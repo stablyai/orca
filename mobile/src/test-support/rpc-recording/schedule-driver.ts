@@ -2,16 +2,6 @@ import { hoistPreludeCheckpoints, type DivergingScenario } from './prelude-check
 import type { RecordingScenario, ScenarioStep } from './recording-scenario'
 
 type Completion = Extract<ScenarioStep, { complete: string }>
-/**
- * Requests are issued with a 30 s deadline. One jump past it records the same partition whatever the
- * deadline is; two jumps with a checkpoint between them put a partition on each side, so shortening
- * or lengthening the real deadline moves an observation.
- */
-const REQUEST_DEADLINE_STRADDLE: ScenarioStep[] = [
-  { advance: 11_000 },
-  { checkpoint: 'deadline-pending' },
-  { advance: 19_000 }
-]
 export const REQUIRED_SCHEDULES = [
   'forward',
   'reverse',
@@ -55,7 +45,7 @@ export function siblingSchedules(
     'both-reject-forward': [rejected(first), checkpoint, rejected(second)],
     'both-reject-reverse': [rejected(second), checkpoint, rejected(first)],
     'reject-peer-pending': [rejected(first), checkpoint],
-    timeout: REQUEST_DEADLINE_STRADDLE,
+    timeout: [{ advance: 30_000 }],
     disconnect: [{ action: 'disconnect', id: 'disconnect' }],
     'client-cutover': [{ action: 'cutover', id: 'cutover' }]
   }
@@ -125,9 +115,9 @@ export function interruptionSchedules(base: RecordingScenario): RecordingScenari
         schedules: [interruption],
         steps: [
           ...base.steps.slice(0, completion),
-          ...(interruption === 'timeout'
-            ? REQUEST_DEADLINE_STRADDLE
-            : [{ action: interruption, id: interruption }]),
+          interruption === 'timeout'
+            ? { advance: 30_000 }
+            : { action: interruption, id: interruption },
           { checkpoint: 'interrupted' },
           ...base.steps.slice(completion)
         ]

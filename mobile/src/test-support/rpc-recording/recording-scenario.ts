@@ -37,6 +37,8 @@ export type RecordingScheduler = {
   start: () => void
   flush: () => Promise<void>
   advance: (ms: number) => Promise<void>
+  /** Virtual milliseconds since the pinned recording epoch. */
+  elapsed: () => number
   stop: () => void
 }
 export type Observation = {

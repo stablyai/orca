@@ -5,26 +5,12 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
-    "005164ebb458": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "submit": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      }
-    },
     "0318f81a142b": [
       {
         "name": "github.project.updateIssueBySlug#1",
@@ -45,6 +31,39 @@
         "itemType": "ISSUE"
       }
     },
+    "15516afe97e7": [
+      {
+        "name": "github.project.updateIssueBySlug#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "github.project.updateIssueBySlug"
+          },
+          {
+            "name": "params",
+            "value": {
+              "host": "github.enterprise.test",
+              "number": 1,
+              "owner": "owner",
+              "repo": "repo",
+              "updates": {
+                "addLabels": ["recorded"]
+              }
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
     "204a5c5728c2": {
       "error": "Cannot read properties of null (reading 'ok')",
       "mutating": false,
@@ -65,7 +84,25 @@
         "value": true
       }
     ],
-    "816dd85d26f9": [
+    "6dfef4ef572b": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "submit": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "7e11552b02fa": [
       {
         "name": "github.project.updateIssueBySlug#1",
         "args": [
@@ -94,6 +131,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -101,49 +140,6 @@
               "$rpc": "null"
             }
           }
-        }
-      }
-    ],
-    "bd10b5abf164": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "submit": {
-        "status": "pending"
-      }
-    },
-    "dc622f138717": [
-      {
-        "name": "github.project.updateIssueBySlug#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "github.project.updateIssueBySlug"
-          },
-          {
-            "name": "params",
-            "value": {
-              "host": "github.enterprise.test",
-              "number": 1,
-              "owner": "owner",
-              "repo": "repo",
-              "updates": {
-                "addLabels": ["recorded"]
-              }
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
         }
       }
     ],
@@ -160,7 +156,21 @@
         "name": "projectMutating",
         "value": false
       }
-    ]
+    ],
+    "f117d93cf44a": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "submit": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    }
   },
   "recording": {
     "scenario": "b2",
@@ -168,9 +178,9 @@
       {
         "id": "pending",
         "observation": {
-          "sender": "dc622f138717",
+          "sender": "15516afe97e7",
           "payloads": "0318f81a142b",
-          "settlements": "bd10b5abf164",
+          "settlements": "f117d93cf44a",
           "state": "0c4dced3e005",
           "effects": "3b9a7724526d"
         }
@@ -178,9 +188,9 @@
       {
         "id": "settled",
         "observation": {
-          "sender": "816dd85d26f9",
+          "sender": "7e11552b02fa",
           "payloads": "0318f81a142b",
-          "settlements": "005164ebb458",
+          "settlements": "6dfef4ef572b",
           "state": "204a5c5728c2",
           "effects": "dd1ba4033a27"
         }

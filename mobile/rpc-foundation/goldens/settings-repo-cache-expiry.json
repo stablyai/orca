@@ -5,10 +5,10 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
     "071880b671a1": {
@@ -28,7 +28,7 @@
         ["Remote", "repo-2"]
       ]
     },
-    "1172c375aeee": [
+    "0837485f8127": [
       {
         "name": "repo.list#1",
         "args": [
@@ -51,6 +51,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -95,6 +97,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-2",
             "ok": true,
@@ -130,20 +134,8 @@
           }
         ],
         "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-3",
-            "ok": true,
-            "result": {
-              "settings": {
-                "defaultTuiAgent": "codex",
-                "disabledTuiAgents": ["claude"],
-                "hostSettingOverrides": {},
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"]
-              }
-            }
-          }
+          "status": "pending",
+          "startedAt": 0
         }
       },
       {
@@ -167,191 +159,37 @@
           }
         ],
         "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-4",
-            "ok": true,
-            "result": {
-              "platform": "linux"
-            }
-          }
-        }
-      },
-      {
-        "name": "repo.list#2",
-        "args": [
-          {
-            "name": "method",
-            "value": "repo.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
+          "status": "pending",
+          "startedAt": 0
         }
       }
     ],
-    "17b91aa59878": [
-      {
-        "name": "repo.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "repo.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "repos": [
-                {
-                  "connectionId": {
-                    "$rpc": "null"
-                  },
-                  "displayName": "Local",
-                  "id": "repo-1"
-                },
-                {
-                  "connectionId": "ssh-1",
-                  "displayName": "Remote",
-                  "id": "repo-2"
-                }
-              ]
-            }
-          }
+    "0f10f753b645": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
         }
       },
-      {
-        "name": "ssh.listTargetSummaries#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "ssh.listTargetSummaries"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-2",
-            "ok": true,
-            "result": {
-              "targets": [
-                {
-                  "id": "ssh-1",
-                  "label": "SSH"
-                }
-              ]
-            }
-          }
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
         }
       },
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-3",
-            "ok": true,
-            "result": {
-              "settings": {
-                "defaultTuiAgent": "codex",
-                "disabledTuiAgents": ["claude"],
-                "hostSettingOverrides": {},
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"]
-              }
-            }
-          }
-        }
-      },
-      {
-        "name": "host.platform#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "host.platform"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-4",
-            "ok": true,
-            "result": {
-              "platform": "linux"
-            }
-          }
+      "cached-query": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
         }
       }
-    ],
+    },
     "26ce47c562c3": [
       {
         "name": "repo.list#1",
@@ -374,6 +212,24 @@
         "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
       }
     ],
+    "2bf0f26c9185": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
     "3d1e2998e81c": [
       {
         "name": "repoColorsByName",
@@ -401,75 +257,6 @@
         ]
       }
     ],
-    "41cc01615a00": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "load": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "cached-query": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "warm-query": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "4ddeef13a71d": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "load": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "cached-query": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "warm-query": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "expired-query": {
-        "status": "pending"
-      }
-    },
-    "55d9d2103270": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "load": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      }
-    },
     "6134b73f18d0": {
       "repoColorsByName": [
         ["Local", "#6366f1"],
@@ -503,7 +290,7 @@
         "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
       }
     ],
-    "8d323268159a": [
+    "8dff1fd17ddc": [
       {
         "name": "repo.list#1",
         "args": [
@@ -526,6 +313,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -570,6 +359,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-2",
             "ok": true,
@@ -605,7 +396,22 @@
           }
         ],
         "settlement": {
-          "status": "pending"
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
         }
       },
       {
@@ -629,39 +435,244 @@
           }
         ],
         "settlement": {
-          "status": "pending"
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        }
+      },
+      {
+        "name": "repo.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 60000
         }
       }
     ],
-    "cb0c60728eb4": {
+    "ad9ee0962195": {
       "mount": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       },
       "load": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       },
       "cached-query": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
+      },
+      "expired-query": {
+        "status": "pending",
+        "startedAt": 60000
       }
     },
-    "d9339f09e8a7": {
+    "d90e99979f09": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        }
+      }
+    ],
+    "e91286279b33": {
       "mount": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       },
       "load": {
-        "status": "pending"
+        "status": "pending",
+        "startedAt": 0
       }
     },
     "ec7bb9cef277": [
@@ -706,9 +717,9 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": "8d323268159a",
+          "sender": "0837485f8127",
           "payloads": "83ef5f7039bf",
-          "settlements": "d9339f09e8a7",
+          "settlements": "e91286279b33",
           "state": "6134b73f18d0",
           "effects": "3d1e2998e81c"
         }
@@ -716,9 +727,9 @@
       {
         "id": "settled",
         "observation": {
-          "sender": "17b91aa59878",
+          "sender": "d90e99979f09",
           "payloads": "83ef5f7039bf",
-          "settlements": "55d9d2103270",
+          "settlements": "2bf0f26c9185",
           "state": "071880b671a1",
           "effects": "ec7bb9cef277"
         }
@@ -726,19 +737,9 @@
       {
         "id": "cache-hit",
         "observation": {
-          "sender": "17b91aa59878",
+          "sender": "d90e99979f09",
           "payloads": "83ef5f7039bf",
-          "settlements": "cb0c60728eb4",
-          "state": "071880b671a1",
-          "effects": "ec7bb9cef277"
-        }
-      },
-      {
-        "id": "cache-warm",
-        "observation": {
-          "sender": "17b91aa59878",
-          "payloads": "83ef5f7039bf",
-          "settlements": "41cc01615a00",
+          "settlements": "0f10f753b645",
           "state": "071880b671a1",
           "effects": "ec7bb9cef277"
         }
@@ -746,9 +747,9 @@
       {
         "id": "cache-expired",
         "observation": {
-          "sender": "1172c375aeee",
+          "sender": "8dff1fd17ddc",
           "payloads": "26ce47c562c3",
-          "settlements": "4ddeef13a71d",
+          "settlements": "ad9ee0962195",
           "state": "071880b671a1",
           "effects": "ec7bb9cef277"
         }

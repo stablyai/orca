@@ -5,318 +5,23 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
-    "00acea34a94b": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": true
-            }
-          }
-        }
-      }
-    ],
-    "023221071205": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": "yes",
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    ],
-    "029f09e7a73b": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "undefined"
-              },
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "073af77308cb": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "null"
-              },
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "15228ce73a8c": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": false,
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "18207726651c": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "settings": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "1b18c879d496": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": "yes",
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "1d2a4505aad1": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": "yes",
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "1dbaae55a83d": {
+    "0131611322e3": {
       "mount": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       }
     },
-    "1e7946a1d8d3": [
+    "04e341f2ce46": [
       {
         "name": "settings.get#1",
         "args": [
@@ -339,162 +44,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "undefined"
-              },
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "24c156970316": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "null"
-              },
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "254c700aeb16": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "undefined"
-              },
-              "settings": 42
-            }
-          }
-        }
-      }
-    ],
-    "2a204d453928": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "undefined"
-              },
-              "settings": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "2c665659ebbd": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -505,7 +56,7 @@
         }
       }
     ],
-    "2c7cdbb33ba0": [
+    "066e5870690f": [
       {
         "name": "settings.get#1",
         "args": [
@@ -528,21 +79,21 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
             "result": {
               "error": "inner refused",
               "ok": true,
-              "settings": {
-                "$rpc": "null"
-              }
+              "settings": {}
             }
           }
         }
       }
     ],
-    "2de0dda9b159": [
+    "070662ed25a9": [
       {
         "name": "settings.get#1",
         "args": [
@@ -565,6 +116,85 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "undefined"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "08d86ac38ca2": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": false,
+              "settings": {}
+            }
+          }
+        }
+      }
+    ],
+    "099ee5c8c395": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -573,13 +203,13 @@
               "ok": {
                 "$rpc": "null"
               },
-              "settings": 42
+              "settings": {}
             }
           }
         }
       }
     ],
-    "30ca34bb16cf": [
+    "09e432ad342c": [
       {
         "name": "settings.get#1",
         "args": [
@@ -602,6 +232,49 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": "yes",
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "0ae51949c31e": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -609,13 +282,56 @@
               "error": {
                 "message": "inner refused"
               },
+              "ok": {
+                "$rpc": "undefined"
+              },
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "0b63e017703d": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
               "ok": true
             }
           }
         }
       }
     ],
-    "3451645fa2f4": [
+    "0c7c10d0f1d4": [
       {
         "name": "settings.get#1",
         "args": [
@@ -638,957 +354,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": true,
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "36a528e2b8f6": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "null"
-              },
-              "settings": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "3da9bdc5e1cb": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": "yes",
-              "settings": 42
-            }
-          }
-        }
-      }
-    ],
-    "3f0e332b7ae4": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": "yes",
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    ],
-    "468c5e1574e3": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "null"
-              },
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    ],
-    "49677f40777d": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": false,
-              "settings": 42
-            }
-          }
-        }
-      }
-    ],
-    "49d6a0fd876f": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "4f53cda18c2b": [],
-    "51b2f5fb3ada": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": "yes",
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "51b6cc1dc9f4": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": 0
-          }
-        }
-      }
-    ],
-    "51e80c0da617": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "null"
-              },
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    ],
-    "51f551dc7959": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "refused",
-              "settings": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "52a474155b20": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": false,
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "57940ad91975": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": true,
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "57fc94423634": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": false
-            }
-          }
-        }
-      }
-    ],
-    "582c9ae252fb": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "undefined"
-              },
-              "settings": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "5891349f897b": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": false,
-              "settings": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "5d6250319fc4": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": true,
-              "settings": 42
-            }
-          }
-        }
-      }
-    ],
-    "5f80bbaf1a1d": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": true,
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "60763089f891": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "refused",
-              "settings": 42
-            }
-          }
-        }
-      }
-    ],
-    "624fba4da33b": ["recorded-bot"],
-    "6bc466cdc669": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": false
-            }
-          }
-        }
-      }
-    ],
-    "6d64a6544285": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": []
-          }
-        }
-      }
-    ],
-    "7082b6822140": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "713add8a3148": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": false,
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "7668d4fce228": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": false,
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    ],
-    "7699bf9f5892": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "undefined"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "77452c17d6fb": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": true
-          }
-        }
-      }
-    ],
-    "77728a7eb636": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -1599,7 +366,7 @@
         }
       }
     ],
-    "77b7c302336c": [
+    "16009321ba4a": [
       {
         "name": "settings.get#1",
         "args": [
@@ -1622,10 +389,269 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
             "result": {
+              "error": "inner refused",
+              "ok": false,
+              "settings": 42
+            }
+          }
+        }
+      }
+    ],
+    "1f2f2a0a5737": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "23bc165c1563": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": false,
+              "settings": {}
+            }
+          }
+        }
+      }
+    ],
+    "244f27e3c266": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": 42
+            }
+          }
+        }
+      }
+    ],
+    "25c985a1606d": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": "yes",
+              "settings": {}
+            }
+          }
+        }
+      }
+    ],
+    "2a8c27fff707": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": true,
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "2cafb822c10b": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "undefined"
+              },
+              "settings": 42
+            }
+          }
+        }
+      }
+    ],
+    "33faa7c56815": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "undefined"
+              },
               "settings": {
                 "prBotAuthorOverrides": {
                   "$rpc": "null"
@@ -1636,7 +662,7 @@
         }
       }
     ],
-    "7b4a269dfa5f": [
+    "3438d33a2bab": [
       {
         "name": "settings.get#1",
         "args": [
@@ -1659,6 +685,47 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": "yes",
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "35364e9332cb": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "error": {
               "code": "method_not_found",
@@ -1670,7 +737,7 @@
         }
       }
     ],
-    "7bd3deb4e9d0": [
+    "3c782ee7b9a5": [
       {
         "name": "settings.get#1",
         "args": [
@@ -1693,19 +760,213 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
             "result": {
               "error": "inner refused",
-              "ok": "yes",
+              "ok": false
+            }
+          }
+        }
+      }
+    ],
+    "3c807d772026": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": true,
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "3e32ebc64ac7": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": []
+          }
+        }
+      }
+    ],
+    "41b24c27cb2d": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "$rpc": "null"
+            }
+          }
+        }
+      }
+    ],
+    "44bb43c1b7f1": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "undefined"
+              },
+              "settings": {
+                "prBotAuthorOverrides": 42
+              }
+            }
+          }
+        }
+      }
+    ],
+    "48866b92955f": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "null"
+              },
               "settings": 42
             }
           }
         }
       }
     ],
-    "7fc7780c00fa": [
+    "4c3fa1018b56": [
       {
         "name": "settings.get#1",
         "args": [
@@ -1728,6 +989,87 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": true,
+              "settings": 42
+            }
+          }
+        }
+      }
+    ],
+    "4f53cda18c2b": [],
+    "52ffb8a6fdd8": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": "yes",
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "5a6be9b97ba7": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true
@@ -1735,7 +1077,7 @@
         }
       }
     ],
-    "81dff3ddd36b": [
+    "5e55c1159c04": [
       {
         "name": "settings.get#1",
         "args": [
@@ -1758,15 +1100,26 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
-            "result": {}
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "null"
+              },
+              "settings": {
+                "$rpc": "null"
+              }
+            }
           }
         }
       }
     ],
-    "827cdf6502bc": [
+    "624fba4da33b": ["recorded-bot"],
+    "6286e720ca11": [
       {
         "name": "settings.get#1",
         "args": [
@@ -1789,6 +1142,86 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "62c8e94ebe2a": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": false,
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "63e5e88e145e": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -1816,7 +1249,7 @@
         }
       }
     ],
-    "847629e3a81f": [
+    "6435848e9b34": [
       {
         "name": "settings.get#1",
         "args": [
@@ -1839,6 +1272,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -1846,7 +1281,47 @@
               "error": {
                 "message": "inner refused"
               },
-              "ok": false,
+              "ok": false
+            }
+          }
+        }
+      }
+    ],
+    "64bea630b836": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "null"
+              },
               "settings": {
                 "prBotAuthorOverrides": {
                   "$rpc": "null"
@@ -1857,7 +1332,7 @@
         }
       }
     ],
-    "8832dc5c3646": [
+    "663d2b3c3acc": [
       {
         "name": "settings.get#1",
         "args": [
@@ -1880,23 +1355,17 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": "yes",
-              "settings": {
-                "$rpc": "null"
-              }
-            }
+            "result": false
           }
         }
       }
     ],
-    "8d4050ae1ffb": [
+    "6706f757789e": [
       {
         "name": "settings.get#1",
         "args": [
@@ -1919,45 +1388,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": false,
-              "settings": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "8f2469da5dd7": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -1968,43 +1400,13 @@
               "ok": {
                 "$rpc": "undefined"
               },
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
+              "settings": 42
             }
           }
         }
       }
     ],
-    "95115856c445": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      }
-    ],
-    "98f954dcea08": [
+    "67f3241cca27": [
       {
         "name": "settings.get#1",
         "args": [
@@ -2027,6 +1429,361 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "undefined"
+              },
+              "settings": {}
+            }
+          }
+        }
+      }
+    ],
+    "6803fc7b0ca1": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": "yes"
+            }
+          }
+        }
+      }
+    ],
+    "68a9f8c5706f": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": true
+          }
+        }
+      }
+    ],
+    "6910a40752da": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": false,
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "7255c69bf83f": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "null"
+              },
+              "settings": {
+                "prBotAuthorOverrides": 42
+              }
+            }
+          }
+        }
+      }
+    ],
+    "75100074067b": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": true,
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "7ac8dc9e1fb4": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "7b74b4cc555c": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "null"
+              },
+              "settings": {}
+            }
+          }
+        }
+      }
+    ],
+    "7d865533f33f": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": true,
+              "settings": {
+                "prBotAuthorOverrides": 42
+              }
+            }
+          }
+        }
+      }
+    ],
+    "7e2216fcd624": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -2041,7 +1798,7 @@
         }
       }
     ],
-    "99da7a779533": [
+    "7fd81164911d": [
       {
         "name": "settings.get#1",
         "args": [
@@ -2064,19 +1821,63 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
             "result": {
               "error": "inner refused",
-              "ok": true,
+              "ok": {
+                "$rpc": "null"
+              },
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "8584ca66fe94": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "refused",
               "settings": {}
             }
           }
         }
       }
     ],
-    "9c310cf6aeef": [
+    "8cde4f79af52": [
       {
         "name": "settings.get#1",
         "args": [
@@ -2099,6 +1900,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -2106,7 +1909,294 @@
               "error": {
                 "message": "inner refused"
               },
-              "ok": "yes"
+              "ok": {
+                "$rpc": "null"
+              },
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "8dcbdc268ccb": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "undefined"
+              },
+              "settings": {}
+            }
+          }
+        }
+      }
+    ],
+    "93595437f550": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": true,
+              "settings": 42
+            }
+          }
+        }
+      }
+    ],
+    "9703df3d8f20": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": 0
+          }
+        }
+      }
+    ],
+    "99c6622d0d89": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": "yes",
+              "settings": 42
+            }
+          }
+        }
+      }
+    ],
+    "9c753d3a11f2": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultLinearTeamSelection": {
+                  "$rpc": "null"
+                },
+                "defaultRepoSelection": {
+                  "$rpc": "null"
+                },
+                "defaultTaskSource": "github",
+                "defaultTaskViewPreset": "all",
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "githubProjects": {},
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["recorded-bot"],
+                "visibleTaskProviders": ["github"]
+              }
+            }
+          }
+        }
+      }
+    ],
+    "9d1adf895b57": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": "yes",
+              "settings": 42
+            }
+          }
+        }
+      }
+    ],
+    "9d65dfc8b284": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "undefined"
+              },
+              "settings": {
+                "$rpc": "null"
+              }
             }
           }
         }
@@ -2118,7 +2208,7 @@
         "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
       }
     ],
-    "a2cceb8a787c": [
+    "9f0d8be6923f": [
       {
         "name": "settings.get#1",
         "args": [
@@ -2141,23 +2231,23 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
             "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "null"
-              },
-              "settings": 42
+              "error": "inner refused",
+              "ok": false,
+              "settings": {
+                "prBotAuthorOverrides": 42
+              }
             }
           }
         }
       }
     ],
-    "a5bd8fc72824": [
+    "a2c162af2635": [
       {
         "name": "settings.get#1",
         "args": [
@@ -2180,6 +2270,43 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {}
+            }
+          }
+        }
+      }
+    ],
+    "a316395f7413": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -2187,6 +2314,125 @@
               "error": {
                 "message": "inner refused"
               },
+              "ok": "yes",
+              "settings": {}
+            }
+          }
+        }
+      }
+    ],
+    "a4c3e8353da6": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "undefined"
+              },
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "aad5f1dd39d0": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": false,
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "aedaafcb016b": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
               "ok": "yes",
               "settings": {
                 "prBotAuthorOverrides": 42
@@ -2196,7 +2442,7 @@
         }
       }
     ],
-    "ac873780f40c": [
+    "b3b8781f6808": [
       {
         "name": "settings.get#1",
         "args": [
@@ -2219,440 +2465,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": true,
-              "settings": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "af66b61ea4b0": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "null"
-              },
-              "settings": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "b00ef92b15fa": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "undefined"
-              },
-              "settings": {}
-            }
-          }
-        }
-      }
-    ],
-    "b191fc8ddbdd": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "$rpc": "null"
-            }
-          }
-        }
-      }
-    ],
-    "b2760decd1ef": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "null"
-              },
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "b3d5f549fc45": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "b9b09062d2eb": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "settings": 42
-            }
-          }
-        }
-      }
-    ],
-    "bd07304dc819": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "null"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "bdb56fcbaf57": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "undefined"
-              },
-              "settings": 42
-            }
-          }
-        }
-      }
-    ],
-    "c3f08f791c0d": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "refused",
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    ],
-    "c601836d4caa": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": "yes"
-            }
-          }
-        }
-      }
-    ],
-    "ca486b3c26a7": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": "value"
-          }
-        }
-      }
-    ],
-    "cdd147869488": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -2678,7 +2492,7 @@
         }
       }
     ],
-    "d183d7ceb42c": [
+    "bb905be3d8d0": [
       {
         "name": "settings.get#1",
         "args": [
@@ -2701,6 +2515,127 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "refused",
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "bd4c4614dcdd": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": false,
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "be6b02435245": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": "yes"
+            }
+          }
+        }
+      }
+    ],
+    "be91360e297c": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -2725,7 +2660,7 @@
         }
       }
     ],
-    "d450132ac825": [
+    "bf83ce4746e3": [
       {
         "name": "settings.get#1",
         "args": [
@@ -2748,200 +2683,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "null"
-              },
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "d585cabbdf58": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "undefined"
-              },
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "d98f98f34101": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": {
-                "$rpc": "undefined"
-              }
-            }
-          }
-        }
-      }
-    ],
-    "dd2da8eead58": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": true,
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    ],
-    "def7bb4764f0": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": false,
-              "settings": {
-                "prBotAuthorOverrides": 42
-              }
-            }
-          }
-        }
-      }
-    ],
-    "e124e0bd0e48": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -2955,7 +2698,7 @@
         }
       }
     ],
-    "e895efd314d5": [
+    "ccbd5fbcb1c6": [
       {
         "name": "settings.get#1",
         "args": [
@@ -2978,18 +2721,20 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
             "result": {
               "error": "refused",
-              "settings": {}
+              "settings": 42
             }
           }
         }
       }
     ],
-    "ed01cecb2616": [
+    "cd41018879b7": [
       {
         "name": "settings.get#1",
         "args": [
@@ -3012,119 +2757,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": "inner refused",
-              "ok": {
-                "$rpc": "undefined"
-              },
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    ],
-    "efd7e27a5785": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": false
-          }
-        }
-      }
-    ],
-    "f1707630a706": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "error": {
-                "message": "inner refused"
-              },
-              "ok": true,
-              "settings": {
-                "prBotAuthorOverrides": {
-                  "$rpc": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    ],
-    "f4673b10593e": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "error": {
               "code": "refused",
@@ -3136,7 +2770,7 @@
         }
       }
     ],
-    "f75839ad1f0c": [
+    "d2d371788440": [
       {
         "name": "settings.get#1",
         "args": [
@@ -3159,6 +2793,322 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "undefined"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "d4494e2d5f50": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "d509c56018fd": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "undefined"
+              },
+              "settings": {
+                "prBotAuthorOverrides": 42
+              }
+            }
+          }
+        }
+      }
+    ],
+    "d60e7518854f": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "null"
+              },
+              "settings": 42
+            }
+          }
+        }
+      }
+    ],
+    "e2211034a6f3": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "null"
+              },
+              "settings": {
+                "prBotAuthorOverrides": 42
+              }
+            }
+          }
+        }
+      }
+    ],
+    "e2b118ab072f": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "refused",
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "e485d8916cf1": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": "value"
+          }
+        }
+      }
+    ],
+    "e90ab3e09214": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": "yes",
+              "settings": {
+                "prBotAuthorOverrides": {
+                  "$rpc": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    ],
+    "ea0984fc5a5a": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -3167,13 +3117,172 @@
                 "message": "inner refused"
               },
               "ok": true,
-              "settings": 42
+              "settings": {}
             }
           }
         }
       }
     ],
-    "f7d7206541b5": [
+    "ead071a01f59": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": false,
+              "settings": {
+                "prBotAuthorOverrides": 42
+              }
+            }
+          }
+        }
+      }
+    ],
+    "ec5cad8dcf69": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": "yes",
+              "settings": {
+                "prBotAuthorOverrides": 42
+              }
+            }
+          }
+        }
+      }
+    ],
+    "ecf606adb6ef": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": true,
+              "settings": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "f5ba2dd0b035": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": true
+            }
+          }
+        }
+      }
+    ],
+    "f60b502aa33d": [
       {
         "name": "settings.get#1",
         "args": [
@@ -3196,6 +3305,8 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
           "error": {
             "category": "Error",
             "message": "transport failure",
@@ -3204,7 +3315,7 @@
         }
       }
     ],
-    "f9735a58c009": [
+    "f67b7730a96e": [
       {
         "name": "settings.get#1",
         "args": [
@@ -3227,21 +3338,25 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
             "result": {
-              "error": "inner refused",
-              "ok": "yes",
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": true,
               "settings": {
-                "$rpc": "null"
+                "prBotAuthorOverrides": 42
               }
             }
           }
         }
       }
     ],
-    "feb64c87d2da": [
+    "fa7d077cf5e6": [
       {
         "name": "settings.get#1",
         "args": [
@@ -3264,25 +3379,87 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
             "result": {
               "settings": {
-                "defaultLinearTeamSelection": {
-                  "$rpc": "null"
-                },
-                "defaultRepoSelection": {
-                  "$rpc": "null"
-                },
-                "defaultTaskSource": "github",
-                "defaultTaskViewPreset": "all",
-                "defaultTuiAgent": "codex",
-                "disabledTuiAgents": ["claude"],
-                "githubProjects": {},
-                "hostSettingOverrides": {},
-                "prBotAuthorOverrides": ["recorded-bot"],
-                "visibleTaskProviders": ["github"]
+                "prBotAuthorOverrides": 42
+              }
+            }
+          }
+        }
+      }
+    ],
+    "fd72872a0bb1": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {}
+          }
+        }
+      }
+    ],
+    "ff4aaa91868b": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "null"
               }
             }
           }
@@ -3296,9 +3473,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.prelude:settings-pending",
         "observation": {
-          "sender": "95115856c445",
+          "sender": "1f2f2a0a5737",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3306,9 +3483,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.normal:settled",
         "observation": {
-          "sender": "feb64c87d2da",
+          "sender": "9c753d3a11f2",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "624fba4da33b",
           "effects": "4f53cda18c2b"
         }
@@ -3316,9 +3493,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-absent:settled",
         "observation": {
-          "sender": "7fc7780c00fa",
+          "sender": "5a6be9b97ba7",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3326,9 +3503,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-undefined:settled",
         "observation": {
-          "sender": "2c665659ebbd",
+          "sender": "04e341f2ce46",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3336,9 +3513,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-null:settled",
         "observation": {
-          "sender": "b191fc8ddbdd",
+          "sender": "41b24c27cb2d",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3346,9 +3523,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-empty:settled",
         "observation": {
-          "sender": "81dff3ddd36b",
+          "sender": "fd72872a0bb1",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3356,9 +3533,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-true:settled",
         "observation": {
-          "sender": "77452c17d6fb",
+          "sender": "68a9f8c5706f",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3366,9 +3543,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-false:settled",
         "observation": {
-          "sender": "efd7e27a5785",
+          "sender": "663d2b3c3acc",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3376,9 +3553,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-zero:settled",
         "observation": {
-          "sender": "51b6cc1dc9f4",
+          "sender": "9703df3d8f20",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3386,9 +3563,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-string:settled",
         "observation": {
-          "sender": "ca486b3c26a7",
+          "sender": "e485d8916cf1",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3396,9 +3573,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-array:settled",
         "observation": {
-          "sender": "6d64a6544285",
+          "sender": "3e32ebc64ac7",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3406,9 +3583,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-ok-missing:settled",
         "observation": {
-          "sender": "77728a7eb636",
+          "sender": "0c7c10d0f1d4",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3416,9 +3593,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-string-error:settled",
         "observation": {
-          "sender": "7699bf9f5892",
+          "sender": "070662ed25a9",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3426,9 +3603,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-object-error:settled",
         "observation": {
-          "sender": "d98f98f34101",
+          "sender": "d2d371788440",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3436,9 +3613,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-string-error:settled",
         "observation": {
-          "sender": "bd07304dc819",
+          "sender": "7ac8dc9e1fb4",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3446,9 +3623,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-object-error:settled",
         "observation": {
-          "sender": "b3d5f549fc45",
+          "sender": "ff4aaa91868b",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3456,9 +3633,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-string-error:settled",
         "observation": {
-          "sender": "57fc94423634",
+          "sender": "3c782ee7b9a5",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3466,9 +3643,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-object-error:settled",
         "observation": {
-          "sender": "6bc466cdc669",
+          "sender": "6435848e9b34",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3476,9 +3653,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-string-error:settled",
         "observation": {
-          "sender": "00acea34a94b",
+          "sender": "0b63e017703d",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3486,9 +3663,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-object-error:settled",
         "observation": {
-          "sender": "30ca34bb16cf",
+          "sender": "f5ba2dd0b035",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3496,9 +3673,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-string-error:settled",
         "observation": {
-          "sender": "c601836d4caa",
+          "sender": "6803fc7b0ca1",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3506,9 +3683,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-object-error:settled",
         "observation": {
-          "sender": "9c310cf6aeef",
+          "sender": "be6b02435245",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3516,9 +3693,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.outer-refused:settled",
         "observation": {
-          "sender": "f4673b10593e",
+          "sender": "cd41018879b7",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3526,9 +3703,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.method-not-found:settled",
         "observation": {
-          "sender": "7b4a269dfa5f",
+          "sender": "35364e9332cb",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3536,9 +3713,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.transport-rejection:settled",
         "observation": {
-          "sender": "f7d7206541b5",
+          "sender": "f60b502aa33d",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3546,9 +3723,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.normal.field-settings-missing:settled",
         "observation": {
-          "sender": "81dff3ddd36b",
+          "sender": "fd72872a0bb1",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3556,9 +3733,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.normal.field-settings-null:settled",
         "observation": {
-          "sender": "18207726651c",
+          "sender": "d4494e2d5f50",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3566,9 +3743,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.normal.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "b9b09062d2eb",
+          "sender": "244f27e3c266",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3576,9 +3753,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.normal.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "d183d7ceb42c",
+          "sender": "be91360e297c",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3586,9 +3763,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.normal.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "827cdf6502bc",
+          "sender": "63e5e88e145e",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3596,9 +3773,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.normal.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "cdd147869488",
+          "sender": "b3b8781f6808",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3606,9 +3783,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-empty.field-settings-missing:settled",
         "observation": {
-          "sender": "81dff3ddd36b",
+          "sender": "fd72872a0bb1",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3616,9 +3793,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-empty.field-settings-null:settled",
         "observation": {
-          "sender": "18207726651c",
+          "sender": "d4494e2d5f50",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3626,9 +3803,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-empty.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "b9b09062d2eb",
+          "sender": "244f27e3c266",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3636,9 +3813,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-empty.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "49d6a0fd876f",
+          "sender": "a2c162af2635",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3646,9 +3823,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-empty.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "77b7c302336c",
+          "sender": "6286e720ca11",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3656,9 +3833,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.result-empty.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "7082b6822140",
+          "sender": "fa7d077cf5e6",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3666,9 +3843,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-ok-missing.field-settings-missing:settled",
         "observation": {
-          "sender": "77728a7eb636",
+          "sender": "0c7c10d0f1d4",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3676,9 +3853,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-ok-missing.field-settings-null:settled",
         "observation": {
-          "sender": "51f551dc7959",
+          "sender": "e2b118ab072f",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3686,9 +3863,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-ok-missing.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "60763089f891",
+          "sender": "ccbd5fbcb1c6",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3696,9 +3873,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-ok-missing.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "e895efd314d5",
+          "sender": "8584ca66fe94",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3706,9 +3883,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-ok-missing.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "c3f08f791c0d",
+          "sender": "bb905be3d8d0",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3716,9 +3893,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-ok-missing.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "e124e0bd0e48",
+          "sender": "bf83ce4746e3",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3726,9 +3903,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-string-error.field-settings-missing:settled",
         "observation": {
-          "sender": "7699bf9f5892",
+          "sender": "070662ed25a9",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3736,9 +3913,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-string-error.field-settings-null:settled",
         "observation": {
-          "sender": "582c9ae252fb",
+          "sender": "a4c3e8353da6",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3746,9 +3923,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-string-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "bdb56fcbaf57",
+          "sender": "2cafb822c10b",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3756,9 +3933,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-string-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "b00ef92b15fa",
+          "sender": "67f3241cca27",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3766,9 +3943,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-string-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "ed01cecb2616",
+          "sender": "33faa7c56815",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3776,9 +3953,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-string-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "d585cabbdf58",
+          "sender": "44bb43c1b7f1",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3786,9 +3963,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-object-error.field-settings-missing:settled",
         "observation": {
-          "sender": "d98f98f34101",
+          "sender": "d2d371788440",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3796,9 +3973,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-object-error.field-settings-null:settled",
         "observation": {
-          "sender": "2a204d453928",
+          "sender": "9d65dfc8b284",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3806,9 +3983,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-object-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "254c700aeb16",
+          "sender": "6706f757789e",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3816,9 +3993,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-object-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "1e7946a1d8d3",
+          "sender": "8dcbdc268ccb",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3826,9 +4003,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-object-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "8f2469da5dd7",
+          "sender": "0ae51949c31e",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3836,9 +4013,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-undefined-object-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "029f09e7a73b",
+          "sender": "d509c56018fd",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3846,9 +4023,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-string-error.field-settings-missing:settled",
         "observation": {
-          "sender": "bd07304dc819",
+          "sender": "7ac8dc9e1fb4",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3856,9 +4033,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-string-error.field-settings-null:settled",
         "observation": {
-          "sender": "af66b61ea4b0",
+          "sender": "5e55c1159c04",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3866,9 +4043,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-string-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "2de0dda9b159",
+          "sender": "d60e7518854f",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3876,9 +4053,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-string-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "24c156970316",
+          "sender": "099ee5c8c395",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3886,9 +4063,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-string-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "51e80c0da617",
+          "sender": "7fd81164911d",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3896,9 +4073,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-string-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "b2760decd1ef",
+          "sender": "e2211034a6f3",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3906,9 +4083,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-object-error.field-settings-missing:settled",
         "observation": {
-          "sender": "b3d5f549fc45",
+          "sender": "ff4aaa91868b",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3916,9 +4093,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-object-error.field-settings-null:settled",
         "observation": {
-          "sender": "36a528e2b8f6",
+          "sender": "8cde4f79af52",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3926,9 +4103,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-object-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "a2cceb8a787c",
+          "sender": "48866b92955f",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3936,9 +4113,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-object-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "073af77308cb",
+          "sender": "7b74b4cc555c",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3946,9 +4123,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-object-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "468c5e1574e3",
+          "sender": "64bea630b836",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3956,9 +4133,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-null-object-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "d450132ac825",
+          "sender": "7255c69bf83f",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3966,9 +4143,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-string-error.field-settings-missing:settled",
         "observation": {
-          "sender": "57fc94423634",
+          "sender": "3c782ee7b9a5",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3976,9 +4153,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-string-error.field-settings-null:settled",
         "observation": {
-          "sender": "5891349f897b",
+          "sender": "62c8e94ebe2a",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3986,9 +4163,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-string-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "49677f40777d",
+          "sender": "16009321ba4a",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -3996,9 +4173,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-string-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "15228ce73a8c",
+          "sender": "23bc165c1563",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4006,9 +4183,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-string-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "7668d4fce228",
+          "sender": "bd4c4614dcdd",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4016,9 +4193,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-string-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "def7bb4764f0",
+          "sender": "9f0d8be6923f",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4026,9 +4203,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-object-error.field-settings-missing:settled",
         "observation": {
-          "sender": "6bc466cdc669",
+          "sender": "6435848e9b34",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4036,9 +4213,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-object-error.field-settings-null:settled",
         "observation": {
-          "sender": "8d4050ae1ffb",
+          "sender": "aad5f1dd39d0",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4046,9 +4223,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-object-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "98f954dcea08",
+          "sender": "7e2216fcd624",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4056,9 +4233,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-object-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "713add8a3148",
+          "sender": "08d86ac38ca2",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4066,9 +4243,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-object-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "847629e3a81f",
+          "sender": "6910a40752da",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4076,9 +4253,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-false-object-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "52a474155b20",
+          "sender": "ead071a01f59",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4086,9 +4263,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-string-error.field-settings-missing:settled",
         "observation": {
-          "sender": "00acea34a94b",
+          "sender": "0b63e017703d",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4096,9 +4273,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-string-error.field-settings-null:settled",
         "observation": {
-          "sender": "2c7cdbb33ba0",
+          "sender": "ecf606adb6ef",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4106,9 +4283,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-string-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "5d6250319fc4",
+          "sender": "4c3fa1018b56",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4116,9 +4293,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-string-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "99da7a779533",
+          "sender": "066e5870690f",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4126,9 +4303,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-string-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "dd2da8eead58",
+          "sender": "75100074067b",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4136,9 +4313,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-string-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "57940ad91975",
+          "sender": "7d865533f33f",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4146,9 +4323,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-object-error.field-settings-missing:settled",
         "observation": {
-          "sender": "30ca34bb16cf",
+          "sender": "f5ba2dd0b035",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4156,9 +4333,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-object-error.field-settings-null:settled",
         "observation": {
-          "sender": "ac873780f40c",
+          "sender": "2a8c27fff707",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4166,9 +4343,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-object-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "f75839ad1f0c",
+          "sender": "93595437f550",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4176,9 +4353,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-object-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "3451645fa2f4",
+          "sender": "ea0984fc5a5a",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4186,9 +4363,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-object-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "f1707630a706",
+          "sender": "3c807d772026",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4196,9 +4373,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-true-object-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "5f80bbaf1a1d",
+          "sender": "f67b7730a96e",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4206,9 +4383,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-string-error.field-settings-missing:settled",
         "observation": {
-          "sender": "c601836d4caa",
+          "sender": "6803fc7b0ca1",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4216,9 +4393,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-string-error.field-settings-null:settled",
         "observation": {
-          "sender": "f9735a58c009",
+          "sender": "3438d33a2bab",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4226,9 +4403,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-string-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "7bd3deb4e9d0",
+          "sender": "9d1adf895b57",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4236,9 +4413,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-string-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "51b2f5fb3ada",
+          "sender": "25c985a1606d",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4246,9 +4423,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-string-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "023221071205",
+          "sender": "09e432ad342c",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4256,9 +4433,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-string-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "1b18c879d496",
+          "sender": "aedaafcb016b",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4266,9 +4443,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-object-error.field-settings-missing:settled",
         "observation": {
-          "sender": "9c310cf6aeef",
+          "sender": "be6b02435245",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4276,9 +4453,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-object-error.field-settings-null:settled",
         "observation": {
-          "sender": "8832dc5c3646",
+          "sender": "52ffb8a6fdd8",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4286,9 +4463,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-object-error.field-settings-wrong-type:settled",
         "observation": {
-          "sender": "3da9bdc5e1cb",
+          "sender": "99c6622d0d89",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4296,9 +4473,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-object-error.field-settings-prBotAuthorOverrides-missing:settled",
         "observation": {
-          "sender": "1d2a4505aad1",
+          "sender": "a316395f7413",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4306,9 +4483,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-object-error.field-settings-prBotAuthorOverrides-null:settled",
         "observation": {
-          "sender": "3f0e332b7ae4",
+          "sender": "e90ab3e09214",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -4316,9 +4493,9 @@
       {
         "id": "settings-bot-overrides-fulfilled.inner-truthy-object-error.field-settings-prBotAuthorOverrides-wrong-type:settled",
         "observation": {
-          "sender": "a5bd8fc72824",
+          "sender": "ec5cad8dcf69",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }

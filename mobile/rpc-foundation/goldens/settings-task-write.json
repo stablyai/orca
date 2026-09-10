@@ -5,39 +5,13 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
-    "0efe672b07d3": [
-      {
-        "name": "settings.update#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.update"
-          },
-          {
-            "name": "params",
-            "value": {
-              "defaultTaskViewPreset": "assigned"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      }
-    ],
-    "17e698f5530e": [
+    "1e0992e3ef1e": [
       {
         "name": "settings.update#1",
         "args": [
@@ -60,6 +34,8 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
           "error": {
             "category": "Error",
             "message": "write disconnected",
@@ -68,22 +44,26 @@
         }
       }
     ],
-    "2614969a3e03": {
+    "5db909d58c6f": {
+      "preset": "assigned"
+    },
+    "a4cc6c82ee53": {
       "mount": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       },
       "write": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       }
-    },
-    "5db909d58c6f": {
-      "preset": "assigned"
     },
     "b26f6d594d62": [
       {
@@ -96,6 +76,33 @@
         "name": "settings.update#1",
         "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
       }
+    ],
+    "e02c44633084": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
     ]
   },
   "recording": {
@@ -104,9 +111,9 @@
       {
         "id": "optimistic",
         "observation": {
-          "sender": "0efe672b07d3",
+          "sender": "e02c44633084",
           "payloads": "c48c361670b0",
-          "settlements": "2614969a3e03",
+          "settlements": "a4cc6c82ee53",
           "state": "5db909d58c6f",
           "effects": "b26f6d594d62"
         }
@@ -114,9 +121,9 @@
       {
         "id": "settled",
         "observation": {
-          "sender": "17e698f5530e",
+          "sender": "1e0992e3ef1e",
           "payloads": "c48c361670b0",
-          "settlements": "2614969a3e03",
+          "settlements": "a4cc6c82ee53",
           "state": "5db909d58c6f",
           "effects": "b26f6d594d62"
         }

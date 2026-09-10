@@ -5,33 +5,13 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
-    "25640c8aebbe": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "old": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "lifecycle-unmount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "4efbcc6bae22": [
+    "1a957d27c347": [
       {
         "name": "files.searchPaths#1",
         "args": [
@@ -55,7 +35,8 @@
           }
         ],
         "settlement": {
-          "status": "pending"
+          "status": "pending",
+          "startedAt": 120
         }
       }
     ],
@@ -63,86 +44,6 @@
     "602e35a92eec": {
       "files": []
     },
-    "60e894f30e86": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "old": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "lifecycle-reset": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "63bd2f04a0cf": [
-      {
-        "name": "files.searchPaths#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "files.searchPaths"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 16,
-              "query": "old",
-              "worktree": "id:A"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "error": {
-              "code": "method_not_found",
-              "message": "Unknown method"
-            },
-            "id": "frame-1",
-            "ok": false
-          }
-        }
-      },
-      {
-        "name": "files.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "files.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "worktree": "id:A"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      }
-    ],
     "6713de8f80d3": [
       {
         "name": "files.searchPaths#1",
@@ -153,39 +54,33 @@
         "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
       }
     ],
-    "7301d07e0d38": {
+    "8baaca44e19f": {
       "mount": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       },
       "old": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       },
-      "lifecycle-unmount": {
+      "lifecycle-blur": {
         "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "remount": {
-        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
         "value": {
           "$rpc": "undefined"
         }
       }
     },
-    "a5b853493ed4": [
-      {
-        "name": "files.searchPaths#1",
-        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
-      }
-    ],
-    "b99382bd8e90": [
+    "97ccce4248eb": [
       {
         "name": "files.searchPaths#1",
         "args": [
@@ -210,6 +105,77 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 120
+        }
+      }
+    ],
+    "a5b853493ed4": [
+      {
+        "name": "files.searchPaths#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+      }
+    ],
+    "ab2510585ba0": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
           "value": {
             "error": {
               "code": "method_not_found",
@@ -242,6 +208,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
           "value": {
             "id": "frame-2",
             "ok": true,
@@ -256,28 +224,94 @@
         }
       }
     ],
-    "fe1aebea954c": {
-      "files": ["old.ts"]
-    },
-    "ff7e99c8e6de": {
+    "c8fe68914ed2": {
       "mount": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       },
       "old": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       },
-      "lifecycle-blur": {
+      "lifecycle-unmount": {
         "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
         "value": {
           "$rpc": "undefined"
         }
       }
+    },
+    "ca50cabf84eb": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "old": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "lifecycle-unmount": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "remount": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "e55f989316a7": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "old": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "lifecycle-reset": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "fe1aebea954c": {
+      "files": ["old.ts"]
     }
   },
   "recording": {
@@ -286,9 +320,9 @@
       {
         "id": "inventory-lifecycle.reset-before-1:lifecycle-boundary",
         "observation": {
-          "sender": "4efbcc6bae22",
+          "sender": "1a957d27c347",
           "payloads": "a5b853493ed4",
-          "settlements": "60e894f30e86",
+          "settlements": "e55f989316a7",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -296,9 +330,9 @@
       {
         "id": "inventory-lifecycle.reset-before-1:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "60e894f30e86",
+          "settlements": "e55f989316a7",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -306,9 +340,9 @@
       {
         "id": "inventory-lifecycle.reset-after-1:lifecycle-boundary",
         "observation": {
-          "sender": "63bd2f04a0cf",
+          "sender": "97ccce4248eb",
           "payloads": "6713de8f80d3",
-          "settlements": "60e894f30e86",
+          "settlements": "e55f989316a7",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -316,9 +350,9 @@
       {
         "id": "inventory-lifecycle.reset-after-1:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "60e894f30e86",
+          "settlements": "e55f989316a7",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -326,9 +360,9 @@
       {
         "id": "inventory-lifecycle.reset-before-2:lifecycle-boundary",
         "observation": {
-          "sender": "63bd2f04a0cf",
+          "sender": "97ccce4248eb",
           "payloads": "6713de8f80d3",
-          "settlements": "60e894f30e86",
+          "settlements": "e55f989316a7",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -336,9 +370,9 @@
       {
         "id": "inventory-lifecycle.reset-before-2:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "60e894f30e86",
+          "settlements": "e55f989316a7",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -346,9 +380,9 @@
       {
         "id": "inventory-lifecycle.reset-after-2:lifecycle-boundary",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "60e894f30e86",
+          "settlements": "e55f989316a7",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -356,9 +390,9 @@
       {
         "id": "inventory-lifecycle.reset-after-2:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "60e894f30e86",
+          "settlements": "e55f989316a7",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -366,9 +400,9 @@
       {
         "id": "inventory-lifecycle.unmount-before-1:lifecycle-boundary",
         "observation": {
-          "sender": "4efbcc6bae22",
+          "sender": "1a957d27c347",
           "payloads": "a5b853493ed4",
-          "settlements": "25640c8aebbe",
+          "settlements": "c8fe68914ed2",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -376,9 +410,9 @@
       {
         "id": "inventory-lifecycle.unmount-before-1:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "25640c8aebbe",
+          "settlements": "c8fe68914ed2",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -386,9 +420,9 @@
       {
         "id": "inventory-lifecycle.unmount-before-1:remounted",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "7301d07e0d38",
+          "settlements": "ca50cabf84eb",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -396,9 +430,9 @@
       {
         "id": "inventory-lifecycle.unmount-after-1:lifecycle-boundary",
         "observation": {
-          "sender": "63bd2f04a0cf",
+          "sender": "97ccce4248eb",
           "payloads": "6713de8f80d3",
-          "settlements": "25640c8aebbe",
+          "settlements": "c8fe68914ed2",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -406,9 +440,9 @@
       {
         "id": "inventory-lifecycle.unmount-after-1:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "25640c8aebbe",
+          "settlements": "c8fe68914ed2",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -416,9 +450,9 @@
       {
         "id": "inventory-lifecycle.unmount-after-1:remounted",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "7301d07e0d38",
+          "settlements": "ca50cabf84eb",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -426,9 +460,9 @@
       {
         "id": "inventory-lifecycle.unmount-before-2:lifecycle-boundary",
         "observation": {
-          "sender": "63bd2f04a0cf",
+          "sender": "97ccce4248eb",
           "payloads": "6713de8f80d3",
-          "settlements": "25640c8aebbe",
+          "settlements": "c8fe68914ed2",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -436,9 +470,9 @@
       {
         "id": "inventory-lifecycle.unmount-before-2:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "25640c8aebbe",
+          "settlements": "c8fe68914ed2",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -446,9 +480,9 @@
       {
         "id": "inventory-lifecycle.unmount-before-2:remounted",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "7301d07e0d38",
+          "settlements": "ca50cabf84eb",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -456,9 +490,9 @@
       {
         "id": "inventory-lifecycle.unmount-after-2:lifecycle-boundary",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "25640c8aebbe",
+          "settlements": "c8fe68914ed2",
           "state": "fe1aebea954c",
           "effects": "4f53cda18c2b"
         }
@@ -466,9 +500,9 @@
       {
         "id": "inventory-lifecycle.unmount-after-2:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "25640c8aebbe",
+          "settlements": "c8fe68914ed2",
           "state": "fe1aebea954c",
           "effects": "4f53cda18c2b"
         }
@@ -476,9 +510,9 @@
       {
         "id": "inventory-lifecycle.unmount-after-2:remounted",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "7301d07e0d38",
+          "settlements": "ca50cabf84eb",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -486,9 +520,9 @@
       {
         "id": "inventory-lifecycle.blur-before-1:lifecycle-boundary",
         "observation": {
-          "sender": "4efbcc6bae22",
+          "sender": "1a957d27c347",
           "payloads": "a5b853493ed4",
-          "settlements": "ff7e99c8e6de",
+          "settlements": "8baaca44e19f",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -496,9 +530,9 @@
       {
         "id": "inventory-lifecycle.blur-before-1:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "ff7e99c8e6de",
+          "settlements": "8baaca44e19f",
           "state": "fe1aebea954c",
           "effects": "4f53cda18c2b"
         }
@@ -506,9 +540,9 @@
       {
         "id": "inventory-lifecycle.blur-after-1:lifecycle-boundary",
         "observation": {
-          "sender": "63bd2f04a0cf",
+          "sender": "97ccce4248eb",
           "payloads": "6713de8f80d3",
-          "settlements": "ff7e99c8e6de",
+          "settlements": "8baaca44e19f",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -516,9 +550,9 @@
       {
         "id": "inventory-lifecycle.blur-after-1:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "ff7e99c8e6de",
+          "settlements": "8baaca44e19f",
           "state": "fe1aebea954c",
           "effects": "4f53cda18c2b"
         }
@@ -526,9 +560,9 @@
       {
         "id": "inventory-lifecycle.blur-before-2:lifecycle-boundary",
         "observation": {
-          "sender": "63bd2f04a0cf",
+          "sender": "97ccce4248eb",
           "payloads": "6713de8f80d3",
-          "settlements": "ff7e99c8e6de",
+          "settlements": "8baaca44e19f",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -536,9 +570,9 @@
       {
         "id": "inventory-lifecycle.blur-before-2:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "ff7e99c8e6de",
+          "settlements": "8baaca44e19f",
           "state": "fe1aebea954c",
           "effects": "4f53cda18c2b"
         }
@@ -546,9 +580,9 @@
       {
         "id": "inventory-lifecycle.blur-after-2:lifecycle-boundary",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "ff7e99c8e6de",
+          "settlements": "8baaca44e19f",
           "state": "fe1aebea954c",
           "effects": "4f53cda18c2b"
         }
@@ -556,9 +590,9 @@
       {
         "id": "inventory-lifecycle.blur-after-2:settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "ff7e99c8e6de",
+          "settlements": "8baaca44e19f",
           "state": "fe1aebea954c",
           "effects": "4f53cda18c2b"
         }

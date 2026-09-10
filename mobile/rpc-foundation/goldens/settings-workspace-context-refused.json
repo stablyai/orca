@@ -5,15 +5,17 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
-    "1dbaae55a83d": {
+    "0131611322e3": {
       "mount": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
@@ -27,7 +29,25 @@
       "trust": {}
     },
     "4f53cda18c2b": [],
-    "5524f79301eb": [
+    "7076fb41232c": [
+      {
+        "name": "preflight.check#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+      },
+      {
+        "name": "linear.status#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+      },
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "ui.get#1",
+        "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
+      }
+    ],
+    "7e236d701bd4": [
       {
         "name": "preflight.check#1",
         "args": [
@@ -49,7 +69,8 @@
           }
         ],
         "settlement": {
-          "status": "pending"
+          "status": "pending",
+          "startedAt": 0
         }
       },
       {
@@ -73,7 +94,8 @@
           }
         ],
         "settlement": {
-          "status": "pending"
+          "status": "pending",
+          "startedAt": 0
         }
       },
       {
@@ -97,7 +119,8 @@
           }
         ],
         "settlement": {
-          "status": "pending"
+          "status": "pending",
+          "startedAt": 0
         }
       },
       {
@@ -121,29 +144,12 @@
           }
         ],
         "settlement": {
-          "status": "pending"
+          "status": "pending",
+          "startedAt": 0
         }
       }
     ],
-    "7076fb41232c": [
-      {
-        "name": "preflight.check#1",
-        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-      },
-      {
-        "name": "linear.status#1",
-        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-      },
-      {
-        "name": "settings.get#1",
-        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-      },
-      {
-        "name": "ui.get#1",
-        "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"ui.get\"}"
-      }
-    ],
-    "d12c61bdfe5c": [
+    "96691837821b": [
       {
         "name": "preflight.check#1",
         "args": [
@@ -166,6 +172,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -199,6 +207,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-2",
             "ok": true,
@@ -230,6 +240,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "error": {
               "code": "refused",
@@ -262,6 +274,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-4",
             "ok": true,
@@ -286,9 +300,9 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": "5524f79301eb",
+          "sender": "7e236d701bd4",
           "payloads": "7076fb41232c",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "f6a09f8c5b85",
           "effects": "4f53cda18c2b"
         }
@@ -296,9 +310,9 @@
       {
         "id": "settled",
         "observation": {
-          "sender": "d12c61bdfe5c",
+          "sender": "96691837821b",
           "payloads": "7076fb41232c",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "3a834cb85dd8",
           "effects": "4f53cda18c2b"
         }

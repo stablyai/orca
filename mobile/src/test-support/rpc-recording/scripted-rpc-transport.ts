@@ -50,7 +50,8 @@ export class ScriptedRpcTransport {
   })
   private wireNames: string[] = []
 
-  constructor() {
+  /** `now` is the recording scheduler's virtual clock; every settlement is stamped from it. */
+  constructor(private readonly now: () => number = () => 0) {
     const session = this.session()
     this.logical = createStableLogicalRpcClient(session, 'lan')
     this.client = {
@@ -63,11 +64,11 @@ export class ScriptedRpcTransport {
         const request = {
           name,
           args: captureArguments(args),
-          settlement: { status: 'pending' } as Settlement
+          settlement: { status: 'pending', startedAt: this.now() } as Settlement
         }
         this.requests.push(request)
         const promise = this.logical.sendRequest(...args)
-        observeSettlement(promise, (state) => {
+        observeSettlement(promise, this.now, (state) => {
           request.settlement = state
         })
         return promise

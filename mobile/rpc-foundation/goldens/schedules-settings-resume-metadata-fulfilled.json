@@ -5,13 +5,31 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
-    "06bc3c9dc8cc": [
+    "09fea004b891": {
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 30000,
+        "value": {
+          "folderWorkspaces": [],
+          "projectGroups": [],
+          "repos": [],
+          "settings": {
+            "$rpc": "null"
+          },
+          "worktrees": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "12d84e6b7567": [
       {
         "name": "repo.list#1",
         "args": [
@@ -34,6 +52,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -65,6 +85,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-2",
             "ok": true,
@@ -96,6 +118,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-3",
             "ok": true,
@@ -127,6 +151,8 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
           "error": {
             "category": "LogicalClientCutoverError",
             "message": "RPC interrupted by connection migration",
@@ -156,6 +182,8 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
           "error": {
             "category": "LogicalClientCutoverError",
             "message": "RPC interrupted by connection migration",
@@ -164,7 +192,34 @@
         }
       }
     ],
-    "1b33ba4de560": [
+    "44136fa355b3": {},
+    "4683bd69c2f9": {
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "folderWorkspaces": [],
+          "projectGroups": [],
+          "repos": [],
+          "settings": {
+            "$rpc": "null"
+          },
+          "worktrees": {
+            "$rpc": "null"
+          }
+        }
+      },
+      "disconnect": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "4f53239c1410": [
       {
         "name": "repo.list#1",
         "args": [
@@ -187,6 +242,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -218,6 +275,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-2",
             "ok": true,
@@ -249,6 +308,536 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      },
+      {
+        "name": "worktree.ps#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "worktree.ps"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 10000
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "worktree.ps#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "4f53cda18c2b": [],
+    "5a83d3e4c539": {
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "folderWorkspaces": [],
+          "projectGroups": [],
+          "repos": [],
+          "settings": {
+            "$rpc": "null"
+          },
+          "worktrees": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "65c557da4079": {
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "folderWorkspaces": [],
+          "projectGroups": [],
+          "repos": [],
+          "settings": {
+            "defaultTuiAgent": "codex",
+            "disabledTuiAgents": ["claude"],
+            "hostSettingOverrides": {},
+            "prBotAuthorOverrides": ["bot-user"],
+            "visibleTaskProviders": ["github", "linear"]
+          },
+          "worktrees": []
+        }
+      }
+    },
+    "7c1aad2b38f8": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        }
+      },
+      {
+        "name": "folderWorkspace.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "folderWorkspace.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        }
+      },
+      {
+        "name": "projectGroup.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "projectGroup.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "worktree.ps#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "worktree.ps"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 10000
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-5",
+            "ok": true,
+            "result": {
+              "worktrees": []
+            }
+          }
+        }
+      }
+    ],
+    "8d58bed8d904": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        }
+      },
+      {
+        "name": "folderWorkspace.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "folderWorkspace.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        }
+      },
+      {
+        "name": "projectGroup.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "projectGroup.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      },
+      {
+        "name": "worktree.ps#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "worktree.ps"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 10000
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-5",
+            "ok": true,
+            "result": {
+              "worktrees": []
+            }
+          }
+        }
+      }
+    ],
+    "96c81b544556": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        }
+      },
+      {
+        "name": "folderWorkspace.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "folderWorkspace.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        }
+      },
+      {
+        "name": "projectGroup.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "projectGroup.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-3",
             "ok": true,
@@ -280,6 +869,358 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "settings.get#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "worktree.ps#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "worktree.ps"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 10000
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "979c190bfe01": [
+      {
+        "name": "repo.list#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+      },
+      {
+        "name": "folderWorkspace.list#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"folderWorkspace.list\"}"
+      },
+      {
+        "name": "projectGroup.list#1",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"projectGroup.list\"}"
+      },
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "worktree.ps#1",
+        "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+      }
+    ],
+    "b04cfa013a4b": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        }
+      },
+      {
+        "name": "folderWorkspace.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "folderWorkspace.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        }
+      },
+      {
+        "name": "projectGroup.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "projectGroup.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "worktree.ps#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "worktree.ps"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 10000
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "b11c8efab170": {
+      "load": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "b22374c40ccd": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        }
+      },
+      {
+        "name": "folderWorkspace.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "folderWorkspace.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "folderWorkspaces": []
+            }
+          }
+        }
+      },
+      {
+        "name": "projectGroup.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "projectGroup.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "groups": []
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 30000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
           "error": {
             "category": "Error",
             "message": "settings.get#1 rejected",
@@ -309,6 +1250,8 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
           "error": {
             "category": "Error",
             "message": "worktree.ps#1 rejected",
@@ -317,7 +1260,7 @@
         }
       }
     ],
-    "1f026b0f8344": [
+    "b5c5e188c7f0": [
       {
         "name": "repo.list#1",
         "args": [
@@ -340,6 +1283,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -371,6 +1316,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-2",
             "ok": true,
@@ -402,177 +1349,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
-          "value": {
-            "id": "frame-3",
-            "ok": true,
-            "result": {
-              "groups": []
-            }
-          }
-        }
-      },
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      },
-      {
-        "name": "worktree.ps#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "worktree.ps"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 10000
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-5",
-            "ok": true,
-            "result": {
-              "worktrees": []
-            }
-          }
-        }
-      }
-    ],
-    "1f2d6f604307": {
-      "load": {
-        "status": "fulfilled",
-        "value": {
-          "folderWorkspaces": [],
-          "projectGroups": [],
-          "repos": [],
-          "settings": {
-            "$rpc": "null"
-          },
-          "worktrees": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "27ad71a245af": {
-      "load": {
-        "status": "pending"
-      }
-    },
-    "2a074e35530c": [
-      {
-        "name": "repo.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "repo.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "repos": []
-            }
-          }
-        }
-      },
-      {
-        "name": "folderWorkspace.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "folderWorkspace.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-2",
-            "ok": true,
-            "result": {
-              "folderWorkspaces": []
-            }
-          }
-        }
-      },
-      {
-        "name": "projectGroup.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "projectGroup.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-3",
             "ok": true,
@@ -604,6 +1382,8 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
           "error": {
             "category": "Error",
             "message": "Connection lost",
@@ -633,6 +1413,8 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
           "error": {
             "category": "Error",
             "message": "Connection lost",
@@ -641,9 +1423,11 @@
         }
       }
     ],
-    "38583452c337": {
+    "e0fbdb9e1ad2": {
       "load": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "folderWorkspaces": [],
           "projectGroups": [],
@@ -658,12 +1442,14 @@
       },
       "cutover": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       }
     },
-    "437e9fa96b67": [
+    "f48c5a8191d8": [
       {
         "name": "repo.list#1",
         "args": [
@@ -686,6 +1472,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-1",
             "ok": true,
@@ -717,6 +1505,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-2",
             "ok": true,
@@ -748,349 +1538,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
-          "value": {
-            "id": "frame-3",
-            "ok": true,
-            "result": {
-              "groups": []
-            }
-          }
-        }
-      },
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-4",
-            "ok": true,
-            "result": {
-              "settings": {
-                "defaultTuiAgent": "codex",
-                "disabledTuiAgents": ["claude"],
-                "hostSettingOverrides": {},
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"]
-              }
-            }
-          }
-        }
-      },
-      {
-        "name": "worktree.ps#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "worktree.ps"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 10000
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-5",
-            "ok": true,
-            "result": {
-              "worktrees": []
-            }
-          }
-        }
-      }
-    ],
-    "44136fa355b3": {},
-    "480f3ffa88d2": {
-      "load": {
-        "status": "fulfilled",
-        "value": {
-          "folderWorkspaces": [],
-          "projectGroups": [],
-          "repos": [],
-          "settings": {
-            "$rpc": "null"
-          },
-          "worktrees": {
-            "$rpc": "null"
-          }
-        }
-      },
-      "disconnect": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "492f0776eec9": [
-      {
-        "name": "repo.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "repo.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "repos": []
-            }
-          }
-        }
-      },
-      {
-        "name": "folderWorkspace.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "folderWorkspace.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-2",
-            "ok": true,
-            "result": {
-              "folderWorkspaces": []
-            }
-          }
-        }
-      },
-      {
-        "name": "projectGroup.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "projectGroup.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-3",
-            "ok": true,
-            "result": {
-              "groups": []
-            }
-          }
-        }
-      },
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-4",
-            "ok": true,
-            "result": {
-              "settings": {
-                "defaultTuiAgent": "codex",
-                "disabledTuiAgents": ["claude"],
-                "hostSettingOverrides": {},
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"]
-              }
-            }
-          }
-        }
-      },
-      {
-        "name": "worktree.ps#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "worktree.ps"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 10000
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      }
-    ],
-    "4f53cda18c2b": [],
-    "7835c2f5b373": [
-      {
-        "name": "repo.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "repo.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "repos": []
-            }
-          }
-        }
-      },
-      {
-        "name": "folderWorkspace.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "folderWorkspace.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-2",
-            "ok": true,
-            "result": {
-              "folderWorkspaces": []
-            }
-          }
-        }
-      },
-      {
-        "name": "projectGroup.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "projectGroup.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "id": "frame-3",
             "ok": true,
@@ -1122,6 +1571,8 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 30000,
           "error": {
             "category": "Error",
             "message": "Request timed out: settings.get",
@@ -1151,488 +1602,11 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 30000,
           "error": {
             "category": "Error",
             "message": "Request timed out: worktree.ps",
-            "isRpcDeliveryUnknown": true
-          }
-        }
-      }
-    ],
-    "979c190bfe01": [
-      {
-        "name": "repo.list#1",
-        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-      },
-      {
-        "name": "folderWorkspace.list#1",
-        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"folderWorkspace.list\"}"
-      },
-      {
-        "name": "projectGroup.list#1",
-        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"projectGroup.list\"}"
-      },
-      {
-        "name": "settings.get#1",
-        "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-      },
-      {
-        "name": "worktree.ps#1",
-        "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
-      }
-    ],
-    "d0bb33de375c": [
-      {
-        "name": "repo.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "repo.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "repos": []
-            }
-          }
-        }
-      },
-      {
-        "name": "folderWorkspace.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "folderWorkspace.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-2",
-            "ok": true,
-            "result": {
-              "folderWorkspaces": []
-            }
-          }
-        }
-      },
-      {
-        "name": "projectGroup.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "projectGroup.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-3",
-            "ok": true,
-            "result": {
-              "groups": []
-            }
-          }
-        }
-      },
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      },
-      {
-        "name": "worktree.ps#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "worktree.ps"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 10000
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      }
-    ],
-    "d84bbd1e6a18": [
-      {
-        "name": "repo.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "repo.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "repos": []
-            }
-          }
-        }
-      },
-      {
-        "name": "folderWorkspace.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "folderWorkspace.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-2",
-            "ok": true,
-            "result": {
-              "folderWorkspaces": []
-            }
-          }
-        }
-      },
-      {
-        "name": "projectGroup.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "projectGroup.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-3",
-            "ok": true,
-            "result": {
-              "groups": []
-            }
-          }
-        }
-      },
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "rejected",
-          "error": {
-            "category": "Error",
-            "message": "settings.get#1 rejected",
-            "isRpcDeliveryUnknown": true
-          }
-        }
-      },
-      {
-        "name": "worktree.ps#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "worktree.ps"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 10000
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      }
-    ],
-    "f1ad4268f39d": {
-      "load": {
-        "status": "fulfilled",
-        "value": {
-          "folderWorkspaces": [],
-          "projectGroups": [],
-          "repos": [],
-          "settings": {
-            "defaultTuiAgent": "codex",
-            "disabledTuiAgents": ["claude"],
-            "hostSettingOverrides": {},
-            "prBotAuthorOverrides": ["bot-user"],
-            "visibleTaskProviders": ["github", "linear"]
-          },
-          "worktrees": []
-        }
-      }
-    },
-    "f566bf5807e4": [
-      {
-        "name": "repo.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "repo.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "repos": []
-            }
-          }
-        }
-      },
-      {
-        "name": "folderWorkspace.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "folderWorkspace.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-2",
-            "ok": true,
-            "result": {
-              "folderWorkspaces": []
-            }
-          }
-        }
-      },
-      {
-        "name": "projectGroup.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "projectGroup.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-3",
-            "ok": true,
-            "result": {
-              "groups": []
-            }
-          }
-        }
-      },
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "undefined"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      },
-      {
-        "name": "worktree.ps#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "worktree.ps"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 10000
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "timeoutMs": 30000
-            }
-          }
-        ],
-        "settlement": {
-          "status": "rejected",
-          "error": {
-            "category": "Error",
-            "message": "worktree.ps#1 rejected",
             "isRpcDeliveryUnknown": true
           }
         }
@@ -1645,9 +1619,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.forward:sibling-pending",
         "observation": {
-          "sender": "492f0776eec9",
+          "sender": "b04cfa013a4b",
           "payloads": "979c190bfe01",
-          "settlements": "27ad71a245af",
+          "settlements": "b11c8efab170",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1655,9 +1629,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.forward:settled",
         "observation": {
-          "sender": "437e9fa96b67",
+          "sender": "7c1aad2b38f8",
           "payloads": "979c190bfe01",
-          "settlements": "f1ad4268f39d",
+          "settlements": "65c557da4079",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1665,9 +1639,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.reverse:sibling-pending",
         "observation": {
-          "sender": "1f026b0f8344",
+          "sender": "8d58bed8d904",
           "payloads": "979c190bfe01",
-          "settlements": "27ad71a245af",
+          "settlements": "b11c8efab170",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1675,9 +1649,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.reverse:settled",
         "observation": {
-          "sender": "437e9fa96b67",
+          "sender": "7c1aad2b38f8",
           "payloads": "979c190bfe01",
-          "settlements": "f1ad4268f39d",
+          "settlements": "65c557da4079",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1685,9 +1659,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.both-reject-forward:sibling-pending",
         "observation": {
-          "sender": "d84bbd1e6a18",
+          "sender": "96c81b544556",
           "payloads": "979c190bfe01",
-          "settlements": "27ad71a245af",
+          "settlements": "b11c8efab170",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1695,9 +1669,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.both-reject-forward:settled",
         "observation": {
-          "sender": "1b33ba4de560",
+          "sender": "b22374c40ccd",
           "payloads": "979c190bfe01",
-          "settlements": "1f2d6f604307",
+          "settlements": "5a83d3e4c539",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1705,9 +1679,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.both-reject-reverse:sibling-pending",
         "observation": {
-          "sender": "f566bf5807e4",
+          "sender": "4f53239c1410",
           "payloads": "979c190bfe01",
-          "settlements": "27ad71a245af",
+          "settlements": "b11c8efab170",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1715,9 +1689,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.both-reject-reverse:settled",
         "observation": {
-          "sender": "1b33ba4de560",
+          "sender": "b22374c40ccd",
           "payloads": "979c190bfe01",
-          "settlements": "1f2d6f604307",
+          "settlements": "5a83d3e4c539",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1725,9 +1699,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.reject-peer-pending:sibling-pending",
         "observation": {
-          "sender": "d84bbd1e6a18",
+          "sender": "96c81b544556",
           "payloads": "979c190bfe01",
-          "settlements": "27ad71a245af",
+          "settlements": "b11c8efab170",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1735,19 +1709,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.reject-peer-pending:settled",
         "observation": {
-          "sender": "d84bbd1e6a18",
+          "sender": "96c81b544556",
           "payloads": "979c190bfe01",
-          "settlements": "27ad71a245af",
-          "state": "44136fa355b3",
-          "effects": "4f53cda18c2b"
-        }
-      },
-      {
-        "id": "settings-resume-metadata-fulfilled.timeout:deadline-pending",
-        "observation": {
-          "sender": "d0bb33de375c",
-          "payloads": "979c190bfe01",
-          "settlements": "27ad71a245af",
+          "settlements": "b11c8efab170",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1755,9 +1719,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.timeout:settled",
         "observation": {
-          "sender": "7835c2f5b373",
+          "sender": "f48c5a8191d8",
           "payloads": "979c190bfe01",
-          "settlements": "1f2d6f604307",
+          "settlements": "09fea004b891",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1765,9 +1729,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.disconnect:settled",
         "observation": {
-          "sender": "2a074e35530c",
+          "sender": "b5c5e188c7f0",
           "payloads": "979c190bfe01",
-          "settlements": "480f3ffa88d2",
+          "settlements": "4683bd69c2f9",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }
@@ -1775,9 +1739,9 @@
       {
         "id": "settings-resume-metadata-fulfilled.client-cutover:settled",
         "observation": {
-          "sender": "06bc3c9dc8cc",
+          "sender": "12d84e6b7567",
           "payloads": "979c190bfe01",
-          "settlements": "38583452c337",
+          "settlements": "e0fbdb9e1ad2",
           "state": "44136fa355b3",
           "effects": "4f53cda18c2b"
         }

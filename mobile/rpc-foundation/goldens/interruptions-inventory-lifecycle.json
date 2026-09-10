@@ -5,226 +5,60 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
-    "0658643bf451": {
+    "305c86832cd8": {
       "mount": {
         "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       },
       "old": {
         "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "disconnect": {
-        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
         "value": {
           "$rpc": "undefined"
         }
       }
     },
-    "2c4dcc8e654b": [
-      {
-        "name": "files.searchPaths#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "files.searchPaths"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 16,
-              "query": "old",
-              "worktree": "id:A"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "error": {
-              "code": "method_not_found",
-              "message": "Unknown method"
-            },
-            "id": "frame-1",
-            "ok": false
-          }
+    "44517661da0d": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
         }
       },
-      {
-        "name": "files.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "files.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "worktree": "id:A"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "rejected",
-          "error": {
-            "category": "LogicalClientCutoverError",
-            "message": "RPC interrupted by connection migration",
-            "isRpcDeliveryUnknown": false
-          }
+      "old": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "cutover": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
         }
       }
-    ],
+    },
     "4f53cda18c2b": [],
-    "521fc7fd2169": [
-      {
-        "name": "files.searchPaths#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "files.searchPaths"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 16,
-              "query": "old",
-              "worktree": "id:A"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "error": {
-              "code": "method_not_found",
-              "message": "Unknown method"
-            },
-            "id": "frame-1",
-            "ok": false
-          }
-        }
-      },
-      {
-        "name": "files.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "files.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "worktree": "id:A"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "rejected",
-          "error": {
-            "category": "Error",
-            "message": "Connection lost",
-            "isRpcDeliveryUnknown": true
-          }
-        }
-      }
-    ],
     "602e35a92eec": {
       "files": []
     },
-    "63bd2f04a0cf": [
-      {
-        "name": "files.searchPaths#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "files.searchPaths"
-          },
-          {
-            "name": "params",
-            "value": {
-              "limit": 16,
-              "query": "old",
-              "worktree": "id:A"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "error": {
-              "code": "method_not_found",
-              "message": "Unknown method"
-            },
-            "id": "frame-1",
-            "ok": false
-          }
-        }
-      },
-      {
-        "name": "files.list#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "files.list"
-          },
-          {
-            "name": "params",
-            "value": {
-              "worktree": "id:A"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      }
-    ],
     "6713de8f80d3": [
       {
         "name": "files.searchPaths#1",
@@ -235,7 +69,33 @@
         "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
       }
     ],
-    "6878fb9df00a": [
+    "8c70b1eb7a30": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "old": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "disconnect": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "8d7ff0ac3500": [
       {
         "name": "files.searchPaths#1",
         "args": [
@@ -260,6 +120,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
           "value": {
             "error": {
               "code": "method_not_found",
@@ -292,6 +154,8 @@
         ],
         "settlement": {
           "status": "rejected",
+          "startedAt": 120,
+          "settledAt": 30120,
           "error": {
             "category": "Error",
             "message": "Request timed out: files.list",
@@ -300,60 +164,154 @@
         }
       }
     ],
-    "8b33b4454476": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
+    "da74303641ea": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
         }
       },
-      "old": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 120,
+          "settledAt": 120,
+          "error": {
+            "category": "LogicalClientCutoverError",
+            "message": "RPC interrupted by connection migration",
+            "isRpcDeliveryUnknown": false
+          }
         }
       }
-    },
-    "8b72743d20bc": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
+    ],
+    "e01595c0caa4": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
         }
       },
-      "old": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "cutover": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 120,
+          "settledAt": 120,
+          "error": {
+            "category": "Error",
+            "message": "Connection lost",
+            "isRpcDeliveryUnknown": true
+          }
         }
       }
-    }
+    ]
   },
   "recording": {
     "scenario": "interruptions-inventory-lifecycle",
     "checkpoints": [
       {
-        "id": "inventory-lifecycle.timeout:deadline-pending",
-        "observation": {
-          "sender": "63bd2f04a0cf",
-          "payloads": "6713de8f80d3",
-          "settlements": "8b33b4454476",
-          "state": "602e35a92eec",
-          "effects": "4f53cda18c2b"
-        }
-      },
-      {
         "id": "inventory-lifecycle.timeout:interrupted",
         "observation": {
-          "sender": "6878fb9df00a",
+          "sender": "8d7ff0ac3500",
           "payloads": "6713de8f80d3",
-          "settlements": "8b33b4454476",
+          "settlements": "305c86832cd8",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -361,9 +319,9 @@
       {
         "id": "inventory-lifecycle.timeout:settled",
         "observation": {
-          "sender": "6878fb9df00a",
+          "sender": "8d7ff0ac3500",
           "payloads": "6713de8f80d3",
-          "settlements": "8b33b4454476",
+          "settlements": "305c86832cd8",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -371,9 +329,9 @@
       {
         "id": "inventory-lifecycle.disconnect:interrupted",
         "observation": {
-          "sender": "521fc7fd2169",
+          "sender": "e01595c0caa4",
           "payloads": "6713de8f80d3",
-          "settlements": "0658643bf451",
+          "settlements": "8c70b1eb7a30",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -381,9 +339,9 @@
       {
         "id": "inventory-lifecycle.disconnect:settled",
         "observation": {
-          "sender": "521fc7fd2169",
+          "sender": "e01595c0caa4",
           "payloads": "6713de8f80d3",
-          "settlements": "0658643bf451",
+          "settlements": "8c70b1eb7a30",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -391,9 +349,9 @@
       {
         "id": "inventory-lifecycle.cutover:interrupted",
         "observation": {
-          "sender": "2c4dcc8e654b",
+          "sender": "da74303641ea",
           "payloads": "6713de8f80d3",
-          "settlements": "8b72743d20bc",
+          "settlements": "44517661da0d",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }
@@ -401,9 +359,9 @@
       {
         "id": "inventory-lifecycle.cutover:settled",
         "observation": {
-          "sender": "2c4dcc8e654b",
+          "sender": "da74303641ea",
           "payloads": "6713de8f80d3",
-          "settlements": "8b72743d20bc",
+          "settlements": "44517661da0d",
           "state": "602e35a92eec",
           "effects": "4f53cda18c2b"
         }

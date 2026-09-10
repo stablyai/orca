@@ -34,15 +34,24 @@ wire ids never identify completions. Timers only advance explicitly, and zero-ti
 flush due timers, promise continuations, and React work after every step. Date, performance,
 Math.random, Web Crypto random bytes/UUIDs, and transport ids are deterministic.
 
-### Time thresholds
+### Recorded time
 
-No observation carries a timestamp, so a threshold is only observable when a checkpoint sits on
-each side of it. Every scripted threshold is straddled rather than jumped: the 30 s request
-deadline by `{"advance":11000}`, `deadline-pending`, `{"advance":19000}` in both the sibling and
-interruption schedules, the 120 ms search debounce by 119 ms, `debounce-pending`, 1 ms in `b1`, and
-the 60 s repo-metadata cache TTL by 59 s, `cache-warm`, 1 s in `settings-repo-cache-expiry`.
-Shortening any of the three moves an observation into the earlier partition; lengthening one
-already failed, because a completion for a request that was never issued is refused.
+Every settlement carries `startedAt` and `settledAt` in virtual milliseconds since the pinned epoch,
+so the projection has a temporal dimension instead of relying on where a checkpoint happens to sit.
+Any transition the product schedules for itself is recorded at the time it actually fires: change a
+request deadline or the search debounce by any amount, in either direction, and a recorded number
+moves. Granularity is exact milliseconds, because the fake timers fire at their scheduled time and
+never coalesce; `recording-runner.test.ts` pins a 5 ms deadline settling at exactly `settledAt: 5`.
+
+A checkpoint's own clock is not recorded. It is always the sum of the scripted `advance` steps, so
+it is a function of the scenario rather than of the code under test; `run-recording.ts` asserts that
+equality at every checkpoint instead, which costs no bytes and fails loudly if it ever drifts.
+
+This covers thresholds the product schedules. It does not cover a threshold the product only
+consults when something else makes it act, such as the `Date.now()` cache TTL in
+`use-host-repo-metadata.ts`: both a 60 s and a 20 s TTL are expired when the scenario probes at
+60 s, and no observation exists in between. Closing that needs a scenario acting inside the window,
+which is a coverage decision, not a projection one.
 
 ## Golden schema
 
@@ -55,9 +64,9 @@ on the header and forces a deliberate re-record. Checkpoints
 contain ordered sender calls and serialized physical application payloads, action and request
 settlements, projected state, and ordered external effects. Sender args have three positional
 slots; absent, undefined and null are distinct `$rpc` tags. Literal objects containing `$rpc`
-are escaped. Only object keys are sorted; array/effect order, options, budgets and errors stay
-observable. Errors contain category, message and `isRpcDeliveryUnknown`, never stack paths, plus
-`code` and a recursively captured `cause` when the thrown error carries them.
+are escaped. Only object keys are sorted; array/effect order, options, budgets, settlement times
+and errors stay observable. Errors contain category, message and `isRpcDeliveryUnknown`, never
+stack paths, plus `code` and a recursively captured `cause` when the thrown error carries them.
 Platform is provenance; candidate comparison does not require the same operating system.
 
 ### Value pool

@@ -61,15 +61,32 @@ export function captureError(error: unknown, depth = 0): RecordedValue {
   }
 }
 
+/**
+ * `startedAt` and `settledAt` are virtual milliseconds on the pinned fake clock. They give the
+ * observation a temporal dimension: a transition the product schedules for itself, such as a
+ * request deadline or a debounce, is recorded at the time it actually happens, so any change to
+ * that duration moves a recorded number rather than needing a scenario placed across it.
+ */
 export type Settlement =
-  | { status: 'pending' }
-  | { status: 'fulfilled'; value: RecordedValue }
-  | { status: 'rejected'; error: RecordedValue }
+  | { status: 'pending'; startedAt: number }
+  | { status: 'fulfilled'; startedAt: number; settledAt: number; value: RecordedValue }
+  | { status: 'rejected'; startedAt: number; settledAt: number; error: RecordedValue }
 
-export function observeSettlement(value: unknown, update: (state: Settlement) => void): void {
-  update({ status: 'pending' })
+export function rejectedSettlement(error: unknown, at: number): Settlement {
+  return { status: 'rejected', startedAt: at, settledAt: at, error: captureError(error) }
+}
+
+export function observeSettlement(
+  value: unknown,
+  now: () => number,
+  update: (state: Settlement) => void
+): void {
+  const startedAt = now()
+  update({ status: 'pending', startedAt })
   Promise.resolve(value).then(
-    (result) => update({ status: 'fulfilled', value: captureValue(result) }),
-    (error: unknown) => update({ status: 'rejected', error: captureError(error) })
+    (result) =>
+      update({ status: 'fulfilled', startedAt, settledAt: now(), value: captureValue(result) }),
+    (error: unknown) =>
+      update({ status: 'rejected', startedAt, settledAt: now(), error: captureError(error) })
   )
 }

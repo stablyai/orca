@@ -1,8 +1,8 @@
 import { recordUnhandledRejections } from './unhandled-recording'
 import {
-  captureError,
   captureValue,
   observeSettlement,
+  rejectedSettlement,
   type Settlement,
   type RecordedValue
 } from './recording-values'
@@ -21,7 +21,7 @@ export async function runRecording(
   scheduler: RecordingScheduler
 ): Promise<Recording> {
   scheduler.start()
-  const transport = new ScriptedRpcTransport()
+  const transport = new ScriptedRpcTransport(scheduler.elapsed)
   const effects: { name: string; value: RecordedValue }[] = []
   const settlements: Record<string, Settlement> = {}
   const recording: Recording = { scenario: scenario.id, checkpoints: [] }
@@ -31,6 +31,7 @@ export async function runRecording(
   const stopUnhandled = recordUnhandledRejections(effect)
   let mounted: MountedOperation | undefined
   const ids = new Set<string>()
+  let advanced = 0
   try {
     mounted = mount({ client: transport.client, effect })
     for (const step of scenario.steps) {
@@ -46,21 +47,29 @@ export async function runRecording(
               : step.action === 'cutover'
                 ? transport.cutover()
                 : mounted.action(step.action, step.args ?? {})
-          observeSettlement(value, (state) => {
+          observeSettlement(value, scheduler.elapsed, (state) => {
             settlements[step.id] = state
           })
         } catch (error) {
-          settlements[step.id] = { status: 'rejected', error: captureError(error) }
+          settlements[step.id] = rejectedSettlement(error, scheduler.elapsed())
         }
       } else if ('complete' in step) {
         transport.complete(step.complete, step.params, step.reply, step.reject)
       } else if ('bind' in step) {
         transport.bind(step.bind, step.request, step.params)
       } else if ('advance' in step) {
+        advanced += step.advance
         await scheduler.advance(step.advance)
       }
       await scheduler.flush()
       if ('checkpoint' in step) {
+        // A checkpoint's own clock is the sum of the scripted advances, so recording it would add
+        // bytes and no signal. Asserted rather than recorded, so a future drift fails loudly.
+        if (scheduler.elapsed() !== advanced) {
+          throw new Error(
+            `Checkpoint clock drifted: ${scenario.id} ${step.checkpoint} at ${scheduler.elapsed()}, scripted ${advanced}`
+          )
+        }
         recording.checkpoints.push({
           id: step.checkpoint,
           observation: {

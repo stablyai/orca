@@ -12,11 +12,13 @@ import {
   compareGolden,
   GOLDEN_FORMAT_VERSION,
   goldenBytes,
+  PROJECTION_VERSION,
   readGolden,
   writeGolden,
   type GoldenRecording
 } from './golden-recording'
 import { hoistPreludeCheckpoints } from './prelude-checkpoints'
+import { runRecording } from './run-recording'
 import { replyPartitions } from './reply-matrix'
 import type { Observation, RecordingScenario } from './recording-scenario'
 
@@ -32,7 +34,7 @@ describe('recording boundaries', () => {
   it('runs the actual stable-client projection and physical serialization', async () => {
     const clock = vitestRecordingScheduler()
     clock.start()
-    const transport = new ScriptedRpcTransport()
+    const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const result = transport.client.sendRequest(
         'worktree.ps',
@@ -65,7 +67,7 @@ describe('recording boundaries', () => {
   it('requires logical bindings plus matching params for concurrent same-method calls', async () => {
     const clock = vitestRecordingScheduler()
     clock.start()
-    const transport = new ScriptedRpcTransport()
+    const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       const left = transport.client.sendRequest('files.list', { worktree: 'A' })
       const right = transport.client.sendRequest('files.list', { worktree: 'B' })
@@ -99,20 +101,23 @@ describe('recording boundaries', () => {
   it('records actual deadline ambiguity and leaves peers pending before their deadlines', async () => {
     const clock = vitestRecordingScheduler()
     clock.start()
-    const transport = new ScriptedRpcTransport()
+    const transport = new ScriptedRpcTransport(clock.elapsed)
     try {
       void transport.client.sendRequest('short', {}, { timeoutMs: 5 }).catch(() => {})
       void transport.client.sendRequest('long', {}, { timeoutMs: 50 }).catch(() => {})
       await clock.advance(5)
+      // Exact virtual milliseconds: the deadline is recorded at the value the product asked for.
       expect(transport.requests[0].settlement).toEqual({
         status: 'rejected',
+        startedAt: 0,
+        settledAt: 5,
         error: {
           category: 'Error',
           message: 'Request timed out: short',
           isRpcDeliveryUnknown: true
         }
       })
-      expect(transport.requests[1].settlement).toEqual({ status: 'pending' })
+      expect(transport.requests[1].settlement).toEqual({ status: 'pending', startedAt: 0 })
     } finally {
       transport.dispose()
       await clock.flush()
@@ -217,6 +222,25 @@ describe('recording boundaries', () => {
     ).toThrow('diverges from the base')
   })
 
+  it('refuses a checkpoint whose clock drifted from the scripted advances', async () => {
+    const scheduler = vitestRecordingScheduler()
+    await expect(
+      runRecording(
+        {
+          id: 'drift',
+          operation: 'op',
+          version: 1,
+          family: 'op',
+          sites: [],
+          schedules: [],
+          steps: [{ advance: 10 }, { checkpoint: 'settled' }]
+        },
+        () => ({ action: () => {}, state: () => ({}), dispose: () => {} }),
+        { ...scheduler, elapsed: () => scheduler.elapsed() + 1 }
+      )
+    ).rejects.toThrow('Checkpoint clock drifted: drift settled at 11, scripted 10')
+  })
+
   it('records an error code and cause, and omits both when the error carries neither', () => {
     expect(captureError(new Error('plain'))).toEqual({
       category: 'Error',
@@ -299,7 +323,7 @@ function sampleGolden(id: string): GoldenRecording {
     recorderSha256: 'c'.repeat(64),
     platform: process.platform,
     scenarioVersion: 1,
-    projectionVersion: 1,
+    projectionVersion: PROJECTION_VERSION,
     goldenFormatVersion: GOLDEN_FORMAT_VERSION,
     recording: { scenario: id, checkpoints: [{ id: 'settled', observation: observation('idle') }] }
   }

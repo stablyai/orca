@@ -2,6 +2,8 @@ import { act } from 'react-test-renderer'
 import { vi } from 'vitest'
 import type { RecordingScheduler } from './recording-scenario'
 
+const RECORDING_EPOCH = new Date('2026-01-01T00:00:00Z')
+
 export function vitestRecordingScheduler(): RecordingScheduler {
   async function flush() {
     await act(async () => {
@@ -21,7 +23,7 @@ export function vitestRecordingScheduler(): RecordingScheduler {
           'performance'
         ]
       })
-      vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+      vi.setSystemTime(RECORDING_EPOCH)
       let seed = 1
       const random = () => {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
@@ -47,6 +49,7 @@ export function vitestRecordingScheduler(): RecordingScheduler {
       }
     },
     flush,
+    elapsed: () => Date.now() - RECORDING_EPOCH.getTime(),
     advance: async (ms) => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(ms)

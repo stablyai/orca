@@ -5,26 +5,12 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
-    "005164ebb458": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "submit": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      }
-    },
     "13c996e4ec2b": {
       "creating": true,
       "error": "",
@@ -32,6 +18,33 @@
         "disabledTuiAgents": ["claude"]
       }
     },
+    "1f2f2a0a5737": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
     "5efbd884ea5a": {
       "creating": false,
       "error": "Selected agent is disabled. Choose an enabled agent before creating.",
@@ -43,71 +56,24 @@
         "visibleTaskProviders": ["github", "linear"]
       }
     },
-    "8ad24c7e79a6": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "fulfilled",
-          "value": {
-            "id": "frame-1",
-            "ok": true,
-            "result": {
-              "settings": {
-                "defaultTuiAgent": "codex",
-                "disabledTuiAgents": ["claude"],
-                "hostSettingOverrides": {},
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"]
-              }
-            }
-          }
+    "6dfef4ef572b": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "submit": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
         }
       }
-    ],
-    "95115856c445": [
-      {
-        "name": "settings.get#1",
-        "args": [
-          {
-            "name": "method",
-            "value": "settings.get"
-          },
-          {
-            "name": "params",
-            "value": {
-              "$rpc": "absent"
-            }
-          },
-          {
-            "name": "options",
-            "value": {
-              "$rpc": "absent"
-            }
-          }
-        ],
-        "settlement": {
-          "status": "pending"
-        }
-      }
-    ],
+    },
     "9db655095867": [
       {
         "name": "error",
@@ -145,23 +111,67 @@
         "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
       }
     ],
-    "bd10b5abf164": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
+    "a7af6ac4ce05": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
         }
-      },
-      "submit": {
-        "status": "pending"
       }
-    },
+    ],
     "c0cb3df4feef": [
       {
         "name": "error",
         "value": ""
       }
-    ]
+    ],
+    "f117d93cf44a": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "submit": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    }
   },
   "recording": {
     "scenario": "settings-workspace-submit-fulfilled",
@@ -169,9 +179,9 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": "95115856c445",
+          "sender": "1f2f2a0a5737",
           "payloads": "9e493785145e",
-          "settlements": "bd10b5abf164",
+          "settlements": "f117d93cf44a",
           "state": "13c996e4ec2b",
           "effects": "c0cb3df4feef"
         }
@@ -179,9 +189,9 @@
       {
         "id": "settled",
         "observation": {
-          "sender": "8ad24c7e79a6",
+          "sender": "a7af6ac4ce05",
           "payloads": "9e493785145e",
-          "settlements": "005164ebb458",
+          "settlements": "6dfef4ef572b",
           "state": "5efbd884ea5a",
           "effects": "9db655095867"
         }

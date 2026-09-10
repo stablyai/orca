@@ -5,13 +5,23 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
-    "1043ce303fe4": [
+    "0131611322e3": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "16043f76be6c": [
       {
         "name": "settings.get#1",
         "args": [
@@ -34,6 +44,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
           "value": {
             "error": {
               "code": "refused",
@@ -45,16 +57,7 @@
         }
       }
     ],
-    "1dbaae55a83d": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "4f53cda18c2b": [],
-    "95115856c445": [
+    "1f2f2a0a5737": [
       {
         "name": "settings.get#1",
         "args": [
@@ -76,10 +79,12 @@
           }
         ],
         "settlement": {
-          "status": "pending"
+          "status": "pending",
+          "startedAt": 0
         }
       }
     ],
+    "4f53cda18c2b": [],
     "9e493785145e": [
       {
         "name": "settings.get#1",
@@ -93,9 +98,9 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": "95115856c445",
+          "sender": "1f2f2a0a5737",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }
@@ -103,9 +108,9 @@
       {
         "id": "settled",
         "observation": {
-          "sender": "1043ce303fe4",
+          "sender": "16043f76be6c",
           "payloads": "9e493785145e",
-          "settlements": "1dbaae55a83d",
+          "settlements": "0131611322e3",
           "state": "4f53cda18c2b",
           "effects": "4f53cda18c2b"
         }

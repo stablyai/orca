@@ -5,12 +5,30 @@
   "runnerVersion": 1,
   "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
   "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
-  "recorderSha256": "05ddde590389d3a356e9e642f1d1b84bbdcedcfa3a121ea09e6a71bbad253330",
+  "recorderSha256": "372a7e36905b29ea283e68a098391c6a935a238d68aade1a0a7d9576f444887c",
   "platform": "darwin",
   "scenarioVersion": 1,
-  "projectionVersion": 1,
+  "projectionVersion": 2,
   "goldenFormatVersion": 2,
   "values": {
+    "305c86832cd8": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "old": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
     "4f53cda18c2b": [],
     "6713de8f80d3": [
       {
@@ -22,21 +40,7 @@
         "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
       }
     ],
-    "8b33b4454476": {
-      "mount": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      },
-      "old": {
-        "status": "fulfilled",
-        "value": {
-          "$rpc": "undefined"
-        }
-      }
-    },
-    "b99382bd8e90": [
+    "ab2510585ba0": [
       {
         "name": "files.searchPaths#1",
         "args": [
@@ -61,6 +65,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
           "value": {
             "error": {
               "code": "method_not_found",
@@ -93,6 +99,8 @@
         ],
         "settlement": {
           "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
           "value": {
             "id": "frame-2",
             "ok": true,
@@ -117,9 +125,9 @@
       {
         "id": "settled",
         "observation": {
-          "sender": "b99382bd8e90",
+          "sender": "ab2510585ba0",
           "payloads": "6713de8f80d3",
-          "settlements": "8b33b4454476",
+          "settlements": "305c86832cd8",
           "state": "fe1aebea954c",
           "effects": "4f53cda18c2b"
         }

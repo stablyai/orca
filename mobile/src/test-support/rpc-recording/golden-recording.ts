@@ -15,6 +15,8 @@ import type { Recording, RecordingScenario } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 
 export const RUNNER_VERSION = 1
+// 2 stamps every settlement with startedAt/settledAt on the pinned virtual clock.
+export const PROJECTION_VERSION = 2
 // 2 interns observation field values into a pooled map; a version 1 file is not comparable here.
 export const GOLDEN_FORMAT_VERSION = 2
 export type GoldenRecording = {
@@ -53,7 +55,7 @@ export function goldenRecording(
     recorderSha256: recorderSha256(root),
     platform: process.platform,
     scenarioVersion: scenario.version,
-    projectionVersion: 1,
+    projectionVersion: PROJECTION_VERSION,
     goldenFormatVersion: GOLDEN_FORMAT_VERSION,
     recording
   }
