@@ -477,14 +477,13 @@ describe('ReviewNotesSendMenuContent', () => {
     const tree = render()
     const item = findByType(tree, 'DropdownMenuItem')
 
-        const labels = findAllByType(item, 'span').filter(
-          (span) => typeof span.props.className === 'string' && span.props.className.includes('truncate')
-        )
-        expect(collectText(labels[0])).toBe('Payments')
-        expect(collectText(labels[1])).toContain('Claude')
-        expect(collectText(labels[1])).not.toContain('Payments')
+    const labels = findAllByType(item, 'span').filter(
+      (span) => typeof span.props.className === 'string' && span.props.className.includes('truncate')
+    )
+    expect(collectText(labels[0])).toBe('Payments')
     // Why: the agent type moves to the secondary line instead of duplicating the name.
-    expect(collectText(item)).toContain('Claude')
+    expect(collectText(labels[1])).toContain('Claude')
+    expect(collectText(labels[1])).not.toContain('Payments')
   })
 
   it('does not target title-detected rows skipped by target derivation', async () => {
