@@ -3,14 +3,13 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import {
-  agentSessionBackgroundTasksEqual,
-  type AgentSessionBackgroundTaskState,
-  type AgentSessionSlashCommand,
-  type AgentSessionHandoffStatus,
-  type AgentSessionHistoryPage,
-  type AgentSessionSubscribeEvent,
-  type AgentSessionTurnActivity
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionSlashCommand,
+  AgentSessionHandoffStatus,
+  AgentSessionHistoryPage,
+  AgentSessionSubscribeEvent,
+  AgentSessionTurnActivity
 } from './agent-session-wire'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'

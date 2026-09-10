@@ -49,13 +49,15 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   })
 }))
 
-import type { AgentJournalSubmission } from '../../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions
 } from '../../../../shared/native-chat-session-option-defaults'
 import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat-session-options'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 
 /** Replay every host mutation in order, exactly as the runtime does. */
@@ -598,8 +600,11 @@ describe('turn timing', () => {
       )
       expect(result.current.isWorking).toBe(true)
       expect(result.current.workingStartedAt).toBe(50_000 - 300)
+      // t2 is still running, so the host has no duration for it: an explicit null
+      // that outranks whatever this client clocked locally.
       expect([...result.current.settledTurns]).toEqual([
-        ['u1', { startedAt: 9_000_000, workedSeconds: 4 }]
+        ['u1', { startedAt: 9_000_000, workedSeconds: 4 }],
+        ['u2', null]
       ])
       vi.setSystemTime(80_000)
       rerender()

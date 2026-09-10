@@ -73,7 +73,7 @@ function loadedHistory() {
   for (const first of [129, 65, 1]) {
     state = reduceStructuredAgentSession(state, {
       type: 'older-page',
-      requestedEpoch: 'epoch',
+      requestedCursor: { epoch: 'epoch', sequence: Number.MAX_SAFE_INTEGER },
       page: page(Array.from({ length: 64 }, (_, index) => index + first))
     })
   }
@@ -84,7 +84,7 @@ describe('durable turn attribution across paginated history', () => {
   it('keeps an older page duration after the recent submission budget fills', () => {
     const state = reduceStructuredAgentSession(loadedHistory(), {
       type: 'older-page',
-      requestedEpoch: 'epoch',
+      requestedCursor: { epoch: 'epoch', sequence: Number.MAX_SAFE_INTEGER },
       page: page([0])
     })
     expect(
@@ -125,7 +125,7 @@ describe('durable turn attribution across paginated history', () => {
   it('drops an old alias once rewind removes its user item', () => {
     const loaded = reduceStructuredAgentSession(loadedHistory(), {
       type: 'older-page',
-      requestedEpoch: 'epoch',
+      requestedCursor: { epoch: 'epoch', sequence: Number.MAX_SAFE_INTEGER },
       page: page([0])
     })
     const removed = reduceStructuredAgentSession(loaded, {
