@@ -9,6 +9,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
       ? [
           "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
+          ...(kind === 'pi' ? ['    piUiPromptDepth = 0'] : []),
           '    // Why: /reload re-registers the active session, but it is not a',
           '    // turn boundary and must not clear the visible status or unread state.',
           "    if (event.reason === 'reload') return",
@@ -105,6 +106,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     ...captureSessionMetadata,
     '    clearPendingAgentEndCheck()',
     '    agentEndReported = false',
+    // Why: a turn cannot begin under a dialog holding input focus, so this is the one
+    // boundary that can recover a modal whose close never arrived.
+    ...(kind === 'pi' ? ['    piUiPromptDepth = 0', '    piTurnInFlight = true'] : []),
     "    post('agent_start')",
     '  })',
     '',
@@ -168,6 +172,9 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  function postAgentEndOnce(): void {',
     '    if (agentEndReported) return',
     '    agentEndReported = true',
+    // Why: distinct from agentEndReported, which also dedupes the completion post and so
+    // starts false on a pane that has not run a turn yet — that pane is idle, not busy.
+    ...(kind === 'pi' ? ['    piTurnInFlight = false'] : []),
     "    post('agent_end')",
     '  }',
     '',

@@ -5298,7 +5298,6 @@
           "5c9c7c16aa": "Add a project to create workspaces",
           "a30e34eb5c": "Close workspace board",
           "views": "Sidebar view",
-          "createMenu": "Create",
           "addProject": "Add project"
         },
         "SidebarNav": {
@@ -16244,8 +16243,6 @@
           "5651b216c6": "Unknown project",
           "22b22034bc": "Standalone terminal unavailable in Activity.",
           "afdc2139a8": "Agent terminal closed. Open a new terminal in this workspace to continue.",
-          "compactModeDescription": "Shows shorter thread rows with one-line titles and two-line status messages.",
-          "unreadOnlyDescription": "Filters the activity list to show only threads with unread updates.",
           "clearCompleted": "Clear completed",
           "none": "None",
           "search": "Search",
@@ -16265,7 +16262,9 @@
             "idle": "Idle",
             "unverifiable": "No recent update",
             "permission": "Needs attention"
-          }
+          },
+          "filtersSection": "Filters",
+          "viewSection": "View"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -16282,8 +16281,8 @@
           "dc708f3eff": "Close agents"
         },
         "ActivityScopeFilterControls": {
-          "resetScope": "Show all hosts and projects",
-          "hiddenCount": "{{value0}} hidden"
+          "hiddenCount": "{{value0}} hidden",
+          "resetScope": "Show all hosts and projects"
         },
         "ActivityThreadHoverCard": {
           "pathCopied": "Path copied to clipboard",
@@ -16994,6 +16993,35 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "taskList": {
+        "title": "Tasks",
+        "completed": "Completed",
+        "inProgress": "In progress",
+        "pending": "Pending",
+        "empty": "No tasks",
+        "progress": "{{completed}} of {{total}} tasks completed",
+        "added": "Added {{task}}",
+        "removed": "Removed {{task}}",
+        "started": "Started {{task}}",
+        "finished": "Completed {{task}}",
+        "reset": "Marked pending: {{task}}",
+        "updated": "Updated {{task}}",
+        "unchanged": "Tasks unchanged",
+        "showAll": "Full task list"
+      },
+      "turnDiff": {
+        "one": "1 changed file",
+        "many": "{{count}} changed files",
+        "partial": "Partial diff",
+        "recorded": "Totals from recorded edits in this turn."
+      },
+      "receipt": {
+        "unavailable": "Selected answer unavailable",
+        "cancelled": "Cancelled",
+        "resolved": "Resolved",
+        "resolver": "Answered on {{device}}",
+        "cancelledBy": "Cancelled on {{device}}"
+      },
       "notices": {
         "compaction": "Context compacted",
         "details": "Details",
@@ -17110,8 +17138,34 @@
         "command": "Background command",
         "monitor": "Background monitor",
         "task": "Background task",
-        "runningList": "Running background tasks",
-        "detailsUnavailable": "Task details are unavailable for this session."
+        "detailsUnavailable": "Task details are unavailable for this session.",
+        "countAgentsOne": "1 agent",
+        "countAgentsMany": "{{value0}} agents",
+        "countShellOne": "1 shell",
+        "countShellMany": "{{value0}} shells",
+        "countShellCommandOne": "1 shell command",
+        "countMonitorsOne": "1 monitor",
+        "countMonitorsMany": "{{value0}} monitors",
+        "countWorkflowsOne": "1 workflow",
+        "countWorkflowsMany": "{{value0}} workflows",
+        "countTasksOne": "1 task",
+        "countTasksMany": "{{value0}} tasks",
+        "headerTotal": "{{value0}} background tasks",
+        "stateWorking": "working",
+        "stateMonitoring": "monitoring",
+        "stateWaiting": "waiting",
+        "stateBlocked": "blocked",
+        "stateDone": "done",
+        "stateIdle": "stopped",
+        "stateUnverifiable": "unverifiable",
+        "reasonWaiting": "needs approval",
+        "reasonUnverifiable": "no contact",
+        "reasonBlocked": "failed",
+        "groupAgents": "Agents",
+        "groupShell": "Shell",
+        "groupMonitors": "Monitors",
+        "groupWorkflows": "Workflows",
+        "groupTasks": "Tasks"
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {

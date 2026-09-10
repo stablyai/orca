@@ -104,6 +104,34 @@ describe('orchestration worker-start CLI contract', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
+  it.each(['succeeded', 'failed'])(
+    'accepts a successful start whose task already %s',
+    async (workerOutcome) => {
+      const receipt = {
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        state: 'ready',
+        stage: 'settled',
+        workerOutcome,
+        effects: [],
+        residualResources: []
+      }
+      callMock.mockResolvedValue({ result: receipt })
+      await invokeWorkerStart(
+        new Map([
+          ['task', 'task_1'],
+          ['from', 'term_coord']
+        ])
+      )
+      expect(process.exitCode).toBeUndefined()
+      expect(printResult).toHaveBeenCalledWith(
+        expect.objectContaining({ result: receipt }),
+        true,
+        expect.any(Function)
+      )
+    }
+  )
+
   it('capability-gates and forwards per-invocation launch preferences', async () => {
     callMock
       .mockResolvedValueOnce({

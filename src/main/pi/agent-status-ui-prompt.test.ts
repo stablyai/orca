@@ -92,11 +92,21 @@ describe('Pi UI prompt status', () => {
     expect(harness.statuses.map((status) => status?.payload.state)).toEqual(['waiting', 'done'])
   })
 
-  it('does not infer done when the context cannot establish idleness', async () => {
+  it('returns a pane that never ran a turn to done when idleness is unreadable', async () => {
     const harness = createHarness()
     await post(harness, 'ui_prompt_start')
     await post(harness, 'ui_prompt_end')
-    expect(harness.statuses.at(-1)?.payload.state).toBe('working')
+    // Why: no turn has started, so the pane is idle — reporting working would spin forever.
+    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+  })
+
+  it('trusts local turn state over a ctx that claims work on an idle pane', async () => {
+    const harness = createHarness()
+    await post(harness, 'ui_prompt_start')
+    await harness.callHook('ui_prompt_end', {}, { isIdle: () => false })
+    await flushPosts()
+    // Why: no turn ever started, so nothing later would correct a working verdict.
+    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
   })
 
   it('lets the normal settlement hook finish work after a modal closes', async () => {
@@ -118,20 +128,139 @@ describe('Pi UI prompt status', () => {
     const harness = createHarness()
     await post(harness, 'ui_prompt_start')
     harness.reload()
-    await post(harness, 'session_start', { reason: 'reload' })
     await post(harness, 'tool_execution_end', { toolName: 'bash' })
+    // Why: re-registering handlers is not a session boundary and must not lose the wait.
     expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
   })
 
-  it('keeps a session-switching modal blocked until it actually closes', async () => {
+  it('releases a modal that a session replacement tore down without a close', async () => {
     const harness = createHarness()
     await post(harness, 'before_agent_start', { prompt: 'Old session prompt' })
     await post(harness, 'ui_prompt_start')
-    await post(harness, 'session_start', { reason: 'switch' })
     expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
-    expect(harness.statuses.at(-1)?.payload.prompt).toBe('')
+    // Why: pi hides the dialog through resetExtensionUI without resolving its promise,
+    // so no ui_prompt_end is ever emitted — these two boundaries are the only release.
+    await post(harness, 'session_shutdown')
+    await post(harness, 'session_start', { reason: 'switch' })
+    await post(harness, 'tool_execution_end', { toolName: 'bash' })
+    expect(harness.statuses.at(-1)?.payload.state).not.toBe('waiting')
+  })
+
+  it('releases a modal dropped by a reload that emits no shutdown', async () => {
+    const harness = createHarness()
+    await post(harness, 'ui_prompt_start')
+    await post(harness, 'session_start', { reason: 'reload' })
+    await post(harness, 'tool_execution_end', { toolName: 'bash' })
+    expect(harness.statuses.at(-1)?.payload.state).not.toBe('waiting')
+  })
+
+  it('still captures the assistant reply that lands while a modal is open', async () => {
+    const harness = createHarness()
+    await post(harness, 'agent_start')
+    await post(harness, 'message_end', {
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Before modal' }] }
+    })
+    await post(harness, 'ui_prompt_start')
+    await post(harness, 'message_end', {
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Final reply' }] }
+    })
     await harness.callHook('ui_prompt_end', {}, { isIdle: () => true })
     await flushPosts()
+    expect(harness.statuses.at(-1)?.payload).toMatchObject({
+      state: 'done',
+      lastAssistantMessage: 'Final reply'
+    })
+    expect(harness.statuses.at(-1)?.payload.toolName).toBeUndefined()
+    expect(harness.statuses.at(-1)?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('still reports the close when the modal invalidated its own runner', async () => {
+    const harness = createHarness()
+    await post(harness, 'ui_prompt_start')
+    await harness.callHook(
+      'ui_prompt_end',
+      {},
+      {
+        isIdle: () => {
+          throw new Error('extension runner is no longer active')
+        }
+      }
+    )
+    await flushPosts()
+    // Why: a lost close would strand the pane on waiting; no turn is running, so done.
+    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+  })
+
+  it('keeps a mid-turn modal working when its runner throws on close', async () => {
+    const harness = createHarness()
+    await post(harness, 'agent_start')
+    await post(harness, 'ui_prompt_start')
+    await harness.callHook(
+      'ui_prompt_end',
+      {},
+      {
+        isIdle: () => {
+          throw new Error('extension runner is no longer active')
+        }
+      }
+    )
+    await flushPosts()
+    // Why: the turn is still in flight, so done would ring the completion bell early.
+    expect(harness.statuses.at(-1)?.payload.state).toBe('working')
+    await post(harness, 'agent_settled')
+    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+  })
+
+  it('recovers on a new turn when a modal close was lost', async () => {
+    const harness = createHarness()
+    await post(harness, 'ui_prompt_start')
+    expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
+    // Why: a turn cannot begin under a dialog holding input focus, so this is recovery.
+    await post(harness, 'agent_start')
+    await post(harness, 'tool_execution_end', { toolName: 'bash' })
+    expect(harness.statuses.at(-1)?.payload.state).toBe('working')
+  })
+
+  it('keeps the wait until the outermost of nested modals closes', async () => {
+    const harness = createHarness()
+    await post(harness, 'ui_prompt_start')
+    await post(harness, 'ui_prompt_start')
+    await harness.callHook('ui_prompt_end', {}, { isIdle: () => true })
+    await flushPosts()
+    expect(harness.statuses.at(-1)?.payload.state).toBe('waiting')
+    await harness.callHook('ui_prompt_end', {}, { isIdle: () => true })
+    await flushPosts()
+    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+  })
+
+  it('returns an idle pane to done when its modal lost the runner', async () => {
+    const harness = createHarness()
+    await post(harness, 'agent_start')
+    await post(harness, 'agent_settled')
+    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+    await post(harness, 'ui_prompt_start')
+    await harness.callHook(
+      'ui_prompt_end',
+      {},
+      {
+        isIdle: () => {
+          throw new Error('extension runner is no longer active')
+        }
+      }
+    )
+    await flushPosts()
+    // Why: the turn already reported its end, so no later event is coming to correct a
+    // guess of working — fall back to what this process knows rather than strand it.
+    expect(harness.statuses.at(-1)?.payload.state).toBe('done')
+  })
+
+  it('keeps a mid-turn modal working when its close cannot read idleness', async () => {
+    const harness = createHarness()
+    await post(harness, 'agent_start')
+    await post(harness, 'ui_prompt_start')
+    await post(harness, 'ui_prompt_end')
+    expect(harness.statuses.at(-1)?.payload.state).toBe('working')
+    await post(harness, 'agent_settled')
     expect(harness.statuses.at(-1)?.payload.state).toBe('done')
   })
 

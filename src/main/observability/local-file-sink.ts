@@ -25,6 +25,9 @@ export const DEFAULT_MAX_FILES = 10
 export const DEFAULT_BATCH_WINDOW_MS = 200
 const PRIVATE_DIRECTORY_MODE = 0o700
 const PRIVATE_FILE_MODE = 0o600
+/** NDJSON `type` for the placeholder left behind when a record is too large to store. */
+export const DROPPED_RECORD_TYPE = 'trace-record-dropped'
+const MAX_MARKER_NAME_CHARS = 120
 
 export type LocalFileSinkOptions = {
   readonly filePath: string
@@ -77,7 +80,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
   let fd: number = openAppend(filePath)
   let currentBytes: number = safeFstatSize(fd)
 
-  let buffer: string[] = []
+  let buffer: (string | null)[] = []
   let timer: NodeJS.Timeout | null = null
   let closed = false
 
@@ -171,11 +174,10 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
     }
 
     for (const line of lines) {
-      const lineBytes = Buffer.byteLength(line, 'utf8')
-      if (lineBytes > maxBytes) {
-        // Oversized single span would blow the maxFiles × maxBytes envelope; drop just this record.
+      if (line === null) {
         continue
       }
+      const lineBytes = Buffer.byteLength(line, 'utf8')
       if (pendingChunkBytes > 0 && currentBytes + pendingChunkBytes + lineBytes > maxBytes) {
         flushPendingChunk()
       }
@@ -187,6 +189,27 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       pendingChunkBytes += lineBytes
     }
     flushPendingChunk()
+  }
+
+  /**
+   * Stand-in for a record too large to store. `droppedChars` is UTF-16 units, not bytes: measuring
+   * bytes is the scan this path exists to skip. Returns null when even the marker exceeds maxBytes.
+   */
+  function oversizeMarker(record: unknown, droppedChars: number): string | null {
+    const span =
+      typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : {}
+    const name = typeof span.name === 'string' ? span.name.slice(0, MAX_MARKER_NAME_CHARS) : null
+    const traceId = typeof span.traceId === 'string' ? span.traceId.slice(0, 32) : null
+    const marker = `${JSON.stringify({
+      type: DROPPED_RECORD_TYPE,
+      reason: 'oversize',
+      droppedChars,
+      // Lets the bundle collector's lookback filter age these out like any other span.
+      endTimeUnixNano: `${Date.now()}000000`,
+      ...(name === null ? {} : { name }),
+      ...(traceId === null ? {} : { traceId })
+    })}\n`
+    return Buffer.byteLength(marker, 'utf8') > maxBytes ? null : marker
   }
 
   function ensureTimer(): void {
@@ -216,7 +239,13 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
         // Redactor handles cycles upstream; a throw here means pre-redact data slipped in — drop rather than crash (best-effort).
         return
       }
-      buffer.push(line)
+      // UTF-8 uses at most three bytes per UTF-16 unit; small records need no admission scan.
+      const oversized =
+        line.length > maxBytes ||
+        (line.length * 3 > maxBytes && Buffer.byteLength(line, 'utf8') > maxBytes)
+      // Rejected records still occupy a buffer slot (preserving flush timing) but carry a marker
+      // instead of their payload, so the gap they leave is readable rather than silent.
+      buffer.push(oversized ? oversizeMarker(record, line.length) : line)
       if (buffer.length >= flushThreshold) {
         flushBuffer()
       } else {

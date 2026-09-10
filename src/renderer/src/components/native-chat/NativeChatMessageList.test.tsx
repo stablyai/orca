@@ -50,7 +50,7 @@ describe('NativeChatMessageList assistant messages', () => {
     const controls = copyButton.parentElement
 
     expect(row).toHaveClass('select-text')
-    expect(controls).toHaveClass('select-none', 'pointer-events-none', 'mt-1')
+    expect(controls).toHaveClass('select-none', 'can-hover:pointer-events-none', 'mt-1')
     expect(controls).not.toHaveClass('absolute')
     expect(prose.compareDocumentPosition(controls!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })

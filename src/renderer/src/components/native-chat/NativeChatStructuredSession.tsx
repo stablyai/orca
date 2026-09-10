@@ -192,6 +192,7 @@ export function NativeChatStructuredSession(
         ) : (
           <NativeChatMessageList
             session={session}
+            journalItems={controller.journalItems}
             isWorking={controller.isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
@@ -303,10 +304,14 @@ export function NativeChatStructuredSession(
           {controller.error ?? composerError}
         </p>
       ) : null}
-      {controller.isMonitoringBackgroundTasks ? (
+      {controller.backgroundTasks.show ? (
         <NativeChatBackgroundTasksStatus
-          tasks={controller.backgroundTasks}
-          supportsTaskStop={controller.supportsBackgroundTaskStop}
+          isVisible={props.isVisible}
+          tasks={controller.backgroundTasks.tasks}
+          settledTasks={controller.backgroundTasks.settledTasks}
+          indicatorActive={controller.backgroundTasks.isMonitoring}
+          supportsTaskStop={controller.backgroundTasks.supportsStop}
+          supportsStopAll={controller.backgroundTasks.supportsStopAll}
           stoppingTaskIds={activeStoppingBackgroundTasks?.taskIds ?? NO_STOPPING_TASKS}
           stoppingAll={activeStoppingBackgroundTasks?.all ?? false}
           onStop={(taskId) => {
@@ -350,7 +355,9 @@ export function NativeChatStructuredSession(
           targetPtyId={null}
           agent={props.agent}
           canSend={!prompt}
-          isWorking={controller.isWorking}
+          // Stop, not status: only a provider-minted turn can be interrupted, so the button
+          // must not flip while a dispatch is still unanswered.
+          isWorking={controller.turnId !== null}
           onStop={() => {
             if (controller.turnId) {
               void controller.cancel(controller.turnId)

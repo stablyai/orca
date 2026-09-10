@@ -11,7 +11,10 @@ import {
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  hasUnansweredStructuredAgentSessionDispatch
+} from '../../../src/shared/structured-agent-session-projection'
 import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
@@ -291,7 +294,10 @@ export function useMobileStructuredAgentSession(args: {
       loadingEarlier: loadingOlder,
       loadEarlier
     },
-    isWorking: activeStructuredAgentSessionTurnId(state.items) !== null,
+    // A dispatch the provider has not answered yet is already work — see the desktop hook.
+    isWorking:
+      activeStructuredAgentSessionTurnId(state.items) !== null ||
+      hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
     turnId: activeStructuredAgentSessionTurnId(state.items),
     sendWithOutcome,
     cancel,

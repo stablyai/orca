@@ -80,6 +80,8 @@ export async function createStructuredWorkerSession(args: {
   worktreeId: string
   agent: 'claude' | 'codex'
   dispatchId: string
+  /** The dispatch's own `--model`/`--effort`, already narrowed to the seedable string subset. */
+  options?: Readonly<Record<string, string>>
   /** Retried whenever the session's journal moves, which is the structured idle edge. */
   onJournalActivity: (sessionId: string) => void
 }): Promise<{ identity: StructuredWorkerIdentity; host: StructuredAgentSessionHost }> {
@@ -120,6 +122,8 @@ export async function createStructuredWorkerSession(args: {
       },
       worktree: `id:${args.worktreeId}`,
       agent: args.agent,
+      // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
+      ...(args.options ? { options: args.options } : {}),
       // Dispatching a worker is background work; it must not pull the surface away from the user.
       activate: false
     })

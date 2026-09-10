@@ -11,6 +11,7 @@ import {
   type PersistedSessionParseCacheEntry,
   type SessionParseStats
 } from './session-scanner-parse-cache'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 
 // Bump when the persisted entry layout or cached session semantics change; a
 // mismatched file is discarded whole.
@@ -181,15 +182,35 @@ function parsePersistedEntry(item: unknown): [string, PersistedSessionParseCache
   if (entry.session !== null && typeof entry.session !== 'object') {
     return null
   }
+  const sidecar = parsePersistedSidecar(entry.sidecar)
   return [
     path,
     {
       mtimeMs: entry.mtimeMs,
       sizeBytes: entry.sizeBytes,
       platform: entry.platform as NodeJS.Platform,
-      session: entry.session as PersistedSessionParseCacheEntry['session']
+      session: entry.session as PersistedSessionParseCacheEntry['session'],
+      ...(sidecar === undefined ? {} : { sidecar })
     }
   ]
+}
+
+// Why: added after SCHEMA_VERSION 2 shipped, so a file an older build wrote has
+// no such field. Absent (or unreadable) means unknown, which costs one re-parse
+// of the rows that have a sibling and nothing at all for the rest.
+function parsePersistedSidecar(value: unknown): SessionSidecarObservation | undefined {
+  if (value === 'none' || value === 'unknown') {
+    return value
+  }
+  if (typeof value !== 'object' || value === null) {
+    return undefined
+  }
+  const record = value as Record<string, unknown>
+  return typeof record.path === 'string' &&
+    typeof record.mtimeMs === 'number' &&
+    typeof record.sizeBytes === 'number'
+    ? { path: record.path, mtimeMs: record.mtimeMs, sizeBytes: record.sizeBytes }
+    : undefined
 }
 
 async function persistSnapshot(current: SessionParseCachePersistenceOptions): Promise<void> {

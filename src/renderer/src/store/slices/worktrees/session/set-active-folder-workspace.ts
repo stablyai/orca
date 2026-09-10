@@ -8,6 +8,7 @@ import {
   folderWorkspaceMatchesHost
 } from '../listing/detected-worktree-meta'
 import { shouldDeferActivationTerminalPrep } from './activation-terminal-prep'
+import { deriveActiveSurfaceForWorktree } from '../../tabs/tabs-surface'
 
 export function createSetActiveFolderWorkspace(
   set: WorktreeSliceSet,
@@ -28,72 +29,11 @@ export function createSetActiveFolderWorkspace(
     const reconciledActiveTabId =
       get().reconcileWorktreeTabModel(workspaceKey).activeRenderableTabId
     set((s) => {
-      const restoredFileId = s.activeFileIdByWorktree[workspaceKey] ?? null
-      const restoredBrowserTabId = s.activeBrowserTabIdByWorktree[workspaceKey] ?? null
-      const restoredTabType = s.activeTabTypeByWorktree[workspaceKey] ?? 'terminal'
-      const activeGroupId =
-        s.activeGroupIdByWorktree[workspaceKey] ?? s.groupsByWorktree[workspaceKey]?.[0]?.id ?? null
-      const activeGroup = activeGroupId
-        ? ((s.groupsByWorktree[workspaceKey] ?? []).find((group) => group.id === activeGroupId) ??
-          null)
-        : null
-      const activeUnifiedTabId = reconciledActiveTabId ?? activeGroup?.activeTabId ?? null
-      const activeUnifiedTab =
-        activeUnifiedTabId != null
-          ? ((s.unifiedTabsByWorktree[workspaceKey] ?? []).find(
-              (tab) =>
-                tab.id === activeUnifiedTabId && (!activeGroup || tab.groupId === activeGroup.id)
-            ) ?? null)
-          : null
-      const fileStillOpen = restoredFileId
-        ? s.openFiles.some((file) => file.id === restoredFileId && file.worktreeId === workspaceKey)
-        : false
-      const browserTabs = s.browserTabsByWorktree[workspaceKey] ?? []
-      const browserTabStillOpen = restoredBrowserTabId
-        ? browserTabs.some((tab) => tab.id === restoredBrowserTabId)
-        : false
-      const worktreeTabs = s.tabsByWorktree[workspaceKey] ?? []
-      const restoredTabId = s.activeTabIdByWorktree[workspaceKey] ?? null
-      const tabStillExists = restoredTabId
-        ? worktreeTabs.some((tab) => tab.id === restoredTabId)
-        : false
-      const activeFileId =
-        activeUnifiedTab?.contentType === 'editor' ||
-        activeUnifiedTab?.contentType === 'diff' ||
-        activeUnifiedTab?.contentType === 'conflict-review' ||
-        activeUnifiedTab?.contentType === 'check-details'
-          ? activeUnifiedTab.entityId
-          : fileStillOpen
-            ? restoredFileId
-            : null
-      const activeBrowserTabId =
-        activeUnifiedTab?.contentType === 'browser'
-          ? activeUnifiedTab.entityId
-          : browserTabStillOpen
-            ? restoredBrowserTabId
-            : (browserTabs[0]?.id ?? null)
-      const activeTabType =
-        activeUnifiedTab?.contentType === 'terminal'
-          ? 'terminal'
-          : activeUnifiedTab?.contentType === 'browser'
-            ? 'browser'
-            : activeUnifiedTab
-              ? 'editor'
-              : restoredTabType === 'browser' && browserTabStillOpen
-                ? 'browser'
-                : restoredTabType === 'editor' && fileStillOpen
-                  ? 'editor'
-                  : fileStillOpen
-                    ? 'editor'
-                    : browserTabs.length > 0
-                      ? 'browser'
-                      : 'terminal'
-      const activeTabId =
-        activeUnifiedTab?.contentType === 'terminal'
-          ? activeUnifiedTab.entityId
-          : tabStillExists
-            ? restoredTabId
-            : (worktreeTabs[0]?.id ?? null)
+      const { activeFileId, activeBrowserTabId, activeTabType, activeTabId } =
+        deriveActiveSurfaceForWorktree(s, workspaceKey, undefined, {
+          legacySelection: 'remembered-type',
+          preferredTabId: reconciledActiveTabId ?? undefined
+        })
       const nextEverActivated = s.everActivatedWorktreeIds.has(workspaceKey)
         ? s.everActivatedWorktreeIds
         : new Set([...s.everActivatedWorktreeIds, workspaceKey])

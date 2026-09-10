@@ -21,6 +21,7 @@ export async function replaceClaudeRewindOwner(
     return rewindRefusal('outcome-unknown')
   }
   session.hasProviderChild = false
+  context.publishStatus?.(sessionId)
   const head = agentSessionProviderHandleChainHead(
     context.deps.store.getRecord(sessionId)!.providerHandleChain
   )?.handle

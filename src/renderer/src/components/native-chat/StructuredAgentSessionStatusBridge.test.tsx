@@ -7,6 +7,7 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session-wire'
 import { resolveAttention } from '../sidebar/smart-attention'
+import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
@@ -88,6 +89,7 @@ function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessi
     workspaceId: 'wt-1',
     agent: 'codex',
     status: 'working',
+    hostExecutionOwned: true,
     latestPrompt: 'hello',
     providerSession,
     updatedAt: 1,
@@ -180,6 +182,26 @@ describe('StructuredAgentSessionStatusBridge', () => {
   // Hiddenness is the host's side of this: see structured-agent-session-subscribers.test.ts,
   // which drives an unsubscribed journal through the feed. Here the transport is a mock, so
   // only the summary-to-store mapping is under test.
+  it('keeps host-held working evidence active past the normal freshness window', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    const updatedAt = Date.now() - 30 * 60 * 1000 - 1
+    act(() => feed().emit({ type: 'status', session: summary({ updatedAt }) }))
+    const entry = statuses()[0]
+    expect(entry).toEqual(expect.objectContaining({ state: 'working', structuredHostOwned: true }))
+    expect(isExplicitAgentStatusFresh(entry, Date.now(), 30 * 60 * 1000)).toBe(true)
+  })
+
+  it('clears host-held evidence when the status stream disconnects', async () => {
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+    act(() => feed().emit({ type: 'status', session: summary() }))
+    expect(statuses()).toHaveLength(1)
+    act(() => feed().emit({ type: 'end' }))
+    expect(statuses()).toHaveLength(1)
+    expect(statuses()[0]).not.toHaveProperty('structuredHostOwned')
+  })
+
   it('maps each host status onto the sidebar agent state', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())

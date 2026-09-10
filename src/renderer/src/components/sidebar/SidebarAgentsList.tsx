@@ -182,7 +182,7 @@ export default function SidebarAgentsList({
               showSearch={showSearch}
               onShowSearchChange={handleShowSearchChange}
               unreadOnly={readFilter === 'unread'}
-              onToggleUnread={() => setReadFilter(readFilter === 'unread' ? 'all' : 'unread')}
+              onUnreadOnlyChange={(unreadOnly) => setReadFilter(unreadOnly ? 'unread' : 'all')}
             />,
             optionsTarget
           )

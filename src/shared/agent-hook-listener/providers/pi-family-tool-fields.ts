@@ -36,7 +36,15 @@ export function extractPiToolFields(
       eventName === 'ui_prompt_start' ||
       eventName === 'ui_prompt_end')
   ) {
-    return clearActiveToolFieldsUpdate()
+    // Why: the reply is the agent's own text, not modal content, so a turn that finishes
+    // while a dialog is open must not leave the preview stuck on the previous message.
+    const assistantText =
+      eventName === 'message_end' && hookPayload.role === 'assistant'
+        ? readString(hookPayload, 'text')
+        : undefined
+    return assistantText
+      ? { ...clearActiveToolFieldsUpdate(), lastAssistantMessage: assistantText }
+      : clearActiveToolFieldsUpdate()
   }
   if (
     eventName === 'tool_call' ||

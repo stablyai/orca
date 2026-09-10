@@ -9,8 +9,8 @@
  *
  * The settings default and the per-launch feasibility both come from
  * `shared/structured-native-chat-launch-route`, the same module the renderer's
- * `resolveAgentLaunchRoute` uses; only the placement options that exist solely on this command are
- * decided here.
+ * `resolveAgentLaunchRoute` uses. This adapter supplies placement facts and formats the receipt;
+ * it does not own a second feasibility policy.
  */
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -31,11 +31,10 @@ export type WorkerStartModeReason =
   | 'user_default'
   | 'remote_execution_host'
   | 'reused_terminal'
-  | 'worktree_creation'
-  | 'launch_preferences'
   | 'agent_without_structured_session'
   | 'tui_launch_customization'
   | 'structured_sessions_unavailable'
+  | 'structured_support_unknown'
   | 'wsl_execution_runtime'
   | 'codex_on_windows'
   | 'structured_unsupported_on_host'
@@ -55,6 +54,9 @@ type WorkerStartModeSettings = Partial<
     Pick<GlobalSettings, 'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv'>
 >
 
+/** The placement options that exist only on `worker-start`. `worktree`, `model` and `effort` are
+ *  listed but no longer read: a structured worker honours all three, and naming them here keeps
+ *  the set of options this decision has considered visible. */
 type WorkerStartModePlacement = {
   agent?: string
   on?: string
@@ -65,14 +67,13 @@ type WorkerStartModePlacement = {
 }
 
 const DOWNGRADE_DETAIL: Record<Exclude<WorkerStartModeReason, 'user_default'>, string> = {
-  remote_execution_host: '--on runs the worker on a remote execution host',
+  remote_execution_host: 'this worker runs on a remote execution host',
   reused_terminal: '--terminal reuses a running terminal agent',
-  worktree_creation: 'a new worktree is created with its agent terminal',
-  launch_preferences: '--model and --effort apply only to a terminal agent',
   agent_without_structured_session: 'this agent has no structured session',
   tui_launch_customization:
     'this agent has a custom launch command, arguments or environment that only a terminal applies',
   structured_sessions_unavailable: 'this runtime does not support structured agent sessions',
+  structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
   structured_unsupported_on_host: 'the execution host cannot create one here'
@@ -82,6 +83,7 @@ const BLOCKER_REASON: Record<
   StructuredNativeChatBlocker,
   Exclude<WorkerStartModeReason, 'user_default'>
 > = {
+  'reused-terminal': 'reused_terminal',
   'agent-without-structured-session': 'agent_without_structured_session',
   'draft-prompt': 'structured_unsupported_on_host',
   'floating-workspace': 'structured_unsupported_on_host',
@@ -89,9 +91,7 @@ const BLOCKER_REASON: Record<
   'remote-execution-host': 'remote_execution_host',
   'project-runtime': 'wsl_execution_runtime',
   'runtime-capability': 'structured_sessions_unavailable',
-  // Orchestration passes its own host's list, so this is unreachable there; the map is
-  // exhaustive by type and must still name it.
-  'runtime-capability-unknown': 'structured_sessions_unavailable'
+  'runtime-capability-unknown': 'structured_support_unknown'
 }
 
 /** The host's own create-support verdict (`agentSession.createSupport`) in this vocabulary. */
@@ -117,15 +117,11 @@ export function decideWorkerStartMode(args: {
       detail: 'Started a terminal agent worker, the default for new agent tabs in your settings.'
     }
   }
-  const placementReason = resolvePlacementReason(params)
-  if (placementReason) {
-    return downgraded(placementReason)
-  }
   const agent = params.agent as TuiAgent
   const support = resolveStructuredNativeChatSupport({
     agent,
-    // Set only by --on, which the placement check above already turned into a fallback.
-    executionHostId: 'local',
+    executionHostId: params.on ? `runtime:${params.on}` : 'local',
+    reusesTerminal: Boolean(params.terminal),
     hostCapabilities: RUNTIME_CAPABILITIES,
     // Orchestration resolves a managed worktree or folder workspace; a floating terminal is never
     // a worker placement. WSL is left to the executing host's own create-support probe, which
@@ -169,14 +165,14 @@ async function readStructuredCreateSupport(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   worktreeId: string,
   agent: TuiAgent | undefined
-): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
+): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null> {
   if (agent !== 'claude' && agent !== 'codex') {
     return { supported: false, reason: 'agent' }
   }
   try {
     return await runtime.getStructuredAgentSessionCreateSupport(`id:${worktreeId}`, agent)
   } catch {
-    return { supported: false }
+    return null
   }
 }
 
@@ -186,32 +182,17 @@ async function readStructuredCreateSupport(
  */
 export function downgradeWorkerStartModeForHost(
   receipt: WorkerStartModeReceipt,
-  support: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }
+  support: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null
 ): WorkerStartModeReceipt {
-  if (receipt.mode !== 'structured' || support.supported) {
+  if (receipt.mode !== 'structured' || support?.supported) {
     return receipt
+  }
+  if (support === null) {
+    return downgraded(BLOCKER_REASON['runtime-capability-unknown'])
   }
   return downgraded(
     support.reason ? HOST_SUPPORT_REASON[support.reason] : 'structured_unsupported_on_host'
   )
-}
-
-function resolvePlacementReason(
-  params: WorkerStartModePlacement
-): Exclude<WorkerStartModeReason, 'user_default'> | null {
-  if (params.on) {
-    return 'remote_execution_host'
-  }
-  if (params.terminal) {
-    return 'reused_terminal'
-  }
-  if (params.worktree === 'new-child' || params.worktree === 'new-top-level') {
-    return 'worktree_creation'
-  }
-  if (params.model || params.effort) {
-    return 'launch_preferences'
-  }
-  return null
 }
 
 function downgraded(

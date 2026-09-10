@@ -37,6 +37,8 @@ export type AgentSessionDeltaCoalescerDeps = {
   maxTotalRetainedBytes?: number
   /** Maximum distinct item streams retained at once. */
   maxStreams?: number
+  /** The caller byte-bounds protected metadata; only ordinary streams use the count cap. */
+  isProtected?: (key: string) => boolean
   /** Injected by tests so a window can be driven without real time. */
   schedule?: (run: () => void, ms: number) => () => void
 }
@@ -83,8 +85,7 @@ export function createAgentSessionDeltaCoalescer(
   >()
   let totalRetainedBytes = 0
   let cancelTimer: (() => void) | null = null
-  const streamOrder = new Map<string, number>()
-  let nextOrder = 0
+  const evictable = new Set<string>()
 
   const flushKey = (key: string): boolean => {
     const stream = streams.get(key)
@@ -130,9 +131,13 @@ export function createAgentSessionDeltaCoalescer(
       if (!stream) {
         // Evict the oldest stream before admitting a new attacker-controlled
         // id. Flush first so the retained prefix is durably visible.
-        if (streams.size >= maxStreams) {
-          const oldest = [...streamOrder.entries()].sort((a, b) => a[1] - b[1])[0]?.[0]
+        while (!deps.isProtected?.(key) && evictable.size >= maxStreams) {
+          const oldest = evictable.values().next().value
           if (oldest) {
+            if (deps.isProtected?.(oldest)) {
+              evictable.delete(oldest)
+              continue
+            }
             // Under sink backpressure the oldest stream must remain available
             // for a later retry; dropping it would lose already-observed output.
             if (!flushKey(oldest)) {
@@ -143,8 +148,9 @@ export function createAgentSessionDeltaCoalescer(
               totalRetainedBytes -= evicted.retainedBytes
             }
             streams.delete(oldest)
-            streamOrder.delete(oldest)
+            evictable.delete(oldest)
           }
+          break
         }
         stream = {
           chunks: [],
@@ -153,7 +159,11 @@ export function createAgentSessionDeltaCoalescer(
           truncated: false,
           dirty: false
         }
-        streamOrder.set(key, nextOrder++)
+        if (!deps.isProtected?.(key)) {
+          evictable.add(key)
+        }
+      } else if (deps.isProtected?.(key)) {
+        evictable.delete(key)
       }
       stream.observedBytes += Buffer.byteLength(delta, 'utf8')
       if (!stream.truncated) {
@@ -184,14 +194,14 @@ export function createAgentSessionDeltaCoalescer(
       if (stream) {
         totalRetainedBytes -= stream.retainedBytes
         streams.delete(key)
-        streamOrder.delete(key)
+        evictable.delete(key)
       }
     },
     dispose: () => {
       cancelTimer?.()
       cancelTimer = null
       streams.clear()
-      streamOrder.clear()
+      evictable.clear()
       totalRetainedBytes = 0
     },
     snapshot: (key) => {

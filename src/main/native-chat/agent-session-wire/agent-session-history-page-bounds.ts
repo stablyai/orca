@@ -66,8 +66,7 @@ export function boundHistoryItemsByBytes(
   submissionBytes: ReadonlyMap<string, number>,
   maxBytes: number
 ): { items: AgentJournalRenderItem[]; dropped: number } {
-  const groups = groupItemsBySequence(items)
-  const ordered = keep === 'newest' ? groups.toReversed() : groups
+  const ordered = groupItemsBySequence(items, keep)
   const kept: AgentJournalRenderItem[][] = []
   let total = 0
   for (const group of ordered) {
@@ -88,29 +87,42 @@ export function boundHistoryItemsByBytes(
   }
 }
 
-function groupItemsBySequence(
-  items: readonly AgentJournalRenderItem[]
-): AgentJournalRenderItem[][] {
-  const groups: AgentJournalRenderItem[][] = []
-  for (const item of items) {
-    const current = groups.at(-1)
-    if (current?.[0]?.sequence === item.sequence) {
-      current.push(item)
+/** Adjacent same-sequence runs, walked from the end (`newest`) or the start (`oldest`)
+ *  so a caller that stops at its window never groups the history it will not return.
+ *  Groups and their items keep the order the eager forward grouping produced. */
+function* groupItemsBySequence(
+  items: readonly AgentJournalRenderItem[],
+  keep: 'newest' | 'oldest'
+): Generator<AgentJournalRenderItem[]> {
+  let cursor = keep === 'newest' ? items.length : 0
+  while (keep === 'newest' ? cursor > 0 : cursor < items.length) {
+    if (keep === 'newest') {
+      let start = cursor - 1
+      const sequence = items[start].sequence
+      while (start > 0 && items[start - 1].sequence === sequence) {
+        start -= 1
+      }
+      yield items.slice(start, cursor)
+      cursor = start
     } else {
-      groups.push([item])
+      let end = cursor + 1
+      const sequence = items[cursor].sequence
+      while (end < items.length && items[end].sequence === sequence) {
+        end += 1
+      }
+      yield items.slice(cursor, end)
+      cursor = end
     }
   }
-  return groups
 }
 
 export function newestWholeSequenceGroups(
   items: readonly AgentJournalRenderItem[],
   limit: number
 ): AgentJournalRenderItem[] {
-  const groups = groupItemsBySequence(items)
   const selected: AgentJournalRenderItem[][] = []
   let count = 0
-  for (const group of groups.toReversed()) {
+  for (const group of groupItemsBySequence(items, 'newest')) {
     if (selected.length > 0 && count + group.length > limit) {
       break
     }

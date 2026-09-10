@@ -243,6 +243,7 @@
     "electron-vite": "^5.0.0",
     "emoji-picker-react": "^4.19.1",
     "emojibase-data": "17.0.0",
+    "esbuild": "^0.25.12",
     "happy-dom": "^20.11.8",
     "html-to-image": "^1.11.13",
     "husky": "^9.1.7",

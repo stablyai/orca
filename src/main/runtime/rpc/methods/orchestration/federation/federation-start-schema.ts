@@ -3,7 +3,8 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../../../s
 import { OptionalWorkerLaunchPreference } from '../worker/worker-start-schema'
 
 export const FederationAttachStartParams = z.object({
-  runId: requiredString('Missing Run ID'),
+  /** Omitted by v1.4.198 coordinators; the worker host then mints a stub home Run. */
+  runId: OptionalString,
   dispatchId: requiredString('Missing Dispatch ID'),
   taskId: requiredString('Missing Task ID'),
   taskSpec: requiredString('Missing Task spec'),

@@ -486,18 +486,28 @@ describe('NativeChatToolRun', () => {
     expect(runHeader(container)).toHaveTextContent('shell git log -1')
   })
 
-  it('settles an orphaned running call when its turn lifecycle has ended', () => {
+  it('keeps a post-turn running call neutral until the item itself settles', () => {
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'sleep 1' }, state: 'running' }
     ]
 
-    const { container } = render(
+    const { container, rerender } = render(
       <NativeChatToolRun blocks={blocks} expandSignal={false} activeTurnIsWorking={false} />
     )
 
     expect(screen.queryByText('Running sleep 1')).toBeNull()
-    expect(container.querySelector('.lucide-check')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-check')).toBeNull()
     expect(container.querySelector('.lucide-circle-alert')).toBeNull()
+    rerender(
+      <NativeChatToolRun
+        blocks={[
+          { type: 'tool-call', name: 'shell', input: { command: 'sleep 1' }, state: 'completed' }
+        ]}
+        expandSignal={false}
+        activeTurnIsWorking={false}
+      />
+    )
+    expect(container.querySelector('.lucide-check')).toBeInTheDocument()
   })
 
   it('shows the category glyph beside the word a classified row is named by', () => {
@@ -728,5 +738,60 @@ describe('NativeChatToolRun', () => {
 
     expect(container.querySelector('.lucide-folder')).toBeInTheDocument()
     expect(screen.getByTitle('ls')).toHaveTextContent('ls')
+  })
+})
+
+describe('NativeChatToolRun task lists', () => {
+  it('renders task updates instead of JSON and consumes successful results', () => {
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'update_plan',
+        input: {
+          plan: [
+            { step: 'Read', status: 'in_progress' },
+            { step: 'Test', status: 'pending' }
+          ]
+        }
+      },
+      { type: 'tool-result', output: 'Plan updated' },
+      {
+        type: 'tool-call',
+        name: 'update_plan',
+        input: {
+          plan: [
+            { step: 'Read', status: 'completed' },
+            { step: 'Test', status: 'in_progress' }
+          ]
+        }
+      }
+    ]
+    const { container } = render(<NativeChatToolRun blocks={blocks} expandSignal />)
+    expect(screen.getByText('Completed Read')).toBeInTheDocument()
+    expect(screen.getByText('Started Test')).toBeInTheDocument()
+    expect(screen.getByText('1/2')).toBeInTheDocument()
+    expect(screen.queryByText('Plan updated')).toBeNull()
+    expect(container.querySelector('pre')).toBeNull()
+  })
+
+  it('keeps malformed calls and failed results visible in the generic view', () => {
+    render(
+      <NativeChatToolRun
+        blocks={[
+          { type: 'tool-call', name: 'TodoWrite', input: '{' },
+          { type: 'tool-result', output: 'Invalid arguments', isError: true },
+          {
+            type: 'tool-call',
+            name: 'TodoWrite',
+            input: { todos: [{ content: 'Test', status: 'completed' }] }
+          },
+          { type: 'tool-result', output: 'Update rejected', isError: true }
+        ]}
+        expandSignal
+      />
+    )
+    expect(screen.getByText('Invalid arguments', { selector: 'pre' })).toBeInTheDocument()
+    expect(screen.getByText('Update rejected', { selector: 'pre' })).toBeInTheDocument()
+    expect(screen.queryByText('1/1')).toBeNull()
   })
 })

@@ -37,6 +37,7 @@ export function isFreshNonDoneAgentStatus(
         | 'evidenceObservedAt'
         | 'mirroredEvidenceReceivedAt'
         | 'restoredUnconfirmed'
+        | 'structuredHostOwned'
       >
     | undefined,
   now = Date.now(),
@@ -47,6 +48,7 @@ export function isFreshNonDoneAgentStatus(
     entry &&
     entry.state !== 'done' &&
     entry.restoredUnconfirmed !== true &&
-    now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs
+    (entry.structuredHostOwned === true ||
+      now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs)
   )
 }

@@ -82,6 +82,32 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     handle?.unsubscribe()
     handle = null
   }
+  const revokeSnapshotOwnership = (): void => {
+    let next: Map<string, AgentSessionStatusSummary> | null = null
+    for (const [sessionId, summary] of snapshot) {
+      if (!summary.hostExecutionOwned) {
+        continue
+      }
+      if (!next) {
+        next = new Map(snapshot)
+      }
+      const { hostExecutionOwned: _owned, ...retained } = summary
+      next.set(sessionId, retained)
+    }
+    if (next) {
+      snapshot = next
+      emit()
+    }
+  }
+  const fenceCandidateAndReconnect = (candidate: number): void => {
+    if (candidate !== generation) {
+      return
+    }
+    generation += 1
+    revokeSnapshotOwnership()
+    dropHandle()
+    scheduleReconnect(generation)
+  }
   let open = (): void => {}
   const scheduleReconnect = (candidate: number): void => {
     if (!active(candidate) || reconnectTimer) {
@@ -104,22 +130,19 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
           return
         }
         if (event.type === 'end') {
-          dropHandle()
-          scheduleReconnect(candidate)
+          fenceCandidateAndReconnect(candidate)
           return
         }
         applyEvent(event)
       },
       () => {
         if (active(candidate)) {
-          dropHandle()
-          scheduleReconnect(candidate)
+          fenceCandidateAndReconnect(candidate)
         }
       },
       () => {
         if (active(candidate)) {
-          dropHandle()
-          scheduleReconnect(candidate)
+          fenceCandidateAndReconnect(candidate)
         }
       }
     )
@@ -130,7 +153,13 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
           opened.unsubscribe()
         }
       })
-      .catch(() => scheduleReconnect(candidate))
+      .catch(() => {
+        if (active(candidate)) {
+          fenceCandidateAndReconnect(candidate)
+        } else {
+          scheduleReconnect(candidate)
+        }
+      })
   }
   open = (): void => {
     const candidate = ++generation
@@ -163,6 +192,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     generation += 1
     clearReconnect()
     dropHandle()
+    revokeSnapshotOwnership()
     reconnectAttempt = 0
   }
 
