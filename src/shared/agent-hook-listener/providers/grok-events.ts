@@ -43,6 +43,11 @@ export function normalizeGrokEvent(
   const isUserInputPreTool =
     isGrokEvent(eventName, 'pre_tool_use') && isAskUserQuestionTool(preToolName)
 
+  // Why: an interrupted turn skips the stop gate and reports StopCancelled instead. A child-scoped
+  // one never reaches here (dispatch routes it to the roster), so this is always the lead's own
+  // turn ending without finishing. It must publish: the pane would otherwise keep the pre-cancel
+  // row — spinner still running, children still listed — until some later turn happened to end.
+  const isLeadTurnCancel = isGrokEvent(eventName, 'stop_cancelled')
   let stateName: 'working' | 'waiting' | 'done' | null = null
   if (
     isGrokEvent(eventName, 'user_prompt_submit', 'post_tool_use', 'post_tool_use_failure') ||
@@ -51,7 +56,7 @@ export function normalizeGrokEvent(
     stateName = 'working'
   } else if (isUserInputPreTool) {
     stateName = 'waiting'
-  } else if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
+  } else if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure') || isLeadTurnCancel) {
     stateName = 'done'
   } else if (
     isGrokEvent(eventName, 'notification') &&
@@ -91,6 +96,10 @@ export function normalizeGrokEvent(
 
   return normalizeAgentStatusPayload({
     state: stateName,
+    // Why: a cancelled turn did not finish. The flag is what makes the row read 'Interrupted' and
+    // any notification say 'stopped' rather than 'finished' — the same shape claude's interrupt
+    // path publishes. Covers a runtime cancel (turn limit, no progress) too: neither completed.
+    ...(isLeadTurnCancel ? { interrupted: true } : {}),
     prompt: resolvePrompt(state, paneKey, effectivePrompt, {
       resetOnNewTurn: isNewTurnEvent('grok', eventName)
     }),

@@ -35,6 +35,9 @@ export type AgentStatusExtensionHarness = {
   handlers: Record<string, HookHandler>
   processEnv: Record<string, string | undefined>
   callHook: (name: string, event?: unknown, context?: HookContext) => Promise<void>
+  /** Emit on the process event bus pi's subagent extension publishes async child runs on. */
+  emitProcessBus: (name: string, payload?: unknown) => void
+  processBusListenerCount: (name: string) => number
   // Re-invoke the extension factory in the same process (as Pi does on an
   // in-process extension reload), swapping in the freshly registered handlers.
   reload: () => void
@@ -115,7 +118,11 @@ export function createAgentStatusExtensionHarness(args: {
     throw new Error(`unexpected require(${specifier})`)
   })
 
+  const processBusListeners: Record<string, ((payload: unknown) => void)[]> = {}
   const processMock = {
+    on(name: string, listener: (payload: unknown) => void) {
+      ;(processBusListeners[name] ??= []).push(listener)
+    },
     env: {
       ...BASE_ENV,
       ...(args.kind === 'prime-agent' ? { PRIME_AGENT_INTERNAL_DAEMON_WORKER: '1' } : {}),
@@ -180,6 +187,12 @@ export function createAgentStatusExtensionHarness(args: {
     callHook: async (name, event, hookContext) => {
       await handlers[name]?.(event, hookContext)
     },
+    emitProcessBus: (name, payload) => {
+      for (const listener of processBusListeners[name] ?? []) {
+        listener(payload)
+      }
+    },
+    processBusListenerCount: (name) => (processBusListeners[name] ?? []).length,
     reload: () => {
       for (const key of Object.keys(handlers)) {
         delete handlers[key]

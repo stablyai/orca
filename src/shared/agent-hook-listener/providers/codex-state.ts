@@ -1,11 +1,11 @@
 import type { ParsedAgentStatusPayload } from '../../agent-status-types'
 import {
-  codexRosterEffectiveState,
-  codexRosterToSnapshots,
-  finishCodexSubagent,
-  seedCodexSubagentRoster,
-  type CodexSubagentRoster
-} from '../../codex-subagent-roster'
+  agentDescendantEffectiveState,
+  agentDescendantRosterToSnapshots,
+  finishAgentDescendant,
+  seedAgentDescendantRoster,
+  type AgentDescendantRoster
+} from '../../agent-descendant-roster'
 import {
   createCodexSubagentTranscriptState,
   hasTrackedCodexTranscriptSubagents,
@@ -13,10 +13,10 @@ import {
 } from '../../codex-subagent-transcript'
 import type { CodexLeadTurnState, HookListenerState } from '../listener-state'
 
-export function getOrCreateCodexSubagentRoster(
+export function getOrCreateAgentDescendantRoster(
   state: HookListenerState,
   paneKey: string
-): CodexSubagentRoster {
+): AgentDescendantRoster {
   let roster = state.codexSubagentRosterByPaneKey.get(paneKey)
   if (!roster) {
     roster = new Map()
@@ -48,7 +48,7 @@ export function seedCodexStateFromSnapshot(
 ): void {
   const snapshots = payload.subagents ?? []
   if (snapshots.length > 0 && !state.codexSubagentRosterByPaneKey.has(paneKey)) {
-    seedCodexSubagentRoster(getOrCreateCodexSubagentRoster(state, paneKey), snapshots)
+    seedAgentDescendantRoster(getOrCreateAgentDescendantRoster(state, paneKey), snapshots)
   }
   if (!state.codexLeadStateByPaneKey.has(paneKey)) {
     // Why: child hooks after restart omit the root model; seed it from durable status before they can overwrite the cache.
@@ -111,13 +111,13 @@ export function reconcileRemoteCodexState(
   if (agentId && !payload.subagents && !state.codexSubagentRosterByPaneKey.has(paneKey)) {
     return payload
   }
-  const roster = getOrCreateCodexSubagentRoster(state, paneKey)
+  const roster = getOrCreateAgentDescendantRoster(state, paneKey)
   if (payload.subagents) {
-    seedCodexSubagentRoster(roster, payload.subagents)
+    seedAgentDescendantRoster(roster, payload.subagents)
   }
   if (agentId) {
     if (eventName === 'SubagentStop') {
-      finishCodexSubagent(roster, agentId)
+      finishAgentDescendant(roster, agentId)
     }
   } else {
     const leadState = codexLeadStateForHookEvent(eventName)
@@ -146,8 +146,8 @@ export function reconcileRemoteCodexState(
   return {
     ...payload,
     prompt,
-    state: codexRosterEffectiveState(roster, lead.state),
+    state: agentDescendantEffectiveState(roster, lead.state),
     model: lead.model ?? payload.model,
-    subagents: codexRosterToSnapshots(roster)
+    subagents: agentDescendantRosterToSnapshots(roster)
   }
 }

@@ -1,4 +1,5 @@
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
+import { getPiAgentStatusAsyncSubagentSourceLines } from './agent-status-async-subagent-source'
 import { getPiAgentStatusUiPromptHandlerSourceLines } from './agent-status-ui-prompt-source'
 
 // Why: keep the generated handler registrations separate from hook transport;
@@ -136,6 +137,7 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  })',
     '',
     ...approvalHandlers,
+    ...getPiAgentStatusAsyncSubagentSourceLines(kind),
     ...getPiAgentStatusUiPromptHandlerSourceLines(kind),
     "  // Why: capture the assistant's final text on each completed message",
     '  // so the dashboard preview reflects the most recent reply even before',

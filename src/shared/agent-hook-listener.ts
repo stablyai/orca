@@ -136,8 +136,12 @@ export function normalizeHookPayload(
     // Normalization is transport-agnostic; only ingestRemote knows the mux identity to stamp.
     connectionId: null,
     ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
-    hasExplicitPrompt:
-      source === 'amp'
+    // Why: nothing on a descendant's event describes the pane's own turn — counting a child's
+    // prompt as a user submit would move turn-scoped state (telemetry, permission stickiness)
+    // on the parent.
+    hasExplicitPrompt: dispatched.descendantScoped
+      ? undefined
+      : source === 'amp'
         ? hasExplicitAmpPrompt(eventName, promptText, hookPayloadRecord)
           ? true
           : undefined

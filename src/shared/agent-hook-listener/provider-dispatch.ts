@@ -3,6 +3,16 @@ import type { AgentHookSource } from '../agent-hook-relay'
 import { readLastCommandCodeUserPromptEntryFromTranscript } from './command-code-transcript'
 import { readGrokHomeEnvelope } from './grok-result-discovery'
 import { readFirstString } from './interactive-tool'
+import {
+  isDescendantScopeResetEvent,
+  providerOwnsDescendantLifecycle,
+  readDescendantEventFacts
+} from './descendant-events'
+import {
+  applyDescendantEventToPane,
+  clearDescendantScope,
+  gatePaneStateOnDescendants
+} from './descendant-pane-state'
 import type { HookListenerState } from './listener-state'
 import type { ExtractedPromptText } from './prompt-fields'
 import { isNewTurnEvent } from './provider-event-routing'
@@ -28,6 +38,8 @@ export type ProviderDispatchResult = {
   resolvedPromptText: string
   promptInteractionKey?: string
   hasTranscriptPromptEvidence: boolean
+  /** The event fired inside a descendant, so nothing on it describes the pane's own turn. */
+  descendantScoped?: true
 }
 
 /** Exhaustive provider routing with provider-specific transcript locality and attribution. */
@@ -47,6 +59,26 @@ export function normalizeProviderEvent(input: {
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false
   let payload: ParsedAgentStatusPayload | null
+
+  // Why: the pane rule — idle only when the lead is idle AND no descendant is live — is applied
+  // here, once, for every provider that does not own a roster. A child's lifecycle event never
+  // reaches the provider normalizer, so it cannot settle the pane or relabel the row.
+  const ownsDescendants = providerOwnsDescendantLifecycle(source)
+  if (!ownsDescendants) {
+    if (isDescendantScopeResetEvent(source, eventName, hookPayload)) {
+      clearDescendantScope(state, paneKey)
+    }
+    const descendant = readDescendantEventFacts(source, eventName, hookPayload)
+    if (descendant) {
+      return {
+        payload: applyDescendantEventToPane(state, source, paneKey, descendant),
+        // Why: a child's prompt is not the pane's turn label, and its tool events are not a user submit.
+        resolvedPromptText: '',
+        hasTranscriptPromptEvidence: false,
+        descendantScoped: true
+      }
+    }
+  }
 
   switch (source) {
     case 'claude':
@@ -150,5 +182,10 @@ export function normalizeProviderEvent(input: {
       break
   }
 
-  return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }
+  return {
+    payload: ownsDescendants ? payload : gatePaneStateOnDescendants(state, paneKey, payload),
+    resolvedPromptText,
+    promptInteractionKey,
+    hasTranscriptPromptEvidence
+  }
 }
