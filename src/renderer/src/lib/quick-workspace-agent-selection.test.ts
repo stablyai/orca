@@ -12,6 +12,12 @@ describe('pickQuickWorkspaceAgent', () => {
     expect(new Set(TUI_AGENT_AUTO_PICK_ORDER).size).toBe(TUI_AGENT_AUTO_PICK_ORDER.length)
   })
 
+  it('uses the cross-platform OpenInterpreter quickstart for the install action', () => {
+    expect(AGENT_CATALOG.find((agent) => agent.id === 'openinterpreter')?.homepageUrl).toBe(
+      'https://www.openinterpreter.com/docs/terminal/quickstart'
+    )
+  })
+
   it('uses the first enabled catalog agent while detection is pending', () => {
     expect(pickQuickWorkspaceAgent(null, null, [])).toBe('claude')
     expect(pickQuickWorkspaceAgent(null, null, ['claude'])).toBe('claude-agent-teams')

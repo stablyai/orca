@@ -16,6 +16,10 @@ describe('pickTuiAgent', () => {
     expect(pickTuiAgent(null, ['continue', 'command-code'])).toBe('command-code')
   })
 
+  it('keeps the generic OpenInterpreter binary last in auto-pick order', () => {
+    expect(pickTuiAgent(null, ['openinterpreter', 'cursor'])).toBe('cursor')
+  })
+
   it('respects the explicit blank terminal preference', () => {
     expect(pickTuiAgent('blank', ['cursor', 'claude'])).toBeNull()
   })
