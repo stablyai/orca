@@ -45,6 +45,9 @@ const PortsStatusSegment = lazyWithRetry(() =>
 const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
 )
+const AgentStatusSegment = lazyWithRetry(() =>
+  import('./AgentStatusSegment').then((module) => ({ default: module.AgentStatusSegment }))
+)
 
 export type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -248,6 +251,7 @@ export function StatusBarSurface({
         <SkillUpdateStatusSegment iconOnly={iconOnly} />
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
         <React.Suspense fallback={null}>
+          <AgentStatusSegment compact={compact} iconOnly={iconOnly} />
           {petEnabled ? <PetStatusSegment /> : null}
           {showResourceUsage ? (
             <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />

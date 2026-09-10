@@ -1,4 +1,9 @@
 import { ipcRenderer } from 'electron'
+import type {
+  AgentHealthProvider,
+  AgentHealthSnapshot,
+  AgentUpdateResult
+} from '../../shared/agent-health'
 import type { PreflightRuntimeContext, PreloadApi, RefreshAgentsResult } from '../api-types'
 
 export const preflightApi = {
@@ -29,6 +34,14 @@ export const preflightApi = {
     ipcRenderer.invoke('preflight:detectAgents', args),
   refreshAgents: (args?: PreflightRuntimeContext): Promise<RefreshAgentsResult> =>
     ipcRenderer.invoke('preflight:refreshAgents', args),
+  probeAgentHealth: (args?: PreflightRuntimeContext): Promise<AgentHealthSnapshot[]> =>
+    ipcRenderer.invoke('preflight:probeAgentHealth', args),
+  probeAgentHealthProvider: (
+    args: PreflightRuntimeContext & { provider: AgentHealthProvider }
+  ): Promise<AgentHealthSnapshot> => ipcRenderer.invoke('preflight:probeAgentHealthProvider', args),
+  updateAgent: (
+    args: PreflightRuntimeContext & { provider: AgentHealthProvider }
+  ): Promise<AgentUpdateResult> => ipcRenderer.invoke('preflight:updateAgent', args),
   detectRemoteAgents: (args: { connectionId: string }): Promise<string[]> =>
     ipcRenderer.invoke('preflight:detectRemoteAgents', args),
   detectRemoteWindowsTerminalCapabilities: (args: {

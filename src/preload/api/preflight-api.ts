@@ -1,5 +1,10 @@
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import type {
+  AgentHealthProvider,
+  AgentHealthSnapshot,
+  AgentUpdateResult
+} from '../../shared/agent-health'
+import type {
   PathSource,
   ShellHydrationFailureReason
 } from '../../shared/shell-path-hydration-types'
@@ -47,6 +52,13 @@ export type PreflightApi = {
   check: (args?: PreflightRuntimeContext & { force?: boolean }) => Promise<PreflightStatus>
   detectAgents: (args?: PreflightRuntimeContext) => Promise<string[]>
   refreshAgents: (args?: PreflightRuntimeContext) => Promise<RefreshAgentsResult>
+  probeAgentHealth: (args?: PreflightRuntimeContext) => Promise<AgentHealthSnapshot[]>
+  probeAgentHealthProvider: (
+    args: PreflightRuntimeContext & { provider: AgentHealthProvider }
+  ) => Promise<AgentHealthSnapshot>
+  updateAgent: (
+    args: PreflightRuntimeContext & { provider: AgentHealthProvider }
+  ) => Promise<AgentUpdateResult>
   detectRemoteAgents: (args: { connectionId: string }) => Promise<string[]>
   detectRemoteWindowsTerminalCapabilities: (args: { connectionId: string }) => Promise<{
     wslAvailable: boolean
