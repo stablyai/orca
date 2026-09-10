@@ -14,58 +14,60 @@ function userItem(itemId: string): AgentJournalRenderItem {
 }
 
 describe('authoritative unknown turn duration at the shared status consumer', () => {
-  it('does not convert a running turn to local Worked for after unverifiable recovery', () => {
-    const user: AgentJournalRenderItem = {
-      itemId: 'orca:u1',
-      revision: 0,
-      sequence: 1,
-      observedAt: 1_000,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
-    }
-    const recoveredTurn: AgentJournalRenderItem = {
-      itemId: 'legacy:codex:s:turn-lifecycle%3At1',
-      revision: 2,
-      sequence: 2,
-      observedAt: 60_000,
-      body: {
-        kind: 'turn',
-        turnId: 't1',
-        userItemId: user.itemId,
-        state: 'unverifiable',
-        startedAt: 1_000
+  it.each([1_000, undefined])(
+    'does not convert a running turn to local Worked for after unverifiable recovery (start %s)',
+    (startedAt) => {
+      const user: AgentJournalRenderItem = {
+        itemId: 'orca:u1',
+        revision: 0,
+        sequence: 1,
+        observedAt: 1_000,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
       }
-    }
-    const keys = new Set([user.itemId])
-    const running = reduceNativeChatTurnTiming(
-      {},
-      {
+      const recoveredTurn: AgentJournalRenderItem = {
+        itemId: 'legacy:codex:s:turn-lifecycle%3At1',
+        revision: 2,
+        sequence: 2,
+        observedAt: 60_000,
+        body: {
+          kind: 'turn',
+          turnId: 't1',
+          state: 'unverifiable',
+          ...(startedAt === undefined ? {} : { startedAt, userItemId: user.itemId })
+        }
+      }
+      const keys = new Set([user.itemId])
+      const running = reduceNativeChatTurnTiming(
+        {},
+        {
+          activeTurnKey: user.itemId,
+          validTurnKeys: keys,
+          isWorking: true,
+          workingStartedAt: 1_000,
+          now: 1_000
+        }
+      )
+      const locallyStopped = reduceNativeChatTurnTiming(running, {
         activeTurnKey: user.itemId,
         validTurnKeys: keys,
-        isWorking: true,
-        workingStartedAt: 1_000,
-        now: 1_000
+        isWorking: false,
+        workingStartedAt: null,
+        now: 60_000
+      })
+      const options = {
+        activeTurnKey: user.itemId,
+        isWorking: false,
+        hasCurrentTurnResponse: true,
+        settledByTurn: selectStructuredAgentSettledTurns([user, recoveredTurn])
       }
-    )
-    const locallyStopped = reduceNativeChatTurnTiming(running, {
-      activeTurnKey: user.itemId,
-      validTurnKeys: keys,
-      isWorking: false,
-      workingStartedAt: null,
-      now: 60_000
-    })
-    const options = {
-      activeTurnKey: user.itemId,
-      isWorking: false,
-      hasCurrentTurnResponse: true,
-      settledByTurn: selectStructuredAgentSettledTurns([user, recoveredTurn])
-    }
 
-    const mounted = selectNativeChatTurnStatuses(locallyStopped, options)
-    const reloaded = selectNativeChatTurnStatuses({}, options)
-    expect(mounted).toEqual(reloaded)
-    expect(mounted.active).toBeNull()
-    expect(mounted.completedByTurn).toEqual({})
-  })
+      const mounted = selectNativeChatTurnStatuses(locallyStopped, options)
+      const reloaded = selectNativeChatTurnStatuses({}, options)
+      expect(mounted).toEqual(reloaded)
+      expect(mounted.active).toBeNull()
+      expect(mounted.completedByTurn).toEqual({})
+    }
+  )
 
   it.each(['running', 'completed', 'interrupted'] as const)(
     'suppresses local completion for a host-recorded %s turn without an endpoint',

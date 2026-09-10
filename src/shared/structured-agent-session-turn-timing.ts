@@ -56,11 +56,11 @@ function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | n
  *  reached through its alias. Rows from older hosts carry no key and fall back
  *  to the nearest user message before them in journal order — the submission
  *  row is written ahead of dispatch, so it always precedes the provider's
- *  turn-start. Rows without `startedAt` (conversation commands) are skipped. */
+ *  turn-start. Untimed rows are skipped unless explicitly unverifiable (null). */
 export function selectStructuredAgentTurnTimings(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
-): ReadonlyMap<string, StructuredAgentTurnTiming> {
+): ReadonlyMap<string, StructuredAgentTurnTiming | null> {
   const itemIds = new Set(items.map((item) => item.itemId))
   const aliases = new Map<string, string>()
   // Codex folds a send issued mid-turn into the running turn under the SAME provider
@@ -70,18 +70,19 @@ export function selectStructuredAgentTurnTimings(
       aliases.set(submission.providerItemId, agentJournalSubmissionKey(submission.clientMessageId))
     }
   }
-  const timings = new Map<string, StructuredAgentTurnTiming>()
+  const timings = new Map<string, StructuredAgentTurnTiming | null>()
   let precedingUserItemId: string | null = null
   for (const item of items) {
     if (item.body.kind === 'message' && item.body.role === 'user') {
       precedingUserItemId = item.itemId
       continue
     }
+    const turn = readAgentJournalTurn(item.body)
     const timing = readTiming(item)
-    if (!timing) {
+    if (!timing && turn?.state !== 'unverifiable') {
       continue
     }
-    const key = readAgentJournalTurn(item.body)?.userItemId
+    const key = turn?.userItemId
     const userItemId =
       key === undefined ? precedingUserItemId : itemIds.has(key) ? key : (aliases.get(key) ?? null)
     if (userItemId !== null) {
@@ -108,7 +109,7 @@ export function selectStructuredAgentRunningTurnTiming(
 
 /** Whole seconds a settled turn ran, or null when the host never observed its end. */
 export function completedStructuredAgentTurnSeconds(
-  timing: StructuredAgentTurnTiming | undefined
+  timing: StructuredAgentTurnTiming | null | undefined
 ): number | null {
   if (!timing || (timing.state !== 'completed' && timing.state !== 'interrupted')) {
     return null
@@ -152,7 +153,9 @@ export function selectStructuredAgentSettledTurns(
     const workedSeconds = completedStructuredAgentTurnSeconds(timing)
     settled.set(
       userItemId,
-      workedSeconds === null ? null : { startedAt: timing.startedAt, workedSeconds }
+      workedSeconds === null || timing === null
+        ? null
+        : { startedAt: timing.startedAt, workedSeconds }
     )
   }
   return settled
