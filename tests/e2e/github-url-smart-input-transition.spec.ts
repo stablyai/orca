@@ -1,3 +1,4 @@
+import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import type { ElectronApplication, Locator, Page } from '@stablyai/playwright-test'
 import type { GitHubWorkItem } from '../../src/shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../src/shared/gitlab-types'
@@ -203,6 +204,12 @@ async function installHeldGitLabLookup(
         __releaseGitLabUrlLookup?: () => void
       }
       fixture.__gitlabUrlLookupStarted = false
+      ipcMain.removeHandler('preflight:check')
+      ipcMain.handle('preflight:check', () => ({
+        git: { installed: true },
+        gh: { installed: true, authenticated: true },
+        glab: { installed: true, authenticated: true }
+      }))
       ipcMain.removeHandler('gitlab:listMRs')
       ipcMain.handle('gitlab:listMRs', () => ({
         items: [wrongItem],
@@ -221,23 +228,12 @@ async function installHeldGitLabLookup(
     },
     { wrongItem: GITLAB_WRONG_ITEM, targetItem: GITLAB_TARGET_ITEM }
   )
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')
     }
-    const state = store.getState()
-    if (!state.preflightStatusContextKey) {
-      throw new Error('preflight context is not ready')
-    }
-    store.setState({
-      preflightStatus: {
-        git: state.preflightStatus?.git ?? { installed: true },
-        gh: state.preflightStatus?.gh ?? { installed: true, authenticated: true },
-        glab: { installed: true, authenticated: true }
-      },
-      preflightStatusChecked: true
-    })
+    await store.getState().refreshPreflightStatus({ force: true })
   })
 }
 
@@ -259,7 +255,7 @@ test('a pasted GitHub URL never selects a stale cached issue', async ({
   await waitForActiveWorktree(orcaPage)
   await installHeldGitHubLookup(electronApp, orcaPage)
 
-  await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   const input = dialog.locator('[data-workspace-name-input="true"]')
   await expect(input).toBeVisible()
@@ -305,7 +301,7 @@ test('a pasted GitLab URL never selects a stale cached merge request', async ({
   await waitForActiveWorktree(orcaPage)
   await installHeldGitLabLookup(electronApp, orcaPage)
 
-  await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(orcaPage)
   const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   const input = dialog.locator('[data-workspace-name-input="true"]')
   await expect(input).toBeVisible()

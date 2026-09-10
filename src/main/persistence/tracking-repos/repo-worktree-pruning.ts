@@ -2,11 +2,14 @@ import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { removeWorkspaceSessionOwners } from '../restoring-sessions/session-owner-removal'
 import {
+  getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
+import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
 
 export function pruneWorktreeStateForRepo(
   state: PersistedState,
@@ -56,10 +59,26 @@ export function pruneWorktreeStateForRepo(
       }
     }
   }
-  collectPrefixedKeys(Object.keys(state.worktreeMeta))
-  collectPrefixedKeys(Object.keys(state.workspaceSession?.lastVisitedAtByWorktreeId ?? {}))
-  for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
+  // Why the pane-keyed records contribute owner keys: they are pruned by the worktreeId they name,
+  // not by their own key, so a worktree with no meta and no visit row would otherwise keep its
+  // sleeping agents and tombstones forever -- and keep re-seeding the orphan sweep every load.
+  const collectScannedRecordOwners = (session: WorkspaceSessionState | undefined): void => {
     collectPrefixedKeys(Object.keys(session?.lastVisitedAtByWorktreeId ?? {}))
+    collectPrefixedKeys(
+      Object.values(session?.sleepingAgentSessionsByPaneKey ?? {}).map(
+        (record) => record.worktreeId
+      )
+    )
+    collectPrefixedKeys(
+      Object.values(session?.terminalSurfaceTombstonesByPaneKey ?? {}).map(
+        (tombstone) => tombstone.worktreeId
+      )
+    )
+  }
+  collectPrefixedKeys(Object.keys(state.worktreeMeta))
+  collectScannedRecordOwners(state.workspaceSession)
+  for (const session of Object.values(state.workspaceSessionsByHostId ?? {})) {
+    collectScannedRecordOwners(session)
   }
 
   for (const key of Object.keys(state.worktreeMeta)) {
@@ -67,6 +86,14 @@ export function pruneWorktreeStateForRepo(
       delete state.worktreeMeta[key]
     }
   }
+  for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
+    const rawId = getWorktreeIdFromHostIdentity(alias)
+    const aliasHost = getExecutionHostIdFromWorktreeHostIdentity(alias)
+    if (rawId.startsWith(prefix) && (hostId === null || aliasHost === hostId)) {
+      delete state.worktreeIdentityAliases?.[alias]
+    }
+  }
+  pruneUnreferencedWorktreeIdentityMeta(state)
   // Why: a host-scoped prune must touch only that host's session (legacy blob = local, one partition
   // per remote host); pruning every partition would wipe a surviving host's tabs and sleeping agents
   // for a shared repo id/path. A full removal (hostId === null) still clears every host.

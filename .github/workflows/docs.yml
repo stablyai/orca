@@ -1,0 +1,275 @@
+name: Docs site
+
+on:
+  # Stable desktop releases are the production publication boundary. The
+  # release gate below excludes mobile and prerelease tags from this trigger.
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - 'docs/site/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Stable desktop release tag to redeploy (vX.Y.Z)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Serialize production runs so a delayed older release cannot overwrite a
+  # newer deployment. PR checks may still run concurrently by pull request.
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.event.pull_request.number) || 'docs-production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    # The Vercel project is rooted at `.`; this package directory is the
+    # complete upload and build context.
+    working-directory: docs/site
+
+jobs:
+  # This job deliberately has no deployment credentials and runs for every PR,
+  # including forks.
+  check:
+    name: Build and test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        # v5 avoids the v6 bootstrap/shim regression when pinning pnpm 10.
+        uses: pnpm/action-setup@v5
+        with:
+          version: 10.24.0
+          package_json_file: docs/site/package.json
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          # The repository root pins pnpm 12 while this isolated app pins 10;
+          # setup-node's cache probe runs at the root and would auto-switch.
+          package-manager-cache: false
+
+      - name: Install site dependencies
+        run: pnpm --ignore-workspace install --frozen-lockfile
+
+      - name: Run package tests
+        run: pnpm --ignore-workspace test
+
+      - name: Lint site
+        run: pnpm --ignore-workspace lint
+
+      - name: Typecheck site
+        run: pnpm --ignore-workspace exec tsc --noEmit --incremental false
+
+      - name: Build site
+        run: pnpm --ignore-workspace build
+
+  release_gate:
+    name: Authorize release
+    if: >-
+      github.repository == 'stablyai/orca' &&
+      (github.event_name == 'release' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      deploy: ${{ steps.validate.outputs.deploy }}
+      commit_sha: ${{ steps.validate.outputs.commit_sha }}
+    steps:
+      - name: Validate stable desktop tag
+        id: validate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          RELEASE_DRAFT: ${{ github.event.release.draft }}
+          RELEASE_AUTHOR: ${{ github.event.release.author.login }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          WORKFLOW_REF: ${{ github.ref }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          tag="$INPUT_TAG"
+          [[ "$EVENT_NAME" == "release" ]] && tag="$RELEASE_TAG"
+
+          # Match the stable desktop format used by release-policy.yml. This
+          # intentionally rejects mobile-* and all -rc.* tags.
+          stable_tag=false
+          [[ "$tag" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] && stable_tag=true
+
+          if [[ "$stable_tag" != "true" ]]; then
+            echo "Release $tag is not a stable desktop release; skipping docs deployment."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == "release" ]]; then
+            authorized_ref=true
+            authorized_author=false
+            [[ "$RELEASE_AUTHOR" == "github-actions[bot]" ]] && authorized_author=true
+            release_state_ok=false
+            [[ "$RELEASE_PRERELEASE" == "false" && "$RELEASE_DRAFT" == "false" ]] && release_state_ok=true
+          else
+            authorized_ref=false
+            [[ "$WORKFLOW_REF" == "refs/heads/$DEFAULT_BRANCH" ]] && authorized_ref=true
+
+            release_json=''
+            for attempt in 1 2 3; do
+              if release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" 2>/dev/null)"; then
+                break
+              fi
+              if [[ "$attempt" -eq 3 ]]; then
+                echo "::error::Release metadata for $tag was not available after 3 attempts."
+                exit 1
+              fi
+              sleep "$((attempt * 5))"
+            done
+            authorized_author=false
+            [[ "$(jq -r '.author.login' <<<"$release_json")" == "github-actions[bot]" ]] && authorized_author=true
+            release_state_ok=false
+            if [[ "$(jq -r '.tag_name' <<<"$release_json")" == "$tag" &&
+              "$(jq -r '.prerelease' <<<"$release_json")" == "false" &&
+              "$(jq -r '.draft' <<<"$release_json")" == "false" ]]; then
+              release_state_ok=true
+            fi
+          fi
+
+          # Resolve the tag to an immutable commit before handing it to the
+          # deployment job. This prevents a force-moved tag from changing the
+          # source between authorization and checkout.
+          tag_ref_json=''
+          for attempt in 1 2 3; do
+            if tag_ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" 2>/dev/null)"; then
+              break
+            fi
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "::error::Git ref for $tag was not available after 3 attempts."
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
+          tag_object_sha="$(jq -er '.object.sha' <<<"$tag_ref_json")"
+          tag_object_type="$(jq -er '.object.type' <<<"$tag_ref_json")"
+          commit_sha="$tag_object_sha"
+          if [[ "$tag_object_type" == 'tag' ]]; then
+            commit_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object_sha" | jq -er '.object.sha')"
+          fi
+          if [[ ! "$commit_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not resolve $tag to a commit SHA."
+            exit 1
+          fi
+          echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
+
+          # Stable tags cut before the docs package was merged are valid Orca
+          # releases, but cannot produce a docs deployment. Skip them before
+          # requesting the protected production environment.
+          docs_source_available=false
+          for attempt in 1 2 3; do
+            if gh api "repos/$GITHUB_REPOSITORY/contents/docs/site/package.json?ref=$commit_sha" >/dev/null 2>&1; then
+              docs_source_available=true
+              break
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          if [[ "$docs_source_available" != "true" ]]; then
+            echo "Release $tag does not contain docs/site; skipping docs deployment."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          deploy=false
+          if [[ "$authorized_ref" == "true" && "$authorized_author" == "true" && "$release_state_ok" == "true" ]]; then
+            deploy=true
+          else
+            echo "Release $tag is not an authorized stable desktop release; skipping docs deployment."
+          fi
+          echo "deploy=$deploy" >> "$GITHUB_OUTPUT"
+
+  production:
+    name: Production
+    if: >-
+      (github.event_name == 'release' || github.event_name == 'workflow_dispatch') &&
+      needs.release_gate.result == 'success' &&
+      needs.release_gate.outputs.deploy == 'true'
+    needs: release_gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: docs-production
+      url: https://www.onorca.dev/docs
+    env:
+      VERCEL_TELEMETRY_DISABLED: '1'
+    steps:
+      - name: Checkout released tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.release_gate.outputs.commit_sha }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        # v5 avoids the v6 bootstrap/shim regression when pinning pnpm 10.
+        uses: pnpm/action-setup@v5
+        with:
+          version: 10.24.0
+          package_json_file: docs/site/package.json
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Install site dependencies
+        run: pnpm --ignore-workspace install --frozen-lockfile
+
+      - name: Verify Vercel credentials
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}" || { echo '::error::VERCEL_TOKEN is not configured for docs-production.'; exit 1; }
+          test -n "${VERCEL_ORG_ID:-}" || { echo '::error::VERCEL_ORG_ID is not configured for docs-production.'; exit 1; }
+          test -n "${VERCEL_PROJECT_ID:-}" || { echo '::error::VERCEL_PROJECT_ID is not configured for docs-production.'; exit 1; }
+
+      - name: Pull Vercel production settings
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: pnpm --ignore-workspace exec vercel pull --yes --non-interactive --environment=production
+
+      - name: Run package tests
+        run: pnpm --ignore-workspace test
+
+      - name: Lint site
+        run: pnpm --ignore-workspace lint
+
+      - name: Typecheck site
+        run: pnpm --ignore-workspace exec tsc --noEmit --incremental false
+
+      - name: Build production site
+        run: pnpm --ignore-workspace exec vercel build --prod --non-interactive
+
+      - name: Deploy production site
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: pnpm --ignore-workspace exec vercel deploy --prebuilt --prod --yes --non-interactive

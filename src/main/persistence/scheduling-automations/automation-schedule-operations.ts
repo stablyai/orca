@@ -3,7 +3,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   latestAutomationOccurrenceAtOrBefore,
   nextAutomationOccurrenceAfter
-} from '../../../shared/automation-schedules'
+} from '../../../shared/automation-schedule-occurrences'
 
 export function advanceAutomationNextRun(
   state: PersistedState,

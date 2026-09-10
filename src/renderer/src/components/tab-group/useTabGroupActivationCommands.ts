@@ -9,6 +9,7 @@ import {
 } from '../../runtime/web-runtime-session'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import type { TabGroupWorktreeSnapshot } from './useTabGroupItemProjections'
 
 export function useTabGroupActivationCommands({
@@ -138,5 +139,18 @@ export function useTabGroupActivationCommands({
     [activateTab, focusGroup, groupId, groupTabs, setActiveBrowserTab, setActiveTabType, worktreeId]
   )
 
-  return { activateTerminal, toggleTerminalPaneExpand, activateEditor, activateBrowser }
+  const activateAgentSession = useCallback(
+    (tabId: string) => {
+      activateStructuredAgentSessionTab({ worktreeId, tabId })
+    },
+    [worktreeId]
+  )
+
+  return {
+    activateTerminal,
+    toggleTerminalPaneExpand,
+    activateEditor,
+    activateBrowser,
+    activateAgentSession
+  }
 }

@@ -3,6 +3,7 @@ import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { join } from 'node:path'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   addPreviewMessage,
   createAccumulator,
@@ -25,14 +26,15 @@ import {
 
 export async function parseOpenCodeSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
   if (!record) {
     return null
   }
   const sessionId = extractString(record.id) ?? sessionIdFromFileName(file.path)
-  const accumulator = createAccumulator({ agent: 'opencode', file, sessionId })
+  const accumulator = createAccumulator({ agent: 'opencode', file, sessionId, messages })
   accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
   accumulator.cwd = extractString(record.directory)
   updateTimeline(accumulator, timeObjectValue(record.time, 'created'))

@@ -21,6 +21,7 @@ export type EndpointFileFields = {
   token: string
   env: string
   version: string
+  transport?: string
 }
 
 /** Atomically write the endpoint file at `endpointDir/<getEndpointFileName()>`.
@@ -39,6 +40,9 @@ export function writeEndpointFile(
     ['ORCA_AGENT_HOOK_ENV', fields.env],
     ['ORCA_AGENT_HOOK_VERSION', fields.version]
   ]
+  if (fields.transport) {
+    valuesToWrite.push(['ORCA_AGENT_HOOK_TRANSPORT', fields.transport])
+  }
   for (const [key, value] of valuesToWrite) {
     if (!isShellSafeEndpointValue(value)) {
       console.error(

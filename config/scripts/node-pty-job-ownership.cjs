@@ -1,10 +1,6 @@
 'use strict'
 
-const NODE_PTY_JOB_EXPORTS = [
-  'listJobProcessIds',
-  'terminateJob',
-  'assignCurrentProcessToJob'
-]
+const NODE_PTY_JOB_EXPORTS = ['listJobProcessIds', 'terminateJob', 'assignCurrentProcessToJob']
 
 function assertNodePtyJobOwnership({ nativeName, native, platform = process.platform }) {
   if (platform !== 'win32' || nativeName !== 'conpty') {

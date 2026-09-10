@@ -161,7 +161,7 @@ describe('remote git diff transport budget', () => {
     const commands = new RuntimeGitCommands({
       resolveRuntimeGitTarget: async () => ({
         worktree: { id: 'wt-1', path: '/remote/repo' } as unknown as ResolvedRuntimeGitWorktree,
-        connectionId: 'conn-1'
+        executionHostId: 'ssh:conn-1'
       }),
       getRuntimeSettings: () => ({}) as GlobalSettings
     })

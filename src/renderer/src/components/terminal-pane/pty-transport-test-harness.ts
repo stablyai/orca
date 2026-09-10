@@ -1,7 +1,13 @@
 import { vi } from 'vitest'
 
 export type PtyStreamPayload = { id: string; data: string }
-export type PtyExitPayload = { id: string; code: number; preserveRendererBinding?: boolean }
+export type PtyExitPayload = {
+  id: string
+  code: number
+  preserveRendererBinding?: boolean
+  /** Which lifetime of `id` died; absent when the execution host predates the field. */
+  incarnationId?: string
+}
 
 /** Sinks let each spec own its `onData`/`onExit` bindings, so test bodies keep calling them directly. */
 export type PtyListenerSinks = {

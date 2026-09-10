@@ -128,14 +128,13 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
 
   const [linkDirectLoading, setLinkDirectLoading] = useState(false)
 
-  const lastAutoNameRef = useRef<string>(
-    getInitialAutoManagedWorkspaceName({
-      draftName: persistDraft ? newWorkspaceDraft?.name : null,
-      draftLinkedWorkItem: persistDraft ? draftLinkedWorkItemSeed : null,
-      initialName,
-      initialLinkedWorkItem: initialLinkedWorkItemSeed
-    })
-  )
+  const lastAutoNameRef = useRef<string>(undefined!)
+  lastAutoNameRef.current ??= getInitialAutoManagedWorkspaceName({
+    draftName: persistDraft ? newWorkspaceDraft?.name : null,
+    draftLinkedWorkItem: persistDraft ? draftLinkedWorkItemSeed : null,
+    initialName,
+    initialLinkedWorkItem: initialLinkedWorkItemSeed
+  })
 
   const nameRef = useRef<string>(name)
 
@@ -153,12 +152,18 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
   }, [name, note])
 
   // Why: PR checkout refs resolve async, so submit can still see the linked PR as a checkout source if Create fires before the resolver settles.
+  // Why useState and not `useRef(expr)`: the seed legitimately resolves to null, so a nullish
+  // guard would keep re-running it; useState's initializer runs once without writing in render.
+  const [initialSmartGitHubPrStartPointSelection] =
+    useState<SmartGitHubPrStartPointSelection | null>(() =>
+      getInitialGitHubPrStartPointSelection({
+        item: initialGitHubWorkItem,
+        linkedWorkItem: initialLinkedWorkItemSeed,
+        repoId: selectedRepo?.id ?? initialRepoId
+      })
+    )
   const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(
-    getInitialGitHubPrStartPointSelection({
-      item: initialGitHubWorkItem,
-      linkedWorkItem: initialLinkedWorkItemSeed,
-      repoId: selectedRepo?.id ?? initialRepoId
-    })
+    initialSmartGitHubPrStartPointSelection
   )
 
   useEffect(() => {

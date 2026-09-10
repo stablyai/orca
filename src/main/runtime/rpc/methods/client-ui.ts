@@ -1,7 +1,11 @@
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { defineMethod, type RpcMethod } from '../core'
-import { PRBotAuthorOverrideUpdate, SettingsUpdate } from './client-settings-schemas'
+import {
+  NativeChatSessionOptionsMutation,
+  PRBotAuthorOverrideUpdate,
+  SettingsUpdate
+} from './client-settings-schemas'
 import { FeatureInteractionIdParam, UiUpdate } from './client-ui-schemas'
 // Type-only side effect: keeps the schema/PersistedUIState parity assertions in
 // the typecheck graph so drift fails the build instead of a paired client.
@@ -43,6 +47,14 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
     handler: (params, { runtime }) => ({
       settings: runtime.updateClientPRBotAuthorOverride(params)
     })
+  }),
+  defineMethod({
+    name: 'settings.mutateNativeChatSessionOptions',
+    params: NativeChatSessionOptionsMutation,
+    handler: (params, { runtime }) => {
+      runtime.updateClientNativeChatSessionOptions(params)
+      return { ok: true as const }
+    }
   }),
   defineMethod({
     name: 'ui.get',

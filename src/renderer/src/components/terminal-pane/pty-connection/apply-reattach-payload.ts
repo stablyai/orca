@@ -92,13 +92,21 @@ export function createReattachPayloadHandlers(
         session.reattachReplayResetSequence(
           daemonSnapshotReplay,
           Boolean(ctx.connectResult.coldRestore),
-          ctx.connectResult.isAlternateScreen
+          ctx.connectResult.isAlternateScreen,
+          ctx.connectResult.snapshotTerminalOwner
         )
       )
       if (ctx.connectResult.pendingEscapeTailAnsi) {
         // Why last: re-arm the dangling mid-escape after the reset (whose ESC would abort it) so the live continuation completes it (#7329).
         session.writeReplayData(ctx.connectResult.pendingEscapeTailAnsi)
       }
+      // The initial attach backlog can contain bytes already painted by this snapshot.
+      session.setRestoredSnapshotBaseline(
+        ctx.ptyId,
+        { seq: ctx.connectResult.snapshotSeq },
+        restoredSnapshotPaintsPrintableContent({ data: daemonSnapshotReplay })
+      )
+      session.recordRendererOrderedSeq({ seq: ctx.connectResult.snapshotSeq })
       session.sendFocusedReattachFocusInAfterReplay(ctx.ptyId, ctx.attemptGeneration)
       if (ctx.connectResult.coldRestore) {
         // Snapshot superseded the cold-restore payload; ack so the daemon doesn't redeliver it.
@@ -184,7 +192,8 @@ export function createReattachPayloadHandlers(
           session.reattachReplayResetSequence(
             modelData,
             Boolean(ctx.connectResult?.coldRestore),
-            modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen
+            modelSnapshot.alternateScreen ?? ctx.connectResult?.isAlternateScreen,
+            modelSnapshot.terminalOwner
           )
         )
         if (modelSnapshot.pendingEscapeTailAnsi) {

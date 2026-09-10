@@ -61,6 +61,7 @@ export type PtyIpcSpawnState = {
   metadataLeafId: string | null
   metadataPaneKey: string | null
   legacySpawnPaneKey: { tabId: string; numericPaneId: string; paneKey: string } | null
+  opaqueRemintedSpawnPaneKey: string | null
   migrationUnsupportedPaneKey: string | null
   reservationPaneKey: string | null
   validatedPaneKey: string | null
@@ -134,6 +135,7 @@ export function createPtyIpcSpawnState(
     metadataLeafId: null,
     metadataPaneKey: null,
     legacySpawnPaneKey: null,
+    opaqueRemintedSpawnPaneKey: null,
     migrationUnsupportedPaneKey: null,
     reservationPaneKey: null,
     validatedPaneKey: null,

@@ -3,7 +3,8 @@ import { computeLineStats } from './diff-line-stats'
 import {
   getDiffSectionBodyHeight,
   getLargeDiffFallbackBodyHeight,
-  isIntrinsicHeightImageDiff
+  isIntrinsicHeightImageDiff,
+  usesLargeDiffFallbackHeight
 } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
 
@@ -20,7 +21,7 @@ export function useDiffSectionLayoutMetrics({
   isLargeDiffLimited: boolean
 } {
   const renderLimit = section.largeDiffRenderLimit
-  const isLargeDiffLimited = renderLimit?.limited === true
+  const isLargeDiffLimited = usesLargeDiffFallbackHeight(section)
   const lineStats = useMemo(
     () =>
       section.loading || section.error || isLargeDiffLimited

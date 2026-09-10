@@ -29,7 +29,7 @@ const uncRouteLanes = new Map<string, UncRouteLane>()
  * subdirectories of one share share a lane. Returns null for local-disk paths,
  * which never block long enough to be worth queueing.
  */
-function uncRouteKey(cwd: string): string | null {
+export function uncRouteKey(cwd: string): string | null {
   if (!cwd.startsWith('\\\\')) {
     return null
   }

@@ -137,8 +137,15 @@ export function reconcileRemoteCodexState(
   if (!lead) {
     return payload
   }
+  // Child lifecycle hooks commonly omit the root prompt. Preserve the last known
+  // turn label while merging their roster/state so relay restarts do not blank it.
+  const prompt =
+    agentId && payload.prompt.length === 0 && previous?.agentType === 'codex'
+      ? previous.prompt
+      : payload.prompt
   return {
     ...payload,
+    prompt,
     state: codexRosterEffectiveState(roster, lead.state),
     model: lead.model ?? payload.model,
     subagents: codexRosterToSnapshots(roster)

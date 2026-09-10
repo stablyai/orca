@@ -2,24 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { getNativeChatAgentProfile } from './native-chat-agent-profiles'
 
 describe('native chat agent picker profiles', () => {
-  it('keeps Codex dollar skills separate from slash commands', () => {
+  // The composer types the same `/` for every agent; skillPrefix is only the
+  // form a picked skill is written as.
+  it('keeps Codex skills invocable as dollar tokens', () => {
     expect(getNativeChatAgentProfile('codex')).toMatchObject({
       skillPrefix: '$',
-      groupedSlash: false,
       skillSourceOwner: 'codex'
     })
   })
 
-  it('groups Claude-family and Grok skills under slash', () => {
+  it('writes Claude-family and Grok skills as slash tokens', () => {
     expect(getNativeChatAgentProfile('claude')).toMatchObject({
       skillPrefix: '/',
-      groupedSlash: true,
       skillSourceOwner: 'claude'
     })
     expect(getNativeChatAgentProfile('openclaude')).toMatchObject({ skillSourceOwner: 'claude' })
     expect(getNativeChatAgentProfile('grok')).toMatchObject({
       skillPrefix: '/',
-      groupedSlash: true,
       skillSourceOwner: 'grok'
     })
   })

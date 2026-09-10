@@ -3,6 +3,7 @@ import type {
   ProviderRateLimits,
   ProviderRateLimitStatus
 } from '../../../../shared/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import {
   getVisibleUsageProvider,
   hasUsageProviderSettings,
@@ -73,6 +74,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     geminiCliOAuthEnabled: false,
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
+    minimaxApiKeyConfigured: false,
     grokAuthConfigured: false,
     ...overrides
   }
@@ -127,6 +129,7 @@ describe('hasUsageProviderSettings', () => {
       false
     )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
   })
 
@@ -194,6 +197,24 @@ describe('hasUsageProviderSettingsForProvider', () => {
     ).toBe(true)
     expect(hasUsageProviderSettingsForProvider('minimax', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('minimax', null)).toBe(false)
+  })
+
+  it('treats minimaxApiKeyConfigured as a parallel durable signal for MiniMax', () => {
+    // Why: CN endpoint users can configure MiniMax with an API key only. The
+    // visibility check must accept either credential so the status bar stays
+    // visible while the snapshot is still pending.
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'minimax',
+        usageSettings({ minimaxApiKeyConfigured: true })
+      )
+    ).toBe(true)
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'minimax',
+        usageSettings({ minimaxApiKeyConfigured: false, minimaxCookieConfigured: false })
+      )
+    ).toBe(false)
   })
 
   it('treats grokAuthConfigured as the durable signal for Grok', () => {
@@ -363,21 +384,7 @@ describe('getVisibleUsageProvider', () => {
 
 describe('isUsageEmptyState', () => {
   it('waits for provider snapshots before showing the setup CTA', () => {
-    expect(
-      isUsageEmptyState(
-        {
-          claude: null,
-          codex: null,
-          gemini: null,
-          opencodeGo: null,
-          kimi: null,
-          antigravity: null,
-          minimax: null,
-          grok: null
-        },
-        usageSettings()
-      )
-    ).toBe(false)
+    expect(isUsageEmptyState(createEmptyRateLimitState(), usageSettings())).toBe(false)
   })
 
   it('treats provider keys omitted by an older main process as pending', () => {
@@ -446,21 +453,7 @@ describe('isUsageEmptyState', () => {
   })
 
   it('waits for settings before showing the setup CTA', () => {
-    expect(
-      isUsageEmptyState(
-        {
-          claude: null,
-          codex: null,
-          gemini: null,
-          opencodeGo: null,
-          kimi: null,
-          antigravity: null,
-          minimax: null,
-          grok: null
-        },
-        null
-      )
-    ).toBe(false)
+    expect(isUsageEmptyState(createEmptyRateLimitState(), null)).toBe(false)
   })
 
   it('shows the setup CTA for a loaded profile with no configured usage provider', () => {

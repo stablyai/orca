@@ -4,6 +4,7 @@ import {
   AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS,
   type AgentPromptActivity,
   isAgentPromptStalledError,
+  readAgentPromptWaitText,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
@@ -23,12 +24,24 @@ function activity(overrides: Partial<AgentPromptActivity> = {}): AgentPromptActi
 describe('agent prompt submission verification', () => {
   afterEach(() => vi.useRealTimers())
 
+  it('reuses wait text while the PTY output sequence is unchanged', () => {
+    const cache: { outputSequence?: number; waitText?: string } = {}
+    const readWaitText = vi.fn(() => 'retained terminal tail')
+
+    expect(readAgentPromptWaitText(cache, 7, readWaitText)).toBe('retained terminal tail')
+    expect(readAgentPromptWaitText(cache, 7, readWaitText)).toBe('retained terminal tail')
+    expect(readAgentPromptWaitText(cache, 8, readWaitText)).toBe('retained terminal tail')
+
+    expect(readWaitText).toHaveBeenCalledTimes(2)
+  })
+
   it('accepts an observed working transition', async () => {
     vi.useFakeTimers()
     let current = activity()
     const verification = verifyAgentPromptSubmission({
       baseline: current,
-      readActivity: () => current
+      readActivity: () => current,
+      allowOutputEvidence: false
     })
 
     current = activity({ workingSequence: 5, status: 'working' })
@@ -78,6 +91,21 @@ describe('agent prompt submission verification', () => {
     await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
 
     await rejected
+  })
+
+  it('accepts a working transition after the former five-second deadline', async () => {
+    vi.useFakeTimers()
+    let current = activity()
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current
+    })
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    current = activity({ workingSequence: 5, status: 'working' })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(verification).resolves.toBeUndefined()
   })
 
   it('blocks when permission appears after submit', async () => {
@@ -137,7 +165,8 @@ describe('agent prompt submission verification', () => {
     let current = activity()
     const verification = verifyAgentPromptSubmission({
       baseline: current,
-      readActivity: () => current
+      readActivity: () => current,
+      allowOutputEvidence: false
     })
 
     // No workingSequence edge: the window-gated synthetic title never ran (hidden window/headless).
@@ -145,6 +174,29 @@ describe('agent prompt submission verification', () => {
     await vi.advanceTimersByTimeAsync(50)
 
     await expect(verification).resolves.toBeUndefined()
+  })
+
+  it('requires request claim approval for hook working evidence', async () => {
+    vi.useFakeTimers()
+    let current = activity()
+    const acceptTurnStart = vi.fn(() => false)
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current,
+      acceptTurnStart,
+      allowOutputEvidence: false,
+      timeoutMs: 50
+    })
+    const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
+
+    current = activity({ explicitWorkingStartedAt: 2_000, status: 'working' })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await rejected
+    expect(acceptTurnStart).toHaveBeenCalledWith({
+      kind: 'hook',
+      workingStartedAt: 2_000
+    })
   })
 
   it('does not accept a hook working status that predates the baseline', async () => {
@@ -192,6 +244,22 @@ describe('agent prompt submission verification', () => {
     await expect(verification).resolves.toBeUndefined()
   })
 
+  it('does not accept existing-turn output as durable submission evidence', async () => {
+    vi.useFakeTimers()
+    let current = activity({ status: 'working' })
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current,
+      allowOutputEvidence: false
+    })
+    const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
+
+    current = activity({ status: 'working', outputSequence: 8 })
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+
+    await rejected
+  })
+
   it('does not accept pane output when the agent was idle at submit', async () => {
     vi.useFakeTimers()
     let current = activity()
@@ -207,7 +275,7 @@ describe('agent prompt submission verification', () => {
     await rejected
   })
 
-  it('holds the longer hook window open past the default timeout', async () => {
+  it('holds the extended hook window open past the former hook timeout', async () => {
     vi.useFakeTimers()
     let current = activity()
     const verification = verifyAgentPromptSubmission({
@@ -216,7 +284,7 @@ describe('agent prompt submission verification', () => {
       timeoutMs: AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
     })
 
-    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS + 1_000)
+    await vi.advanceTimersByTimeAsync(15_000 + 1_000)
     current = activity({ explicitWorkingStartedAt: 9_000, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 

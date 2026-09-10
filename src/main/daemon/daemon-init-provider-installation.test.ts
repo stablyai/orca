@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   isPackagedMock,
+  getMacDaemonTccAttributionHealthMock,
+  trackDaemonAdoptedMock,
   probeSocketExistsMock,
   readFileSyncMock,
   unlinkSyncMock,
@@ -28,7 +30,6 @@ const {
   (await import('./daemon-init-test-harness')).createDaemonInitMocks()
 )
 
-vi.mock('electron', () => moduleFactories.electron())
 vi.mock('fs', () => moduleFactories.fs())
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
@@ -43,6 +44,7 @@ vi.mock('./daemon-process-start-time', () => moduleFactories.daemonProcessStartT
 vi.mock('./daemon-pid-file-parse', () => moduleFactories.daemonPidFileParse())
 vi.mock('./client', () => moduleFactories.client())
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
+vi.mock('./daemon-adoption-telemetry-event', () => moduleFactories.daemonAdoptionTelemetryEvent())
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
@@ -229,6 +231,48 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances[1].disconnectOnly).toHaveBeenCalledOnce()
   })
 
+  // #17696: adopting a daemon from an earlier app launch is invisible to daemon_lifecycle, so
+  // it gets its own event — macOS only, and only for adopted (not freshly forked) daemons.
+  it('reports a macOS daemon adoption with its TCC attribution and live session bucket', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const mod = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/adopted-socket',
+      tokenPath: '/fake/adopted-token',
+      adopted: true
+    }))
+    getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
+    defaultListSessionsSessions.push({ sessionId: 'wt-1@@a' }, { sessionId: 'wt-1@@b' })
+
+    await mod.initDaemonPtyProvider()
+    await vi.waitFor(() => expect(trackDaemonAdoptedMock).toHaveBeenCalledOnce())
+
+    // null pid record: the harness has no pid file, which the emitter classifies as 'unknown'.
+    expect(trackDaemonAdoptedMock).toHaveBeenCalledWith(null, 'severed', 2)
+    vi.restoreAllMocks()
+  })
+
+  it('does not report adoption for a freshly forked daemon or off macOS', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(trackDaemonAdoptedMock).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    const linuxMod = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/adopted-socket',
+      tokenPath: '/fake/adopted-token',
+      adopted: true
+    }))
+    await linuxMod.initDaemonPtyProvider()
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(trackDaemonAdoptedMock).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
   it('routes fresh PTYs to the local fallback when a preserved daemon cannot spawn new PTYs', async () => {
     const mod = await importFresh()
     ensureRunningOverrides.push(async () => ({
@@ -253,6 +297,28 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       rows: 24
     })
     expect(adapterInstances[0].listProcesses).toHaveBeenCalled()
+  })
+
+  it('answers daemonOwnsFreshPersistentPtys honestly for each installed provider', async () => {
+    // What orcad publishes as `canRecoverPersistentLocalPtys` and as the readiness health
+    // verdict. Answering true under degraded routing would advertise recovery for terminals
+    // that die with the runtime process.
+    const mod = await importFresh()
+    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(false)
+
+    await mod.initDaemonPtyProvider()
+    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(true)
+
+    const degraded = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/degraded-socket',
+      tokenPath: '/fake/degraded-token',
+      mode: 'degraded-new-pty-fallback'
+    }))
+    await degraded.initDaemonPtyProvider()
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    expect(degraded.getDaemonProvider()).toBeInstanceOf(DegradedDaemonPtyProvider)
+    expect(degraded.daemonOwnsFreshPersistentPtys()).toBe(false)
   })
 
   it('rechecks the preserved daemon endpoint before recovering fresh-spawn routing', async () => {

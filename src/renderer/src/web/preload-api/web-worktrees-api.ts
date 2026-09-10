@@ -53,6 +53,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         name: args.name,
         // Absent means user-typed, which is what the host must assume — so send it only when true.
         ...(args.nameWasGenerated ? { nameWasGenerated: true } : {}),
+        ...(args.displayNameKind ? { displayNameKind: args.displayNameKind } : {}),
         baseBranch: args.baseBranch,
         compareBaseRef: args.compareBaseRef,
         branchNameOverride: args.branchNameOverride,
@@ -86,6 +87,8 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
             }
           : {}),
         parentWorkspace: args.parentWorkspace,
+        // Why: every create through this API is an in-app action, never the CLI's parent flag.
+        ...(args.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
         automationProvenanceRequest: args.automationProvenanceRequest

@@ -23,12 +23,14 @@ export async function publishMultiplexInitialSnapshot(
   const { runtime, streams, emit } = state
   const { ptyId } = stream
   const isMobile = stream.isMobile
+  const forcedInitialSnapshotTruncated =
+    process.env.ORCA_E2E_FORCE_REMOTE_TERMINAL_INITIAL_SNAPSHOT_TRUNCATED === '1'
   let read = await runtime.readTerminal(request.terminal)
   let serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, isMobile)
   if (state.closed || streams.get(request.streamId) !== stream) {
     return null
   }
-  let initialOutputOverflowed = false
+  let initialOutputOverflowed = forcedInitialSnapshotTruncated
   if (stream.pendingOutputOverflowed) {
     stream.pendingOutput.splice(0)
     stream.pendingOutputBytes = 0
@@ -95,6 +97,8 @@ export async function publishMultiplexInitialSnapshot(
       truncatedByByteBudget: serialized?.truncatedByByteBudget,
       source: serialized?.source,
       kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
+      alternateScreen: serialized?.alternateScreen,
+      terminalOwner: serialized?.terminalOwner,
       oscLinks: serialized?.oscLinks,
       pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
       data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')

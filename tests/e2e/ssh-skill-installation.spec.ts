@@ -10,7 +10,6 @@ import {
 import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
-  REMOTE_SKILL_CLOUD_ORIGIN,
   REMOTE_SKILL_NAME,
   REMOTE_SKILL_PACKAGE_ID,
   REMOTE_SKILL_VERSION_ID,
@@ -25,13 +24,19 @@ const REMOTE_FOLDER = '/tmp/orca-skill-folder-workspace'
 let cloud: RemoteSkillCloudFixture | null = null
 
 test.use({
-  orcaAppExtraEnv: {
-    ORCA_ARTIFACTS_API_URL: REMOTE_SKILL_CLOUD_ORIGIN,
-    ORCA_CLOUD_API_URL: REMOTE_SKILL_CLOUD_ORIGIN,
-    ORCA_CLOUD_CLIENT_ID: 'skills-e2e-client',
-    ORCA_CLOUD_DEV_AUTH: '1',
-    ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
-    ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS: REMOTE_SKILL_CLOUD_ORIGIN
+  // oxlint-disable-next-line no-empty-pattern -- The server starts in beforeAll before this test fixture runs.
+  orcaAppExtraEnv: async ({}, provideEnv) => {
+    if (!cloud) {
+      throw new Error('Skill cloud fixture unavailable')
+    }
+    await provideEnv({
+      ORCA_ARTIFACTS_API_URL: cloud.origin,
+      ORCA_CLOUD_API_URL: cloud.origin,
+      ORCA_CLOUD_CLIENT_ID: 'skills-e2e-client',
+      ORCA_CLOUD_DEV_AUTH: '1',
+      ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
+      ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS: cloud.origin
+    })
   }
 })
 

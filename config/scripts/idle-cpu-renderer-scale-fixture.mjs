@@ -1,6 +1,6 @@
 export async function configureRendererScaleFixture(page, options, repoPath) {
   return page.evaluate(
-    ({ agentsPerWorktree, lineageDepth, repoPath }) => {
+    ({ agentsPerWorktree, subagentsPerAgent, lineageDepth, repoPath }) => {
       const store = window.__store
       if (!store) {
         throw new Error('window.__store is not available')
@@ -98,7 +98,18 @@ export async function configureRendererScaleFixture(page, options, repoPath) {
               {
                 state: 'working',
                 prompt: `Idle CPU agent ${worktreeIndex + 1}.${agentIndex + 1}`,
-                agentType
+                agentType,
+                ...(subagentsPerAgent > 0
+                  ? {
+                      subagents: Array.from({ length: subagentsPerAgent }, (_, index) => ({
+                        id: `child-${index}`,
+                        state: 'working',
+                        startedAt: fixtureNow,
+                        agentType,
+                        description: `Subagent ${worktreeIndex + 1}.${agentIndex + 1}.${index + 1}`
+                      }))
+                    }
+                  : {})
               },
               agentType,
               { updatedAt: fixtureNow, stateStartedAt: fixtureNow },
@@ -116,10 +127,16 @@ export async function configureRendererScaleFixture(page, options, repoPath) {
         expandedLineageGroups: lineageParentIds.size,
         agentsPerWorktree,
         seededAgentRows,
+        seededSubagentRows: seededAgentRows * subagentsPerAgent,
         orderedWorktreeIds: worktrees.map((worktree) => worktree.id)
       }
     },
-    { agentsPerWorktree: options.agentsPerWorktree, lineageDepth: options.lineageDepth, repoPath }
+    {
+      agentsPerWorktree: options.agentsPerWorktree,
+      subagentsPerAgent: options.subagentsPerAgent ?? 0,
+      lineageDepth: options.lineageDepth,
+      repoPath
+    }
   )
 }
 

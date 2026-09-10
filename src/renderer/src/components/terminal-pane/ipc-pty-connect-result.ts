@@ -16,6 +16,10 @@ export function projectIpcPtyConnectResult(
       snapshot: spawnResult.snapshot,
       snapshotCols: spawnResult.snapshotCols,
       snapshotRows: spawnResult.snapshotRows,
+      ...(spawnResult.snapshotSeq !== undefined ? { snapshotSeq: spawnResult.snapshotSeq } : {}),
+      ...(spawnResult.snapshotKittyKeyboardFlags !== undefined
+        ? { snapshotKittyKeyboardFlags: spawnResult.snapshotKittyKeyboardFlags }
+        : {}),
       ...(spawnResult.snapshotPrefixAnsi !== undefined
         ? { snapshotPrefixAnsi: spawnResult.snapshotPrefixAnsi }
         : {}),
@@ -24,6 +28,9 @@ export function projectIpcPtyConnectResult(
         : {}),
       ...(spawnResult.snapshotFrameRestoreAnsi !== undefined
         ? { snapshotFrameRestoreAnsi: spawnResult.snapshotFrameRestoreAnsi }
+        : {}),
+      ...(spawnResult.snapshotTerminalOwner
+        ? { snapshotTerminalOwner: spawnResult.snapshotTerminalOwner }
         : {}),
       isAlternateScreen: spawnResult.isAlternateScreen,
       sessionExpired: spawnResult.sessionExpired,

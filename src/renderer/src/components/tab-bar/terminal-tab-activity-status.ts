@@ -23,6 +23,8 @@ type TerminalTabActivityFlags = {
   hasInterrupted: boolean
   hasLiveDone: boolean
   paneIds: Set<string>
+  /** Panes whose row went stale; suppress generated permission labels only. */
+  stalePaneIds: Set<string>
 }
 
 type FlagsCache = {
@@ -69,6 +71,10 @@ function getTerminalTabActivityFlags(
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
     // must not keep a tab spinning. Same freshness gate as the sidebar.
     if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      // Stale identity suppresses Orca's one-shot permission label without suppressing native titles.
+      getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).stalePaneIds.add(
+        identity.paneId
+      )
       continue
     }
 
@@ -106,7 +112,8 @@ function getOrCreateTerminalTabActivityFlags(
       hasLiveMonitoring: false,
       hasInterrupted: false,
       hasLiveDone: false,
-      paneIds: new Set()
+      paneIds: new Set(),
+      stalePaneIds: new Set()
     }
     flagsByTabId.set(tabId, flags)
   }
@@ -162,6 +169,7 @@ export function resolveTerminalTabActivityStatus({
     ptyIdsByTabId: ptyIdsByTabId ?? {},
     runtimePaneTitlesByTabId: runtimePaneTitlesByTabId ?? {},
     agentStatusPaneIdsByTabId: { [tab.id]: flags?.paneIds ?? EMPTY_PANE_IDS },
+    stalePaneIdsByTabId: { [tab.id]: flags?.stalePaneIds ?? EMPTY_PANE_IDS },
     terminalLayoutsByTabId: terminalLayout ? { [tab.id]: terminalLayout } : undefined,
     hasPermission: flags?.hasPermission ?? false,
     hasLiveWorking: flags?.hasLiveWorking ?? false,
@@ -256,29 +264,49 @@ export function terminalTabHasUnreadActivity({
   )
 }
 
+// Why: production writes replace this map; WeakMap supports retained snapshots without pinning them.
+let unreadAgentCompletionTabIdsBySnapshot = new WeakMap<
+  Record<string, boolean | undefined>,
+  ReadonlySet<string>
+>()
+
+function getUnreadAgentCompletionTabIds(
+  unreadAgentCompletionPanes: Record<string, boolean | undefined>
+): ReadonlySet<string> {
+  const cached = unreadAgentCompletionTabIdsBySnapshot.get(unreadAgentCompletionPanes)
+  if (cached) {
+    return cached
+  }
+
+  // Why: every mounted tab runs this selector per store write; index each immutable marker snapshot once.
+  const tabIds = new Set<string>()
+  for (const paneKey of Object.keys(unreadAgentCompletionPanes)) {
+    if (!unreadAgentCompletionPanes[paneKey]) {
+      continue
+    }
+    const separatorIndex = paneKey.indexOf(':')
+    tabIds.add(separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex))
+  }
+  unreadAgentCompletionTabIdsBySnapshot.set(unreadAgentCompletionPanes, tabIds)
+  return tabIds
+}
+
 /** Match pane-level unread completion markers to their owning terminal tab. */
 export function hasUnreadAgentCompletionForTerminalTab(
   unreadAgentCompletionPanes: Record<string, boolean | undefined> | undefined,
   tabId: string
 ): boolean {
-  for (const [paneKey, unread] of Object.entries(unreadAgentCompletionPanes ?? {})) {
-    // Why entries, not keys: the widened value type lets a cleared marker linger as `false`.
-    if (!unread) {
-      continue
-    }
-    // paneKey is `${tabId}:${leafId}` and tab ids never contain ":", so the
-    // prefix up to the first ":" is the owning tab id (see
-    // selectFloatingWorkspaceHasUnread). Prefix-match to keep legacy keys.
-    const separatorIndex = paneKey.indexOf(':')
-    const owningTabId = separatorIndex === -1 ? paneKey : paneKey.slice(0, separatorIndex)
-    if (owningTabId === tabId) {
-      return true
-    }
-  }
-  return false
+  return unreadAgentCompletionPanes
+    ? getUnreadAgentCompletionTabIds(unreadAgentCompletionPanes).has(tabId)
+    : false
 }
 
 /** Test-only: clear the memoized per-tab flag cache between cases. */
 export function resetTerminalTabActivityFlagsCacheForTest(): void {
   flagsCache = null
+}
+
+/** Test-only: clear the unread marker snapshot index between cases. */
+export function resetUnreadAgentCompletionTabIdsCacheForTest(): void {
+  unreadAgentCompletionTabIdsBySnapshot = new WeakMap()
 }

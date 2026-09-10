@@ -25,9 +25,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     const entry = state.agentStatusByPaneKey[session.cacheKey]
     const sleepingRecordEntry = session.getSleepingRecordForPane(state)
     const sleepingRecord = sleepingRecordEntry?.record
-    if (session.isLegacyWorkerAutomaticResumeBlocked()) {
-      return null
-    }
+
     const useLiveEntry = entry && entry.state !== 'done'
     const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
     if (!agent || !isResumableTuiAgent(agent)) {

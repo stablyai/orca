@@ -7,7 +7,9 @@ import {
   _internals,
   forgetCodexPaneAccount,
   getCodexPaneAccount,
+  hasAnyRecordedLegacyWslCodexPane,
   hasRecordedLegacySharedCodexPane,
+  hasRecordedLegacyWslCodexPane,
   hasRecordedManagedHostCodexPane,
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys,
@@ -138,6 +140,53 @@ describe('codex pane account registry', () => {
     expect(hasRecordedLegacySharedCodexPane()).toBe(true)
   })
 
+  it('identifies only legacy runtime-home panes on the requested WSL lane', () => {
+    recordCodexPaneAccount('pty-legacy', {
+      selectionKey: 'wsl:Ubuntu',
+      accountId: 'account-old',
+      homeRoute: 'wsl-home'
+    })
+    recordCodexPaneAccount('pty-direct', {
+      selectionKey: 'wsl:Ubuntu',
+      accountId: 'account-new',
+      homeRoute: 'account-home'
+    })
+    recordCodexPaneAccount('pty-other-distro', {
+      selectionKey: 'wsl:Debian',
+      accountId: 'account-debian',
+      homeRoute: 'wsl-home'
+    })
+    recordCodexPaneAccount('pty-default', {
+      selectionKey: 'wsl:__default__',
+      accountId: null,
+      homeRoute: 'wsl-home'
+    })
+
+    expect(hasRecordedLegacyWslCodexPane('wsl:Ubuntu')).toBe(true)
+    expect(hasRecordedLegacyWslCodexPane('wsl:ubuntu')).toBe(true)
+    forgetCodexPaneAccount('pty-legacy')
+    expect(hasRecordedLegacyWslCodexPane('wsl:Ubuntu')).toBe(true)
+    forgetCodexPaneAccount('pty-default')
+    expect(hasRecordedLegacyWslCodexPane('wsl:Ubuntu')).toBe(false)
+    expect(hasRecordedLegacyWslCodexPane('wsl:Debian')).toBe(true)
+  })
+
+  it('requests daemon reconciliation for WSL-only legacy records', () => {
+    recordCodexPaneAccount('pty-direct', {
+      selectionKey: 'wsl:Ubuntu',
+      accountId: 'account-new',
+      homeRoute: 'account-home'
+    })
+    expect(hasAnyRecordedLegacyWslCodexPane()).toBe(false)
+
+    recordCodexPaneAccount('pty-legacy', {
+      selectionKey: 'wsl:Ubuntu',
+      accountId: 'account-old',
+      homeRoute: 'wsl-home'
+    })
+    expect(hasAnyRecordedLegacyWslCodexPane()).toBe(true)
+  })
+
   it('requests startup inventory only for managed host panes', () => {
     recordCodexPaneAccount('pty-real', {
       selectionKey: 'host',
@@ -238,6 +287,44 @@ describe('codex pane account registry', () => {
     recordCodexPaneAccount('pty-1', { selectionKey: 'host', accountId: 'account-a' })
     _internals.resetCache()
     expect(getCodexPaneAccount('pty-1')).toEqual({ selectionKey: 'host', accountId: 'account-a' })
+  })
+
+  it.each([
+    ['unparseable JSON', '{ not json'],
+    ['a malformed pane record', '{"version":2,"panes":{"pty-1":{"selectionKey":7}}}'],
+    [
+      'an invalid lane key',
+      '{"version":2,"panes":{"pty-1":{"selectionKey":"Ubuntu","accountId":null}}}'
+    ],
+    ['an unknown registry version', '{"version":999,"panes":{}}']
+  ])('refuses to authorize a destructive WSL drain from %s', (_label, contents) => {
+    writeFileSync(join(userDataPath, 'codex-pane-accounts.json'), contents)
+    _internals.resetCache()
+
+    expect(() => hasRecordedLegacyWslCodexPane('wsl:Ubuntu')).toThrow('registry could not be read')
+  })
+
+  it('does not authorize retirement after a new pane repairs a corrupt registry', () => {
+    writeFileSync(join(userDataPath, 'codex-pane-accounts.json'), '{ not json')
+    _internals.resetCache()
+    expect(() => hasRecordedLegacyWslCodexPane('wsl:Ubuntu')).toThrow()
+
+    recordCodexPaneAccount('pty-direct', {
+      selectionKey: 'wsl:Ubuntu',
+      accountId: 'account-new',
+      homeRoute: 'account-home'
+    })
+    _internals.resetCache()
+
+    expect(hasRecordedLegacyWslCodexPane('wsl:Ubuntu')).toBe(true)
+
+    reconcileCodexPaneAccountsWithLivePtys(['pty-direct', 'pty-legacy-unknown'])
+    _internals.resetCache()
+    expect(hasRecordedLegacyWslCodexPane('wsl:Ubuntu')).toBe(true)
+
+    reconcileCodexPaneAccountsWithLivePtys(['pty-direct'])
+    _internals.resetCache()
+    expect(hasRecordedLegacyWslCodexPane('wsl:Ubuntu')).toBe(false)
   })
 
   it('drops a malformed record without discarding its valid siblings', () => {

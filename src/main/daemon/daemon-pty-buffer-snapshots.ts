@@ -64,7 +64,8 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       ...(kittyKeyboardFlags !== undefined ? { kittyKeyboardFlags } : {}),
       ...(snapshot.pendingEscapeTailAnsi
         ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
-        : {})
+        : {}),
+      ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {})
     }
   }
 
