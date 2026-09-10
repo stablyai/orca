@@ -11,7 +11,7 @@ import type {
 } from '../../shared/agent-session-host-authority'
 import { canonicalizeAgentSessionIdentity } from './agent-session-claim-identity'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
-import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
+import { resolveAgentResumeStartupShell } from './agent-resume-startup-shell-resolution'
 import { buildAgentResumeStartupPlan } from '../../shared/tui-agent-startup'
 import {
   resolveTuiAgentLaunchArgs,
@@ -133,7 +133,8 @@ export class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntim
     // Why: `workspace.repo` is display metadata and may be a row from another host; the launch
     // shape must match the PTY route this scope already resolved.
     const isRemote = Boolean(workspace.connectionId)
-    const shell = resolveLocalWindowsAgentStartupShell({
+    const shell = resolveAgentResumeStartupShell({
+      requestedStartupShell: request.startupShell,
       platform,
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell

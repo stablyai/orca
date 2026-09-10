@@ -8,6 +8,7 @@ import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runti
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
 import type { TuiAgent } from './tui-agent'
+import type { AgentStartupShell } from './tui-agent-startup-shell'
 
 export { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY as AGENT_SESSION_HOST_AUTHORITY_CAPABILITY } from './protocol-version'
 
@@ -112,6 +113,11 @@ export type RuntimeEnsureAgentSessionRequest =
       launchPreferences?: AgentLaunchPreferences
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
+      /** Startup-shell family the pane actually runs, resolved by the client from
+       *  the per-tab override before the global `terminalWindowsShell` setting.
+       *  Omission keeps the host's global-setting resolution, so an older client
+       *  behaves exactly as before. */
+      startupShell?: AgentStartupShell
     }
 
 export type RuntimeEnsureAgentSessionResult = {
