@@ -33,6 +33,7 @@ type MockState = {
     notifications?: {
       customSoundPath?: string | null
       customSoundId?: string | null
+      agentNotificationMode?: 'all' | 'results-and-actions'
     }
   }
   markWorktreeUnread: ReturnType<typeof vi.fn>
@@ -188,6 +189,28 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
     expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('filters progress before unread and delivery side effects in result-focused mode', () => {
+    mockState.settings.notifications = { agentNotificationMode: 'results-and-actions' }
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'working',
+      toolName: 'Bash'
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      agentStatusSnapshot: mockState.agentStatusByPaneKey[paneKey]
+    })
+
+    const sideEffects = [
+      window.api.notifications.dispatch,
+      mockState.markWorktreeUnread,
+      playDesktopNotificationSound
+    ]
+    sideEffects.forEach((sideEffect) => expect(sideEffect).not.toHaveBeenCalled())
   })
 
   it('builds the notification id from a completion snapshot, not the pinned working row', () => {

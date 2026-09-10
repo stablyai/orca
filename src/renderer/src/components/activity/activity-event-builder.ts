@@ -11,6 +11,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { AgentNotificationMode } from '../../../../shared/notification-settings-types'
 import type { ActivityEvent, ActivityLiveAgentSnapshot } from './activity-thread-types'
 import { capActivityEvents } from './activity-event-cap'
 import { newestActivityHistoryEntries } from './activity-pane-events'
@@ -42,6 +43,8 @@ export type BuildActivityEventsArgs = {
   repos?: readonly Repo[]
   resolveWorktree?: (worktreeId: string, executionHostId?: ExecutionHostId) => Worktree | undefined
   acknowledgedAgentsByPaneKey: Record<string, number>
+  manuallyUnreadTurnsByPaneKey?: Record<string, number>
+  agentNotificationMode?: AgentNotificationMode
   /** Per-pane "Clear completed" cutoffs; events stamped at or before the cutoff are hidden. */
   activityClearedAtByPaneKey?: Record<string, number>
   now: number
@@ -107,6 +110,8 @@ export function buildActivityEvents(
         agentType: entry.agentType ?? 'unknown',
         agentAlive: true,
         acknowledgedAt: args.acknowledgedAgentsByPaneKey[paneKey] ?? 0,
+        manuallyUnreadAt: args.manuallyUnreadTurnsByPaneKey?.[paneKey] ?? 0,
+        agentNotificationMode: args.agentNotificationMode,
         clearedAt: args.activityClearedAtByPaneKey?.[paneKey] ?? 0,
         liveState
       },

@@ -29,6 +29,7 @@ function createSettings(): GlobalSettings {
     notifications: {
       enabled: true,
       agentTaskComplete: true,
+      agentNotificationMode: 'results-and-actions',
       terminalBell: true,
       suppressWhenFocused: true,
       customSoundId: 'system',
@@ -55,6 +56,10 @@ describe('NotificationsPane', () => {
     )
 
     expect(html).toContain('Notification Sound')
+    expect(html).toContain('Agent notification mode')
+    expect(html).toContain(
+      'Choose whether intermediate agent activity should request your attention.'
+    )
     expect(getNotificationSoundOptions(null).map((option) => option.title)).toEqual(
       expect.arrayContaining(['System Default', 'Two Tone', 'Bong', 'Ding'])
     )

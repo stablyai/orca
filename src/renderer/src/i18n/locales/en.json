@@ -9952,7 +9952,12 @@
             "72539aede4": "system",
             "51ae2183e1": "desktop",
             "0534c76311": "Master switch for Orca desktop notifications.",
-            "4a210b2f72": "Enable Notifications"
+            "4a210b2f72": "Enable Notifications",
+            "agentNotificationMode": "Agent notification mode",
+            "agentNotificationModeDescription": "Choose whether intermediate agent activity should request attention.",
+            "results": "results",
+            "actionRequired": "action required",
+            "progress": "progress"
           }
         },
         "orchestration": {
@@ -11839,6 +11844,12 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "AgentNotificationModeSetting": {
+          "label": "Agent notification mode",
+          "description": "Choose whether intermediate agent activity should request your attention.",
+          "all": "All completions and attention",
+          "resultsAndActions": "Results and action required"
         }
       },
       "right": {

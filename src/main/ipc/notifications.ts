@@ -24,6 +24,7 @@ import {
   recordNotificationDeliveryOutcome,
   resetNotificationPermissionEvidence
 } from './notification-permission-probe'
+import { shouldSurfaceAgentNotification } from '../../shared/agent-notification-policy'
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   const recentDesktopNotifications = new Map<string, number>()
@@ -110,7 +111,17 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       _event,
       args: NotificationDispatchRequest
     ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
-      // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
+      const settings = store.getSettings().notifications
+      if (
+        args.source === 'agent-task-complete' &&
+        !shouldSurfaceAgentNotification(
+          settings.agentNotificationMode,
+          args.agentNotificationIntent
+        )
+      ) {
+        return { delivered: false, reason: 'filtered-by-policy' }
+      }
+
       if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
         const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
         if (!isMainWindowVisible(activeWindow)) {
@@ -118,7 +129,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         }
       }
 
-      const settings = store.getSettings().notifications
       if (!settings.enabled) {
         return { delivered: false, reason: 'disabled' }
       }

@@ -129,6 +129,37 @@ describe('registerNotificationHandlers', () => {
     expect(dispatchMobileNotification).not.toHaveBeenCalled()
   })
 
+  it('filters result-focused progress before mobile fanout', async () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            agentNotificationMode: 'results-and-actions',
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+
+    expect(
+      await getDispatchHandler()(
+        {},
+        {
+          source: 'agent-task-complete',
+          worktreeId: 'repo::wt1',
+          agentNotificationIntent: 'progress'
+        }
+      )
+    ).toEqual({ delivered: false, reason: 'filtered-by-policy' })
+    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
   it('dispatches one mobile notification when the active worktree is focused on desktop', async () => {
     getAllWindowsMock.mockReturnValue([
       {

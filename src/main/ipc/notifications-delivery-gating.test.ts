@@ -133,6 +133,32 @@ describe('registerNotificationHandlers', () => {
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
+  it('filters progress before tray and native delivery in result-focused mode', async () => {
+    getAllWindowsMock.mockReturnValue([
+      { isDestroyed: () => false, isVisible: () => false, isMinimized: () => false } as never
+    ])
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          agentNotificationMode: 'results-and-actions',
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const result = await getDispatchHandler()(
+      {},
+      { source: 'agent-task-complete', agentNotificationIntent: 'progress' }
+    )
+
+    expect(result).toEqual({ delivered: false, reason: 'filtered-by-policy' })
+    expect(setTrayAttentionMock).not.toHaveBeenCalled()
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
   it('suppresses active-worktree notifications while Orca is focused', async () => {
     getAllWindowsMock.mockReturnValue([
       {

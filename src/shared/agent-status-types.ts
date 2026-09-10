@@ -5,6 +5,7 @@
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
+import type { AgentNotificationIntent } from './notification-settings-types'
 import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
@@ -65,6 +66,8 @@ export type AgentStateHistoryEntry = {
   /** True when this `done` was a cancellation (agent hook like Claude `is_interrupt`,
    *  or Orca's guarded fallback). Always falsy for non-`done` states so retention logic can preserve it. */
   interrupted?: boolean
+  /** Notification meaning captured before live fields are cleared by the next transition. */
+  notificationIntent?: AgentNotificationIntent
 }
 
 /** Maximum number of history entries kept per agent to bound memory. */

@@ -57,6 +57,8 @@ export function appendUnsupportedAndRetainedEvents(context: {
         agentType: entry.agentType ?? 'unknown',
         agentAlive: false,
         acknowledgedAt: args.acknowledgedAgentsByPaneKey[entry.paneKey] ?? 0,
+        manuallyUnreadAt: args.manuallyUnreadTurnsByPaneKey?.[entry.paneKey] ?? 0,
+        agentNotificationMode: args.agentNotificationMode,
         clearedAt: args.activityClearedAtByPaneKey?.[entry.paneKey] ?? 0,
         migrationUnsupportedPtyId: unsupported.ptyId,
         liveState: 'blocked'
@@ -94,6 +96,8 @@ export function appendUnsupportedAndRetainedEvents(context: {
         agentType: retained.agentType,
         agentAlive: false,
         acknowledgedAt: args.acknowledgedAgentsByPaneKey[paneKey] ?? 0,
+        manuallyUnreadAt: args.manuallyUnreadTurnsByPaneKey?.[paneKey] ?? 0,
+        agentNotificationMode: args.agentNotificationMode,
         clearedAt: args.activityClearedAtByPaneKey?.[paneKey] ?? 0,
         liveState: null
       },

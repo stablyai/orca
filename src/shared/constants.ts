@@ -122,6 +122,7 @@ export function getDefaultNotificationSettings(): NotificationSettings {
   return {
     enabled: true,
     agentTaskComplete: true,
+    agentNotificationMode: 'all',
     terminalBell: false,
     suppressWhenFocused: true,
     customSoundId: 'system',

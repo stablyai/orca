@@ -51,4 +51,51 @@ describe('live activity capacity', () => {
     expect(workingThreads).toHaveLength(81)
     expect(workingThreads.every((thread) => thread.unread)).toBe(true)
   })
+
+  it('keeps progress rows visible but quiet in result-focused mode', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree()
+    const tab = makeTabWithIds('tab-progress', worktree.id)
+    const paneKey = makePaneKey(tab.id, LEAF_ID)
+    const entry: AgentStatusEntry = {
+      paneKey,
+      state: 'working',
+      prompt: 'Run checks',
+      stateStartedAt: 2_000,
+      updatedAt: 3_000,
+      stateHistory: [
+        {
+          state: 'done',
+          prompt: 'Previous result',
+          startedAt: 1_000,
+          notificationIntent: 'result'
+        }
+      ],
+      agentType: 'codex',
+      toolName: 'Bash',
+      toolInput: 'pnpm test'
+    }
+    const build = (manuallyUnreadTurnsByPaneKey?: Record<string, number>) =>
+      buildActivityEvents({
+        agentStatusByPaneKey: { [paneKey]: entry },
+        retainedAgentsByPaneKey: {},
+        tabsByWorktree: { [worktree.id]: [tab] },
+        worktreeMap: new Map([[worktree.id, worktree]]),
+        repoMap: new Map([[repo.id, repo]]),
+        acknowledgedAgentsByPaneKey: {},
+        manuallyUnreadTurnsByPaneKey,
+        agentNotificationMode: 'results-and-actions',
+        now: 3_000
+      }).events
+
+    expect(build()).toEqual([
+      expect.objectContaining({ timestamp: 2_000, state: 'working', unread: false }),
+      expect.objectContaining({ timestamp: 1_000, state: 'done', unread: true })
+    ])
+    expect(build({ [paneKey]: 2_000 })[0]).toMatchObject({
+      timestamp: 2_000,
+      state: 'working',
+      unread: true
+    })
+  })
 })
