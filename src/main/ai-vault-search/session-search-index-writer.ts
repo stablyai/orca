@@ -268,14 +268,19 @@ export class SessionSearchIndexWriter {
           return
         }
         hash = foldContentHash(hash, [message])
+        // The ceiling is checked per row, not per message: one message is a whole
+        // conversation turn and may be megabytes, so checking it after the whole
+        // message had been buffered let a single one carry a transaction as far
+        // past the ceiling as it was large.
         for (const row of searchMessageRows([message])) {
           buffer.push(row)
           bufferedChars += row.text.length
-        }
-        if (bufferedChars >= this.commitChars && !write(null)) {
-          fenced = true
-          buffer.length = 0
-          bufferedChars = 0
+          if (bufferedChars >= this.commitChars && !write(null)) {
+            fenced = true
+            buffer.length = 0
+            bufferedChars = 0
+            return
+          }
         }
       },
       commit: (outcome) => !fenced && write(outcome)

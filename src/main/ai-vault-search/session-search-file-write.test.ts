@@ -236,6 +236,39 @@ it('leaves the session consistent after every chunk of a file too large for one 
   expect(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset).toBe(4096)
 })
 
+it('holds the ceiling against a single message larger than it', () => {
+  const writer = new SessionSearchIndexWriter(index.db, 8000)
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  const exec = SyncDatabase.prototype.exec
+  let opened = 0
+  vi.spyOn(SyncDatabase.prototype, 'exec').mockImplementation(function (
+    this: SyncDatabase,
+    sql: string
+  ) {
+    if (sql === 'BEGIN IMMEDIATE') {
+      opened += 1
+    }
+    exec.call(this, sql)
+  })
+
+  // One conversation turn, three times the ceiling. Checked once per message,
+  // this commits all 24,000 characters in a single transaction — the ceiling
+  // bounds nothing that a message can exceed on its own.
+  write.add({ role: 'assistant', text: 'a'.repeat(24_000), timestamp: null })
+  vi.restoreAllMocks()
+
+  expect(opened).toBe(3)
+  expect(counts(index.db).messages).toBe(3)
+  expect(
+    write.commit({
+      session: syntheticSession(),
+      byteOffset: 4096,
+      incomplete: false
+    })
+  ).toBe(true)
+  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 3 })
+})
+
 it('reports a chunk-partial file as held, and as one that must be read whole', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
   const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
@@ -311,16 +344,25 @@ it('stops a chunked read whose file was removed between its chunks', () => {
   for (const message of messages.slice(4)) {
     write.add(message)
   }
-  expect(write.commit({ session: syntheticSession(), byteOffset: 4096, incomplete: false })).toBe(
-    false
-  )
+  expect(
+    write.commit({
+      session: syntheticSession(),
+      byteOffset: 4096,
+      incomplete: false
+    })
+  ).toBe(false)
   vi.restoreAllMocks()
 
   // Not one row of the removed source came back. The read stopped at the first
   // refusal rather than reopening a transaction it already knows will roll back,
   // once for every message left in a file that may be a hundred megabytes.
   expect(opened).toBe(1)
-  expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0, full: 0 })
+  expect(counts(index.db)).toMatchObject({
+    sessions: 0,
+    messages: 0,
+    files: 0,
+    full: 0
+  })
 })
 
 it('fences a first-ever read whose file was removed before it committed', () => {
@@ -334,10 +376,19 @@ it('fences a first-ever read whose file was removed before it committed', () => 
   // budget and never wrote, while the registered consumer is fed concurrently.
   store.removeFile('/never-indexed.jsonl')
 
-  expect(write.commit({ session: syntheticSession(), byteOffset: 300, incomplete: false })).toBe(
-    false
-  )
-  expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0, full: 0 })
+  expect(
+    write.commit({
+      session: syntheticSession(),
+      byteOffset: 300,
+      incomplete: false
+    })
+  ).toBe(false)
+  expect(counts(index.db)).toMatchObject({
+    sessions: 0,
+    messages: 0,
+    files: 0,
+    full: 0
+  })
 })
 
 it('replaces the previous generation without ever showing both', () => {
