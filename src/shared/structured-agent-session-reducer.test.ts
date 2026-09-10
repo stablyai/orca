@@ -149,7 +149,7 @@ describe('structured agent session reducer', () => {
     })
     const withOlder = reduceStructuredAgentSession(snapshot, {
       type: 'older-page',
-      requestedEpoch: 'epoch-a',
+      requestedCursor: { epoch: 'epoch-a', sequence: 50 },
       page: {
         sessionId: 'session-a',
         epoch: 'epoch-a',
