@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -75,6 +75,34 @@ it('moves the generation forward when a committed read changes what a read retur
     const before = readIndexGeneration(db)
     await indexOneTranscript(root, store)
     expect(readIndexGeneration(db)).toBeGreaterThan(before)
+  } finally {
+    store.close()
+  }
+})
+
+it('moves the generation forward when an append adds rows to a live session', async () => {
+  // The first read of a file inserts its `files` row; every read after that
+  // updates it. An append changes a session's rank and its message count, so a
+  // cursor minted before it indexes into a list that no longer exists.
+  const root = await tempRoot()
+  const path = join(root, 'index.sqlite')
+  const db = reader(path)
+  const store = new SessionSearchStore(path, (error) => {
+    throw error
+  })
+  try {
+    const transcript = await indexOneTranscript(root, store)
+    const indexed = readIndexGeneration(db)
+    const unregister = registerSessionSearchIndexConsumer(store)
+    try {
+      resetSessionParseCacheForTests()
+      await appendFile(transcript, `${userRecord(1, 'a second needle turn')}\n`)
+      await parseTranscript(transcript)
+    } finally {
+      unregister()
+    }
+    expect(db.prepare('SELECT COUNT(*) AS c FROM messages').get()).toEqual({ c: 2 })
+    expect(readIndexGeneration(db)).toBeGreaterThan(indexed)
   } finally {
     store.close()
   }
