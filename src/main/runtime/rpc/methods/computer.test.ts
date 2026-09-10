@@ -29,6 +29,27 @@ vi.mock('../../../computer/macos-computer-use-permissions', () => ({
 
 import { COMPUTER_METHODS, resetComputerSessionsForTest } from './computer'
 
+const PAIRED_COMPUTER_METHOD_CASES = [
+  { name: 'computer.capabilities', params: {} },
+  { name: 'computer.listApps', params: {} },
+  { name: 'computer.permissions', params: { id: 'accessibility' } },
+  { name: 'computer.permissionsStatus', params: {} },
+  { name: 'computer.listWindows', params: { app: 'Finder' } },
+  { name: 'computer.getAppState', params: { app: 'Finder' } },
+  { name: 'computer.click', params: { app: 'Finder', elementIndex: 0 } },
+  {
+    name: 'computer.performSecondaryAction',
+    params: { app: 'Finder', elementIndex: 0, action: 'Raise' }
+  },
+  { name: 'computer.scroll', params: { app: 'Finder', elementIndex: 0, direction: 'down' } },
+  { name: 'computer.drag', params: { app: 'Finder', fromX: 1, fromY: 2, toX: 3, toY: 4 } },
+  { name: 'computer.typeText', params: { app: 'Finder', text: 'hello' } },
+  { name: 'computer.pressKey', params: { app: 'Finder', key: 'Return' } },
+  { name: 'computer.hotkey', params: { app: 'Finder', key: 'CmdOrCtrl+L' } },
+  { name: 'computer.pasteText', params: { app: 'Finder', text: 'hello' } },
+  { name: 'computer.setValue', params: { app: 'Finder', elementIndex: 0, value: 'x' } }
+] as const
+
 describe('computer RPC methods', () => {
   beforeEach(() => {
     computerMocks.callComputerSidecarAction.mockReset()
@@ -245,6 +266,48 @@ describe('computer RPC methods', () => {
     expect(
       findMethod('computer.pasteText').params!.safeParse({ app: 'Finder', text }).success
     ).toBe(true)
+  })
+
+  it.each(PAIRED_COMPUTER_METHOD_CASES)(
+    'rejects paired-device calls to $name',
+    async ({ name, params }) => {
+      const method = findMethod(name)
+      const parsed = method.params ? method.params.parse(params) : undefined
+      const runtime = { getRuntimeId: () => 'runtime-1' } as never
+
+      for (const clientKind of ['mobile', 'runtime'] as const) {
+        await expect(method.handler(parsed, { runtime, clientKind })).rejects.toThrow(
+          /only available on the Orca host runtime/
+        )
+      }
+
+      expect(computerMocks.callComputerSidecarAction).not.toHaveBeenCalled()
+      expect(computerMocks.callComputerSidecarCapabilities).not.toHaveBeenCalled()
+      expect(computerMocks.callComputerSidecarListApps).not.toHaveBeenCalled()
+      expect(computerMocks.callComputerSidecarListWindows).not.toHaveBeenCalled()
+      expect(computerMocks.callComputerSidecarSnapshot).not.toHaveBeenCalled()
+      expect(computerMocks.openComputerUsePermissions).not.toHaveBeenCalled()
+      expect(computerMocks.getComputerUsePermissionStatus).not.toHaveBeenCalled()
+    }
+  )
+
+  it('allows local-socket computer.click and computer.typeText', async () => {
+    computerMocks.callComputerSidecarAction.mockResolvedValue({ ok: true })
+
+    await expect(call('computer.click', { app: 'Finder', elementIndex: 0 })).resolves.toEqual({
+      ok: true
+    })
+    await expect(call('computer.typeText', { app: 'Finder', text: 'hello' })).resolves.toEqual({
+      ok: true
+    })
+    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(1, 'click', {
+      app: 'Finder',
+      elementIndex: 0
+    })
+    expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(2, 'typeText', {
+      app: 'Finder',
+      text: 'hello'
+    })
   })
 })
 
