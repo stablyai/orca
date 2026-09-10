@@ -3,7 +3,7 @@ import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-a
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
 export function conversationCommandBlocked(
-  ctx: AgentSessionTurnContext,
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'adapter' | 'sessionId'>,
   record: AgentSessionRecord
 ): string | null {
   const items = ctx.journal.snapshot().items

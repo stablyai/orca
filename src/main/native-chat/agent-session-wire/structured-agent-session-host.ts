@@ -1,3 +1,4 @@
+import { createStructuredAgentSessionFork } from './structured-agent-session-host-fork'
 import type { AgentSessionRewindParams } from '../../../shared/agent-session-rewind'
 import { rewindStructuredAgentSession } from './structured-agent-session-rewind'
 import { StructuredConversationCommandController } from './structured-conversation-command-controller'
@@ -84,6 +85,8 @@ export class StructuredAgentSessionHost {
   private readonly holds: StructuredAgentSessionHolds
   private readonly eventRecovery: StructuredAgentSessionEventRecovery
   private readonly backgroundTasks: StructuredAgentSessionBackgroundTaskChannel
+
+  fork = createStructuredAgentSessionFork(() => this.attachContext())
 
   constructor(readonly deps: StructuredAgentSessionHostDeps) {
     this.backgroundTasks = new StructuredAgentSessionBackgroundTaskChannel(
@@ -175,14 +178,12 @@ export class StructuredAgentSessionHost {
   handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
     this.eventRecovery.handle(event)
 
-  private lifetimeContext(): StructuredAgentSessionLifetimeContext {
-    return {
-      deps: this.deps,
-      runtimeState: this.runtimeState,
-      sessions: this.sessions,
-      now: () => this.now()
-    }
-  }
+  private lifetimeContext = (): StructuredAgentSessionLifetimeContext => ({
+    deps: this.deps,
+    runtimeState: this.runtimeState,
+    sessions: this.sessions,
+    now: this.now
+  })
 
   /** The host's half of attaching, named so it cannot grow dependencies unnoticed. */
   private attachContext(): StructuredAgentSessionAttachContext {

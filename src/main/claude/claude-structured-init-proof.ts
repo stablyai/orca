@@ -48,11 +48,11 @@ export function readClaudeModels(initialization: unknown): unknown[] {
 
 /** CLI capabilities advertised on the initialize result or the yielded system/init frame. */
 export function readClaudeCapabilities(
-  init: ClaudeInitObservation,
+  init: ClaudeInitObservation | null,
   initialization: unknown
 ): string[] {
   const fromResult = isRecord(initialization) ? initialization.capabilities : undefined
-  const fromFrame = init.message.capabilities
+  const fromFrame = init?.message.capabilities
   const source = Array.isArray(fromResult) ? fromResult : Array.isArray(fromFrame) ? fromFrame : []
   return source.filter((value): value is string => typeof value === 'string')
 }
@@ -70,11 +70,11 @@ export function claudeInitializationAuthError(
 }
 
 export function claudeAuthDiagnostic(
-  init: ClaudeInitObservation,
+  init: ClaudeInitObservation | null,
   settings: unknown
 ): ClaudeAuthDiagnostic {
   const env = isRecord(settings) && isRecord(settings.env) ? settings.env : {}
-  const apiKeySource = readClaudeFrameString(init.message, 'apiKeySource')
+  const apiKeySource = readClaudeFrameString(init?.message ?? {}, 'apiKeySource')
   const configured = (key: string): boolean =>
     (typeof env[key] === 'string' && (env[key] as string).trim().length > 0) ||
     Boolean(process.env[key]?.trim())

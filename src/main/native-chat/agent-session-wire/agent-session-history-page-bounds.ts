@@ -6,9 +6,9 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
+import { AGENT_SESSION_PREFIX_MAX_BYTES as AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from '../../../shared/agent-session-prefix-bounds'
 
-export const AGENT_SESSION_HISTORY_MAX_PAGE_BYTES = REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES / 2
+export { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES }
 
 const HISTORY_PAGE_ENVELOPE_RESERVE_BYTES = 64 * 1024
 

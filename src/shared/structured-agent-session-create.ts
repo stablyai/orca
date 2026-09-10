@@ -1,3 +1,4 @@
+import type { AgentSessionForkSource } from './agent-session-fork'
 import type { AgentSessionHandleProvider } from './agent-session-provider-handle'
 import type { AgentSessionMutationEnvelope } from './agent-session-wire'
 import {
@@ -22,6 +23,7 @@ export type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: AgentSessionHandleProvider
+  forkFrom?: AgentSessionForkSource
   resumeFrom?: StructuredAgentSessionResumeSource
 }
 
@@ -43,6 +45,7 @@ export function structuredAgentSessionCreateParams(args: {
   sessionId: string
   worktree: string
   agent: AgentSessionHandleProvider
+  forkFrom?: AgentSessionForkSource
   resumeFrom?: StructuredAgentSessionResumeSource
   randomUuid: () => string
   now?: number
@@ -50,6 +53,7 @@ export function structuredAgentSessionCreateParams(args: {
   const fields = {
     worktree: args.worktree,
     agent: args.agent,
+    ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   }
   return {

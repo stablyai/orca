@@ -153,10 +153,17 @@ export function createClaudeJournalTranslator(
     }
     const outputEnvelope = claudeOutputEnvelope(envelope)
     const body = claudeMessageBody(outputEnvelope)
-    // The final frame of a streamed block lands on the block's identity, not its own uuid.
-    const identity =
-      (body && envelope.role === 'assistant' ? streamedBlocks.reconcile(envelope) : null) ??
-      claudeMessageIdentity(envelope)
+    // Only this frame's uuid is written to the transcript, so a streamed block RETIRES its
+    // placeholder here rather than keeping it: fork and rewind anchor on the row's identity, and a
+    // stream_event uuid is one `--resume-session-at` refuses. Both rows publish in one batch.
+    const streamed =
+      body && envelope.role === 'assistant' ? streamedBlocks.reconcile(envelope) : null
+    const identity = claudeMessageIdentity(envelope)
+    if (streamed) {
+      streamedText.forget(agentJournalItemKey(streamed))
+      deps.sink.appendTombstone(streamed)
+      changed = true
+    }
     streamedText.forget(agentJournalItemKey(identity))
     if (body) {
       deps.sink.appendItem(identity, body)

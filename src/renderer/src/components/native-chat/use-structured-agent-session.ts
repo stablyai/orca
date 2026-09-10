@@ -1,3 +1,4 @@
+import * as forkState from './structured-agent-session-fork-state'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as conversationCommands from './structured-conversation-command-send'
 import type {
@@ -27,7 +28,10 @@ import {
   hasUnansweredStructuredAgentSessionDispatch
 } from '../../../../shared/structured-agent-session-projection'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import {
+  callStructuredAgentSession,
+  structuredAgentSessionForkAvailable
+} from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import {
@@ -54,10 +58,8 @@ export function useStructuredAgentSession(args: {
   const { state, loadingOlder, loadOlder } = useStructuredAgentSessionRead(args)
   const stateRef = useRef(state)
   const { mutate, writeError } = useStructuredAgentSessionMutate({ sessionId, target, stateRef })
-  const [conversationSupport, setConversationSupport] = useState<{
-    sessionId: string
-    commands: readonly AgentSessionConversationCommand[]
-  } | null>(null)
+  const [conversationSupport, setConversationSupport] =
+    useState<forkState.StructuredSessionConversationSupport | null>(null)
   const commandPending = useRef(false)
   const [optionState, setOptionState] = useState(() =>
     createStructuredAgentSessionOptionState(agent)
@@ -101,9 +103,19 @@ export function useStructuredAgentSession(args: {
     void callStructuredAgentSession<AgentSessionOptionsResult>(target, 'agentSession.options', {
       sessionId
     })
-      .then((result) => {
+      .then(async (result) => {
+        // The probe is a separate RPC to the remote host. Its failure may only cost the fork
+        // affordance — the slash-command menu and this turn's options come from `result`.
+        const forkSupported =
+          result.fork?.supported === true &&
+          (await structuredAgentSessionForkAvailable(target).catch(() => false))
         if (!stale) {
-          setConversationSupport({ sessionId, commands: result.conversationCommands ?? [] })
+          setConversationSupport({
+            sessionId,
+            commands: result.conversationCommands ?? [],
+            forkSupported,
+            forkedFromSessionId: result.forkedFrom?.sessionId
+          })
           setOptionState((current) =>
             current.record === activeOptionRecordRef.current
               ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
@@ -185,6 +197,7 @@ export function useStructuredAgentSession(args: {
   const { outbox } = outboxController
   const messages = useStructuredAgentSessionMessages(state.items, outbox, state.submissions)
   return {
+    ...forkState.structuredSessionForkState(state, sessionId, conversationSupport),
     conversationCommands:
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : [],
     runConversationCommand: (command: AgentSessionConversationCommand) =>

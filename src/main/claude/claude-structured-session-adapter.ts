@@ -57,6 +57,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
 
   supportsLocation = supportsClaudeStructuredLocation
 
+  forkSupport: NonNullable<StructuredAgentSessionAdapter['forkSupport']> = (sessionId) =>
+    this.sessions.has(sessionId) ? { supported: true } : { supported: false, reason: 'unsupported' }
+
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = () =>
     this.deps.readTranscriptLeaf ? { supported: true } : { supported: false, reason: 'unsupported' }
 

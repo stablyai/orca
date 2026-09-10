@@ -1,3 +1,4 @@
+import type { AgentSessionForkRecord } from '../../../shared/agent-session-fork'
 // Attach: reserve the session record, then open its journal.
 //
 // `create` and `ensure` are the same transition with a different starting
@@ -64,6 +65,8 @@ export type AgentSessionAttachParams = {
   launchArgs?: string[]
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+  /** Host-resolved fork seed, never accepted from a client attach payload. */
+  fork?: AgentSessionForkRecord
   /**
    * Host-resolved only. Present when this create adopts an existing provider conversation rather
    * than starting one: it seeds the handle chain so the adapter resumes instead of creating, and
@@ -107,6 +110,14 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     // identity. The transcript path is excluded: it is where the host found that conversation this
     // time, not part of what the caller asked for.
     adoptedProviderHandle: params.adopt?.providerHandle,
+    forkSource: params.fork
+      ? {
+          sessionId: params.fork.sourceSessionId,
+          itemId: params.fork.itemId,
+          expectedEpoch: params.fork.expectedEpoch,
+          expectedRuntimeFence: params.fork.expectedRuntimeFence
+        }
+      : undefined,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -260,6 +271,11 @@ export function reserveRequestFor(input: {
           // Fence 1 is a new record's first, and the owner probe requires the head link to carry
           // the record's current fence.
           adoptedHandleLink: adoptedProviderHandleLink(params.adopt.providerHandle, input.now)
+        }
+      : {}),
+    ...(params.fork
+      ? {
+          fork: params.fork
         }
       : {}),
     expectedFence: params.envelope.expectedRuntimeFence,

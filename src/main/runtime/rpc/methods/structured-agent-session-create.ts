@@ -1,3 +1,4 @@
+import type { AgentSessionForkSource } from '../../../../shared/agent-session-fork'
 /**
  * Creating a structured session for a worktree: resolve the create intent, attach it under the
  * host-computed fingerprint, then publish its tab.
@@ -33,6 +34,7 @@ import {
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
+  forkFrom?: AgentSessionForkSource
   attachParams: AgentSessionAttachParams
   /** Null when the caller supplied its own location; only a resolved worktree publishes a tab. */
   tab: { workspaceId: string; agent: 'claude' | 'codex' } | null
@@ -48,12 +50,16 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   worktree: string
   agent: 'claude' | 'codex'
   caller: StructuredAgentSessionCaller
+  forkFrom?: AgentSessionForkSource
   resumeFrom?: StructuredAgentSessionResumeSource
   /** Replaces the seed options the host resolves from settings. Orchestration passes the
    *  `--model`/`--effort` the dispatch asked for; a chat the user opened passes nothing and keeps
    *  the saved selection. Narrowed by the caller, so `{}` never reaches the reservation. */
   options?: Readonly<Record<string, string>>
 }): Promise<PreparedStructuredAgentSessionCreate> {
+  if (args.forkFrom && args.resumeFrom) {
+    throw new Error('agent_session_operation_invalid')
+  }
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null
   const resolved = await args.runtime.resolveStructuredAgentSessionCreateIntent({
@@ -72,6 +78,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved
   return {
     host,
+    ...(args.forkFrom ? { forkFrom: args.forkFrom } : {}),
     attachParams: {
       ...resolvedAttach,
       // After the fingerprint, deliberately: `attachFingerprintFields` excludes options because
@@ -97,7 +104,9 @@ export async function commitStructuredAgentSessionCreate(args: {
   activate: boolean
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
-  const result = await prepared.host.attach(args.caller, prepared.attachParams)
+  const result = prepared.forkFrom
+    ? await prepared.host.fork(args.caller, prepared.attachParams, prepared.forkFrom)
+    : await prepared.host.attach(args.caller, prepared.attachParams)
   if (!result.ok || !prepared.tab) {
     return result
   }

@@ -1,11 +1,15 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
-import { claudeRecord, claudeText } from './claude-structured-item-translation'
+import {
+  claudeRecord,
+  claudeStreamedTextIdentity,
+  claudeText
+} from './claude-structured-item-translation'
 
 // Under --include-partial-messages every stream_event frame carries its own
 // uuid, and the block's final `assistant` frame carries yet another; only
-// `message.id` ties them together. The block's first stream frame mints the
-// journal identity, and the final frame lands on it in block order instead of
-// appending a duplicate under its own uuid.
+// `message.id` ties them together. Of those two, ONLY the final frame's uuid is
+// written to the transcript, so the streamed identity minted here is a
+// placeholder the final frame retires — never a provider identity.
 
 export type ClaudeStreamedTextDelta = { identity: AgentJournalItemIdentity; text: string }
 
@@ -50,7 +54,7 @@ export function createClaudeStreamedBlockRegistry(): ClaudeStreamedBlockRegistry
     index: number,
     uuid: string
   ): AgentJournalItemIdentity => {
-    const identity: AgentJournalItemIdentity = { provider: 'claude', sessionId, uuid }
+    const identity = claudeStreamedTextIdentity(sessionId, uuid)
     streamed.blocks.set(index, identity)
     streamed.awaitingFinal.push(identity)
     return identity

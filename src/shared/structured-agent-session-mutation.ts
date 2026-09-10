@@ -1,3 +1,4 @@
+import type { AgentSessionForkSource } from './agent-session-fork'
 import { sha256 } from './sha256'
 
 function canonicalize(value: unknown): string {
@@ -30,6 +31,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
   agent: 'claude' | 'codex'
+  forkFrom?: AgentSessionForkSource
   resumeFrom?: { providerSessionId: string }
 }): string {
   return structuredAgentSessionPayloadFingerprint({
@@ -40,7 +42,8 @@ export function structuredAgentSessionCreateFingerprint(input: {
       agent: input.agent,
       // `canonicalize` drops undefined, so a plain create keeps the digest it has always had.
       // Adopting a conversation is a different intent and must not replay as a blank create.
-      resumeFrom: input.resumeFrom
+      resumeFrom: input.resumeFrom,
+      forkFrom: input.forkFrom
     }
   })
 }

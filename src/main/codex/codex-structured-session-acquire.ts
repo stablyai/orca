@@ -1,3 +1,4 @@
+import { verifyCodexForkedHistory } from './codex-structured-fork-history'
 import {
   AgentSessionAcquisitionRefusal,
   AgentSessionPreSpawnError,
@@ -162,8 +163,23 @@ export async function acquireCodexStructuredSession(input: {
       })
     }
     acquisitions.assertCurrent(sessionId, attempt)
-    const opened = await openCodexThread(connection, launch, deps.requestTimeoutMs)
+    const opened = await openCodexThread(
+      connection,
+      acquireInput.fork?.source.provider === 'codex'
+        ? { ...launch, resumeThreadId: acquireInput.fork.source.threadId }
+        : launch,
+      deps.requestTimeoutMs,
+      acquireInput.fork
+    )
     acquisitions.assertCurrent(sessionId, attempt)
+    if (acquireInput.fork) {
+      await verifyCodexForkedHistory(
+        connection,
+        opened.threadId,
+        acquireInput.fork,
+        deps.requestTimeoutMs
+      )
+    }
     primaryThreadId = opened.threadId
     const restoreAdmission = translator?.restoreThread(opened.threadId, opened.thread ?? {})
     if (restoreAdmission && !restoreAdmission.accepted) {

@@ -1,3 +1,7 @@
+import {
+  isAgentSessionForkRecord,
+  type AgentSessionForkRecord
+} from '../../shared/agent-session-fork'
 /**
  * Reservation admission: what a reserve request means against the persisted state.
  *
@@ -53,6 +57,7 @@ export type AgentSessionReserveRequest = {
   /** Set only when this create adopts an existing provider conversation. Seeds the handle chain so
    *  the adapter resumes; without it a new record has never proved a thread and starts a fresh one. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
+  fork?: AgentSessionForkRecord
   runtimeKind: AgentSessionReservation['runtimeKind']
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
@@ -135,6 +140,9 @@ export function applyAgentSessionReservation(
   record: AgentSessionRecord
   disposition: Exclude<AgentSessionReserveDisposition, 'replayed'>
 } {
+  if (request.fork && (!isAgentSessionForkRecord(request.fork) || request.adoptedHandleLink)) {
+    throw new Error('agent_session_operation_invalid')
+  }
   if (request.launchEnv && !isAgentSessionLaunchEnv(request.launchEnv)) {
     throw new Error('agent_session_launch_env_invalid')
   }
@@ -233,13 +241,14 @@ function createAgentSessionRecord(
   reservation: AgentSessionReservation
 ): AgentSessionRecord {
   return {
-    schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
+    schemaVersion: request.fork ? 3 : AGENT_SESSION_RECORD_SCHEMA_VERSION,
     sessionId: request.sessionId,
     location: request.location,
     provider: request.provider,
     // Fence 1 below is this record's first, and the owner probe requires the head link to carry the
     // record's current fence — so an adopted link must be minted at that same fence.
     providerHandleChain: request.adoptedHandleLink ? [request.adoptedHandleLink] : [],
+    ...(request.fork ? { fork: request.fork } : {}),
     accountHome: request.accountHome,
     ...(request.options ? { options: { ...request.options } } : {}),
     ...(request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),

@@ -48,8 +48,14 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds,
   showTurnStatus = true,
   turnActivity,
-  runtimeContext
+  runtimeContext,
+  forkAction
 }: {
+  forkAction?: {
+    eligibleIds: ReadonlySet<string>
+    onFork: (itemId: string) => void
+    pending: boolean
+  }
   session: NativeChatLiveSession
   journalItems?: readonly AgentJournalRenderItem[]
   isWorking: boolean
@@ -273,6 +279,9 @@ export function NativeChatMessageList({
                     ? turnStatuses.completedByTurn[turnKey]
                     : undefined
               const receipt = receipts.get(message.id)
+              // Only the eligible row gets the handler AND the pending flag: handing either to every
+              // row would re-render the whole (unwindowed) transcript on every fork click.
+              const forkEligible = forkAction?.eligibleIds.has(message.id) === true
               const turnDiff =
                 turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined
               return (
@@ -303,6 +312,9 @@ export function NativeChatMessageList({
                       structuredActivityUi={showTurnStatus}
                       activityExpandOverride={turnKey ? expandedTurnIds.has(turnKey) : undefined}
                       runtimeContext={runtimeContext}
+                      forkEligible={forkEligible}
+                      forkPending={forkEligible ? forkAction?.pending : undefined}
+                      onFork={forkEligible ? forkAction?.onFork : undefined}
                     />
                   )}
                   {showTurnStatus &&

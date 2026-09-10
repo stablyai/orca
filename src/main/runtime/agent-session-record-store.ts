@@ -1,3 +1,4 @@
+import { proveAgentSessionForkOwner } from './agent-session-fork-proof'
 import { setVisibleSessionId } from './agent-session-visible-tab-index'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
 /** Durable single-writer session records and their operation ledger. */
@@ -26,7 +27,6 @@ import {
 import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,
-  proveAgentSessionOwner,
   setAgentSessionJournalCheckpoint,
   type AgentSessionProcessIdentityCommit
 } from './agent-session-lease-transitions'
@@ -216,7 +216,7 @@ export class AgentSessionRecordStore {
     options?: Readonly<Record<string, string>>
   }): Promise<AgentSessionRecord> {
     return this.mutate(args.sessionId, (record) => {
-      const proved = proveAgentSessionOwner({
+      const proved = proveAgentSessionForkOwner({
         record,
         fence: args.fence,
         link: args.link,

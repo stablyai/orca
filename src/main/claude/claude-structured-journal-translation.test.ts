@@ -199,10 +199,16 @@ describe('Claude structured journal translation', () => {
       finalUuid: 'assistant-final-1',
       chunks: ['ST', 'REAMOK_ELEC_64E632']
     })
-    const streamedIdentity = {
+    // The stream frame's uuid is never written to the transcript, so the streaming row is an
+    // Orca-keyed PLACEHOLDER; the final frame's uuid is the one the transcript records.
+    const placeholder = {
+      provider: 'orca',
+      clientMessageId: 'claude-stream:claude-session:block-start-1'
+    }
+    const finalIdentity = {
       provider: 'claude',
       sessionId: 'claude-session',
-      uuid: 'block-start-1'
+      uuid: 'assistant-final-1'
     }
 
     for (const event of turn.start) {
@@ -216,7 +222,7 @@ describe('Claude structured journal translation', () => {
     const run = scheduled as (() => void) | null
     run?.()
     expect(state.items.at(-1)).toEqual({
-      identity: streamedIdentity,
+      identity: placeholder,
       body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: turn.text }] }
     })
 
@@ -226,10 +232,16 @@ describe('Claude structured journal translation', () => {
     }
     const assistant = assistantMessages(state.items)
     expect(assistant.at(-1)).toEqual({
-      identity: streamedIdentity,
+      identity: finalIdentity,
       body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: turn.text }] }
     })
-    expect(new Set(assistant.map((item) => agentJournalItemKey(item.identity))).size).toBe(1)
+    // The placeholder is RETIRED, not left beside the real row: one row survives, and it is the
+    // one a `--resume-session-at` anchor can name.
+    expect(state.tombstones).toContainEqual(placeholder)
+    const surviving = assistant
+      .map((item) => agentJournalItemKey(item.identity))
+      .filter((key) => !state.tombstones.some((dead) => agentJournalItemKey(dead) === key))
+    expect(new Set(surviving).size).toBe(1)
     expect(providerFrameKinds(state.items)).toEqual([])
   })
 
@@ -283,7 +295,9 @@ describe('Claude structured journal translation', () => {
 
     const items: AgentJournalRenderItem[] = journal.snapshot().items
     const assistant = assistantMessages(items)
-    expect(assistant.map((item) => item.itemId)).toEqual(['claude:claude-session:count-start'])
+    // Through the REAL journal store: exactly one surviving row, keyed by the final frame's uuid —
+    // the uuid the transcript records — not the stream frame's, which it never does.
+    expect(assistant.map((item) => item.itemId)).toEqual(['claude:claude-session:count-final'])
     expect(assistant[0]?.body).toEqual({
       kind: 'message',
       role: 'assistant',

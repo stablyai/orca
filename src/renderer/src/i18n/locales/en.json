@@ -17277,7 +17277,20 @@
       "conversationCommand": {
         "pendingWork": "Wait for pending work and messages to finish before using this command.",
         "unconfirmed": "Conversation operation was not confirmed."
-      }
+      },
+      "forkServerUpdateRequired": "Forking requires a newer Orca server. Update the server and try again.",
+      "rewindServerUpdateRequired": "Rewinding requires a newer Orca server. Update the server and try again.",
+      "forkFromTurn": "Fork from this turn",
+      "forkFailed": "Could not fork this turn.",
+      "forkRefused": "Could not fork this turn: {{reason}}",
+      "forkBusy": "Wait for this conversation to finish, then fork the turn.",
+      "forkUnsupported": "This conversation cannot be forked.",
+      "forkHistoryLimit": "This turn carries too much history to fork.",
+      "forkStaleEpoch": "This conversation moved on. Reopen it and fork the turn again.",
+      "forkUnconfirmed": "A fork could not be confirmed. Retry the same turn to check its outcome.",
+      "forkCreated": "Forked this turn into a new chat",
+      "openForkedChat": "Open forked chat",
+      "forkedFrom": "Forked from"
     },
     "tab": {
       "bar": {

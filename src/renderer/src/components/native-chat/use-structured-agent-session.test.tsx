@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
+  forkAvailable: vi.fn(),
   operationId: vi.fn(),
   enqueueSettingsWrite: vi.fn()
 }))
@@ -13,7 +14,8 @@ let sessionCommands: { name: string; kind: 'command' | 'skill' }[] | undefined
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  structuredAgentSessionForkAvailable: mocks.forkAvailable
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -70,6 +72,7 @@ function seededByNextLaunch(): Record<string, string> | undefined {
 }
 
 const LOCAL_TARGET = { kind: 'local' } as const
+const REMOTE_TARGET = { kind: 'environment', environmentId: 'remote-host' } as const
 
 const OPTIONS = {
   models: [
@@ -170,6 +173,7 @@ describe('useStructuredAgentSession options', () => {
     mocks.call.mockImplementation((_target, method) =>
       method === 'agentSession.options' ? Promise.resolve(OPTIONS) : Promise.resolve(null)
     )
+    mocks.forkAvailable.mockReset().mockResolvedValue(true)
   })
 
   it('applies provider-reconciled values after a model change', async () => {
@@ -585,5 +589,54 @@ describe('session command catalog stream', () => {
     expect(
       mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.commands')
     ).toHaveLength(0)
+  })
+})
+
+describe('fork support probe isolation', () => {
+  const COMMANDS = [{ name: 'compact', kind: 'command' as const }]
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fence = 3
+    mocks.operationId.mockReset().mockReturnValue('operation-1')
+    mocks.call.mockImplementation((_target: unknown, method: string) =>
+      method === 'agentSession.options'
+        ? Promise.resolve({ ...OPTIONS, conversationCommands: COMMANDS, fork: { supported: true } })
+        : Promise.resolve(null)
+    )
+  })
+
+  it('keeps conversation commands and options when the remote fork probe fails', async () => {
+    // The probe is a second RPC to the remote host. A transient failure used to blank the
+    // slash-command menu and drop this turn's option refresh with it.
+    mocks.forkAvailable.mockRejectedValue(new Error('unreachable'))
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: REMOTE_TARGET,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(result.current.conversationCommands).toEqual(COMMANDS))
+    expect(result.current.forkSupported).toBe(false)
+    // The per-turn option refresh rode on the same `.then`; it must still land.
+    expect(result.current.optionSnapshot.find((entry) => entry.id === 'model')?.kind).toMatchObject(
+      { currentValue: 'gpt-live' }
+    )
+  })
+
+  it('reports fork support when the probe answers', async () => {
+    mocks.forkAvailable.mockResolvedValue(true)
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: REMOTE_TARGET,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(result.current.forkSupported).toBe(true))
+    expect(result.current.conversationCommands).toEqual(COMMANDS)
   })
 })

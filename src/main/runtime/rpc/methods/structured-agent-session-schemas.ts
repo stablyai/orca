@@ -110,6 +110,15 @@ export const CreateIntentParams = z
     envelope: MutationEnvelope,
     worktree: Identifier('Invalid worktree selector'),
     agent: z.enum(['claude', 'codex']),
+    forkFrom: z
+      .object({
+        sessionId: Identifier('Invalid source session'),
+        itemId: Identifier('Invalid fork item'),
+        expectedEpoch: Identifier('Invalid source epoch'),
+        expectedRuntimeFence: z.number().int().positive()
+      })
+      .strict()
+      .optional(),
     resumeFrom: ResumeSource.optional()
   })
   .strict()

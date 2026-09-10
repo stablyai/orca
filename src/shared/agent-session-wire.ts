@@ -1,3 +1,4 @@
+import type { AgentSessionForkSupport } from './agent-session-fork'
 import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 // ─── Structured agent-session wire contract ─────────────────────────────────
@@ -326,6 +327,7 @@ export function isAgentSessionWireRefusalCode(
 }
 
 export type AgentSessionWireRefusal = {
+  forkReason?: AgentSessionRewindReason
   rewindReason?: AgentSessionRewindReason
   code: AgentSessionWireRefusalCode
   message: string
@@ -417,6 +419,11 @@ export type AgentSessionCommandsResult = {
 /** Provider-reported choices and effective next-turn values. Additive read-only
  *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
+  fork?: AgentSessionForkSupport
+  /** Lineage, not capability: the session this one was forked FROM, by Orca session id. Absent
+   *  whenever no fork produced this session, and absent from every host that predates the field —
+   *  absence is the whole degrade path, so nothing negotiates a capability for it. */
+  forkedFrom?: { sessionId: string }
   rewind?: AgentSessionRewindSupport
   conversationCommands?: readonly AgentSessionConversationCommand[]
   models: AgentSessionModelOption[]

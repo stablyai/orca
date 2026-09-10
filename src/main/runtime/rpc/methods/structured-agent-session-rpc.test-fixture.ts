@@ -110,36 +110,42 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
   })
 }
 
+function attachResult() {
+  return {
+    ok: true,
+    replayed: false,
+    fence: 1,
+    cursor: { epoch: 'epoch-a', sequence: 0 },
+    value: {
+      sessionId: SESSION,
+      fence: 1,
+      page: {
+        sessionId: SESSION,
+        epoch: 'epoch-a',
+        direction: 'tail',
+        items: [],
+        removedItemIds: [],
+        submissions: [],
+        window: {
+          oldest: null,
+          newest: null,
+          nextCursor: { epoch: 'epoch-a', sequence: 0 }
+        },
+        liveCursor: { epoch: 'epoch-a', sequence: 0 },
+        hasOlder: false,
+        hasNewer: false
+      },
+      unconfirmedClientMessageIds: []
+    }
+  }
+}
+
 export function hostStub(): StructuredAgentSessionHost {
   reset(hostCalls)
   Object.assign(hostCalls, {
-    attach: vi.fn(async () => ({
-      ok: true,
-      replayed: false,
-      fence: 1,
-      cursor: { epoch: 'epoch-a', sequence: 0 },
-      value: {
-        sessionId: SESSION,
-        fence: 1,
-        page: {
-          sessionId: SESSION,
-          epoch: 'epoch-a',
-          direction: 'tail',
-          items: [],
-          removedItemIds: [],
-          submissions: [],
-          window: {
-            oldest: null,
-            newest: null,
-            nextCursor: { epoch: 'epoch-a', sequence: 0 }
-          },
-          liveCursor: { epoch: 'epoch-a', sequence: 0 },
-          hasOlder: false,
-          hasNewer: false
-        },
-        unconfirmedClientMessageIds: []
-      }
-    })),
+    attach: vi.fn(async () => attachResult()),
+    // A seeded child answers exactly like an attach; only the tab decision differs.
+    fork: vi.fn(async () => attachResult()),
     rewind: vi.fn(async () => ({ ok: true, value: { itemId: 'chosen', epoch: 'next' } })),
     send: vi.fn(async () => ({ ok: true, replayed: false })),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),

@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_REWIND_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  AGENT_SESSION_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 
 const mocks = vi.hoisted(() => ({
   subscribe: vi.fn(),
@@ -67,6 +70,25 @@ describe('callStructuredAgentSession rewind capability', () => {
     )
     expect(mocks.call).not.toHaveBeenCalled()
   })
+
+  it.each([false, true])(
+    'gates fork create on its own advertised capability (%s)',
+    async (supported) => {
+      mocks.supportsCapability.mockResolvedValue(supported)
+      const forkParams = { forkFrom: { sessionId: 'parent' } }
+      const result = callStructuredAgentSession(target, 'agentSession.create', forkParams)
+      if (supported) {
+        await expect(result).resolves.toEqual({ ok: true })
+      } else {
+        await expect(result).rejects.toThrow('Forking requires a newer Orca server')
+        expect(mocks.call).not.toHaveBeenCalled()
+      }
+      expect(mocks.supportsCapability).toHaveBeenCalledExactlyOnceWith(
+        'env-1',
+        AGENT_SESSION_FORK_RUNTIME_CAPABILITY
+      )
+    }
+  )
 
   it('uses the local build directly and leaves existing remote methods available', async () => {
     await callStructuredAgentSession({ kind: 'local' }, 'agentSession.rewind', params)

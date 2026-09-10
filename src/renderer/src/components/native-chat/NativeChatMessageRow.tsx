@@ -4,16 +4,11 @@ import CommentMarkdown, {
 } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import {
-  isSubagentGroupFallbackText,
-  subagentGroupBlocks
-} from '../../../../shared/native-chat-subagent-summary'
-import {
-  isSubagentGroupBlock,
-  type NativeChatMessage,
-  type NativeChatToolCallBlock
+import { nativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type {
+  NativeChatMessage,
+  NativeChatToolCallBlock
 } from '../../../../shared/native-chat-types'
-import { splitNativeChatBlocks } from './native-chat-tool-fold'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
@@ -44,7 +39,10 @@ export const MessageRow = memo(function MessageRow({
   deliveryFailed = false,
   activityExpandOverride,
   structuredActivityUi = true,
-  runtimeContext
+  runtimeContext,
+  forkEligible = false,
+  forkPending = false,
+  onFork
 }: {
   message: NativeChatMessage
   previousTodoWrite?: NativeChatToolCallBlock
@@ -60,32 +58,20 @@ export const MessageRow = memo(function MessageRow({
   activityExpandOverride?: boolean
   structuredActivityUi?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  /** Set on the single row that anchors a forkable turn; passed only there so the row memo holds. */
+  forkEligible?: boolean
+  forkPending?: boolean
+  onFork?: (itemId: string) => void
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set: a streaming turn re-renders this row on every frame, and these
   // derivations used to re-run each time even though `message.blocks` had not changed.
   const { hasImages, markdown, prose, subagentGroups, tools } = useMemo(() => {
-    const split = splitNativeChatBlocks(message.blocks)
-    const groups = subagentGroupBlocks(split.prose)
-    // A spawn-group row carries a plain-text twin so a client without the block
-    // type still reads the roster. This one draws the block, so the twin is
-    // dropped rather than printed beside it — only the twin, never the prose
-    // beside it: the block is provider-agnostic, so a lane that folds a roster
-    // into a message with real text must not lose that text here.
-    const prose =
-      groups.length === 0
-        ? split.prose
-        : split.prose.filter(
-            (block) =>
-              !isSubagentGroupBlock(block) &&
-              !(block.type === 'text' && isSubagentGroupFallbackText(block.text))
-          )
+    const content = nativeChatRowContent(message.blocks)
     return {
-      tools: split.tools,
-      prose,
-      subagentGroups: groups,
-      markdown: nativeChatProseToMarkdown(prose),
-      hasImages: prose.some((block) => block.type === 'image-ref')
+      ...content,
+      markdown: nativeChatProseToMarkdown(content.prose),
+      hasImages: content.prose.some((block) => block.type === 'image-ref')
     }
   }, [message.blocks])
   const isUser = message.role === 'user'
@@ -98,6 +84,8 @@ export const MessageRow = memo(function MessageRow({
       onScrollMessageToTop(rowRef.current)
     }
   }, [onScrollMessageToTop])
+  const messageId = message.id
+  const forkThisTurn = useCallback(() => onFork?.(messageId), [onFork, messageId])
 
   // Skip rows with nothing renderable so the transcript shows no empty/ghost
   // bubble.
@@ -227,6 +215,7 @@ export const MessageRow = memo(function MessageRow({
           markdown={markdown}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
+          fork={forkEligible && onFork ? { onFork: forkThisTurn, pending: forkPending } : undefined}
           className="mt-1 -mb-5 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100"
         />
       ) : null}

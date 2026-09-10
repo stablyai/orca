@@ -1,3 +1,4 @@
+import { useStructuredForkAction } from './use-structured-fork-action'
 import { useMemo, useRef, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
@@ -9,6 +10,7 @@ import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { NativeChatForkedFromLine } from './NativeChatForkedFromLine'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
@@ -91,6 +93,12 @@ export function NativeChatStructuredSession(
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
+  const forkAction = useStructuredForkAction(
+    props,
+    controller,
+    fileLinkContext?.worktreeId,
+    setComposerError
+  )
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
     rootRef,
@@ -182,6 +190,10 @@ export function NativeChatStructuredSession(
       onContextMenuCapture={paneCommands.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
+      <NativeChatForkedFromLine
+        worktreeId={fileLinkContext?.worktreeId}
+        parentSessionId={controller.forkedFromSessionId}
+      />
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
@@ -191,6 +203,7 @@ export function NativeChatStructuredSession(
           <NativeChatEmptyState kind="empty" agent={props.agent} />
         ) : (
           <NativeChatMessageList
+            forkAction={forkAction}
             session={session}
             journalItems={controller.journalItems}
             isWorking={controller.isWorking}

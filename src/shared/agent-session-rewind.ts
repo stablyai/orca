@@ -1,3 +1,4 @@
+import { AGENT_SESSION_PREFIX_MAX_ENTRIES } from './agent-session-prefix-bounds'
 import { z } from 'zod'
 import { AgentJournalItemBodySchema } from './agent-session-journal-schemas'
 import { parseAgentJournalItemKey } from './agent-session-journal-item-key'
@@ -45,7 +46,7 @@ export const AgentSessionRewindRecordSchema = z.object({
         observedAt: z.number().finite()
       })
     )
-    .max(10_000)
+    .max(AGENT_SESSION_PREFIX_MAX_ENTRIES)
 })
 export type AgentSessionRewindRecord = z.infer<typeof AgentSessionRewindRecordSchema>
 export const isAgentSessionRewindRecord = (value: unknown): value is AgentSessionRewindRecord =>

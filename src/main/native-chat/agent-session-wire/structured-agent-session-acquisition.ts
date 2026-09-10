@@ -1,8 +1,14 @@
+import {
+  beginStructuredForkAttempt,
+  proveStructuredForkAcquisition,
+  refuseStructuredForkAttempt
+} from './structured-agent-session-fork-lifecycle'
 import { isDeepStrictEqual } from 'node:util'
 import { claudeRewindAcquisitionProofs } from './structured-rewind-claude-proof'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   AgentSessionPreSpawnError,
+  isAgentSessionAcquisitionExitAmbiguous,
   isAgentSessionPreSpawnError,
   rethrowAfterAgentSessionAcquisitionCleanup
 } from './structured-agent-session-adapter'
@@ -36,7 +42,9 @@ export async function acquireOwner(
     } catch (error) {
       throw new AgentSessionPreSpawnError(error)
     }
+    const fork = await beginStructuredForkAttempt(input.store, record)
     const acquired = await input.adapter.acquire({
+      ...(fork ? { fork } : {}),
       identity: journalIdentityFor(record, input.params),
       ...claudeRewindAcquisitionProofs({ store, record, rewind, now }),
       fence,
@@ -64,7 +72,7 @@ export async function acquireOwner(
     const proved = await input.store.proveOwner({
       sessionId: record.sessionId,
       fence,
-      link: acquired.link,
+      link: proveStructuredForkAcquisition(record, acquired.link),
       now: input.now(),
       ...(options ? { options } : {})
     })
@@ -74,8 +82,42 @@ export async function acquireOwner(
     }
   } catch (error) {
     if (isAgentSessionPreSpawnError(error)) {
+      // Nothing spawned, so no provider session can exist: settle the attempt rather than strand it.
+      await refuseStructuredForkAttempt(input.store, record, describeRefusal(error))
       throw error
     }
-    return rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, error)
+    try {
+      return await rethrowAfterAgentSessionAcquisitionCleanup(
+        input.adapter,
+        record.sessionId,
+        error
+      )
+    } catch (settled) {
+      // Cleanup that PROVED a clean release leaves no provider session behind, so a fork attempt
+      // that died past the spawn — a fork-history verification timeout, a restore refusal — can
+      // settle too instead of wedging the turn forever. Anything ambiguous keeps `attempted` and
+      // goes on refusing, because a second attempt could then mint a second child.
+      const ambiguous = isAgentSessionAcquisitionExitAmbiguous(settled)
+      if (!ambiguous) {
+        await refuseStructuredForkAttempt(input.store, record, describeRefusal(settled))
+      }
+      if (record.fork) {
+        // Which branch ran is the difference between a retryable fork and a wedged one, and it is
+        // invisible from the client, which sees one sentence either way.
+        console.warn(
+          `[agent-session] fork acquisition failed for ${record.sessionId}: ` +
+            `${ambiguous ? 'exit unproven, left attempted' : 'released cleanly, settled refused'}`,
+          settled
+        )
+      }
+      throw settled
+    }
   }
+}
+
+function describeRefusal(error: unknown): string {
+  const cause = error instanceof Error ? (error.cause ?? error) : error
+  return cause instanceof Error && cause.message
+    ? cause.message
+    : 'agent_session_acquisition_failed'
 }

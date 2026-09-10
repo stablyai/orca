@@ -46,6 +46,12 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
 
+  forkSupport: NonNullable<StructuredAgentSessionAdapter['forkSupport']> = (sessionId) =>
+    this.owners.get(sessionId)?.forkSupport?.(sessionId) ?? {
+      supported: false,
+      reason: 'unsupported'
+    }
+
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
     this.owners.get(sessionId)?.rewindSupport?.(sessionId) ?? {
       supported: false,

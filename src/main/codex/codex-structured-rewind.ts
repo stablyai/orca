@@ -2,7 +2,7 @@ import { readCodexThreadId, readCodexTurnId } from './codex-structured-thread-fa
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
-import { CODEX_RESTORE_MAX_OPERATIONS } from './codex-structured-journal-translation-restore'
+import { CODEX_RESTORE_MAX_OPERATIONS as MAX_ENTRIES } from './codex-structured-journal-translation-restore'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
@@ -12,8 +12,7 @@ import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from '../native-chat/agent-sessi
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type { CodexSession } from './codex-structured-session-state'
 
-const MAX_PAGES = 100
-const MAX_ENTRIES = CODEX_RESTORE_MAX_OPERATIONS
+import { AGENT_SESSION_PREFIX_MAX_PAGES as MAX_PAGES } from '../../shared/agent-session-prefix-bounds'
 
 class CodexRewindTargetRetainedError extends Error {}
 class CodexRewindTargetMissingError extends Error {}
@@ -38,7 +37,8 @@ export async function verifyCodexRevertedHistory(
   reply: Record<string, unknown>,
   beforeTurnId: string,
   timeoutMs?: number,
-  targetPresence: 'absent' | 'present' = 'absent'
+  targetPresence: 'absent' | 'present' = 'absent',
+  verifyTurnIds?: (turnIds: readonly string[]) => void
 ): Promise<{ identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]> {
   let bytes = 0
   let entries = 0
@@ -104,6 +104,7 @@ export async function verifyCodexRevertedHistory(
       }
     }
   }
+  verifyTurnIds?.([...turns.keys()])
   if (targetPresence === 'present' && !turns.has(beforeTurnId)) {
     throw new CodexRewindTargetMissingError('agent_session_rewind:target-missing')
   }

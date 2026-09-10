@@ -856,3 +856,42 @@ describe('NativeChatMessageList childless spawn group', () => {
     expect(emptySlots(container)).toEqual([])
   })
 })
+
+describe('structured turn fork action', () => {
+  it('forks only an eligible message and prevents duplicate clicks while pending', () => {
+    const onFork = vi.fn()
+    const { rerender } = render(
+      <NativeChatMessageList
+        session={session}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+        forkAction={{ eligibleIds: new Set(['assistant-1']), onFork, pending: false }}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Fork from this turn' }))
+    expect(onFork).toHaveBeenCalledExactlyOnceWith('assistant-1')
+    rerender(
+      <NativeChatMessageList
+        session={session}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+        forkAction={{ eligibleIds: new Set(['assistant-1']), onFork, pending: true }}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Fork from this turn' })).toBeDisabled()
+  })
+
+  it('does not offer a fork action without explicit structured support', () => {
+    render(
+      <NativeChatMessageList
+        session={session}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'Fork from this turn' })).not.toBeInTheDocument()
+  })
+})

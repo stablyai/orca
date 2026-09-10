@@ -80,3 +80,42 @@ describe('structured agent session create params', () => {
     )
   })
 })
+
+describe('fork create fingerprints', () => {
+  it('binds the source session, selected item, epoch, and fence into the new-session intent', () => {
+    const source = {
+      sessionId: 'parent-session',
+      itemId: 'codex:parent:turn:1',
+      expectedEpoch: 'epoch',
+      expectedRuntimeFence: 1
+    }
+    const make = (forkFrom = source) =>
+      structuredAgentSessionCreateParams({
+        sessionId: SESSION_ID,
+        worktree: 'workspace',
+        agent: 'codex',
+        forkFrom,
+        randomUuid: nextUuid,
+        now: 1_800_000_000_000
+      })
+    const params = make()
+    expect(params.forkFrom).toEqual(source)
+    expect(params.envelope.expectedRuntimeFence).toBeNull()
+    expect(params.envelope.payloadFingerprint).toBe(
+      structuredAgentSessionCreateFingerprint({
+        sessionId: SESSION_ID,
+        worktree: 'workspace',
+        agent: 'codex',
+        forkFrom: source
+      })
+    )
+    for (const changed of [
+      { ...source, sessionId: 'other-session' },
+      { ...source, itemId: 'codex:parent:other:1' },
+      { ...source, expectedEpoch: 'other-epoch' },
+      { ...source, expectedRuntimeFence: 2 }
+    ]) {
+      expect(make(changed).envelope.payloadFingerprint).not.toBe(params.envelope.payloadFingerprint)
+    }
+  })
+})

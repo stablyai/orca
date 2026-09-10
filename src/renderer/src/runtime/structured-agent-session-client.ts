@@ -1,15 +1,23 @@
+import { translate } from '@/i18n/i18n'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
-import { AGENT_SESSION_REWIND_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  AGENT_SESSION_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import {
   callRuntimeRpc,
   runtimeEnvironmentSupportsCapability,
   type RuntimeClientTarget
 } from './runtime-rpc-client'
+
+/** The paired runtime is too old for this method. Thrown BEFORE any request leaves the client, so
+ *  a caller may report the real reason and retire the attempt: no session was created. */
+export class StructuredAgentSessionCapabilityError extends Error {}
 
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,
@@ -24,7 +32,26 @@ export async function callStructuredAgentSession<TResult>(
       AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
     ))
   ) {
-    throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
+    throw new StructuredAgentSessionCapabilityError(
+      translate(
+        'components.native-chat.rewindServerUpdateRequired',
+        'Rewinding requires a newer Orca server. Update the server and try again.'
+      )
+    )
+  }
+  if (
+    method === 'agentSession.create' &&
+    params &&
+    typeof params === 'object' &&
+    'forkFrom' in params &&
+    !(await structuredAgentSessionForkAvailable(target))
+  ) {
+    throw new StructuredAgentSessionCapabilityError(
+      translate(
+        'components.native-chat.forkServerUpdateRequired',
+        'Forking requires a newer Orca server. Update the server and try again.'
+      )
+    )
   }
   return method === 'agentSession.conversationCommand'
     ? callRuntimeRpc<TResult>(target, method, params, { timeoutMs: 195_000 })
@@ -93,4 +120,13 @@ export function subscribeStructuredAgentSessionStatus(
     onError,
     onClose
   )
+}
+
+export function structuredAgentSessionForkAvailable(target: RuntimeClientTarget): Promise<boolean> {
+  return target.kind === 'local'
+    ? Promise.resolve(true)
+    : runtimeEnvironmentSupportsCapability(
+        target.environmentId,
+        AGENT_SESSION_FORK_RUNTIME_CAPABILITY
+      )
 }

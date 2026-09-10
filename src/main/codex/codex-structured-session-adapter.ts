@@ -1,8 +1,6 @@
+import { codexSessionForkSupport } from './codex-structured-fork-history'
 import * as codexRewind from './codex-structured-rewind'
-import type {
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../shared/agent-session-journal-types'
+import type * as Journal from '../../shared/agent-session-journal-types'
 import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
 import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type {
@@ -193,7 +191,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   async dispatch(input: {
     sessionId: string
     clientMessageId: string
-    body: AgentJournalMessageItem
+    body: Journal.AgentJournalMessageItem
     fence: number
   }): Promise<AgentSessionDispatchOutcome> {
     const session = this.session(input.sessionId)
@@ -215,6 +213,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     const turnId = this.compactions.providerTurnId(input.sessionId, input.turnId)
     return turnId ? this.turnCancellation.cancel(session, turnId) : { cancelled: false }
   }
+
+  forkSupport = (sessionId: string) => codexSessionForkSupport(this.sessions.get(sessionId))
 
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
     this.sessions.get(sessionId)?.historyMode === 'legacy'
@@ -282,7 +282,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
   historyFilePath = async (input: {
-    identity: AgentSessionJournalIdentity
+    identity: Journal.AgentSessionJournalIdentity
   }): Promise<string | null> => this.sessions.get(input.identity.sessionId)?.historyPath ?? null
 
   closeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
