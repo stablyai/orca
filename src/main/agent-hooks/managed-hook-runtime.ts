@@ -80,26 +80,30 @@ export async function resolveRelayGrokHome(home: string, signal?: AbortSignal): 
 }
 
 /**
- * Where this host's Codex actually keeps its config.
+ * The Codex home this host redirects to, or `null` for the ordinary `~/.codex`.
  *
  * `printenv CODEX_HOME` is not enough: a launcher wrapper exports it inside the
  * script and `exec`s the real binary, so it never reaches the parent shell
  * (#19598). Codex's own app-server handshake reports the value the wrapper set,
- * which is the only authority on the question. Anything else — no Codex on
- * PATH, a CLI too old for the handshake, a timeout, a non-POSIX answer — falls
- * back to `~/.codex`, the incumbent behaviour.
+ * which is the only authority on the question. No Codex on PATH, a CLI too old
+ * for the handshake, a timeout, an abort, or a non-POSIX answer all read as
+ * "not redirected".
+ *
+ * Why `null` rather than the default path: `installRemote` treats an explicit
+ * `codexHomeDir` as a redirected runtime home and moves the hook script under
+ * it, switches the command wrapper and reorders the hook groups. Handing it
+ * `~/.codex` would apply that contract to every unwrapped host as well.
  */
-export async function resolveRelayCodexHome(
+export async function resolveRelayRedirectedCodexHome(
   home: string,
   agents: readonly AgentHookTarget[],
   signal?: AbortSignal,
   probe: typeof probeCodexHomeViaAppServer = probeCodexHomeViaAppServer
-): Promise<string> {
-  const fallback = defaultAgentHome(home, '.codex')
+): Promise<string | null> {
   // Why: only a positively detected Codex pays for the probe; other hosts must
   // not start an app-server for a CLI the user never installed.
   if (!agents.includes('codex')) {
-    return fallback
+    return null
   }
   const { shell, flag } = loginShellInvocation()
   const reported = await probe({
@@ -107,7 +111,8 @@ export async function resolveRelayCodexHome(
     loginShellFlag: flag,
     ...(signal ? { signal } : {})
   })
-  return (reported === null ? null : normalizePosixAgentHome(reported.trim())) ?? fallback
+  const codexHome = reported === null ? null : normalizePosixAgentHome(reported.trim())
+  return !codexHome || codexHome === defaultAgentHome(home, '.codex') ? null : codexHome
 }
 
 export async function installManagedHooks(options?: {
@@ -124,7 +129,7 @@ export async function installManagedHooks(options?: {
   const home = homedir()
   const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
   options?.signal?.throwIfAborted()
-  const codexHomeDir = await resolveRelayCodexHome(home, agents, options?.signal)
+  const codexHomeDir = await resolveRelayRedirectedCodexHome(home, agents, options?.signal)
   options?.signal?.throwIfAborted()
   const hostIdentity = scopeManagedHookHostIdentity(
     await readManagedHookHostIdentity(),
@@ -138,7 +143,7 @@ export async function installManagedHooks(options?: {
         createManagedHookLocalFilesystem(),
         home,
         {
-          codexHomeDir,
+          ...(codexHomeDir ? { codexHomeDir } : {}),
           grokHomeDir,
           signal: options?.signal,
           agents
