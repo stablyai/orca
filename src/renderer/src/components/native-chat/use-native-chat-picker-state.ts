@@ -1,3 +1,4 @@
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import {
   useCallback,
   useEffect,
@@ -48,7 +49,7 @@ export function useNativeChatPickerState(args: {
   agentCommands: readonly SlashCommandSuggestion[]
   /** Skill names the running session reports; undefined keeps the host disk scan. */
   sessionSkillNames?: readonly string[]
-  textareaRef: RefObject<HTMLTextAreaElement | null>
+  textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
   setActiveSuggestion: Dispatch<SetStateAction<number>>
@@ -130,6 +131,10 @@ export function useNativeChatPickerState(args: {
         return
       }
       const result = applyPickerSuggestion(draft, caret, item, autocomplete.prefix)
+      if (item.kind === 'skill' && textareaRef.current?.insertSkill) {
+        const from = result.caret - result.insertedToken.length - 1
+        textareaRef.current.insertSkill(from, caret, result.insertedToken)
+      }
       setDraft(result.draft)
       setCaret(result.caret)
       setActiveSuggestion(0)

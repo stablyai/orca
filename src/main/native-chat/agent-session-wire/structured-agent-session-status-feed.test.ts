@@ -53,15 +53,24 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
   })
 }
 
-function indexed(session: { journal: Awaited<ReturnType<typeof openJournal>> }) {
+function indexed(session: {
+  journal: Awaited<ReturnType<typeof openJournal>>
+  hasProviderChild?: boolean
+}) {
   return {
     journal: session.journal,
+    ...(session.hasProviderChild !== undefined
+      ? { hasProviderChild: session.hasProviderChild }
+      : {}),
     params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
   }
 }
 
 function feedFor(
-  sessions: Map<string, { journal: Awaited<ReturnType<typeof openJournal>> }>,
+  sessions: Map<
+    string,
+    { journal: Awaited<ReturnType<typeof openJournal>>; hasProviderChild?: boolean }
+  >,
   record: Partial<AgentSessionRecord> | null = null,
   onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
 ) {
@@ -88,6 +97,41 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
+  it('publishes provider ownership transitions without changing journal time', async () => {
+    const journal = await openJournal()
+    const sessions = new Map([[SESSION, { journal, hasProviderChild: true }]])
+    const { feed, events, dispose } = feedFor(sessions)
+    events.length = 0
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1 }
+    )
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ hostExecutionOwned: true, updatedAt: expect.any(Number) })
+    })
+    const firstStatus = events.at(-1)
+    expect(firstStatus?.type).toBe('status')
+    if (firstStatus?.type !== 'status') {
+      throw new Error('status publication missing')
+    }
+    const journalTime = firstStatus.session.updatedAt
+    sessions.get(SESSION)!.hasProviderChild = false
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'idle', updatedAt: journalTime })
+    })
+    const secondStatus = events.at(-1)
+    expect(secondStatus?.type).toBe('status')
+    if (secondStatus?.type === 'status') {
+      expect(secondStatus.session).not.toHaveProperty('hostExecutionOwned')
+    }
+    dispose()
+  })
+
   it('opens with every readable session and reports no status before a persisted turn', async () => {
     const journal = await openJournal()
     const { events } = feedFor(new Map([[SESSION, { journal }]]))
@@ -521,5 +565,39 @@ describe('StructuredAgentSessionStatusFeed', () => {
       type: 'status',
       session: expect.objectContaining({ status: 'idle', latestPrompt: 'hello' })
     })
+  })
+})
+
+/**
+ * `published` is a broadcast cache, not a roster. It deliberately never retracts — an evicted idle
+ * session is still idle, and a reloading renderer must not lose every settled row — so enumerating
+ * it lists every session this host has ever opened. Eviction's `forget-session` step deletes the
+ * session from the live map and touches nothing else, so a poller has to intersect with that map.
+ */
+describe('the polling reader answers from the live sessions, not the retained cache', () => {
+  it('drops an evicted session from the poll while a late subscriber still sees it', async () => {
+    const journal = await openJournal()
+    const sessions = new Map([[SESSION, { journal }]])
+    const { feed } = feedFor(sessions)
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1 }
+    )
+    feed.publish(SESSION, journal)
+    expect(feed.liveSessionSummaries().map((summary) => summary.sessionId)).toEqual([SESSION])
+
+    // Exactly what eviction's `forget-session` step does; nothing else touches the feed.
+    sessions.delete(SESSION)
+
+    expect(feed.liveSessionSummaries()).toEqual([])
+    const late: AgentSessionStatusEvent[] = []
+    feed.subscribe({ id: 'list-2', emit: (event) => late.push(event) })
+    expect(late).toEqual([
+      {
+        type: 'snapshot',
+        sessions: [expect.objectContaining({ sessionId: SESSION, status: 'idle' })]
+      }
+    ])
   })
 })

@@ -2,18 +2,27 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import SyncDatabase from '../sqlite/sync-database'
 import { listHermesSqliteSessions, parseHermesSqliteSession } from './session-scanner-hermes-sqlite'
 import { buildHermesSqliteCandidatePath } from './session-scanner-hermes-sqlite-paths'
 import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
+import { parseAgentSessionFile } from './session-scanner-agent-parser'
+import type { SessionFileCandidate } from './session-scanner-types'
+import { readWholeTranscript } from './session-transcript-reader'
+import {
+  registerTranscriptConsumer,
+  resetTranscriptConsumersForTests,
+  type TranscriptMessage
+} from './session-transcript-consumers'
 
 describe('Hermes 0.19 SQLite support & legacy backwards compatibility', () => {
   const cleanupDirs: string[] = []
 
   afterEach(() => {
+    resetTranscriptConsumersForTests()
     for (const dir of cleanupDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -89,6 +98,97 @@ describe('Hermes 0.19 SQLite support & legacy backwards compatibility', () => {
     expect(parsed?.model).toBe('hermes-v3')
     expect(parsed?.messageCount).toBe(2)
     expect(parsed?.resumeCommand).toBe("cd '/tmp/hermes-work' && hermes --resume 'hermes-sqlite-1'")
+    expect(
+      await parseHermesSqliteSession({ dbPath, sessionId: 'missing-session', platform: 'darwin' })
+    ).toBeNull()
+  })
+
+  it.each(['sqlite', 'json'])(
+    'publishes full %s messages without changing the session',
+    async (format) => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-consumer-'))
+      cleanupDirs.push(dir)
+      const messages = Array.from({ length: 8 }, (_, index) => ({
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `Turn ${index}: ${'x'.repeat(400)}`
+      }))
+      const sessionId = 'hermes-consumer'
+      const modifiedAt = '2026-06-01T10:00:00.000Z'
+      let filePath: string
+      if (format === 'sqlite') {
+        const dbPath = join(dir, 'state.db')
+        const db = createTestDb(dbPath)
+        db.prepare('INSERT INTO sessions (id, created_at, updated_at) VALUES (?, ?, ?)').run(
+          sessionId,
+          modifiedAt,
+          modifiedAt
+        )
+        const insertMessage = db.prepare(
+          'INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)'
+        )
+        for (const message of messages) {
+          insertMessage.run(sessionId, message.role, message.content)
+        }
+        db.close()
+        filePath = buildHermesSqliteCandidatePath(dbPath, sessionId)
+      } else {
+        filePath = join(dir, `session_${sessionId}.json`)
+        await writeFile(filePath, JSON.stringify({ session_id: sessionId, messages }))
+      }
+      const candidate: SessionFileCandidate = {
+        agent: 'hermes',
+        codexHome: null,
+        file: { path: filePath, mtimeMs: Date.parse(modifiedAt), modifiedAt }
+      }
+      const unobserved = await parseAgentSessionFile(candidate, process.platform)
+      const received: TranscriptMessage[] = []
+      const finish = vi.fn()
+      registerTranscriptConsumer({
+        beginRead: () => ({ message: (message) => received.push(message), finish })
+      })
+
+      const session = await readWholeTranscript({ candidate, platform: process.platform })
+
+      expect(session).toEqual(unobserved)
+      expect(session?.messageCount).toBe(8)
+      expect(session?.previewMessages).toHaveLength(5)
+      expect(received).toEqual(
+        messages.map((message) => ({ role: message.role, text: message.content, timestamp: null }))
+      )
+      expect(finish).toHaveBeenCalledExactlyOnceWith({ session, byteOffset: 0, incomplete: false })
+    }
+  )
+
+  it('reports a corrupt SQLite database read as incomplete', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-read-error-'))
+    cleanupDirs.push(dir)
+    const dbPath = join(dir, 'state.db')
+    await writeFile(dbPath, 'not a SQLite database')
+    const finish = vi.fn()
+    const message = vi.fn()
+    registerTranscriptConsumer({ beginRead: () => ({ message, finish }) })
+
+    await expect(
+      readWholeTranscript({
+        candidate: {
+          agent: 'hermes',
+          codexHome: null,
+          file: {
+            path: buildHermesSqliteCandidatePath(dbPath, 'hermes-read-error'),
+            mtimeMs: 1,
+            modifiedAt: new Date(1).toISOString()
+          }
+        },
+        platform: process.platform
+      })
+    ).rejects.toThrow()
+
+    expect(message).not.toHaveBeenCalled()
+    expect(finish).toHaveBeenCalledExactlyOnceWith({
+      session: null,
+      byteOffset: 0,
+      incomplete: true
+    })
   })
 
   it('scans Hermes SQLite session alongside legacy JSON files with deduplication', async () => {
@@ -151,6 +251,16 @@ describe('Hermes 0.19 SQLite support & legacy backwards compatibility', () => {
     const legacySession = hermesSessions.find((s) => s.sessionId === 'legacy-old')
     expect(legacySession).toBeDefined()
     expect(legacySession?.title).toBe('Old Legacy Session')
+
+    const unlimitedResult = await scanAiVaultSessions({
+      ...roots,
+      hermesStateDbPaths: [dbPath],
+      platform: 'darwin',
+      limit: 1,
+      unlimited: true
+    })
+    expect(unlimitedResult.issues).toEqual([])
+    expect(unlimitedResult.sessions.filter((s) => s.agent === 'hermes')).toEqual(hermesSessions)
   })
 
   it('scans legacy JSON sessions when state.db does not exist at all (pure fallback)', async () => {
@@ -291,13 +401,13 @@ describe('Hermes 0.19 SQLite support & legacy backwards compatibility', () => {
       ...roots,
       hermesStateDbPaths: [dbPath],
       platform: 'darwin',
-      limit: 1 // limit is 1, so only sess-newer is in SQLite candidate list
+      limit: 10,
+      limitPerAgent: 1
     })
 
     const hermesSessions = scanResult.sessions.filter((s) => s.agent === 'hermes')
     // sess-older should be deduplicated out even though it's beyond the candidate limit of 1
-    const olderLegacy = hermesSessions.find((s) => s.sessionId === 'sess-older')
-    expect(olderLegacy).toBeUndefined()
+    expect(hermesSessions.map((s) => s.sessionId)).toEqual(['sess-newer'])
   })
 
   // Why: the shipped 0.18+ schema carries none of created_at/updated_at — recency

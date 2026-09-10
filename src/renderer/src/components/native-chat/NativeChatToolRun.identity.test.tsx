@@ -70,7 +70,7 @@ describe('inline tool annotations', () => {
       />
     )
     expect(screen.queryByRole('link')).toBeNull()
-    fireEvent.click(screen.getByText('web_search').closest('button')!)
+    fireEvent.click(screen.getByText('web_search', { selector: 'code' }).closest('button')!)
     const link = screen.getByRole('link', { name: /Reference docs/ })
     expect(link.getAttribute('href')).toBe('https://example.com/docs')
     expect(link.closest('button')).toBeNull()
@@ -112,7 +112,10 @@ it.each(['running', 'completed'] as const)(
     expect(screen.getByText('My server')).toBeTruthy()
     expect(screen.getByText('ns.tool')).toBeTruthy()
     expect(screen.getByTitle(name)).toBeTruthy()
-    expect(document.querySelectorAll('.lucide-plug')).toHaveLength(2)
+    // Header glyph plus the row's. A settled header also names each member in a
+    // pill, which carries that member's own glyph — so three, all plug: the
+    // identity holds wherever it is drawn.
+    expect(document.querySelectorAll('.lucide-plug')).toHaveLength(state === 'completed' ? 3 : 2)
   }
 )
 

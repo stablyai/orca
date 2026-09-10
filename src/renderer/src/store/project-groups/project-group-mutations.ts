@@ -5,6 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { selectProjectGroupRemovalTargets } from '../slices/project-group-removal-targets'
 import {
   catalogOwnsHost,
+  getProjectGroupHostId,
   projectGroupMatchesOwnerHost,
   resolveProjectGroupOwnerHostId,
   settingsForProjectGroupOwner
@@ -48,10 +49,22 @@ export function createProjectGroupMutationActions(
                 )
               ).group
         const ownedGroup = projectGroupWithFetchedOwner(group, target)
-        set((s) => ({
-          projectGroups: [...s.projectGroups, ownedGroup],
-          folderWorkspacePathStatuses: {}
-        }))
+        const ownerHostId = getProjectGroupHostId(ownedGroup)
+        set((s) => {
+          // An overlapping catalog refresh may have already inserted a newer copy.
+          if (
+            s.projectGroups.some(
+              (existing) =>
+                existing.id === ownedGroup.id && getProjectGroupHostId(existing) === ownerHostId
+            )
+          ) {
+            return s
+          }
+          return {
+            projectGroups: [...s.projectGroups, ownedGroup],
+            folderWorkspacePathStatuses: {}
+          }
+        })
         return ownedGroup
       } catch (err) {
         console.error('Failed to create project group:', err)

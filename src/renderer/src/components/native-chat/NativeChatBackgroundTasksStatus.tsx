@@ -26,6 +26,9 @@ function backgroundTaskLabel(task: AgentSessionBackgroundTask): string {
 export function NativeChatBackgroundTasksStatus(props: {
   tasks: readonly AgentSessionBackgroundTask[]
   supportsTaskStop: boolean
+  /** False when the provider exposes no honest stop at all; the fallback
+   *  control is hidden rather than offering a button that cannot act. */
+  supportsStopAll: boolean
   stoppingTaskIds: ReadonlySet<string>
   stoppingAll: boolean
   onStop: (taskId?: string) => void
@@ -49,7 +52,7 @@ export function NativeChatBackgroundTasksStatus(props: {
             <span aria-hidden="true">
               <AgentStateDot state="monitoring" size="md" title={null} />
             </span>
-            <span className="min-w-0 flex-1 truncate">
+            <span className="min-w-0 truncate">
               {translate(
                 'components.native-chat.backgroundTasks.monitoring',
                 'Monitoring background tasks'
@@ -115,7 +118,7 @@ export function NativeChatBackgroundTasksStatus(props: {
                 )}
               </p>
             )}
-            {!props.supportsTaskStop ? (
+            {!props.supportsTaskStop && props.supportsStopAll ? (
               <div className={props.tasks.length > 0 ? 'mt-2 border-t border-border pt-2' : 'mt-2'}>
                 <Button
                   type="button"

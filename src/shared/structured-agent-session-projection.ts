@@ -121,29 +121,37 @@ function itemBlocks(item: AgentJournalRenderItem): {
   }
 }
 
+const projectedItems = new WeakMap<AgentJournalRenderItem, NativeChatMessage | null>()
+
 export function projectStructuredItemsToNativeChat(
   items: readonly AgentJournalRenderItem[]
 ): NativeChatMessage[] {
   return items.flatMap((item) => {
-    const projected = itemBlocks(item)
-    return projected
-      ? [
-          {
-            id: item.itemId,
-            role: projected.role,
-            blocks: projected.blocks,
-            timestamp: item.observedAt,
-            source: 'transcript'
-          }
-        ]
-      : []
+    const projected = projectStructuredItemToNativeChat(item)
+    return projected ? [projected] : []
   })
 }
 
 export function projectStructuredItemToNativeChat(
   item: AgentJournalRenderItem
 ): NativeChatMessage | null {
-  return projectStructuredItemsToNativeChat([item])[0] ?? null
+  const cached = projectedItems.get(item)
+  if (cached !== undefined) {
+    return cached
+  }
+  // Reducer updates replace journal items, so unchanged rows keep their render caches.
+  const projected = itemBlocks(item)
+  const message: NativeChatMessage | null = projected
+    ? {
+        id: item.itemId,
+        role: projected.role,
+        blocks: projected.blocks,
+        timestamp: item.observedAt,
+        source: 'transcript'
+      }
+    : null
+  projectedItems.set(item, message)
+  return message
 }
 
 export function activeStructuredAgentSessionTurnId(
@@ -289,6 +297,14 @@ export function projectStructuredAgentSessionStatusSummary(
     ...(toolInput ? { toolInput } : {}),
     ...(lastAssistantMessage ? { lastAssistantMessage } : {})
   }
+}
+
+/** The agent-status state one projected session status stands for. Shared across the process
+ *  boundary so `worktree ps` and the sidebar cannot disagree about the same session. */
+export function structuredAgentSessionStatusState(
+  status: StructuredAgentSessionProjectedStatus
+): 'working' | 'blocked' | 'done' {
+  return status === 'working' ? 'working' : status === 'attention' ? 'blocked' : 'done'
 }
 
 export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {

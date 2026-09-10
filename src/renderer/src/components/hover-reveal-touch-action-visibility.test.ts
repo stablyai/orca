@@ -17,6 +17,7 @@ const HOVER_REVEAL_FILES = [
   resolve(__dirname, 'editor/DiffSectionHeader.tsx'),
   resolve(__dirname, 'github-project/ProjectPicker.tsx'),
   resolve(__dirname, 'github-project/ProjectRow.tsx'),
+  resolve(__dirname, 'native-chat/NativeChatMessageRow.tsx'),
   resolve(__dirname, 'right-sidebar/AiVaultSessionRow.tsx'),
   resolve(__dirname, 'right-sidebar/ChecksPanel.tsx'),
   resolve(__dirname, 'right-sidebar/local-port-row.tsx'),

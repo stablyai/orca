@@ -29,7 +29,10 @@ describe('Task/Dispatch concurrency', () => {
   it('reads a concurrent Task result before applying an explicit status correction', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const task = first.db.createTask({ spec: 'concurrent status winner' })
+    const task = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'concurrent status winner'
+    })
     const sqlite = sqliteFor(first.db)
     const exec = sqlite.exec.bind(sqlite)
     let concurrentWon = false
@@ -57,7 +60,7 @@ describe('Task/Dispatch concurrency', () => {
   it('holds the Task status writer reservation through its lifecycle reads', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const task = first.db.createTask({ spec: 'reserved status winner' })
+    const task = first.db.createTask({ runId: 'run_legacy_local', spec: 'reserved status winner' })
     const sqlite = sqliteFor(first.db)
     const exec = sqlite.exec.bind(sqlite)
     sqliteFor(concurrent.db).pragma('busy_timeout = 0')
@@ -86,7 +89,7 @@ describe('Task/Dispatch concurrency', () => {
 
   it('rolls back Dispatch failure when Task requeue fails', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'atomic retry failure' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'atomic retry failure' })
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     sqliteFor(db).exec(`
       CREATE TRIGGER reject_task_requeue
@@ -113,7 +116,10 @@ describe('Task/Dispatch concurrency', () => {
   it('does not let stale failure overwrite a completed worker report', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const task = first.db.createTask({ spec: 'worker completion wins' })
+    const task = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'worker completion wins'
+    })
     const started = first.db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -177,7 +183,10 @@ describe('Task/Dispatch concurrency', () => {
 
   it('keeps nested dispatch failure atomic with its caller transaction', () => {
     const { db } = createDatabase()
-    const task = db.createTask({ spec: 'nested atomic failure' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'nested atomic failure'
+    })
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     const sqlite = sqliteFor(db)
 
@@ -198,8 +207,14 @@ describe('Task/Dispatch concurrency', () => {
   it('serializes reminted-pane worker authority claims', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
-    const losingTask = first.db.createTask({ spec: 'losing worker' })
-    const winningTask = first.db.createTask({ spec: 'winning worker' })
+    const losingTask = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'losing worker'
+    })
+    const winningTask = first.db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'winning worker'
+    })
     const loser = first.db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

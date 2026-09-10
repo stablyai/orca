@@ -93,13 +93,19 @@ export async function resumeStructuredAgentSessionForHold(
 export function createStructuredAgentSessionHolds(
   context: StructuredAgentSessionLifetimeContext,
   input: {
-    resume: (sessionId: string) => Promise<void>
-    evict: (sessionId: string) => Promise<void>
+    reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
+    attach: Parameters<typeof resumeHeldStructuredAgentSession>[0]['attach']
+    close: (sessionId: string) => Promise<void>
   }
 ): StructuredAgentSessionHolds {
   return new StructuredAgentSessionHolds({
-    resume: input.resume,
-    evict: input.evict,
+    resume: (sessionId) =>
+      resumeStructuredAgentSessionForHold(
+        { ...context, reconcileLeases: input.reconcileLeases },
+        sessionId,
+        input.attach
+      ),
+    evict: input.close,
     hasProviderChild: (sessionId) => hasProviderChild(context, sessionId),
     isTurnActive: (sessionId) => {
       const session = context.sessions.get(sessionId)

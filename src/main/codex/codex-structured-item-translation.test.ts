@@ -584,6 +584,16 @@ describe('codex item bodies', () => {
     })
   })
 
+  it('preserves plan prose documents byte-for-byte as status text', () => {
+    const text =
+      '  # Implementation plan\r\n\r\n- [ ] Preserve prose\r\n- [x] Keep café → 日本語\r\n\r\n```ts\r\nconst task = "pending"\r\n```\r\n  '
+
+    expect(codexJournalItem({ type: 'plan', id: 'plan-document', text })).toEqual({
+      body: { kind: 'status', text, presentation: 'plan-document' },
+      handled: true
+    })
+  })
+
   it('renders reasoning as status and exposes an unknown item as a provider frame', () => {
     expect(codexItemBody({ type: 'reasoning', id: 'r', text: 'thinking' })).toEqual({
       kind: 'status',

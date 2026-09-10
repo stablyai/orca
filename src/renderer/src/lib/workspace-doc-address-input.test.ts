@@ -144,4 +144,51 @@ describe('resolveWorkspaceDocAddressTarget', () => {
       resolveWorkspaceDocAddressTarget(makeState(), CURRENT, '/home/alice/wt1/x.html')
     ).toEqual({ status: 'unsupported', message: 'no channel' })
   })
+
+  it('resolves a current-workspace address without enumerating unrelated workspace roots', () => {
+    const state = makeState()
+    state.allWorktrees = vi.fn(() => {
+      throw new Error('unnecessary global workspace enumeration')
+    })
+    expect(
+      resolveWorkspaceDocAddressTarget(state, CURRENT, '/home/alice/wt1/docs/index.html').status
+    ).toBe('workspace-doc')
+    expect(state.allWorktrees).not.toHaveBeenCalled()
+  })
+
+  // The current worktree outranks every other root, including a more specific one nested inside it.
+  it('keeps the current worktree ahead of a workspace nested inside it', () => {
+    const state = makeState()
+    const nestedInsideCurrent = {
+      ...state,
+      allWorktrees: () => [
+        ...state.allWorktrees(),
+        { id: 'repo3::/home/alice/wt1/vendor', path: '/home/alice/wt1/vendor' }
+      ]
+    } as typeof state
+
+    expect(
+      resolveWorkspaceDocAddressTarget(
+        nestedInsideCurrent,
+        CURRENT,
+        '/home/alice/wt1/vendor/index.html'
+      )
+    ).toMatchObject({ status: 'workspace-doc', docLocation: { worktreeId: CURRENT } })
+  })
+
+  it('short-circuits for a folder workspace that is the current workspace', () => {
+    const state = makeState()
+    const folderCurrent = {
+      ...state,
+      getKnownWorktreeById: (id: string) =>
+        id === 'folder:folder-1' ? { id: 'folder:folder-1', path: '/srv/site' } : undefined,
+      allWorktrees: vi.fn(() => {
+        throw new Error('unnecessary global workspace enumeration')
+      })
+    } as unknown as AppState
+
+    expect(
+      resolveWorkspaceDocAddressTarget(folderCurrent, 'folder:folder-1', '/srv/site/index.html')
+    ).toMatchObject({ status: 'workspace-doc', docLocation: { worktreeId: 'folder:folder-1' } })
+  })
 })

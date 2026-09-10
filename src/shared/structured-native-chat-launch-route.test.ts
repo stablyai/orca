@@ -57,6 +57,7 @@ describe('per-launch structured feasibility', () => {
   })
 
   it.each([
+    ['a reused PTY agent', { reusesTerminal: true }, 'reused-terminal'],
     ['grok', { agent: 'grok' }, 'agent-without-structured-session'],
     ['openclaude', { agent: 'openclaude' }, 'agent-without-structured-session'],
     ['a draft prompt', { isDraftPrompt: true }, 'draft-prompt'],

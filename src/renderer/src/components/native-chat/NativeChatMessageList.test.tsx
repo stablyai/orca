@@ -50,7 +50,7 @@ describe('NativeChatMessageList assistant messages', () => {
     const controls = copyButton.parentElement
 
     expect(row).toHaveClass('select-text')
-    expect(controls).toHaveClass('select-none', 'pointer-events-none', 'mt-1')
+    expect(controls).toHaveClass('select-none', 'can-hover:pointer-events-none', 'mt-1')
     expect(controls).not.toHaveClass('absolute')
     expect(prose.compareDocumentPosition(controls!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
@@ -200,7 +200,7 @@ describe('NativeChatMessageList assistant messages', () => {
       />
     )
 
-    const settledTool = screen.getByText('shell pnpm test')
+    const settledTool = screen.getByText('shell')
     const activity = screen.getByText('Working…')
     expect(activity.textContent).not.toBe(settledTool.textContent)
     expect(activity).not.toHaveTextContent('shell')
@@ -243,7 +243,8 @@ describe('NativeChatMessageList assistant messages', () => {
       />
     )
 
-    const settledTool = screen.getByText('shell pnpm test')
+    const settledTool = screen.getByText('shell')
+    expect(settledTool).toHaveTextContent('shell pnpm test')
     expect(settledTool.closest('button')?.querySelector('.animate-pulse')).toBeNull()
     expect(settledTool.closest('button')?.querySelector('.lucide-check')).toBeInTheDocument()
     const activity = screen.getByText('Preparing the answer')

@@ -32,6 +32,7 @@ export type StructuredAgentSessionUnexpectedExitContext = {
   sessions: Map<string, StructuredAgentSessionHostSession>
   flushLifecycle: (sessionId: string) => Promise<StructuredAgentSessionSinkBarrier>
   publishFence: (sessionId: string, session: StructuredAgentSessionHostSession) => void
+  publishStatus?: (sessionId: string) => void
   hasResumeCapableHolder: (sessionId: string) => boolean
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
@@ -59,6 +60,7 @@ export async function settleUnexpectedStructuredAgentSessionExit(
     if (!record || record.lease.handoffStage !== null) {
       // The handoff coordinator owns an already-started transition.
       session.hasProviderChild = false
+      context.publishStatus?.(unexpectedEvent.sessionId)
       return null
     }
 
@@ -117,6 +119,7 @@ export async function settleUnexpectedStructuredAgentSessionExit(
         context.onBarrierError?.(unexpectedEvent.sessionId, error)
       } finally {
         session.hasProviderChild = false
+        context.publishStatus?.(unexpectedEvent.sessionId)
         if (released) {
           session.fence = released.lease.runtimeFence
           context.publishFence(unexpectedEvent.sessionId, session)

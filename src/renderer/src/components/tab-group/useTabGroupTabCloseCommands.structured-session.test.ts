@@ -24,12 +24,16 @@ const store = vi.hoisted(() => ({
   reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 })),
   setActiveWorktree: mocks.setActiveWorktree,
   tabsByWorktree: {},
-  unifiedTabsByWorktree: {}
+  unifiedTabsByWorktree: {} as Record<string, unknown[]>
 }))
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
-  return { ...actual, useCallback: <T>(callback: T) => callback }
+  return {
+    ...actual,
+    useCallback: <T>(callback: T) => callback,
+    useMemo: <T>(factory: () => T) => factory()
+  }
 })
 
 vi.mock('../../store', () => ({
@@ -105,6 +109,7 @@ const AGENT_TAB = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  store.unifiedTabsByWorktree = { 'wt-1': [AGENT_TAB] }
   mocks.closeStructuredAgentSession.mockResolvedValue('closed')
   mocks.callRuntimeRpc.mockResolvedValue({ ok: true })
 })

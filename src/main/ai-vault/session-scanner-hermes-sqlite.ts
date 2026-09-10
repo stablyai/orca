@@ -7,6 +7,7 @@ import {
 } from './session-scanner-accumulator'
 import { buildHermesSqliteCandidatePath } from './session-scanner-hermes-sqlite-paths'
 import type { SessionFileCandidate } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import { errorMessage, extractContentText } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
@@ -117,7 +118,7 @@ function messagesPredicateFor(db: SyncDatabase, idCol: string): string {
 /**
  * Builds the SQL SELECT query string used to discover Hermes sessions.
  */
-function buildSessionListQuery(db: SyncDatabase): string {
+function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
   const { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol } = resolveSessionColumns(db)
   const messagesPredicate = messagesPredicateFor(db, idCol)
 
@@ -130,7 +131,7 @@ function buildSessionListQuery(db: SyncDatabase): string {
           FROM sessions
           WHERE 1=1 ${messagesPredicate}
           ORDER BY ${updatedCol} DESC
-          LIMIT ?`
+          ${limited ? 'LIMIT ?' : ''}`
 }
 
 /**
@@ -188,7 +189,9 @@ export async function listHermesSqliteSessions(args: {
       if (!canReadHermesSessions(db)) {
         continue
       }
-      const rows = db.prepare(buildSessionListQuery(db)).all(args.limit) as SessionRow[]
+      const limited = Number.isFinite(args.limit)
+      const statement = db.prepare(buildSessionListQuery(db, limited))
+      const rows = (limited ? statement.all(args.limit) : statement.all()) as SessionRow[]
       for (const row of rows) {
         if (!row.id) {
           continue
@@ -225,14 +228,17 @@ export async function listHermesSqliteSessions(args: {
  * @param args.dbPath - Absolute path to the state.db file.
  * @param args.sessionId - The session ID (primary key in the `sessions` table).
  * @param args.platform - The platform to use for resume command generation.
+ * @param args.messages - Where the parser publishes every decoded message.
  * @returns The parsed `AiVaultSession`, or `null` if the session does not exist.
  */
 export async function parseHermesSqliteSession(args: {
   dbPath: string
   sessionId: string
   platform: NodeJS.Platform
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
   let db: SyncDatabase | null = null
+  // Let read failures propagate so the transcript reader reports an incomplete read.
   try {
     db = openReadonlyDatabase(args.dbPath)
     if (!canReadHermesSessions(db)) {
@@ -266,7 +272,8 @@ export async function parseHermesSqliteSession(args: {
     const accumulator = createAccumulator({
       agent: 'hermes',
       file,
-      sessionId: args.sessionId
+      sessionId: args.sessionId,
+      messages: args.messages
     })
 
     if (row.model) {
@@ -319,8 +326,6 @@ export async function parseHermesSqliteSession(args: {
     }
 
     return finalizeSession(accumulator, args.platform)
-  } catch {
-    return null
   } finally {
     db?.close()
   }

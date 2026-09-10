@@ -12,7 +12,6 @@ import { bindPrepaintParkedSshSnapshot } from './ssh-snapshot-prepaint'
 import { bindForegroundOutputRefresh } from './foreground-output-refresh'
 import { bindRegisterPaneSerializer } from './pane-serializer-register'
 import { bindHandleReattachResult } from './reattach-result-handler'
-import { bindAttachRetainedLegacyPty } from './retained-legacy-pty-attach'
 import { runDeferredSessionAttach } from './deferred-session-attach'
 
 import { bindSerializeHiddenOutputSnapshot } from './hidden-output-snapshot-serialize'
@@ -154,7 +153,6 @@ export function installRunDeferredConnect(session: ConnectPanePtySession): void 
 
     bindPrepaintParkedSshSnapshot(session)
     bindHandleReattachResult(session)
-    bindAttachRetainedLegacyPty(session)
     runDeferredSessionAttach(session)
   }
 

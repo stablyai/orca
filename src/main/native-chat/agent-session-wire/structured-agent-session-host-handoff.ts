@@ -25,6 +25,7 @@ type HostHandoffAccess = {
   flush: (sessionId: string) => Promise<void>
   serialize: (sessionId: string, task: () => Promise<void>) => Promise<void>
   subscribers: AgentSessionSubscribers
+  publishStatus?: (sessionId: string) => void
   now: () => number
 }
 
@@ -82,6 +83,7 @@ export function createStructuredAgentSessionHostHandoff(
         return { state: 'live' }
       }
       host.session(sessionId).hasProviderChild = false
+      host.publishStatus?.(sessionId)
       try {
         await host.flush(sessionId)
         host.eventSink(sessionId).unbind()
@@ -243,6 +245,7 @@ export async function acquireNativeHandoffOwner(
     return rethrowAfterAgentSessionAcquisitionCleanup(deps.adapter, input.sessionId, error)
   }
   session.hasProviderChild = true
+  host.publishStatus?.(input.sessionId)
   session.fence = proved.lease.runtimeFence
   session.acquisitionGeneration = acquired.acquisitionGeneration ?? null
   eventSink.bind({

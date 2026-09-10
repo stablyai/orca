@@ -430,6 +430,31 @@ describe('buildSearchableBrowserPages', () => {
     expect(results.map((result) => result.pageId)).toEqual(['page-1', 'page-4', 'page-2', 'page-3'])
     expect(results[0].isCurrentPage).toBe(true)
   })
+
+  // Why this matters to the workspace index: it keeps the first browser tab per workspace id, so
+  // it would lose a later owned tab if two ever reached the lookup. This pins that they cannot.
+  it('omits a workspace claimed by more than one unified browser tab', () => {
+    const entries = buildFixture({
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          browserUnifiedTab('tab-foreign', 'ws-1', 'wt-2'),
+          browserUnifiedTab('tab-owned', 'ws-1', 'wt-1')
+        ]
+      }
+    })
+
+    expect(entries.some((entry) => entry.workspace.id === 'ws-1')).toBe(false)
+  })
+
+  // Why: a workspace whose only unified tab belongs to another worktree must stay hidden here.
+  it('omits a workspace whose single unified browser tab is not owned by this worktree', () => {
+    const entries = buildFixture({
+      unifiedTabsByWorktree: { 'wt-1': [browserUnifiedTab('tab-foreign', 'ws-1', 'wt-2')] }
+    })
+
+    expect(entries.some((entry) => entry.workspace.id === 'ws-1')).toBe(false)
+    expect(entries.some((entry) => entry.workspace.id === 'ws-2')).toBe(true)
+  })
 })
 
 function browserUnifiedTab(
@@ -452,3 +477,41 @@ function browserUnifiedTab(
     createdAt: 0
   }
 }
+
+it('indexes workspace tabs when building a large browser palette', () => {
+  let reads = 0
+  const workspaces = Array.from({ length: 1000 }, (_, i) =>
+    makeWorkspace({ id: `workspace-${i}`, activePageId: `page-${i}` })
+  )
+  const tabs: Tab[] = workspaces.map((workspace, i) => ({
+    id: `tab-${i}`,
+    get entityId() {
+      reads++
+      return workspace.id
+    },
+    groupId: 'group-1',
+    worktreeId: 'wt-1',
+    contentType: 'browser',
+    label: 'Example',
+    customLabel: null,
+    color: null,
+    sortOrder: i,
+    createdAt: 0
+  }))
+  const pages = Object.fromEntries(
+    workspaces.map((workspace, i) => [
+      workspace.id,
+      [makePage({ id: `page-${i}`, workspaceId: workspace.id })]
+    ])
+  )
+  const entries = buildFixture({
+    worktrees: [worktreeA],
+    browserTabsByWorktree: { 'wt-1': workspaces },
+    browserPagesByWorkspace: pages,
+    unifiedTabsByWorktree: { 'wt-1': tabs }
+  })
+  expect(reads).toBeLessThan(6000)
+  expect(entries.map((entry) => entry.workspace.id)).toEqual(
+    workspaces.map((workspace) => workspace.id)
+  )
+})

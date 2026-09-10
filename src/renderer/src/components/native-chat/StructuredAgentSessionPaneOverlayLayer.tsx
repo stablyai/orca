@@ -5,7 +5,7 @@ import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-p
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
+import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
 
 type StructuredAgentSessionTab = Tab & {
@@ -29,37 +29,12 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   target: RuntimeClientTarget
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element {
-  const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
-  const style = useMemo<React.CSSProperties>(
-    () =>
-      anchorName
-        ? {
-            position: 'absolute',
-            positionAnchor: anchorName,
-            top: `anchor(${anchorName} top)`,
-            left: `anchor(${anchorName} left)`,
-            width: `anchor-size(${anchorName} width)`,
-            height: `anchor-size(${anchorName} height)`,
-            display: isActive ? 'flex' : 'none',
-            pointerEvents: isActive ? 'auto' : 'none'
-          }
-        : { display: 'none' },
-    [anchorName, isActive]
-  )
-  const focusOwningGroup = useCallback(() => {
-    if (groupId !== undefined && onFocusOwningGroup) {
-      onFocusOwningGroup(groupId)
-    }
-  }, [groupId, onFocusOwningGroup])
-
   return (
-    <div
-      style={style}
-      className="native-chat-pane-shell z-10 min-h-0 min-w-0"
+    <RetainedPaneHost
+      groupId={groupId}
+      isVisible={isActive}
       data-structured-agent-session-overlay-tab-id={tab.id}
-      aria-hidden={!isActive}
-      onPointerDown={focusOwningGroup}
-      onFocusCapture={focusOwningGroup}
+      onFocusOwningGroup={onFocusOwningGroup}
     >
       <NativeChatView
         mode="structured"
@@ -70,7 +45,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
         isVisible={isActive}
         target={target}
       />
-    </div>
+    </RetainedPaneHost>
   )
 })
 

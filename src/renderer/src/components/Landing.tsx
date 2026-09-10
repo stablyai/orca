@@ -280,7 +280,7 @@ export default function Landing(): React.JSX.Element {
               onClick={() => openModal('add-repo')}
             >
               <FolderPlus className="size-3.5" />
-              {translate('auto.components.Landing.f9eaa9e12d', 'Add Project')}
+              {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
             </button>
 
             <button

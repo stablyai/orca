@@ -20,6 +20,65 @@ function item(
 }
 
 describe('structured agent session status projection', () => {
+  it('reuses immutable item projections and refreshes revisions and resolved prompts', () => {
+    const original = item('diff', 1, {
+      kind: 'diff',
+      path: 'a.ts',
+      patch: {
+        head: '@@\n+first',
+        digest: 'one',
+        byteLength: 10,
+        truncated: false
+      }
+    })
+    const first = projectStructuredItemToNativeChat(original)
+    expect(projectStructuredItemToNativeChat(original)).toBe(first)
+    const revised = {
+      ...original,
+      revision: 2,
+      observedAt: 2000,
+      body: {
+        kind: 'diff' as const,
+        path: 'a.ts',
+        patch: {
+          head: '@@\n+second',
+          digest: 'two',
+          byteLength: 11,
+          truncated: false
+        }
+      }
+    }
+    const second = projectStructuredItemToNativeChat(revised)
+    expect(second).not.toBe(first)
+    expect(second).toMatchObject({
+      timestamp: 2000,
+      blocks: [{ type: 'tool-call' }, { type: 'tool-result', output: '@@\n+second' }]
+    })
+    const pending = item('approval', 2, {
+      kind: 'approval',
+      title: 'Allow?',
+      detail: null,
+      options: [],
+      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+    })
+    expect(projectStructuredItemToNativeChat(pending)).toBeNull()
+    if (pending.body.kind !== 'approval') {
+      throw new Error('fixture')
+    }
+    const resolved = {
+      ...pending,
+      revision: 2,
+      body: {
+        ...pending.body,
+        resolution: { ...pending.body.resolution, state: 'resolved' as const }
+      }
+    }
+    expect(projectStructuredItemToNativeChat(resolved)).toMatchObject({
+      id: 'approval',
+      role: 'system'
+    })
+  })
+
   it('projects running, attention, and completed lifecycle states', () => {
     const running = item('running', 1, {
       kind: 'status',

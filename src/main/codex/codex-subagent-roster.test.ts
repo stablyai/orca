@@ -83,6 +83,22 @@ function deliver(
   item: CodexThreadItem,
   turnId: string | null = TURN
 ): void {
+  // The fixture includes the child's owner event separately from its activity metadata.
+  const state =
+    item.kind === 'started'
+      ? 'working'
+      : item.kind === 'completed'
+        ? 'completed'
+        : item.kind === 'interrupted'
+          ? 'stopped'
+          : null
+  if (state && typeof item.agentThreadId === 'string') {
+    roster.handleTurn({
+      threadId: item.agentThreadId,
+      turnId: `execution:${item.agentThreadId}`,
+      state
+    })
+  }
   // Every activity item reaches the wire twice: item/started, then item/completed.
   roster.handleItem({ threadId: THREAD, turnId, item })
   roster.handleItem({ threadId: THREAD, turnId, item })
@@ -270,7 +286,7 @@ describe('CodexSubagentRoster', () => {
     expect(appended).toHaveLength(1)
   })
 
-  it('rule 2 — a first event of any kind creates the entry in the state it implies', () => {
+  it('registers a child after its owner already reported completion', () => {
     const { roster, agents } = createHarness()
 
     deliver(
@@ -374,7 +390,7 @@ describe('CodexSubagentRoster', () => {
 
     deliver(
       roster,
-      activity({ kind: 'interacted', agentThreadId: 'child-1', agentPath: '/root/read' })
+      activity({ kind: 'started', agentThreadId: 'child-1', agentPath: '/root/read' })
     )
     roster.settleSession()
     const afterFirstSweep = appended.length
@@ -676,6 +692,7 @@ describe('CodexSubagentRoster', () => {
         now: () => 1_000
       })
       const item = activity({ kind: 'started', agentThreadId: 'child-1', agentPath: '/root/read' })
+      roster.handleTurn({ threadId: 'child-1', turnId: 'child-turn', state: 'working' })
 
       expect(roster.handleItem({ threadId: THREAD, turnId: TURN, item })).toEqual(refusal)
 
@@ -724,6 +741,7 @@ describe('CodexSubagentRoster', () => {
       activeTurn: () => TURN,
       now: () => 1_000
     })
+    roster.handleTurn({ threadId: 'child-1', turnId: 'child-turn', state: 'working' })
     roster.handleItem({
       threadId: THREAD,
       turnId: TURN,
@@ -758,6 +776,7 @@ describe('CodexSubagentRoster', () => {
       activeTurn: () => TURN
     })
 
+    roster.handleTurn({ threadId: 'child-1', turnId: 'child-turn', state: 'working' })
     expect(
       roster.handleItem({
         threadId: THREAD,

@@ -8,7 +8,7 @@ describe('guarded lifecycle transitions', () => {
 
   it('rejects a stale prior state without changing the projection', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'guarded transition' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'guarded transition' })
 
     expect(() =>
       db!.transitionLifecycle({
@@ -23,7 +23,7 @@ describe('guarded lifecycle transitions', () => {
 
   it('composes its projection into the caller-owned transaction', () => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'caller-owned rollback' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'caller-owned rollback' })
 
     db.db.exec('SAVEPOINT lifecycle_test')
     expect(
@@ -49,7 +49,7 @@ describe('guarded lifecycle transitions', () => {
     ['completed', 'blocked']
   ] as const)('preserves public task updates from %s to %s', (from, to) => {
     db = new OrchestrationDb(':memory:')
-    const task = db.createTask({ spec: 'manual status correction' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'manual status correction' })
     db.db.prepare('UPDATE tasks SET status = ? WHERE id = ?').run(from, task.id)
 
     expect(db.updateTaskStatus(task.id, to)?.status).toBe(to)

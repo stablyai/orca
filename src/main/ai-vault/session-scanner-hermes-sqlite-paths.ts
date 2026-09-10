@@ -41,13 +41,3 @@ export function splitHermesSqliteCandidate(
   }
   return { dbPath, sessionId }
 }
-
-/**
- * Type guard: returns `true` if the path is a valid synthetic Hermes SQLite
- * candidate path (i.e. `splitHermesSqliteCandidate` would return non-null).
- * @param candidatePath - The path to test.
- * @returns `true` if the path is a synthetic SQLite candidate, `false` otherwise.
- */
-export function looksLikeHermesSqliteCandidate(candidatePath: string): boolean {
-  return splitHermesSqliteCandidate(candidatePath) !== null
-}

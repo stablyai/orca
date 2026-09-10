@@ -4,7 +4,7 @@ import {
   NativeChatCommandMetadata,
   NativeChatSearchResults
 } from './NativeChatToolAnnotations'
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -12,28 +12,28 @@ import {
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatBlock,
-  type NativeChatSubagentGroupBlock
+  type NativeChatSubagentGroupBlock,
+  type NativeChatToolCallBlock
 } from '../../../../shared/native-chat-types'
 import { isRenderableSubagentGroup } from '../../../../shared/native-chat-subagent-summary'
 import { diffFromText, diffFromToolCall, type DiffLine } from './native-chat-diff'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
-import { pairToolBlocks } from './native-chat-tool-fold'
-import {
-  editFilesFromToolPair,
-  isEditToolName
-} from '../../../../shared/native-chat-edit-normalize'
-import type { NativeChatEditFile } from '../../../../shared/native-chat-edit-model'
+import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
+import { buildEditCards, NO_EDIT_CARDS } from './native-chat-edit-cards'
 import {
   countToolCalls,
   createToolInputDisplay,
-  summarizeToolRun,
-  truncateToolDetail
+  toolRunSummaryMembers,
+  truncateToolDetail,
+  type ToolRunMember
 } from './native-chat-tool-summary'
 import {
   NATIVE_CHAT_TOOL_ACTIVITY_COPY,
   selectActiveToolCall
 } from '../../../../shared/native-chat-tool-activity'
 import { nativeChatToolRunIconName } from '../../../../shared/native-chat-tool-icon'
+import { NativeChatTaskList } from './NativeChatTaskList'
+import { buildNativeChatTaskListRows } from './native-chat-task-list-history'
 import { NativeChatDiffView } from './NativeChatDiffView'
 import { NativeChatSubagentRun } from './NativeChatSubagentRun'
 import { NativeChatToolIcon, NativeChatToolRunIcon } from './NativeChatToolIcon'
@@ -156,55 +156,15 @@ function ToolLine({
   )
 }
 
-type EditCardModel = {
-  editCards: Map<NativeChatBlock, { files: NativeChatEditFile[]; key: string }>
-  /** Result blocks the card already speaks for, so they render no second row. */
-  consumedResults: Set<NativeChatBlock>
-}
-
-const NO_EDIT_CARDS: EditCardModel = { editCards: new Map(), consumedResults: new Set() }
-
-/** An edit renders as one card, so its result block is folded into the call. The
- *  model decides which calls have landed; a call that has not keeps the generic
- *  tool view, its result still visible as the provider's own error. */
-function buildEditCards(blocks: NativeChatBlock[]): EditCardModel {
-  const editCards: EditCardModel['editCards'] = new Map()
-  const consumedResults: EditCardModel['consumedResults'] = new Set()
-  for (const [index, pair] of pairToolBlocks(blocks).entries()) {
-    const call = pair.call
-    if (!call || !isEditToolName(call.name)) {
-      continue
-    }
-    const files = editFilesFromToolPair({
-      name: call.name,
-      input: call.input,
-      ...(call.state ? { state: call.state } : {}),
-      ...(pair.result
-        ? {
-            result: {
-              output: pair.result.output,
-              isError: pair.result.isError,
-              editPatch: pair.result.editPatch
-            }
-          }
-        : {})
-    })
-    if (!files || files.length === 0) {
-      continue
-    }
-    editCards.set(call, { files, key: `${call.name}:${index}` })
-    if (pair.result) {
-      consumedResults.add(pair.result)
-    }
-  }
-  return { editCards, consumedResults }
-}
-
 /** A run of a message's tool calls/results, collapsed to a one-line summary that
  *  expands to the individual inline tool lines. `expandSignal` lets the global
  *  toolbar toggle drive every run at once while still allowing per-run override. */
 export function NativeChatToolRun({
   blocks,
+  previousTodoWrite,
+  previousUpdatePlan,
+  revealedDiff,
+  onRevealDiff,
   subagentGroups = NO_SUBAGENT_GROUPS,
   expandSignal,
   activeTurnIsWorking,
@@ -213,6 +173,10 @@ export function NativeChatToolRun({
   onLinkClick
 }: {
   blocks: NativeChatBlock[]
+  previousTodoWrite?: NativeChatToolCallBlock
+  previousUpdatePlan?: NativeChatToolCallBlock
+  revealedDiff?: NativeChatDiffReveal
+  onRevealDiff?: (element: HTMLElement) => void
   /** Spawn-group rosters that belong with this run's activity, one row each. */
   subagentGroups?: NativeChatSubagentGroupBlock[]
   /** Toolbar-driven desired open state. Each change re-syncs this run's state. */
@@ -224,9 +188,23 @@ export function NativeChatToolRun({
   structuredActivityUi?: boolean
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
-  const [open, setOpen] = useState(expandOverride ?? expandSignal)
-  // Re-sync when the global toolbar toggle flips.
-  useEffect(() => setOpen(expandOverride ?? expandSignal), [expandOverride, expandSignal])
+  const [open, setOpen] = useState(revealedDiff ? true : (expandOverride ?? expandSignal))
+  const [controls, setControls] = useState({ expandOverride, expandSignal, revealedDiff })
+  if (
+    controls.expandOverride !== expandOverride ||
+    controls.expandSignal !== expandSignal ||
+    controls.revealedDiff !== revealedDiff
+  ) {
+    setControls({ expandOverride, expandSignal, revealedDiff })
+    if (revealedDiff && controls.revealedDiff !== revealedDiff) {
+      setOpen(true)
+    } else if (
+      controls.expandOverride !== expandOverride ||
+      controls.expandSignal !== expandSignal
+    ) {
+      setOpen(expandOverride ?? expandSignal)
+    }
+  }
 
   // Childless groups are dropped so `subagentRows.length` stays an honest test of
   // "something will draw": the roster-only branch below returns a margin-bearing
@@ -237,21 +215,48 @@ export function NativeChatToolRun({
     .filter(isRenderableSubagentGroup)
     .map((group) => <NativeChatSubagentRun key={group.groupId} block={group} />)
   const callCount = countToolCalls(blocks) || blocks.length
-  const summary = summarizeToolRun(blocks)
+  // Members stay separate all the way to the markup: joining them into one
+  // string is what made a run read as a single call, because the separator also
+  // occurs inside tool names like `browser.open` and `tools/read`.
+  const summaryMembers = toolRunSummaryMembers(blocks)
+  const hiddenCallCount = Math.max(0, callCount - summaryMembers.length)
+  // Same content-signature keying the member rows below use: two identical calls
+  // in one run are distinguished by occurrence, never by list position.
+  const keyedSummaryMembers = ((): (ToolRunMember & { key: string })[] => {
+    const seen = new Map<string, number>()
+    return summaryMembers.map((member) => {
+      const signature = `${member.name}:${member.arg}`
+      const occurrence = seen.get(signature) ?? 0
+      seen.set(signature, occurrence + 1)
+      return { ...member, key: `${signature}:${occurrence}` }
+    })
+  })()
   const latestActiveCall = structuredActivityUi
     ? selectActiveToolCall(blocks, { activeTurnIsWorking })
     : null
   const isSettled = latestActiveCall == null
+  const hasRunningCall = blocks.some((block) => isToolCallBlock(block) && block.state === 'running')
   // The turn caret opens the activity group, while each child tool remains
   // collapsed. The global expand toolbar still opens child details together.
   const expandToolLines = expandOverride === undefined ? open : false
   // Diffing every edit is the run's most expensive work, so a collapsed run —
   // which renders none of it — never pays for it.
+  const taskLists = useMemo(
+    () =>
+      open
+        ? buildNativeChatTaskListRows(blocks, {
+            todowrite: previousTodoWrite,
+            update_plan: previousUpdatePlan
+          })
+        : null,
+    [open, blocks, previousTodoWrite, previousUpdatePlan]
+  )
+  // Rollups cache counts only; detailed diff rows are built when the run opens.
   const { editCards, consumedResults } = useMemo(
     () => (open ? buildEditCards(blocks) : NO_EDIT_CARDS),
     [open, blocks]
   )
-  // Only the settled header reads this. It stands over `summary`, which speaks
+  // Only the settled header reads this. It stands over `summaryMembers`, which speaks
   // for the run's first calls rather than its last, so a glyph taken from one
   // call would assert a category the text beside it doesn't describe. A run that
   // spans categories therefore heads with the generic tool glyph. The glyph is
@@ -284,6 +289,7 @@ export function NativeChatToolRun({
   if (
     structuredActivityUi &&
     expandOverride === false &&
+    !(revealedDiff && open) &&
     isSettled &&
     activeTurnIsWorking === false
   ) {
@@ -311,7 +317,7 @@ export function NativeChatToolRun({
             rowWord={latestActiveCall.name}
             className="text-muted-foreground"
           />
-          <span className="min-w-0 flex-1 animate-pulse truncate text-foreground/85 motion-reduce:animate-none">
+          <span className="min-w-0 animate-pulse truncate text-foreground/85 motion-reduce:animate-none">
             {nativeChatToolActivityLabel(latestActiveCall)}
           </span>
           {open ? <ChevronRight className="size-3.5 rotate-90 text-muted-foreground" /> : null}
@@ -329,11 +335,54 @@ export function NativeChatToolRun({
           <span className="shrink-0 font-mono text-[11px] font-bold text-muted-foreground transition-colors group-hover:text-foreground/80">
             {callCount}×
           </span>
-          <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80">
-            {summary || fallbackLabel}
-          </span>
-          {/* Completion reads as a trailing mark so the leading glyph can stay fixed. */}
-          {structuredActivityUi ? (
+          {summaryMembers.length > 0 ? (
+            <>
+              {/* Each member is led by its own category glyph, which is what marks
+                  the boundary. A separator character cannot: `·` occurs inside
+                  `browser.open` and `tools/read`. The list stays one line and
+                  truncates as a whole rather than wrapping into a block — a
+                  header that grows to three rows stops reading as a header. */}
+              <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80">
+                {keyedSummaryMembers.map((member, index) => (
+                  <Fragment key={member.key}>
+                    {/* A real space, not just the margin: a CSS gap is invisible to
+                        a copied selection and to the button's accessible name, which
+                        would otherwise run one member's argument into the next
+                        member's name. The margin is trimmed to pay for its width. */}
+                    {index > 0 ? ' ' : null}
+                    <span data-tool-run-member className={cn(index > 0 && 'ml-2')}>
+                      <NativeChatToolIcon
+                        rowWord={member.name}
+                        mcpIdentity={member.mcpIdentity}
+                        className="mr-1 inline-flex size-3.5 align-middle"
+                      />
+                      {member.name}
+                      {member.arg ? (
+                        <span className="text-muted-foreground/70">{` ${member.arg}`}</span>
+                      ) : null}
+                    </span>
+                  </Fragment>
+                ))}
+              </span>
+              {hiddenCallCount > 0 ? (
+                /* Outside the truncating span, so the count of what is not shown
+                   survives a list the pane is too narrow to print. */
+                <span className="shrink-0 font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80">
+                  {translate(
+                    'components.native-chat.tool.moreCalls',
+                    NATIVE_CHAT_TOOL_ACTIVITY_COPY.moreCalls,
+                    { value0: hiddenCallCount }
+                  )}
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground transition-colors group-hover:text-foreground/80">
+              {fallbackLabel}
+            </span>
+          )}
+          {/* A running item cannot inherit completion from its turn. */}
+          {structuredActivityUi && !hasRunningCall ? (
             <Check aria-hidden className="size-3 shrink-0 text-muted-foreground" />
           ) : null}
           {/* Chevron is revealed on hover when collapsed and points down when open. */}
@@ -346,10 +395,20 @@ export function NativeChatToolRun({
         </button>
       )}
       {open ? (
-        <div className="mt-1">
+        // Members are indented under the header because nothing else marks the
+        // run's extent — flush rows are indistinguishable from the blocks after
+        // them, so the batch has no visible end.
+        <div className="mt-1 pl-4">
           {(() => {
             const seen = new Map<string, number>()
-            return blocks.map((block) => {
+            return blocks.map((block, blockIndex) => {
+              const taskList = taskLists?.rows.get(block)
+              if (taskList) {
+                return <NativeChatTaskList key={`tasks:${blockIndex}`} {...taskList} />
+              }
+              if (taskLists?.consumedResults.has(block)) {
+                return null
+              }
               const edit = editCards.get(block)
               if (edit) {
                 return (
@@ -358,6 +417,12 @@ export function NativeChatToolRun({
                       <NativeChatDiffCard
                         key={`${edit.key}:${fileIndex}`}
                         file={file}
+                        revealSignal={
+                          revealedDiff?.editKey === edit.key && revealedDiff.fileIndex === fileIndex
+                            ? revealedDiff.requestId
+                            : undefined
+                        }
+                        onReveal={onRevealDiff}
                         initiallyExpanded={expandToolLines}
                       />
                     ))}

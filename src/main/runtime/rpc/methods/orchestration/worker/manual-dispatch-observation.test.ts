@@ -242,7 +242,13 @@ describe('manual Dispatch observation', () => {
     const result = (await workerListMethod.handler(
       workerListMethod.params?.parse({ run: run.id }),
       { runtime }
-    )) as { workers: { dispatchId: string; workerState: string; terminalState: string | null }[] }
+    )) as {
+      workers: {
+        dispatchId: string
+        workerState: string
+        terminalState: string | null
+      }[]
+    }
 
     expect(result.workers).toEqual([
       expect.objectContaining({
@@ -262,7 +268,10 @@ describe('manual Dispatch observation', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     const closeTerminal = vi.spyOn(runtime, 'closeTerminal')
-    const task = db.createTask({ spec: 'operator-owned lane' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'operator-owned lane'
+    })
     const dispatch = createRootDispatch(
       db,
       task.id,

@@ -42,6 +42,12 @@ export type AgentLaunchRoutingInput = {
 }
 
 export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLaunchRoute {
+  if (
+    prefersStructuredNativeChatByDefault(input.settings) &&
+    structuredAgentLaunchSupported(input)
+  ) {
+    return 'structured-native-chat'
+  }
   const initialViewMode = decideInitialAgentTabViewMode({
     experimentalNativeChat: input.settings?.experimentalNativeChat,
     openAgentTabsInChatByDefault: input.settings?.openAgentTabsInChatByDefault,
@@ -53,10 +59,7 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   if (initialViewMode !== 'chat') {
     return 'terminal-tui'
   }
-  if (!prefersStructuredNativeChatByDefault(input.settings)) {
-    return 'legacy-native-chat'
-  }
-  return structuredAgentLaunchSupported(input) ? 'structured-native-chat' : 'legacy-native-chat'
+  return 'legacy-native-chat'
 }
 
 // Explicit chat requests do not depend on the default view mode for new tabs.

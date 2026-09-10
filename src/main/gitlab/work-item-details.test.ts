@@ -458,4 +458,42 @@ describe('countDiffLines', () => {
     // Why: the `@@` hunk check runs first, so it must not swallow `+`/`-` content.
     expect(countDiffLines('@@ -1 +1 @@\n-@@ old\n+@@ new')).toEqual({ additions: 1, deletions: 1 })
   })
+
+  // Why: the scan now reads a prefix code unit at a byte cursor rather than a split
+  // segment, so line-ending and non-ASCII shapes are the new regression surface.
+  it('counts a CRLF hunk the same as an LF hunk', () => {
+    expect(countDiffLines('@@ -1 +1,2 @@\r\n-old\r\n+a\r\n+b\r\n')).toEqual({
+      additions: 2,
+      deletions: 1
+    })
+  })
+
+  it('treats a lone CR as content, not a line break', () => {
+    expect(countDiffLines('@@ -1 +1 @@\n-old\r+new')).toEqual({ additions: 0, deletions: 1 })
+  })
+
+  it('counts lines whose content is multi-byte or a surrogate pair', () => {
+    expect(countDiffLines('@@ -1 +1 @@\n-é ünïcode\n+🚀 rocket')).toEqual({
+      additions: 1,
+      deletions: 1
+    })
+  })
+
+  it('ignores non-ASCII context lines and blank lines inside a hunk', () => {
+    expect(countDiffLines('@@ -1 +1 @@\n é leading accent\n 🚀 leading emoji\n\n')).toEqual({
+      additions: 0,
+      deletions: 0
+    })
+  })
+
+  it('counts large diff prefixes without allocating a string array for every line', () => {
+    const diff = `--- a/file\n+++ b/file\n@@ -1 +1 @@\n${'-old\n+new\n context\n'.repeat(10000)}`
+    const split = vi.spyOn(String.prototype, 'split')
+    try {
+      expect(countDiffLines(diff)).toEqual({ additions: 10000, deletions: 10000 })
+      expect(split.mock.calls.length).toBe(0)
+    } finally {
+      split.mockRestore()
+    }
+  })
 })

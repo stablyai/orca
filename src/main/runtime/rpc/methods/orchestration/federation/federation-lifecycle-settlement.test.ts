@@ -445,6 +445,7 @@ describe('orchestration federation lifecycle settlement', () => {
       const dispatchId = `ctx_persisted_protocol_${protocolVersion}`
       const taskId = `task_persisted_protocol_${protocolVersion}`
       workerDb.createRemoteDispatchAttachment({
+        runId: 'run-home',
         dispatchId,
         taskId,
         homePeerFingerprint: 'run-home-device-token',

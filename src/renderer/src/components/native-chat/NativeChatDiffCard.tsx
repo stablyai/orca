@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight, FilePlus2, FileMinus2, FilePen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -111,12 +111,23 @@ function DiffRow({ line, gutterWidth }: { line: NativeChatEditLine; gutterWidth:
  *  nothing else — keeps the header rows and offers no empty disclosure. */
 export function NativeChatDiffCard({
   file,
+  revealSignal,
+  onReveal,
   initiallyExpanded = false
 }: {
   file: NativeChatEditFile
+  revealSignal?: number
+  onReveal?: (element: HTMLElement) => void
   initiallyExpanded?: boolean
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(initiallyExpanded)
+  const cardRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    if (revealSignal && cardRef.current) {
+      setExpanded(true)
+      onReveal?.(cardRef.current)
+    }
+  }, [revealSignal, onReveal])
   // Joining every row to seed the copy button is the card's most expensive
   // work, and a collapsed card renders none of those rows.
   const copyText = useMemo(() => patchText(file.lines), [file.lines])
@@ -127,7 +138,7 @@ export function NativeChatDiffCard({
   const gutterWidth = file.lineNumbersKnown ? Math.max(3, String(widest).length + 1) : 0
 
   return (
-    <div className="my-1 overflow-hidden rounded-md border border-border">
+    <div ref={cardRef} className="my-1 overflow-hidden rounded-md border border-border">
       <button
         type="button"
         onClick={() => hasBody && setExpanded((value) => !value)}

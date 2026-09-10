@@ -6,6 +6,8 @@ import type {
   openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
@@ -44,6 +46,10 @@ export type CodexStructuredSessionAdapterDeps = {
   /** Host capability seam; production uses the native Windows process table. */
   isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
+  onBackgroundTasksChanged?: (
+    sessionId: string,
+    state: AgentSessionBackgroundTaskState | null
+  ) => void
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
@@ -73,6 +79,8 @@ export type CodexSession = {
   reportedOptions: { model?: string; effort?: string }
   turnIdWaiters: ((turnId: string) => void)[]
   translator: CodexJournalTranslator | null
+  /** Ephemeral roster behind the background-tasks strip; never durable state. */
+  backgroundTasks: CodexBackgroundTaskTracker
   unbindReadingControl?: () => void
   /** Terminates this exact child as an unexpected death and enters host recovery. */
   forceCloseUnexpected?: (reason: Error) => Promise<boolean>

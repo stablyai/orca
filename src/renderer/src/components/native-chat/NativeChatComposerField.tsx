@@ -1,3 +1,5 @@
+import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import type { ClipboardEventHandler, KeyboardEventHandler, RefObject } from 'react'
 import { useLayoutEffect, useRef } from 'react'
 import { ImageOff } from 'lucide-react'
@@ -19,7 +21,7 @@ export type NativeChatComposerFieldProps = {
   /** Pane identity published to the drop pipeline so a native file drop lands
    *  only in the composer it was dropped on. */
   composerScopeKey: string
-  textareaRef: RefObject<HTMLTextAreaElement | null>
+  textareaRef: RefObject<NativeChatComposerInput | null>
   draft: string
   disabled: boolean
   hasPty: boolean
@@ -35,11 +37,11 @@ export type NativeChatComposerFieldProps = {
   isDictating: boolean
   isDictationHoldMode: boolean
   imeEnterGesture: ReturnType<typeof useImeEnterGestureOwnership>
-  onDraftChange: (value: string, element: HTMLTextAreaElement) => void
-  onTextareaSelect: (element: HTMLTextAreaElement) => void
-  onKeyDown: KeyboardEventHandler<HTMLTextAreaElement>
-  onImeSettled: (element: HTMLTextAreaElement) => void
-  onPaste: ClipboardEventHandler<HTMLTextAreaElement>
+  onDraftChange: (value: string, element: NativeChatComposerInput) => void
+  onTextareaSelect: (element: NativeChatComposerInput) => void
+  onKeyDown: KeyboardEventHandler<HTMLElement>
+  onImeSettled: (element: NativeChatComposerInput) => void
+  onPaste: ClipboardEventHandler<HTMLElement>
   pickerListboxId: string
   onChoosePickerItem: (item: NativeChatPickerItem) => void
   onRetrySkills: () => void
@@ -151,7 +153,7 @@ export function NativeChatComposerField({
     textarea.value = draft
   }, [draft, imeEnterGesture, textareaRef])
 
-  const settleImeValue = (element: HTMLTextAreaElement): void => {
+  const settleImeValue = (element: NativeChatComposerInput): void => {
     if (droppedDraftClearRef.current) {
       droppedDraftClearRef.current = false
       element.value = imeComposedSegment(compositionBaseRef.current, element.value)
@@ -204,38 +206,39 @@ export function NativeChatComposerField({
                 ))}
               </div>
             ) : null}
-            <textarea
-              ref={textareaRef}
-              defaultValue={draft}
+            <NativeChatPromptEditor
+              key={composerScopeKey}
+              scopeKey={composerScopeKey}
+              inputRef={textareaRef}
+              initialValue={draft}
               disabled={disabled}
-              rows={2}
-              onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
-              onKeyDown={(event) => {
+              onChange={(input) => onDraftChange(input.value, input)}
+              onKeyDownCapture={(event) => {
                 if (!imeEnterGesture.ownsKeyDown(event)) {
                   onKeyDown(event)
                 }
               }}
               onKeyUp={imeEnterGesture.onKeyUp}
-              onBlur={(event) => {
+              onBlur={() => {
                 const compositionWasActive = imeEnterGesture.isComposing()
                 imeEnterGesture.reset()
                 if (compositionWasActive) {
-                  settleImeValue(event.currentTarget)
+                  settleImeValue(textareaRef.current!)
                 }
               }}
-              onCompositionStart={(event) => {
-                compositionBaseRef.current = event.currentTarget.value
+              onCompositionStart={() => {
+                compositionBaseRef.current = textareaRef.current!.value
                 imeEnterGesture.setComposing(true)
               }}
-              onCompositionEnd={(event) => {
+              onCompositionEnd={() => {
                 const compositionWasActive = imeEnterGesture.isComposing()
                 imeEnterGesture.setComposing(false)
                 if (compositionWasActive) {
-                  settleImeValue(event.currentTarget)
+                  settleImeValue(textareaRef.current!)
                 }
               }}
-              onPaste={onPaste}
-              onSelect={(e) => onTextareaSelect(e.currentTarget)}
+              onPasteCapture={onPaste}
+              onSelect={onTextareaSelect}
               aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}
               aria-controls={
                 autocomplete.mode === 'slash' || autocomplete.mode === 'skill'
@@ -250,13 +253,13 @@ export function NativeChatComposerField({
               }
               placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
-              // field-sizing:content grows the field with the draft; the 8lh cap (plus
+              // Editable content grows naturally; the 8lh cap (plus
               // py-1) turns further growth into internal scrolling, and scrollbar-sleek
               // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
               // so re-wrap on window/pane resize is handled without a measure pass.
               className={cn(
-                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
-                '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
+                'min-h-12 w-full bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
+                'max-h-[calc(8lh+0.5rem)] overflow-y-auto scrollbar-sleek',
                 'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />

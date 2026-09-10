@@ -246,6 +246,8 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'status.get',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  // Why: the phone reports a takeover out of band, the same signal the desktop renderer sends.
+  'orchestration.workerTerminalUserInput',
   'terminal.clearBuffer',
   'terminal.close',
   'terminal.closeAll',

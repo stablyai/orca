@@ -1,28 +1,50 @@
-import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
+import {
+  appendRetiredTerminalSurfaceProofs,
+  dropRetirementProofsForLiveSurfaces
+} from '../../shared/terminal-retirement-proof-ledger'
 
-const MAX_RETIRED_TERMINAL_SURFACE_PROOFS = 64
+export {
+  appendRetiredTerminalSurfaceProofs,
+  dropRetirementProofsForLiveSurfaces
+} from '../../shared/terminal-retirement-proof-ledger'
 
-export function appendRetiredTerminalSurfaceProofs(
-  existing: readonly RuntimeMobileSessionRetiredTerminalSurface[] | undefined,
-  retired: readonly RuntimeMobileSessionRetiredTerminalSurface[]
-): RuntimeMobileSessionRetiredTerminalSurface[] {
-  const next = new Map(
-    (existing ?? []).map((surface) => [
-      `${surface.parentTabId}\0${surface.leafId}\0${surface.terminal}`,
-      surface
-    ])
-  )
-  for (const evidence of retired) {
-    const key = `${evidence.parentTabId}\0${evidence.leafId}\0${evidence.terminal}`
-    next.delete(key)
-    next.set(key, evidence)
+/**
+ * Renderer snapshots omit the host's durable close acknowledgements; carry them forward.
+ *
+ * Why the identity inheritance: host-authored writes never set `worktreeInstanceId`. Without it
+ * the stored entry forgets which occupant minted the proofs, and renderer(A) -> host write ->
+ * renderer(B) would launder A's proofs into B.
+ */
+export function preserveTerminalRetirementProofs(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  existing: RuntimeMobileSessionTabsSnapshot | undefined
+): RuntimeMobileSessionTabsSnapshot {
+  if (!existing || existing.worktree !== snapshot.worktree) {
+    return snapshot
   }
-  while (next.size > MAX_RETIRED_TERMINAL_SURFACE_PROOFS) {
-    const oldest = next.keys().next().value
-    if (typeof oldest !== 'string') {
-      break
-    }
-    next.delete(oldest)
+  if (
+    existing.worktreeInstanceId !== undefined &&
+    snapshot.worktreeInstanceId !== undefined &&
+    existing.worktreeInstanceId !== snapshot.worktreeInstanceId
+  ) {
+    return snapshot
   }
-  return [...next.values()]
+  const identified =
+    snapshot.worktreeInstanceId === undefined && existing.worktreeInstanceId !== undefined
+      ? { ...snapshot, worktreeInstanceId: existing.worktreeInstanceId }
+      : snapshot
+  if (!existing.retiredTerminalSurfaces?.length) {
+    return identified
+  }
+  return {
+    ...identified,
+    retiredTerminalSurfaces: dropRetirementProofsForLiveSurfaces(
+      appendRetiredTerminalSurfaceProofs(
+        existing.retiredTerminalSurfaces,
+        snapshot.retiredTerminalSurfaces ?? []
+      ),
+      snapshot.tabs
+    )
+  }
 }

@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   submissions: [] as unknown[],
   monitoringBackgroundTasks: false,
   supportsBackgroundTaskStop: false,
+  supportsBackgroundTaskStopAll: true,
   backgroundTasks: [] as AgentSessionBackgroundTask[],
   stopBackgroundTask: vi.fn()
 }))
@@ -77,6 +78,7 @@ vi.mock('./use-structured-agent-session', async () => {
         isWorking: false,
         isMonitoringBackgroundTasks: mocks.monitoringBackgroundTasks,
         supportsBackgroundTaskStop: mocks.supportsBackgroundTaskStop,
+        supportsBackgroundTaskStopAll: mocks.supportsBackgroundTaskStopAll,
         backgroundTasks: mocks.backgroundTasks,
         turnId: null,
         cancel: vi.fn(),
@@ -169,6 +171,7 @@ describe('NativeChatStructuredSession', () => {
     mocks.submissions = []
     mocks.monitoringBackgroundTasks = false
     mocks.supportsBackgroundTaskStop = false
+    mocks.supportsBackgroundTaskStopAll = true
     mocks.stopBackgroundTask.mockReset()
     mocks.backgroundTasks = []
   })

@@ -49,6 +49,10 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   agent: 'claude' | 'codex'
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
+  /** Replaces the seed options the host resolves from settings. Orchestration passes the
+   *  `--model`/`--effort` the dispatch asked for; a chat the user opened passes nothing and keeps
+   *  the saved selection. Narrowed by the caller, so `{}` never reaches the reservation. */
+  options?: Readonly<Record<string, string>>
 }): Promise<PreparedStructuredAgentSessionCreate> {
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null
@@ -70,6 +74,10 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     host,
     attachParams: {
       ...resolvedAttach,
+      // After the fingerprint, deliberately: `attachFingerprintFields` excludes options because
+      // they are the session's initial state, not its identity, so a retry that re-resolves them
+      // must replay rather than conflict.
+      ...(args.options ? { options: args.options } : {}),
       provider: resolved.provider as 'claude' | 'codex',
       agent: resolved.agent as 'claude' | 'codex',
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
@@ -121,6 +129,7 @@ export async function createStructuredAgentSessionForWorktree(args: {
   worktree: string
   agent: 'claude' | 'codex'
   activate: boolean
+  options?: Readonly<Record<string, string>>
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const prepared: PreparedStructuredAgentSessionCreate | StructuredCreateRefused =
     await resolveUncommittedStructuredCreate(() =>
