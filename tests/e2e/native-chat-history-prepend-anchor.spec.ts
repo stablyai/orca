@@ -120,9 +120,14 @@ test.describe('Native chat history prepend anchoring', () => {
       const anchor = await scroll.evaluate(async (element) => {
         element.scrollTop = element.scrollHeight * 0.55
         element.dispatchEvent(new Event('scroll', { bubbles: true }))
-        await new Promise<void>((resolve) => {
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
-        })
+        let previousGeometry = ''
+        let stableFrames = 0
+        for (let frame = 0; frame < 120 && stableFrames < 5; frame += 1) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          const geometry = `${element.scrollHeight}:${element.scrollTop}`
+          stableFrames = geometry === previousGeometry ? stableFrames + 1 : 0
+          previousGeometry = geometry
+        }
         const scrollRect = element.getBoundingClientRect()
         const candidates = Array.from(
           element.querySelectorAll<HTMLElement>('[data-native-chat-window] > [data-index]')
@@ -142,6 +147,8 @@ test.describe('Native chat history prepend anchoring', () => {
         return {
           index: Number(row.dataset.index),
           marker: marker.textContent?.trim() ?? '',
+          scrollHeight: element.scrollHeight,
+          scrollTop: element.scrollTop,
           viewportOffset: row.getBoundingClientRect().top - scrollRect.top
         }
       })
@@ -160,19 +167,35 @@ test.describe('Native chat history prepend anchoring', () => {
 
       const anchoredMarker = orcaPage.getByText(anchor.marker, { exact: true })
       await expect(anchoredMarker).toBeAttached({ timeout: 15_000 })
-      const after = await anchoredMarker.evaluate((marker) => {
+      const after = await anchoredMarker.evaluate(async (marker) => {
         const row = marker.closest<HTMLElement>('[data-index]')
         const scrollRoot = marker.closest<HTMLElement>('[data-native-chat-scroll]')
         if (!row || !scrollRoot) {
           return null
         }
+        let previousGeometry = ''
+        let stableFrames = 0
+        for (let frame = 0; frame < 120 && stableFrames < 5; frame += 1) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+          const geometry = `${scrollRoot.scrollHeight}:${scrollRoot.scrollTop}`
+          stableFrames = geometry === previousGeometry ? stableFrames + 1 : 0
+          previousGeometry = geometry
+        }
         return {
           index: Number(row.dataset.index),
+          scrollHeight: scrollRoot.scrollHeight,
+          scrollTop: scrollRoot.scrollTop,
           viewportOffset: row.getBoundingClientRect().top - scrollRoot.getBoundingClientRect().top
         }
       })
       expect(after, 'anchored row must remain mounted after history prepends').not.toBeNull()
       expect(after?.index).toBe(anchor.index + 200)
+      const contentGrowth = (after?.scrollHeight ?? 0) - anchor.scrollHeight
+      const scrollAdjustment = (after?.scrollTop ?? 0) - anchor.scrollTop
+      expect(
+        Math.abs(contentGrowth - scrollAdjustment),
+        `content grew ${contentGrowth}px while scrollTop adjusted ${scrollAdjustment}px`
+      ).toBeLessThanOrEqual(2)
       expect(Math.abs((after?.viewportOffset ?? 0) - anchor.viewportOffset)).toBeLessThanOrEqual(3)
     } finally {
       rmSync(scratchDir, { recursive: true, force: true })
