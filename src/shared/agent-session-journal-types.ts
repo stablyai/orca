@@ -86,6 +86,8 @@ export type AgentJournalToolCallItem = NativeChatToolMetadata & {
   kind: 'tool-call'
   name: string
   input: unknown
+  /** Provider-stable identity; optional for mixed-version peers. */
+  callId?: string
   state: AgentJournalToolCallState
   output?: AgentJournalBoundedPayload
 }

@@ -78,6 +78,7 @@ const Block = z.union([
       type: z.literal('tool-call'),
       name: z.string(),
       input: z.unknown().optional(),
+      callId: z.string().min(1).optional(),
       ...ToolMetadata
     }),
     z.object({
@@ -140,6 +141,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     name: z.string(),
     // See the tool-call block: the key itself is lost when `input` is undefined.
     input: z.unknown().optional(),
+    callId: z.string().min(1).optional(),
     state: z.string().min(1),
     output: BoundedPayload.optional()
   }),

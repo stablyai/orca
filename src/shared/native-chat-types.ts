@@ -55,6 +55,8 @@ export type NativeChatToolCallBlock = NativeChatToolMetadata & {
   type: 'tool-call'
   name: string
   input: unknown
+  /** Provider-stable identity; absent on legacy transcripts and older peers. */
+  callId?: string
   /** Provider lifecycle when the structured app-server path can supply it. */
   state?: 'running' | 'completed' | 'failed'
 }

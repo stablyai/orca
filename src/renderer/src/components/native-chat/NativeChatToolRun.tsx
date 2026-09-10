@@ -35,8 +35,7 @@ import { nativeChatToolActivityLabel } from './native-chat-tool-activity-label'
 const NO_SUBAGENT_GROUPS: NativeChatSubagentGroupBlock[] = []
 
 /** A run of a message's tool calls/results, collapsed to a one-line summary that
- *  expands to the individual inline tool lines. `expandSignal` lets the global
- *  toolbar toggle drive every run at once while still allowing per-run override. */
+ *  expands to the individual inline tool lines. */
 export function NativeChatToolRun({
   blocks,
   previousTodoWrite,
@@ -58,7 +57,7 @@ export function NativeChatToolRun({
   onRevealDiff?: (element: HTMLElement) => void
   /** Spawn-group rosters that belong with this run's activity, one row each. */
   subagentGroups?: NativeChatSubagentGroupBlock[]
-  /** Toolbar-driven desired open state. Each change re-syncs this run's state. */
+  /** Legacy view-level default; production native-chat entry points pass false. */
   expandSignal: boolean
   /** Per-turn disclosure state controlled by the completed turn status row. */
   expandOverride?: boolean
@@ -70,10 +69,8 @@ export function NativeChatToolRun({
   disclosureId?: string
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
-  // The controls that re-sync this run are part of its remembered identity: a
-  // reader's deviation belongs to the control state it was made under, so a
-  // toolbar flip reads as "no choice recorded yet" and the new default stands
-  // without the store having to be written to mid-render.
+  // A reader's deviation belongs to the controlling disclosure state, so returning
+  // to that state restores the same choice without writing to the store mid-render.
   const runKey =
     disclosureId === undefined
       ? undefined
@@ -133,8 +130,7 @@ export function NativeChatToolRun({
     : null
   const isSettled = latestActiveCall == null
   const hasRunningCall = blocks.some((block) => isToolCallBlock(block) && block.state === 'running')
-  // The turn caret opens the activity group, while each child tool remains
-  // collapsed. The global expand toolbar still opens child details together.
+  // The turn caret opens the activity group while each child tool stays collapsed.
   const expandToolLines = expandOverride === undefined ? open : false
   // Diffing every edit is the run's most expensive work, so a collapsed run —
   // which renders none of it — never pays for it.
@@ -342,16 +338,18 @@ export function NativeChatToolRun({
                     : `${block.type}`
               const occurrence = seen.get(signature) ?? 0
               seen.set(signature, occurrence + 1)
+              const lineIdentity =
+                block.type === 'tool-call' && block.callId
+                  ? `call:${block.callId}`
+                  : `${signature}:${occurrence}`
               return (
                 <NativeChatToolLine
-                  key={`${signature}:${occurrence}`}
+                  key={lineIdentity}
                   block={block}
                   onLinkClick={onLinkClick}
                   initiallyExpanded={expandToolLines}
                   disclosureKey={
-                    disclosureId === undefined
-                      ? undefined
-                      : `line:${disclosureId}:${signature}:${occurrence}`
+                    disclosureId === undefined ? undefined : `line:${disclosureId}:${lineIdentity}`
                   }
                 />
               )

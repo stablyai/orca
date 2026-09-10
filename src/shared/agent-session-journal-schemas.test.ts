@@ -265,7 +265,9 @@ describe('optional tool annotations', () => {
   const body = { kind: 'tool-call', name: 'shell', input: null, state: 'completed' }
   it('admits old rows and rows with optional annotations without a new kind', () => {
     expect(isAdmissibleAgentJournalItemBody(body)).toBe(true)
-    expect(isAdmissibleAgentJournalItemBody({ ...body, exitCode: 0, durationMs: 0 })).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({ ...body, callId: 'call-1', exitCode: 0, durationMs: 0 })
+    ).toBe(true)
     expect(
       isAdmissibleAgentJournalItemBody({
         ...body,
@@ -283,6 +285,8 @@ describe('optional tool annotations', () => {
     ).toBe(true)
   })
   it.each([
+    { callId: '' },
+    { callId: 1 },
     { exitCode: '127' },
     { exitCode: 1.5 },
     { durationMs: -1 },

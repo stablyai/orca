@@ -3,10 +3,24 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import type { NativeChatToolCallBlock } from '../../../../shared/native-chat-types'
+import {
+  NativeChatDisclosureContext,
+  useNativeChatDisclosures
+} from './native-chat-disclosure-store'
 
 vi.mock('./NativeChatDiffCard', () => ({ NativeChatDiffCard: () => null }))
 vi.mock('./NativeChatDiffView', () => ({ NativeChatDiffView: () => null }))
-afterEach(cleanup)
+
+const disclosureWrite = vi.fn()
+const capturedDisclosures = {
+  read: (_key: string) => undefined,
+  write: (key: string, open: boolean) => disclosureWrite(key, open)
+}
+
+afterEach(() => {
+  cleanup()
+  disclosureWrite.mockReset()
+})
 
 const shell: NativeChatToolCallBlock = {
   type: 'tool-call',
@@ -17,7 +31,67 @@ const shell: NativeChatToolCallBlock = {
   durationMs: 400
 }
 
+function ToolRunDisclosureHarness({ expandOverride }: { expandOverride: boolean }) {
+  const disclosures = useNativeChatDisclosures()
+  return (
+    <NativeChatDisclosureContext.Provider value={disclosures}>
+      <NativeChatToolRun
+        blocks={[shell]}
+        expandSignal={false}
+        expandOverride={expandOverride}
+        activeTurnIsWorking={false}
+        disclosureId="message-1"
+      />
+    </NativeChatDisclosureContext.Provider>
+  )
+}
+
 describe('inline tool annotations', () => {
+  it('restores a per-run deviation when its turn returns to the same disclosure state', () => {
+    const { rerender } = render(<ToolRunDisclosureHarness expandOverride />)
+    const run = screen.getByRole('button', { expanded: true })
+
+    fireEvent.click(run)
+    expect(run.getAttribute('aria-expanded')).toBe('false')
+
+    rerender(<ToolRunDisclosureHarness expandOverride={false} />)
+    expect(screen.queryByRole('button')).toBeNull()
+
+    rerender(<ToolRunDisclosureHarness expandOverride />)
+    expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('uses provider call identities for byte-identical line disclosure keys', () => {
+    const blocks = [
+      { ...shell, callId: 'call-a' },
+      { ...shell, callId: 'call-b' }
+    ]
+    render(
+      <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
+        <NativeChatToolRun blocks={blocks} expandSignal disclosureId="message-1" />
+      </NativeChatDisclosureContext.Provider>
+    )
+
+    fireEvent.click(screen.getAllByRole('button')[2]!)
+
+    expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith('line:message-1:call:call-b', false)
+  })
+
+  it('keeps occurrence identity as the fallback for calls without provider IDs', () => {
+    render(
+      <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
+        <NativeChatToolRun blocks={[shell, shell]} expandSignal disclosureId="message-1" />
+      </NativeChatDisclosureContext.Provider>
+    )
+
+    fireEvent.click(screen.getAllByRole('button')[2]!)
+
+    expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith(
+      'line:message-1:tool-call:shell:{"command":"missing-command"}:1',
+      false
+    )
+  })
+
   it('keeps command completion annotations on the collapsed tool line', () => {
     render(
       <NativeChatToolRun
