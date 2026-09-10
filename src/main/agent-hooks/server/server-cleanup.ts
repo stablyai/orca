@@ -22,12 +22,18 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
   }
 
   /** Drop only the status row (user dismissal); do NOT wipe prompt/tool caches since the pane's agent may still be alive. Use clearPaneState for PTY-teardown. */
-  dropStatusEntry(paneKey: string): void {
+  dropStatusEntry(
+    paneKey: string,
+    /** Defaults to true: a dismissed pane can still be resumed in place. A structured session has
+     *  no pane to resume into and its record store owns resume identity, so it passes false. */
+    options?: { preserveResumeIdentity?: boolean }
+  ): void {
     const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
     if (!deleted) {
       return
     }
-    const retained = this.toRetainedProviderSessionRow(deleted)
+    const retained =
+      options?.preserveResumeIdentity === false ? null : this.toRetainedProviderSessionRow(deleted)
     if (retained) {
       this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
     }

@@ -546,6 +546,7 @@ Fix dispatch fallback preview for normalized status prompts`
         subagents: [
           { id: 'a1', state: 'working', startedAt: 100, agentType: 'general-purpose' },
           { id: 'r1', state: 'idle', startedAt: 'nope', description: 'line\none' },
+          { id: 'u1', state: 'unverifiable', startedAt: 200 },
           { id: '', state: 'working', startedAt: 1 },
           { id: 'bad-state', state: 'running', startedAt: 1 },
           'garbage',
@@ -572,6 +573,7 @@ Fix dispatch fallback preview for normalized status prompts`
       startedAt: 0,
       description: 'line one'
     })
+    expect(result?.subagents?.[2]).toMatchObject({ id: 'u1', state: 'unverifiable' })
   })
 
   it('omits subagents when absent or empty', () => {

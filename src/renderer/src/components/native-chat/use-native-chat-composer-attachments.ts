@@ -1,3 +1,4 @@
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
 import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
@@ -17,7 +18,7 @@ export type UseNativeChatComposerAttachmentsArgs = {
   disabled: boolean
   isComposing: () => boolean
   resolveTarget: () => NativeChatResolvedTarget | null
-  textareaRef: RefObject<HTMLTextAreaElement | null>
+  textareaRef: RefObject<NativeChatComposerInput | null>
   setCaret: (caret: number) => void
   setDraft: (updater: (previous: string) => string) => void
   setNotice: (notice: string | null) => void

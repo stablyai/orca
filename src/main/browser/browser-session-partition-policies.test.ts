@@ -82,6 +82,7 @@ vi.mock('./browser-media-access', () => ({
   requestSystemMediaAccess: async () => false
 }))
 vi.mock('./browser-session-ua', () => ({
+  cleanElectronUserAgent: (userAgent: string) => userAgent,
   setupGoogleAuthUserAgentOverride: vi.fn()
 }))
 vi.mock('./browser-session-user-agent-mode', () => ({

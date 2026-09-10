@@ -309,7 +309,20 @@ describe('activating a folder workspace whose last terminal was closed', () => {
     vi.stubGlobal('window', {
       api: {
         runtime: {
-          call: vi.fn(async () => ({ ok: true, result: { snapshots: [] } }))
+          // A `session.tabs.list` answer must name the scope it listed, or the gate refuses it and
+          // blocks — which would leave the row empty for the wrong reason.
+          call: vi.fn(async () => ({
+            ok: true,
+            result: {
+              worktree: FOLDER_KEY,
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 1,
+              activeGroupId: null,
+              activeTabId: null,
+              activeTabType: null,
+              tabs: []
+            }
+          }))
         },
         pty: { listSessions: vi.fn(async () => []) }
       }

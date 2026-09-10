@@ -6,6 +6,7 @@ import type {
 } from '../../../src/shared/native-chat-ask'
 import type { detectAgentPermission } from './mobile-native-chat-permission'
 import type { parseAgentQuestion } from './mobile-native-chat-question'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -28,6 +29,10 @@ export type MobileNativeChatController = {
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
   nativeChatAgentWorking: boolean
+  /** Structured lane: host-recorded turn timing for the per-turn status rows. */
+  nativeChatWorkingStartedAt: number | null
+  nativeChatSettledTurns: NativeChatSettledTurns | null
+  nativeChatCanStop: boolean
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean

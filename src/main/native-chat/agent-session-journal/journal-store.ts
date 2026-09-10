@@ -177,7 +177,7 @@ export class AgentSessionJournal {
 
   canonicalItemId = (itemId: string): string => resolveJournalItemId(this.state, itemId)
 
-  readSince(cursor: AgentJournalCursor): JournalReadSince {
+  readSince(cursor: AgentJournalCursor, limit?: number): JournalReadSince {
     return readJournalSince(
       {
         state: this.state,
@@ -186,7 +186,8 @@ export class AgentSessionJournal {
             this.requireDatabase().db,
             this.identity.sessionId,
             this.state.epoch,
-            afterSequence
+            afterSequence,
+            limit
           ),
         readOnly: this.readOnly
       },
@@ -231,7 +232,7 @@ export class AgentSessionJournal {
   }
 
   /**
-   * Advance a submission to exactly one of accepted / rejected / unknown.
+   * Record a dispatch transition, including a proven retry returning to pending.
    *
    * Accepting REQUIRES the provider identity rather than a free-form id: the
    * adopted key is what the provider's echo will upsert into, so a mismatched
@@ -244,10 +245,9 @@ export class AgentSessionJournal {
     }))
   }
 
-  /** On restart every `pending` submission becomes `unknown` before the session
-   *  accepts a writer. Orca never re-sends on the user's behalf. */
-  async markPendingSubmissionsUnknown(fence: number): Promise<string[]> {
-    return markJournalPendingSubmissionsUnknown(this, fence)
+  /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
+  async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
+    return markJournalPendingSubmissionsUnknown(this, fence, reason)
   }
 
   /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,

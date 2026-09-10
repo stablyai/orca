@@ -15,9 +15,9 @@ const MAILBOX = 'dispatch:d1'
 function seeded(): OrchestrationDb {
   const db = new OrchestrationDb(':memory:')
   db.insertMessages([
-    { from: 'coordinator', to: MAILBOX, subject: 'a', type: 'status' },
-    { from: 'coordinator', to: MAILBOX, subject: 'b', type: 'question' },
-    { from: 'coordinator', to: MAILBOX, subject: 'c', type: 'status' }
+    { runId: 'run_legacy_local', from: 'coordinator', to: MAILBOX, subject: 'a', type: 'status' },
+    { runId: 'run_legacy_local', from: 'coordinator', to: MAILBOX, subject: 'b', type: 'question' },
+    { runId: 'run_legacy_local', from: 'coordinator', to: MAILBOX, subject: 'c', type: 'status' }
   ])
   return db
 }

@@ -572,7 +572,7 @@ describe('orchestration RPC methods', () => {
       )
       expect(result.effects).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ role: 'agent', action: 'reused_agent_terminal' }),
+          expect.objectContaining({ role: 'agent', action: 'created' }),
           expect.objectContaining({ role: 'setup', action: 'created' }),
           expect.objectContaining({ role: 'configured_tab', action: 'created' })
         ])

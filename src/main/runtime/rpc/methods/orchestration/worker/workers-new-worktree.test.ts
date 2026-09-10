@@ -157,7 +157,7 @@ describe('orchestration new-worktree workers', () => {
         expect.objectContaining({
           kind: 'terminal',
           role: 'agent',
-          action: 'reused_agent_terminal',
+          action: 'created',
           id: 'term_worker'
         })
       ])

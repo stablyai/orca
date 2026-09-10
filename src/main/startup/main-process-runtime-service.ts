@@ -87,6 +87,12 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: worktree.ps pulls hook-reported agent status (same source as the desktop sidebar) at query time so mobile shows the same agents.
     getAgentStatusSnapshot: () =>
       agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    // Why: structured chats have no hooks, so the host writes their projections here itself; the
+    // snapshot above then lists them for the CLI and mobile without a second store.
+    structuredAgentStatusSink: {
+      publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
+      forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
+    },
     // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
     // read, so a row observed under one process otherwise acquires whatever the pane owns now.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
@@ -129,7 +135,6 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
   )
-  runtime.prepareLegacyWorkerTerminalRecovery()
   // Why before anything can attach: a client host that reattaches to a restarted runtime is only
   // handed its pages back if the runtime found them first.
   runtime.rehydrateClientHostedBrowserPages()

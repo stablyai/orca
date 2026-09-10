@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { preflightAgentTrust as preflightWorkspaceAgentTrust } from '@/lib/agent-trust-preflight'
+import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import {
@@ -28,18 +28,6 @@ import { markStructuredWorktreeLaunchUnconfirmed } from '@/lib/worktree-creation
 function isPendingCreationSurfaceVisible(creationId: string): boolean {
   const state = useAppStore.getState()
   return state.activeView === 'terminal' && state.activePendingCreationId === creationId
-}
-
-async function preflightAgentTrust(
-  request: WorktreeCreationRequest,
-  path: string,
-  connectionId?: string | null
-): Promise<void> {
-  await preflightWorkspaceAgentTrust({
-    agent: request.agent,
-    workspacePath: path,
-    connectionId
-  })
 }
 
 export async function executeWorktreeCreation(
@@ -157,7 +145,11 @@ export async function executeWorktreeCreation(
   if (worktree.path && !structuredLaunch) {
     const repoConnectionId =
       useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
-    await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)
+    await preflightAgentTrust({
+      agent: preparedRequest.agent,
+      workspacePath: worktree.path,
+      connectionId: repoConnectionId
+    })
   }
 
   // `createWorktree` already inserted the real worktree row. Leaving for an app
@@ -173,21 +165,18 @@ export async function executeWorktreeCreation(
 
   let activation: ActivateAndRevealResult | false = false
   let primaryTabId: string | null
-  if (shouldActivateOnCompletion) {
+  if (shouldActivateOnCompletion && !structuredLaunch) {
     activation = activateAndRevealWorktree(worktree.id, {
       sidebarRevealBehavior: 'auto',
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),
       ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
-      ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {}),
-      ...(structuredLaunch ? { providesInitialSurface: true } : {})
+      ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
     })
     primaryTabId = activation === false ? null : activation.primaryTabId
   } else {
-    // The user moved on. Seed the worktree's terminal + setup in the background
-    // (setActiveTab only writes global focus for the active worktree, so this is
-    // safe) without yanking them back to it.
+    // Keep chat creation on its pending surface until the session is ready.
     const hasExplicitTerminalWork = Boolean(
       startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
     )
@@ -210,10 +199,15 @@ export async function executeWorktreeCreation(
   }
 
   let structuredLaunchAccepted = structuredLaunch
-  if (structuredLaunch && isAgentSessionHandleProvider(preparedRequest.agent)) {
+  const { agentLaunchRoute } = preparedRequest
+  if (
+    agentLaunchRoute === 'structured-native-chat' &&
+    isAgentSessionHandleProvider(preparedRequest.agent)
+  ) {
     const structuredSession = await launchStructuredWorktreeSession({
       creationId,
       request: preparedRequest,
+      agentLaunchRoute,
       worktreeId: worktree.id,
       shouldActivateOnCompletion,
       fallbackStartupOpt,

@@ -14,6 +14,7 @@ import {
 } from './session-tabs-inventory'
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
+import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
@@ -115,13 +116,16 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
+      const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
       emit({
         type: 'snapshot',
-        ...projectSessionTabsForClient(
-          initial,
-          clientKind,
-          clientCapabilities,
-          isStructuredNativeChatEnabled(runtime)
+        ...withProofDelta(
+          projectSessionTabsForClient(
+            initial,
+            clientKind,
+            clientCapabilities,
+            isStructuredNativeChatEnabled(runtime)
+          )
         )
       })
       initialized = true
@@ -133,11 +137,13 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         if (snapshot.worktree === subscribedWorktree) {
           emit({
             type: 'updated',
-            ...projectSessionTabsForClient(
-              snapshot,
-              clientKind,
-              clientCapabilities,
-              isStructuredNativeChatEnabled(runtime)
+            ...withProofDelta(
+              projectSessionTabsForClient(
+                snapshot,
+                clientKind,
+                clientCapabilities,
+                isStructuredNativeChatEnabled(runtime)
+              )
             )
           })
         }

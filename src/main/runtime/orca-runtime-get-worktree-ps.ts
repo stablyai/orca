@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner } from './orca-runtime-structured-agent-session-recover-tui-owner'
 import { DEFAULT_WORKTREE_PS_LIMIT } from './orca-runtime-postlude'
 import type { RuntimeWorktreePsResult } from '../../shared/runtime-types'
@@ -102,11 +103,14 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       summaries,
       pathIndex: runtimeWorktreeSummaryPathIndex,
       missingWorktreeIds: missingRuntimeWorktreeIds,
-      mirroredWorktreeIdByTabId,
-      connectedPtyEvidence,
       workingTerminalEvidenceByWorktreeId,
-      retainedSnapshots: this.agentRows.values(),
-      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      rowSources: collectRuntimeWorktreeAgentSources({
+        mirroredWorktreeIdByTabId,
+        connectedPtyEvidence,
+        retainedSnapshots: this.agentRows.values(),
+        // Structured sessions are in here too: the host publishes them into the same store.
+        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
+      }),
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
@@ -167,6 +171,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
           firstWorkRenameDeps(this.requireStore(), this)
         )
       },
+      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
       handoffTransport: this.createStructuredAgentSessionHandoffTransport()
     })
   }

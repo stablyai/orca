@@ -81,3 +81,6 @@ relay_gce_cells = {
 }
 
 relay_region_rehome_source_cell_ids = ["staging-gce-c2", "staging-gce-c3"]
+
+# Push is currently provisioned only in production.
+push_gateway_enabled = false

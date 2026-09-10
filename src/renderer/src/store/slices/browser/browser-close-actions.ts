@@ -13,6 +13,7 @@ import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-clos
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
 import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
+import { releaseBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 
 export function createBrowserCloseActions(
   set: BrowserSliceSet,
@@ -28,6 +29,7 @@ export function createBrowserCloseActions(
       // grant is the only authority the preview scheme honors — a closed document must stop being
       // readable, and it must stop being readable even if the reducer bails out below.
       let docPageIdsToRelease: string[] = []
+      let closedPagesForMountRelease: string[] = []
       let activeBrowserWorktreeIdToNotify: string | null = null
       set((s) => {
         let owningWorktreeId: string | null = null
@@ -49,6 +51,7 @@ export function createBrowserCloseActions(
         }
 
         const closedPages = s.browserPagesByWorkspace[tabId] ?? []
+        closedPagesForMountRelease = closedPages.map((page) => page.id)
         const nextBrowserPagesByWorkspace = { ...s.browserPagesByWorkspace }
         delete nextBrowserPagesByWorkspace[tabId]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
@@ -135,16 +138,17 @@ export function createBrowserCloseActions(
         }
         delete nextRecentlyClosedBrowserPagesByWorkspace[tabId]
 
-        const nextPendingAddressBarFocusByPageId = Object.fromEntries(
-          Object.entries(s.pendingAddressBarFocusByPageId).filter(
-            ([pageId]) => !closedPages.some((page) => page.id === pageId)
-          )
+        // Why omit rather than rebuild: only the closed ids can match, so this touches the
+        // closed pages instead of every pending entry and keeps the record identity when none did.
+        const closedPageIds = closedPages.map((page) => page.id)
+        const nextPendingAddressBarFocusByPageId = omitRecordKeys(
+          s.pendingAddressBarFocusByPageId,
+          closedPageIds
         )
-        const nextPendingAddressBarFocusByTabId = Object.fromEntries(
-          Object.entries(s.pendingAddressBarFocusByTabId).filter(
-            ([focusId]) => focusId !== tabId && !closedPages.some((page) => page.id === focusId)
-          )
-        )
+        const nextPendingAddressBarFocusByTabId = omitRecordKeys(s.pendingAddressBarFocusByTabId, [
+          ...closedPageIds,
+          tabId
+        ])
 
         return {
           browserTabsByWorktree: nextBrowserTabsByWorktree,
@@ -178,6 +182,9 @@ export function createBrowserCloseActions(
 
       for (const docPageId of docPageIdsToRelease) {
         releaseDocPreviewGrant(docPageId)
+      }
+      for (const pageId of closedPagesForMountRelease) {
+        releaseBrowserPageMount(pageId)
       }
 
       for (const tabs of Object.values(get().unifiedTabsByWorktree)) {

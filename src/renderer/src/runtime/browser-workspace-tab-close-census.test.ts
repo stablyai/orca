@@ -49,36 +49,12 @@ const BROWSER_WORKSPACE_CLOSE_SITES: {
     why: 'Passes the local floating-panel close action through its controller.'
   },
   {
-    path: 'src/renderer/src/components/tab-group/useTabGroupTabCloseCommands.ts',
-    closeBrowserTabMentions: 4,
-    reasonCarryingCloseCalls: 1,
-    planReasonForwardings: 1,
-    routesThroughPlan: true,
-    why: 'closeBrowserItem, shared by the split-pane strip X and bulk close commands.'
-  },
-  {
     path: 'src/renderer/src/components/use-terminal-bulk-close-actions.ts',
     closeBrowserTabMentions: 3,
     reasonCarryingCloseCalls: 1,
     planReasonForwardings: 1,
     routesThroughPlan: true,
     why: 'Bulk terminal-tab teardown plans browser ownership before local cleanup.'
-  },
-  {
-    path: 'src/renderer/src/components/use-terminal-close-actions.ts',
-    closeBrowserTabMentions: 4,
-    reasonCarryingCloseCalls: 2,
-    planReasonForwardings: 1,
-    routesThroughPlan: true,
-    why: 'Terminal close callbacks route browser ownership through the shared plan.'
-  },
-  {
-    path: 'src/renderer/src/components/use-terminal-keyboard-shortcuts.ts',
-    closeBrowserTabMentions: 2,
-    reasonCarryingCloseCalls: 0,
-    planReasonForwardings: 0,
-    routesThroughPlan: false,
-    why: 'Keyboard shortcut wiring forwards the local close action.'
   },
   {
     path: 'src/renderer/src/components/use-terminal-workspace-store-bindings.ts',
@@ -105,12 +81,12 @@ const BROWSER_WORKSPACE_CLOSE_SITES: {
     why: 'Host session-tab requests are applied locally without echo.'
   },
   {
-    path: 'src/renderer/src/hooks/ipc-events/tab-lifecycle-ipc-bridge.ts',
+    path: 'src/renderer/src/lib/workspace-browser-tab-close.ts',
     closeBrowserTabMentions: 2,
     reasonCarryingCloseCalls: 1,
     planReasonForwardings: 1,
     routesThroughPlan: true,
-    why: 'The local menu close routes through the shared ownership plan; host fallback has no owner.'
+    why: 'All workspace browser teardown funnels through the ownership plan before local cleanup.'
   },
   {
     path: 'src/renderer/src/runtime/browser-workspace-tab-close.ts',

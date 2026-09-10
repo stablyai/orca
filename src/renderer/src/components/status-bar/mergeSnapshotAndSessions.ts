@@ -35,7 +35,10 @@ import type {
   UnifiedSessionRow,
   UnifiedWorktreeRow
 } from './resource-usage-merge-types'
-import { buildResourceSessionBindingIndex } from './resource-session-bindings'
+import {
+  buildResourceSessionBindingIndex,
+  type ResourceSessionBindingIndex
+} from './resource-session-bindings'
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -67,13 +70,13 @@ function parsePaneKey(paneKey: string | null): { tabId: string; leafId: string }
 function resolveSnapshotSessionLabel(
   session: SessionMemory,
   worktreeId: string,
-  ctx: MergeContext
+  index: ResourceSessionBindingIndex
 ): string {
   const parsed = parsePaneKey(session.paneKey)
   if (parsed) {
-    const tabs = ctx.tabsByWorktree[worktreeId] ?? []
-    const tabIndex = tabs.findIndex((t) => t.id === parsed.tabId)
-    const tab = tabIndex !== -1 ? tabs[tabIndex] : undefined
+    const match = index.tabsByIdByWorktree.get(worktreeId)?.get(parsed.tabId)
+    const tab = match?.tab
+    const tabIndex = match?.index ?? -1
     if (tab) {
       const custom = tab.customTitle?.trim()
       if (custom) {
@@ -93,12 +96,11 @@ function resolveDaemonSessionLabel(
   session: DaemonSession,
   resolvedWorktreeId: string | null,
   tabId: string | null,
-  ctx: MergeContext
+  ctx: MergeContext,
+  index: ResourceSessionBindingIndex
 ): string {
   if (tabId && resolvedWorktreeId) {
-    const tabs = ctx.tabsByWorktree[resolvedWorktreeId] ?? []
-    const tabIndex = tabs.findIndex((t) => t.id === tabId)
-    const tab = tabIndex !== -1 ? tabs[tabIndex] : undefined
+    const tab = index.tabsByIdByWorktree.get(resolvedWorktreeId)?.get(tabId)?.tab
     if (tab) {
       const custom = tab.customTitle?.trim()
       if (custom) {
@@ -140,6 +142,7 @@ export function mergeSnapshotAndSessions(
   ctx: MergeContext
 ): UnifiedProjectGroup[] {
   const repos = new Map<string, UnifiedProjectGroup>()
+  const worktreeRowsByRepo = new Map<string, Map<string, UnifiedWorktreeRow>>()
   const seenSessionIds = new Set<string>()
   // Why: pre-build O(1) lookup indices once per merge. This includes live
   // ptyIdsByTabId plus deferred-reattach wake hints, so restored inactive
@@ -184,6 +187,7 @@ export function mergeSnapshotAndSessions(
       worktrees: []
     }
     repos.set(repoId, next)
+    worktreeRowsByRepo.set(repoId, new Map())
     return next
   }
 
@@ -191,7 +195,15 @@ export function mergeSnapshotAndSessions(
     repo: UnifiedProjectGroup,
     worktreeId: string
   ): UnifiedWorktreeRow | undefined {
-    return repo.worktrees.find((w) => w.worktreeId === worktreeId)
+    return worktreeRowsByRepo.get(repo.repoId)?.get(worktreeId)
+  }
+
+  function appendWorktreeRow(repo: UnifiedProjectGroup, row: UnifiedWorktreeRow): void {
+    repo.worktrees.push(row)
+    const rows = worktreeRowsByRepo.get(repo.repoId)!
+    if (!rows.has(row.worktreeId)) {
+      rows.set(row.worktreeId, row)
+    }
   }
 
   // ── Step 1: ingest snapshot worktrees as the local-truth foundation.
@@ -210,7 +222,7 @@ export function mergeSnapshotAndSessions(
           sessionId: s.sessionId,
           paneKey: s.paneKey,
           pid: s.pid,
-          label: resolveSnapshotSessionLabel(s, wt.worktreeId, ctx),
+          label: resolveSnapshotSessionLabel(s, wt.worktreeId, index),
           bound: ctx.workspaceSessionReady && boundPtyIds.has(s.sessionId),
           agentOwnership: ownershipBySessionId.get(s.sessionId) ?? 'unknown',
           tabId,
@@ -219,7 +231,7 @@ export function mergeSnapshotAndSessions(
           hasLocalSamples: true
         }
       })
-      repo.worktrees.push({
+      appendWorktreeRow(repo, {
         worktreeId: wt.worktreeId,
         worktreeName: wt.worktreeName,
         repoId: wt.repoId,
@@ -291,14 +303,14 @@ export function mergeSnapshotAndSessions(
         sessions: [],
         browsers: []
       }
-      repo.worktrees.push(row)
+      appendWorktreeRow(repo, row)
     }
 
     row.sessions.push({
       sessionId: session.id,
       paneKey: null,
       pid: 0,
-      label: resolveDaemonSessionLabel(session, worktreeId, tabId, ctx),
+      label: resolveDaemonSessionLabel(session, worktreeId, tabId, ctx, index),
       bound: ctx.workspaceSessionReady && boundPtyIds.has(session.id),
       agentOwnership: session.agentOwnership,
       tabId,
@@ -331,7 +343,7 @@ export function mergeSnapshotAndSessions(
         sessions: [],
         browsers: []
       }
-      repo.worktrees.push(row)
+      appendWorktreeRow(repo, row)
     }
     row.browsers = browsers
   }

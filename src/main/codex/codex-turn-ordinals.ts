@@ -14,15 +14,10 @@ export class CodexTurnOrdinals {
     { assigned: Map<string, number>; next: number; active: boolean }
   >()
   private retainedBytes = 0
+  private readonly forgottenTurns = new Set<string>()
 
   get forgottenTurnCount(): number {
-    let count = 0
-    for (const turn of this.turns.values()) {
-      if (!turn.active) {
-        count += 1
-      }
-    }
-    return count
+    return this.forgottenTurns.size
   }
 
   get bytes(): number {
@@ -48,12 +43,13 @@ export class CodexTurnOrdinals {
 
   private trimForgotten(): void {
     while (this.forgottenTurnCount > MAX_CODEX_TURN_ORDINAL_ENTRIES) {
-      const oldest = [...this.turns.entries()].find(([, turn]) => !turn.active)?.[0]
+      const oldest = this.forgottenTurns.values().next().value
       if (!oldest) {
         break
       }
       const removed = this.turns.get(oldest)
       this.turns.delete(oldest)
+      this.forgottenTurns.delete(oldest)
       if (removed) {
         this.retainedBytes = Math.max(
           0,
@@ -68,7 +64,7 @@ export class CodexTurnOrdinals {
   private trimBytes(currentTurnKey: string): void {
     this.trimForgotten()
     while (this.retainedBytes > MAX_CODEX_TURN_ORDINAL_BYTES) {
-      const forgotten = [...this.turns.entries()].find(([, turn]) => !turn.active)?.[0]
+      const forgotten = this.forgottenTurns.values().next().value
       const oldest = forgotten ?? this.turns.keys().next().value
       if (typeof oldest !== 'string') {
         break
@@ -90,6 +86,7 @@ export class CodexTurnOrdinals {
         break
       }
       this.turns.delete(oldest)
+      this.forgottenTurns.delete(oldest)
       this.retainedBytes = Math.max(
         0,
         this.retainedBytes -
@@ -112,6 +109,7 @@ export class CodexTurnOrdinals {
         this.turns.set(turnKey, turn)
       }
       turn.active = true
+      this.forgottenTurns.delete(turnKey)
     }
     const itemKey = this.keyPart(codexItemId)
     const existing = turn.assigned.get(itemKey)
@@ -136,6 +134,8 @@ export class CodexTurnOrdinals {
       )
       turn.assigned = new Map()
       turn.active = false
+      this.forgottenTurns.delete(turnKey)
+      this.forgottenTurns.add(turnKey)
       this.retainedBytes = Math.max(0, this.retainedBytes - assignedBytes)
       this.turns.delete(turnKey)
       this.turns.set(turnKey, turn)

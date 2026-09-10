@@ -65,6 +65,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
 
       const db = runtime.getOrchestrationDb()
       db.createRemoteDispatchAttachment({
+        runId: params.runId,
         dispatchId: params.dispatchId,
         taskId: params.taskId,
         homePeerFingerprint: orchestrationMutation.callerFingerprint,

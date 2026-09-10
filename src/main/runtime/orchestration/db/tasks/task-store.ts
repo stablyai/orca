@@ -1,7 +1,6 @@
 import type Database from '../../../../sqlite/sync-database'
 import type { TaskStatus, TaskRow } from '../../types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration-task-display'
-import { LEGACY_RUN_ID } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { TaskRuntimeLineageRow } from '../run-list-page'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -25,7 +24,10 @@ export function createTask(
     runId?: string
   }
 ): TaskRow {
-  const runId = task.runId ?? LEGACY_RUN_ID
+  const runId = task.runId
+  if (!runId) {
+    throw new Error('Run is required')
+  }
   this.requireRun(runId)
   if (task.parentId) {
     const parent = this.getTask(task.parentId)

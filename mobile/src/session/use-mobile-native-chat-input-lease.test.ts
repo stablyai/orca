@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it } from 'vitest'
-import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  useMobileNativeChatInputLease,
+  useSettledMobileNativeChatInputLock
+} from './use-mobile-native-chat-input-lease'
 
 type Lease = ReturnType<typeof useMobileNativeChatInputLease>
 
@@ -59,5 +62,42 @@ describe('useMobileNativeChatInputLease', () => {
 
     act(() => lease?.markReady('other'))
     expect(lease?.clear()).toBe(true)
+  })
+})
+
+describe('useSettledMobileNativeChatInputLock', () => {
+  let renderer: ReactTestRenderer | null = null
+  let settled: ReturnType<typeof useSettledMobileNativeChatInputLock> | undefined
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  function Harness({ reason }: { reason: 'waiting' | 'disconnected' | null }): null {
+    settled = useSettledMobileNativeChatInputLock(reason)
+    return null
+  }
+
+  it('holds each edge until the lease has stopped flapping', () => {
+    vi.useFakeTimers()
+    act(() => {
+      renderer = create(createElement(Harness, { reason: 'waiting' }))
+    })
+    expect(settled).toBeNull()
+    act(() => vi.advanceTimersByTime(600))
+    expect(settled).toBe('waiting')
+
+    // A brief unlock that reverts inside the settle window never reaches the composer.
+    act(() => renderer?.update(createElement(Harness, { reason: null })))
+    act(() => vi.advanceTimersByTime(300))
+    act(() => renderer?.update(createElement(Harness, { reason: 'disconnected' })))
+    act(() => vi.advanceTimersByTime(600))
+    expect(settled).toBe('disconnected')
+
+    act(() => renderer?.update(createElement(Harness, { reason: null })))
+    act(() => vi.advanceTimersByTime(600))
+    expect(settled).toBeNull()
   })
 })

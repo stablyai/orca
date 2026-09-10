@@ -25,19 +25,23 @@ export function countDiffLines(diff: string): { additions: number; deletions: nu
   // diff line `---<content>`, colliding with the `--- a/file` header — so it must
   // be counted once inside a hunk, not skipped.
   let inHunk = false
-  for (const line of diff.split('\n')) {
-    if (line.startsWith('@@')) {
+  let cursor = 0
+  while (cursor < diff.length) {
+    if (diff.startsWith('@@', cursor)) {
       inHunk = true
-      continue
+    } else if (inHunk) {
+      const prefix = diff.charCodeAt(cursor)
+      if (prefix === 43) {
+        additions += 1
+      } else if (prefix === 45) {
+        deletions += 1
+      }
     }
-    if (!inHunk) {
-      continue
+    const newline = diff.indexOf('\n', cursor)
+    if (newline === -1) {
+      break
     }
-    if (line.startsWith('+')) {
-      additions += 1
-    } else if (line.startsWith('-')) {
-      deletions += 1
-    }
+    cursor = newline + 1
   }
   return { additions, deletions }
 }

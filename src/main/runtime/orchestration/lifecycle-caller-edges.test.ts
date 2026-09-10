@@ -109,7 +109,10 @@ describe('lifecycle graph against its callers', () => {
 
   it('settles a stopping worker whose PTY exits during the stop', () => {
     const database = createDatabase()
-    const task = database.createTask({ spec: 'stopping exited worker' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'stopping exited worker'
+    })
     const dispatchId = startWorker(database, task.id, 'stopping_exited')
 
     expect(database.beginWorkerStop(dispatchId, 'runtime_test').disposition).toBe('stopping')
@@ -127,9 +130,18 @@ describe('lifecycle graph against its callers', () => {
 
   it('still lets a coordinator reopen or overturn a settled Task', () => {
     const database = createDatabase()
-    const reopened = database.createTask({ spec: 'reopen me' })
-    const overturned = database.createTask({ spec: 'overturn me' })
-    const retried = database.createTask({ spec: 'retry me' })
+    const reopened = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'reopen me'
+    })
+    const overturned = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'overturn me'
+    })
+    const retried = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'retry me'
+    })
     database.updateTaskStatus(reopened.id, 'completed', 'first result')
     database.updateTaskStatus(overturned.id, 'completed', 'wrong result')
     database.updateTaskStatus(retried.id, 'failed', 'boom')

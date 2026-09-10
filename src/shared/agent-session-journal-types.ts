@@ -14,7 +14,18 @@ import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 export { type AgentType }
 
 /** Bump only alongside a read-time upcaster in `journal-row-schema.ts`. */
-export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 2
+/** v3 introduced the `turn` item. A row without one is still written at v2 so
+ *  an older host keeps reading it; the first v3 row latches that host read-only
+ *  instead of truncating the epoch. */
+export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 3
+export const AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION = 3
+const AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION = 2
+
+export function journalRowSchemaVersion(bodies: readonly { kind: string }[]): number {
+  return bodies.some((body) => body.kind === 'turn')
+    ? AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION
+    : AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION
+}
 
 /** Epoch-qualified position in one journal. `sequence` 0 means "before the first row". */
 export type AgentJournalCursor = {
@@ -145,15 +156,36 @@ export type AgentJournalQuestionItem = {
   resolution: AgentJournalResolution
 }
 
+export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
+  'running',
+  'completed',
+  'interrupted',
+  'unverifiable'
+] as const
+export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
+
+export type AgentJournalTurnLifecycle = {
+  turnId: string
+  state: AgentJournalTurnLifecycleState
+  /** Provider key of the user item that opened the turn; clients resolve a
+   *  submission alias through it. Absent on rows from older hosts. */
+  userItemId?: string
+  startedAt?: number
+  completedAt?: number
+  /** The provider's own measured turn duration, preferred over the host interval. */
+  durationMs?: number
+}
+
 export type AgentJournalStatusItem = {
   kind: 'status'
   text: string
   /** Optional display hints; unknown values retain the ordinary text fallback. */
   presentation?: string
   tone?: string
-  /** Durable root-turn lifecycle used by clients to expose cancellation only
-   *  while the provider can still accept it. */
-  turnLifecycle?: { turnId: string; state: 'running' | 'completed' }
+  /** Legacy carrier of a turn record: written by hosts before v3, and published
+   *  to clients that predate the `turn` item. New code reads turns through
+   *  `readAgentJournalTurn`, never this field. */
+  turnLifecycle?: AgentJournalTurnLifecycle
   /** Additive fallback for provider traffic this host cannot model yet. Older
    *  clients still render `text`; newer clients expose the bounded frame. */
   providerFrame?: {
@@ -163,6 +195,14 @@ export type AgentJournalStatusItem = {
   }
 }
 
+/** The durable record of one root turn. `running` exposes cancellation while
+ *  the provider can still accept it; the item is revised to a terminal state,
+ *  never tombstoned, so the endpoints survive. Timestamps are the execution
+ *  host's clock at provider-event receipt; `durationMs` is the provider's own
+ *  measurement. `unverifiable` carries no end: the host lost the child without
+ *  observing its exit. */
+export type AgentJournalTurnItem = { kind: 'turn' } & AgentJournalTurnLifecycle
+
 export type AgentJournalItemBody =
   | AgentJournalMessageItem
   | AgentJournalToolCallItem
@@ -170,6 +210,7 @@ export type AgentJournalItemBody =
   | AgentJournalApprovalItem
   | AgentJournalQuestionItem
   | AgentJournalStatusItem
+  | AgentJournalTurnItem
 
 /** One reduced timeline entry. `sequence` orders the list; `observedAt` is the
  *  provider's own clock and may sort earlier than a later sequence when the row
@@ -193,6 +234,7 @@ export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[n
  *  the turn reads as delivery unconfirmed, never as sent and never as failed. */
 export type AgentJournalSubmission = {
   clientMessageId: string
+  /** Execution fence of the latest dispatch attempt or recovery. */
   fence: number
   payloadFingerprint: string
   dispatchState: AgentJournalDispatchState
@@ -202,6 +244,9 @@ export type AgentJournalSubmission = {
   reason: string | null
   submittedAt: number
   resolvedAt: number | null
+  /** Set when crash reconciliation resolved the dispatch, not the provider. A live
+   *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
+  recovered?: true
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

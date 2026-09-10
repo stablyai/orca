@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from './assignment-store.js'
 import { openRelayDatabase, type RelayDatabase } from './database.js'
 import {
@@ -265,6 +265,91 @@ describePostgres('PostgreSQL regional rehoming', () => {
        WHERE user_id = ? AND completed_at IS NULL AND aborted_at IS NULL`,
       [context.identity.userId]
     )).toEqual([{ count: '1' }])
+  })
+
+  it('serializes an enable with a budget-exhausting failure without retries', async () => {
+    const context = await fixture()
+    const attempt = await context.store.claimRegionalRehome()
+    await context.store.recordRegionalRehomeDispatchFailure(attempt!.attemptId)
+    await context.store.recordRegionalRehomeDispatchFailure(attempt!.attemptId)
+    const locked = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const primaryTransaction = primary.transaction.bind(primary)
+    const secondaryTransaction = secondary.transaction.bind(secondary)
+    let enableTransactions = 0
+    let failureTransactions = 0
+    let enablePid = 0
+    let failurePid = 0
+    const enableSpy = vi.spyOn(primary, 'transaction').mockImplementation((operation, options) =>
+      primaryTransaction(async (transaction) => {
+        enableTransactions++
+        enablePid = Number((await transaction.query('SELECT pg_backend_pid() AS pid'))[0]!.pid)
+        return await operation({
+          dialect: 'postgres',
+          query: transaction.query.bind(transaction),
+          queryLocked: async (sql, params, lockOptions) => {
+            const rows = await transaction.queryLocked(sql, params, lockOptions)
+            if (sql.includes('FROM relay_region_rehome_control')) {
+              locked.resolve()
+              await release.promise
+            }
+            return rows
+          },
+          transaction: transaction.transaction.bind(transaction),
+          close: transaction.close.bind(transaction)
+        })
+      }, options)
+    )
+    const failureSpy = vi.spyOn(secondary, 'transaction').mockImplementation((operation, options) =>
+      secondaryTransaction(async (transaction) => {
+        failureTransactions++
+        failurePid = Number((await transaction.query('SELECT pg_backend_pid() AS pid'))[0]!.pid)
+        return await operation(transaction)
+      }, options)
+    )
+    const enable = context.store.applyRegionalRehomeControl({
+      expectedGeneration: 1,
+      enabled: true,
+      notBefore: context.now(),
+      ratePerMinute: 10,
+      preferenceMaxAgeMs: 24 * 60 * 60_000,
+      hostCooldownMs: 7 * 24 * 60 * 60_000,
+      drainGraceMs: 60_000
+    })
+    let failure: Promise<void> | undefined
+    let outcomes: PromiseSettledResult<unknown>[] = []
+    try {
+      await Promise.race([
+        locked.promise,
+        enable.then(() => {
+          throw new Error('enable completed before the control lock')
+        })
+      ])
+      failure = context.competingStore.recordRegionalRehomeDispatchFailure(attempt!.attemptId)
+      // Observe the actual PostgreSQL wait before letting enable acquire the worker row.
+      await vi.waitFor(async () => {
+        expect(failurePid).not.toBe(0)
+        const rows = await primary.query('SELECT pg_blocking_pids(?) AS blockers', [failurePid])
+        expect(rows[0]!.blockers).toContain(enablePid)
+      }, { interval: 10, timeout: 800 })
+    } finally {
+      release.resolve()
+      outcomes = await Promise.allSettled([enable, ...(failure ? [failure] : [])])
+      enableSpy.mockRestore()
+      failureSpy.mockRestore()
+    }
+    expect(outcomes.map((outcome) => outcome.status)).toEqual(['fulfilled', 'fulfilled'])
+    expect({ enableTransactions, failureTransactions }).toEqual({
+      enableTransactions: 1,
+      failureTransactions: 1
+    })
+    expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
+      generation: 2,
+      enabled: true
+    })
+    expect(await primary.query(
+      `SELECT consecutive_failures, paused_until FROM relay_region_rehome_worker_state`
+    )).toEqual([{ consecutive_failures: '1', paused_until: '0' }])
   })
 
   it('increments the disable generation once across competing directors', async () => {

@@ -62,7 +62,10 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
       worktreeId: WORKTREE,
       hostScope: { kind: 'local', hostId: 'local' }
     })
-    const task = db.createTask({ spec: 'stop a structured worker' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'stop a structured worker'
+    })
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

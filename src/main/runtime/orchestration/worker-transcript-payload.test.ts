@@ -146,6 +146,36 @@ describe('worker transcript wire bounds', () => {
     expect(result).toMatchObject({ limited: false, warnings: [] })
   })
 
+  it('keeps two roster ids sharing a 512-char prefix distinct', () => {
+    // The id is the roster key: a plain prefix clip would merge the two children.
+    const head = 'a'.repeat(512)
+    const result = boundWorkerTranscriptMessages([
+      {
+        id: 'message-1',
+        role: 'assistant',
+        timestamp: null,
+        source: 'transcript',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'g',
+            agents: [
+              { id: `${head}-one`, label: 'Audit', state: 'working' },
+              { id: `${head}-two`, label: 'Audit', state: 'working' }
+            ]
+          }
+        ]
+      }
+    ])
+
+    const block = result.messages[0]?.blocks[0]
+    if (block?.type !== 'subagent-group') {
+      throw new Error('expected a subagent-group block')
+    }
+    expect(block.agents[0]?.id).not.toBe(block.agents[1]?.id)
+    expect(block.agents[0]?.id).toHaveLength(512)
+  })
+
   it('keeps fallback identifiers stable without exposing the transcript path', () => {
     const transcriptPath = 'C:\\Users\\worker\\.codex\\session.jsonl'
     const message = {

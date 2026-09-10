@@ -33,6 +33,9 @@ export type RuntimeMobileSessionTerminalTab = {
 export type RuntimeMobileTerminalTheme = {
   mode: 'dark' | 'light'
   theme: TerminalColorOverrides
+  /** Optional desktop terminalMinimumContrastRatio override (#10754). Absent means the client picks
+   *  its own background-luminance floor, which is what pre-#10754 clients always do. */
+  minimumContrastRatio?: number
 }
 
 export type RuntimeMobileSessionMarkdownTab = {

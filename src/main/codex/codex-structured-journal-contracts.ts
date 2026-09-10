@@ -1,11 +1,16 @@
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexSubagentExecutions } from './codex-subagent-executions'
 
 export type CodexJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
+  /** Keys restored lifecycle rows to the live identity; without it history restore skips them. */
+  sessionId?: string
+  now?: () => number
   bindPromptItemId?: (journalItemId: string, threadId: string, promptKey: string) => void
   primaryThreadId?: () => string | null
+  subagentExecutions?: CodexSubagentExecutions
   coalesceMs?: number
   maxRetainedBytes?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']

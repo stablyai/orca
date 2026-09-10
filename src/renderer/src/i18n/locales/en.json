@@ -1508,7 +1508,7 @@
       "Landing": {
         "76a95f7f47": "Create",
         "f05d237049": "Add a project first",
-        "f9eaa9e12d": "Add Project",
+        "f9eaa9e12d": "Add project",
         "6ca6ff404e": "ORCA",
         "520304a067": "Orca logo",
         "ce44fad849": "Missing dependencies",
@@ -5312,14 +5312,12 @@
         "SidebarHeader": {
           "projects": "Projects",
           "spaces": "Spaces",
-          "25a95899c9": "Add Project",
           "92154beb7e": "New workspace",
           "49f62c5665": "Workspace board",
           "5c9c7c16aa": "Add a project to create workspaces",
-          "ca6f729da2": "New workspace ({{value0}})",
           "a30e34eb5c": "Close workspace board",
           "views": "Sidebar view",
-          "moreActions": "More workspace actions"
+          "addProject": "Add project"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -10508,7 +10506,20 @@
             "agent": "agent",
             "process": "process",
             "prompt": "prompt",
-            "stop": "stop"
+            "stop": "stop",
+            "minimumContrast": {
+              "title": "Color Contrast",
+              "description": "Improve text readability or preserve the colors chosen by terminal programs.",
+              "contrast": "contrast",
+              "minimum": "minimum",
+              "ratio": "ratio",
+              "readability": "readability",
+              "wcag": "wcag",
+              "powerline": "powerline",
+              "statusline": "statusline",
+              "dim": "dim",
+              "colors": "colors"
+            }
           },
           "windows": {
             "search": {
@@ -11833,6 +11844,20 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "contrast": {
+          "title": "Color Contrast",
+          "description": "Improve text readability or preserve the colors chosen by terminal programs.",
+          "ratio": "Contrast target",
+          "autoDescription": "Balances readability with your terminal theme. Recommended.",
+          "offDescription": "Keeps program colors unchanged, including dim text and Powerline separators.",
+          "customDescription": "Choose how much to increase contrast between text and its background.",
+          "auto": "Automatic",
+          "off": "Off",
+          "custom": "Custom",
+          "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
+          "subtle": "Subtle",
+          "strong": "Strong"
         }
       },
       "right": {
@@ -13632,7 +13657,7 @@
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",
-            "addProject": "Add a new project",
+            "addProject": "Add project",
             "label": "Project",
             "browse": "Browse projects",
             "listLabel": "Projects",
@@ -16237,8 +16262,6 @@
           "5651b216c6": "Unknown project",
           "22b22034bc": "Standalone terminal unavailable in Activity.",
           "afdc2139a8": "Agent terminal closed. Open a new terminal in this workspace to continue.",
-          "compactModeDescription": "Shows shorter thread rows with one-line titles and two-line status messages.",
-          "unreadOnlyDescription": "Filters the activity list to show only threads with unread updates.",
           "clearCompleted": "Clear completed",
           "none": "None",
           "search": "Search",
@@ -16258,7 +16281,9 @@
             "idle": "Idle",
             "unverifiable": "No recent update",
             "permission": "Needs attention"
-          }
+          },
+          "filtersSection": "Filters",
+          "viewSection": "View"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -16275,8 +16300,8 @@
           "dc708f3eff": "Close agents"
         },
         "ActivityScopeFilterControls": {
-          "resetScope": "Show all hosts and projects",
-          "hiddenCount": "{{value0}} hidden"
+          "hiddenCount": "{{value0}} hidden",
+          "resetScope": "Show all hosts and projects"
         },
         "ActivityThreadHoverCard": {
           "pathCopied": "Path copied to clipboard",
@@ -16987,6 +17012,35 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "taskList": {
+        "title": "Tasks",
+        "completed": "Completed",
+        "inProgress": "In progress",
+        "pending": "Pending",
+        "empty": "No tasks",
+        "progress": "{{completed}} of {{total}} tasks completed",
+        "added": "Added {{task}}",
+        "removed": "Removed {{task}}",
+        "started": "Started {{task}}",
+        "finished": "Completed {{task}}",
+        "reset": "Marked pending: {{task}}",
+        "updated": "Updated {{task}}",
+        "unchanged": "Tasks unchanged",
+        "showAll": "Full task list"
+      },
+      "turnDiff": {
+        "one": "1 changed file",
+        "many": "{{count}} changed files",
+        "partial": "Partial diff",
+        "recorded": "Totals from recorded edits in this turn."
+      },
+      "receipt": {
+        "unavailable": "Selected answer unavailable",
+        "cancelled": "Cancelled",
+        "resolved": "Resolved",
+        "resolver": "Answered on {{device}}",
+        "cancelledBy": "Cancelled on {{device}}"
+      },
       "notices": {
         "compaction": "Context compacted",
         "details": "Details",
@@ -17063,6 +17117,7 @@
         "result": "Result",
         "countOne": "1 tool call",
         "countN": "{{value0}} tool calls",
+        "moreCalls": "+{{value0}} more",
         "runningPreview": "Running {{preview}}",
         "runningCommand": "Running command",
         "runningNamedPreview": "Running {{toolName}} {{preview}}",
@@ -17102,8 +17157,34 @@
         "command": "Background command",
         "monitor": "Background monitor",
         "task": "Background task",
-        "runningList": "Running background tasks",
-        "detailsUnavailable": "Task details are unavailable for this session."
+        "detailsUnavailable": "Task details are unavailable for this session.",
+        "countAgentsOne": "1 agent",
+        "countAgentsMany": "{{value0}} agents",
+        "countShellOne": "1 shell",
+        "countShellMany": "{{value0}} shells",
+        "countShellCommandOne": "1 shell command",
+        "countMonitorsOne": "1 monitor",
+        "countMonitorsMany": "{{value0}} monitors",
+        "countWorkflowsOne": "1 workflow",
+        "countWorkflowsMany": "{{value0}} workflows",
+        "countTasksOne": "1 task",
+        "countTasksMany": "{{value0}} tasks",
+        "headerTotal": "{{value0}} background tasks",
+        "stateWorking": "working",
+        "stateMonitoring": "monitoring",
+        "stateWaiting": "waiting",
+        "stateBlocked": "blocked",
+        "stateDone": "done",
+        "stateIdle": "stopped",
+        "stateUnverifiable": "unverifiable",
+        "reasonWaiting": "needs approval",
+        "reasonUnverifiable": "no contact",
+        "reasonBlocked": "failed",
+        "groupAgents": "Agents",
+        "groupShell": "Shell",
+        "groupMonitors": "Monitors",
+        "groupWorkflows": "Workflows",
+        "groupTasks": "Tasks"
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {

@@ -27,9 +27,16 @@ export async function retryStructuredWorktreeLaunch(
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     return
   }
+  const { agentLaunchRoute } = request
+  // Why: this lane is entered only from an unconfirmed structured launch, so the persisted verdict
+  // is that route; any other one names no session to reconcile.
+  if (agentLaunchRoute !== 'structured-native-chat') {
+    return
+  }
   const structuredSession = await launchStructuredWorktreeSession({
     creationId,
     request,
+    agentLaunchRoute,
     worktreeId,
     shouldActivateOnCompletion: true,
     fallbackStartupOpt: buildWorktreeCreationStartupOpt(request, false),

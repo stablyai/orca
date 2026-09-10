@@ -51,11 +51,7 @@ export function useTaskPageRepoSelection(model: TaskPageStoreBindingsModel) {
     }
     const persisted = settings?.defaultRepoSelection
     if (Array.isArray(persisted)) {
-      const filtered = persisted.filter((id) => eligibleRepos.some((r) => r.id === id))
-      if (filtered.length > 0) {
-        return normalizeTaskRepoSelection(eligibleRepos, new Set(filtered))
-      }
-      // Why: empty after filtering (all persisted repos removed) falls through to the automatic default so the page never renders an empty selection.
+      return normalizeTaskRepoSelection(eligibleRepos, new Set(persisted))
     }
     return getDefaultTaskRepoSelection(eligibleRepos)
   }, [eligibleRepos, pageData.preselectedRepoId, settings?.defaultRepoSelection])

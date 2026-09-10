@@ -41,7 +41,7 @@ export function NativeChatCommandMetadata({
     return null
   }
   return (
-    <span className="ml-auto flex shrink-0 gap-1.5 font-mono text-[11px] text-muted-foreground">
+    <span className="flex shrink-0 gap-1.5 font-mono text-[11px] text-muted-foreground">
       {exitCode !== undefined ? (
         <span className={cn(exitCode !== 0 && 'text-destructive')}>
           {translate('components.native-chat.tool.exitCode', 'exit {{value0}}', {

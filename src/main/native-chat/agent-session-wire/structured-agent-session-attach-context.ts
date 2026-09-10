@@ -38,4 +38,8 @@ export type StructuredAgentSessionAttachContext = {
   reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
+  /** Paired with `sessions.delete` by `forgetStructuredAgentSession`; a failed attach that only
+   *  deleted would leave the store's row behind. */
+  forgetStatus: (sessionId: string) => void
+  publishStatus?: (sessionId: string) => void
 }

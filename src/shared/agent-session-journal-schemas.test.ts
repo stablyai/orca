@@ -33,7 +33,15 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
       },
       { type: 'tool-call', name: 'Read', input: { path: 'a' } },
       { type: 'tool-result', output: 'ok', isError: false },
-      { type: 'image-ref', path: '/tmp/a.png', alt: 'screenshot' }
+      { type: 'image-ref', path: '/tmp/a.png', alt: 'screenshot' },
+      {
+        type: 'subagent-group',
+        groupId: 'claude-session:turn-1',
+        agents: [
+          { id: 'task-1', label: 'Explore', state: 'working', startedAt: 1_000 },
+          { id: 'task-2', label: 'Review', state: 'completed', tokens: 42, settledAt: 2_000 }
+        ]
+      }
     ]
   },
   { kind: 'tool-call', name: 'Read', input: undefined, state: 'running' },
@@ -59,6 +67,16 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
     text: 'turn',
     turnLifecycle: { turnId: 'turn-1', state: 'running' },
     providerFrame: { provider: 'codex', kind: 'raw', payload: PAYLOAD }
+  },
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: { turnId: 'turn-2', state: 'completed', startedAt: 1_000, completedAt: 188_000 }
+  },
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: { turnId: 'turn-3', state: 'unverifiable', startedAt: 1_000 }
   }
 ]
 
@@ -141,6 +159,41 @@ describe('nested corruption is rejected', () => {
     expect(
       isAdmissibleAgentJournalItemBody({ kind: 'message', role: 'user', blocks: 'not-blocks' })
     ).toBe(false)
+  })
+
+  it('rejects a subagent roster whose entries are malformed', () => {
+    // A KNOWN block type stays a known block: it must not fall through to the
+    // forward-tolerant arm just because its payload is wrong.
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'subagent-group', groupId: 'g', agents: [{ id: 'a', label: 'x' }] }]
+      })
+    ).toBe(false)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'subagent-group', groupId: 'g', agents: 'not-a-roster' }]
+      })
+    ).toBe(false)
+  })
+
+  it('keeps a state string a newer build might write admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'g',
+            agents: [{ id: 'a', label: 'x', state: 'some-future-state' }]
+          }
+        ]
+      })
+    ).toBe(true)
   })
 
   it('rejects shallow render items and submissions', () => {
