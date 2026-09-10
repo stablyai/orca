@@ -6,6 +6,8 @@ export type OrchestrationMailboxDeliveryFlight = {
   submitEnter: (() => void) | null
   deferredUntilIdle: boolean
   idleObservedWhileDeferred: boolean
+  /** The incarnation that staged this flight, so retirement can name the rows it owns. */
+  processIncarnation?: string
 }
 
 export type ParkedOrchestrationMailboxDelivery = {

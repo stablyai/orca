@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { forwardRef, useImperativeHandle } from 'react'
+import { forwardRef, useImperativeHandle, useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
@@ -144,13 +144,18 @@ vi.mock('./NativeChatMessageList', () => ({
 vi.mock('./NativeChatComposer', () => ({
   NativeChatComposer: forwardRef((props: typeof mocks.composerProps, ref) => {
     mocks.composerProps = props
+    const fieldRef = useRef<HTMLTextAreaElement>(null)
     useImperativeHandle(ref, () => ({
-      focus: () => true,
+      // Real DOM focus lets the reveal-focus loop verify this pane owns focus.
+      focus: () => {
+        fieldRef.current?.focus()
+        return true
+      },
       insertTypedText: () => true,
       handlePasteEvent: mocks.handlePasteEvent,
       pasteFromClipboard: mocks.pasteFromClipboard
     }))
-    return <textarea data-testid="structured-composer" />
+    return <textarea ref={fieldRef} data-testid="structured-composer" />
   })
 }))
 vi.mock('./NativeChatEmptyState', () => ({ NativeChatEmptyState: () => null }))
@@ -192,6 +197,7 @@ describe('NativeChatStructuredSession', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-paste"
         sessionId="session-paste"
         target={{ kind: 'local' }}
@@ -210,6 +216,7 @@ describe('NativeChatStructuredSession', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-1"
         sessionId="session-1"
         target={{ kind: 'environment', environmentId: 'env-1' }}
@@ -231,6 +238,7 @@ describe('NativeChatStructuredSession', () => {
       render(
         <NativeChatStructuredSession
           isVisible
+          isFocusedGroup
           tabId="structured-tab-parity"
           sessionId="session-parity"
           target={{ kind: 'local' }}
@@ -249,6 +257,7 @@ describe('NativeChatStructuredSession', () => {
   const claudeSessionView = (tabId: string, sessionId: string) => (
     <NativeChatStructuredSession
       isVisible
+      isFocusedGroup
       tabId={tabId}
       sessionId={sessionId}
       target={{ kind: 'local' }}
@@ -423,6 +432,7 @@ describe('NativeChatStructuredSession', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-1"
         sessionId="session-1"
         target={{ kind: 'local' }}
@@ -488,6 +498,7 @@ describe('NativeChatStructuredSession', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-questions"
         sessionId="session-questions"
         target={{ kind: 'local' }}
@@ -546,6 +557,7 @@ describe('NativeChatStructuredSession', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-legacy-question"
         sessionId="session-legacy-question"
         target={{ kind: 'local' }}

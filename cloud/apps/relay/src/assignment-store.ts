@@ -362,6 +362,9 @@ export const REGIONAL_REHOME_QUARANTINE_FAILURES = 3
 export const REGIONAL_REHOME_QUARANTINE_MS = 15 * 60_000
 const REGIONAL_REHOME_QUARANTINE_EXCLUSION_LIMIT = 50
 const REGIONAL_REHOME_QUARANTINE_MEMORY_LIMIT = 1_000
+// Consecutive drain-dispatch failures that latch the durable control off. Any
+// drain receipt and any enable reset it, so it reads "dispatch is broken now".
+const REGIONAL_REHOME_FAILURE_BUDGET = 3
 const REGIONAL_REHOME_OBSERVATION_MS = 24 * 60 * 60_000
 const ASSIGNMENT_LOCK_RETRY_MAX_DELAY_MS = 50
 type AssignmentInventoryScope = 'none' | 'general' | 'all'
@@ -4992,6 +4995,20 @@ export class RelayAssignmentStore {
           now
         ]
       )
+      if (input.enabled) {
+        // A budget spent under a previous enable is not evidence about this one.
+        // Without this an old counter latches the fresh enable straight back off
+        // on its first transient failure.
+        await transaction.query(
+          `INSERT INTO relay_region_rehome_worker_state
+           (worker_id, next_dispatch_at, paused_until, consecutive_failures, updated_at)
+           VALUES ('global', 0, 0, 0, ?)
+           ON CONFLICT (worker_id) DO UPDATE
+             SET paused_until = 0, consecutive_failures = 0,
+                 updated_at = excluded.updated_at`,
+          [now]
+        )
+      }
       const updated = (
         await transaction.query(
           `SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'`
@@ -5940,7 +5957,11 @@ export class RelayAssignmentStore {
 
   async recordRegionalRehomeDispatchFailure(attemptId: string): Promise<void> {
     const now = this.now()
-    await this.database.transaction(async (transaction) => {
+    const disableLog = await this.database.transaction(async (transaction) => {
+      // Match claim and enable ordering before a spent budget updates the control.
+      await transaction.queryLocked(
+        `SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'`
+      )
       const worker = (
         await transaction.queryLocked(
           `SELECT * FROM relay_region_rehome_worker_state WHERE worker_id = 'global'`
@@ -5952,49 +5973,44 @@ export class RelayAssignmentStore {
           [attemptId]
         )
       )[0]
-      if (!worker || !attempt) return
-      await this.incrementRegionalRehomeWorkerFailure(transaction, worker, now)
+      if (!worker || !attempt) return null
+      return await this.incrementRegionalRehomeWorkerFailure(transaction, worker, now)
     })
+    // Logged after the commit so a rollback cannot fabricate the record.
+    if (disableLog) console.warn(JSON.stringify(disableLog))
   }
 
-  async recordRegionalRehomeWorkerFailure(): Promise<void> {
-    const now = this.now()
-    await this.database.transaction(async (transaction) => {
-      await transaction.query(
-        `INSERT INTO relay_region_rehome_worker_state
-         (worker_id, next_dispatch_at, paused_until, consecutive_failures, updated_at)
-         VALUES ('global', 0, 0, 0, ?)
-         ON CONFLICT (worker_id) DO NOTHING`,
-        [now]
-      )
-      const worker = (
-        await transaction.queryLocked(
-          `SELECT * FROM relay_region_rehome_worker_state WHERE worker_id = 'global'`
-        )
-      )[0]!
-      await this.incrementRegionalRehomeWorkerFailure(transaction, worker, now)
-    })
-  }
-
+  // Returns the durable disable this failure caused, for the caller to log once
+  // its transaction commits; null when the budget survives or was already spent.
   private async incrementRegionalRehomeWorkerFailure(
     transaction: RelayDatabase,
     worker: SqlRow,
     now: number
-  ): Promise<void> {
+  ): Promise<Record<string, string | number> | null> {
     const failures = integer(worker, 'consecutive_failures') + 1
+    const spent = failures >= REGIONAL_REHOME_FAILURE_BUDGET
     await transaction.query(
       `UPDATE relay_region_rehome_worker_state
        SET consecutive_failures = ?, paused_until = ?, updated_at = ?
        WHERE worker_id = 'global'`,
-      [failures, failures >= 3 ? now + 5 * 60_000 : 0, now]
+      [failures, spent ? now + 5 * 60_000 : 0, now]
     )
-    if (failures >= 3) {
-      await transaction.query(
-        `UPDATE relay_region_rehome_control
-         SET generation = generation + 1, enabled = 0, updated_at = ?
-         WHERE control_id = 'global' AND enabled = 1`,
-        [now]
-      )
+    if (!spent) return null
+    const disabled = await transaction.query(
+      `UPDATE relay_region_rehome_control
+       SET generation = generation + 1, enabled = 0, updated_at = ?
+       WHERE control_id = 'global' AND enabled = 1
+       RETURNING generation`,
+      [now]
+    )
+    // The disable is otherwise invisible: inspection only shows enabled=false and
+    // nothing records that the failure budget, not an operator, turned it off.
+    if (disabled.length === 0) return null
+    return {
+      event: 'orca_relay_regional_rehome_failure_budget_disabled',
+      controlGeneration: integer(disabled[0]!, 'generation'),
+      consecutiveFailures: failures,
+      now
     }
   }
 
