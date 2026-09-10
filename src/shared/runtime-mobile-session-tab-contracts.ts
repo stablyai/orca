@@ -103,6 +103,20 @@ export type RuntimeMobileSessionAgentTab = {
   isActive: boolean
 }
 
+const STRUCTURED_AGENT_SESSION_HOST_TAB_PREFIX = 'agent-session:'
+
+/** The id a structured chat is published under on the session-tab sync channel. */
+export function structuredAgentSessionHostTabId(sessionId: string): string {
+  return `${STRUCTURED_AGENT_SESSION_HOST_TAB_PREFIX}${sessionId}`
+}
+
+/** The session behind a host session-tab id, or null when the id names another tab kind. */
+export function structuredAgentSessionIdFromHostTabId(hostTabId: string): string | null {
+  return hostTabId.startsWith(STRUCTURED_AGENT_SESSION_HOST_TAB_PREFIX)
+    ? hostTabId.slice(STRUCTURED_AGENT_SESSION_HOST_TAB_PREFIX.length)
+    : null
+}
+
 export type RuntimeMobileSessionSnapshotTab =
   | RuntimeMobileSessionTerminalTab
   | RuntimeMobileSessionMarkdownTab

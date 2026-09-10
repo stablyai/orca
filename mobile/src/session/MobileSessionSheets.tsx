@@ -44,6 +44,8 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     browserActionTarget,
     setBrowserActionTarget,
     agentSessionActionTarget,
+    agentSessionRenameTarget,
+    setAgentSessionRenameTarget,
     setAgentSessionActionTarget,
     discardMarkdownTarget,
     setDiscardMarkdownTarget,
@@ -79,6 +81,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     handleCreateBrowser,
     handleBrowserNavigationCommand,
     handleRenameTerminal,
+    handleRenameAgentSessionTab,
     handleCloseTerminal,
     handleCloseSessionTab,
     bulkCloseActions,
@@ -266,10 +269,27 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
       <ActionSheetModal
         visible={agentSessionActionTarget != null}
         title={agentSessionActionTarget?.title || 'Chat'}
-        actions={closeWithBulkActions(agentSessionActionTarget, () =>
-          setAgentSessionActionTarget(null)
-        )}
+        actions={[
+          {
+            label: 'Rename',
+            closeBeforePress: true,
+            onPress: () => {
+              setAgentSessionRenameTarget(agentSessionActionTarget)
+              setAgentSessionActionTarget(null)
+            }
+          },
+          ...closeWithBulkActions(agentSessionActionTarget, () => setAgentSessionActionTarget(null))
+        ]}
         onClose={() => setAgentSessionActionTarget(null)}
+      />
+      <TextInputModal
+        visible={agentSessionRenameTarget != null}
+        title="Rename Chat"
+        defaultValue={agentSessionRenameTarget?.title || ''}
+        placeholder="Chat name"
+        allowEmpty
+        onSubmit={(value) => void handleRenameAgentSessionTab(value)}
+        onCancel={() => setAgentSessionRenameTarget(null)}
       />
       <ActionSheetModal
         visible={leaveDrafts != null}

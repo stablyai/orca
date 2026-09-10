@@ -1,7 +1,11 @@
 import { toast } from 'sonner'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeTerminalClose, RuntimeTerminalSplit } from '../../../shared/runtime-types'
+import type {
+  RuntimeSessionTabProps,
+  RuntimeTerminalClose,
+  RuntimeTerminalSplit
+} from '../../../shared/runtime-types'
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
 import { useAppStore } from '../store'
@@ -232,13 +236,9 @@ export async function updateWebRuntimePaneLayout(args: {
 }
 
 // Why: tab color/pin are host-authoritative; mirror the change so it persists (undefined field = leave as-is on host).
-export function setWebRuntimeTabProps(args: {
-  worktreeId: string
-  tabId: string
-  color?: string | null
-  isPinned?: boolean
-  viewMode?: 'terminal' | 'chat'
-}): boolean {
+export function setWebRuntimeTabProps(
+  args: { worktreeId: string; tabId: string } & RuntimeSessionTabProps
+): boolean {
   const environmentId =
     getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
@@ -261,6 +261,7 @@ export function setWebRuntimeTabProps(args: {
           tabId: hostTabId,
           ...(args.color !== undefined ? { color: args.color } : {}),
           ...(args.isPinned !== undefined ? { isPinned: args.isPinned } : {}),
+          ...(args.title !== undefined ? { title: args.title } : {}),
           ...(args.viewMode !== undefined ? { viewMode: args.viewMode } : {})
         },
         timeoutMs: 15_000

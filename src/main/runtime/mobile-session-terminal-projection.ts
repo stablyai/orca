@@ -8,6 +8,21 @@ import {
   isPersistedTerminalLeafActive
 } from './mobile-session-layout-projection'
 
+/** The name a headless terminal surface is published under: the user's, then whatever the
+ *  projection can derive. The single place that precedence is decided host-side. */
+export function resolveHeadlessTerminalTabTitle(
+  tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title' | 'defaultTitle'>,
+  fallback: string
+): string {
+  return (
+    tab.customTitle?.trim() ||
+    tab.generatedTitle?.trim() ||
+    tab.title?.trim() ||
+    tab.defaultTitle?.trim() ||
+    fallback
+  )
+}
+
 export function buildHeadlessMobileSessionTerminalTabs(
   worktreeId: string,
   persistedTabs: readonly TerminalTab[],
@@ -23,12 +38,7 @@ export function buildHeadlessMobileSessionTerminalTabs(
       }
       return leafIds.flatMap((leafId) => {
         const ptyId = layout?.ptyIdsByLeafId?.[leafId] ?? (leafIds.length === 1 ? tab.ptyId : null)
-        const title =
-          tab.customTitle?.trim() ||
-          tab.generatedTitle?.trim() ||
-          tab.title?.trim() ||
-          tab.defaultTitle?.trim() ||
-          `Terminal ${index + 1}`
+        const title = resolveHeadlessTerminalTabTitle(tab, `Terminal ${index + 1}`)
         return [
           {
             type: 'terminal' as const,

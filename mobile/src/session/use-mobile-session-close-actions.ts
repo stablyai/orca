@@ -1,4 +1,5 @@
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
+import { renameAgentSessionTab } from './mobile-agent-session-tab-rename'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 
 export function useMobileSessionCloseActions(scope: MobileSessionContentCreateActionsModel) {
@@ -19,6 +20,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     selectedSessionTabIdRef,
     renameTarget,
     setRenameTarget,
+    agentSessionRenameTarget,
+    setAgentSessionRenameTarget,
+    showToast,
     terminalRefs,
     initializedHandlesRef,
     activeHandleRef,
@@ -137,8 +141,35 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       // Close failed — keep the authoritative session snapshot visible.
     }
   }
+  async function handleRenameAgentSessionTab(value: string) {
+    const target = agentSessionRenameTarget
+    setAgentSessionRenameTarget(null)
+    if (!client || !target) {
+      return
+    }
+    const outcome = await renameAgentSessionTab({
+      client,
+      worktreeId,
+      target,
+      value,
+      tabs: sessionTabsRef.current
+    })
+    if (outcome.kind === 'renamed') {
+      sessionTabsRef.current = outcome.tabs
+      setSessionTabs(outcome.tabs)
+      return
+    }
+    showToast(
+      outcome.kind === 'unsupported'
+        ? 'Desktop update required to rename a chat'
+        : "Couldn't rename this chat",
+      1600
+    )
+  }
+
   return {
     handleRenameTerminal,
+    handleRenameAgentSessionTab,
     handleCloseTerminal,
     handleCloseSessionTab
   }

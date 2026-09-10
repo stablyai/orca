@@ -60,3 +60,51 @@ export function mirrorTabViewModeToHost(
     setWebRuntimeTabProps({ worktreeId, tabId, viewMode })
   )
 }
+
+// Why: every other tab kind has a host-owned rename channel — a terminal's goes through
+// `terminal.rename` on its pty handle — but a structured chat has no pty, so its name lived
+// only in this client's `customLabel` and never reached the phone, the web client, or a second
+// desktop. The chat tab is host-owned even on a local workspace (the renderer publishes no
+// agent-session tab; the host's copy is the only one a paired client sees), so the host must
+// hear the rename.
+export function mirrorTabCustomTitleToHost(
+  state: AppState,
+  tabId: string,
+  title: string | null
+): void {
+  const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+  if (!found || found.tab.contentType !== 'agent-session') {
+    return
+  }
+  const { worktreeId, tab } = found
+  if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
+    void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
+      setWebRuntimeTabProps({ worktreeId, tabId, title })
+    )
+    return
+  }
+  void setLocalStructuredSessionTabName(worktreeId, tab.entityId, title)
+}
+
+async function setLocalStructuredSessionTabName(
+  worktreeId: string,
+  sessionId: string,
+  title: string | null
+): Promise<void> {
+  const [{ callRuntimeRpc }, { toRuntimeWorktreeSelector }, { structuredAgentSessionHostTabId }] =
+    await Promise.all([
+      import('@/runtime/runtime-rpc-client'),
+      import('@/runtime/runtime-worktree-selector'),
+      import('../../../../../shared/runtime-mobile-session-tab-contracts')
+    ])
+  await callRuntimeRpc<{ updated: true }>({ kind: 'local' }, 'session.tabs.setTabProps', {
+    worktree: toRuntimeWorktreeSelector(worktreeId),
+    tabId: structuredAgentSessionHostTabId(sessionId),
+    title
+  }).catch((error) => {
+    console.warn(
+      '[tabs-host-mirroring] failed to publish the chat tab name:',
+      error instanceof Error ? error.message : String(error)
+    )
+  })
+}

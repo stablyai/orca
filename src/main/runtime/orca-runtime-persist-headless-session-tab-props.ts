@@ -3,20 +3,25 @@ import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './orca-runtime-cl
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
-  RuntimeMobileSessionTabsSnapshot
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeSessionTabProps
 } from '../../shared/runtime-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../shared/terminal-tab-types'
 import { cloneTerminalLayoutSnapshot } from './mobile-session-layout-projection'
+import { resolveHeadlessTerminalTabTitle } from './mobile-session-terminal-projection'
+import { defaultAgentChatLabel } from '../../shared/agent-session-chat-label'
+import { structuredAgentSessionIdFromHostTabId } from '../../shared/runtime-mobile-session-tab-contracts'
 
 export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWithCloseHeadlessMobileTerminalTab {
   protected persistHeadlessSessionTabProps(
     worktreeId: string,
     tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+    props: RuntimeSessionTabProps
   ): void {
+    const structuredSessionId = structuredAgentSessionIdFromHostTabId(tabId)
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
       return
@@ -34,6 +39,7 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
                 ...tab,
                 ...(props.color !== undefined ? { color: props.color } : {}),
                 ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
+                ...(props.title !== undefined ? { customTitle: props.title } : {}),
                 ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
               }
             : tab
@@ -41,17 +47,24 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
       }
     }
 
+    // A structured chat is addressed on the wire by its host tab id; its persisted unified
+    // row is keyed by the bare session id, so match both or the write lands nowhere.
+    const matchesUnifiedTab = (tab: { id: string; entityId: string }): boolean =>
+      tab.id === tabId ||
+      tab.entityId === tabId ||
+      (structuredSessionId !== null && tab.entityId === structuredSessionId)
     const unifiedTabs = session.unifiedTabs?.[worktreeId]
-    if (unifiedTabs?.some((tab) => tab.id === tabId || tab.entityId === tabId)) {
+    if (unifiedTabs?.some(matchesUnifiedTab)) {
       changed = true
       nextSession.unifiedTabs = {
         ...session.unifiedTabs,
         [worktreeId]: unifiedTabs.map((tab) =>
-          tab.id === tabId || tab.entityId === tabId
+          matchesUnifiedTab(tab)
             ? {
                 ...tab,
                 ...(props.color !== undefined ? { color: props.color } : {}),
-                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {})
+                ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
+                ...(props.title !== undefined ? { customLabel: props.title } : {})
               }
             : tab
         )
@@ -67,7 +80,7 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
   protected applyHeadlessSessionTabPropsToSnapshot(
     worktreeId: string,
     tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+    props: RuntimeSessionTabProps
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
@@ -79,10 +92,15 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
         return tab
       }
       changed = true
+      const title =
+        props.title === undefined
+          ? undefined
+          : this.resolveHeadlessSessionTabDisplayTitle(worktreeId, tab, props.title)
       return {
         ...tab,
         ...(props.color !== undefined ? { color: props.color } : {}),
         ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
+        ...(title !== undefined ? { title } : {}),
         ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
       }
     })
@@ -101,6 +119,31 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
 
   protected getMobileSessionTopLevelTabId(tab: RuntimeMobileSessionSnapshotTab): string {
     return tab.type === 'terminal' ? tab.parentTabId : tab.id
+  }
+
+  /** What a paired client should render after a rename: the user's name, else the name this
+   *  tab kind resolves to on its own. Clearing must not publish an empty label. */
+  protected resolveHeadlessSessionTabDisplayTitle(
+    worktreeId: string,
+    tab: RuntimeMobileSessionSnapshotTab,
+    title: string | null
+  ): string {
+    const named = title?.trim()
+    if (named) {
+      return named
+    }
+    if (tab.type === 'agent-session') {
+      return defaultAgentChatLabel(tab.agent)
+    }
+    if (tab.type !== 'terminal') {
+      return tab.title
+    }
+    const persisted = this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree?.[
+      worktreeId
+    ]?.find((candidate) => candidate.id === tab.parentTabId)
+    return persisted
+      ? resolveHeadlessTerminalTabTitle({ ...persisted, customTitle: null }, tab.title)
+      : tab.title
   }
 
   // Merge the client's pane structure into the persisted tab layout. PTY

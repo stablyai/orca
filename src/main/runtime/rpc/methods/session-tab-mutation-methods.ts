@@ -119,6 +119,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
         tabId: params.tabId,
         ...(params.color !== undefined ? { color: params.color } : {}),
         ...(params.isPinned !== undefined ? { isPinned: params.isPinned } : {}),
+        ...(params.title !== undefined ? { title: params.title } : {}),
         ...(params.viewMode !== undefined ? { viewMode: params.viewMode } : {})
       })
     }
