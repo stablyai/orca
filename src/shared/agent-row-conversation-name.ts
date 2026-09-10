@@ -1,11 +1,13 @@
 // Resolves the stable "conversation name" an agent row can show instead of the
 // live last-message preview. Sources, in the same precedence the tab bar uses
 // (tab-title-resolution.ts): manual rename → quick-command label → OpenCode's
-// semantic session title → Orca's generated title → the agent-set live title.
+// semantic session title → the AI Vault session title (the agent-side
+// `/rename` name) → Orca's generated title → the agent-set live title.
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
 import type { AgentType } from './agent-status-types'
+import type { AiVaultSessionTitle } from './ai-vault-session-title'
 import { isClaudeManagementTitle } from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { formatAgentTypeLabel } from './agent-type-label'
@@ -15,7 +17,7 @@ import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title' | 'defaultTitle'
+  'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
 >
 
 // Why: synthetic status titles ("Codex ready", "Cursor - action required") are
@@ -78,6 +80,30 @@ function isCwdLikeTitle(title: string): boolean {
   return !/\s/.test(title) && /[\\/]/.test(title)
 }
 
+/**
+ * Whether the tab's AI Vault session title belongs to THIS row.
+ *
+ * The title is stored per tab while the row is per pane: on a split tab it may
+ * name a sibling pane's session. A row proves ownership with its provider
+ * session id; rows without one (title-derived fallbacks) may only borrow the
+ * title on a single-pane tab, and only when the agent identity agrees.
+ */
+function aiVaultTitleOwnsRow(
+  title: AiVaultSessionTitle,
+  agentType: AgentType | null | undefined,
+  providerSessionId: string | null | undefined,
+  paneLiveTitle: string | null | undefined
+): boolean {
+  if (providerSessionId) {
+    return title.sessionId === providerSessionId
+  }
+  return paneLiveTitle === undefined && agentType === title.agent
+}
+
+/**
+ * The usable name inside an agent-set live title, or null when the title is
+ * pure status/identity/cwd noise and the caller should keep its own label.
+ */
 function conversationNameFromLiveTitle(
   liveTitle: string,
   agentType: AgentType | null | undefined,
@@ -119,7 +145,11 @@ export function getAgentRowConversationName(
   // this row's own pane title, or `null` when none resolves; `undefined` (a
   // single-pane tab) keeps the tab title. Tab-owned names above are unaffected:
   // the user gave those to the whole tab and they do not flip on focus.
-  paneLiveTitle?: string | null
+  paneLiveTitle?: string | null,
+  // Why: `aiVaultTitle` is tab-scoped, so a split tab's sibling session must
+  // not lend its name to this row. The row's provider session id proves which
+  // session the row belongs to.
+  providerSessionId?: string | null
 ): string | null {
   const customTitle = tab.customTitle?.trim()
   if (customTitle) {
@@ -133,6 +163,14 @@ export function getAgentRowConversationName(
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
+  }
+  const aiVaultTitle = tab.aiVaultTitle?.title.trim()
+  if (
+    aiVaultTitle &&
+    tab.aiVaultTitle &&
+    aiVaultTitleOwnsRow(tab.aiVaultTitle, agentType, providerSessionId, paneLiveTitle)
+  ) {
+    return aiVaultTitle
   }
   const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
   if (generatedTitle) {

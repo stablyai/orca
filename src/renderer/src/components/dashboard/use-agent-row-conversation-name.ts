@@ -9,6 +9,7 @@ type WorktreeTabs = NonNullable<AppState['tabsByWorktree'][string]>
 
 const tabIndexByTabs = new WeakMap<WorktreeTabs, ReadonlyMap<string, WorktreeTabs[number]>>()
 
+/** Looks a tab up in the per-array index, building the index on first use. */
 function getIndexedTab(
   tabs: WorktreeTabs | undefined,
   tabId: string
@@ -59,11 +60,15 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
   if (cannotOwnTabName) {
     return null
   }
+  // Why: the AI Vault title is tab-scoped, so split panes must prove the
+  // session is theirs before borrowing its name.
+  const providerSessionId = agent.entry.providerSession?.id ?? null
   // Why: retained row snapshots need a fallback after their live tab disappears.
   return getAgentRowConversationName(
     liveTab ?? agent.tab,
     agent.agentType,
     generatedTitlesEnabled,
-    paneLiveTitle
+    paneLiveTitle,
+    providerSessionId
   )
 }

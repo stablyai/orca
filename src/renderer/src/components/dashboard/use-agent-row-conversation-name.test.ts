@@ -264,4 +264,85 @@ describe('useAgentRowConversationName', () => {
     }
     expect(useAgentRowConversationName(agent)).toBe('Fix intake flow')
   })
+
+  describe('AI Vault session titles', () => {
+    /** A Codex row whose entry optionally carries a provider session id. */
+    function codexAgent(providerSessionId?: string): DashboardAgentRow {
+      return makeAgent({
+        agentType: 'codex',
+        entry: {
+          prompt: 'fix the sidebar',
+          ...(providerSessionId ? { providerSession: { id: providerSessionId } } : {})
+        },
+        tab: { id: 'tab-1', worktreeId: 'wt-1', customTitle: null, title: 'Codex ready' }
+      } as Partial<DashboardAgentRow>)
+    }
+
+    it('follows an agent-side session rename without a manual tab rename', () => {
+      // Why: Codex `/rename` updates session_index.jsonl; ai-vault title sync
+      // writes it onto the live tab, and the row must read that live value.
+      storeState.current = {
+        settings: {},
+        tabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'tab-1',
+              worktreeId: 'wt-1',
+              customTitle: null,
+              title: 'Codex ready',
+              aiVaultTitle: { agent: 'codex', sessionId: 'sess-1', title: 'orca sidebar rename' }
+            }
+          ]
+        }
+      }
+      expect(useAgentRowConversationName(codexAgent('sess-1'))).toBe('orca sidebar rename')
+    })
+
+    it('updates when the synced title changes on the live tab', () => {
+      /** Points the live store tab's synced AI Vault title at a new name. */
+      const writeStore = (title: string): void => {
+        storeState.current = {
+          settings: {},
+          tabsByWorktree: {
+            'wt-1': [
+              {
+                id: 'tab-1',
+                worktreeId: 'wt-1',
+                customTitle: null,
+                title: 'Codex ready',
+                aiVaultTitle: { agent: 'codex', sessionId: 'sess-1', title }
+              }
+            ]
+          }
+        }
+      }
+      writeStore('first name')
+      expect(useAgentRowConversationName(codexAgent('sess-1'))).toBe('first name')
+      writeStore('renamed by /rename')
+      expect(useAgentRowConversationName(codexAgent('sess-1'))).toBe('renamed by /rename')
+    })
+
+    it('keeps a different session from lending its name to this row', () => {
+      storeState.current = {
+        settings: {},
+        tabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'tab-1',
+              worktreeId: 'wt-1',
+              customTitle: null,
+              title: 'Codex ready',
+              aiVaultTitle: { agent: 'codex', sessionId: 'sess-other', title: 'Sibling name' }
+            }
+          ]
+        },
+        // Why: a split tab makes pane-live-title resolution return null for an
+        // unattributed pane, proving ownership matters even without a live title.
+        terminalLayoutsByTabId: {
+          'tab-1': { root: { type: 'split' } }
+        }
+      }
+      expect(useAgentRowConversationName(codexAgent('sess-1'))).toBeNull()
+    })
+  })
 })
