@@ -15,7 +15,7 @@ import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title' | 'defaultTitle'
+  'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
 >
 
 // Why: synthetic status titles ("Codex ready", "Cursor - action required") are
@@ -133,6 +133,12 @@ export function getAgentRowConversationName(
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
+  }
+  // The provider's own name for this session, read off its transcript. Placed exactly where the tab
+  // strip places it (`resolveUnifiedTabLabel`), so a row and its tab cannot disagree.
+  const aiVaultTitle = tab.aiVaultTitle?.title.trim()
+  if (aiVaultTitle) {
+    return aiVaultTitle
   }
   const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
   if (generatedTitle) {
