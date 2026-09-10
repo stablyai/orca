@@ -6,6 +6,7 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import {
   readClaudeCurrentModel,
+  readClaudeListedModelIds,
   readClaudeModelEffortLevels,
   readClaudeSettingsEffort
 } from './claude-structured-session-options'
@@ -64,6 +65,16 @@ export async function setClaudeStructuredOption(
       throw new AgentSessionOptionRejectedError(
         `claude model ${modelId} does not accept effort ${input.value}`
       )
+    }
+  }
+  // set_model resolves for a model the provider never lists and the session then
+  // fails every turn with zero tokens, so the acceptance proves nothing and only
+  // the catalog does. Restore replays a pick the provider may since have retired,
+  // which reaches here with no user error at all.
+  if (input.key === 'model') {
+    const listed = await readClaudeListedModelIds(session, timeoutMs)
+    if (listed && !listed.has(input.value)) {
+      throw new AgentSessionOptionRejectedError(`claude does not offer model ${input.value}`)
     }
   }
   const modelWasConfirmed = readClaudeCurrentModel(session).confirmed

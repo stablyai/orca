@@ -430,8 +430,11 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     await expect(
       adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'sonnet', fence: 7 })
     ).resolves.toEqual({ model: 'sonnet' })
-    expect(claude.connections[0].calls.slice(-2)).toEqual([
+    // The model write pre-flights the catalog first; this CLI lists nothing, which
+    // identifies no model and so refuses none.
+    expect(claude.connections[0].calls.slice(-3)).toEqual([
       { subtype: 'interrupt', params: {} },
+      { subtype: 'list_models' },
       { subtype: 'set_model', params: { model: 'sonnet' } }
     ])
 

@@ -149,6 +149,27 @@ export async function readClaudeModelEffortLevels(
   }
 }
 
+/**
+ * Every id the catalog answers to — alias and resolved id alike, so a pick stored
+ * as either one matches. Null when nothing identified a model: an absent, failed
+ * or empty `list_models` is not evidence against a model, or a live CLI that
+ * predates it would have every model refused under it.
+ */
+export async function readClaudeListedModelIds(
+  session: ClaudeSession,
+  timeoutMs: number | undefined
+): Promise<ReadonlySet<string> | null> {
+  const catalog = await session.connection.supportedModels({ timeoutMs }).catch(() => null)
+  const models = listedModels(catalog ? { models: catalog } : null)
+  return models.length > 0
+    ? new Set(
+        models.flatMap((model) =>
+          model.resolvedModel ? [model.id, model.resolvedModel] : [model.id]
+        )
+      )
+    : null
+}
+
 export async function readClaudeStructuredSessionOptions(
   session: ClaudeSession,
   timeoutMs: number | undefined
