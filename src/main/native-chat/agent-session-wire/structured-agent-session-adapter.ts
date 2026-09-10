@@ -109,6 +109,8 @@ export type StructuredAgentSessionLifecycleEvent = {
   cause: 'unexpected-exit' | 'requested-close'
   fence: number
   acquisitionGeneration: string
+  /** Host receipt of the child exit, retained across settlement retries. */
+  observedAt?: number
   /** Translator could not admit terminal rows; host recovery must append its bounded fallback. */
   settlementRetryRequired?: boolean
 }

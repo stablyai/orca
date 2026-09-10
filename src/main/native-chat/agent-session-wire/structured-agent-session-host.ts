@@ -33,10 +33,7 @@ import type {
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { listStructuredAgentSessionTabs } from './structured-agent-session-host-tabs'
 import {
-  cancelStructuredAgentSessionTurn,
-  readStructuredAgentSessionOptions,
-  respondToStructuredAgentSessionPrompt,
-  setStructuredAgentSessionOption,
+  structuredAgentSessionMutationDelegates,
   settleStructuredAgentSessionLateDispatch,
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-host-mutations'
@@ -274,32 +271,17 @@ export class StructuredAgentSessionHost {
 
   waitForSendSettlement = this.clientDelivery.waitForSendSettlement
 
-  cancel = (
-    caller: StructuredAgentSessionCaller,
-    params: Parameters<typeof cancelStructuredAgentSessionTurn>[2]
-  ): ReturnType<typeof cancelStructuredAgentSessionTurn> =>
-    cancelStructuredAgentSessionTurn(this.mutationContext(), caller, params)
-
-  respondToPrompt = (
-    caller: StructuredAgentSessionCaller,
-    params: Parameters<typeof respondToStructuredAgentSessionPrompt>[2]
-  ): ReturnType<typeof respondToStructuredAgentSessionPrompt> =>
-    respondToStructuredAgentSessionPrompt(this.mutationContext(), caller, params)
-
-  setOption = (
-    caller: StructuredAgentSessionCaller,
-    params: Parameters<typeof setStructuredAgentSessionOption>[2]
-  ): ReturnType<typeof setStructuredAgentSessionOption> =>
-    setStructuredAgentSessionOption(this.mutationContext(), caller, params)
+  private mutations = structuredAgentSessionMutationDelegates(() => this.mutationContext())
+  cancel = this.mutations.cancel
+  respondToPrompt = this.mutations.respondToPrompt
+  setOption = this.mutations.setOption
+  readOptions = this.mutations.readOptions
 
   requestHandoff = (
     caller: StructuredAgentSessionCaller,
     params: SessionWire.AgentSessionHandoffRequest
   ): Promise<SessionWire.AgentSessionMutationResult<SessionWire.AgentSessionHandoffResult>> =>
     this.handoffs.request(caller.callerKey, params)
-
-  readOptions = (sessionId: string): Promise<SessionWire.AgentSessionOptionsResult> =>
-    readStructuredAgentSessionOptions(this.mutationContext(), sessionId)
 
   rewind = (caller: StructuredAgentSessionCaller, params: AgentSessionRewindParams) =>
     rewindStructuredAgentSession(this.mutationContext(), this.attachContext(), caller, params)
@@ -322,8 +304,8 @@ export class StructuredAgentSessionHost {
   history: StructuredAgentSessionBackgroundTaskChannel['history'] = (request) =>
     this.backgroundTasks.history(request)
 
-  /** The fully reduced timeline, for readers that cannot tolerate a page's ambiguity — a settled
-   *  turn is tombstoned, so an item's ABSENCE from a bounded page proves nothing. */
+  /** The fully reduced timeline, for readers that cannot tolerate a page's ambiguity — rows are
+   *  revised or tombstoned in place, so an item's ABSENCE from a bounded page proves nothing. */
   journalSnapshot = (sessionId: string): AgentJournalSnapshot =>
     this.requireSession(sessionId).journal.snapshot()
 

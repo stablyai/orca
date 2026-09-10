@@ -1,219 +1,118 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { forwardRef, useImperativeHandle, useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import { decodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
-import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
+import { useAppStore } from '@/store'
 import {
   claudeGroupedQuestionPromptItems,
   legacySingleQuestionPromptItems
 } from './native-chat-structured-question-test-fixtures'
 
-const mocks = vi.hoisted(() => ({
-  call: vi.fn(),
-  fileLinkClick: vi.fn(),
-  mode: 'static' as 'static' | 'outbox',
-  messageListProps: null as null | {
-    allowFileUriLinks?: boolean
-    onLinkClick?: (...args: unknown[]) => void
-    showTurnStatus?: boolean
-    runtimeContext?: unknown
-  },
-  composerProps: null as null | {
-    structuredTransport?: Record<string, unknown>
-    isWorking?: boolean
-  },
-  questionCardProps: null as NativeChatQuestionCardProps | null,
-  promptItems: [] as AgentJournalRenderItem[],
-  respond: vi.fn(),
-  handlePasteEvent: vi.fn(),
-  pasteFromClipboard: vi.fn(),
-  submissions: [] as unknown[],
-  monitoringBackgroundTasks: false,
-  showBackgroundTasks: false,
-  isWorking: false,
-  turnId: null as string | null,
-  supportsBackgroundTaskStop: false,
-  supportsBackgroundTaskStopAll: true,
-  backgroundTasks: [] as AgentSessionBackgroundTask[],
-  settledBackgroundTasks: [] as AgentSessionBackgroundTask[],
-  stopBackgroundTask: vi.fn()
-}))
+const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
+  (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
+)
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
-}))
-
-vi.mock('./use-structured-agent-session', async () => {
-  const { useStructuredAgentSessionOutbox } = await import('./use-structured-agent-session-outbox')
-  return {
-    useStructuredAgentSession: (props: {
-      sessionId: string
-      target: { kind: 'local' } | { kind: 'environment'; environmentId: string }
-    }) => {
-      const outbox = useStructuredAgentSessionOutbox({
-        sessionId: props.sessionId,
-        target: props.target,
-        fence: 1,
-        submissions: mocks.submissions as never
-      })
-      return {
-        messages:
-          mocks.mode === 'outbox'
-            ? []
-            : [
-                {
-                  id: 'message-1',
-                  role: 'assistant',
-                  source: 'transcript',
-                  timestamp: 1,
-                  blocks: [{ type: 'text', text: '[file](file:///repo/src/main.ts)' }]
-                }
-              ],
-        status: 'ready' as const,
-        error: outbox.error,
-        hasOlder: false,
-        loadingOlder: false,
-        loadOlder: vi.fn(),
-        prompts: mocks.promptItems,
-        outbox: outbox.outbox,
-        blockedClientMessageId: outbox.blockedClientMessageId,
-        send: outbox.send,
-        retry: outbox.retry,
-        isWorking: mocks.isWorking,
-        backgroundTasks: {
-          show: mocks.showBackgroundTasks || mocks.monitoringBackgroundTasks,
-          isMonitoring: mocks.monitoringBackgroundTasks,
-          tasks: mocks.backgroundTasks,
-          settledTasks: mocks.settledBackgroundTasks,
-          supportsStop: mocks.supportsBackgroundTaskStop,
-          supportsStopAll: mocks.supportsBackgroundTaskStopAll
-        },
-        turnId: mocks.turnId,
-        cancel: vi.fn(),
-        stopBackgroundTask: (taskId?: string) => mocks.stopBackgroundTask(props.sessionId, taskId),
-        respond: mocks.respond,
-        optionSnapshot: [
-          {
-            id: 'model',
-            label: 'Model',
-            category: 'model',
-            kind: {
-              type: 'select',
-              currentValue: 'gpt-live',
-              choices: [{ value: 'gpt-live', label: 'GPT Live' }]
-            },
-            valueSource: 'reported',
-            settable: true
-          }
-        ],
-        optionSurface: {
-          getSnapshot: () => [],
-          setOption: vi.fn(),
-          invokeAction: vi.fn(),
-          subscribe: () => () => {}
-        },
-        setStructuredOption: vi.fn()
-      }
-    }
-  }
-})
-
-vi.mock('./use-native-chat-font-scale', () => ({
-  useNativeChatFontScale: () => ({ scale: 1 })
-}))
-
-vi.mock('./use-native-chat-file-link-context', () => ({
-  useNativeChatFileLinkContext: () => ({
-    worktreeId: 'wt-1',
-    worktreePath: '/repo',
-    runtimeEnvironmentId: null
-  })
-}))
-
-vi.mock('./use-native-chat-file-link-click', () => ({
-  useNativeChatFileLinkClick: (context: unknown) => (context ? mocks.fileLinkClick : undefined)
-}))
-
-vi.mock('./NativeChatMessageList', () => ({
-  NativeChatMessageList: (props: typeof mocks.messageListProps) => {
-    mocks.messageListProps = props
-    return <div data-testid="message-list" />
-  }
-}))
-
-vi.mock('./NativeChatComposer', () => ({
-  NativeChatComposer: forwardRef((props: typeof mocks.composerProps, ref) => {
-    mocks.composerProps = props
-    const fieldRef = useRef<HTMLTextAreaElement>(null)
-    useImperativeHandle(ref, () => ({
-      // Real DOM focus lets the reveal-focus loop verify this pane owns focus.
-      focus: () => {
-        fieldRef.current?.focus()
-        return true
-      },
-      insertTypedText: () => true,
-      handlePasteEvent: mocks.handlePasteEvent,
-      pasteFromClipboard: mocks.pasteFromClipboard
-    }))
-    return <textarea ref={fieldRef} data-testid="structured-composer" />
-  })
-}))
-vi.mock('./NativeChatEmptyState', () => ({ NativeChatEmptyState: () => null }))
-vi.mock('./NativeChatApprovalCard', () => ({ NativeChatApprovalCard: () => null }))
-vi.mock('./NativeChatQuestionCard', () => ({
-  NativeChatQuestionCard: (props: NativeChatQuestionCardProps) => {
-    mocks.questionCardProps = props
-    return null
-  }
-}))
+vi.mock('@/runtime/structured-agent-session-client', () =>
+  moduleFactories.structuredAgentSessionClient()
+)
+vi.mock('./use-structured-agent-session', () => moduleFactories.useStructuredAgentSession())
+vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
+vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())
+vi.mock('./use-native-chat-file-link-click', () => moduleFactories.useNativeChatFileLinkClick())
+vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList())
+vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
+vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
+vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
+vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 
 describe('NativeChatStructuredSession', () => {
   afterEach(() => {
     cleanup()
-    mocks.call.mockReset()
-    mocks.mode = 'static'
-    mocks.messageListProps = null
-    mocks.composerProps = null
-    mocks.questionCardProps = null
-    mocks.promptItems = []
-    mocks.respond.mockReset()
-    mocks.handlePasteEvent.mockReset()
-    mocks.pasteFromClipboard.mockReset()
-    mocks.submissions = []
-    mocks.monitoringBackgroundTasks = false
-    mocks.supportsBackgroundTaskStop = false
-    mocks.supportsBackgroundTaskStopAll = true
-    mocks.turnId = null
-    mocks.stopBackgroundTask.mockReset()
-    mocks.backgroundTasks = []
-    mocks.settledBackgroundTasks = []
-    mocks.showBackgroundTasks = false
-    mocks.isWorking = false
+    resetStructuredSessionMocks()
   })
 
-  it('routes app-menu paste into the structured composer', () => {
+  it('routes the launch draft and app-menu paste to the structured composer', () => {
+    const draft = {
+      tabId: 'structured-draft-tab',
+      agent: 'codex' as const,
+      text: 'PR #19423 — review this change',
+      createdAt: Date.now()
+    }
+    useAppStore.getState().seedNativeChatLaunchDraft(draft)
     render(
       <NativeChatStructuredSession
         isVisible
         isFocusedGroup
-        tabId="structured-tab-paste"
-        sessionId="session-paste"
+        tabId={draft.tabId}
+        sessionId="draft-session"
         target={{ kind: 'local' }}
         agent="codex"
       />
     )
-
+    expect(mocks.composerProps?.launchSeed).toEqual({
+      launchDraft: draft,
+      launchDraftResolved: false,
+      ownsTabWideLaunchDraft: true
+    })
+    act(() => useAppStore.getState().clearNativeChatLaunchDraft(draft.tabId))
     const composer = screen.getByTestId('structured-composer')
     composer.focus()
     window.dispatchEvent(new Event('orca-app-menu-paste', { cancelable: true }))
 
     expect(mocks.pasteFromClipboard).toHaveBeenCalledOnce()
+  })
+
+  // Why: the controller starts at `idle`, before any read; a baseline taken from that empty
+  // render would be exceeded by the backfill itself and resolve a draft the user never saw.
+  it('holds the launch draft unresolved until the first journal read settles', () => {
+    const draft = {
+      tabId: 'structured-idle-tab',
+      agent: 'codex' as const,
+      text: 'PR #19423 — review this change',
+      createdAt: Date.now()
+    }
+    useAppStore.getState().seedNativeChatLaunchDraft(draft)
+    mocks.status = 'idle'
+    mocks.messages = [
+      {
+        id: 'user-1',
+        role: 'user',
+        source: 'transcript',
+        timestamp: draft.createdAt + 1,
+        blocks: [{ type: 'text', text: draft.text }]
+      }
+    ]
+    const { rerender } = render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId={draft.tabId}
+        sessionId="idle-session"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    expect(mocks.composerProps?.launchSeed).toMatchObject({
+      launchDraft: draft,
+      launchDraftResolved: false
+    })
+
+    mocks.status = 'ready'
+    rerender(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId={draft.tabId}
+        sessionId="idle-session"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    expect(mocks.composerProps?.launchSeed?.launchDraftResolved).toBe(true)
+    act(() => useAppStore.getState().clearNativeChatLaunchDraft(draft.tabId))
   })
 
   it('wires remote structured file links through the host-aware native chat opener', () => {

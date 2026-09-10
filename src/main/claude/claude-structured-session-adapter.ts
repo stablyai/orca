@@ -152,7 +152,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         reason: exit.error.message,
         cause: 'unexpected-exit',
         fence: exit.session.fence,
-        acquisitionGeneration: exit.session.acquisitionGeneration
+        acquisitionGeneration: exit.session.acquisitionGeneration,
+        observedAt: this.deps.now?.() ?? Date.now()
       }
       try {
         this.emit(exit.session, ended)

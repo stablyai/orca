@@ -5,7 +5,7 @@ import type {
   AgentJournalMessageItem,
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import { journalRowSchemaVersion } from '../../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { JournalReducerState } from './journal-reducer'
 import type {
@@ -119,7 +119,13 @@ export function journalLifecycleBatchRowBuilder(
       kind: 'lifecycle-batch',
       settlementId,
       mutations: built,
-      ...journalRowBase(current.epoch, seq, options.fence, ts),
+      ...journalRowBase(
+        current.epoch,
+        seq,
+        options.fence,
+        ts,
+        built.flatMap((mutation) => (mutation.kind === 'item' ? [mutation.body] : []))
+      ),
       ...(options.recovered ? { recovered: options.recovered } : {})
     }
     if (Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 > MAX_JOURNAL_LIFECYCLE_BATCH_BYTES) {
@@ -133,9 +139,10 @@ export function journalRowBase(
   epoch: string,
   seq: number,
   fence: number,
-  ts: number
+  ts: number,
+  bodies: readonly { kind: string }[] = []
 ): { v: number; epoch: string; seq: number; fence: number; ts: number } {
-  return { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch, seq, fence, ts }
+  return { v: journalRowSchemaVersion(bodies), epoch, seq, fence, ts }
 }
 
 export function buildJournalItemRow(input: {
@@ -161,7 +168,7 @@ export function buildJournalItemRow(input: {
     itemId,
     revision,
     body: input.body,
-    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts),
+    ...journalRowBase(input.state.epoch, input.seq, input.fence, input.ts, [input.body]),
     ...(input.recovered ? { recovered: input.recovered } : {})
   }
 }

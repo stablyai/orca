@@ -22,6 +22,7 @@ import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-co
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 
 type StoppingBackgroundTasks = {
   sessionId: string
@@ -41,6 +42,14 @@ export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
+  const launchDraftSignal = useNativeChatLaunchDraftSignal({
+    terminalTabId: props.tabId,
+    agent: props.agent,
+    messages: controller.messages,
+    // Why: the controller starts at `idle`, before any read; like the legacy view's unsettled
+    // phases, that empty list must not become the draft's turn baseline.
+    transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
+  })
   const [composerError, setComposerError] = useState<string | null>(null)
   const [stoppingBackgroundTasks, setStoppingBackgroundTasks] =
     useState<StoppingBackgroundTasks | null>(null)
@@ -215,7 +224,8 @@ export function NativeChatStructuredSession(
             isWorking={controller.isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
-            workingStartedAt={null}
+            workingStartedAt={controller.workingStartedAt}
+            settledTurns={controller.settledTurns}
             showTurnStatus
             turnActivity={controller.turnActivity}
             onLinkClick={onLinkClick}
@@ -390,6 +400,7 @@ export function NativeChatStructuredSession(
             }
           }}
           structuredTransport={structuredTransport}
+          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft: true }}
         />
       )}
       {paneCommands.menu}

@@ -4,6 +4,7 @@ import {
   nativeChatTurnHasResponse,
   reduceNativeChatTurnTiming,
   selectNativeChatTurnStatuses,
+  type NativeChatSettledTurns,
   type NativeChatTurnStatus,
   type NativeChatTurnTimingByTurn
 } from '../../../src/shared/native-chat-turn-status'
@@ -25,12 +26,15 @@ export function useMobileNativeChatTurnStatus({
   enabled,
   isWorking,
   workingStartedAt,
+  settledTurns,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
   isWorking: boolean
   workingStartedAt?: number | null
+  /** Host-recorded durations; they outrank whatever this client observed. */
+  settledTurns?: NativeChatSettledTurns | null
   /** Host/worktree/tab identity. Timings never carry across chat surfaces. */
   scopeKey: string
 }): {
@@ -91,15 +95,24 @@ export function useMobileNativeChatTurnStatus({
   // turn re-renders ~20x/s. Without this, every settled turn's row gets fresh
   // props each tick and the memoized message rows all re-render.
   const turnIsWorking = enabled && isWorking
+  const settledByTurn = enabled ? (settledTurns ?? undefined) : undefined
   const statuses = useMemo(
     () =>
       selectNativeChatTurnStatuses(timingByTurn, {
         activeTurnKey,
         isWorking: turnIsWorking,
         workingStartedAt,
-        hasCurrentTurnResponse
+        hasCurrentTurnResponse,
+        settledByTurn
       }),
-    [timingByTurn, activeTurnKey, turnIsWorking, workingStartedAt, hasCurrentTurnResponse]
+    [
+      timingByTurn,
+      activeTurnKey,
+      turnIsWorking,
+      workingStartedAt,
+      hasCurrentTurnResponse,
+      settledByTurn
+    ]
   )
   return { ...statuses, activeTurnKey }
 }
