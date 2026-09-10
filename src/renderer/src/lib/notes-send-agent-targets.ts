@@ -73,7 +73,9 @@ export function deriveNotesSendAgentTargets(
       tabId: target.tabId,
       leafId: target.leafId,
       agentType: resolveNotesTargetAgentType(target.entry.agentType, target.tab.launchAgent),
-      tabTitle: target.tab.title,
+      // Why: prefer the user's own rename (same precedence as the tab bar) over
+      // the live status text agents constantly overwrite the title with.
+      tabTitle: target.tab.customTitle ?? target.tab.title,
       status: target.status,
       ...(target.disabledReason ? { disabledReason: target.disabledReason } : {})
     })
@@ -139,7 +141,7 @@ function deriveTitleHintAgentTarget(
     tabId: tab.id,
     leafId,
     agentType: tab.launchAgent ?? resolveTerminalTitleAgentType(titleEvidence.title),
-    tabTitle: tab.title,
+    tabTitle: tab.customTitle ?? tab.title,
     status: disabledReason ? 'disabled' : 'eligible',
     ...(disabledReason ? { disabledReason } : {})
   }

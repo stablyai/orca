@@ -134,6 +134,34 @@ describe('notes send agent targets', () => {
     ])
   })
 
+  it('prefers the tab custom title over the live title when the user renamed the tab', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(STATUS_TAB_ID, { title: 'Terminal 1', customTitle: 'Payments' })
+          ]
+        },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey,
+        tabId: STATUS_TAB_ID,
+        leafId: LEAF_A,
+        agentType: 'codex',
+        tabTitle: 'Payments',
+        status: 'eligible'
+      }
+    ])
+  })
+
   it('keeps permission status-backed targets visible but disabled', () => {
     const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
     const targets = deriveNotesSendAgentTargets(
@@ -467,6 +495,41 @@ describe('notes send agent targets', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Previous Codex session',
+        status: 'eligible'
+      }
+    ])
+  })
+
+  it('prefers the tab custom title over the live title for a title-hint-promoted launch-agent pane', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT)
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(LAUNCH_TAB_ID, {
+              title: 'Previous Codex session',
+              customTitle: 'Refactor',
+              launchAgent: 'codex'
+            })
+          ]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey,
+        tabId: LAUNCH_TAB_ID,
+        leafId: LEAF_B,
+        agentType: 'codex',
+        tabTitle: 'Refactor',
         status: 'eligible'
       }
     ])
