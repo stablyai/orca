@@ -11,6 +11,7 @@ import { enrichRepoGitUsernames } from '../../repo-git-username-enrichment'
 import { enrichMissingRepoGitRemoteIdentities } from '../../repo-git-remote-identity-enrichment'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
+import { deactivateSpotlightBeforeTeardown } from '../spotlight'
 import { ProjectUpdateIpcArgs, parseProjectGroupIpcArgs } from './repo-ipc-arg-schemas'
 import { listReposForExecutionHost } from './host-repo-catalog-snapshot'
 
@@ -86,6 +87,11 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
   )
 
   ipcMain.handle('repos:remove', async (_event, args: { repoId: string }) => {
+    // Restore the root first: removeProject deletes the Spotlight record, and
+    // without a prior deactivate the root would stay detached on the snapshot,
+    // the log capture would leak, and no store entry would remain for reconcile
+    // to repair.
+    await deactivateSpotlightBeforeTeardown(args.repoId)
     store.removeProject(args.repoId)
     invalidateAuthorizedRootsCache()
     notifyReposChanged(mainWindow)

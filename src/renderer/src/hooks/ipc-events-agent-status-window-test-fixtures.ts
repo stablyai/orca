@@ -23,6 +23,10 @@ export function buildWindowApi(args: {
   return {
     api: {
       repos: { onChanged: () => () => {} },
+      spotlight: {
+        onChanged: () => () => {},
+        getState: () => Promise.resolve({ byRepo: {} })
+      },
       automations: { onChanged: () => () => {} },
       worktrees: {
         onChanged: () => () => {},

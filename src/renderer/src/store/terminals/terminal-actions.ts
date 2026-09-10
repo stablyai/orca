@@ -82,6 +82,9 @@ export type TerminalActions = {
       viewMode?: Tab['viewMode']
       startupCwd?: string
       forceHostRuntime?: boolean
+      /** Marks the workspace's Spotlight terminal (cwd = repo root) so
+       *  re-activation finds and reuses it instead of stacking duplicates. */
+      spotlightRepoRoot?: boolean
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -129,6 +132,9 @@ export type TerminalActions = {
       recordInteraction?: boolean
     }
   ) => void
+  /** Adopt an existing terminal as the repo's Spotlight (server) terminal —
+   *  used when the user already had one running at the root on activation. */
+  markTabSpotlightRepoRoot: (tabId: string) => void
   setTabColor: (tabId: string, color: string | null) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (

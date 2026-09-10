@@ -153,6 +153,8 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     editorFontZoomLevel: 0,
     setEditorFontZoomLevel: vi.fn(),
     setRateLimitsFromPush: vi.fn(),
+    applySpotlightChanged: vi.fn(),
+    hydrateSpotlightState: vi.fn(() => Promise.resolve()),
     updateWorktreeBaseStatus: vi.fn(),
     updateWorktreeRemoteBranchConflict: vi.fn(),
     setSshConnectionState: vi.fn(),

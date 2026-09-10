@@ -1,4 +1,5 @@
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import {
@@ -21,6 +22,8 @@ export function createTerminalPtyReleaseActions(
       let worktreeId: string | null = null
       let wasActivationSpawn = false
       let preservesDirectSshContinuationGap = false
+      let clearedSpotlightTab = false
+      let nextSpotlightLogPtyId: string | null = null
       let isRemoteRuntimeMirror = isRemoteRuntimePtyId(ptyId)
       set((s) => {
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
@@ -45,6 +48,14 @@ export function createTerminalPtyReleaseActions(
           const { pendingActivationSpawn: _unused, ...rest } = tab
           void _unused
           const nextTabPtyId = remainingPtyIds.at(-1) ?? null
+          if (tab.spotlightRepoRoot) {
+            clearedSpotlightTab = true
+            // Why: the log mirror must follow the SAME pane the tab now points at
+            // (nextTabPtyId), never a closing split pane — otherwise the server
+            // log would capture an unrelated pane's shell noise and the restart
+            // trigger would target the wrong pane.
+            nextSpotlightLogPtyId = nextTabPtyId
+          }
           preservesDirectSshContinuationGap = Boolean(
             ptyId &&
             remainingPtyIds.length === 0 &&
@@ -155,6 +166,21 @@ export function createTerminalPtyReleaseActions(
         !(ptyId && get().suppressedPtyExitIds[ptyId])
       ) {
         get().bumpWorktreeActivity(worktreeId)
+      }
+
+      if (clearedSpotlightTab && worktreeId) {
+        const repoId = getRepoIdFromWorktreeId(worktreeId)
+        const isMainWorktreeTab = get().worktreesByRepo[repoId]?.some(
+          (entry) => entry.id === worktreeId && entry.isMainWorktree
+        )
+        if (isMainWorktreeTab) {
+          if (nextSpotlightLogPtyId) {
+            // The Spotlight tab still has a live pane; keep mirroring from it.
+            void window.api.spotlight?.setLogPty?.({ repoId, ptyId: nextSpotlightLogPtyId })
+          } else {
+            void window.api.spotlight?.clearLogPty?.({ repoId })
+          }
+        }
       }
     }
   }

@@ -11,6 +11,7 @@ import {
 } from './WorktreeCardMeta'
 import { WorktreeCardPortsDetails, WorktreeCardPortsTrigger } from './WorktreeCardPorts'
 import type { WorktreeCardController } from './use-worktree-card-controller'
+import { canHoldSpotlight } from './WorktreeCardSpotlightControls'
 
 export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const {
@@ -78,7 +79,19 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const showRepoBadgeInMetaRow =
     !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
   const showHostContextBadge = !compactCards && !!hostContextLabel
-  const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
+  // The active root wears an amber left bar so "Spotlight running here" reads at a glance.
+  const spotlightActive = Boolean(card.spotlight)
+  // Suppress the raw detached-HEAD badge only while Spotlight cleanly owns the
+  // root — the amber chip already signals that expected detachment. If the root
+  // DIVERGED (someone checked out/committed in it), keep the badge: it's real.
+  const spotlightCleanlyOwnsRoot =
+    Boolean(card.spotlight) && card.spotlight?.lastError?.code !== 'root-diverged'
+  const spotlightEligible = canHoldSpotlight(worktree, repo, isFolder)
+  const showDetachedHeadInMetaRow =
+    !compactCards &&
+    !isFolder &&
+    detachedHeadDisplay !== null &&
+    !(worktree.isMainWorktree && spotlightCleanlyOwnsRoot)
   const showBranch =
     !isFolder &&
     branch.length > 0 &&
@@ -109,7 +122,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const hasMetaRow = compactCards
     ? hasMetadataBadge || cacheStartedAt != null
     : hasDetailedMetaRowContent
-  const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
+  const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction || spotlightEligible
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
   const showBranchIdentityHover = newCardStyle
@@ -278,6 +291,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     hasMetaRow,
     showHeaderActions,
     showDeleteQuickAction,
+    spotlightActive,
+    spotlightEligible,
     hoverBranchName,
     hoverWorkspaceTitle,
     hasHoverDetails,

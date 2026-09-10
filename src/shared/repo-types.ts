@@ -102,6 +102,10 @@ export type Repo = {
   sourceControlAi?: RepoSourceControlAiOverrides
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
+  /** Per-repo opt-in for Spotlight testing: sync a workspace's tracked changes
+   *  onto the repo root so it can be tested against the root's installed
+   *  toolchain (node_modules, native builds) without duplicating it. */
+  spotlightTestingEnabled?: boolean
 }
 
 /**

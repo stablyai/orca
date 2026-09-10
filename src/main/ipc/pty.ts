@@ -22,7 +22,8 @@ export {
   unregisterSshPtyProvider,
   getSshPtyProvider,
   getLocalPtyProvider,
-  setLocalPtyProvider
+  setLocalPtyProvider,
+  onLocalPtyProviderChanged
 } from './pty/provider/registry'
 export { clearProviderPtyState, clearPtyOwnershipForConnection } from './pty/provider/state-cleanup'
 export {

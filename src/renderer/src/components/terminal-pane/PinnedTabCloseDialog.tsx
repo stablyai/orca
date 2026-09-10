@@ -26,6 +26,7 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
   const [previousRequest, setPreviousRequest] = useState(request)
 
   const tabLabel = request?.tabLabel.trim()
+  const isSpotlight = request?.kind === 'spotlight'
 
   // Why: a new store request is a new confirmation, so reset its checkbox before
   // paint while keeping a cancelled request's state inert until the next open.
@@ -37,7 +38,7 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
   }
 
   const handleConfirm = (): void => {
-    if (dontAskAgain) {
+    if (dontAskAgain && !isSpotlight) {
       void updateSettings({ confirmClosePinnedTab: false })
     }
     confirmPinnedTabClose()
@@ -55,16 +56,26 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate(
-              'auto.components.terminal.pane.PinnedTabCloseDialog.6c190f295a',
-              'Close pinned tab?'
-            )}
+            {isSpotlight
+              ? translate(
+                  'auto.components.terminal.pane.PinnedTabCloseDialog.spotlightTitle',
+                  'Spotlight is using this terminal'
+                )
+              : translate(
+                  'auto.components.terminal.pane.PinnedTabCloseDialog.6c190f295a',
+                  'Close pinned tab?'
+                )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
-              'auto.components.terminal.pane.PinnedTabCloseDialog.0d1963f4a6',
-              'This tab is pinned. Are you sure you want to close it?'
-            )}
+            {isSpotlight
+              ? translate(
+                  'auto.components.terminal.pane.PinnedTabCloseDialog.spotlightDescription',
+                  'This terminal runs your server at the project root and feeds agent logs. Closing it turns Spotlight off and restores the project root.'
+                )
+              : translate(
+                  'auto.components.terminal.pane.PinnedTabCloseDialog.0d1963f4a6',
+                  'This tab is pinned. Are you sure you want to close it?'
+                )}
           </DialogDescription>
         </DialogHeader>
         {tabLabel ? (
@@ -72,25 +83,32 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
             {tabLabel}
           </p>
         ) : null}
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id={checkboxId}
-            checked={dontAskAgain}
-            onCheckedChange={(checked) => setDontAskAgain(checked === true)}
-          />
-          <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
-            {translate(
-              'auto.components.terminal.pane.PinnedTabCloseDialog.dont_ask_again',
-              "Don't ask again for pinned tabs"
-            )}
-          </Label>
-        </div>
+        {isSpotlight ? null : (
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id={checkboxId}
+              checked={dontAskAgain}
+              onCheckedChange={(checked) => setDontAskAgain(checked === true)}
+            />
+            <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
+              {translate(
+                'auto.components.terminal.pane.PinnedTabCloseDialog.dont_ask_again',
+                "Don't ask again for pinned tabs"
+              )}
+            </Label>
+          </div>
+        )}
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" size="sm" onClick={dismissPinnedTabClose}>
             {translate('auto.components.terminal.pane.PinnedTabCloseDialog.0b38ee2f86', 'Cancel')}
           </Button>
           <Button type="button" variant="destructive" size="sm" autoFocus onClick={handleConfirm}>
-            {translate('auto.components.terminal.pane.PinnedTabCloseDialog.c337c9d75c', 'Close')}
+            {isSpotlight
+              ? translate(
+                  'auto.components.terminal.pane.PinnedTabCloseDialog.spotlightConfirm',
+                  'Turn Off Spotlight & Close'
+                )
+              : translate('auto.components.terminal.pane.PinnedTabCloseDialog.c337c9d75c', 'Close')}
           </Button>
         </DialogFooter>
       </DialogContent>

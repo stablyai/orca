@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
+import { appendTerminalToPersistedTabOrder } from '@/components/tab-bar/reconcile-order'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import {
   flattenTerminalQuickCommand,
@@ -112,22 +112,8 @@ export function runQuickCommandInNewTab({
   // terminal tab stays invisible.
   store.setActiveTabType('terminal')
 
-  // Why: persist tab-bar order with the new terminal appended. Without this,
-  // reconcileTabOrder falls back to terminals-first when the stored order is
-  // unset, jumping the new tab to index 0.
   const fresh = useAppStore.getState()
-  const termIds = (fresh.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
-  const editorIds = fresh.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
-  const browserIds = (fresh.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
-  const base = reconcileTabOrder(
-    fresh.tabBarOrderByWorktree[worktreeId],
-    termIds,
-    editorIds,
-    browserIds
-  )
-  const order = base.filter((id) => id !== tab.id)
-  order.push(tab.id)
-  fresh.setTabBarOrder(worktreeId, order)
+  appendTerminalToPersistedTabOrder(fresh, worktreeId, tab.id)
 
   const launchedGroupId = resolveQuickCommandGroupId(worktreeId, tab.id, groupId)
   if (launchedGroupId) {

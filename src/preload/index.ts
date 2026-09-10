@@ -13,6 +13,7 @@ import { pwshApi } from './api/pwsh-bridge'
 import { gitBashApi } from './api/git-bash-bridge'
 import { pluginsApi } from './api/plugins-bridge'
 import { reposApi } from './api/repos-bridge'
+import { spotlightApi } from './api/spotlight-bridge'
 import { projectsApi } from './api/projects-bridge'
 import { projectGroupsApi } from './api/project-groups-bridge'
 import { folderWorkspacesApi } from './api/folder-workspaces-bridge'
@@ -107,6 +108,7 @@ const api = {
   gitBash: gitBashApi,
   plugins: pluginsApi,
   repos: reposApi,
+  spotlight: spotlightApi,
   projects: projectsApi,
   projectGroups: projectGroupsApi,
   folderWorkspaces: folderWorkspacesApi,

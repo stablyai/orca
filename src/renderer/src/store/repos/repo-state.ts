@@ -49,6 +49,7 @@ export type RepoUpdate = Partial<
     | 'worktreeVisibilitySourcePreferences'
     | 'projectGroupId'
     | 'projectGroupOrder'
+    | 'spotlightTestingEnabled'
   >
 > & {
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null

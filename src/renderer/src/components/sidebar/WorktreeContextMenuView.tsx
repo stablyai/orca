@@ -19,6 +19,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  Flashlight,
   Trash2,
   Unlink,
   Workflow,
@@ -76,6 +77,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleSleepSubtree,
     handleTogglePin,
     handleToggleRead,
+    spotlight,
+    spotlightEligible,
+    spotlightHeldHere,
+    spotlightOffOnMain,
+    handleToggleSpotlight,
+    handleForceSyncSpotlight,
     hasAnyContextLineage,
     hasParentLink,
     isDeleting,
@@ -201,6 +208,36 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                       'Mark Unread'
                     )}
               </DropdownMenuItem>
+              {spotlightEligible || spotlightOffOnMain ? (
+                <DropdownMenuItem
+                  onSelect={handleToggleSpotlight}
+                  disabled={isDeleting || spotlight.syncing}
+                >
+                  <Flashlight className="size-3.5" />
+                  {spotlightHeldHere || spotlightOffOnMain
+                    ? translate(
+                        'auto.components.sidebar.WorktreeContextMenu.spotlightOff',
+                        'Turn Off Spotlight'
+                      )
+                    : translate(
+                        'auto.components.sidebar.WorktreeContextMenu.spotlightOn',
+                        'Spotlight This Workspace'
+                      )}
+                </DropdownMenuItem>
+              ) : null}
+              {spotlightHeldHere && spotlight.rootDiverged && repo ? (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={handleForceSyncSpotlight}
+                  disabled={isDeleting || spotlight.syncing}
+                >
+                  <Flashlight className="size-3.5" />
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.spotlightForceSync',
+                    'Force Sync Spotlight (overwrite root changes)'
+                  )}
+                </DropdownMenuItem>
+              ) : null}
               {repo ? (
                 <>
                   <DropdownMenuSeparator />

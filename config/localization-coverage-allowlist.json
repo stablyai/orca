@@ -89,5 +89,12 @@
     "text": "ghostty",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/web/web-preload-api.ts",
+    "kind": "object-property:message",
+    "text": "Spotlight testing is unavailable on web.",
+    "dynamic": false,
+    "count": 1
   }
 ]

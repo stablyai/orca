@@ -163,6 +163,36 @@ export function getRepositoryPaneSearchEntries(
           }
         ]),
     ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo)),
+    ...(isFolder || repo.connectionId
+      ? []
+      : [
+          {
+            title: translate(
+              'auto.components.settings.repository.search.spotlightTesting',
+              'Spotlight Testing'
+            ),
+            description: translate(
+              'auto.components.settings.repository.search.spotlightTestingDescription',
+              'Mirror workspace changes onto the project root for testing.'
+            ),
+            keywords: [
+              repo.displayName,
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.spotlight',
+                'spotlight'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.testing',
+                'testing'
+              ),
+              ...translateSearchKeyword('auto.components.settings.repository.search.sync', 'sync'),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.repoRoot',
+                'repo root'
+              )
+            ]
+          }
+        ]),
     {
       title: translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),
       description: translate(
