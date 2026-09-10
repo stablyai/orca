@@ -43,6 +43,12 @@ describe('relay protocol version', () => {
     expect(relayProtocolOfferAdmits({ minProtocolVersion: 1 }, 1)).toBe(false)
   })
 
+  // Zero is the one bad value the band check cannot catch on its own: a peer claiming protocol 0
+  // would be admitted by a relay whose own version was also read as 0.
+  it('rejects a zero protocol version rather than treating it as a real version', () => {
+    expect(relayProtocolOfferAdmits({ protocolVersion: 0, minProtocolVersion: 0 }, 0)).toBe(false)
+  })
+
   it('rejects offers that are not plausible integers', () => {
     for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2_000_000]) {
       expect(
