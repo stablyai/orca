@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { mobileGitOperationDescriptors } from './mobile-git-operation-descriptors'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
@@ -22,10 +23,13 @@ export function useMobileGitRequests({ client, connState, worktreeId }: Params) 
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
-      const response = await client.sendRequest(method, {
-        worktree: `id:${worktreeId}`,
-        ...params
-      })
+      const response = await client.sendRequest(
+        mobileGitOperationDescriptors[method]?.method ?? method,
+        {
+          worktree: `id:${worktreeId}`,
+          ...params
+        }
+      )
       if (!response.ok) {
         const error = new Error(
           response.error?.message || 'Source control action failed'
