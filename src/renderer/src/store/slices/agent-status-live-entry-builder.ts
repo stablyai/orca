@@ -19,6 +19,7 @@ import {
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
+import { classifyAgentNotificationIntent } from '../../../../shared/agent-notification-policy'
 import type {
   AgentStatusMetadata,
   AgentStatusPayload,
@@ -96,7 +97,8 @@ export function buildAgentStatusLiveEntry(
         state: existing.state,
         prompt: existing.prompt,
         startedAt: existing.stateStartedAt,
-        interrupted: existing.interrupted
+        interrupted: existing.interrupted,
+        notificationIntent: classifyAgentNotificationIntent(existing)
       }
     ]
     if (history.length > AGENT_STATE_HISTORY_MAX) {

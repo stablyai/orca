@@ -13,11 +13,14 @@ import type {
   ActivityLiveAgentState
 } from './activity-thread-types'
 import { buildPaneActivityEvents } from './activity-pane-events'
+import type { AgentNotificationMode } from '../../../../shared/notification-settings-types'
 
 type PaneActivityCacheEntry = {
   source: unknown
   orchestration: AgentStatusOrchestrationContext | undefined
   acknowledgedAt: number
+  manuallyUnreadAt: number
+  agentNotificationMode: AgentNotificationMode | undefined
   clearedAt: number
   worktree: Worktree
   repo: Repo | null
@@ -46,6 +49,8 @@ export type PaneBuildRequest = {
   agentType: AgentType
   agentAlive: boolean
   acknowledgedAt: number
+  manuallyUnreadAt: number
+  agentNotificationMode: AgentNotificationMode | undefined
   clearedAt: number
   migrationUnsupportedPtyId?: string
   liveState: ActivityLiveAgentState | null
@@ -63,6 +68,8 @@ export function resolvePaneBuild(
     cached.source === request.source &&
     cached.orchestration === request.orchestration &&
     cached.acknowledgedAt === request.acknowledgedAt &&
+    cached.manuallyUnreadAt === request.manuallyUnreadAt &&
+    cached.agentNotificationMode === request.agentNotificationMode &&
     cached.clearedAt === request.clearedAt &&
     cached.worktree === request.worktree &&
     cached.repo === request.repo &&
@@ -96,6 +103,8 @@ export function resolvePaneBuild(
     agentType: request.agentType,
     agentAlive: request.agentAlive,
     acknowledgedAt: request.acknowledgedAt,
+    manuallyUnreadAt: request.manuallyUnreadAt,
+    agentNotificationMode: request.agentNotificationMode,
     clearedAt: request.clearedAt,
     liveState: request.liveState,
     migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
@@ -117,6 +126,8 @@ export function resolvePaneBuild(
     source: request.source,
     orchestration: request.orchestration,
     acknowledgedAt: request.acknowledgedAt,
+    manuallyUnreadAt: request.manuallyUnreadAt,
+    agentNotificationMode: request.agentNotificationMode,
     clearedAt: request.clearedAt,
     worktree: request.worktree,
     repo: request.repo,

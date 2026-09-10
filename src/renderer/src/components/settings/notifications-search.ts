@@ -58,6 +58,27 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.notifications.search.agentNotificationMode',
+      'Agent notification mode'
+    ),
+    description: translate(
+      'auto.components.settings.notifications.search.agentNotificationModeDescription',
+      'Choose whether intermediate agent activity should request attention.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.notifications.search.results', 'results'),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.actionRequired',
+        'action required'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.notifications.search.progress',
+        'progress'
+      )
+    ]
+  },
+  {
     title: translate('auto.components.settings.notifications.search.a5edee1d99', 'Terminal Bell'),
     description: translate(
       'auto.components.settings.notifications.search.d3f1c48677',

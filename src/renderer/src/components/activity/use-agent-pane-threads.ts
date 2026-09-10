@@ -7,6 +7,7 @@ import {
   getSettingsFocusedExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
+import type { AgentNotificationMode } from '../../../../shared/notification-settings-types'
 import { buildActivityEvents, createActivityEventBuildCache } from './activity-event-builder'
 import { projectActivityTabs, type ActivityTabProjection } from './activity-tab-projection'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
@@ -39,6 +40,7 @@ export type AgentPaneThreadsStoreData = Pick<
   | 'detectedWorktreesByRepo'
   | 'getKnownWorktreeById'
   | 'acknowledgedAgentsByPaneKey'
+  | 'manuallyUnreadTurnsByPaneKey'
   | 'activityClearedAtByPaneKey'
   | 'acknowledgeAgents'
   | 'unacknowledgeAgents'
@@ -48,6 +50,7 @@ export type AgentPaneThreadsStoreData = Pick<
   worktreeMap: ReturnType<typeof getWorktreeMapFromState>
   repoMap: ReturnType<typeof getRepoMapFromState>
   generatedTitlesEnabled: boolean
+  agentNotificationMode: AgentNotificationMode | undefined
   /** Focused-host fallback for hostless worktrees, shared by the scope filter and the row actions. */
   defaultHostId: ExecutionHostId
 }
@@ -107,10 +110,12 @@ export function useAgentPaneThreads(args: {
       worktreeMap: getWorktreeMapFromState(s),
       repoMap: getRepoMapFromState(s),
       acknowledgedAgentsByPaneKey: s.acknowledgedAgentsByPaneKey,
+      manuallyUnreadTurnsByPaneKey: s.manuallyUnreadTurnsByPaneKey,
       activityClearedAtByPaneKey: s.activityClearedAtByPaneKey,
       acknowledgeAgents: s.acknowledgeAgents,
       unacknowledgeAgents: s.unacknowledgeAgents,
       generatedTitlesEnabled: s.settings?.tabAutoGenerateTitle === true,
+      agentNotificationMode: s.settings?.notifications?.agentNotificationMode,
       defaultHostId: getSettingsFocusedExecutionHostId(s.settings)
     }))
   )
@@ -141,6 +146,8 @@ export function useAgentPaneThreads(args: {
           repos: storeData.repos,
           resolveWorktree: storeData.getKnownWorktreeById,
           acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
+          manuallyUnreadTurnsByPaneKey: storeData.manuallyUnreadTurnsByPaneKey,
+          agentNotificationMode: storeData.agentNotificationMode,
           activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
           // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
           now: Date.now()

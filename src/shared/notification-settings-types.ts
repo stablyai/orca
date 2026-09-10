@@ -1,8 +1,21 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
 
+export const AGENT_NOTIFICATION_MODES = ['all', 'results-and-actions'] as const
+export type AgentNotificationMode = (typeof AGENT_NOTIFICATION_MODES)[number]
+
+export const AGENT_NOTIFICATION_INTENTS = [
+  'progress',
+  'result',
+  'action-required',
+  'failure'
+] as const
+export type AgentNotificationIntent = (typeof AGENT_NOTIFICATION_INTENTS)[number]
+
 export type NotificationSettings = {
   enabled: boolean
   agentTaskComplete: boolean
+  /** Missing values preserve the legacy all-events behavior for mixed-version settings. */
+  agentNotificationMode?: AgentNotificationMode
   terminalBell: boolean
   suppressWhenFocused: boolean
   customSoundId:
@@ -43,6 +56,7 @@ export type NotificationDispatchRequest = {
   agentToolInput?: string
   agentLastAssistantMessage?: string
   agentInterrupted?: boolean
+  agentNotificationIntent?: AgentNotificationIntent
 }
 
 export type NotificationDispatchResult = {
@@ -51,6 +65,7 @@ export type NotificationDispatchResult = {
   reason?:
     | 'disabled'
     | 'source-disabled'
+    | 'filtered-by-policy'
     | 'suppressed-focus'
     | 'cooldown'
     | 'not-supported'

@@ -11,8 +11,9 @@ async function getSettings(
 async function openNotificationSettings(
   page: Parameters<typeof waitForSessionReady>[0]
 ): Promise<void> {
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const state = window.__store!.getState()
+    await state.updateSettings({ uiLanguage: 'en' })
     state.openSettingsTarget({ pane: 'notifications', repoId: null })
     state.openSettingsPage()
   })
@@ -44,6 +45,9 @@ test.describe('Notification settings', () => {
       name: 'Agent Task Complete'
     })
     const terminalBellSwitch = notificationsSection.getByRole('switch', { name: 'Terminal Bell' })
+    const agentNotificationMode = notificationsSection.getByRole('combobox', {
+      name: 'Agent notification mode'
+    })
     const suppressWhileFocusedSwitch = notificationsSection.getByRole('switch', {
       name: 'Suppress While Focused'
     })
@@ -53,9 +57,20 @@ test.describe('Notification settings', () => {
 
     await expect(enableNotificationsSwitch).toHaveAttribute('aria-checked', 'true')
     await expect(agentTaskCompleteSwitch).toBeEnabled()
+    await expect(agentNotificationMode).toBeEnabled()
     await expect(terminalBellSwitch).toBeEnabled()
     await expect(suppressWhileFocusedSwitch).toBeEnabled()
     await expect(sendTestButton).toBeEnabled()
+
+    await agentNotificationMode.click()
+    await orcaPage.getByRole('option', { name: 'Results and action required' }).click()
+    await expect(agentNotificationMode).toContainText('Results and action required')
+    await expect
+      .poll(async () => (await getSettings(orcaPage)).notifications.agentNotificationMode, {
+        timeout: 5_000,
+        message: 'agent notification mode did not persist'
+      })
+      .toBe('results-and-actions')
 
     await agentTaskCompleteSwitch.click()
     await expect(agentTaskCompleteSwitch).toHaveAttribute('aria-checked', 'false')
@@ -65,10 +80,12 @@ test.describe('Notification settings', () => {
         message: 'agent task-complete notification setting did not persist after disabling'
       })
       .toBe(false)
+    await expect(agentNotificationMode).toBeDisabled()
 
     await enableNotificationsSwitch.click()
     await expect(enableNotificationsSwitch).toHaveAttribute('aria-checked', 'false')
     await expect(agentTaskCompleteSwitch).toBeDisabled()
+    await expect(agentNotificationMode).toBeDisabled()
     await expect(terminalBellSwitch).toBeDisabled()
     await expect(suppressWhileFocusedSwitch).toBeDisabled()
     await expect(sendTestButton).toBeDisabled()

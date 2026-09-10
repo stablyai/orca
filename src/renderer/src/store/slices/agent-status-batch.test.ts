@@ -187,7 +187,7 @@ describe('setAgentStatuses', () => {
     )
     expect(
       batchStore.getState().agentStatusByPaneKey[FIRST_PANE].stateHistory.at(-1)
-    ).toMatchObject({ state: 'done' })
+    ).toMatchObject({ state: 'done', notificationIntent: 'result' })
     // The swallowed `done`'s output survives on the entry, not on the history row.
     expect(
       batchStore.getState().agentStatusByPaneKey[FIRST_PANE].lastCompletedAssistantMessage

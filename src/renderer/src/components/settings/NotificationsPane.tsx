@@ -9,6 +9,7 @@ import {
   useMacNotificationPermissionState
 } from '@/components/notifications/mac-notification-permission-card'
 import { NotificationSettingToggle } from './NotificationSettingToggle'
+import { AgentNotificationModeSetting } from './AgentNotificationModeSetting'
 import { NotificationSoundSection } from './NotificationSoundSection'
 import {
   createNotificationVolumeDraftState,
@@ -144,6 +145,14 @@ export function NotificationsPane({
           void updateNotificationSettings({
             agentTaskComplete: !notificationSettings.agentTaskComplete
           })
+        }
+      />
+
+      <AgentNotificationModeSetting
+        value={notificationSettings.agentNotificationMode ?? 'all'}
+        disabled={!notificationSettings.enabled || !notificationSettings.agentTaskComplete}
+        onChange={(agentNotificationMode) =>
+          void updateNotificationSettings({ agentNotificationMode })
         }
       />
 

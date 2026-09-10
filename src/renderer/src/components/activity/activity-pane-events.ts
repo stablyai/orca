@@ -12,6 +12,14 @@ import type {
   ActivityLiveAgentState
 } from './activity-thread-types'
 import { EVENTS_PER_PANE_CAP } from './activity-event-cap'
+import {
+  classifyAgentNotificationIntent,
+  shouldSurfaceAgentNotification
+} from '../../../../shared/agent-notification-policy'
+import type {
+  AgentNotificationIntent,
+  AgentNotificationMode
+} from '../../../../shared/notification-settings-types'
 
 function historyEntrySnapshot(
   entry: AgentStatusEntry,
@@ -53,6 +61,8 @@ type PaneEventInputs = {
   agentType: AgentStatusEntry['agentType']
   agentAlive: boolean
   acknowledgedAt: number
+  manuallyUnreadAt: number
+  agentNotificationMode: AgentNotificationMode | undefined
   clearedAt: number
   liveState: ActivityLiveAgentState | null
   migrationUnsupportedPtyId?: string
@@ -62,7 +72,12 @@ type PaneEventInputs = {
 export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] {
   const events: ActivityEvent[] = []
   const seenIds = new Set<string>()
-  const append = (state: ActivityEventState, timestamp: number, entry: AgentStatusEntry): void => {
+  const append = (
+    state: ActivityEventState,
+    timestamp: number,
+    entry: AgentStatusEntry,
+    notificationIntent: AgentNotificationIntent | undefined
+  ): void => {
     const id = `agent:${entry.paneKey}:${state}:${timestamp}`
     if (seenIds.has(id)) {
       return
@@ -79,7 +94,10 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
       agentType: args.agentType ?? 'unknown',
       agentAlive: args.agentAlive,
       migrationUnsupportedPtyId: args.migrationUnsupportedPtyId,
-      unread: args.acknowledgedAt < timestamp
+      unread:
+        args.manuallyUnreadAt === timestamp ||
+        (shouldSurfaceAgentNotification(args.agentNotificationMode, notificationIntent) &&
+          args.acknowledgedAt < timestamp)
     })
   }
 
@@ -93,7 +111,8 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
     append(
       history.state as ActivityEventState,
       history.startedAt,
-      historyEntrySnapshot(args.entry, history)
+      historyEntrySnapshot(args.entry, history),
+      history.notificationIntent
     )
   }
 
@@ -108,6 +127,11 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
   if (args.entry.stateStartedAt <= args.clearedAt) {
     return events
   }
-  append(currentState, args.entry.stateStartedAt, args.entry)
+  append(
+    currentState,
+    args.entry.stateStartedAt,
+    args.entry,
+    classifyAgentNotificationIntent(args.entry)
+  )
   return events
 }

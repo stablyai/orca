@@ -5,6 +5,10 @@ import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { showBlockedNotificationFallbackToast } from '@/lib/blocked-notification-fallback'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import {
+  classifyAgentNotificationIntent,
+  shouldSurfaceAgentNotification
+} from '../../../../shared/agent-notification-policy'
 import { shareCompatibleTitleIdentityGroup } from '../../../../shared/agent-title-owner'
 import {
   isFreshNonDoneAgentStatus,
@@ -118,6 +122,19 @@ export function dispatchTerminalNotification(
   ) {
     return
   }
+  const agentNotificationIntent =
+    event.source === 'agent-task-complete'
+      ? classifyAgentNotificationIntent(agentStatus)
+      : undefined
+  if (
+    event.source === 'agent-task-complete' &&
+    !shouldSurfaceAgentNotification(
+      state.settings?.notifications?.agentNotificationMode,
+      agentNotificationIntent
+    )
+  ) {
+    return
+  }
   const agentNotificationStateStartedAt =
     eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
   // Why: main-process hook IPC can update inactive/unmounted worktrees before
@@ -223,6 +240,7 @@ export function dispatchTerminalNotification(
       hasMultipleActiveRepos: countReposNeedingNotificationDisambiguation(state) > 1,
       terminalTitle: event.terminalTitle,
       isActiveWorktree: state.activeWorktreeId === worktreeId,
+      ...(agentNotificationIntent ? { agentNotificationIntent } : {}),
       ...agentSnapshot
     })
     .then((result) => {
