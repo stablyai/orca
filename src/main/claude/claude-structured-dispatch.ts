@@ -18,6 +18,9 @@ import {
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
 
+/** Default window for a dispatch's own replay ack. A lapsed window is never a re-send. */
+export const DISPATCH_ACK_TIMEOUT_MS = 10_000
+
 /** A dispatch whose ack window expired, proven delivered by this replay. */
 export type ClaudeLateDispatchSettlement = (input: {
   clientMessageId: string
