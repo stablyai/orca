@@ -14,11 +14,17 @@ type SendSettlement = SettledSend | 'pending' | 'missing'
 
 type SendSettlementWaiter = {
   clientMessageId: string
-  resolve: (result: SettledSend) => void
+  resolve: (result: SettledSend | undefined) => void
   reject: (error: Error) => void
+  timer: ReturnType<typeof setTimeout>
   signal?: AbortSignal
   onAbort?: () => void
 }
+
+// Known legacy clients abandon the RPC after 15s without cancelling its socket dispatch.
+const SEND_SETTLEMENT_WAIT_TIMEOUT_MS = 30_000
+const MAX_SEND_SETTLEMENT_WAITERS_PER_SESSION = 64
+const MAX_SEND_SETTLEMENT_WAITERS = 1_024
 
 function settledSend(
   journal: AgentSessionJournal,
@@ -41,9 +47,10 @@ function abortError(signal: AbortSignal): Error {
     : new Error('agent session send settlement wait aborted')
 }
 
-/** Preserves the pre-pending RPC contract for older clients without holding the mutation queue. */
+/** Best-effort settlement observation for clients that predate admitted pending replies. */
 export class StructuredAgentSessionSendSettlement {
   private readonly waiters = new Map<string, Set<SendSettlementWaiter>>()
+  private waiterCount = 0
 
   constructor(private readonly journalFor: (sessionId: string) => AgentSessionJournal) {}
 
@@ -51,7 +58,7 @@ export class StructuredAgentSessionSendSettlement {
     sessionId: string,
     clientMessageId: string,
     signal?: AbortSignal
-  ): Promise<SettledSend> => {
+  ): Promise<SettledSend | undefined> => {
     if (signal?.aborted) {
       return Promise.reject(abortError(signal))
     }
@@ -62,15 +69,28 @@ export class StructuredAgentSessionSendSettlement {
     if (immediate !== 'pending') {
       return Promise.resolve(immediate)
     }
+    const existingSession = this.waiters.get(sessionId)
+    if (
+      this.waiterCount >= MAX_SEND_SETTLEMENT_WAITERS ||
+      (existingSession?.size ?? 0) >= MAX_SEND_SETTLEMENT_WAITERS_PER_SESSION
+    ) {
+      return Promise.resolve(undefined)
+    }
     return new Promise((resolve, reject) => {
       const waiter: SendSettlementWaiter = {
         clientMessageId,
         resolve,
-        reject
+        reject,
+        timer: setTimeout(() => {
+          this.remove(sessionId, waiter)
+          resolve(undefined)
+        }, SEND_SETTLEMENT_WAIT_TIMEOUT_MS)
       }
-      const session = this.waiters.get(sessionId) ?? new Set<SendSettlementWaiter>()
+      waiter.timer.unref?.()
+      const session = existingSession ?? new Set<SendSettlementWaiter>()
       session.add(waiter)
       this.waiters.set(sessionId, session)
+      this.waiterCount += 1
       if (signal) {
         const onAbort = (): void => {
           this.remove(sessionId, waiter)
@@ -79,6 +99,9 @@ export class StructuredAgentSessionSendSettlement {
         waiter.signal = signal
         waiter.onAbort = onAbort
         signal.addEventListener('abort', onAbort, { once: true })
+        if (signal.aborted) {
+          onAbort()
+        }
       }
     })
   }
@@ -115,7 +138,7 @@ export class StructuredAgentSessionSendSettlement {
     }
     for (const waiter of waiters) {
       this.remove(sessionId, waiter)
-      waiter.reject(new Error('agent session closed before send settlement'))
+      waiter.resolve(undefined)
     }
   }
 
@@ -126,11 +149,14 @@ export class StructuredAgentSessionSendSettlement {
   }
 
   private remove(sessionId: string, waiter: SendSettlementWaiter): void {
+    clearTimeout(waiter.timer)
     if (waiter.signal && waiter.onAbort) {
       waiter.signal.removeEventListener('abort', waiter.onAbort)
     }
     const session = this.waiters.get(sessionId)
-    session?.delete(waiter)
+    if (session?.delete(waiter)) {
+      this.waiterCount -= 1
+    }
     if (session?.size === 0) {
       this.waiters.delete(sessionId)
     }

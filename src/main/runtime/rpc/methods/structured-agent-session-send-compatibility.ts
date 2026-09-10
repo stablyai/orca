@@ -22,5 +22,5 @@ export async function sendStructuredAgentSessionForClient(
     result.value.clientMessageId,
     context.signal
   )
-  return { ...result, ...settled }
+  return settled ? { ...result, ...settled } : result
 }

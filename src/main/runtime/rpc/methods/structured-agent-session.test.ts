@@ -209,7 +209,7 @@ describe('capability gating', () => {
     expect(hostCalls.send).toHaveBeenCalledTimes(1)
   })
 
-  it('preserves the settled send contract for older structured clients', async () => {
+  it('returns a settlement to older structured clients when observed within the window', async () => {
     const pendingSubmission = {
       clientMessageId: 'client-1',
       fence: 1,
@@ -261,6 +261,39 @@ describe('capability gating', () => {
         cursor: { sequence: 2 },
         value: { submission: { dispatchState: 'accepted' } }
       }
+    })
+  })
+
+  it('returns durable pending when an older-client settlement observer cannot be retained', async () => {
+    hostCalls.send.mockResolvedValueOnce({
+      ok: true,
+      replayed: false,
+      fence: 1,
+      cursor: { epoch: 'epoch-a', sequence: 1 },
+      value: {
+        clientMessageId: 'client-1',
+        submission: {
+          clientMessageId: 'client-1',
+          fence: 1,
+          payloadFingerprint: 'fingerprint',
+          dispatchState: 'pending',
+          providerItemId: null,
+          reason: null,
+          submittedAt: 1,
+          resolvedAt: null
+        }
+      }
+    })
+    hostCalls.waitForSendSettlement.mockResolvedValueOnce(undefined)
+
+    const response = await call('agentSession.send', sendParams(), {
+      clientKind: 'runtime',
+      clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    })
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { value: { submission: { dispatchState: 'pending' } } }
     })
   })
 

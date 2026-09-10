@@ -18,6 +18,7 @@ import {
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
+import { dispatchMayMatchProviderEcho } from './journal-dispatch-doubt-reasons'
 import { journalItemRevisionIsStale } from './journal-item-revision'
 import type { JournalRow } from './journal-row-schema'
 
@@ -160,12 +161,12 @@ export function resolveJournalItemId(
   // Exact payload plus queue order preserves repeated identical sends one-for-one.
   const submission = [...state.submissions.values()]
     .sort((left, right) => left.submittedAt - right.submittedAt)
-    .find((candidate) => {
-      if (candidate.dispatchState === 'rejected' || candidate.payloadFingerprint !== fingerprint) {
-        return false
-      }
-      return state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
-    })
+    .find(
+      (candidate) =>
+        dispatchMayMatchProviderEcho(candidate.dispatchState, candidate.reason) &&
+        candidate.payloadFingerprint === fingerprint &&
+        state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
+    )
   if (!submission) {
     return itemId
   }

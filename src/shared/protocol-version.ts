@@ -138,8 +138,8 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // receive their journal or drive their lifecycle. Mobile may receive a metadata-only placeholder;
 // the host still refuses agentSession.* methods and destructive tab mutations without capability.
 export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
-// Why: older structured clients render a durable pending send reply as uncertain delivery, so
-// hosts preserve their pre-pending contract unless the client explicitly understands admission.
+// Why: older structured clients render durable pending replies as uncertain delivery. Capable
+// clients skip the host's bounded best-effort settlement observation.
 export const AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY =
   'agent-session.pending-send-result.v1' as const
 // Why: paired clients advertise Claude-structured support so the host can gate its agent-specific

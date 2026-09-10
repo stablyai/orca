@@ -210,13 +210,10 @@ describe('a chat that closes', () => {
       throw new Error('send was refused')
     }
     const settlement = host.waitForSendSettlement(SESSION, result.value.clientMessageId)
-    const rejection = expect(settlement).rejects.toThrow(
-      'agent session closed before send settlement'
-    )
 
     await host.close(SESSION)
 
-    await rejection
+    await expect(settlement).resolves.toBeUndefined()
   })
 })
 

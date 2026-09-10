@@ -1,5 +1,7 @@
 // Why a submission is in doubt, and whether Orca may put the message on the
 // wire a second time.
+
+import type { AgentJournalDispatchState } from '../../../shared/agent-session-journal-types'
 //
 // `unknown` is never raised by elapsed time; what survives is a process fact.
 // But a process fact that ends the WAIT is not the same claim as one that
@@ -62,4 +64,11 @@ export function dispatchDoubtProvesUndelivered(reason: string | null | undefined
     reason === DISPATCH_DOUBT_WRITE_FAILED ||
     reason?.startsWith(`${DISPATCH_DOUBT_WRITE_FAILED}: `) === true
   )
+}
+
+export function dispatchMayMatchProviderEcho(
+  state: AgentJournalDispatchState,
+  reason: string | null
+): boolean {
+  return state !== 'rejected' && !(state === 'unknown' && dispatchDoubtProvesUndelivered(reason))
 }
