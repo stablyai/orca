@@ -65,6 +65,98 @@ describe('createPanelBridgeMessageHandler', () => {
     )
   })
 
+  it('opens an owned workspace view without relaying the renderer-only action to main', () => {
+    const panelWindow = createFakePanelWindow()
+    const callPanelAction = vi.fn()
+    const openWorkspaceView = vi.fn().mockReturnValue(true)
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction,
+      openWorkspaceView
+    })
+
+    handler(
+      messageEvent(
+        {
+          type: 'orca-panel-action',
+          requestId: 'open-1',
+          action: 'workspace.openView',
+          params: { viewId: 'board' }
+        },
+        panelWindow
+      )
+    )
+
+    expect(openWorkspaceView).toHaveBeenCalledWith('board')
+    expect(callPanelAction).not.toHaveBeenCalled()
+    expect(panelWindow.postMessage).toHaveBeenCalledWith(
+      { type: 'orca-panel-action-result', requestId: 'open-1', ok: true, value: null },
+      '*'
+    )
+  })
+
+  it('refuses a workspace view the panel does not own without reaching main', () => {
+    const panelWindow = createFakePanelWindow()
+    const callPanelAction = vi.fn()
+    // The renderer scopes lookups to the requesting plugin, so a foreign or
+    // unknown viewId arrives here as a plain false.
+    const openWorkspaceView = vi.fn().mockReturnValue(false)
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction,
+      openWorkspaceView
+    })
+
+    handler(
+      messageEvent(
+        {
+          type: 'orca-panel-action',
+          requestId: 'open-2',
+          action: 'workspace.openView',
+          params: { viewId: 'someone-elses-board' }
+        },
+        panelWindow
+      )
+    )
+
+    expect(callPanelAction).not.toHaveBeenCalled()
+    expect(panelWindow.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: 'open-2', ok: false, errorCode: 'invalid_request' }),
+      '*'
+    )
+  })
+
+  it('rejects a workspace view request with no usable viewId', () => {
+    const panelWindow = createFakePanelWindow()
+    const openWorkspaceView = vi.fn()
+    const handler = createPanelBridgeMessageHandler({
+      sessionToken: SESSION_TOKEN,
+      getPanelWindow: () => panelWindow,
+      callPanelAction: vi.fn(),
+      openWorkspaceView
+    })
+
+    handler(
+      messageEvent(
+        {
+          type: 'orca-panel-action',
+          requestId: 'open-3',
+          action: 'workspace.openView',
+          params: { viewId: 42 }
+        },
+        panelWindow
+      )
+    )
+
+    expect(openWorkspaceView).not.toHaveBeenCalled()
+    expect(panelWindow.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: 'open-3', ok: false }),
+      '*'
+    )
+  })
+
   it('ignores messages whose source is not the panel iframe window', async () => {
     const panelWindow = createFakePanelWindow()
     const { handler, callPanelAction } = createHandler(panelWindow)

@@ -46,6 +46,8 @@ const panelContributionSchema = z.object({
   title: z.string().min(1).max(256),
   /** Lucide icon name rendered in the right-sidebar activity bar. */
   icon: z.string().min(1).max(64).optional(),
+  /** Defaults to the legacy right-sidebar surface for compatibility. */
+  location: z.enum(['right-sidebar', 'workspace']).optional(),
   /** HTML entry rendered inside a sandboxed panel frame. */
   entry: pluginRelativePathSchema
 })

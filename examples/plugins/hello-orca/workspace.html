@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: var(--foreground, #ddd);
+        background: var(--background, transparent);
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 4px;
+      }
+      p {
+        margin: 0 0 16px;
+        color: var(--muted-foreground, #999);
+      }
+      .card {
+        max-width: 640px;
+        padding: 16px;
+        border: 1px solid var(--border, #555);
+        border-radius: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Hello Orca Workspace 🗺️</h1>
+    <p>
+      This panel declares <code>"location": "workspace"</code>, so it renders across the workspace
+      area instead of the right sidebar. It has no activity-bar entry — the sidebar panel opens it.
+    </p>
+    <div class="card">
+      Same sandbox, same bridge, more room: use this surface for content a 320px sidebar cannot
+      hold, such as a board, a diff, or a dashboard.
+    </div>
+  </body>
+</html>

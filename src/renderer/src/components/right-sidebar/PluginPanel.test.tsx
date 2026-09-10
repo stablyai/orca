@@ -9,9 +9,10 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-const { usePluginPanelsMock, setPanelHealthMock } = vi.hoisted(() => ({
-  usePluginPanelsMock: vi.fn<() => ActivePluginPanel[]>(() => []),
-  setPanelHealthMock: vi.fn()
+const { panelListMock, setPanelHealthMock, openWorkspacePanelMock } = vi.hoisted(() => ({
+  panelListMock: vi.fn<() => ActivePluginPanel[]>(() => []),
+  setPanelHealthMock: vi.fn(),
+  openWorkspacePanelMock: vi.fn()
 }))
 
 const { watchdogStartMock, watchdogStopMock, watchdogCallbacks } = vi.hoisted(() => ({
@@ -21,10 +22,13 @@ const { watchdogStartMock, watchdogStopMock, watchdogCallbacks } = vi.hoisted(()
 }))
 
 vi.mock('@/store/plugin-panels', () => ({
-  usePluginPanels: usePluginPanelsMock,
-  usePluginPanelsStore: (
-    selector: (state: { setPanelHealth: typeof setPanelHealthMock }) => unknown
-  ) => selector({ setPanelHealth: setPanelHealthMock })
+  usePluginPanels: panelListMock,
+  collectActivePluginPanels: () => panelListMock(),
+  usePluginPanelsStore: Object.assign(
+    (selector: (state: { setPanelHealth: typeof setPanelHealthMock }) => unknown) =>
+      selector({ setPanelHealth: setPanelHealthMock }),
+    { getState: () => ({ plugins: [], openWorkspacePanel: openWorkspacePanelMock }) }
+  )
 }))
 
 vi.mock('./plugin-panel-watchdog', () => ({
@@ -80,7 +84,7 @@ beforeEach(() => {
   setPanelHealthMock.mockReset()
   document.documentElement.classList.remove('dark')
   pluginChangedListener = null
-  usePluginPanelsMock.mockReturnValue([dashboardPanel])
+  panelListMock.mockReturnValue([dashboardPanel])
   globalThis.window.api = {
     plugins: {
       readPanelEntry: readPanelEntryMock,
@@ -102,9 +106,12 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-async function renderPanel(tabKey: string): Promise<void> {
+async function renderPanel(
+  tabKey: string,
+  expectedLocation?: 'right-sidebar' | 'workspace'
+): Promise<void> {
   await act(async () => {
-    root.render(<PluginPanel tabKey={tabKey} />)
+    root.render(<PluginPanel tabKey={tabKey} expectedLocation={expectedLocation} />)
   })
 }
 
@@ -340,10 +347,67 @@ describe('PluginPanel', () => {
   })
 
   it('shows an unavailable state for a tab whose plugin is gone', async () => {
-    usePluginPanelsMock.mockReturnValue([])
+    panelListMock.mockReturnValue([])
 
     await renderPanel('plugin:orca-samples.removed-plugin/dashboard')
 
+    expect(readPanelEntryMock).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('This plugin panel is no longer available.')
+  })
+
+  it('still delivers an in-flight action reply after the plugin list refreshes', async () => {
+    readPanelEntryMock.mockResolvedValue({
+      html: '<h1>Hello plugin</h1>',
+      sessionToken: SESSION_TOKEN
+    })
+    await renderPanel(dashboardPanel.tabKey)
+    const iframe = container.querySelector('iframe')
+
+    let resolveAction!: (outcome: { ok: true; value: unknown }) => void
+    panelActionMock.mockImplementationOnce(
+      () => new Promise((resolve) => (resolveAction = resolve))
+    )
+    const postMessage = vi.fn()
+    Object.defineProperty(iframe?.contentWindow ?? {}, 'postMessage', {
+      value: postMessage,
+      configurable: true
+    })
+
+    const event = new MessageEvent('message', {
+      data: {
+        type: 'orca-panel-action',
+        requestId: 'in-flight',
+        action: 'notifications.show',
+        params: { title: 'Hello' }
+      }
+    })
+    Object.defineProperty(event, 'source', { value: iframe?.contentWindow })
+    await act(async () => {
+      window.dispatchEvent(event)
+      await waitForHappyDomTasks()
+    })
+
+    // A plugin-list refresh (install, enable, dev reload) hands the component a
+    // new array identity. It must not orphan the reply the panel is awaiting.
+    panelListMock.mockReturnValue([{ ...dashboardPanel }])
+    await renderPanel(dashboardPanel.tabKey)
+    await act(async () => {
+      resolveAction({ ok: true, value: { delivered: true } })
+      await waitForHappyDomTasks()
+    })
+
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: 'in-flight', ok: true }),
+      '*'
+    )
+  })
+
+  it('refuses to render a panel on a surface it did not declare', async () => {
+    panelListMock.mockReturnValue([{ ...dashboardPanel, location: 'workspace' }])
+
+    await renderPanel(dashboardPanel.tabKey, 'right-sidebar')
+
+    // A workspace panel reached through a sidebar tab must not load its entry.
     expect(readPanelEntryMock).not.toHaveBeenCalled()
     expect(container.textContent).toContain('This plugin panel is no longer available.')
   })

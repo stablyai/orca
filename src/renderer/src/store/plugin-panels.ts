@@ -19,10 +19,13 @@ export type PluginPanelHealth = 'healthy' | 'error'
 type PluginPanelsState = {
   plugins: PluginHostListEntry[]
   panelErrors: Record<string, true>
+  activeWorkspacePanel: string | null
   fetchStatus: PluginPanelsFetchStatus
   fetchPlugins: () => Promise<void>
   setPlugins: (plugins: PluginHostListEntry[]) => void
   setPanelHealth: (tabKey: string, health: PluginPanelHealth) => void
+  openWorkspacePanel: (tabKey: string) => void
+  closeWorkspacePanel: () => void
 }
 
 let pluginListGeneration = 0
@@ -49,6 +52,7 @@ function schedulePluginListRetry(generation: number): void {
 export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
   plugins: [],
   panelErrors: {},
+  activeWorkspacePanel: null,
   fetchStatus: 'idle',
   fetchPlugins: async () => {
     const generation = ++pluginListGeneration
@@ -106,7 +110,9 @@ export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
       }
       return { panelErrors }
     })
-  }
+  },
+  openWorkspacePanel: (tabKey) => set({ activeWorkspacePanel: tabKey }),
+  closeWorkspacePanel: () => set({ activeWorkspacePanel: null })
 }))
 
 function retainInstalledPanelErrors(
@@ -151,6 +157,15 @@ export function collectActivePluginPanels(plugins: PluginHostListEntry[]): Activ
         pluginName: plugin.name
       }))
     )
+}
+
+export function collectActivePluginPanelsAt(
+  plugins: PluginHostListEntry[],
+  location: NonNullable<PluginHostPanel['location']>
+): ActivePluginPanel[] {
+  return collectActivePluginPanels(plugins).filter(
+    (panel) => (panel.location ?? 'right-sidebar') === location
+  )
 }
 
 /** Tab keys of every installed plugin panel (any status) — used by the
@@ -202,6 +217,16 @@ export function usePluginPanels(): ActivePluginPanel[] {
   // Why: derive in useMemo (not the selector) so the store snapshot stays
   // referentially stable and doesn't retrigger useSyncExternalStore loops.
   return useMemo(() => collectActivePluginPanels(plugins), [plugins])
+}
+
+export function usePluginPanelsAt(
+  location: NonNullable<PluginHostPanel['location']>
+): ActivePluginPanel[] {
+  const plugins = usePluginPanelsStore((s) => s.plugins)
+  useEffect(() => {
+    ensurePluginPanelsLoaded()
+  }, [])
+  return useMemo(() => collectActivePluginPanelsAt(plugins, location), [location, plugins])
 }
 
 /** Commands of enabled plugins, sharing the authoritative plugin-list refresh. */

@@ -15,11 +15,16 @@ import {
 import { createPanelWatchdog } from './plugin-panel-watchdog'
 import { buildPanelDesignTokenCss, currentPanelColorScheme } from './plugin-panel-design-token-css'
 import { usePluginPanelThemeRevision } from './use-plugin-panel-theme-revision'
-import { usePluginPanels, usePluginPanelsStore } from '@/store/plugin-panels'
+import {
+  collectActivePluginPanels,
+  usePluginPanels,
+  usePluginPanelsStore
+} from '@/store/plugin-panels'
 import { translate } from '@/i18n/i18n'
 
 type PluginPanelProps = {
   tabKey: string
+  expectedLocation?: 'right-sidebar' | 'workspace'
 }
 
 type PluginPanelEntryState =
@@ -45,11 +50,15 @@ function fillPanelShell(html: string): string {
     .replace(PANEL_SHELL_TOKENS_PLACEHOLDER, buildPanelDesignTokenCss())
 }
 
-function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
+function PluginPanel({ tabKey, expectedLocation }: PluginPanelProps): React.JSX.Element {
   const panels = usePluginPanels()
   const setPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
   const panel = isPluginPanelTabKey(tabKey)
-    ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
+    ? (panels.find(
+        (entry) =>
+          entry.tabKey === tabKey &&
+          (!expectedLocation || (entry.location ?? 'right-sidebar') === expectedLocation)
+      ) ?? null)
     : null
   const [entryState, setEntryState] = useState<PluginPanelEntryState>({ status: 'loading' })
   const [sessionToken, setSessionToken] = useState<string | null>(null)
@@ -89,6 +98,19 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       sessionToken,
       getPanelWindow: () => iframeRef.current?.contentWindow ?? null,
       callPanelAction: callPanelActionViaPreload,
+      openWorkspaceView: (viewId) => {
+        // Read the list at call time: capturing it would rebind this handler on
+        // every plugin-list refresh, and the rebind drops in-flight replies.
+        const target = collectActivePluginPanels(usePluginPanelsStore.getState().plugins).find(
+          (entry) =>
+            entry.pluginKey === pluginKey && entry.id === viewId && entry.location === 'workspace'
+        )
+        if (!target) {
+          return false
+        }
+        usePluginPanelsStore.getState().openWorkspacePanel(target.tabKey)
+        return true
+      },
       isActive: () => active,
       onPong: (pingId) => watchdog.handlePong(pingId)
     })
@@ -97,7 +119,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       active = false
       window.removeEventListener('message', handler)
     }
-  }, [panelDocument, sessionToken, watchdog])
+  }, [panelDocument, pluginKey, sessionToken, watchdog])
 
   useEffect(() => {
     if (!panelFrameKey || loadedFrameKey !== panelFrameKey) {

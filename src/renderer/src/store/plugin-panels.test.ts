@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../preload/api-types'
 import {
   collectActivePluginCommands,
+  collectActivePluginPanelsAt,
   collectEditablePluginCommands,
   usePluginPanelsStore
 } from './plugin-panels'
@@ -65,6 +66,39 @@ describe('plugin panel list loading', () => {
         { ...enabled, status: 'disabled' }
       ])
     ).toEqual([expect.objectContaining({ pluginKey: enabled.pluginKey, id: 'tasks' })])
+  })
+
+  it('routes panels to their declared surface and keeps legacy panels in the sidebar', () => {
+    const entry = {
+      ...plugin('orca-samples.current'),
+      panels: [
+        {
+          id: 'legacy',
+          title: 'Legacy',
+          tabKey: 'plugin:orca-samples.current/legacy' as const
+        },
+        {
+          id: 'sidebar',
+          title: 'Sidebar',
+          location: 'right-sidebar' as const,
+          tabKey: 'plugin:orca-samples.current/sidebar' as const
+        },
+        {
+          id: 'board',
+          title: 'Board',
+          location: 'workspace' as const,
+          tabKey: 'plugin:orca-samples.current/board' as const
+        }
+      ]
+    }
+
+    // A manifest written before `location` existed must keep its sidebar tab.
+    expect(collectActivePluginPanelsAt([entry], 'right-sidebar').map((p) => p.id)).toEqual([
+      'legacy',
+      'sidebar'
+    ])
+    expect(collectActivePluginPanelsAt([entry], 'workspace').map((p) => p.id)).toEqual(['board'])
+    expect(collectActivePluginPanelsAt([{ ...entry, status: 'disabled' }], 'workspace')).toEqual([])
   })
 
   it('bounds watchdog errors to installed panels and clears them on recovery', () => {
