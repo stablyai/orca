@@ -43,7 +43,9 @@ export type NativeChatInteractiveSend = {
   }
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
-  /** Stop delayed writes without interrupting the agent. */
+  /** Stop the in-flight answer's delayed keystrokes without interrupting the
+   *  agent. Scoped to selector keystrokes: a chat write carries the user's own
+   *  words, which the card's dismissal must never discard. */
   cancelPending: () => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
   cancel: () => void
@@ -63,9 +65,11 @@ export function useNativeChatInteractiveSend(
   targetPtyId: string | null,
   agent: AgentType
 ): NativeChatInteractiveSend {
-  // The in-flight answer's cancel handle; cleared on a new send, on Stop, and on
+  // The in-flight ANSWER's cancel handle; cleared on a new send, on Stop, and on
   // unmount so a detached setTimeout chain can't keep writing PTY bytes after
-  // the view is gone / the user switched away.
+  // the view is gone / the user switched away. Only selector keystrokes are
+  // enrolled — a chat send stays outside this handle so dismissing the card
+  // cannot drop words the user typed.
   const inFlightRef = useRef<NativeChatSendHandle | null>(null)
   const cancelInFlight = useCallback(() => {
     inFlightRef.current?.cancel()

@@ -316,4 +316,22 @@ describe('useNativeChatInteractiveSend', () => {
     act(() => result.current.cancelPending())
     expect(mocks.cancel).not.toHaveBeenCalled()
   })
+
+  it('cancels only the answer keystrokes, never a message send', () => {
+    const answerHandle = { cancel: vi.fn(), settleAfterMs: 500 }
+    const messageHandle = { cancel: vi.fn(), settleAfterMs: 500 }
+    mocks.sendNativeChatAskAnswer.mockReturnValue(answerHandle)
+    mocks.sendNativeChatMessage.mockReturnValue(messageHandle)
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    act(() => {
+      result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+    act(() => result.current.cancelPending())
+
+    expect(answerHandle.cancel).toHaveBeenCalledOnce()
+    expect(messageHandle.cancel).not.toHaveBeenCalled()
+  })
 })
