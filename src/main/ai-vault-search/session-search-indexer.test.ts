@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { appendFile, chmod, mkdir, rm, stat, utimes } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -548,6 +548,18 @@ it('reports what it last knew after it is closed, without reading the database',
 // the first at random. The recipe for every configuration change is
 // close-then-construct, so the ordering that causes this is the one the recipe
 // rules out; this is what says so rather than letting it corrupt quietly.
+// Round 12, F2. The claim was staked before the store opened, so an open that
+// threw left the path owned by an object that does not exist and every later
+// construction was refused -- including the one that fixes whatever broke it.
+it('releases the database path when the open itself throws', () => {
+  // A directory where the database file goes: the open fails, nothing is owned.
+  mkdirSync(harness.databasePath, { recursive: true })
+  expect(() => newIndexer()).toThrow()
+
+  rmSync(harness.databasePath, { recursive: true, force: true })
+  expect(() => newIndexer()).not.toThrow()
+})
+
 it('refuses a second indexer on a database one already owns', () => {
   newIndexer()
   expect(() => newIndexer()).toThrow(/already has a live indexer/)

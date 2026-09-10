@@ -125,10 +125,15 @@ export class SessionSearchIndexer {
         `SessionSearchIndexer: ${options.databasePath} already has a live indexer; close it first`
       )
     }
-    liveIndexerPaths.add(options.databasePath)
     // Store, registration and indexer share one lifetime, which is what makes
     // the object immutable: there is no second open to get out of step with.
+    // Claimed only once the store is open, because a construction that throws
+    // has no `close()` to release the claim: registering first would leave the
+    // path owned by an object that does not exist, and every later attempt at
+    // it -- including the one that fixes whatever broke the open -- would be
+    // refused for the life of the process.
     this.store = new SessionSearchStore(options.databasePath, onError)
+    liveIndexerPaths.add(options.databasePath)
     this.store.setRetentionCutoffMs(this.cutoffMs())
     this.unregister = registerSessionSearchIndexConsumer(this.store)
   }
