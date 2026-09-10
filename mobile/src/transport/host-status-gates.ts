@@ -67,16 +67,18 @@ export function useHostStatusGates(args: {
       }
       const delay = STATUS_RETRY_DELAYS[attempt++]
       const previous = loadedRef.current
-      const provenThisGeneration =
+      const sameGeneration =
         previous !== null &&
         previous.hostId === hostId &&
         previous.client === client &&
         previous.generation === generation
-      // Why: a probe with retries left is still pending, so a single hiccup shows the spinner
-      // rather than a card the user cannot dismiss. Only an exhausted ladder settles and offers
-      // Retry. Restores the memory main had in the gate's resolved-host latch.
-      setUnverified(!provenThisGeneration && delay !== undefined)
-      if (!provenThisGeneration) {
+      // Why: a probe with retries left is still pending, so a hiccup shows the spinner rather
+      // than a card the user cannot dismiss. Only an exhausted ladder settles and offers Retry.
+      // Restores the memory main had in the gate's resolved-host latch.
+      setUnverified(delay !== undefined)
+      // Why: a verdict this generation already proved outranks the failure; only a generation
+      // with no record of its own falls back to unknown.
+      if (!sameGeneration) {
         applyLoaded({
           hostId,
           client,

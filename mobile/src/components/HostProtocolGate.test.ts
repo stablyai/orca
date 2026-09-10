@@ -433,6 +433,35 @@ describe('HostProtocolGate', () => {
     }
   )
 
+  // Pins where the card appears: after the fourth attempt, not the second. Record existence
+  // alone once counted as "already answered", which surfaced the card a second in.
+  it('surfaces the recovery card only once all four attempts have failed', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi.fn().mockRejectedValue(new Error('timeout'))
+    hostClient.current = { client: { sendRequest } as unknown as RpcClient, state: 'connected' }
+    renderer = await renderGate()
+    const seen: string[] = []
+    const sample = () =>
+      seen.push(
+        `${sendRequest.mock.calls.length}:${
+          renderedText(renderer as ReactTestRenderer).includes('Unable to verify this host')
+            ? 'card'
+            : 'spinner'
+        }`
+      )
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    sample()
+    for (const delay of [1_000, 2_000, 4_000]) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(delay)
+      })
+      sample()
+    }
+    expect(seen).toEqual(['1:spinner', '2:spinner', '3:spinner', '4:card'])
+  })
+
   // Why: a cold start whose first probe fails must not flash the recovery card. main latched
   // resolved hosts so the overlay never returned; this keeps the spinner until the ladder is out.
   it('shows the spinner, not the card, while a cold start retries its first failure', async () => {

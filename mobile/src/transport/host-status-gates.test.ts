@@ -350,4 +350,53 @@ describe('useHostStatusGates', () => {
       vi.useRealTimers()
     }
   })
+
+  // Why: a generation that already proved its capabilities must not have them wiped by a
+  // transient reconnect failure — the host told us once and nothing has contradicted it.
+  it('keeps a proven generation intact when its reconnect probe fails', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: {
+        protocolVersion: 3,
+        minCompatibleMobileVersion: 3,
+        capabilities: ['browser.screencast.v1'],
+        floatingWorkspaceEnabled: true
+      }
+    })
+    const client = { sendRequest } as unknown as RpcClient
+    let gates: HostStatusGates | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe({ connState }: { connState: 'connected' | 'disconnected' }): null {
+      gates = useHostStatusGates({ hostId: 'host-1', client, connState })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe, { connState: 'connected' }))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      expect(gates?.hostCapabilities).toEqual(['browser.screencast.v1'])
+
+      sendRequest.mockRejectedValue(new Error('offline'))
+      await act(async () => {
+        renderer?.update(createElement(Probe, { connState: 'disconnected' }))
+      })
+      await act(async () => {
+        renderer?.update(createElement(Probe, { connState: 'connected' }))
+        await vi.advanceTimersByTimeAsync(0)
+      })
+
+      expect(gates).toMatchObject({
+        hostCapabilities: ['browser.screencast.v1'],
+        floatingWorkspaceEnabled: true,
+        compatVerdict: { kind: 'ok' }
+      })
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
+    }
+  })
 })
