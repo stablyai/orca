@@ -110,6 +110,19 @@ describe('network proxy settings', () => {
       expect(env.HTTPS_PROXY).toBe('http://127.0.0.1:8790')
     })
 
+    it('still exports the CA when the proxy URL is inherited rather than configured', () => {
+      // buildPtyHostEnv keeps inherited proxy variables, so agents can be proxied
+      // while this setting is empty; the anchor is orthogonal to the address.
+      expect(buildConfiguredProxyEnv({ httpProxyCaPath: '/etc/ssl/certs/proxy-ca.pem' })).toEqual({
+        NODE_EXTRA_CA_CERTS: '/etc/ssl/certs/proxy-ca.pem'
+      })
+    })
+
+    it('returns nothing when neither a proxy nor a CA is configured', () => {
+      expect(buildConfiguredProxyEnv({})).toEqual({})
+      expect(buildConfiguredProxyEnv({ httpProxyCaPath: 'relative/path.pem' })).toEqual({})
+    })
+
     it('omits NODE_EXTRA_CA_CERTS when no CA is configured', () => {
       const env = buildConfiguredProxyEnv({ httpProxyUrl: 'http://127.0.0.1:8790' })
       expect(env.NODE_EXTRA_CA_CERTS).toBeUndefined()

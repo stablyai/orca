@@ -128,8 +128,15 @@ export function buildConfiguredProxyEnv(
   settings: NetworkProxySettings | null | undefined
 ): Record<string, string> {
   const proxy = normalizeProxyUrl(settings?.httpProxyUrl)
-  if (!proxy.ok || !proxy.value) {
+  const caPath = normalizeProxyCaPath(settings?.httpProxyCaPath)
+  if (!proxy.ok) {
     return {}
+  }
+  // Why the CA still ships without a configured URL: the pty host keeps any
+  // inherited proxy variables, so agents can be proxied while this setting is
+  // empty. The anchor is orthogonal to where the proxy address came from.
+  if (!proxy.value) {
+    return caPath.ok && caPath.value ? { NODE_EXTRA_CA_CERTS: caPath.value } : {}
   }
   const env: Record<string, string> = {
     HTTP_PROXY: proxy.value,
@@ -149,7 +156,6 @@ export function buildConfiguredProxyEnv(
   // Why: the agent CLIs are Node and Bun programs, and both read
   // NODE_EXTRA_CA_CERTS at startup. Without it every request through an
   // intercepting proxy fails verification and the proxy looks like an outage.
-  const caPath = normalizeProxyCaPath(settings?.httpProxyCaPath)
   if (caPath.ok && caPath.value) {
     env.NODE_EXTRA_CA_CERTS = caPath.value
   }

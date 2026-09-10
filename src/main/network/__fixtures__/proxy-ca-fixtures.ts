@@ -1,5 +1,5 @@
-// PROXY_CA signs LEAF (CN and SAN api.example.com); UNRELATED_CA signs nothing
-// here. Static rather than generated, matching browser-local-https-test-certificate.ts,
+// PROXY_CA signs LEAF (CN and SAN api.example.com). UNRELATED_CA signs ROGUE_LEAF,
+// which claims the same hostname, so an attacker's chain can be built from it. Static rather than generated, matching browser-local-https-test-certificate.ts,
 // which avoids an OpenSSL dependency in tests. Both expire in 2046.
 
 export const PROXY_CA = `-----BEGIN CERTIFICATE-----
@@ -61,4 +61,24 @@ jRfbHnqb75Vy+lHmpHtt7ggq8lE3NTEvwEROdJ4a1yXhGoGmnA6AgvS7NbZVpJqI
 tyhFfE/SODL69KVsI6M8ALKUWGTxXWnQ/ZwPiJ5hQs2cv+qbGmzqglurQMQ+N/+M
 zAWKL3s89x1020B+rYWE541NKcGuhDGV2WdDG6HM4dTe3mKIRxXWKUrvfbeUustj
 r/ysZSBU4XS2thpDP4+FT/RwwQ==
+-----END CERTIFICATE-----`
+
+export const ROGUE_LEAF = `-----BEGIN CERTIFICATE-----
+MIIDKDCCAhCgAwIBAgIUHdZmEfvPcUMLoFzl819Hw9IN9RwwDQYJKoZIhvcNAQEL
+BQAwFzEVMBMGA1UEAwwMVW5yZWxhdGVkIENBMB4XDTI2MDkxMDAxMDI0M1oXDTQ2
+MDkwNTAxMDI0M1owGjEYMBYGA1UEAwwPYXBpLmV4YW1wbGUuY29tMIIBIjANBgkq
+hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmSBQ+zpQ7JJlT36gunJCDdUSptIbZNlA
+fy5xQzoCGz/TImMSEXV50c08Tgd90A1Ylq4znzuRQ+rpngRhOsoO50L/cl28RMXn
+70OjTsiLmJwNiNJ7CgiRb0H4T1lVP5nol7MRGrD/vq65Reb37GwDEZiEjmUgtXwA
+p7I05thF6P36YYJt9dcPJ++eOcXnTgR2OFeUQz3UQdPN/a7Tn3ty1kEwYgkRLYcF
+WOtF590VEfqF8RLgZZEn8RsJ+pz46kEjvg1gjQBEH7+/+giBeHYnFtVW/wyhlN6H
+XoFoSNvDQxhMmPL0mItmUkcRji3EfNZU5TNfI0XRlWcX23AITKuuQwIDAQABo2kw
+ZzAaBgNVHREEEzARgg9hcGkuZXhhbXBsZS5jb20wCQYDVR0TBAIwADAdBgNVHQ4E
+FgQUY2X+JziX0dNl+peXQS//LTPWpyAwHwYDVR0jBBgwFoAULNS8hJhoEnYcYpjZ
+eG4dQIU5AI4wDQYJKoZIhvcNAQELBQADggEBAAhBQYVP7MAipR3QWiSn2ttWmPPs
+5TeKSkaAiPstclFYuCG4UO/l5v84utCxjc61W3wrd2u6ZD9PovpFYYV4gzTZpBDP
+8Y3CH0FNYIiP7W9ufqyyYWdtAh0iO4hKzLxqa7rG305uh7OpSmMJ9y5iOM9vWJTM
+frgOE8l2hkE85/+ytYVqLzSeTY9xbLwG+W6sR25lBYYEXTCj/SlfuY13SzJEhZM/
+4CdjiqSywy43H6vUenTJOKYIld0nLe0H27byu3RiL2AReWMMvAPYRyRZeKb2px1k
+WDI/SA1PBK7KJCdlBK0YzziyQ7hG01l9Sonaf3zWt60ptcAkabBCZj5S6Ew=
 -----END CERTIFICATE-----`

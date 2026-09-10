@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { X509Certificate } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { LEAF, PROXY_CA, UNRELATED_CA } from './__fixtures__/proxy-ca-fixtures'
+import { LEAF, PROXY_CA, ROGUE_LEAF, UNRELATED_CA } from './__fixtures__/proxy-ca-fixtures'
 import {
   applyProxyCaTrustToSession,
   chainIsSignedByProxyCa,
@@ -83,6 +83,50 @@ describe('proxy CA trust', () => {
     ).toEqual({ trusted: false, reason: 'hostname-mismatch' })
   })
 
+  it('rejects a rogue chain that merely appends a copy of the configured CA', () => {
+    // A CA certificate's DER is public by design, so "the chain contains our
+    // anchor" is something any peer can arrange. Only a verified signature path
+    // from the leaf may be honoured.
+    expect(
+      decideProxyCaVerification({
+        verificationResult: AUTHORITY_ERROR,
+        hostname: 'api.example.com',
+        chainPem: [ROGUE_LEAF, PROXY_CA],
+        anchors: anchors(PROXY_CA)
+      })
+    ).toEqual({ trusted: false, reason: 'chain-not-signed-by-ca' })
+    expect(chainIsSignedByProxyCa([ROGUE_LEAF, PROXY_CA], anchors(PROXY_CA))).toBe(false)
+    // Replaying the anchor alone proves nothing either.
+    expect(chainIsSignedByProxyCa([PROXY_CA], anchors(PROXY_CA))).toBe(false)
+  })
+
+  it('fails closed when no hostname is supplied', () => {
+    expect(
+      decideProxyCaVerification({
+        verificationResult: AUTHORITY_ERROR,
+        hostname: '',
+        chainPem: [LEAF],
+        anchors: anchors(PROXY_CA)
+      })
+    ).toEqual({ trusted: false, reason: 'hostname-mismatch' })
+  })
+
+  it('treats a hostname checkHost cannot parse as a mismatch rather than throwing', () => {
+    expect(() =>
+      decideProxyCaVerification({
+        verificationResult: AUTHORITY_ERROR,
+        hostname: '127.0.0.1',
+        chainPem: [LEAF],
+        anchors: anchors(PROXY_CA)
+      })
+    ).not.toThrow()
+  })
+
+  it('refuses an anchor that is not a CA', () => {
+    // LEAF is an end-entity certificate; it must never be honoured as an issuer.
+    expect(chainIsSignedByProxyCa([LEAF], anchors(LEAF))).toBe(false)
+  })
+
   it('rejects a chain signed by some other CA', () => {
     expect(
       decideProxyCaVerification({
@@ -117,8 +161,8 @@ describe('proxy CA trust', () => {
     ).toEqual({ trusted: false, reason: 'no-ca-configured' })
   })
 
-  it('accepts the CA appearing in the presented chain itself', () => {
-    expect(chainIsSignedByProxyCa([PROXY_CA], anchors(PROXY_CA))).toBe(true)
+  it('accepts a leaf presented alongside the CA that signed it', () => {
+    expect(chainIsSignedByProxyCa([LEAF, PROXY_CA], anchors(PROXY_CA))).toBe(true)
   })
 
   it('requires a real signature, not just a matching issuer name', () => {

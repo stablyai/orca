@@ -98,7 +98,25 @@ function isWithinValidityWindow(cert: X509Certificate, now: Date): boolean {
   return now.getTime() >= from && now.getTime() <= to
 }
 
-/** True when some certificate in the chain is one of the anchors, or was signed by one. */
+// Why both checks: checkIssued only compares issuer and subject names, which any
+// peer can claim. The verify call is what proves possession of the issuer's key.
+function signedBy(cert: X509Certificate, issuer: X509Certificate): boolean {
+  try {
+    return cert.checkIssued(issuer) && cert.verify(issuer.publicKey)
+  } catch {
+    // A malformed or unsupported key simply does not establish trust.
+    return false
+  }
+}
+
+/**
+ * True when the leaf chains, by signature, up to one of the configured anchors.
+ *
+ * Membership is never enough. A CA certificate's DER is public by design, so
+ * "the chain contains our anchor" is something any peer can arrange by appending
+ * a copy. Only the certificate reached by verifying every link upward from the
+ * leaf may be matched against an anchor.
+ */
 export function chainIsSignedByProxyCa(
   chainPem: string[],
   anchors: X509Certificate[],
@@ -114,23 +132,48 @@ export function chainIsSignedByProxyCa(
     return false
   }
 
-  for (const cert of certs) {
-    for (const anchor of anchors) {
-      if (cert.raw.equals(anchor.raw)) {
-        return isWithinValidityWindow(anchor, now)
-      }
-      try {
-        // Why both: checkIssued only compares issuer and subject names, which any
-        // peer can claim. The verify call is what proves the signature.
-        if (cert.checkIssued(anchor) && cert.verify(anchor.publicKey)) {
-          return isWithinValidityWindow(anchor, now)
-        }
-      } catch {
-        // A malformed or unsupported key simply does not establish trust.
-      }
+  const leaf = certs[0]
+  if (!leaf || !isWithinValidityWindow(leaf, now)) {
+    return false
+  }
+  // Why: a self-signed anchor verifies against its own key, so presenting the
+  // anchor as the end-entity certificate would otherwise satisfy the check while
+  // proving no possession of the private key.
+  if (anchors.some((anchor) => leaf.raw.equals(anchor.raw))) {
+    return false
+  }
+  let current = leaf
+  for (const next of certs.slice(1)) {
+    if (!isWithinValidityWindow(next, now) || !next.ca || !signedBy(current, next)) {
+      break
+    }
+    current = next
+  }
+
+  for (const anchor of anchors) {
+    // Why `ca`: an end-entity certificate must never be honoured as an issuer,
+    // however the file was assembled.
+    if (!anchor.ca || !isWithinValidityWindow(anchor, now)) {
+      continue
+    }
+    // Reaching the anchor itself counts only when at least one signature was
+    // verified on the way; otherwise the peer simply replayed the public cert.
+    if (current !== leaf && current.raw.equals(anchor.raw)) {
+      return true
+    }
+    if (signedBy(current, anchor)) {
+      return true
     }
   }
   return false
+}
+
+function matchesHost(leaf: X509Certificate, hostname: string): boolean {
+  try {
+    return Boolean(leaf.checkHost(hostname))
+  } catch {
+    return false
+  }
 }
 
 export type ProxyCaVerifyDecision = {
@@ -176,7 +219,11 @@ export function decideProxyCaVerification(args: {
   // Why check the host ourselves: Chromium reports one error code, so an authority
   // failure can hide a name mismatch behind it. Trusting the CA must not also
   // accept a certificate minted for a different origin.
-  if (args.hostname && !leaf.checkHost(args.hostname)) {
+  //
+  // Fails closed on an absent name, and on a throw: checkHost rejects some inputs
+  // (IP literals among them), and an exception escaping here would leave the
+  // verify proc without calling back at all.
+  if (!args.hostname || !matchesHost(leaf, args.hostname)) {
     return { trusted: false, reason: 'hostname-mismatch' }
   }
   if (!chainIsSignedByProxyCa(args.chainPem, args.anchors, now)) {
