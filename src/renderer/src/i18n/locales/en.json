@@ -11839,6 +11839,12 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "OpenAiCompatibleEndpointRow": {
+          "a1b2c3d4e5": "OpenAI-compatible endpoint",
+          "b2c3d4e5f6": "Send cloud dictation to another service that speaks the OpenAI transcription API — Groq, OpenRouter or a local Whisper server. Leave empty to use OpenAI. The API key above is sent as the bearer token; a keyless local server needs none.",
+          "c3d4e5f6a7": "Model name, e.g. whisper-large-v3-turbo",
+          "d4e5f6a7b8": "https://api.groq.com/openai/v1/audio/transcriptions"
         }
       },
       "right": {

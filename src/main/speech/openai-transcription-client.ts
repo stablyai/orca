@@ -1,4 +1,5 @@
 import { resampleToRate } from './stt-audio-resample'
+import type { OpenAiCompatibleEndpoint } from './openai-compatible-endpoint'
 
 export const OPENAI_TRANSCRIPTION_MODEL_BY_ID: Record<string, string> = {
   'openai-gpt-4o-mini-transcribe': 'gpt-4o-mini-transcribe',
@@ -83,7 +84,9 @@ export class OpenAiTranscriptionSession {
 
   constructor(
     private readonly modelId: string,
-    private readonly readApiKey: () => string
+    private readonly readApiKey: () => string,
+    /** Optional OpenAI-compatible endpoint; null keeps the OpenAI defaults. */
+    private readonly readEndpoint: () => OpenAiCompatibleEndpoint | null = () => null
   ) {}
 
   feedAudio(samples: Float32Array, sampleRate: number): void {
@@ -108,18 +111,21 @@ export class OpenAiTranscriptionSession {
     const audio = combineChunks(this.chunks)
     this.chunks = []
     const wav = encodePcm16Wav(audio, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
+    // A configured OpenAI-compatible service replaces URL and model. Its key
+    // still travels in the same header, so users of a keyless local server
+    // simply leave the API key empty.
+    const endpoint = this.readEndpoint()
     const form = new FormData()
-    form.append('model', apiModel)
+    form.append('model', endpoint?.model ?? apiModel)
     form.append('response_format', 'json')
     // Why: OpenAI's transcription endpoint expects a multipart file object;
     // a named WAV blob avoids filesystem temp files and works in packaged apps.
     form.append('file', new Blob([new Uint8Array(wav)], { type: 'audio/wav' }), 'dictation.wav')
 
-    const response = await fetch(OPENAI_TRANSCRIPTION_URL, {
+    const apiKey = this.readApiKey()
+    const response = await fetch(endpoint?.url ?? OPENAI_TRANSCRIPTION_URL, {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.readApiKey()}`
-      },
+      headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
       body: form
     })
 
