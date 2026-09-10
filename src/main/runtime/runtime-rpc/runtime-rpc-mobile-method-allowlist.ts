@@ -198,7 +198,6 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'session.tabs.list',
   'session.tabs.listAll',
   'session.tabs.move',
-  'session.tabs.setTabProps',
   'session.tabs.subscribe',
   'session.tabs.subscribeAll',
   'session.tabs.unsubscribe',

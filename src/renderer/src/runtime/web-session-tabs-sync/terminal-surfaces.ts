@@ -117,9 +117,14 @@ export function buildMirroredAgentTabs(
         // Why: `title` is wire data typed `string`; a host that violates that must
         // degrade to the placeholder, not throw inside the snapshot patch.
         label: tab.title?.trim() || defaultAgentChatLabel(tab.agent),
-        // Why: a manual rename lives only on the client; re-nulling it here made
-        // every host snapshot silently discard the user's title.
-        customLabel: existing?.customLabel ?? null,
+        // Why: the host owns a chat's name, so its copy replaces the local one — otherwise a
+        // rename made here outranks every later rename made anywhere else, forever. A host
+        // that omits the key predates host-owned names and cannot be told apart from one
+        // reporting "unnamed", so that case keeps the local name rather than discarding it.
+        customLabel:
+          tab.customTitle === undefined
+            ? (existing?.customLabel ?? null)
+            : tab.customTitle?.trim() || null,
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,

@@ -21,20 +21,15 @@ export function useMobileSessionTabActionTargets() {
   const [agentSessionActionTarget, setAgentSessionActionTarget] = useState<AgentSessionTab | null>(
     null
   )
-  const [agentSessionRenameTarget, setAgentSessionRenameTarget] = useState<AgentSessionTab | null>(
-    null
-  )
 
   return {
     actionTarget,
     agentSessionActionTarget,
-    agentSessionRenameTarget,
     browserActionTarget,
     fileActionTarget,
     markdownActionTarget,
     setActionTarget,
     setAgentSessionActionTarget,
-    setAgentSessionRenameTarget,
     setBrowserActionTarget,
     setFileActionTarget,
     setMarkdownActionTarget

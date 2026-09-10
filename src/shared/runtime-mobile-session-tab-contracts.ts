@@ -94,7 +94,16 @@ export type RuntimeMobileSessionBrowserTab = {
 export type RuntimeMobileSessionAgentTab = {
   type: 'agent-session'
   id: string
+  /** What to render: the user's name for this chat, else this agent's placeholder. */
   title: string
+  /**
+   * The user's name for this chat, separate from the resolved `title` so a client can tell an
+   * unnamed chat from a named one. Three states, and absent must never read as "no name":
+   * - present string — the host owns chat names and this is the one the user gave.
+   * - present `null` — the host owns chat names and this chat has none.
+   * - absent — the host predates host-owned chat names; the client keeps its own local name.
+   */
+  customTitle?: string | null
   sessionId: string
   replacesSessionId?: string
   agent: 'claude' | 'codex'

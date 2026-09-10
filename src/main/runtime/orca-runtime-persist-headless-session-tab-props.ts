@@ -39,7 +39,7 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
                 ...tab,
                 ...(props.color !== undefined ? { color: props.color } : {}),
                 ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-                ...(props.title !== undefined ? { customTitle: props.title } : {}),
+                ...(props.title !== undefined ? { customTitle: props.title?.trim() || null } : {}),
                 ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
               }
             : tab
@@ -64,7 +64,7 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
                 ...tab,
                 ...(props.color !== undefined ? { color: props.color } : {}),
                 ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
-                ...(props.title !== undefined ? { customLabel: props.title } : {})
+                ...(props.title !== undefined ? { customLabel: props.title?.trim() || null } : {})
               }
             : tab
         )
@@ -101,6 +101,11 @@ export class OrcaRuntimeWithPersistHeadlessSessionTabProps extends OrcaRuntimeWi
         ...(props.color !== undefined ? { color: props.color } : {}),
         ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
         ...(title !== undefined ? { title } : {}),
+        // Why: clients converge on the host's name, so the raw name ships beside the
+        // rendered one — an unnamed chat must not read as one named after its placeholder.
+        ...(title !== undefined && tab.type === 'agent-session'
+          ? { customTitle: props.title?.trim() || null }
+          : {}),
         ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
       }
     })

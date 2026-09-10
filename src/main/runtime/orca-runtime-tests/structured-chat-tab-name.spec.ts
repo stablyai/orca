@@ -37,17 +37,21 @@ function makeSessionWithChat() {
 function subscribeClient(runtime: OrcaRuntimeService): {
   frames: RuntimeMobileSessionTabsResult[]
   chatTitle: () => string | undefined
+  chatCustomTitle: () => string | null | undefined
 } {
   const frames: RuntimeMobileSessionTabsResult[] = []
   runtime.onMobileSessionTabsChanged((snapshot) => {
     frames.push(snapshot)
   })
+  const latestChat = () => {
+    const tab = frames.at(-1)?.tabs.find((candidate) => candidate.id === CHAT_TAB_ID)
+    return tab?.type === 'agent-session' ? tab : undefined
+  }
   return {
     frames,
-    chatTitle: () => {
-      const tab = frames.at(-1)?.tabs.find((candidate) => candidate.id === CHAT_TAB_ID)
-      return tab?.type === 'agent-session' ? tab.title : undefined
-    }
+    chatTitle: () => latestChat()?.title,
+    // The raw name, which is how a client tells an unnamed chat from a named one.
+    chatCustomTitle: () => latestChat()?.customTitle
   }
 }
 
@@ -76,6 +80,7 @@ describe('structured chat tab name', () => {
 
     expect(client.frames.length).toBeGreaterThan(0)
     expect(client.chatTitle()).toBe('Release notes')
+    expect(client.chatCustomTitle()).toBe('Release notes')
     expect(
       getSession().unifiedTabs?.[TEST_WORKTREE_ID]?.find((tab) => tab.entityId === SESSION_ID)
         ?.customLabel
@@ -164,6 +169,7 @@ describe('structured chat tab name', () => {
     })
 
     expect(client.chatTitle()).toBe('Release notes')
+    expect(client.chatCustomTitle()).toBe('Release notes')
   })
 
   it('publishes the agent placeholder when the name is cleared, never an empty label', async () => {
@@ -173,18 +179,23 @@ describe('structured chat tab name', () => {
       tabId: CHAT_TAB_ID,
       title: 'Release notes'
     })
+    // Guard: the placeholder is also the starting title, so without this the clear below
+    // would pass on a rename that never landed.
+    expect(client.chatTitle()).toBe('Release notes')
 
     await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
       tabId: CHAT_TAB_ID,
       title: '   '
     })
     expect(client.chatTitle()).toBe('Codex Chat')
+    expect(client.chatCustomTitle()).toBeNull()
 
     await runtime.setMobileSessionTabProps(`id:${TEST_WORKTREE_ID}`, {
       tabId: CHAT_TAB_ID,
       title: null
     })
     expect(client.chatTitle()).toBe('Codex Chat')
+    expect(client.chatCustomTitle()).toBeNull()
   })
 
   it('leaves an unnamed chat on its placeholder when another prop changes', async () => {
@@ -197,16 +208,13 @@ describe('structured chat tab name', () => {
     })
 
     expect(client.chatTitle()).toBe('Codex Chat')
+    // Never named, so the host must report "unnamed" rather than its own placeholder — a
+    // client that took the placeholder as a name would persist it as one.
+    expect(client.chatCustomTitle()).toBeNull()
   })
 })
 
-describe('session.tabs.setTabProps mobile reachability', () => {
-  it('is callable by a paired mobile client', async () => {
-    const { MOBILE_RPC_METHOD_ALLOWLIST } =
-      await import('../runtime-rpc/runtime-rpc-mobile-method-allowlist')
-    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('session.tabs.setTabProps')).toBe(true)
-  })
-
+describe('session.tabs.setTabProps title parameter', () => {
   it('accepts a title and rejects a non-string one', async () => {
     const { SetTabProps } = await import('../rpc/methods/session-tabs-schemas')
     expect(

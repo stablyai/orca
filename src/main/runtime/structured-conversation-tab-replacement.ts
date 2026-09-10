@@ -31,6 +31,8 @@ export function replaceConversationInSnapshot(
               sessionId: replacement.sessionId,
               agent: replacement.agent,
               title: replacement.agent === 'claude' ? 'Claude Chat' : 'Codex Chat',
+              // A replacement is a different conversation; it does not inherit the old one's name.
+              customTitle: null,
               replacesSessionId: replacement.sourceSessionId
             }
           : tab
