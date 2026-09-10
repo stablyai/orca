@@ -30,7 +30,7 @@ import type { SessionSearchStore } from './session-search-store'
 // Why 512: one directory walk each, only for paths outside the recent window,
 // and only until the watch set drains. Large enough to converge in a handful of
 // cycles on a 3,600-session machine, small enough not to be the cycle's cost.
-export const DEFAULT_SESSION_SEARCH_RETIREMENT_CHECKS = 512
+const SESSION_SEARCH_RETIREMENT_CHECKS_PER_CYCLE = 512
 
 export type SessionSearchReconcileArgs = {
   store: SessionSearchStore
@@ -42,8 +42,6 @@ export type SessionSearchReconcileArgs = {
   overdue?: () => boolean
   /** Paths the previous cycle watched; one missing from this one may be gone. */
   previousRecent: ReadonlySet<string>
-  /** Directories a cycle walks proving deletions; the rest stay watched. */
-  retirementChecksPerCycle?: number
   /** Real roots that listed transcripts on the previous pass; undefined before the first. */
   previousRootsWithFiles?: ReadonlySet<string>
   /** One readdir per directory per pass, shared with the rest of the pass. */
@@ -140,7 +138,7 @@ export async function runSessionSearchReconcileCycle(
             ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
             : new Set(),
           listings: args.listings,
-          limit: args.retirementChecksPerCycle ?? DEFAULT_SESSION_SEARCH_RETIREMENT_CHECKS,
+          limit: SESSION_SEARCH_RETIREMENT_CHECKS_PER_CYCLE,
           signal
         })
       : { retired: [], unverifiable: [], unchecked: [], degradedRoots: [] }

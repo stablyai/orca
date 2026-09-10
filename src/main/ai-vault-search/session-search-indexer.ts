@@ -52,7 +52,6 @@ export class SessionSearchIndexer {
   private readonly recentPerAgent: number
   private readonly fullSweepEveryCycles: number
   private readonly indexingStatus = new SessionSearchIndexingStatus()
-  private readonly onError: (error: unknown) => void
 
   private readonly loop: SessionSearchWorkLoop
   private readonly store: SessionSearchStore
@@ -76,18 +75,18 @@ export class SessionSearchIndexer {
       1,
       options.fullSweepEveryCycles ?? DEFAULT_SESSION_SEARCH_FULL_SWEEP_EVERY_CYCLES
     )
-    this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
+    const onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
     this.loop = new SessionSearchWorkLoop({
       clock: this.clock,
       intervalMs: this.intervalMs,
       onFailure: (error) => {
         this.indexingStatus.failed()
-        this.onError(error)
+        onError(error)
       }
     })
     // Store, registration and indexer share one lifetime, which is what makes
     // the object immutable: there is no second open to get out of step with.
-    this.store = new SessionSearchStore(options.databasePath, this.onError)
+    this.store = new SessionSearchStore(options.databasePath, onError)
     this.store.setRetentionCutoffMs(this.cutoffMs())
     this.unregister = registerSessionSearchIndexConsumer(this.store)
   }
@@ -201,8 +200,8 @@ export class SessionSearchIndexer {
     this.requeue(sweep.deferred)
     if (!sweep.completed) {
       // A sweep stays due until one finishes: an aborted one saw part of the
-      // machine, so it learned nothing about root health or orphans, and
-      // publishing its empty findings would clear a live alarm.
+      // machine, so it learned nothing about root health, and publishing its
+      // empty findings would clear a live alarm.
       this.fullSweepDue = true
       return
     }
@@ -227,7 +226,6 @@ export class SessionSearchIndexer {
       recentPerAgent: this.recentPerAgent,
       overdue,
       previousRecent: this.previousRecent,
-      retirementChecksPerCycle: this.options.retirementChecksPerCycle,
       previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,
       listings,
       signal

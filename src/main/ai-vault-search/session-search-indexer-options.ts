@@ -45,7 +45,5 @@ export type SessionSearchIndexerOptions = {
   passDeadlineMs?: number
   /** Cycles between whole-machine sweeps. */
   fullSweepEveryCycles?: number
-  /** Directories one pass walks proving deletions; the rest are checked next pass. */
-  retirementChecksPerCycle?: number
   onError?: (error: unknown) => void
 }
