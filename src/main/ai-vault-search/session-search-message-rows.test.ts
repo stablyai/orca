@@ -38,6 +38,50 @@ it('splits an oversized message on a line boundary and keeps every character', (
   }
 })
 
+it('cuts at whitespace rather than through the word on the boundary', async () => {
+  const index = await openSessionSearchIndexFile('ss-rows-whitespace')
+  try {
+    // The 8,000th character lands inside `pericardium`. Cutting at the target
+    // would file `per` under one row and `icardium` under another, and the word
+    // the user types would match neither.
+    const text = `${' '.repeat(7997)}pericardium`
+    const chunks = [...searchMessageRows([{ role: 'user', text, timestamp: null }])]
+    expect(chunks.map((row) => row.text).join('')).toBe(text)
+    for (const row of chunks) {
+      insertSearchMessage(index.db, 1, row)
+    }
+
+    expect(
+      index.db
+        .prepare('SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH ?')
+        .get('pericardium')
+    ).toEqual({ n: 1 })
+  } finally {
+    await index.close()
+  }
+})
+
+it('backs up to any whitespace, not only a newline', () => {
+  // An ideographic space separates words in a CJK transcript exactly as a
+  // space does here, and a newline-only backoff tears the token after it.
+  const text = `${'\u4e00'.repeat(7000)}\u3000${'\u4e8c'.repeat(2000)}`
+  const chunks = [...searchMessageRows([{ role: 'user', text, timestamp: null }])].map(
+    (row) => row.text
+  )
+
+  expect(chunks[0]).toBe(`${'\u4e00'.repeat(7000)}\u3000`)
+  expect(chunks.join('')).toBe(text)
+})
+
+it('still chunks a message that holds no whitespace at all', () => {
+  // A 20,000-character token is not a word, so the target itself is the cut and
+  // the message is still bounded.
+  const chunks = [
+    ...searchMessageRows([{ role: 'user', text: 'a'.repeat(20_000), timestamp: null }])
+  ]
+  expect(chunks.map((row) => row.text.length)).toEqual([8000, 8000, 4000])
+})
+
 it('leaves a message that fits as a single row', () => {
   const rows = [...searchMessageRows([{ role: 'user', text: 'short enough', timestamp: null }])]
   expect(rows.map((row) => row.text)).toEqual(['short enough'])

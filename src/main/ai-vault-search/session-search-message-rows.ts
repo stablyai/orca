@@ -4,6 +4,27 @@ import { identifierShadowText } from './session-search-identifier-split'
 
 const CHUNK_TARGET_CHARS = 8000
 
+/**
+ * Index just past the last whitespace in `[floor, end)`, or -1 when the window
+ * holds none. Any Unicode whitespace, not only a newline: a wrapped paragraph, a
+ * CJK transcript separated by ideographic spaces and a minified log all chunk on
+ * a boundary a tokenizer would have picked anyway.
+ */
+function lastWhitespaceEnd(text: string, floor: number, end: number): number {
+  for (let at = end - 1; at >= floor; at--) {
+    if (/\s/.test(text[at]!)) {
+      return at + 1
+    }
+  }
+  return -1
+}
+
+/**
+ * Splits an oversized message into rows of at most `CHUNK_TARGET_CHARS`, cutting
+ * at whitespace so no token is torn in half and every word stays searchable.
+ * A phrase that straddles two chunks is not matched: chunks are separate FTS
+ * rows and FTS5 cannot span them.
+ */
 function* textChunks(text: string): Generator<string> {
   if (text.length <= CHUNK_TARGET_CHARS) {
     yield text
@@ -13,9 +34,12 @@ function* textChunks(text: string): Generator<string> {
   while (start < text.length) {
     let end = Math.min(text.length, start + CHUNK_TARGET_CHARS)
     if (end < text.length) {
-      const newline = text.lastIndexOf('\n', end)
-      if (newline > start + CHUNK_TARGET_CHARS / 2) {
-        end = newline + 1
+      // Only the second half of the window: backing up further would trade a
+      // torn token for chunks half the size. No whitespace at all in 4,000
+      // characters is not a word, so the target itself is the honest cut.
+      const split = lastWhitespaceEnd(text, start + CHUNK_TARGET_CHARS / 2, end)
+      if (split > start) {
+        end = split
       }
     }
     yield text.slice(start, end)
