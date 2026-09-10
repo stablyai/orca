@@ -88,7 +88,13 @@ export class SessionSearchIndexWriter {
 
   constructor(
     private readonly db: SyncDatabase,
-    private readonly commitChars: number = SESSION_SEARCH_COMMIT_CHARS
+    private readonly commitChars: number = SESSION_SEARCH_COMMIT_CHARS,
+    /**
+     * Called after a transaction that left a session's messages with no session
+     * row, so the owner can start the bounded drain that reclaims them.
+     * Synchronous work here would put the cost back where it was taken from.
+     */
+    private readonly onOrphanedRows: () => void = () => undefined
   ) {
     this.records = new SessionSearchFileRecords(db)
   }
@@ -211,7 +217,21 @@ export class SessionSearchIndexWriter {
     // A replace owns the session's whole row set, so the old generation goes in
     // the same transaction as the first of the new one. Chunk two onwards must
     // not repeat it.
+    //
+    // It goes by being cut loose, not by being deleted. Deleting every old row
+    // inline sizes the transaction by the session being replaced rather than by
+    // the chunk being written: 1,286 ms against 720 ms fresh on the 100 MB
+    // corpus, and it grows with the history. Instead the first transaction
+    // mints a new session row, points `files` at it and deletes the one old
+    // `sessions` row. Every retrieval joins `sessions`, so the old generation
+    // stops answering the moment that commits, and its messages are reclaimed
+    // afterwards by the same bounded drain retention uses — which is where the
+    // old rows would have ended up had the process died here anyway.
+    // `sessions.id` is AUTOINCREMENT, so the freed id is never handed to
+    // another session while those rows still name it (round 8).
     let replaced = append
+    // Set by the transaction that cut a generation loose; read once it commits.
+    let orphaned = false
     // Set when the file record moved under this read. Nothing this write holds
     // can land after that, so it stops buffering rather than reopening a
     // transaction it already knows will roll back, once per remaining message.
@@ -254,9 +274,15 @@ export class SessionSearchIndexWriter {
           session = null
           this.records.upsertFile(candidate, outcome.byteOffset, null)
         } else {
-          session ??= this.records.createSessionRow(candidate)
-          if (!replaced) {
-            deleteSearchMessages(db, session)
+          if (replaced) {
+            session ??= this.records.createSessionRow(candidate)
+          } else {
+            const previous = session
+            session = this.records.createSessionRow(candidate)
+            if (previous !== null) {
+              db.prepare('DELETE FROM sessions WHERE id = ?').run(previous)
+              orphaned = true
+            }
             replaced = true
           }
           for (const row of buffer) {
@@ -281,6 +307,12 @@ export class SessionSearchIndexWriter {
       } catch (error) {
         db.exec('ROLLBACK')
         throw error
+      }
+      // After the transaction that cut them loose is durable, never before: a
+      // rollback leaves the old session row standing and nothing to reclaim.
+      if (orphaned) {
+        orphaned = false
+        this.onOrphanedRows()
       }
       expected = {
         session_row_id: session,

@@ -6,10 +6,11 @@ import type {
   SessionSearchIndexedFile
 } from './session-search-file-cursor'
 import {
+  SESSION_SEARCH_COMMIT_CHARS,
   SessionSearchIndexWriter,
   type SessionSearchFileWrite
 } from './session-search-index-writer'
-import { deleteExpiredSearchFiles } from './session-search-retention-delete'
+import { deleteExpiredSearchFiles, drainOrphanedMessages } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
 
 // A paused store keeps recording what it declined, so the set needs a ceiling.
@@ -32,6 +33,10 @@ export class SessionSearchStore {
   // read; PR 3's indexer drains it. Nothing here schedules the re-read.
   private readonly stale = new Map<string, SessionFileCandidate>()
   private droppedStalePaths = 0
+  // One drain at a time. A replace that commits while one is running asks for
+  // another pass rather than starting a second walk of the same rows.
+  private draining = false
+  private drainRequested = false
 
   constructor(
     path: string,
@@ -42,7 +47,46 @@ export class SessionSearchStore {
       )
   ) {
     this.db = openSessionSearchDatabase(path)
-    this.writer = new SessionSearchIndexWriter(this.db)
+    this.writer = new SessionSearchIndexWriter(this.db, SESSION_SEARCH_COMMIT_CHARS, () =>
+      this.scheduleOrphanDrain()
+    )
+  }
+
+  /**
+   * Reclaims the rows a replace cut loose, once its transaction has committed.
+   *
+   * The same split retention makes, for the same reason: deleting the old
+   * session row is what stops it answering, because every retrieval joins
+   * `sessions`, and handing its messages back is the expensive half that must
+   * not hold one transaction. Nothing records the work: rows whose session row
+   * is gone are the whole record, so a crash before or during a drain is found
+   * by the next one.
+   */
+  private scheduleOrphanDrain(): void {
+    this.drainRequested = true
+    if (this.draining || this.closed) {
+      return
+    }
+    this.draining = true
+    // Off the committing stack. An async function runs synchronously up to its
+    // first `await`, so calling the drain here would put its first batch back
+    // inside the call that committed the replace — the cost this took out.
+    void Promise.resolve().then(() => this.runOrphanDrain())
+  }
+
+  private async runOrphanDrain(): Promise<void> {
+    try {
+      while (this.drainRequested && !this.closed) {
+        this.drainRequested = false
+        await drainOrphanedMessages(this.db, () => this.closed)
+      }
+    } catch (error) {
+      if (!this.closed) {
+        this.onError(error)
+      }
+    } finally {
+      this.draining = false
+    }
   }
 
   /**

@@ -60,11 +60,16 @@ export async function deleteExpiredSearchFiles(
 /**
  * Deletes rows whose session no longer exists, a bounded batch per transaction.
  *
- * That set is exactly what retention, a removed source and an interrupted
- * earlier drain leave behind, so the index needs no record of unfinished work
- * beyond the rows themselves.
+ * That set is exactly what retention, a replace that cut its old generation
+ * loose, a removed source and an interrupted earlier drain leave behind, so the
+ * index needs no record of unfinished work beyond the rows themselves.
+ *
+ * Exported for the store, which runs it after a replace commits for the same
+ * reason retention runs it after its own small transaction: cutting a session
+ * loose is what hides it, and reclaiming its rows is the half that must not
+ * hold one transaction.
  */
-async function drainOrphanedMessages(
+export async function drainOrphanedMessages(
   db: SyncDatabase,
   closed: () => boolean,
   yieldStep: () => Promise<void> = yieldToEventLoop

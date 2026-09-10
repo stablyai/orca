@@ -5,6 +5,7 @@ import { registerSessionSearchIndexConsumer } from './session-search-index-consu
 import { cwdKey } from './session-search-file-records'
 import { requiresWholeRead } from './session-search-file-cursor'
 import { SessionSearchIndexWriter } from './session-search-index-writer'
+import { deleteExpiredSearchFiles } from './session-search-retention-delete'
 import {
   openSessionSearchIndexFile,
   replayTranscriptRead,
@@ -171,7 +172,7 @@ it('takes the rows back when recording the cursor is what fails', () => {
   expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset).toBe(40)
 })
 
-it('shows a reader on another handle one generation or the other, never a mixture', () => {
+it('shows a reader on another handle one generation or the other, never a mixture', async () => {
   replayTranscriptRead({
     messages: userMessages('firstgeneration', 3),
     outcome: { byteOffset: 40 }
@@ -193,9 +194,14 @@ it('shows a reader on another handle one generation or the other, never a mixtur
     })
   ).toBe(true)
 
-  expect(counts(index.db).messages).toBe(7)
   expect(matches(index.db, 'messages_fts', 'firstgeneration')).toBe(0)
   expect(matches(index.db, 'messages_fts', 'secondgeneration')).toBe(7)
+  // The old three are cut loose, not deleted, so they are still on disk and
+  // already unreachable; the drain the store scheduled hands them back.
+  expect(counts(index.db).messages).toBe(10)
+  await vi.waitFor(() => {
+    expect(counts(index.db).messages).toBe(7)
+  })
 })
 
 // Four of these fill the 400-char ceiling the two tests below construct.
@@ -400,7 +406,7 @@ it('reports a chunk-partial file as held, and as one that must be read whole', (
   }
 })
 
-it('re-reads a chunked file whole when its writer died between chunks', () => {
+it('re-reads a chunked file whole when its writer died between chunks', async () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
   const abandoned = writer.beginWrite(syntheticCandidate(), 'replace', 0, named)!
   for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
@@ -420,8 +426,12 @@ it('re-reads a chunked file whole when its writer died between chunks', () => {
       incomplete: false
     })
   ).toBe(true)
-  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 1 })
+  // The eight stranded rows stop answering the moment the replace commits, and
+  // the drain hands them back after it rather than inside it.
+  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 9 })
   expect(matches(index.db, 'messages_fts', 'chunkedneedle')).toBe(0)
+  await deleteExpiredSearchFiles(index.db, null, () => false)
+  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 1 })
 })
 
 it('stops a chunked read whose file was removed between its chunks', () => {
@@ -477,17 +487,67 @@ it('fences a first-ever read whose file was removed before it committed', () => 
   expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0, full: 0 })
 })
 
-it('replaces the previous generation without ever showing both', () => {
+it('replaces the previous generation without ever showing both', async () => {
   replayTranscriptRead({ messages: userMessages('firstgeneration', 10) })
   replayTranscriptRead({ messages: userMessages('secondgeneration', 10) })
 
-  expect(counts(index.db)).toMatchObject({
-    sessions: 1,
-    messages: 10,
-    full: 10
-  })
   expect(matches(index.db, 'messages_fts', 'firstgeneration')).toBe(0)
   expect(matches(index.db, 'messages_fts', 'secondgeneration')).toBe(10)
+  await vi.waitFor(() => {
+    expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 10, full: 10 })
+  })
+})
+
+it('replaces a generation by cutting the old one loose, not by deleting it inline', async () => {
+  const writer = new SessionSearchIndexWriter(index.db)
+  const first = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  for (const message of userMessages('firstgeneration', 200)) {
+    first.add(message)
+  }
+  expect(first.commit({ session: syntheticSession(), byteOffset: 100, incomplete: false })).toBe(
+    true
+  )
+  const before = index.db.prepare('SELECT id FROM sessions').get() as { id: number }
+  expect(counts(index.db).messages).toBe(200)
+
+  const second = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  for (const message of userMessages('secondgeneration', 3)) {
+    second.add(message)
+  }
+  expect(second.commit({ session: syntheticSession(), byteOffset: 200, incomplete: false })).toBe(
+    true
+  )
+
+  // The transaction inserted three rows and deleted one, rather than deleting
+  // two hundred: all 203 are still on disk, and the old 200 already answer
+  // nothing, because every retrieval joins `sessions`.
+  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 203, full: 203 })
+  expect(matches(index.db, 'messages_fts', 'firstgeneration')).toBe(0)
+  expect(matches(index.db, 'messages_fts', 'secondgeneration')).toBe(3)
+
+  // A new session row, with `files` repointed at it in that same transaction.
+  // AUTOINCREMENT never hands the freed id back while orphans still name it.
+  const after = index.db.prepare('SELECT id FROM sessions').get() as { id: number }
+  expect(after.id).toBeGreaterThan(before.id)
+  expect(index.db.prepare('SELECT session_row_id FROM files').get()).toEqual({
+    session_row_id: after.id
+  })
+
+  await deleteExpiredSearchFiles(index.db, null, () => false)
+  expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 3, full: 3 })
+})
+
+it('drains what a replace cut loose without being asked', async () => {
+  replayTranscriptRead({ messages: userMessages('firstgeneration', 200) })
+  replayTranscriptRead({ messages: userMessages('secondgeneration', 3) })
+
+  // The store schedules the reclaim the way it schedules retention's. Hiding a
+  // generation and never reclaiming it would grow the file by every re-read.
+  expect(matches(index.db, 'messages_fts', 'firstgeneration')).toBe(0)
+  await vi.waitFor(() => {
+    expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 3, full: 3 })
+  })
+  expect(errors).toEqual([])
 })
 
 it('continues a session across an append rather than replaying it', () => {

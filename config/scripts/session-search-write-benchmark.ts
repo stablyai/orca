@@ -8,6 +8,7 @@ import {
   resetSessionParseCacheForTests
 } from '../../src/main/ai-vault/session-scanner-parse-cache'
 import { resetTranscriptConsumersForTests } from '../../src/main/ai-vault/session-transcript-consumers'
+import { requestWholeTranscriptRead } from '../../src/main/ai-vault/session-transcript-reader'
 import { registerSessionSearchIndexConsumer } from '../../src/main/ai-vault-search/session-search-index-consumer'
 import { SessionSearchStore } from '../../src/main/ai-vault-search/session-search-store'
 import { writeSyntheticTranscriptCorpus } from '../../src/main/ai-vault-search/session-search-synthetic-corpus'
@@ -195,6 +196,31 @@ try {
     restoreExec()
     assert.deepEqual(errors, [])
     transactions.sort((a, b) => a - b)
+
+    // The same file again, over a generation the index already holds. That is
+    // the pass a growing transcript really costs, and the one whose transaction
+    // used to be sized by the old session rather than by the chunk being
+    // written. The drain that reclaims the cut-loose generation runs after the
+    // commit, so its bounded batches are in `replaceTransactions` too.
+    const replaceTransactions: number[] = []
+    const restoreReplaceExec = recordTransactionDurations(replaceTransactions)
+    requestWholeTranscriptRead(large.files[0]!)
+    const replaceStarted = performance.now()
+    await parseAgentSessionFileCached(
+      await sessionCandidate('claude', large.files[0]!),
+      process.platform,
+      stats
+    )
+    const replaceMs = performance.now() - replaceStarted
+    // Finishes whatever the scheduled drain has not reached, so the reclaim is
+    // priced rather than left half done under the next measurement.
+    const reclaimStarted = performance.now()
+    await store.purgeOlderThan(null)
+    const reclaimMs = performance.now() - reclaimStarted
+    restoreReplaceExec()
+    assert.deepEqual(errors, [])
+    replaceTransactions.sort((a, b) => a - b)
+
     console.log(
       JSON.stringify(
         {
@@ -203,6 +229,10 @@ try {
           indexMs: Math.round(indexMs),
           transactions: transactions.length,
           maxTransactionMs: Math.round(transactions.at(-1) ?? 0),
+          replaceMs: Math.round(replaceMs),
+          replaceTransactions: replaceTransactions.length,
+          maxReplaceTransactionMs: Math.round(replaceTransactions.at(-1) ?? 0),
+          reclaimMs: Math.round(reclaimMs),
           indexMb: Math.round(((await stat(largeIndexPath)).size / (1024 * 1024)) * 100) / 100
         },
         null,
