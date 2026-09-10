@@ -11,6 +11,7 @@ import {
   getBrowserSettingsHostId,
   getBrowserSettingsRuntimeEnvironmentId,
   profileListByHostUpdate,
+  clearedDefaultBrowserProfileForHostUpdate,
   getDefaultBrowserProfileForHost
 } from './browser-host-state'
 
@@ -108,6 +109,30 @@ export function createBrowserProfileListActions(
     deleteBrowserSessionProfile: async (profileId) => {
       const hostId = getBrowserSettingsHostId(get())
       const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
+      const dropDeletedProfile = (): void => {
+        // Why read the selection here and not before the awaited request: the user can select
+        // this very profile while the delete is in flight, and a pre-request snapshot would
+        // clear the store without persisting the clear.
+        const clearedSelection = getDefaultBrowserProfileForHost(get(), hostId) === profileId
+        set((s) => ({
+          ...profileListByHostUpdate(
+            s,
+            getBrowserProfilesForHost(s, hostId).filter((profile) => profile.id !== profileId),
+            hostId
+          ),
+          ...clearedDefaultBrowserProfileForHostUpdate(s, hostId, profileId)
+        }))
+        // Why only when it was selected: an unrelated deletion leaves the persisted
+        // selection untouched, and rewriting it would be a pointless disk write.
+        if (clearedSelection) {
+          void window.api.ui
+            .set({
+              defaultBrowserSessionProfileIdByHostId: get().defaultBrowserSessionProfileIdByHostId
+            })
+            .catch(console.error)
+        }
+      }
+
       if (runtimeEnvironmentId) {
         try {
           const result = await callRuntimeRpc<BrowserProfileDeleteResult>(
@@ -117,24 +142,7 @@ export function createBrowserProfileListActions(
             { timeoutMs: 15_000 }
           )
           if (result.deleted) {
-            set((s) => ({
-              ...profileListByHostUpdate(
-                s,
-                getBrowserProfilesForHost(s, hostId).filter((profile) => profile.id !== profileId),
-                hostId
-              ),
-              ...(getDefaultBrowserProfileForHost(s, hostId) === profileId
-                ? {
-                    ...(getBrowserSettingsHostId(s) === hostId
-                      ? { defaultBrowserSessionProfileId: null }
-                      : {}),
-                    defaultBrowserSessionProfileIdByHostId: {
-                      ...s.defaultBrowserSessionProfileIdByHostId,
-                      [hostId]: null
-                    }
-                  }
-                : {})
-            }))
+            dropDeletedProfile()
           }
           return result.deleted
         } catch {
@@ -144,24 +152,7 @@ export function createBrowserProfileListActions(
       try {
         const ok = await window.api.browser.sessionDeleteProfile({ profileId })
         if (ok) {
-          set((s) => ({
-            ...profileListByHostUpdate(
-              s,
-              getBrowserProfilesForHost(s, hostId).filter((profile) => profile.id !== profileId),
-              hostId
-            ),
-            ...(getDefaultBrowserProfileForHost(s, hostId) === profileId
-              ? {
-                  ...(getBrowserSettingsHostId(s) === hostId
-                    ? { defaultBrowserSessionProfileId: null }
-                    : {}),
-                  defaultBrowserSessionProfileIdByHostId: {
-                    ...s.defaultBrowserSessionProfileIdByHostId,
-                    [hostId]: null
-                  }
-                }
-              : {})
-          }))
+          dropDeletedProfile()
         }
         return ok
       } catch {

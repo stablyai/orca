@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
 import { useAppStore } from '@/store'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
 import type { AppState } from '@/store/types'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -190,9 +191,7 @@ function createClientBrowserTab(
       activate: request.focusOnCreate !== false,
       browserRuntimeEnvironmentId: null,
       focusAddressBar: false,
-      sessionProfileId:
-        state.defaultBrowserSessionProfileIdByHostId[hostId] ??
-        state.defaultBrowserSessionProfileId,
+      sessionProfileId: getDefaultBrowserProfileForHost(state, hostId),
       targetGroupId: request.targetGroupId,
       title: presentation.title
     })

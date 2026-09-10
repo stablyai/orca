@@ -149,6 +149,29 @@ describe('Store', () => {
     })
   })
 
+  // #19905: the active internal-browser profile is only restored if it survives this
+  // boundary — the renderer, the web RPC and the CLI all write UI state through it.
+  it('updateUI round-trips the active browser session profile per host', async () => {
+    const store = await createStore()
+
+    store.updateUI({
+      defaultBrowserSessionProfileIdByHostId: { local: 'profile-a' } as never
+    })
+
+    expect(store.getUI().defaultBrowserSessionProfileIdByHostId).toEqual({ local: 'profile-a' })
+  })
+
+  it('updateUI preserves the browser session profile when an update omits it', async () => {
+    const store = await createStore()
+    store.updateUI({
+      defaultBrowserSessionProfileIdByHostId: { local: 'profile-a' } as never
+    })
+
+    store.updateUI({ sidebarWidth: 400 })
+
+    expect(store.getUI().defaultBrowserSessionProfileIdByHostId).toEqual({ local: 'profile-a' })
+  })
+
   it('updateUI skips save and notification when normalized UI is unchanged', async () => {
     vi.useFakeTimers()
     try {

@@ -125,6 +125,9 @@ export function BrowserProfileRow({
     <div
       role="button"
       tabIndex={0}
+      data-testid="browser-session-profile-row"
+      data-browser-session-profile-id={profile.id}
+      data-browser-session-profile-active={isActive ? 'true' : 'false'}
       onClick={onSelect}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {

@@ -1,3 +1,4 @@
+import type { DefaultBrowserSessionProfileIdByHostId } from './browser-workspace-types'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { FeatureTipId } from './feature-tips'
@@ -169,6 +170,8 @@ export type PersistedUIState = {
   browserDefaultZoomLevel?: number
   /** Optional Kagi private-session link used only when Kagi is the search engine. */
   browserKagiSessionLink?: string | null
+  /** Active internal-browser session profile per execution host; a host mapped to null means Default. */
+  defaultBrowserSessionProfileIdByHostId?: DefaultBrowserSessionProfileIdByHostId
   /** Saved window bounds so the app restores last position/size instead of maximizing each launch. */
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
