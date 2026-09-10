@@ -40,7 +40,7 @@ describe('typo repair policy', () => {
         if (exact) {
           addTerm(index.db, 1, input)
         }
-        expect(new SessionSearchTypoRepair(index.db).correct(input)).toBe(expected)
+        expect(new SessionSearchTypoRepair(index.db).correct(input, 'all')).toBe(expected)
       } finally {
         await index.close()
       }
@@ -72,7 +72,7 @@ describe('typo repair policy', () => {
       expect(db.prepare("SELECT doc FROM messages_vocab WHERE term='coalesces'").get()).toEqual({
         doc: 2
       })
-      expect(new SessionSearchTypoRepair(db).correct('coalescs')).toBe('coalesced')
+      expect(new SessionSearchTypoRepair(db).correct('coalescs', 'all')).toBe('coalesced')
     } finally {
       await index.close()
     }
