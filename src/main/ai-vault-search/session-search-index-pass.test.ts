@@ -154,6 +154,28 @@ it('is not overtaken by a list parse racing the same path', async () => {
   })
 })
 
+// A read that dies between chunks leaves rows for a prefix and a cursor no
+// append continues, under the whole file's mtime and size. Counting that as
+// indexed drops the file from the queue, and nothing ever finishes it.
+it('does not count a file a chunked read left half written as indexed', async () => {
+  const only = (await candidates()).slice(0, 1)
+  const indexed: string[] = []
+  const reported = store.indexedFile.bind(store)
+  store.indexedFile = (path, identity) => {
+    const row = reported(path, identity)
+    return row === null ? null : { ...row, byteOffset: null }
+  }
+
+  const pass = await runSessionSearchIndexPass(store, only, {
+    onIndexed: (candidate) => indexed.push(candidate.file.path)
+  })
+
+  // The read ran and the rows landed; what it did not do is claim the file is
+  // covered, because the cursor it left continues nothing.
+  expect(pass.stats.fullParses).toBe(1)
+  expect(indexed).toEqual([])
+})
+
 // Finding 4d: a declined read is a parse that returns normally and indexes
 // nothing. Counting it makes a status claim files the index does not hold.
 it('does not count a read the index declined, even though the parse succeeded', async () => {

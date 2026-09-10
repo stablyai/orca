@@ -84,6 +84,25 @@ function indexedSessionCount(): number {
   )
 }
 
+/** The byte offset the index recorded; PR 2 stores -1 for a half-written file. */
+function indexedByteOffset(path: string): number | undefined {
+  return harness.read(
+    (db: SyncDatabase) =>
+      (
+        db.prepare('SELECT byte_offset AS offset FROM files WHERE path = ?').get(path) as
+          | { offset: number }
+          | undefined
+      )?.offset
+  )
+}
+
+/** What a chunk of a read that never finished leaves on the file row. */
+function plantPartialCursor(path: string): void {
+  harness.write((db: SyncDatabase) =>
+    db.prepare('UPDATE files SET byte_offset = -1 WHERE path = ?').run(path)
+  )
+}
+
 function indexedCursor(path: string): { mtime_ms: number; size_bytes: number } | undefined {
   return harness.read(
     (db: SyncDatabase) =>
@@ -396,6 +415,39 @@ it('counts a file as indexed only when the index actually took it', async () => 
   // Nothing changed, so the next cycle reads nothing and must claim nothing.
   await indexer?.reconcile()
   expect(indexer?.status()).toMatchObject({ filesIndexed: 1, bytesIndexed: afterSweep })
+})
+
+// PR 2 records a cursor no append continues for a file a chunked read left half
+// written, and reports it as a null offset. The mtime and size on that row are
+// the whole file's, so a freshness check comparing only those calls a prefix
+// current and leaves it in the index for good.
+it('re-reads a file a chunked read left half written, and settles it in one pass', async () => {
+  const path = transcriptPath()
+  await writeClaudeTranscript(path, ['the committed half'], SESSION_ID)
+  await newIndexer().start()
+  const whole = (await stat(path)).size
+  expect(indexedByteOffset(path)).toBe(whole)
+  indexer?.close()
+
+  plantPartialCursor(path)
+  await newIndexer().start()
+
+  // Nothing about the file changed, and it was read anyway: the whole of it,
+  // because there is no cursor to continue from.
+  expect(indexer?.status().bytesIndexed).toBe(whole)
+  expect(indexedByteOffset(path)).toBe(whole)
+  expect(indexer?.status().phase).toBe('current')
+  indexer?.close()
+
+  // A half-written file that also grew is repaired by one pass rather than two.
+  // The session list's resume point would have the reader offer an append here,
+  // and an append onto a partial cursor is a read the consumer declines.
+  plantPartialCursor(path)
+  await appendFile(path, `${claudeLines(['the lost half'], SESSION_ID, 10).join('\n')}\n`)
+  await newIndexer().start()
+
+  expect(sessionsMatching('lost')).toEqual([SESSION_ID])
+  expect(indexer?.status()).toMatchObject({ filesPending: 0, phase: 'current' })
 })
 
 it('reports closed once it is closed, whatever it was doing before', async () => {

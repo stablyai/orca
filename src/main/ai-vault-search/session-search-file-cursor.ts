@@ -40,13 +40,21 @@ export function fileIdentity(file: FileWithMtime): SessionSearchFileIdentity {
     : null
 }
 
-/** True when the index already covers this file at its current stat. */
+/**
+ * True when the index already covers this file at its current stat.
+ *
+ * A half-written file is never current, whatever its stat says: the mtime and
+ * the size on that row are the whole file's, so comparing only those would call
+ * a prefix current and leave it in the index for good. This is the check
+ * `requiresWholeRead` exists in front of.
+ */
 export function isSessionSearchFileCurrent(
   indexed: SessionSearchIndexedFile | null,
   file: FileWithMtime
 ): boolean {
   return (
     indexed !== null &&
+    !requiresWholeRead(indexed) &&
     indexed.mtimeMs === file.mtimeMs &&
     (indexed.sizeBytes === null ||
       file.sizeBytes === undefined ||

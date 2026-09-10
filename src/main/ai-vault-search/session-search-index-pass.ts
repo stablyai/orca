@@ -124,10 +124,10 @@ function indexIsCurrent(store: SessionSearchStore, candidate: SessionFileCandida
 }
 
 /**
- * True when the rows under this path describe a file that no longer exists:
- * the same name now carries a different dev/ino, or it is shorter than the
- * offset the index read to. Either way an append would splice two files
- * together, so the read has to start over.
+ * True when an append would splice this read onto rows it does not continue:
+ * the same name now carries a different dev/ino, the file is shorter than the
+ * offset the index read to, or a chunked read left a prefix and no cursor at
+ * all. Either way the read has to start over.
  */
 function mustReadWhole(
   store: SessionSearchStore,
@@ -144,16 +144,21 @@ function mustReadWhole(
   if (!store.indexedFile(candidate.file.path, fileIdentity(candidate.file))) {
     return true
   }
+  const offset = stored.byteOffset
+  if (offset === null) {
+    // A read that died between chunks. Asking for an append here is a read the
+    // consumer declines, so the repair would wait a whole extra pass.
+    return true
+  }
   const size = candidate.file.sizeBytes
-  return typeof size === 'number' && stored.byteOffset > size
+  return typeof size === 'number' && offset > size
 }
 
 /** What this read will actually cost: the tail past the index's own cursor. */
 function unreadBytes(store: SessionSearchStore, candidate: SessionFileCandidate): number {
   const size = candidate.file.sizeBytes ?? 0
   const indexed = store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
-  if (!indexed || indexed.byteOffset > size) {
-    return size
-  }
-  return size - indexed.byteOffset
+  // No cursor to read past: a half-written file starts over, so it costs all of it.
+  const offset = indexed?.byteOffset ?? null
+  return offset === null || offset > size ? size : size - offset
 }
