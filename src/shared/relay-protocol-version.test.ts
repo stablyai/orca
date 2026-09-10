@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   MIN_RELAY_PROTOCOL_VERSION,
   RELAY_PROTOCOL_VERSION,
+  describeRelayProtocolVersion,
   relayProtocolOffer,
   relayProtocolOfferAdmits
 } from './relay-protocol-version'
@@ -70,5 +71,21 @@ describe('relay protocol version', () => {
   it('rejects an inverted range instead of silently reordering it', () => {
     expect(relayProtocolOfferAdmits({ protocolVersion: 1, minProtocolVersion: 5 }, 1)).toBe(false)
     expect(relayProtocolOfferAdmits({ protocolVersion: 1, minProtocolVersion: 5 }, 5)).toBe(false)
+  })
+
+  // A relay daemon logs the peer's claim on the refusal path, and `JSON.parse` can produce an
+  // object a template literal cannot stringify. Throwing there is inside the frame-decoder
+  // callback, which would take the daemon and every PTY it still holds down with it.
+  it('renders a peer version claim that a template literal would throw on', () => {
+    const hostile = JSON.parse('{"protocolVersion": {"toString": 1}}').protocolVersion
+    expect(() => `${hostile}`).toThrow()
+    expect(describeRelayProtocolVersion(hostile)).toBe('none')
+  })
+
+  it('renders real numbers and refuses every other shape', () => {
+    expect(describeRelayProtocolVersion(7)).toBe('7')
+    for (const bad of [undefined, null, '3', {}, [], Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(describeRelayProtocolVersion(bad), JSON.stringify(bad ?? null)).toBe('none')
+    }
   })
 })

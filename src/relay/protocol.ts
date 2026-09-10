@@ -27,6 +27,7 @@ export type { DecodedFrame, FrameDecoderOptions } from './relay-frame-decoder'
 import {
   MIN_RELAY_PROTOCOL_VERSION,
   RELAY_PROTOCOL_VERSION,
+  describeRelayProtocolVersion,
   relayProtocolOffer,
   relayProtocolOfferAdmits,
   type RelayHandshakeCapabilities,
@@ -36,6 +37,7 @@ import {
 export {
   MIN_RELAY_PROTOCOL_VERSION,
   RELAY_PROTOCOL_VERSION,
+  describeRelayProtocolVersion,
   relayProtocolOffer,
   relayProtocolOfferAdmits
 }
