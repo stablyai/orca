@@ -129,7 +129,7 @@ export default function MobilePage(): React.JSX.Element {
   }, [connectionMode, generatePairing, pairLoading, signedIn])
 
   const handleConnectionModeChange = useCallback(
-    (nextMode: MobilePairingConnectionMode): void => {
+    (nextMode: MobilePairingConnectionMode, options?: { persist?: boolean }): void => {
       if (nextMode === connectionMode) {
         return
       }
@@ -138,7 +138,12 @@ export default function MobilePage(): React.JSX.Element {
       // (below), which also covers cross-window preference syncs.
       setRelayMintFailure(null)
       setConnectionMode(nextMode)
-      void updateSettings({ mobilePairingConnectionMode: nextMode })
+      // Why: the persisted setting is host policy — it withdraws Relay from
+      // every paired phone. A mint-failure recovery button only promises a
+      // LAN QR, so it must not persist.
+      if (options?.persist !== false) {
+        void updateSettings({ mobilePairingConnectionMode: nextMode })
+      }
     },
     [connectionMode, updateSettings, setConnectionMode]
   )
@@ -345,7 +350,7 @@ export default function MobilePage(): React.JSX.Element {
       relayMintFailure={
         connectionMode === 'automatic' && pairQrDataUrl == null ? relayMintFailure : null
       }
-      onUseLan={() => handleConnectionModeChange('local-only')}
+      onUseLan={() => handleConnectionModeChange('local-only', { persist: false })}
       onRetryRelay={() => void generatePairing(true)}
       onCopyRelayDiagnostics={() => void copyRelayDiagnostics()}
       platform={platform}
