@@ -292,11 +292,14 @@ export class DesktopRelayService {
   }
 
   private async requireActiveBroker(): Promise<RelaySessionBroker> {
-    const broker = await this.activeBrokerForDemand()
-    if (!broker) {
-      throw new Error(relayOfflineReasonMintFailureCode(this.coordinator.getOfflineReason()))
+    const result = await this.coordinator.waitForLiveBrokerResult()
+    if (!result.broker) {
+      throw new Error(relayOfflineReasonMintFailureCode(result.offlineReason))
     }
-    return broker
+    if (!(result.broker instanceof RelaySessionBroker)) {
+      throw new Error('relay_control_not_active')
+    }
+    return result.broker
   }
 
   private refreshDemand(): void {

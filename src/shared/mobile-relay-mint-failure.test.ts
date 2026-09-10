@@ -35,23 +35,26 @@ describe('mobileRelayMintFailureFromUnknown', () => {
   // Guards the path requireActiveBroker relies on: a coded Error thrown by the
   // relay coordinator (relay_signed_out / relay_not_entitled /
   // relay_broker_unavailable) must reach the failure payload unchanged.
-  it.each(['relay_signed_out', 'relay_not_entitled', 'relay_broker_unavailable'])(
-    'forwards the relay failure cause code %s',
-    (code) => {
-      expect(
-        mobileRelayMintFailureFromUnknown({
-          stage: 'create_pairing_relay',
-          error: new Error(code),
-          fallbackCode: 'relay_mint_failed',
-          fallbackMessage: 'Relay pairing invite request failed'
-        })
-      ).toEqual({
-        code,
+  it.each([
+    'relay_signed_out',
+    'relay_not_entitled',
+    'relay_auth_unavailable',
+    'relay_broker_unavailable',
+    'relay_broker_rejected'
+  ])('forwards the relay failure cause code %s', (code) => {
+    expect(
+      mobileRelayMintFailureFromUnknown({
         stage: 'create_pairing_relay',
-        message: 'Relay pairing invite request failed'
+        error: new Error(code),
+        fallbackCode: 'relay_mint_failed',
+        fallbackMessage: 'Relay pairing invite request failed'
       })
-    }
-  )
+    ).toEqual({
+      code,
+      stage: 'create_pairing_relay',
+      message: 'Relay pairing invite request failed'
+    })
+  })
 
   it('falls back for error values that are neither objects nor Errors', () => {
     expect(

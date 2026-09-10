@@ -11,8 +11,7 @@ function serviceWithOfflineReason(offlineReason: RelayOfflineReason | null): {
   const coordinator = {
     getActiveBroker: () => null,
     getLiveBroker: () => null,
-    waitForLiveBroker: async () => null,
-    getOfflineReason: () => offlineReason
+    waitForLiveBrokerResult: async () => ({ broker: null, offlineReason })
   }
   const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
   Object.assign(service, { coordinator })
@@ -36,6 +35,18 @@ describe('DesktopRelayService.requireActiveBroker failure cause codes', () => {
     await expect(
       serviceWithOfflineReason('broker_unavailable').requireActiveBroker()
     ).rejects.toThrow('relay_broker_unavailable')
+  })
+
+  it('names a relay that rejected this desktop instead of the generic control-not-active code', async () => {
+    await expect(serviceWithOfflineReason('broker_rejected').requireActiveBroker()).rejects.toThrow(
+      'relay_broker_rejected'
+    )
+  })
+
+  it('names a cloud session that could not be read instead of blaming the relay', async () => {
+    await expect(
+      serviceWithOfflineReason('auth_unavailable').requireActiveBroker()
+    ).rejects.toThrow('relay_auth_unavailable')
   })
 
   it('falls back to relay_control_not_active when no cause was recorded', async () => {
