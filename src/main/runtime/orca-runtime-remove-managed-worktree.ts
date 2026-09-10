@@ -14,6 +14,7 @@ import { resolveWorktreeRemovalRoute } from '../worktree-removal-execution-host-
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { listWorktreesStrict } from '../git/worktree'
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
+import { resolveWorktreeRemovalHome } from '../worktree-removal-execution-host-route'
 import { removeRuntimeUnregisteredWorktree } from './runtime-unregistered-worktree-removal'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
@@ -98,10 +99,12 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           removalHostId
         )
         const removedPushTarget = removedMeta?.pushTarget ?? removalTarget.pushTarget
+        const removalHome = resolveWorktreeRemovalHome(route)
         const registeredWorktree = findRegisteredDeletableWorktree(
           repo.path,
           removalTarget.path,
-          registeredWorktrees
+          registeredWorktrees,
+          removalHome
         )
         if (!registeredWorktree) {
           return removeRuntimeUnregisteredWorktree({

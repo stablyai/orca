@@ -11,7 +11,9 @@ import {
 import { ExecutionHostNotDispatchableError } from './providers/execution-host-provider-dispatch'
 import {
   getWorktreeRemovalConnectionId,
-  resolveWorktreeRemovalRoute
+  resolveWorktreeRemovalHome,
+  resolveWorktreeRemovalRoute,
+  setWorktreeRemovalSshHostHomeResolver
 } from './worktree-removal-execution-host-route'
 
 const HOST_A = 'target-a'
@@ -26,6 +28,7 @@ function fsProvider(name: string): never {
 }
 
 afterEach(() => {
+  setWorktreeRemovalSshHostHomeResolver(() => null)
   unregisterSshGitProvider(HOST_A)
   unregisterSshGitProvider(HOST_B)
   unregisterSshFilesystemProvider(HOST_A)
@@ -96,5 +99,33 @@ describe('resolveWorktreeRemovalRoute', () => {
     expect(() => resolveWorktreeRemovalRoute('runtime:target-a')).toThrow(
       ExecutionHostNotDispatchableError
     )
+  })
+})
+
+describe('resolveWorktreeRemovalHome', () => {
+  it('takes the home from the SSH host that will run the delete', () => {
+    registerSshGitProvider(HOST_A, gitProvider('git-a'))
+    setWorktreeRemovalSshHostHomeResolver((id) => (id === HOST_A ? '/srv/homes/alice' : null))
+
+    expect(resolveWorktreeRemovalHome(resolveWorktreeRemovalRoute('ssh:target-a'))).toEqual({
+      kind: 'executionHost',
+      homePath: '/srv/homes/alice'
+    })
+  })
+
+  it('reports an unresolved SSH home as unknown, never as this client s home', () => {
+    registerSshGitProvider(HOST_A, gitProvider('git-a'))
+    setWorktreeRemovalSshHostHomeResolver(() => null)
+
+    expect(resolveWorktreeRemovalHome(resolveWorktreeRemovalRoute('ssh:target-a'))).toEqual({
+      kind: 'executionHost',
+      homePath: null
+    })
+  })
+
+  it('keeps a local removal on this client s home', () => {
+    expect(resolveWorktreeRemovalHome(resolveWorktreeRemovalRoute('local'))).toEqual({
+      kind: 'client'
+    })
   })
 })
