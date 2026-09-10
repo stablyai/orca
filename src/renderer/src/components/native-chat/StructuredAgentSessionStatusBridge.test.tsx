@@ -298,8 +298,25 @@ describe('StructuredAgentSessionStatusBridge', () => {
       })
     ])
 
+    act(() =>
+      feed().emit({
+        type: 'status',
+        session: summary({
+          updatedAt: 3,
+          backgroundTasks: [{ id: 'child-1', kind: 'agent', state: 'unverifiable' }]
+        })
+      })
+    )
+    expect(
+      buildSubagentChildRows({
+        parentEntry: statuses()[0],
+        tab: structuredTab as never,
+        parentIsFresh: true
+      })[0]?.state
+    ).toBe('unverifiable')
+
     // A summary without tasks ends the fan-out: children clear with it.
-    act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 3 }) }))
+    act(() => feed().emit({ type: 'status', session: summary({ status: 'idle', updatedAt: 4 }) }))
     expect(statuses()).toEqual([expect.objectContaining({ subagents: undefined })])
   })
 

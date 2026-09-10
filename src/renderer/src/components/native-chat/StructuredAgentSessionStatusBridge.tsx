@@ -85,8 +85,9 @@ function subagentStateFromTask(task: AgentSessionBackgroundTask): AgentSubagentS
       return 'blocked'
     case 'done':
     case 'idle':
-    case 'unverifiable':
       return 'idle'
+    case 'unverifiable':
+      return 'unverifiable'
     // Absent state is an old host's live task; live means working here.
     case 'working':
     case 'monitoring':

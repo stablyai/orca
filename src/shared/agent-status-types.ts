@@ -85,7 +85,7 @@ export type AgentStatusOrchestrationContext = {
   attention?: OrchestrationFleetAttention
 }
 
-export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle'
+export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle' | 'unverifiable'
 
 /** A live in-process child of the pane's provider session. Rendered as an
  *  indented child row with no PTY of its own. */
@@ -304,7 +304,8 @@ function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null
     obj.state !== 'working' &&
     obj.state !== 'blocked' &&
     obj.state !== 'waiting' &&
-    obj.state !== 'idle'
+    obj.state !== 'idle' &&
+    obj.state !== 'unverifiable'
   ) {
     return null
   }
