@@ -1,0 +1,53 @@
+name: Release signing checks
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/*signing*.yml'
+      - '.github/workflows/release-cut.yml'
+      - 'config/windows-signing/**'
+      - 'cloud/apps/release-signing/**'
+      - 'cloud/infra/release-signing/**'
+      - 'cloud/pnpm-lock.yaml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-control:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Exercise signing failures and checkpoint recovery
+        shell: pwsh
+        run: ./config/windows-signing/signing-control.test.ps1
+  coordinator:
+    defaults:
+      run:
+        working-directory: cloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: cloud/package.json
+          run_install: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @orca-cloud/release-signing typecheck
+      - run: pnpm --filter @orca-cloud/release-signing test
+      - run: node --test ../config/windows-signing/configure-environments.test.mjs
+  infrastructure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+      - run: terraform -chdir=cloud/infra/release-signing fmt -check
+      - run: terraform -chdir=cloud/infra/release-signing init -backend=false -input=false
+      - run: terraform -chdir=cloud/infra/release-signing validate

@@ -5,6 +5,19 @@ import { parse } from 'yaml'
 
 const RELEASE_WORKFLOW = '.github/workflows/release-cut.yml'
 const EXPECTED_MATRIX = {
+  [`${RELEASE_WORKFLOW}#build-windows`]: { actions: 'read', contents: 'write' },
+  [`${RELEASE_WORKFLOW}#build-windows -> .github/workflows/release-windows-signing.yml#build`]: {
+    actions: 'read',
+    contents: 'read'
+  },
+  [`${RELEASE_WORKFLOW}#build-windows -> .github/workflows/release-windows-signing.yml#package`]: {
+    actions: 'read',
+    contents: 'read'
+  },
+  [`${RELEASE_WORKFLOW}#build-windows -> .github/workflows/release-windows-signing.yml#finalize`]: {
+    actions: 'read',
+    contents: 'write'
+  },
   '.github/workflows/docs.yml#check': { contents: 'read' },
   '.github/workflows/docs.yml#production': { contents: 'read' },
   '.github/workflows/docs.yml#release_gate': { contents: 'read' },

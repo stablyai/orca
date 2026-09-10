@@ -164,6 +164,12 @@ describe('Electron runtime package contract', () => {
       (step) => step.name === 'Publish release artifacts (macOS)'
     ).with.command
 
+    releaseCommands.set(
+      'win',
+      parse(
+        readFileSync(join(projectDir, '.github/workflows/release-windows-signing.yml'), 'utf8')
+      ).jobs.build.steps.find((s) => s.name === 'Build Windows release artifacts').with.command
+    )
     expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'win'])
     for (const command of [...releaseCommands.values(), macReleaseCommand]) {
       expect(command).toContain('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
@@ -253,7 +259,9 @@ describe('Electron runtime package contract', () => {
 
     assertRelayGate(releaseWorkflow.jobs.build.steps, 'Publish release artifacts (Linux)')
     assertRelayGate(macWorkflow.jobs['build-mac'].steps, 'Publish release artifacts (macOS)')
-    const releaseNames = releaseWorkflow.jobs.build.steps.map((step) => step.name)
+    const releaseNames = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-windows-signing.yml'), 'utf8')
+    ).jobs.build.steps.map((s) => s.name)
     expect(releaseNames.indexOf('Gate SSH relay watcher process isolation')).toBeLessThan(
       releaseNames.indexOf('Build Windows release artifacts')
     )
@@ -274,17 +282,6 @@ describe('Electron runtime package contract', () => {
     expect(relayDeploy.match(/\$\{windowsNodePtyPatchCommand\(nodePath\)\}/g)).toHaveLength(2)
     expect(patchAsset).toContain('consoleProcessList = [shellPid];')
     expect(patchAsset).toContain('packageJson.version !== EXPECTED_NODE_PTY_VERSION')
-  })
-
-  it('pins the Windows release builder to the VS 2022 runner image', () => {
-    const releaseWorkflow = parse(
-      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
-    )
-    const windowsReleaseEntry = releaseWorkflow.jobs.build.strategy.matrix.include.find(
-      ({ platform }) => platform === 'win'
-    )
-
-    expect(windowsReleaseEntry.os).toBe('windows-2022')
   })
 
   it('keeps release-cut signing provenance on GitHub-hosted runners', () => {

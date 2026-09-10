@@ -1,0 +1,22 @@
+project = "YOUR_GCP_PROJECT"
+region  = "us-central1"
+image   = "REGION-docker.pkg.dev/PROJECT/REPOSITORY/release-signing@sha256:IMAGE_DIGEST"
+environment = {
+  GITHUB_APP_ID            = "APP_ID"
+  GITHUB_INSTALLATION_ID   = "INSTALLATION_ID"
+  SIGNPATH_ORGANIZATION_ID = "c37aa192-a27a-4377-9c90-5d6c95912dc0"
+  SIGNING_POLICIES = <<-JSON
+  [
+    {"workflow":".github/workflows/release-cut.yml","branch":"main","signingPolicy":"release-signing","environments":{"inner":"windows-inner-signing","installer":"windows-installer-signing"}},
+    {"workflow":".github/workflows/windows-signing-rehearsal.yml","branch":"main","signingPolicy":"test-signing","environments":{"inner":"windows-rehearsal-inner-signing","installer":"windows-rehearsal-installer-signing"}}
+  ]
+  JSON
+}
+secrets = {
+  GITHUB_APP_PRIVATE_KEY   = "release-signing-github-private-key"
+  GITHUB_WEBHOOK_SECRET   = "release-signing-github-webhook"
+  SIGNPATH_WEBHOOK_SECRET = "release-signing-signpath-webhook"
+  RECONCILE_SECRET        = "release-signing-reconcile"
+  SIGNPATH_API_TOKEN      = "release-signing-signpath-api-token"
+}
+# Supply TF_VAR_reconcile_token from the same Secret Manager version as RECONCILE_SECRET.
