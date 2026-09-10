@@ -5958,6 +5958,10 @@ export class RelayAssignmentStore {
   async recordRegionalRehomeDispatchFailure(attemptId: string): Promise<void> {
     const now = this.now()
     const disableLog = await this.database.transaction(async (transaction) => {
+      // Match claim and enable ordering before a spent budget updates the control.
+      await transaction.queryLocked(
+        `SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'`
+      )
       const worker = (
         await transaction.queryLocked(
           `SELECT * FROM relay_region_rehome_worker_state WHERE worker_id = 'global'`
