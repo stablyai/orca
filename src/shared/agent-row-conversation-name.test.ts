@@ -31,13 +31,15 @@ describe('getAgentRowConversationName', () => {
     )
   })
 
-  it('shows the provider session title from the transcript, so the row matches its tab', () => {
+  it("shows the title owned by the row's provider session", () => {
     const tab = makeTab({
       aiVaultTitle: { agent: 'claude', sessionId: 's1', title: 'Fix the lease probe' },
       generatedTitle: 'Fix intake flow',
       title: '\u2733 Investigate replay bug'
     })
-    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Fix the lease probe')
+    expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's1')).toBe(
+      'Fix the lease probe'
+    )
   })
 
   it('lets a manual rename and a quick command still outrank the provider title', () => {
@@ -46,14 +48,18 @@ describe('getAgentRowConversationName', () => {
       getAgentRowConversationName(
         makeTab({ aiVaultTitle: vault, customTitle: 'Mine' }),
         'claude',
-        true
+        true,
+        undefined,
+        's1'
       )
     ).toBe('Mine')
     expect(
       getAgentRowConversationName(
         makeTab({ aiVaultTitle: vault, quickCommandLabel: 'Run tests' }),
         'claude',
-        true
+        true,
+        undefined,
+        's1'
       )
     ).toBe('Run tests')
   })
@@ -64,7 +70,7 @@ describe('getAgentRowConversationName', () => {
       aiVaultTitle: { agent: 'claude', sessionId: 's1', title: 'auth/login' },
       title: '\u2733 Investigate replay bug'
     })
-    expect(getAgentRowConversationName(tab, 'claude', true)).toBe('auth/login')
+    expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's1')).toBe('auth/login')
     expect(getAgentRowConversationName(makeTab({ title: 'auth/login' }), 'claude', true)).toBeNull()
   })
 

@@ -1,7 +1,8 @@
 // Resolves the stable "conversation name" an agent row can show instead of the
 // live last-message preview. Sources, in the same precedence the tab bar uses
 // (tab-title-resolution.ts): manual rename → quick-command label → OpenCode's
-// semantic session title → Orca's generated title → the agent-set live title.
+// semantic session title → provider session title → Orca's generated title →
+// the agent-set live title.
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
@@ -119,7 +120,8 @@ export function getAgentRowConversationName(
   // this row's own pane title, or `null` when none resolves; `undefined` (a
   // single-pane tab) keeps the tab title. Tab-owned names above are unaffected:
   // the user gave those to the whole tab and they do not flip on focus.
-  paneLiveTitle?: string | null
+  paneLiveTitle?: string | null,
+  providerSessionId?: string
 ): string | null {
   const customTitle = tab.customTitle?.trim()
   if (customTitle) {
@@ -134,11 +136,16 @@ export function getAgentRowConversationName(
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
   }
-  // The provider's own name for this session, read off its transcript. Placed exactly where the tab
-  // strip places it (`resolveUnifiedTabLabel`), so a row and its tab cannot disagree.
-  const aiVaultTitle = tab.aiVaultTitle?.title.trim()
-  if (aiVaultTitle) {
-    return aiVaultTitle
+  // Provider titles belong to their session, not every pane in the tab.
+  const aiVaultTitle = tab.aiVaultTitle
+  const providerTitle = aiVaultTitle?.title.trim()
+  if (
+    aiVaultTitle &&
+    providerTitle &&
+    aiVaultTitle.agent === agentType &&
+    aiVaultTitle.sessionId === providerSessionId
+  ) {
+    return providerTitle
   }
   const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
   if (generatedTitle) {
