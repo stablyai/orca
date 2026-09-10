@@ -87,6 +87,46 @@ describe('structured agent session reducer', () => {
     expect(updated.items).toBe(initial.items)
   })
 
+  it("republishes when only a row's stoppability changes", () => {
+    // A row losing its stop is the whole difference between an honest control
+    // and a dead one, so it must not be dropped as an equal state.
+    const backgroundTasks = {
+      state: 'monitoring' as const,
+      supportsTaskStop: true,
+      tasks: [{ id: 'task-1', kind: 'agent' as const }]
+    }
+    const initial = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
+      type: 'event',
+      event: {
+        type: 'snapshot',
+        sessionId: 'session-a',
+        fence: 1,
+        page: { ...hydrationPage([]), backgroundTasks }
+      }
+    })
+    const updated = reduceStructuredAgentSession(initial, {
+      type: 'event',
+      event: {
+        type: 'batch',
+        sessionId: 'session-a',
+        batch: {
+          cursor: { epoch: 'epoch-a', sequence: 0 },
+          items: [],
+          removedItemIds: [],
+          submissions: []
+        },
+        backgroundTasks: {
+          ...backgroundTasks,
+          tasks: [{ id: 'task-1', kind: 'agent' as const, stoppable: false }]
+        }
+      }
+    })
+
+    expect(updated.backgroundTasks?.tasks).toEqual([
+      { id: 'task-1', kind: 'agent', stoppable: false }
+    ])
+  })
+
   it('uses the bounded hydration page pagination boundary', () => {
     const restored = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
@@ -149,7 +189,7 @@ describe('structured agent session reducer', () => {
     })
     const withOlder = reduceStructuredAgentSession(snapshot, {
       type: 'older-page',
-      requestedEpoch: 'epoch-a',
+      requestedCursor: { epoch: 'epoch-a', sequence: 50 },
       page: {
         sessionId: 'session-a',
         epoch: 'epoch-a',

@@ -82,6 +82,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   /** Every structured-session status projection, for host-side reactions such as the first-work
    *  workspace rename that CLI agents get from their hooks. */
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
+  /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
+  statusSink?: StructuredAgentSessionHostDeps['statusSink']
   handoffTransport?: StructuredAgentSessionHandoffTransport
   reapOrphanChildren?: typeof stopOrphanAgentSessionChildren
 }
@@ -300,6 +302,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.onSessionStatusChanged
         ? { onSessionStatusChanged: deps.onSessionStatusChanged }
         : {}),
+      ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
       persistTuiProviderHandle: async ({ sessionId, link, now }) => {
         await store.transitionHandoff(sessionId, (record) =>
           recordAgentSessionProviderHandle({ record, fence: record.lease.runtimeFence, link, now })

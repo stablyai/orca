@@ -27,6 +27,19 @@ export type StructuredAgentSessionLifetimeContext = {
   runtimeState: StructuredAgentSessionHostRuntimeState
   sessions: Map<string, StructuredAgentSessionHostSession>
   now: () => number
+  /** Drops the session's row from the agent-status store; see `forgetStructuredAgentSession`. */
+  forgetStatus: (sessionId: string) => void
+}
+
+/** Dropping a session and dropping its status row are ONE operation: the store keeps the row until
+ *  told, so a caller that only deletes strands a live-looking row no reader can ever decay. */
+export async function forgetStructuredAgentSession(
+  context: StructuredAgentSessionLifetimeContext,
+  sessionId: string
+): Promise<void> {
+  await context.sessions.get(sessionId)?.journal.close()
+  context.sessions.delete(sessionId)
+  context.forgetStatus(sessionId)
 }
 
 function hasProviderChild(
@@ -50,10 +63,7 @@ export async function evictHeldStructuredAgentSession(
     hasProviderChild: hasProviderChild(context, sessionId),
     eventSink: context.runtimeState.eventSinkFor(sessionId),
     adapter: context.deps.adapter,
-    forget: async () => {
-      await context.sessions.get(sessionId)?.journal.close()
-      context.sessions.delete(sessionId)
-    },
+    forget: () => forgetStructuredAgentSession(context, sessionId),
     discardSink: () => context.runtimeState.discardEventSink(sessionId),
     releaseLease: () =>
       releaseStoredStructuredAgentSessionOwner({

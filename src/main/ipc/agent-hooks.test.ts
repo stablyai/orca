@@ -152,6 +152,37 @@ describe('agentStatus:getSnapshot IPC', () => {
     expect(handler!({})).toEqual(snapshot)
   })
 
+  // The half-migration seam: until PR 2 retires the renderer's own feed bridge, main must not
+  // publish structured rows to the renderer at all — one pane key, one writer.
+  it('omits structured rows the renderer feed bridge still owns', async () => {
+    getStatusSnapshot.mockReturnValue([
+      {
+        paneKey: PANE_KEY,
+        state: 'done',
+        prompt: 'hook row',
+        agentType: 'claude',
+        connectionId: null,
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000
+      },
+      {
+        paneKey: CHILD_PANE_KEY,
+        state: 'working',
+        prompt: 'native chat row',
+        agentType: 'codex',
+        connectionId: null,
+        structuredHost: 'owned',
+        receivedAt: 1_700_000_001_000,
+        stateStartedAt: 1_700_000_000_500
+      }
+    ])
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const rows = handleHandlers.get('agentStatus:getSnapshot')!({}) as { paneKey: string }[]
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY])
+  })
+
   it('enriches the hook cache snapshot with runtime lineage metadata', async () => {
     const snapshot = [
       {

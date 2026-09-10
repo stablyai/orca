@@ -11,6 +11,7 @@ import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState } from './native-chat-view-state'
+import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
@@ -31,6 +32,8 @@ type StoppingBackgroundTasks = {
 
 const NO_STOPPING_TASKS: ReadonlySet<string> = new Set()
 
+type ExpandedBackgroundTasks = { sessionId: string; expanded: boolean }
+
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
 }
@@ -50,6 +53,10 @@ export function NativeChatStructuredSession(
   const [composerError, setComposerError] = useState<string | null>(null)
   const [stoppingBackgroundTasks, setStoppingBackgroundTasks] =
     useState<StoppingBackgroundTasks | null>(null)
+  // Held here, not in the strip: the strip unmounts whenever live work briefly
+  // drops to nothing, and its own state would collapse the list each time.
+  const [expandedBackgroundTasks, setExpandedBackgroundTasks] =
+    useState<ExpandedBackgroundTasks | null>(null)
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -108,6 +115,13 @@ export function NativeChatStructuredSession(
   const activeStoppingBackgroundTasks =
     stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
   const prompt = controller.prompts[0] ?? null
+  useNativeChatComposerRevealFocus({
+    rootRef,
+    composerRef,
+    isVisible: props.isVisible,
+    isFocusedGroup: props.isFocusedGroup,
+    composerReady: prompt === null
+  })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const questions =
     questionBody?.questions ??
@@ -323,6 +337,13 @@ export function NativeChatStructuredSession(
           supportsStopAll={controller.backgroundTasks.supportsStopAll}
           stoppingTaskIds={activeStoppingBackgroundTasks?.taskIds ?? NO_STOPPING_TASKS}
           stoppingAll={activeStoppingBackgroundTasks?.all ?? false}
+          expanded={
+            expandedBackgroundTasks?.sessionId === props.sessionId &&
+            expandedBackgroundTasks.expanded
+          }
+          onExpandedChange={(expanded) =>
+            setExpandedBackgroundTasks({ sessionId: props.sessionId, expanded })
+          }
           onStop={(taskId) => {
             const targetSessionId = props.sessionId
             setStoppingBackgroundTasks((current) => {

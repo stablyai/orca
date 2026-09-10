@@ -17,9 +17,12 @@ import { AgentHookServerStatusDisposition } from './server-status-disposition'
 const MAX_REMEMBERED_EVIDENCE_OBSERVATIONS = 1024
 
 export abstract class AgentHookServerStatusApplication extends AgentHookServerStatusDisposition {
+  /** `observedAt` is the producer's own clock for evidence that has one (a session journal); it
+   *  stamps the evidence and state-start times while `receivedAt` keeps delivery order. */
   protected attachStatusTiming(
     payload: AgentHookEventPayload,
-    now = Date.now()
+    now = Date.now(),
+    observedAt?: number
   ): EnrichedAgentHookEventPayload {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
@@ -39,12 +42,12 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     const stateStartedAt =
       previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
         ? previous.stateStartedAt
-        : now
+        : (observedAt ?? now)
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,
       receivedAt: now,
-      evidenceObservedAt: this.resolveEvidenceObservedAt(payload, previous, now),
+      evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
       stateStartedAt
     }
   }

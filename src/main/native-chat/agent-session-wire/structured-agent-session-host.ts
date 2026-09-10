@@ -180,7 +180,8 @@ export class StructuredAgentSessionHost {
       deps: this.deps,
       runtimeState: this.runtimeState,
       sessions: this.sessions,
-      now: () => this.now()
+      now: () => this.now(),
+      forgetStatus: (sessionId) => this.statusFeed.forget(sessionId)
     }
   }
 
@@ -201,7 +202,7 @@ export class StructuredAgentSessionHost {
     return this.serialize(sessionId, async () => {
       await this.handoffs.closeRetainedTuiOwner(sessionId)
       await evictHeldStructuredAgentSession(this.lifetimeContext(), sessionId)
-      this.statusFeed.revokeLive(sessionId)
+      this.statusFeed.close(sessionId)
       // Whoever asked for the close, the surfaces that were holding this session are looking at a
       // session that no longer exists. A failed eviction throws above and keeps them.
       this.holds.forget(sessionId)
@@ -212,10 +213,6 @@ export class StructuredAgentSessionHost {
     providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)
 
   listSessionTabs = () => listStructuredAgentSessionTabs(this.sessions)
-
-  /** Last projected status for every structured session this host still holds, for non-subscribing
-   *  readers. The retained projections of forgotten sessions are deliberately not included. */
-  readonly liveSessionStatusSummaries = () => this.statusFeed.liveSessionSummaries()
 
   getPersistedVisibleSessionTabIndex = () => this.deps.store.getVisibleSessionTabIndex()
 

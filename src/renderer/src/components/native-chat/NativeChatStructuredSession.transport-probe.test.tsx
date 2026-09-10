@@ -44,6 +44,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-1"
         sessionId="session-1"
         target={{ kind: 'local' }}
@@ -75,6 +76,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-wedge"
         sessionId="session-wedge"
         target={{ kind: 'local' }}
@@ -106,6 +108,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-probe-flag"
         sessionId="session-probe-flag"
         target={{ kind: 'local' }}
@@ -138,6 +141,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-parked"
         sessionId="session-parked"
         target={{ kind: 'local' }}
@@ -187,6 +191,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     const makeView = (): React.ReactElement => (
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-churn"
         sessionId="session-churn"
         target={{ kind: 'local' }}
@@ -240,6 +245,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     ) => (
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-target-switch"
         sessionId="session-target-switch"
         target={target}
@@ -274,6 +280,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-forced"
         sessionId="session-forced"
         target={{ kind: 'local' }}
@@ -312,6 +319,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
     render(
       <NativeChatStructuredSession
         isVisible
+        isFocusedGroup
         tabId="structured-tab-pending"
         sessionId="session-pending"
         target={{ kind: 'local' }}
@@ -341,6 +349,7 @@ describe('NativeChatStructuredSession transport-unconfirmed sends', () => {
       render(
         <NativeChatStructuredSession
           isVisible
+          isFocusedGroup
           tabId="structured-tab-budget"
           sessionId="session-budget"
           target={{ kind: 'local' }}

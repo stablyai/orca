@@ -10,7 +10,6 @@ import {
   applyRuntimeWorktreePsTerminalActivity
 } from './runtime-worktree-ps-activity'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { Repo } from '../../shared/repo-types'
@@ -109,9 +108,8 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         mirroredWorktreeIdByTabId,
         connectedPtyEvidence,
         retainedSnapshots: this.agentRows.values(),
-        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
-        // Broadcast history outlives closed sessions; only the host roster is eligible.
-        structuredSummaries: getStructuredAgentSessionHost()?.liveSessionStatusSummaries() ?? []
+        // Structured sessions are in here too: the host publishes them into the same store.
+        hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
       }),
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
@@ -173,6 +171,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
           firstWorkRenameDeps(this.requireStore(), this)
         )
       },
+      ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
       handoffTransport: this.createStructuredAgentSessionHandoffTransport()
     })
   }

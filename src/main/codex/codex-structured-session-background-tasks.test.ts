@@ -215,29 +215,27 @@ describe('codex background tasks reach the strip', () => {
     }
   })
 
-  it('publishes the orphaned fan-out once the spawning turn completes', async () => {
+  it('publishes the fan-out while it runs and keeps it past the spawning turn', async () => {
     const published: { sessionId: string; state: AgentSessionBackgroundTaskState | null }[] = []
     const { adapter, codex } = await adapterWithSession(published)
+    const running = {
+      state: 'monitoring',
+      supportsStopAll: false,
+      tasks: [{ id: `codex-agent:${CHILD_ID}`, kind: 'agent', description: 'count_a' }]
+    }
 
     const spawn = subagentNotification('started')
     codex.handlers().onNotification?.(spawn.method, spawn.params)
-    // The child is still inside the turn, so the strip stays silent.
-    expect(published).toEqual([])
-    expect(adapter.backgroundTaskState('session-1')).toBeNull()
+    // Mid-turn: the child is running, so the strip reports it now.
+    expect(published).toEqual([{ sessionId: 'session-1', state: running }])
+    expect(adapter.backgroundTaskState('session-1')).toEqual(running)
 
+    published.length = 0
     codex.handlers().onNotification?.(TURN_COMPLETED.method, TURN_COMPLETED.params)
 
-    expect(published).toEqual([
-      {
-        sessionId: 'session-1',
-        state: {
-          state: 'monitoring',
-          supportsStopAll: false,
-          tasks: [{ id: `codex-agent:${CHILD_ID}`, kind: 'agent', description: 'count_a' }]
-        }
-      }
-    ])
-    expect(adapter.backgroundTaskState('session-1')).toEqual(published[0].state)
+    // Turn end is not the child's outcome: no republish and no settle.
+    expect(published).toEqual([])
+    expect(adapter.backgroundTaskState('session-1')).toEqual(running)
   })
 
   it('clears the strip when the session closes', async () => {

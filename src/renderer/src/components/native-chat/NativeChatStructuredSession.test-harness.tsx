@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle } from 'react'
+import { forwardRef, useImperativeHandle, useRef } from 'react'
 import { vi, type Mock } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
@@ -156,13 +156,18 @@ export function createStructuredSessionMocks() {
     nativeChatComposer: () => ({
       NativeChatComposer: forwardRef((props: typeof mocks.composerProps, ref) => {
         mocks.composerProps = props
+        const fieldRef = useRef<HTMLTextAreaElement>(null)
         useImperativeHandle(ref, () => ({
-          focus: () => true,
+          // Real DOM focus: the reveal-focus loop retries until focus lands in the pane.
+          focus: () => {
+            fieldRef.current?.focus()
+            return true
+          },
           insertTypedText: () => true,
           handlePasteEvent: mocks.handlePasteEvent,
           pasteFromClipboard: mocks.pasteFromClipboard
         }))
-        return <textarea data-testid="structured-composer" />
+        return <textarea ref={fieldRef} data-testid="structured-composer" />
       })
     }),
     nativeChatEmptyState: () => ({ NativeChatEmptyState: () => null }),

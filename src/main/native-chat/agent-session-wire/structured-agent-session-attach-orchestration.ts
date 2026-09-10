@@ -23,6 +23,7 @@ import {
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
+import { forgetStructuredAgentSession } from './structured-agent-session-host-lifetime'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -90,8 +91,7 @@ export function attachStructuredAgentSession(
       // Site 9: this closes the PRIOR map entry it drops, never the provisional
       // journal — it has no reference to that one. `onAttached` owns that.
       onAttachFailed: async () => {
-        await context.sessions.get(sessionId)?.journal.close()
-        context.sessions.delete(sessionId)
+        await forgetStructuredAgentSession(context, sessionId)
         eventSink.close()
         context.runtimeState.discardEventSink(sessionId)
       },
