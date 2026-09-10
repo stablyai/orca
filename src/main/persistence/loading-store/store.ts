@@ -18,6 +18,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { syncProjectHostSetupCompatibilityState } from './repo-lifecycle-operations'
+import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
 import {
   planRepoPathRelocation,
   type RepoWorkspaceIdentityMove
@@ -144,6 +145,9 @@ export class Store {
     // stale on the setup row until an unrelated catalog mutation happens to rebuild it — and
     // `setup.path` is what an automation resolves its run directory from.
     syncProjectHostSetupCompatibilityState(this)
+    // Every path a scan would report just changed, which is exactly what this generation exists to
+    // signal. `updateRepo` bumps it for far smaller edits; a direct write must not skip it.
+    bumpLocalWorktreeScanGeneration(repoId)
     scheduleSave(this.domains.scheduling)
     return { repo: this.getRepo(repoId) ?? stored, moves }
   }

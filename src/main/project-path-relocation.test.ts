@@ -13,6 +13,7 @@ import { RuntimeProjectHostSetupController } from './runtime/runtime-project-hos
 import { registerProjectHostSetupHandlers } from './ipc/repos/project-host-setup-handlers'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { computeWorktreePath } from './ipc/worktree-logic'
+import { getLocalWorktreeScanGeneration } from './local-worktree-scan-generation'
 
 const ipcHandlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
@@ -383,6 +384,19 @@ describe('projectHostSetup.update entry points', () => {
     ).toThrow(/another host/)
     expect(store.getRepos().find((repo) => !repo.connectionId)?.path).toBe(oldPath)
     expect(notices).toEqual([])
+  })
+
+  it('advances the local worktree scan generation', () => {
+    const store = storeWithFolderProject()
+    store.setWorktreeMeta(rootWorkspaceId(), { displayName: 'example-project' })
+    const before = getLocalWorktreeScanGeneration('r1')
+    const { controller } = rpcController(store)
+
+    controller.updateSetup({ setupId: 'r1', updates: { path: newPath } })
+
+    // Every path a scan would report just changed; a detected-worktree cache keyed on this
+    // generation would otherwise keep answering for the directory the project left.
+    expect(getLocalWorktreeScanGeneration('r1')).toBeGreaterThan(before)
   })
 
   it('moves the project host setup row with the repo', () => {
