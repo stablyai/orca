@@ -101,6 +101,7 @@ export async function checkRunMailbox(args: {
     const result = {
       messages: exposeMessages(messages),
       count: messages.length,
+      deliveryId: db.getOutstandingMailboxDelivery(address)?.id ?? null,
       acknowledged: acknowledged?.delivery.id ?? null
     }
     if (params.format || params.inject) {
