@@ -1,5 +1,6 @@
 import { setVisibleSessionId } from './agent-session-visible-tab-index'
 import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
+import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 /** Durable single-writer session records and their operation ledger. */
 
 import {
@@ -140,6 +141,13 @@ export class AgentSessionRecordStore {
       commitConversationCommandRecord(this.state, sessionId, fence, command)
     )
   }
+
+  /** Unfenced on purpose: the name is a durable note, so writing it never contends with the
+   *  writer lease. `null` clears it. */
+  setConversationName = (sessionId: string, name: string | null): Promise<AgentSessionRecord> =>
+    this.mutate(sessionId, (record) =>
+      setAgentSessionRecordConversationName(record, name, Date.now())
+    )
 
   /** A record this build cannot validate: readable as present, never grantable as a writer. */
   isSessionUnreadable(sessionId: string): boolean {
