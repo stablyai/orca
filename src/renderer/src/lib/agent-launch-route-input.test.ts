@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type * as ConnectionOwnerResolutionModule from './connection-owner-resolution'
 
 const mocks = vi.hoisted(() => ({
   getExecutionHostIdForWorktree: vi.fn(),
@@ -14,7 +15,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: mocks.getExecutionHostIdForWorktree
 }))
-vi.mock('@/lib/connection-owner-resolution', () => ({
+// Why the partial mock: only the worktree-owner answer is staged here; the repo fallback must be
+// the real resolver, since it is what this suite pins.
+vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof ConnectionOwnerResolutionModule>()),
   getConnectionIdFromState: mocks.getConnectionIdFromState
 }))
 vi.mock('@/lib/local-preflight-context', () => ({
@@ -35,13 +39,15 @@ import {
   type AgentLaunchRouteArgs,
   type AgentLaunchRouteStore
 } from './agent-launch-route-input'
-import { planAgentSessionLaunch } from './agent-session-launch-plan'
+import {
+  planAgentSessionLaunch,
+  structuredAgentSessionLaunchFeasible
+} from './agent-session-launch-plan'
 
 const routeFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
   planAgentSessionLaunch(appStore, args).route
-const explicitStructuredFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
-  planAgentSessionLaunch(appStore, { ...args, explicitStructured: true }).route ===
-  'structured-native-chat'
+const structuredFeasibleFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
+  structuredAgentSessionLaunchFeasible(appStore, { ...args, settings: STRUCTURED_SETTINGS })
 
 const STRUCTURED_SETTINGS = {
   experimentalNativeChat: true,
@@ -127,7 +133,7 @@ describe('buildAgentLaunchRouteInput', () => {
     expect(mocks.getLocalProjectExecutionRuntimeContext).not.toHaveBeenCalled()
     expect(mocks.getLocalRepoProjectExecutionRuntimeContext).not.toHaveBeenCalled()
     expect(
-      explicitStructuredFor(store(), {
+      structuredFeasibleFor(store(), {
         agent: 'claude',
         workspace: { kind: 'git-worktree', worktreeId: 'wt-remote' }
       })
@@ -213,7 +219,7 @@ describe('buildAgentLaunchRouteInput', () => {
     expect(input.projectRuntime).toBeUndefined()
     expect(mocks.getLocalProjectExecutionRuntimeContext).not.toHaveBeenCalled()
     expect(
-      explicitStructuredFor(store(), {
+      structuredFeasibleFor(store(), {
         agent: 'codex',
         workspace: { kind: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
       })
@@ -229,7 +235,7 @@ describe('buildAgentLaunchRouteInput', () => {
     }
     expect(buildAgentLaunchRouteInput(store(), args).promptDelivery).toBe('draft')
     expect(routeFor(store(), args)).toBe('structured-native-chat')
-    expect(explicitStructuredFor(store(), args)).toBe(true)
+    expect(structuredFeasibleFor(store(), args)).toBe(true)
   })
 
   it.each([
@@ -246,6 +252,56 @@ describe('buildAgentLaunchRouteInput', () => {
       }
     )
     expect(input.requiresTuiLaunchCustomization).toBe(true)
+  })
+
+  // Grok reads its transcript off local disk, so it is the agent the readability answer routes on.
+  const NATIVE_CHAT_SETTINGS = { experimentalNativeChat: true, openAgentTabsInChatByDefault: true }
+  const UNLANDED_WORKSPACE = {
+    kind: 'git-worktree',
+    worktreeId: 'repo-1::/repo/wt-1',
+    repoId: 'repo-1'
+  } as const
+
+  it('falls back to the repo when the worktree row has not landed yet', () => {
+    // Why: "Use" on a PR plans the route in the window between creating the workspace and its row
+    // reaching the store; an unresolved owner there must not downgrade native chat to a terminal.
+    mocks.getConnectionIdFromState.mockReturnValue(undefined)
+    const appStore = {
+      settings: NATIVE_CHAT_SETTINGS,
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: null }],
+      worktreesByRepo: {}
+    } as unknown as AgentLaunchRouteStore
+    expect(
+      buildAgentLaunchRouteInput(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })
+        .nativeChatTranscriptIsLocalReadable
+    ).toBe(true)
+    expect(routeFor(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })).toBe(
+      'legacy-native-chat'
+    )
+  })
+
+  it('keeps a worktree on an unresolvable repo off native chat', () => {
+    mocks.getConnectionIdFromState.mockReturnValue(undefined)
+    const appStore = {
+      settings: NATIVE_CHAT_SETTINGS,
+      repos: [],
+      worktreesByRepo: {}
+    } as unknown as AgentLaunchRouteStore
+    expect(routeFor(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })).toBe(
+      'terminal-tui'
+    )
+  })
+
+  it('never lets the repo answer over a resolved local worktree owner', () => {
+    mocks.getConnectionIdFromState.mockReturnValue(null)
+    const appStore = {
+      settings: NATIVE_CHAT_SETTINGS,
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'build-box' }],
+      worktreesByRepo: {}
+    } as unknown as AgentLaunchRouteStore
+    expect(routeFor(appStore, { agent: 'grok', workspace: UNLANDED_WORKSPACE })).toBe(
+      'legacy-native-chat'
+    )
   })
 
   it('reports an unprobed host as unknown rather than unsupported', () => {

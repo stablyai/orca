@@ -28,6 +28,7 @@ export type DirectWorkItemAgentLaunchPreparation = {
 export async function prepareDirectWorkItemAgentLaunch(args: {
   worktreeId: string
   worktreePath: string
+  repoId: string
   agentOverride?: TuiAgent
   agentArgs?: string | null
   repoConnectionId: string | null
@@ -94,7 +95,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
       ? null
       : args.planLaunch(args.latestStore, {
           agent: effectiveAgent,
-          workspace: { kind: 'git-worktree', worktreeId: args.worktreeId },
+          workspace: { kind: 'git-worktree', worktreeId: args.worktreeId, repoId: args.repoId },
           prompt: args.draftContent,
           promptDelivery: args.promptDelivery,
           tuiCustomization: { agentArgs: args.agentArgs },

@@ -13,7 +13,10 @@ import {
 } from '@/lib/agent-launch-routing'
 // Why: the `connection-context` facade imports the store root; the resolver's own module keeps
 // this input builder importable from anywhere in the launch graph without a cycle.
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import {
+  getConnectionIdFromState,
+  getRepoConnectionIdFromState
+} from '@/lib/connection-owner-resolution'
 import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext
@@ -93,8 +96,13 @@ function resolveTranscriptIsLocalReadable(
   executionHostId: string
 ): boolean {
   if (workspace.worktreeId) {
+    const connectionId = getConnectionIdFromState(store, workspace.worktreeId)
+    // Why: right after creation the worktree row has not landed, and only `undefined` — "cannot
+    // determine the host" — hands the question to the repo. A resolved `null` is the local answer.
     return isNativeChatTranscriptLocalReadable(
-      getConnectionIdFromState(store, workspace.worktreeId)
+      connectionId === undefined
+        ? getRepoConnectionIdFromState(store, workspace.repoId)
+        : connectionId
     )
   }
   const host = parseExecutionHostId(executionHostId)

@@ -202,6 +202,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const launchPreparation = await prepareDirectWorkItemAgentLaunch({
       worktreeId,
       worktreePath,
+      repoId,
       agentOverride,
       agentArgs,
       repoConnectionId,
@@ -265,7 +266,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     startupPlan,
     launchSource
   })
-  if (structuredResult.visibilityUnknown) {
+  if (structuredResult.visibilityUnknown || structuredResult.failed) {
+    // Why: callers hang irreversible follow-up work off a `true` here, so a structured launch that
+    // opened no surface must not report the workspace as started.
     return false
   }
   if (structuredResult.completed) {
