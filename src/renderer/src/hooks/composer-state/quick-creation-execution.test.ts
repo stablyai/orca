@@ -95,6 +95,14 @@ function makeInput(): QuickCreationExecutionInput {
 
 const repo = { id: 'repo-1', path: '/repo', connectionId: null } as Repo
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
+
 describe('useQuickCreationExecution launch route before hydration', () => {
   afterEach(() => {
     setLocalRuntimeCapabilitiesForTests([])
@@ -149,5 +157,38 @@ describe('useQuickCreationExecution launch route before hydration', () => {
     expect(mocks.runBackgroundWorktreeCreation.mock.calls[0][0]).toMatchObject({
       agentLaunchRoute: 'legacy-native-chat'
     })
+  })
+
+  it('does not create when the composer is dismissed while the probe is still pending', async () => {
+    setLocalRuntimeCapabilitiesForTests(null)
+    const status = deferred<{ capabilities: readonly string[] }>()
+    const getStatus = vi.fn(() => status.promise)
+    Object.assign(window, { api: { runtime: { getStatus } } })
+    let cancelled = false
+    const hook = renderHook(() =>
+      useQuickCreationExecution({ ...makeInput(), isSubmissionCancelled: () => cancelled })
+    )
+
+    let creation!: Promise<void>
+    act(() => {
+      creation = hook.result.current.executeQuickCreation(
+        { kind: 'none' },
+        'claude',
+        'workspace',
+        null,
+        'repo-1',
+        repo
+      )
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(getStatus).toHaveBeenCalledTimes(1)
+
+    cancelled = true
+    status.resolve({ capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] })
+    await act(async () => creation)
+
+    expect(mocks.runBackgroundWorktreeCreation).not.toHaveBeenCalled()
   })
 })
