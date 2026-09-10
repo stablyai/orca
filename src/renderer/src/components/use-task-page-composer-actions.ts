@@ -1,4 +1,4 @@
-import type { TaskPageJiraListEffectsModel } from './use-task-page-jira-list-effects'
+import type { TaskPageGitHubIssueGenerationModel } from './use-task-page-github-issue-generation'
 import { useCallback } from 'react'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
@@ -13,7 +13,7 @@ import { bindTaskPageJiraItemSourceContext } from './task-page-jira-item-source-
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
 import { getJiraIssueWorkspaceSeed } from './task-page-source-context'
-export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) {
+export function useTaskPageComposerActions(model: TaskPageGitHubIssueGenerationModel) {
   const {
     setTaskResumeState,
     openModal,

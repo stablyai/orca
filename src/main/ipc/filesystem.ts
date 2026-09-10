@@ -15,6 +15,7 @@ import { registerFilesystemGitCommitHandlers } from './filesystem/filesystem-git
 import { registerFilesystemGitCommitGenerationHandlers } from './filesystem/filesystem-git-commit-generation-handlers'
 import { registerFilesystemGitModelDiscoveryHandlers } from './filesystem/filesystem-git-model-discovery-handlers'
 import { registerFilesystemGitPullRequestGenerationHandlers } from './filesystem/filesystem-git-pull-request-generation-handlers'
+import { registerFilesystemGitIssueGenerationHandlers } from './filesystem/filesystem-git-issue-generation-handlers'
 import { registerFilesystemGitRemoteHandlers } from './filesystem/filesystem-git-remote-handlers'
 import { registerFilesystemGitDiffHandlers } from './filesystem/filesystem-git-diff-handlers'
 import { registerFilesystemGitIndexHandlers } from './filesystem/filesystem-git-index-handlers'
@@ -40,6 +41,7 @@ export function registerFilesystemHandlers(
   registerFilesystemGitCommitGenerationHandlers(context)
   registerFilesystemGitModelDiscoveryHandlers(context)
   registerFilesystemGitPullRequestGenerationHandlers(context)
+  registerFilesystemGitIssueGenerationHandlers(context)
   registerFilesystemGitRemoteHandlers(context)
   registerFilesystemGitDiffHandlers(context)
   registerFilesystemGitIndexHandlers(context)

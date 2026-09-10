@@ -158,6 +158,19 @@ export const gitApi = {
     worktreePath: string
     connectionId?: string
   }): Promise<void> => ipcRenderer.invoke('git:cancelGeneratePullRequestFields', args),
+  generateIssueFields: (args: {
+    worktreePath: string
+    repoId?: string
+    title: string
+    body: string
+    repoSlug?: string | null
+    availableLabels?: string[]
+    connectionId?: string
+  }) => ipcRenderer.invoke('git:generateIssueFields', args),
+  cancelGenerateIssueFields: (args: {
+    worktreePath: string
+    connectionId?: string
+  }): Promise<void> => ipcRenderer.invoke('git:cancelGenerateIssueFields', args),
   stage: (args: { worktreePath: string; filePath: string; connectionId?: string }): Promise<void> =>
     ipcRenderer.invoke('git:stage', args),
   bulkStage: (args: {

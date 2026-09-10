@@ -96,6 +96,26 @@ export type GitOperationApi = {
     worktreePath: string
     connectionId?: string
   }) => Promise<void>
+  generateIssueFields: (args: {
+    worktreePath: string
+    repoId?: string
+    title: string
+    body: string
+    repoSlug?: string | null
+    availableLabels?: string[]
+    connectionId?: string
+  }) => Promise<
+    | {
+        success: true
+        fields: { title: string; body: string; labels: string[] }
+        agentLabel?: string
+      }
+    | { success: false; error: string; canceled?: boolean }
+  >
+  cancelGenerateIssueFields: (args: {
+    worktreePath: string
+    connectionId?: string
+  }) => Promise<void>
   stage: (args: { worktreePath: string; filePath: string; connectionId?: string }) => Promise<void>
   bulkStage: (args: {
     worktreePath: string

@@ -8,6 +8,24 @@ import type {
   SpawnSourceControlAgent
 } from './source-control-text-generation-types'
 
+// Why: headless generation is not a pane session. Inherited pane identity (Orca
+// launched from a nested Orca terminal) makes the spawned agent's Stop hook report
+// "finished" to a live Orca pane, popping a notification for a run that pane never made.
+const PANE_IDENTITY_ENV_KEYS = [
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_AGENT_LAUNCH_TOKEN'
+] as const
+
+function withoutPaneIdentityEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const cleaned = { ...env }
+  for (const key of PANE_IDENTITY_ENV_KEYS) {
+    delete cleaned[key]
+  }
+  return cleaned
+}
+
 const WSL_LAUNCHER_ENV_KEYS = [
   'ComSpec',
   'COMSPEC',
@@ -37,12 +55,12 @@ function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS
 }
 
 export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
-  const spawnEnv = input.env ?? process.env
+  const spawnEnv = withoutPaneIdentityEnv(input.env ?? process.env)
   if (process.platform === 'win32' && input.wslDistro) {
     // Same contract as spawnProcess: stdout/stderr are piped; stdin matches stdinMode.
     return wslAwareSpawn(input.binary, input.args, {
       cwd: input.cwd,
-      env: buildWslLauncherEnv(input.env),
+      env: buildWslLauncherEnv(input.env ? withoutPaneIdentityEnv(input.env) : undefined),
       stdio: [input.stdinMode, 'pipe', 'pipe'],
       windowsHide: true,
       wslDistro: input.wslDistro,
