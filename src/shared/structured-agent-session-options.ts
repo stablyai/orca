@@ -49,14 +49,10 @@ export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult
 ): AgentSessionOptionCatalog {
+  // Why: only ids the provider lists may be offered. An unlisted `current.model` still
+  // reaches the snapshot through the record, which draws it as tracked-but-unmatched —
+  // a neutral pill — instead of a raw-id row.
   const models: CatalogModel[] = result.models.map(discoveredModel)
-  if (!models.some((model) => model.id === result.current.model)) {
-    models.push({
-      id: result.current.model,
-      label: result.current.model,
-      options: seed.unknownModelOptions ?? []
-    })
-  }
   return { ...seed, models, defaultModelIsCliDefault: true }
 }
 

@@ -61,7 +61,7 @@ describe('structured agent session options', () => {
     })
   })
 
-  it('uses provider-scoped models and retains the current unknown id', () => {
+  it('uses provider-scoped models and withholds a current id they do not carry', () => {
     const state = applyStructuredAgentSessionOptions(
       createStructuredAgentSessionOptionState('codex'),
       CODEX_SESSION_OPTION_CATALOG,
@@ -77,11 +77,31 @@ describe('structured agent session options', () => {
         current: { model: 'persisted-unknown' }
       }
     )
+    // Was: a fabricated `persisted-unknown` choice. The provider never listed that id, so
+    // it is tracked as the model the thread runs, but never offered and never named.
     const model = structuredAgentSessionOptionSnapshot(state)[0]
     expect(
       model.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
-    ).toEqual(['account-model', 'persisted-unknown'])
-    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('persisted-unknown')
+    ).toEqual(['account-model'])
+    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBeUndefined()
+    expect(model).toMatchObject({ valueSource: 'unknown' })
+  })
+
+  it('keeps the model row when the provider lists no models at all', () => {
+    // `readCodexStructuredSessionOptions` throws only when no model resolves at all, so an
+    // empty `model/list` on a restored thread reaches here with a current model. Fabricating
+    // a row used to hide that; without one the snapshot must not blank the pill.
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      { models: [], current: { model: 'gpt-5.9-secret' } }
+    )
+
+    const snapshot = structuredAgentSessionOptionSnapshot(state)
+    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model'])
+    const model = snapshot[0]
+    expect(model).toMatchObject({ valueSource: 'unknown' })
+    expect(model.kind.type === 'select' ? model.kind.choices : null).toEqual([])
   })
 
   it('projects live options as directly settable descriptors', () => {

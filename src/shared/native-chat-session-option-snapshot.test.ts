@@ -104,9 +104,12 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     expect(model.kind.choices.map((choice) => choice.value)).toEqual(
       CLAUDE_SESSION_OPTION_CATALOG.models.map((catalogModel) => catalogModel.id)
     )
+    // Nor does it name one it cannot offer: the trigger would show a raw id.
+    expect(model.kind.currentValue).toBeUndefined()
+    expect(model).toMatchObject({ valueSource: 'unknown' })
   })
 
-  it('is empty when the model list is empty', () => {
+  it('is empty when the model list is empty and nothing is tracked', () => {
     expect(
       buildNativeChatSessionOptionSnapshot({
         catalog: CLAUDE_SESSION_OPTION_CATALOG,
@@ -117,6 +120,27 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         liveTransport: 'catalog'
       })
     ).toEqual([])
+  })
+
+  it('keeps the model row when the provider listed no models at all', () => {
+    // A restored Codex thread whose `model/list` came back empty still runs a model —
+    // `readCodexStructuredSessionOptions` refuses only when nothing resolves at all — so
+    // the row has to survive the blank picker instead of taking the pill with it.
+    const record = createNativeChatSessionOptionRecord('codex')
+    record.model = { value: 'gpt-5.9-secret', source: 'reported' }
+    const snapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: { ...CODEX_SESSION_OPTION_CATALOG, models: [], defaultModelIsCliDefault: true },
+      models: [],
+      record,
+      mode: 'live',
+      modelLabel: 'Model',
+      liveTransport: 'agent-session'
+    })
+    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model'])
+    const model = snapshot[0]!
+    // No id is offerable, and the raw one never reaches the trigger.
+    expect(model.kind.type === 'select' ? model.kind.choices : null).toEqual([])
+    expect(model).toMatchObject({ valueSource: 'unknown' })
   })
 
   describe('sortNativeChatSessionOptions', () => {
@@ -178,19 +202,37 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       expect(snapshot.length).toBeGreaterThan(1)
     })
 
-    it('labels a wholly unknown tracked model by its id rather than dropping it', () => {
+    it('offers no row for a tracked id neither the discovered list nor the seed carries', () => {
+      // Was: a fabricated `{ id, label: id, options: [] }` row, which put a raw launch
+      // flag (`worker-start --model claude-opus-5`) in the picker and in the pill as
+      // though the CLI had listed it. Only available models may be offered or named.
       const record = claudeRecord()
-      record.model = { value: 'experimental-model', source: 'reported' }
+      record.model = { value: 'claude-opus-5', source: 'reported' }
       const reconciled = withTrackedNativeChatModel(
         CLAUDE_SESSION_OPTION_CATALOG,
         CLAUDE_SESSION_OPTION_CATALOG.models,
         record
       )
-      expect(reconciled.at(-1)).toEqual({
-        id: 'experimental-model',
-        label: 'experimental-model',
-        options: []
+      expect(reconciled).toEqual([...CLAUDE_SESSION_OPTION_CATALOG.models])
+
+      const snapshot = buildNativeChatSessionOptionSnapshot({
+        catalog: CLAUDE_SESSION_OPTION_CATALOG,
+        models: reconciled,
+        record,
+        mode: 'live',
+        modelLabel: 'Model',
+        liveTransport: 'catalog'
       })
+      const model = snapshot[0]!
+      if (model.kind.type !== 'select') {
+        throw new Error('model descriptor must be a select')
+      }
+      // `unknown` is what nativeChatModelPillLabel reads to render the neutral "Model".
+      expect(model).toMatchObject({ valueSource: 'unknown' })
+      expect(model.kind.currentValue).toBeUndefined()
+      expect(model.kind.choices.some((choice) => choice.value === 'claude-opus-5')).toBe(false)
+      // Restoring this session's effort row from `unknownModelOptions` is a follow-up.
+      expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model'])
     })
 
     it('leaves the list alone when the tracked model is already listed', () => {

@@ -592,13 +592,9 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     const adapter = await acquired(claude)
     const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
 
-    expect(result.models.map((model) => model.id)).toEqual([
-      'fable',
-      'opus',
-      'sonnet',
-      'haiku',
-      'custom-model'
-    ])
+    // Was: a trailing `custom-model` row. The seed is a list of available ids, and the
+    // init frame's unlisted model is reported as current without being offered.
+    expect(result.models.map((model) => model.id)).toEqual(['fable', 'opus', 'sonnet', 'haiku'])
     expect(result.current).toEqual({
       model: 'custom-model',
       effort: 'high',

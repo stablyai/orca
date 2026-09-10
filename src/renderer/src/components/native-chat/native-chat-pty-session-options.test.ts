@@ -593,10 +593,11 @@ describe('native chat PTY session options', () => {
     expect(surface.getSnapshot()[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
-  it('passes an unknown persisted model through as a literal choice', () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'future-model'
-    })
+  it('withholds an unknown persisted model instead of offering it as a choice', () => {
+    // Was: a literal `{ value: id, label: id }` row. A launch flag the CLI never listed
+    // (`worker-start --model claude-opus-5`) names no model we can offer, so the pill
+    // reads `unknown` and the dropdown stays available-models-only.
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'future-model' })
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -604,10 +605,11 @@ describe('native chat PTY session options', () => {
       dispatchCommand: vi.fn()
     })!
     const model = surface.getSnapshot()[0]
-    expect(model.kind).toMatchObject({
-      currentValue: 'future-model',
-      choices: expect.arrayContaining([{ value: 'future-model', label: 'future-model' }])
-    })
+    expect(model).toMatchObject({ valueSource: 'unknown', kind: { type: 'select' } })
+    expect(model.kind.type === 'select' ? model.kind.currentValue : 'set').toBeUndefined()
+    expect(
+      model.kind.type === 'select' ? model.kind.choices.map(({ value }) => value) : []
+    ).not.toContain('future-model')
   })
 
   it('keeps a tracked alias selectable when the host catalog omits it', async () => {

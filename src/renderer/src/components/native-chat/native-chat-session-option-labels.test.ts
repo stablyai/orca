@@ -5,6 +5,12 @@ import {
   nativeChatSessionChoiceLabel
 } from './native-chat-session-option-labels'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-claude-codex'
+import {
+  buildNativeChatSessionOptionSnapshot,
+  withTrackedNativeChatModel
+} from '../../../../shared/native-chat-session-option-snapshot'
+import { createNativeChatSessionOptionRecord } from '../../../../shared/native-chat-session-option-state'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: vi.fn((_key: string, fallback: string) => fallback)
@@ -42,6 +48,28 @@ describe('nativeChatModelPillLabel', () => {
   it('withholds a value it has no evidence for', () => {
     expect(nativeChatModelPillLabel(modelDescriptor('unknown', 'grok-4.5'))).toBe('Model')
     expect(nativeChatModelPillLabel(modelDescriptor('default'))).toBe('Model')
+  })
+
+  it('withholds a launch flag no list carried, end to end from the builder', () => {
+    // `worker-start --model claude-opus-5` tracks an id neither the discovered list nor
+    // the seed carries, so the composer's pill must read the neutral category rather
+    // than echoing back the string the launch was typed with.
+    const record = createNativeChatSessionOptionRecord('claude')
+    record.model = { value: 'claude-opus-5', source: 'reported' }
+    const snapshot = buildNativeChatSessionOptionSnapshot({
+      catalog: CLAUDE_SESSION_OPTION_CATALOG,
+      models: withTrackedNativeChatModel(
+        CLAUDE_SESSION_OPTION_CATALOG,
+        CLAUDE_SESSION_OPTION_CATALOG.models,
+        record
+      ),
+      record,
+      mode: 'live',
+      modelLabel: 'Model',
+      liveTransport: 'catalog'
+    })
+
+    expect(nativeChatModelPillLabel(snapshot[0]!)).toBe('Model')
   })
 
   it('falls back to the raw id when the list no longer offers it', () => {

@@ -102,14 +102,8 @@ export async function readCodexStructuredSessionOptions(input: {
       break
     }
   }
-  if (input.current.model && !models.some((model) => model.id === input.current.model)) {
-    models.push({
-      id: input.current.model,
-      label: input.current.model,
-      isDefault: false,
-      efforts: []
-    })
-  }
+  // `models` stays what `model/list` offered: a current id the account cannot select is
+  // still reported (the thread runs it) but never listed, so no raw id is offerable.
   const model = input.current.model ?? models.find((entry) => entry.isDefault)?.id ?? models[0]?.id
   if (!model) {
     throw new Error('codex app-server returned no available models')

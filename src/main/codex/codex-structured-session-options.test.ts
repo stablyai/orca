@@ -123,6 +123,25 @@ describe('structured Codex session options', () => {
     )
   })
 
+  it('reports an unlisted current model without offering it as a choice', async () => {
+    // Was: a fabricated `{ id, label: id, efforts: [] }` row, which offered a raw launch
+    // id in the picker as though the account were entitled to it.
+    const request = vi.fn(async () => ({
+      data: [{ model: 'gpt-live', displayName: 'GPT Live', isDefault: true }],
+      nextCursor: null
+    }))
+
+    await expect(
+      readCodexStructuredSessionOptions({
+        connection: { request } as never,
+        current: { model: 'gpt-unlisted' }
+      })
+    ).resolves.toEqual({
+      models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
+      current: { model: 'gpt-unlisted' }
+    })
+  })
+
   it('hydrates current values from thread start or resume', () => {
     expect(
       reportedCodexThreadOptions({

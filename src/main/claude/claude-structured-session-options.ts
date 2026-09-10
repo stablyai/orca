@@ -157,10 +157,10 @@ export async function readClaudeStructuredSessionOptions(
   const discovered = listedModels(catalog ? { models: catalog } : null)
   const models = discovered.length > 0 ? discovered : seedModels()
   const current = readClaudeCurrentModel(session)
+  // `models` stays the CLI's own list (or the seed): `currentModelId` already maps a
+  // resolved id back onto a listed row, so what survives unmatched is an id the CLI
+  // never offered. It is reported as current — the session runs it — but not listed.
   const model = currentModelId(models, current.id)
-  if (!models.some((entry) => entry.id === model)) {
-    models.push({ id: model, label: model, isDefault: false, efforts: [], resolvedModel: null })
-  }
   const effort = session.options.get('effort') ?? session.reportedOptions.effort
   const confirmed = [
     ...(current.confirmed ? ['model'] : []),
