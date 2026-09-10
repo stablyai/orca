@@ -429,4 +429,68 @@ describe('handshake round-trip over a real Socket pair', () => {
 
     bridgeSock.destroy()
   })
+
+  // The daemon reads one handshake frame before any credential check, so every field on it is
+  // untrusted input. `JSON.parse` hands back objects a template literal cannot stringify, and the
+  // frame callback runs inside the decoder: a throw there used to escape the socket's data
+  // handler and take the daemon — and every PTY and agent session it held — down with it.
+  it('closes a connection whose handshake version is not a string and keeps serving', async () => {
+    const { accepted } = await startDaemon('0.1.0+server-version')
+
+    const hostile = connect(sockPath)
+    await new Promise<void>((r) => hostile.once('connect', () => r()))
+    const hostileClosed = new Promise<void>((r) => hostile.once('close', () => r()))
+    hostile.write(
+      encodeHandshakeFrame(
+        JSON.parse('{"type":"orca-relay-handshake","version":{"toString":1}}') as HandshakeMessage
+      )
+    )
+    await hostileClosed
+
+    const good = connect(sockPath)
+    await new Promise<void>((r) => good.once('connect', () => r()))
+    const acceptedCb = vi.fn<(leftover: Buffer) => void>()
+    runConnectHandshake(good, '0.1.0+server-version', { onAccepted: acceptedCb })
+    await accepted
+    await vi.waitFor(() => expect(acceptedCb).toHaveBeenCalledTimes(1))
+
+    good.destroy()
+  })
+
+  // Same class, different instance: `onAccepted` runs inside the frame callback too, so a throw
+  // from the accept path must cost that one connection and nothing else.
+  it('closes only the connection whose accept path throws', async () => {
+    let connections = 0
+    const acceptedSockets: Socket[] = []
+    server = createServer((sock) => {
+      trackServerSocket(sock)
+      connections += 1
+      const failThisOne = connections === 1
+      setupDaemonHandshake(sock, {
+        launchVersion: '0.1.0+server-version',
+        onAccepted: (s) => {
+          if (failThisOne) {
+            throw new Error('accept path failed')
+          }
+          acceptedSockets.push(s)
+        }
+      })
+    })
+    await new Promise<void>((r) => server.listen(sockPath, () => r()))
+
+    const first = connect(sockPath)
+    await new Promise<void>((r) => first.once('connect', () => r()))
+    const firstClosed = new Promise<void>((r) => first.once('close', () => r()))
+    runConnectHandshake(first, '0.1.0+server-version', { onAccepted: vi.fn() })
+    await firstClosed
+
+    const second = connect(sockPath)
+    await new Promise<void>((r) => second.once('connect', () => r()))
+    const acceptedCb = vi.fn<(leftover: Buffer) => void>()
+    runConnectHandshake(second, '0.1.0+server-version', { onAccepted: acceptedCb })
+    await vi.waitFor(() => expect(acceptedCb).toHaveBeenCalledTimes(1))
+    expect(acceptedSockets).toHaveLength(1)
+
+    second.destroy()
+  })
 })
