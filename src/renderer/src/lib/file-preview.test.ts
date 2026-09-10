@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
   canShowWorkspaceFileBrowserAction,
-  convertBrowserPageToWorkspaceDoc,
   getWorkspaceFileBrowserOpenTarget,
   openFileInBrowserTab,
   openFilePreviewToSide
 } from './file-preview'
+import { convertBrowserPageToWorkspaceDoc } from './workspace-doc-page-conversion'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 function browserActionState(connectionId: string | null = null): never {
@@ -483,8 +483,9 @@ describe('getWorkspaceFileBrowserOpenTarget', () => {
   })
 })
 
-// Why the reuse case is pinned here too: the address bar's way into a document must obey the same
-// one-grant-per-document rule the preview action does.
+// Why the reuse case is pinned beside the preview action, though the function now lives in
+// `workspace-doc-page-conversion`: the address bar's way into a document must obey the same
+// one-grant-per-document rule, and the two drifting apart is the regression worth catching.
 describe('convertBrowserPageToWorkspaceDoc', () => {
   const DOC_LOCATION = {
     kind: 'workspace-doc' as const,

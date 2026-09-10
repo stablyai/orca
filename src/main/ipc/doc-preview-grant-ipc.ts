@@ -40,6 +40,12 @@ function isValidGrantRequest(request: DocPreviewGrantRequest): boolean {
   if (request.owner.kind === 'ssh') {
     return Boolean(request.owner.connectionId.trim())
   }
+  if (request.owner.kind === 'inline') {
+    // Never mintable from the renderer: an inline grant is bytes main already holds, so a renderer
+    // that could name one could serve arbitrary content under a preview URL. Main mints these
+    // itself, in `office-preview-ipc.ts`, from a render it performed on the owning host.
+    return false
+  }
   return Boolean(
     request.owner.environmentId.trim() &&
     request.owner.worktreeSelector.trim() &&

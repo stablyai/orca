@@ -977,6 +977,21 @@
         "preview": {
           "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet."
         }
+      },
+      "office": {
+        "install": {
+          "terminal": {
+            "failed": "Orca could not open a terminal on that machine."
+          }
+        },
+        "live": {
+          "refreshFailed": "The live preview did not refresh. It is still showing the previous version."
+        },
+        "selection": {
+          "copied": "Selection copied — paste it into the agent you want to act on it.",
+          "empty": "Nothing is selected in the live preview yet.",
+          "failed": "Orca could not read the preview selection."
+        }
       }
     },
     "hooks": {
@@ -11839,6 +11854,22 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "officeSkills": {
+          "installFailed": "Orca could not run the officecli skill installer on that machine.",
+          "title": "Office document skills",
+          "description": "Install officecli’s own skills so agents can author and edit Word, Excel and PowerPoint files. They are installed on the machine that owns the active workspace.",
+          "noBinary": "officecli is not installed on that machine, so there are no skills to install.",
+          "unavailable": "Orca could not read the skill catalogue from that machine.",
+          "recheck": "Check again",
+          "skills": "Skills",
+          "agents": "Agents",
+          "installing": "Installing…",
+          "install": "Install selected",
+          "installed_one": "Installed {{count}} skill.",
+          "installed_other": "Installed {{count}} skills.",
+          "installedPartial_one": "Installed {{installed}} of {{count}} skill.",
+          "installedPartial_other": "Installed {{installed}} of {{count}} skills."
         }
       },
       "right": {
@@ -15216,7 +15247,9 @@
           "a0af0198aa": "Large diffs are not rendered by default.",
           "c3d9f4a712": "This diff's size isn't known yet, so it loads on request.",
           "f7fa7a40d0": "Load diff"
-        }
+        },
+        "officeBinaryPlaceholder": "{{name}} is an Office document.",
+        "officeOpenPreview": "Open preview"
       },
       "diff": {
         "comments": {
@@ -16885,6 +16918,62 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "office": {
+        "preview": {
+          "copyInstallCommand": "Copy",
+          "runInTerminal": "Run in terminal",
+          "retrying": "Checking…",
+          "retry": "Retry",
+          "releases": "Releases",
+          "runInTerminalHint": "Orca types the command for you and stops there — you press Enter.",
+          "tryAgain": "Try again",
+          "openExternally": "Open in the system app",
+          "showDetail": "What the tool said",
+          "reveal": "Reveal in folder",
+          "liveStarting": "Starting the live preview…",
+          "liveNoHost": "Orca cannot tell which machine owns this document.",
+          "liveNoBinary": "officecli is not installed on the machine that owns this document.",
+          "liveFailed": "The live preview could not start. Showing the snapshot.",
+          "missingBinaryTitle": "officecli is not installed",
+          "unsupportedFormatTitle": "This format can't be previewed",
+          "tooLargeTitle": "This document is too large",
+          "updateRequiredTitle": "The paired machine needs updating",
+          "hostUnreachableTitle": "Orca couldn't reach the machine that owns this document",
+          "fileMissingTitle": "Document not found",
+          "renderFailedTitle": "Preview unavailable",
+          "missingBinaryOnHost": "Office previews are rendered on {{host}}, which does not have officecli.",
+          "missingBinaryHere": "Office previews need officecli on the machine that owns this document.",
+          "unsupportedFormatDetail": "Open it in the app it belongs to.",
+          "tooLargeDetail": "Rendering it produced more than Orca will send to a preview. Try the live preview, or open it in the system app.",
+          "updateRequiredDetail": "Office previews require a newer Orca on that machine. Update it and try again.",
+          "hostUnreachableDetail": "Orca cannot tell whether the work is still running. Reconnect and try again.",
+          "alreadyWatchedDetail": "Another process is already showing a live preview of this document.",
+          "portTimeoutDetail": "The live preview server did not start in time. The snapshot is still available.",
+          "watchNotRunningDetail": "There is no live preview running for this document.",
+          "fileMissingDetail": "It may have been renamed or removed since the tab was opened.",
+          "renderFailedDetail": "officecli could not render this document.",
+          "unrenderableNamed": "Orca does not preview {{format}} files.",
+          "unrenderableUnnamed": "Orca does not preview this file format.",
+          "kindWord": "Document",
+          "kindExcel": "Spreadsheet",
+          "kindPpt": "Presentation",
+          "selectionUnavailableExcel": "Spreadsheets do not expose addressable cells, so selection is unavailable here.",
+          "rerender": "Re-render",
+          "rerenderUpdated": "This document changed on disk — re-render",
+          "live": "Live",
+          "liveHint": "Show a live preview that updates as the document is edited",
+          "useSelection": "Use selection",
+          "useSelectionHint": "Put what you selected into the agent composer",
+          "snapshotAriaLabel": "Office document preview",
+          "clearMarks": "Clear",
+          "markStale": "stale",
+          "liveNoWatch": "The officecli on that machine is too old to serve a live preview.",
+          "outsideWorkspaceTitle": "This document is outside the workspace",
+          "outsideWorkspaceDetail": "Orca only previews documents that live inside the workspace they were opened from.",
+          "marksTitle_one": "{{count}} mark proposed for review",
+          "marksTitle_other": "{{count}} marks proposed for review"
+        }
       }
     },
     "i18n": {

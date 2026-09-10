@@ -31,11 +31,17 @@ const NON_IMAGE_BINARY_EXTENSIONS = [
   '.webm',
   // Documents
   '.doc',
+  '.docm',
   '.docx',
+  '.odp',
+  '.ods',
+  '.odt',
   '.pdf',
   '.ppt',
+  '.pptm',
   '.pptx',
   '.xls',
+  '.xlsm',
   '.xlsx',
   // Fonts
   '.eot',

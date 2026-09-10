@@ -39,6 +39,7 @@ import {
   writeSshTerminalArtifact
 } from './ssh-filesystem-terminal-artifact'
 import { readSshDocPreviewFile } from './ssh-filesystem-doc-preview'
+import { requestSshOffice } from './ssh-filesystem-office'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
@@ -126,6 +127,13 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     request: Parameters<NonNullable<IFilesystemProvider['readDocPreviewFile']>>[0]
   ): ReturnType<NonNullable<IFilesystemProvider['readDocPreviewFile']>> {
     return readSshDocPreviewFile(this.mux, request)
+  }
+
+  officeRequest(
+    method: Parameters<NonNullable<IFilesystemProvider['officeRequest']>>[0],
+    params: Parameters<NonNullable<IFilesystemProvider['officeRequest']>>[1]
+  ): ReturnType<NonNullable<IFilesystemProvider['officeRequest']>> {
+    return requestSshOffice(this.mux, method, params)
   }
 
   readFileRange(

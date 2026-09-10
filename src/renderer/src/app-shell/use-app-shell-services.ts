@@ -4,6 +4,7 @@ import { useAutomationDispatchEvents } from '../hooks/useAutomationDispatchEvent
 import { useAutoAckViewedAgent } from '../hooks/useAutoAckViewedAgent'
 import { useEditorExternalWatch } from '../hooks/useEditorExternalWatch'
 import { useGlobalFileDrop } from '../hooks/useGlobalFileDrop'
+import { useOfficeLivePreviewSweep } from '../hooks/useOfficeLivePreviewSweep'
 import { useAppMenuPaste } from '../hooks/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '../hooks/useAppMenuSelectionActions'
 import { useLargeTextControlPaste } from '../hooks/useLargeTextControlPaste'
@@ -41,6 +42,9 @@ export function useAppShellServices(options: { floatingPanelVisible: boolean }):
   useGitStatusPolling({ enabled: workspaceSessionReady })
   // Why: wire file-change watching at App level so the editor keeps hearing FS changes when Explorer unmounts (right-sidebar switches to Source Control/Checks).
   useEditorExternalWatch()
+  // Why here: a live Office preview is a detached process on the owning host, and the tab that
+  // started it is exactly what disappears when it needs stopping.
+  useOfficeLivePreviewSweep()
   useGlobalFileDrop()
   useAutoAckViewedAgent(options.floatingPanelVisible)
   useAppMenuPaste()

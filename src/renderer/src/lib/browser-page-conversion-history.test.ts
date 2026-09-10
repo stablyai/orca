@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ convertBrowserPage: mocks.convertBrowserPage }) }
 }))
-vi.mock('@/lib/file-preview', () => ({
+vi.mock('@/lib/workspace-doc-page-conversion', () => ({
   convertBrowserPageToWorkspaceDoc: mocks.convertBrowserPageToWorkspaceDoc
 }))
 
