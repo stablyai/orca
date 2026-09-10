@@ -264,7 +264,11 @@ export function buildNativeChatSessionOptionSnapshot(args: {
     return snapshot
   }
   const trackedValues = record.valuesByModel[effectiveModelId] ?? {}
-  for (const option of listedModel?.options ?? []) {
+  // Why: an unlisted model still runs, so its options come from the catalog's launch-safe
+  // set rather than leaving the session unadjustable — the same fallback the launch
+  // resolver already applies (see agent-session-option-launch). Options, not choices: the
+  // model stays absent from `modelChoices` either way.
+  for (const option of listedModel?.options ?? catalog.unknownModelOptions ?? []) {
     const descriptor = optionDescriptor({
       option,
       tracked: trackedValues[option.id],

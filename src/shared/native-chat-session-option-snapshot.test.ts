@@ -140,7 +140,9 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model',
       liveTransport: 'agent-session'
     })
-    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model'])
+    // An empty list takes the choices, not the effort picker: the thread still runs a model.
+    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
+    expect(snapshot[1]).toMatchObject({ settable: true })
     const model = snapshot[0]!
     // No id is offerable, and the raw one never reaches the trigger.
     expect(model.kind.type === 'select' ? model.kind.choices : null).toEqual([])
@@ -236,8 +238,11 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       expect(model).toMatchObject({ valueSource: 'unknown' })
       expect(model.kind.currentValue).toBeUndefined()
       expect(model.kind.choices.some((choice) => choice.value === 'claude-opus-5')).toBe(false)
-      // Restoring this session's effort row from `unknownModelOptions` is a follow-up.
-      expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model'])
+      // The session still runs that model, so its options stay settable off the catalog's
+      // launch-safe set. Unnameable is not unadjustable.
+      expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
+      expect(snapshot[1]).toMatchObject({ settable: true })
+      expect(CLAUDE_SESSION_OPTION_CATALOG.unknownModelOptions?.[0]?.id).toBe('effort')
     })
 
     it('names an unlisted model the agent reported, without offering it as a choice', () => {

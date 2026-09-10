@@ -79,12 +79,18 @@ describe('structured agent session options', () => {
     )
     // Was: a fabricated `persisted-unknown` choice. The provider never listed that id, so
     // it is tracked as the model the thread runs, but never offered and never named.
-    const model = structuredAgentSessionOptionSnapshot(state)[0]
+    const snapshot = structuredAgentSessionOptionSnapshot(state)
+    const model = snapshot[0]
     expect(
       model.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
     ).toEqual(['account-model'])
     expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBeUndefined()
     expect(model).toMatchObject({ valueSource: 'unknown' })
+    // Unnameable, but the thread still runs it, so effort stays settable off the catalog.
+    expect(snapshot.find((descriptor) => descriptor.id === 'effort')).toMatchObject({
+      settable: true,
+      kind: { type: 'select' }
+    })
   })
 
   it('keeps the model row when the provider lists no models at all', () => {
@@ -101,7 +107,8 @@ describe('structured agent session options', () => {
     // echoed. An empty list must not promote it to a name it was never owed.
     expect(state.record.model).toEqual({ value: 'gpt-5.9-secret', source: 'dispatched' })
     const snapshot = structuredAgentSessionOptionSnapshot(state)
-    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model'])
+    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
+    expect(snapshot[1]).toMatchObject({ settable: true })
     const model = snapshot[0]
     expect(model).toMatchObject({ valueSource: 'unknown' })
     expect(model.kind.type === 'select' ? model.kind.choices : null).toEqual([])
