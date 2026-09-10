@@ -95,8 +95,8 @@ describe('createPtySlaveLineEditorProbe', () => {
     execFileMock.mockImplementationOnce((_c, _a, _o, cb) =>
       cb(Object.assign(new Error('not a tty'), { code: 1 }), '', '')
     )
-    await expect(probe?.()).resolves.toBe('unknown')
-    await expect(probe?.()).resolves.toBe('unknown')
+    await expect(probe?.()).resolves.toBe('unavailable')
+    await expect(probe?.()).resolves.toBe('unavailable')
     expect(execFileMock).toHaveBeenCalledTimes(5)
   })
 })

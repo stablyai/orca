@@ -175,7 +175,7 @@ describe('verifyWindowsTreeKillTarget scan volume', () => {
       cb(withSelf(NATIVE_ROWS))
     })
     __setWindowsProcessTreeLoaderForTests(() => ({
-      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses: getAllProcessesMock
     }))
   })

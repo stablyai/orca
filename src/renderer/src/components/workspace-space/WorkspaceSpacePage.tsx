@@ -4,30 +4,13 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { WorkspaceSpaceManagerPanel } from '../status-bar/WorkspaceSpaceManagerPanel'
 import { useAppStore } from '../../store'
+import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { translate } from '@/i18n/i18n'
 
 export default function WorkspaceSpacePage(): React.JSX.Element {
   const closeSpacePage = useAppStore((state) => state.closeSpacePage)
 
   useEffect(() => {
-    const hasVisibleOverlay = (): boolean =>
-      Array.from(
-        document.querySelectorAll('[role="dialog"], [role="listbox"], [role="menu"]')
-      ).some((element) => {
-        if (!(element instanceof HTMLElement)) {
-          return false
-        }
-        if (element.closest('[aria-hidden="true"]')) {
-          return false
-        }
-        const style = window.getComputedStyle(element)
-        return (
-          style.display !== 'none' &&
-          style.visibility !== 'hidden' &&
-          element.getClientRects().length > 0
-        )
-      })
-
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') {
         return

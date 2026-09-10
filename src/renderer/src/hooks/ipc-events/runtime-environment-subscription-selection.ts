@@ -178,6 +178,7 @@ export function createRuntimeEnvironmentStoreSyncSubscriber(
 
 type RuntimeClientEventReplayInvalidationDeps = {
   getSshStateReference: () => RuntimeEnvironmentStoreSyncState['sshStateByEnvironment']
+  refreshRuntimeStatus: () => void
   requestProjectRefresh: () => void
   markEnvironmentSshStateStale: () => void
   hydrateEnvironmentSshState: () => Promise<unknown>
@@ -193,6 +194,10 @@ type RuntimeClientEventReplayInvalidationDeps = {
 export function invalidateRuntimeClientEventReplay(
   deps: RuntimeClientEventReplayInvalidationDeps
 ): void {
+  // Why: nothing else re-probes status.get after a reconnect, so a host recorded
+  // unreachable during the gap stayed 'disconnected' in the sidebar forever while
+  // its terminals and RPCs worked again.
+  deps.refreshRuntimeStatus()
   deps.requestProjectRefresh()
   const previousSshStateReference = deps.getSshStateReference()
   deps.markEnvironmentSshStateStale()

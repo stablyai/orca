@@ -136,11 +136,15 @@ describe('useNativeChatInteractiveSend', () => {
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'openclaude')
     )
 
-    act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
 
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
     expect(onSettled).toBeTypeOf('function')
     onSettled?.(true)
+    sendResult?.confirmAnswered()
     expect(mocks.inferQuestionAnswered).toHaveBeenCalledOnce()
   })
 
@@ -154,7 +158,7 @@ describe('useNativeChatInteractiveSend', () => {
       resultValue = result.current.sendAnswer(PROMPT, [{ indices: [] }])
     })
 
-    expect(resultValue).toEqual({ settleAfterMs: 0, waitsForVerifiedDelivery: false })
+    expect(resultValue).toMatchObject({ settleAfterMs: 0, waitsForVerifiedDelivery: false })
     expect(mocks.sendNativeChatAskAnswer).not.toHaveBeenCalled()
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
@@ -211,19 +215,40 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendRuntimePtyInput).not.toHaveBeenCalled()
   })
 
-  it('infers a Claude question answer only after every runtime write was delivered', () => {
+  // Delivered bytes are not an answered question: a selector layout the
+  // keystrokes do not fit leaves the ask live (#16865). Only the card's
+  // confirmation signal may clear the pane's wait.
+  it('does not clear the question wait on delivery alone', () => {
     const { result } = renderHook(() =>
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
     )
 
     act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
-    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
 
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
     expect(onSettled).toBeTypeOf('function')
-    onSettled?.(false)
-    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
     onSettled?.(true)
+
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
+  it('clears the question wait once, when the card confirms the ask resolved', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
+    onSettled?.(true)
+    sendResult?.confirmAnswered()
+    // A second confirmation (deadline race, replacement prompt) must not
+    // re-clear a wait that may already belong to the next question.
+    sendResult?.confirmAnswered()
 
     expect(mocks.inferQuestionAnswered).toHaveBeenCalledExactlyOnceWith({
       paneKey: PANE_KEY,
@@ -240,7 +265,10 @@ describe('useNativeChatInteractiveSend', () => {
     )
 
     // Answer question A while it is the current waiting question.
-    act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
 
     // A different AskUserQuestion becomes current before the paced send settles.
     mocks.storeState = {
@@ -256,6 +284,7 @@ describe('useNativeChatInteractiveSend', () => {
 
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
     onSettled?.(true)
+    sendResult?.confirmAnswered()
 
     // The baseline is question A's (captured before delivery), so the server can
     // reject it against the now-current question B instead of clearing B's wait.
@@ -278,7 +307,7 @@ describe('useNativeChatInteractiveSend', () => {
     act(() => {
       sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }], onDeliverySettled)
     })
-    expect(sendResult).toEqual({ settleAfterMs: 500, waitsForVerifiedDelivery: true })
+    expect(sendResult).toMatchObject({ settleAfterMs: 500, waitsForVerifiedDelivery: true })
 
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
     onSettled?.(false)

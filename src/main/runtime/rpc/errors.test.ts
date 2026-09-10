@@ -9,6 +9,12 @@ import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   AutomationOwnerConflictError
 } from '../../../shared/automation-owner-conflict'
+import {
+  NESTED_WORKER_DEPTH_EXCEEDED_CODE,
+  NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS,
+  nestedWorkerDepthExceededMessage
+} from '../../../shared/nested-worker-depth'
+import { OrchestrationError } from '../orchestration/orchestration-error'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -248,5 +254,25 @@ describe('automation owner conflicts', () => {
   it('still lets an old runtime be classified from the message tail', () => {
     const error = new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)
     expect(error.message.endsWith(`: ${AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged}`)).toBe(true)
+  })
+})
+
+describe('nested worker depth cap', () => {
+  it('keeps its code and next steps instead of collapsing to runtime_error', () => {
+    const failure = mapRuntimeError(
+      'rpc_depth',
+      { runtimeId: 'runtime-1' },
+      new OrchestrationError(
+        NESTED_WORKER_DEPTH_EXCEEDED_CODE,
+        nestedWorkerDepthExceededMessage(2, 1),
+        { effectsApplied: false, nextSteps: [...NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS] }
+      )
+    )
+
+    expect(failure.error.code).toBe(NESTED_WORKER_DEPTH_EXCEEDED_CODE)
+    expect(failure.error.data).toMatchObject({
+      effectsApplied: false,
+      nextSteps: [...NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS]
+    })
   })
 })

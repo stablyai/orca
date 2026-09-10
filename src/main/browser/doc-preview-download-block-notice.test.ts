@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   publishDocPreviewFailure: vi.fn(),
-  boundGrantIdByGuest: new Map<object, string>()
+  boundGrantIdByGuest: new Map<object, string>(),
+  revocationListener: null as null | ((grant: { id: string }) => void)
 }))
 
 vi.mock('./doc-preview-failure-notice', () => ({
@@ -10,6 +11,12 @@ vi.mock('./doc-preview-failure-notice', () => ({
 }))
 vi.mock('./doc-preview-guest-policy', () => ({
   readDocPreviewGuestBoundGrantId: (guest: object) => mocks.boundGrantIdByGuest.get(guest) ?? null
+}))
+vi.mock('./doc-preview-grant-registry', () => ({
+  onDocPreviewGrantRevoked: (listener: (grant: { id: string }) => void) => {
+    mocks.revocationListener = listener
+    return vi.fn()
+  }
 }))
 
 const GRANT_ID = 'a'.repeat(32)
@@ -32,6 +39,7 @@ async function loadNotifier(): Promise<(guest: Electron.WebContents) => void> {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.boundGrantIdByGuest.clear()
+  mocks.revocationListener = null
   // Why per test: the module remembers which grants it has already told the reader about.
   vi.resetModules()
   vi.useFakeTimers()
@@ -92,6 +100,17 @@ describe('noticeDocPreviewDownloadBlocked', () => {
       grantId: OTHER_GRANT_ID,
       reason: 'download-blocked'
     })
+  })
+
+  it('forgets a preview as soon as its grant is revoked', async () => {
+    const notice = await loadNotifier()
+    const guest = guestBoundTo(GRANT_ID)
+
+    notice(guest)
+    mocks.revocationListener?.({ id: GRANT_ID })
+    notice(guest)
+
+    expect(mocks.publishDocPreviewFailure).toHaveBeenCalledTimes(2)
   })
 
   // The absence half of the first test: no shell is showing this contents, so there is no preview

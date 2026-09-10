@@ -37,6 +37,7 @@ import {
   revokeAllDocPreviewGrants
 } from '../browser/doc-preview-grant-registry'
 import {
+  DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
   DOC_PREVIEW_LINK_CLICK_CHANNEL,
   DOC_PREVIEW_MINT_GRANT_CHANNEL,
   DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
@@ -45,6 +46,7 @@ import {
 
 const REQUEST: DocPreviewGrantRequest = {
   owner: { kind: 'ssh', connectionId: 'ssh-1' },
+  requestBase: '/home/alice/docs',
   root: '/home/alice/docs',
   entryRelativePath: 'index.html',
   browserPageId: 'doc-page-1'
@@ -66,6 +68,14 @@ function revoke(grantId: string): boolean {
     throw new Error('revoke handler not registered')
   }
   return handler({ sender }, grantId) as boolean
+}
+
+function authorize(grantId: unknown, relativePath: unknown): boolean {
+  const handler = mocks.handlers.get(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL)
+  if (!handler) {
+    throw new Error('authorize handler not registered')
+  }
+  return handler({ sender }, grantId, relativePath) as boolean
 }
 
 function reportLinkClick(url: unknown): void {
@@ -135,6 +145,31 @@ describe('document preview grant handlers', () => {
 
     expect(revoke(result.grantId)).toBe(false)
     expect(getDocPreviewGrant(result.grantId)).not.toBeNull()
+  })
+
+  it('lets only the trusted renderer authorize a valid requested directory', () => {
+    const result = mint({
+      ...REQUEST,
+      requestBase: '/home/alice',
+      root: '/home/alice/docs',
+      entryRelativePath: 'docs/index.html'
+    })
+
+    expect(authorize(result.grantId, 'assets/app.js')).toBe(true)
+    expect(getDocPreviewGrant(result.grantId)?.authorizedRoots).toEqual(['/home/alice/assets'])
+
+    mocks.isTrustedBrowserRenderer.mockReturnValue(false)
+    expect(authorize(result.grantId, 'secrets/token.txt')).toBe(false)
+    expect(getDocPreviewGrant(result.grantId)?.authorizedRoots).toEqual(['/home/alice/assets'])
+  })
+
+  it('refuses malformed directory authorization arguments', () => {
+    const result = mint()
+
+    expect(authorize(result.grantId, '../secret.txt')).toBe(false)
+    expect(authorize(result.grantId, null)).toBe(false)
+    expect(authorize(null, 'assets/app.js')).toBe(false)
+    expect(authorize('0'.repeat(32), 'assets/app.js')).toBe(false)
   })
 
   // Why this channel skips the trusted-renderer check: its sender is a preview guest rendering a

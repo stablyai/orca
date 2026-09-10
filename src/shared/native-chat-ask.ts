@@ -108,7 +108,10 @@ export function parseAskFromStatus(
  *  live cannot vanish from pending state after a reconnect/replay. */
 export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPrompt | null {
   let pending: AskPrompt | null = null
-  const outstanding: (AskPrompt | null)[] = []
+  // The FIFO is two counters, not a queue: a result only needs to know how far the
+  // call that produced `pending` sits from the head, so nothing is retained per call.
+  let outstanding = 0
+  let pendingDepth = -1
   for (const message of messages) {
     // A new user turn (or an interrupt row) ends the turn that owns whatever
     // calls are still in flight: their results never arrive, and `tool_use_id`
@@ -117,7 +120,8 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
     // transcript and strands an answered ask as a permanent card over the
     // composer (#11761). Claude's tool-result turns decode as role 'tool'.
     if (message.role === 'user' || isInterruptedStatusMessage(message)) {
-      outstanding.length = 0
+      outstanding = 0
+      pendingDepth = -1
       pending = null
     }
     for (const block of message.blocks) {
@@ -125,12 +129,16 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
         const parsed = parseToolInput(block.name, block.input)
         if (parsed) {
           pending = parsed
+          pendingDepth = outstanding
         }
-        outstanding.push(parsed)
-      } else if (block.type === 'tool-result' && outstanding.length > 0) {
-        const resolved = outstanding.shift()
-        if (resolved && resolved === pending) {
+        outstanding += 1
+      } else if (block.type === 'tool-result' && outstanding > 0) {
+        outstanding -= 1
+        if (pendingDepth === 0) {
           pending = null
+          pendingDepth = -1
+        } else if (pendingDepth > 0) {
+          pendingDepth -= 1
         }
       }
     }
@@ -138,13 +146,71 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
   return pending
 }
 
-/** Prefers live status and consults transcript history only after its read settles. */
+/** Does the transcript positively show THIS ask already resolved?
+ *
+ *  Answers only from evidence: a tool-call matching `ask` whose FIFO slot then
+ *  received its tool-result. Absence of the call, an unsettled read, and a call
+ *  orphaned by a user turn or interrupt all answer false — an orphan's result
+ *  never arrives, so it can never witness resolution (#11761). Callers use this
+ *  to retire an ask that live status still asserts; a false negative leaves a
+ *  stale card up, while a false positive would hide a live question.
+ *
+ *  Claude Code writes a tool-result row for an AskUserQuestion cancelled in the
+ *  TUI (`is_error`), so a selector the user escaped reads as resolved here. That
+ *  result is immediately followed by the interrupt row, so a formed verdict
+ *  outlives turn boundaries; only a fresh matching call un-resolves the ask. */
+export function isAskResolvedInTranscript(
+  ask: AskPrompt,
+  messages: readonly NativeChatMessage[]
+): boolean {
+  // Same identity the cards dismiss under: canonical content, not object identity.
+  const askKey = nativeChatAskDismissKey(ask)
+  // Mirrors extractPendingAsk's FIFO walk: `outstanding` holds each unresolved
+  // call's key (or null for a non-question call), oldest first.
+  let outstanding: (string | null)[] = []
+  let resolved = false
+  for (const message of messages) {
+    if (message.role === 'user' || isInterruptedStatusMessage(message)) {
+      // The turn owning these calls ended; their results never arrive, so the
+      // pending FIFO is void. A verdict already witnessed by a result stands —
+      // the cancel path writes the interrupt row right after the tool-result.
+      outstanding = []
+    }
+    for (const block of message.blocks) {
+      if (block.type === 'tool-call') {
+        const key = nativeChatAskDismissKey(parseToolInput(block.name, block.input))
+        if (key === askKey) {
+          // The agent is asking this same question again: a live instance is
+          // outstanding, so the earlier resolution no longer describes it.
+          resolved = false
+        }
+        outstanding.push(key)
+      } else if (block.type === 'tool-result' && outstanding.length > 0) {
+        if (outstanding.shift() === askKey) {
+          resolved = true
+        }
+      }
+    }
+  }
+  return resolved
+}
+
+/** Prefers live status, except where the settled transcript positively shows the
+ *  live ask already resolved — a question killed inside the TUI emits no hook, so
+ *  live status would otherwise assert it forever (#16865). Falls through to the
+ *  transcript's own pending ask so a genuinely newer question still renders. */
 export function resolveNativeChatAsk(args: {
   liveAsk: AskPrompt | null
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
 }): AskPrompt | null {
-  return args.liveAsk ?? (args.transcriptSettled ? extractPendingAsk(args.messages) : null)
+  if (args.liveAsk) {
+    if (!args.transcriptSettled || !isAskResolvedInTranscript(args.liveAsk, args.messages)) {
+      return args.liveAsk
+    }
+    return extractPendingAsk(args.messages)
+  }
+  return args.transcriptSettled ? extractPendingAsk(args.messages) : null
 }
 
 /** One question's chosen answer, normalized for delivery: the selected option

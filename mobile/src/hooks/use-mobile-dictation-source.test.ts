@@ -95,7 +95,7 @@ describe('useMobileDictation source invariants', () => {
       /import \{[^}]*createMobileDictationKeepAwakeOwner[^}]*\} from '\.\/mobile-dictation-keep-awake'/
     )
     expect(source).toContain(
-      'const keepAwakeOwner = useMemo(createMobileDictationKeepAwakeOwner, [])'
+      'const keepAwakeOwner = useMemo(() => createMobileDictationKeepAwakeOwner(), [])'
     )
     expect(keepAwakeSource).toContain('activateKeepAwakeAsync')
     expect(keepAwakeSource).toContain('deactivateKeepAwake')

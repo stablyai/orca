@@ -71,7 +71,11 @@ export function BrowserReloadControl({
                 onMenuOpenChange(true)
               }}
             >
-              {loading ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}
+              {loading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
             </Button>
           </DropdownMenuTrigger>
         </TooltipTrigger>

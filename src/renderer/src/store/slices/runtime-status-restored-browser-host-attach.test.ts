@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import { resetRestoredBrowserClientHostAttachForTests } from '@/runtime/restored-client-hosted-browser-host-attach'
+import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   createRuntimeStatusSlice,
@@ -10,6 +11,10 @@ import {
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }
+}))
+
+vi.mock('@/runtime/client-hosted-browser-close-intent-replay', () => ({
+  replayClientHostedBrowserCloseIntents: vi.fn(async () => {})
 }))
 
 const prepareBrowserClientHostPlacement = vi.fn(async (_args: { selector: string }) => ({
@@ -48,6 +53,7 @@ describe('restored client-hosted browser host attach on reachability', () => {
     clearRuntimeEnvironmentConnectionGenerationsForTests()
     resetRestoredBrowserClientHostAttachForTests()
     prepareBrowserClientHostPlacement.mockClear()
+    vi.mocked(replayClientHostedBrowserCloseIntents).mockClear()
   })
 
   afterEach(() => {
@@ -67,13 +73,40 @@ describe('restored client-hosted browser host attach on reachability', () => {
     })
   })
 
-  it('starts no browser client host when the environment is unreachable', async () => {
-    stubApi(vi.fn().mockRejectedValue(new Error('unreachable')))
+  // The reconnect policy suppresses the *failure* publish only. A probe that answered still owes
+  // both recovery follow-ups, or a restored client-hosted page never comes back after the gap.
+  it('runs both recovery follow-ups on a success when the caller opted out of publishing failures', async () => {
+    stubApi(vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a')))
 
-    await storeWithRestoredHandles(true).getState().refreshRuntimeEnvironmentStatus('env-a')
+    await storeWithRestoredHandles(true)
+      .getState()
+      .refreshRuntimeEnvironmentStatus('env-a', undefined, { publishUnreachable: false })
 
-    expect(prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
+    expect(prepareBrowserClientHostPlacement).toHaveBeenCalledWith({
+      selector: 'env-a',
+      preference: 'auto'
+    })
+    expect(replayClientHostedBrowserCloseIntents).toHaveBeenCalledWith('env-a', expect.anything())
   })
+
+  // Under either policy a failed probe owes *no* follow-ups: it verified nothing, so there is no
+  // recovered host to reattach restored pages to and no one to replay closes at.
+  it.each([
+    { name: 'the default policy', options: undefined },
+    { name: 'a caller that opted out of publishing', options: { publishUnreachable: false } }
+  ])(
+    'starts no browser client host when the environment is unreachable: $name',
+    async (scenario) => {
+      stubApi(vi.fn().mockRejectedValue(new Error('unreachable')))
+
+      await storeWithRestoredHandles(true)
+        .getState()
+        .refreshRuntimeEnvironmentStatus('env-a', undefined, scenario.options)
+
+      expect(prepareBrowserClientHostPlacement).not.toHaveBeenCalled()
+      expect(replayClientHostedBrowserCloseIntents).not.toHaveBeenCalled()
+    }
+  )
 
   it('starts no browser client host for restored pages the server hosts', async () => {
     stubApi(vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a')))

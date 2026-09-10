@@ -23,20 +23,19 @@ export function buildDocPreviewGrantRequest(
   filePath: string
 ): DocPreviewGrantLocation | null {
   const worktreeRoot = state.getKnownWorktreeById(worktreeId)?.path ?? null
-  // Why the workspace root and not the document's folder: reports keep their assets in a sibling
-  // directory (`../assets/app.css`), which a folder-rooted grant refuses. This is no wider than the
-  // channel already allows — files.read is worktree-scoped on paired hosts either way.
   const worktreeRelativePath = getRelativePathInsideRoot(filePath, worktreeRoot)
-  const root = worktreeRoot && worktreeRelativePath ? worktreeRoot : dirname(filePath)
+  const root = dirname(filePath)
+  const requestBase = worktreeRoot && worktreeRelativePath ? worktreeRoot : root
   const entryRelativePath = worktreeRelativePath ?? basename(filePath)
-  if (!root || !entryRelativePath) {
+  if (!requestBase || !root || !entryRelativePath) {
     return null
   }
   const connectionId = getConnectionIdForFileFromState(state, worktreeId, filePath)
   if (connectionId) {
-    // Why SSH keeps a document-folder root when the file sits outside the workspace: those previews
-    // are unrestricted by design, and there is no workspace boundary to root them in.
-    return { owner: { kind: 'ssh', connectionId }, root, entryRelativePath }
+    // Outside a workspace there is no broader request base: the document directory bounds
+    // resolution, and main starts such a grant at the entry file alone — an out-of-workspace
+    // directory is often a home directory, which is where secrets live.
+    return { owner: { kind: 'ssh', connectionId }, requestBase, root, entryRelativePath }
   }
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   if (!environmentId || !worktreeRoot || !worktreeRelativePath) {
@@ -49,6 +48,7 @@ export function buildDocPreviewGrantRequest(
       worktreeSelector: toRuntimeWorktreeSelector(worktreeId),
       worktreeRoot
     },
+    requestBase,
     root,
     entryRelativePath
   }

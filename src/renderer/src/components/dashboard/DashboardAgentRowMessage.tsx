@@ -1,5 +1,9 @@
+import { useEffect } from 'react'
 import { cn } from '@/lib/utils'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import {
+  CommentMarkdownAsync,
+  preloadCommentMarkdown
+} from '@/components/sidebar/comment-markdown-lazy'
 import { translate } from '@/i18n/i18n'
 
 type DashboardAgentRowMessageProps = {
@@ -13,6 +17,9 @@ export function DashboardAgentRowMessage({
   isInterrupted,
   lastAssistantMessage
 }: DashboardAgentRowMessageProps): React.JSX.Element | null {
+  // These rows are the sidebar's only boot-visible markdown, so warm the chunk as
+  // soon as one mounts rather than waiting for text to arrive.
+  useEffect(preloadCommentMarkdown, [])
   // Why: message slot is always reserved in collapsed view so the row height
   // stays fixed as assistant text arrives or clears.
   if (!isInterrupted && !lastAssistantMessage) {
@@ -38,7 +45,7 @@ export function DashboardAgentRowMessage({
         </span>
       ) : null}
       {lastAssistantMessage ? (
-        <CommentMarkdown
+        <CommentMarkdownAsync
           content={lastAssistantMessage}
           // Why: animate between a clipped preview and natural height without
           // measuring markdown content in JS.

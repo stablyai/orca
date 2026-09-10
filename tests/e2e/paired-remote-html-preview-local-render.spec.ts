@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Locator, Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -37,6 +37,9 @@ const SCRIPTED_EGRESS_URL = 'https://exfil.test/?d=scripted'
 /** The same exfiltration, but riding a press the reader really made somewhere else in the document. */
 const POST_INPUT_EGRESS_URL = 'https://exfil.test/?d=after-input'
 const BLANK_PAGE_URL = 'data:text/html,'
+const SCOPED_FIXTURE_NAME = 'scoped-preview.html'
+const SCOPED_FIXTURE_HEADING = 'scoped preview rendered'
+const SCOPED_ASSET_TEXT = 'approved sibling asset loaded'
 
 type PreparedPairedClient = {
   client: PairedElectronClient
@@ -282,10 +285,28 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     expect(afterPreview.hostSessionBrowserTabs).toEqual(baseline.hostSessionBrowserTabs)
 
     // The chip stands in for the address bar the document page has none of, and keeps naming the
-    // file whatever the document calls itself.
-    const pathChip = page.getByRole('button', { name: 'Copy file path', exact: true })
+    // file whatever the document calls itself. Since STA-5681 the chip is the way into the
+    // editable address bar, so it answers to that name now.
+    const pathChip = page.getByRole('button', { name: 'Edit address', exact: true })
     await expect(pathChip).toBeVisible({ timeout: 30_000 })
     await expect(pathChip).toContainText(FIXTURE_NAME)
+    // Below 24rem of chip width the identity row hides whole instead of clipping into slivers;
+    // when it shows, the badge must sit inside the chip's own layout box. Which arm runs depends
+    // on how much width this platform's toolbar leaves the chip — both are the contract.
+    const hostBadge = pathChip.locator('[data-slot="badge"]')
+    const pathChipBox = await pathChip.boundingBox()
+    expect(pathChipBox).not.toBeNull()
+    if (await hostBadge.isVisible()) {
+      const hostBadgeBox = await hostBadge.boundingBox()
+      expect(hostBadgeBox).not.toBeNull()
+      expect((hostBadgeBox?.x ?? 0) + (hostBadgeBox?.width ?? 0)).toBeLessThanOrEqual(
+        (pathChipBox?.x ?? 0) + (pathChipBox?.width ?? 0) + 0.5
+      )
+    } else {
+      // A chip too narrow for the identity row hides it whole; a wide one must show it. 26rem of
+      // border-box width clears the 24rem content-box container threshold plus padding.
+      expect(pathChipBox?.width ?? 0).toBeLessThan(416)
+    }
 
     await expect(page.locator(`[data-tab-group-body-id="${sourceGroupId}"]`)).toBeVisible()
     await expect(page.locator(`[data-tab-group-body-id="${previewRow.groupId}"]`)).toBeVisible()
@@ -553,36 +574,59 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       hostBrowserPages: linkBaseline.hostBrowserPages.length,
       routedCalls: []
     })
-    console.log(
-      `[preview-e2e] before-focus ${JSON.stringify(
-        await page.evaluate(() => {
-          const active = document.activeElement
-          const guest = document.querySelector(
-            'webview[src^="orca-preview://"]'
-          ) as HTMLElement | null
-          const before = active?.tagName ?? null
-          guest?.focus()
-          return { before, after: document.activeElement?.tagName ?? null }
-        })
-      )}`
-    )
-    // Why the failure is dressed rather than left bare: "nothing routed" has three very different
-    // causes — the press missed the anchor, the pane had no layout, or the fences refused what the
-    // press reported — and the counts below are what tell them apart. Finding the guest-focus gap
-    // took exactly these three numbers.
+    const guestFocus = await page.evaluate(() => {
+      const active = document.activeElement
+      const guest = document.querySelector('webview[src^="orca-preview://"]') as HTMLElement | null
+      const before = active?.tagName ?? null
+      guest?.focus()
+      return { before, after: document.activeElement?.tagName ?? null }
+    })
+    console.log(`[preview-e2e] before-focus ${JSON.stringify(guestFocus)}`)
+    const confirmation = page.getByRole('dialog', { name: 'Open link to example.com?' })
+    const confirmationTitle = confirmation.getByRole('heading', {
+      name: 'Open link to example.com?'
+    })
+    await expect
+      .poll(
+        async () => {
+          if (!(await confirmationTitle.isVisible())) {
+            const point = await readDocPreviewElementCenter(page, '#external')
+            if (point) {
+              await page.mouse.click(point.x, point.y)
+            }
+          }
+          return confirmationTitle.isVisible()
+        },
+        {
+          timeout: 60_000,
+          intervals: [2_000],
+          message: 'a target=_blank click never showed its destination confirmation'
+        }
+      )
+      .toBe(true)
+    await expect(confirmation.getByText(EXTERNAL_LINK_URL, { exact: true })).toBeVisible()
+    await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(confirmationTitle).not.toBeVisible()
+    const afterCancel = await readPairedHtmlPreviewInventory(page, inventoryArgs)
+    expect({
+      routedCalls: await readPairedHtmlPreviewLinkRouting(page),
+      browserCount: afterCancel.clientBrowserWorkspaceCountAllWorktrees
+    }).toEqual({
+      routedCalls: [],
+      browserCount: linkBaseline.clientBrowserWorkspaceCountAllWorktrees
+    })
+
     try {
+      const point = await readDocPreviewElementCenter(page, '#external')
+      if (!point) {
+        throw new Error('external link lost its clickable point after cancellation')
+      }
+      await page.mouse.click(point.x, point.y)
+      await expect(confirmationTitle).toBeVisible({ timeout: 30_000 })
+      await confirmation.getByRole('button', { name: 'Open link', exact: true }).click()
       await expect
         .poll(
           async () => {
-            const routedCalls = await readPairedHtmlPreviewLinkRouting(page)
-            // Why only while nothing has routed: a retry after a successful route would open a
-            // second tab and turn this oracle into a counter of presses.
-            if (routedCalls.length === 0) {
-              const point = await readDocPreviewElementCenter(page, '#external')
-              if (point) {
-                await page.mouse.click(point.x, point.y)
-              }
-            }
             const opened = await readPairedHtmlPreviewInventory(page, inventoryArgs)
             return {
               routedCalls: await readPairedHtmlPreviewLinkRouting(page),
@@ -596,7 +640,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
           {
             timeout: 60_000,
             intervals: [2_000],
-            message: 'a target=_blank click in the preview never opened an Orca browser tab'
+            message: 'a confirmed preview link never opened an Orca browser tab'
           }
         )
         .toMatchObject({
@@ -614,6 +658,100 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
   } finally {
     await prepared?.client.dispose()
     await marker.close()
+  }
+})
+
+test('asks before a paired preview reads a sibling directory', async ({
+  orcaPage,
+  testRepoPath
+}, testInfo) => {
+  test.setTimeout(300_000)
+  const docsDirectory = path.join(testRepoPath, 'preview-docs')
+  const assetsDirectory = path.join(testRepoPath, 'preview-assets')
+  mkdirSync(docsDirectory, { recursive: true })
+  mkdirSync(assetsDirectory, { recursive: true })
+  writeFileSync(
+    path.join(docsDirectory, SCOPED_FIXTURE_NAME),
+    `<!doctype html><html><head><title>Scoped Preview</title></head><body>` +
+      `<h1>${SCOPED_FIXTURE_HEADING}</h1><div id="asset-result">blocked</div>` +
+      `<script src="../preview-assets/scoped-preview.js"></script></body></html>\n`
+  )
+  writeFileSync(
+    path.join(assetsDirectory, 'scoped-preview.js'),
+    `document.getElementById('asset-result').textContent=${JSON.stringify(SCOPED_ASSET_TEXT)}\n`
+  )
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+
+  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  let prepared: PreparedPairedClient | null = null
+  try {
+    prepared = await preparePairedClient(offer, testInfo, 'Scoped HTML preview', testRepoPath)
+    const { client, worktreeId, worktreePath } = prepared
+    const page = client.page
+    const docFilePath = path.join(worktreePath, 'preview-docs', SCOPED_FIXTURE_NAME)
+    await page.evaluate(
+      ({ environmentId, filePath, relativePath, targetWorktreeId }) => {
+        window.__store?.getState().openFile(
+          {
+            filePath,
+            relativePath,
+            worktreeId: targetWorktreeId,
+            language: 'html',
+            runtimeEnvironmentId: environmentId,
+            mode: 'edit'
+          },
+          { preview: false, focusEditor: true }
+        )
+      },
+      {
+        environmentId: client.environmentId,
+        filePath: docFilePath,
+        relativePath: `preview-docs/${SCOPED_FIXTURE_NAME}`,
+        targetWorktreeId: worktreeId
+      }
+    )
+    const openPreviewToSide = page.getByRole('button', { name: 'Open Preview to the Side' })
+    await expect(openPreviewToSide).toBeVisible({ timeout: 30_000 })
+    await openPreviewToSide.click()
+    await expect
+      .poll(() => readDocPreviewRenderedText(page, 'h1'), {
+        timeout: 60_000,
+        message: 'the scoped preview document never rendered'
+      })
+      .toBe(SCOPED_FIXTURE_HEADING)
+
+    const workspace = await page.evaluate((targetWorktreeId) => {
+      const state = window.__store?.getState()
+      return (state?.browserTabsByWorktree[targetWorktreeId] ?? []).find((candidate) =>
+        candidate.docLocation?.filePath.endsWith('/scoped-preview.html')
+      )?.id
+    }, worktreeId)
+    if (!workspace) {
+      throw new Error('scoped preview had no document browser workspace')
+    }
+    await focusBrowserWorkspace(page, worktreeId, workspace)
+    await page.locator(`[data-tab-id="${workspace}"]`).click()
+
+    await expect(page.getByText('This preview wants to read files in preview-assets.')).toBeVisible(
+      {
+        timeout: 30_000
+      }
+    )
+    await expect.poll(() => readDocPreviewRenderedText(page, '#asset-result')).toBe('blocked')
+    await page.getByRole('button', { name: 'Allow folder', exact: true }).click()
+    await expect(
+      page.getByText('This preview wants to read files in preview-assets.')
+    ).not.toBeVisible()
+    await expect
+      .poll(() => readDocPreviewRenderedText(page, '#asset-result'), {
+        timeout: 60_000,
+        message: 'the approved sibling asset never loaded after reload'
+      })
+      .toBe(SCOPED_ASSET_TEXT)
+  } finally {
+    await prepared?.client.dispose()
   }
 })
 

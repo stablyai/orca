@@ -8,14 +8,19 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const { spawnMock, isPwshAvailableMock, resolveAgentForegroundProcessMock, readConptyMock, jobReadableMock } =
-  vi.hoisted(() => ({
-    spawnMock: vi.fn(),
-    isPwshAvailableMock: vi.fn(),
-    resolveAgentForegroundProcessMock: vi.fn(),
-    readConptyMock: vi.fn(),
-    jobReadableMock: vi.fn()
-  }))
+const {
+  spawnMock,
+  isPwshAvailableMock,
+  resolveAgentForegroundProcessMock,
+  readConptyMock,
+  jobReadableMock
+} = vi.hoisted(() => ({
+  spawnMock: vi.fn(),
+  isPwshAvailableMock: vi.fn(),
+  resolveAgentForegroundProcessMock: vi.fn(),
+  readConptyMock: vi.fn(),
+  jobReadableMock: vi.fn()
+}))
 
 vi.mock('node-pty', () => ({ spawn: spawnMock }))
 vi.mock('../pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))

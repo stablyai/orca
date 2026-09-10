@@ -72,14 +72,18 @@ describe('useFullCreationExecution cancellation', () => {
       normalizedSparseDirectories: [],
       note: '',
       onCreated: vi.fn<NonNullable<FullCreationExecutionInput['onCreated']>>(),
+      parentWorktreeId: null,
       persistDraft: false,
       persistSetupAgentStartupPolicy,
       prepareFullSubmit: vi
         .fn<FullCreationExecutionInput['prepareFullSubmit']>()
         .mockResolvedValue(prepared),
       resolvedInitialWorkspaceStatus: undefined,
+      selectedRepoExecutionHostId: 'local',
       selectedRepoIsGit: true,
+      selectedRepoIsRemote: false,
       setSidebarOpen: vi.fn<FullCreationExecutionInput['setSidebarOpen']>(),
+      settings: null,
       sparseEnabled: false,
       taskSourceContext: null,
       telemetrySource: undefined,

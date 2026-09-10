@@ -447,16 +447,13 @@ describe('workspace cleanup broad scan opt-in', () => {
   it('batches fleet progress instead of emitting one IPC payload per row', async () => {
     const worktrees = [
       GIT_WORKTREES[0],
-      ...Array.from(
-        { length: 200 },
-        (_, index): GitWorktreeInfo => ({
-          path: `/repo-batch-${index}`,
-          head: `head-${index}`,
-          branch: `refs/heads/batch-${index}`,
-          isBare: false,
-          isMainWorktree: false
-        })
-      )
+      ...Array.from({ length: 200 }, (_, index): GitWorktreeInfo => ({
+        path: `/repo-batch-${index}`,
+        head: `head-${index}`,
+        branch: `refs/heads/batch-${index}`,
+        isBare: false,
+        isMainWorktree: false
+      }))
     ]
     listRepoWorktreesMock.mockResolvedValue(worktrees)
     const onProgress = vi.fn()

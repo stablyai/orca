@@ -1,3 +1,4 @@
+import { createElement } from 'react'
 import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
@@ -73,5 +74,7 @@ export function ReviewIcon({
   const providerIcon =
     variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const Icon = getReviewStateIcon(review.state) ?? providerIcon
-  return <Icon className={cn(className, getCheckTone(review) ?? getStateTone(review.state))} />
+  return createElement(Icon, {
+    className: cn(className, getCheckTone(review) ?? getStateTone(review.state))
+  })
 }

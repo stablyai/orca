@@ -42,7 +42,9 @@ export function isDocPreviewSession(candidate: Electron.Session): boolean {
  * Product decision, not a hardening default: previewed documents are agent-authored, so any
  * outbound request they can make is an exfiltration channel for whatever else the page can read.
  * Self-contained documents — inline CSS/JS/SVG and in-grant assets — render in full; a CDN
- * stylesheet, font, script, or analytics beacon deliberately does not load.
+ * stylesheet, font, script, or analytics beacon deliberately does not load. Electron 43 still
+ * resolves explicit DNS-prefetch hints outside session hooks; the accepted residual is covered by
+ * `browser-route-dns-prefetch.electron.test.ts` and can beacon grant-readable bytes in DNS labels.
  */
 const DOC_PREVIEW_CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -120,12 +122,12 @@ export function installDocPreviewProtocolHandler(): void {
   }
   previewSession.protocol.handle(DOC_PREVIEW_SCHEME, handleDocPreviewRequest)
   // Why: the response CSP is the document's own promise to obey; this is the session refusing to
-  // carry the request at all, so a CSP bypass in one element type still reaches nothing.
+  // carry network requests even if an element bypasses CSP. DNS-prefetch does not reach this hook.
   previewSession.webRequest.onBeforeRequest((details, callback) => {
     callback({ cancel: !isAllowedDocPreviewRequestUrl(details.url) })
   })
-  // Why: preview guests are webviews like any other, so they inherit the same deny-by-default
-  // permission, display-media and user-agent policy every browser partition gets.
+  // Why: the shared installer still owns certificate, UA, download and permission hooks, while
+  // preview content receives no ambient browser/device permissions.
   installBrowserSessionPartitionPolicies(
     {
       id: DOC_PREVIEW_PARTITION,
@@ -139,6 +141,6 @@ export function installDocPreviewProtocolHandler(): void {
     // page to attribute the file to, and a previewed document is not one. Routed here it would
     // reserve a name in this desktop's Downloads folder and write remote-authored bytes into it
     // with nothing in the UI naming the tab that asked, and no prompt in front of it.
-    { downloads: 'deny' }
+    { downloads: 'deny', permissions: 'deny' }
   )
 }

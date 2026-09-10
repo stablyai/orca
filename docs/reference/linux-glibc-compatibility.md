@@ -6,6 +6,14 @@ Packaging enforces this floor automatically; keep it in mind when adding or
 upgrading native dependencies. (The optional speech feature is the one
 exception — see below.)
 
+## Local package build prerequisites
+
+`pnpm run build:linux` produces AppImage, deb, and RPM artifacts. The RPM target
+requires `rpmbuild` on `PATH`; install `rpm` on Ubuntu/Debian, `rpm-build` on
+Fedora/RHEL, or `rpm` through Homebrew on macOS, then verify it with
+`rpmbuild --version` before packaging. Cross-host builds have the same
+requirement.
+
 ## Why this needs attention
 
 A native module (`.node`) links against the glibc of the machine that compiled
@@ -25,11 +33,11 @@ broke launch on Ubuntu 20.04 ([#9902](https://github.com/stablyai/orca/issues/99
 The specific trap is glibc's 2.32–2.34 "libpthread/libutil merge", which moved
 several long-stable functions into libc under brand-new symbol versions:
 
-| Symbol            | New version   | node-pty use            |
-| ----------------- | ------------- | ----------------------- |
-| `pthread_sigmask` | `GLIBC_2.32`  | reset child signal mask |
-| `openpty`         | `GLIBC_2.34`  | allocate the pty        |
-| `forkpty`         | `GLIBC_2.34`  | fork the shell          |
+| Symbol            | New version  | node-pty use            |
+| ----------------- | ------------ | ----------------------- |
+| `pthread_sigmask` | `GLIBC_2.32` | reset child signal mask |
+| `openpty`         | `GLIBC_2.34` | allocate the pty        |
+| `forkpty`         | `GLIBC_2.34` | fork the shell          |
 
 Electron itself (glibc 2.25) and the other bundled native modules
 (`sherpa-onnx`, `@parcel/watcher`, both prebuilt on old glibc) stay well under

@@ -366,6 +366,35 @@ describe('listTerminals scope declaration', () => {
     expect(result.hostScope?.omittedHostIds).toEqual(['local', 'ssh:box-1'])
   })
 
+  // The renderer's surface census can read an empty scope on a plain local machine, not
+  // only on a degraded host: a superseded inventory answers for no host at all.
+  it('reports an empty scope when a concurrent inventory refresh supersedes this one', async () => {
+    const runtime = makeRuntime([])
+    const releases: (() => void)[] = []
+    runtime.setPtyController({
+      spawn: vi.fn(async () => ({ id: 'never' })),
+      write: () => true,
+      kill: () => true,
+      listProcesses: vi.fn(async () => []),
+      listProcessesWithHostScope: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            releases.push(() => resolve({ processes: [], hostIds: ['local'] }))
+          })
+      )
+    } as never)
+
+    const superseded = runtime.listTerminals(`id:${LOCAL_WORKTREE_ID}`)
+    await vi.waitFor(() => expect(releases).toHaveLength(1))
+    const current = runtime.listTerminals(`id:${LOCAL_WORKTREE_ID}`)
+    await vi.waitFor(() => expect(releases).toHaveLength(2))
+    releases[1]!()
+    releases[0]!()
+
+    expect((await superseded).hostScope?.hostIds).toEqual([])
+    expect((await current).hostScope?.hostIds).toEqual(['local'])
+  })
+
   it('reports the hosts a worktree-scoped listing skipped, so an empty result is not absolute', async () => {
     const runtime = makeRuntime([
       { worktreeId: SSH_WORKTREE_ID, leafId: SSH_LEAF_ID, ptyId: 'ssh:box-1@@pty-7' }

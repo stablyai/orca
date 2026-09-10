@@ -9,6 +9,7 @@
 // read error or a revoked grant); 'unsupported-asset' comes from a subresource whose format the
 // host declined to send — a font, say — and never from the document itself.
 import { act } from 'react'
+import type * as WebviewRegistryModule from '../host-guest/webview-registry'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -18,7 +19,11 @@ const GRANT_ID = 'a'.repeat(32)
 const REMINTED_GRANT_ID = 'c'.repeat(32)
 const ENTRY_RELATIVE_PATH = 'doc.html'
 
-const grantRuntime = vi.hoisted(() => ({ mints: 0, released: [] as string[] }))
+const grantRuntime = vi.hoisted(() => ({
+  mints: 0,
+  released: [] as string[],
+  authorizations: [] as { grantId: string; relativePath: string }[]
+}))
 
 vi.mock('@/lib/doc-preview-grants', () => ({
   buildDocPreviewGrantRequest: () => ({
@@ -28,6 +33,7 @@ vi.mock('@/lib/doc-preview-grants', () => ({
       worktreeSelector: 'id:wt-1',
       worktreeRoot: '/repo'
     },
+    requestBase: '/repo',
     root: '/repo/docs',
     entryRelativePath: ENTRY_RELATIVE_PATH
   }),
@@ -42,7 +48,8 @@ vi.mock('@/lib/doc-preview-grants', () => ({
   }
 }))
 
-vi.mock('@/components/browser-pane/host-guest/webview-registry', () => ({
+vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOriginal) => ({
+  ...(await importOriginal<typeof WebviewRegistryModule>()),
   moveFocusToRendererBeforeWebviewDetach: () => undefined
 }))
 
@@ -60,6 +67,8 @@ const storeState = {
   deleteBrowserPageAnnotation: () => undefined,
   clearBrowserPageAnnotations: () => undefined,
   recordFeatureInteraction: () => undefined,
+  recordWorkspaceDocVisit: () => undefined,
+  workspaceDocHistory: [],
   openFile: () => 'file-1'
 }
 
@@ -110,8 +119,13 @@ describe('HtmlDocPreview failure messages', () => {
     failureListeners.length = 0
     grantRuntime.mints = 0
     grantRuntime.released = []
+    grantRuntime.authorizations = []
     ;(window as unknown as { api: unknown }).api = {
       docPreview: {
+        authorizeDirectory: (grantId: string, relativePath: string) => {
+          grantRuntime.authorizations.push({ grantId, relativePath })
+          return Promise.resolve(true)
+        },
         onLoadFailure: (callback: (payload: DocPreviewFailure) => void) => {
           failureListeners.push(callback)
           return () => {
@@ -201,6 +215,180 @@ describe('HtmlDocPreview failure messages', () => {
       'Orca could not read assets/logo.png from the workspace.'
     )
     expect(container.textContent).not.toContain('files in this document')
+  })
+
+  it('caps document-authored failure rows', async () => {
+    await renderPreview(container, root)
+
+    await act(async () => {
+      for (let index = 0; index < 75; index += 1) {
+        emitFailure({
+          grantId: GRANT_ID,
+          relativePath: `assets/missing-${index}.png`,
+          reason: 'unreadable'
+        })
+      }
+    })
+
+    expect(container.textContent).toContain('50 files in this document could not be loaded.')
+    expect(container.textContent).not.toContain('75 files in this document could not be loaded.')
+  })
+
+  it('asks before reading a directory outside the document folder', async () => {
+    await renderPreview(container, root)
+
+    await act(async () => {
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'assets/app.js',
+        reason: 'authorization-required'
+      })
+    })
+
+    expect(container.textContent).toContain('This preview wants to read files in assets.')
+    expect(container.textContent).toContain('Dismiss')
+    expect(container.textContent).toContain('Allow folder')
+    expect(grantRuntime.authorizations).toEqual([])
+  })
+
+  it('names the full workspace root when the document asks for a root file', async () => {
+    await renderPreview(container, root)
+
+    await act(async () => {
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: '.env',
+        reason: 'authorization-required'
+      })
+    })
+
+    expect(container.textContent).toContain('This preview wants to read files in /repo.')
+  })
+
+  it('authorizes only after Allow folder and reloads the guest', async () => {
+    await renderPreview(container, root)
+    const reload = vi.fn()
+    Object.assign(container.querySelector('webview')!, { reload })
+
+    await act(async () => {
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'assets/app.js',
+        reason: 'authorization-required'
+      })
+    })
+    const allowButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Allow folder'
+    )
+
+    await act(async () => {
+      allowButton?.click()
+    })
+
+    expect(grantRuntime.authorizations).toEqual([
+      { grantId: GRANT_ID, relativePath: 'assets/app.js' }
+    ])
+    expect(reload).toHaveBeenCalledOnce()
+    expect(container.textContent).not.toContain('This preview wants to read files in assets.')
+  })
+
+  it('batches folders blocked in one load into a single decision', async () => {
+    await renderPreview(container, root)
+    const reload = vi.fn()
+    Object.assign(container.querySelector('webview')!, { reload })
+
+    await act(async () => {
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'assets/app.js',
+        reason: 'authorization-required'
+      })
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'assets/theme.css',
+        reason: 'authorization-required'
+      })
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'data/rows.json',
+        reason: 'authorization-required'
+      })
+    })
+
+    expect(container.textContent).toContain('This preview wants to read files in assets and data.')
+    const allowButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Allow 2 folders'
+    )
+    expect(allowButton).toBeDefined()
+
+    await act(async () => {
+      allowButton?.click()
+    })
+
+    // One decision grants exactly the named set, then one reload picks it all up.
+    expect(grantRuntime.authorizations).toEqual([
+      { grantId: GRANT_ID, relativePath: 'assets/app.js' },
+      { grantId: GRANT_ID, relativePath: 'data/rows.json' }
+    ])
+    expect(reload).toHaveBeenCalledOnce()
+    expect(container.textContent).not.toContain('This preview wants to read files in')
+  })
+
+  it('dismisses every folder the banner named, not just the first', async () => {
+    await renderPreview(container, root)
+
+    await act(async () => {
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'assets/app.js',
+        reason: 'authorization-required'
+      })
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'data/rows.json',
+        reason: 'authorization-required'
+      })
+    })
+    const dismissButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Dismiss'
+    )
+    await act(async () => {
+      dismissButton?.click()
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'data/other.json',
+        reason: 'authorization-required'
+      })
+    })
+
+    expect(container.textContent).not.toContain('This preview wants to read files in')
+    expect(grantRuntime.authorizations).toEqual([])
+  })
+
+  it('does not reprompt for a dismissed directory during the grant lifetime', async () => {
+    await renderPreview(container, root)
+
+    await act(async () => {
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'assets/app.js',
+        reason: 'authorization-required'
+      })
+    })
+    const dismissButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Dismiss'
+    )
+    await act(async () => {
+      dismissButton?.click()
+      emitFailure({
+        grantId: GRANT_ID,
+        relativePath: 'assets/theme.css',
+        reason: 'authorization-required'
+      })
+    })
+
+    expect(container.textContent).not.toContain('This preview wants to read files in assets.')
+    expect(grantRuntime.authorizations).toEqual([])
   })
 
   // Why: nothing rendered, so the notice strip would be a footnote on a blank page.

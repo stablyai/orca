@@ -1,11 +1,9 @@
 import type {
-  RuntimeTerminalClose,
   RuntimeTerminalCreate,
   RuntimeTerminalFocus,
   RuntimeTerminalListResult,
   RuntimeTerminalRead,
   RuntimeTerminalRename,
-  RuntimeTerminalSend,
   RuntimeTerminalShow,
   RuntimeTerminalSplit,
   RuntimeTerminalWait
@@ -13,13 +11,11 @@ import type {
 import type { CommandHandler } from '../dispatch'
 import { shouldUseRendererBackedInteractiveTerminal } from '../codex-command-classification'
 import {
-  formatTerminalClose,
   formatTerminalCreate,
   formatTerminalFocus,
   formatTerminalList,
   formatTerminalRead,
   formatTerminalRename,
-  formatTerminalSend,
   formatTerminalShow,
   formatTerminalSplit,
   formatTerminalWait,
@@ -30,6 +26,10 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
+import {
+  annotateOmittedHostScope,
+  type WithAnnotatedHostScope
+} from '../omitted-host-scope-selectors'
 import { RuntimeClientError } from '../runtime-client'
 import {
   getBrowserWorktreeSelector,
@@ -37,6 +37,8 @@ import {
   getRequiredWorktreeSelector,
   getTerminalHandle
 } from '../selectors'
+import { terminalCloseHandler } from './terminal-close'
+import { terminalSendHandler } from './terminal-send'
 
 // Why: terminal wait legitimately needs to outlive the CLI's default RPC
 // timeout. Even without an explicit server timeout, the client must allow
@@ -53,12 +55,16 @@ const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }
 
 export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'terminal list': async ({ flags, client, cwd, json }) => {
-    const result = await client.call<RuntimeTerminalListResult>('terminal.list', {
-      worktree: await getOptionalWorktreeSelector(flags, 'worktree', cwd, client),
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      // Why: agent JSON calls dominate; topology stays available through an explicit opt-in.
-      includeVisualLayouts: !json || flags.has('include-visual-layouts')
-    })
+    const result = await client.call<WithAnnotatedHostScope<RuntimeTerminalListResult>>(
+      'terminal.list',
+      {
+        worktree: await getOptionalWorktreeSelector(flags, 'worktree', cwd, client),
+        limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
+        // Why: agent JSON calls dominate; topology stays available through an explicit opt-in.
+        includeVisualLayouts: !json || flags.has('include-visual-layouts')
+      }
+    )
+    await annotateOmittedHostScope(client, result.result)
     printResult(result, json, formatTerminalList)
   },
   'terminal show': async ({ flags, client, cwd, json }) => {
@@ -102,20 +108,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult(result, json, formatTerminalRead)
   },
-  'terminal send': async ({ flags, client, cwd, json }) => {
-    const text = getOptionalStringFlag(flags, 'text')
-    const enter = flags.get('enter') === true
-    const interrupt = flags.get('interrupt') === true
-    const result = await client.call<{ send: RuntimeTerminalSend }>('terminal.send', {
-      terminal: await getTerminalHandle(flags, cwd, client),
-      text,
-      enter,
-      interrupt,
-      ...(text && enter && !interrupt ? { agentPrompt: true } : {}),
-      client: { id: 'orca-cli', type: 'desktop' }
-    })
-    printResult(result, json, formatTerminalSend)
-  },
+  'terminal send': terminalSendHandler,
   'terminal wait': async ({ flags, client, cwd, json }) => {
     const timeoutMs = getOptionalPositiveIntegerFlag(flags, 'timeout-ms')
     const result = await client.call<{ wait: RuntimeTerminalWait }>(
@@ -175,13 +168,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   },
   // `focus` resolves to this canonical path via CommandSpec.aliases before dispatch.
   'terminal switch': terminalFocusHandler,
-  'terminal close': async ({ flags, client, cwd, json }) => {
-    const method = flags.get('tab') === true ? 'terminal.closeTab' : 'terminal.close'
-    const result = await client.call<{ close: RuntimeTerminalClose }>(method, {
-      terminal: await getTerminalHandle(flags, cwd, client)
-    })
-    printResult(result, json, formatTerminalClose)
-  },
+  'terminal close': terminalCloseHandler,
   'terminal split': async ({ flags, client, cwd, json }) => {
     const directionFlag = getOptionalStringFlag(flags, 'direction')
     if (

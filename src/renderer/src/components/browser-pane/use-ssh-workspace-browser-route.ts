@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/ssh-workspace-browser-route-eligibility'
 
 export type SshWorkspaceBrowserRouteErrorKind = 'forwarding-blocked' | 'ssh-unavailable' | 'unknown'
 
@@ -45,20 +45,17 @@ export function useSshWorkspaceBrowserRoute(
   browseFromThisDevice: () => void
 } {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
-  const routingEnabled = useAppStore((s) => s.settings?.browserSshWorkspaceRoutingEnabled !== false)
-  const disabledTargetIds = useAppStore(
-    (s) => s.settings?.browserSshWorkspaceRoutingDisabledTargetIds
-  )
+  const browserRoutingSettings = useAppStore((s) => s.settings)
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
   )
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const parsed = parseExecutionHostId(executionHostId)
-  // Why: runtime-owned ephemeral targets belong to a paired runtime's own machinery.
-  const sshTargetId =
-    parsed?.kind === 'ssh' && !isRuntimeOwnedSshTargetId(parsed.targetId) ? parsed.targetId : null
-  const targetId =
-    routingEnabled && sshTargetId && !disabledTargetIds?.includes(sshTargetId) ? sshTargetId : null
+  const routeEligibility = resolveSshWorkspaceBrowserRouteEligibility(
+    executionHostId,
+    browserRoutingSettings
+  )
+  const sshTargetId = routeEligibility?.targetId ?? null
+  const targetId = routeEligibility?.eligible === true ? routeEligibility.targetId : null
   const browserProfileId = sessionProfileId ?? 'default'
   const [attempt, setAttempt] = useState<{ count: number; skipProbe: boolean }>({
     count: 0,
@@ -135,7 +132,7 @@ export function useSshWorkspaceBrowserRoute(
       if (!sshTargetId) {
         return
       }
-      const disabled = disabledTargetIds ?? []
+      const disabled = browserRoutingSettings?.browserSshWorkspaceRoutingDisabledTargetIds ?? []
       if (!disabled.includes(sshTargetId)) {
         updateSettings({
           browserSshWorkspaceRoutingDisabledTargetIds: [...disabled, sshTargetId]
@@ -153,13 +150,14 @@ export function useSshWorkspaceBrowserRoute(
  */
 export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void) | null {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
+  const browserRoutingSettings = useAppStore((s) => s.settings)
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
   )
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const parsed = parseExecutionHostId(executionHostId)
   const targetId =
-    parsed?.kind === 'ssh' && !isRuntimeOwnedSshTargetId(parsed.targetId) ? parsed.targetId : null
+    resolveSshWorkspaceBrowserRouteEligibility(executionHostId, browserRoutingSettings)?.targetId ??
+    null
   if (!targetId || probeSkippedTargetIds?.includes(targetId) !== true) {
     return null
   }

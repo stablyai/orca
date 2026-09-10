@@ -1,4 +1,5 @@
 import { publishDocPreviewFailure } from './doc-preview-failure-notice'
+import { onDocPreviewGrantRevoked } from './doc-preview-grant-registry'
 import { readDocPreviewGuestBoundGrantId } from './doc-preview-guest-policy'
 
 /**
@@ -11,6 +12,8 @@ import { readDocPreviewGuestBoundGrantId } from './doc-preview-guest-policy'
  */
 const NOTICE_MIN_INTERVAL_MS = 2_000
 const noticedAtByGrantId = new Map<string, number>()
+
+onDocPreviewGrantRevoked((grant) => noticedAtByGrantId.delete(grant.id))
 
 export function noticeDocPreviewDownloadBlocked(guest: Electron.WebContents): void {
   const grantId = readDocPreviewGuestBoundGrantId(guest)

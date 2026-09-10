@@ -64,10 +64,18 @@ export function deliverLaunchPromptToAgentTab(args: {
     forcePaste,
     timeoutMs,
     onTimeout
-  }).then((delivered) => {
-    if (shouldSeed && !delivered && !deliversViaNativePrefill) {
-      useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+  }).then(
+    (delivered) => {
+      if (shouldSeed && !delivered && !deliversViaNativePrefill) {
+        useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+      }
+      return delivered || deliversViaNativePrefill
+    },
+    (error) => {
+      if (shouldSeed && !deliversViaNativePrefill) {
+        useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+      }
+      throw error
     }
-    return delivered || deliversViaNativePrefill
-  })
+  )
 }

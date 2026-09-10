@@ -486,14 +486,16 @@ describe('SshFilesystemProvider', () => {
     expect(result).toEqual(searchResult)
   })
 
-  it('listFiles sends fs.listFiles request', async () => {
+  // Why #12547: a monorepo listing does not fit one control-lane frame, so the request opts into
+  // response streaming. An old relay ignores `__streamResponse` and answers plainly, which is the
+  // plain-array case each of these asserts.
+  it('listFiles sends a streamable fs.listFiles request', async () => {
     mux.request.mockResolvedValue(['src/index.ts', 'package.json'])
     const result = await provider.listFiles('/home/user/project')
-    expect(mux.request).toHaveBeenCalledWith(
-      'fs.listFiles',
-      { rootPath: '/home/user/project' },
-      { signal: undefined }
-    )
+    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
+      rootPath: '/home/user/project',
+      __streamResponse: true
+    })
     expect(result).toEqual(['src/index.ts', 'package.json'])
   })
 
@@ -503,26 +505,22 @@ describe('SshFilesystemProvider', () => {
       maxResults: 20_000,
       searchQuery: 'target'
     })
-    expect(mux.request).toHaveBeenCalledWith(
-      'fs.listFiles',
-      {
-        rootPath: '/home/user/project',
-        excludePaths: ['/home/user/project/worktrees/b'],
-        maxResults: 20_000,
-        searchQuery: 'target'
-      },
-      { signal: undefined }
-    )
+    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
+      rootPath: '/home/user/project',
+      excludePaths: ['/home/user/project/worktrees/b'],
+      maxResults: 20_000,
+      searchQuery: 'target',
+      __streamResponse: true
+    })
   })
 
   it('listFiles omits excludePaths when empty', async () => {
     mux.request.mockResolvedValue([])
     await provider.listFiles('/home/user/project', { excludePaths: [] })
-    expect(mux.request).toHaveBeenCalledWith(
-      'fs.listFiles',
-      { rootPath: '/home/user/project' },
-      { signal: undefined }
-    )
+    expect(mux.request).toHaveBeenCalledWith('fs.listFiles', {
+      rootPath: '/home/user/project',
+      __streamResponse: true
+    })
   })
 
   it('listFiles forwards the cancellation signal to the mux request (#7721)', async () => {
@@ -531,8 +529,8 @@ describe('SshFilesystemProvider', () => {
     await provider.listFiles('/home/user/project', { signal: controller.signal })
     expect(mux.request).toHaveBeenCalledWith(
       'fs.listFiles',
-      { rootPath: '/home/user/project' },
-      { signal: controller.signal }
+      { rootPath: '/home/user/project', __streamResponse: true },
+      { signal: controller.signal, timeoutMs: undefined }
     )
   })
 

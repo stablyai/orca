@@ -3,7 +3,7 @@
 // Metro only watches mobile/ + repo-root src/shared, never src/renderer.
 // INVARIANT: /shared is a leaf — this module must NOT import from src/renderer.
 import {
-  isPathInsideOrEqual,
+  createNormalizedPathInsideOrEqualMatcher,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
 } from './cross-platform-path'
@@ -79,45 +79,50 @@ export function filterAiVaultSessions(
 
   const agentSet = new Set(filters.agents)
   const parsedQuery = parseVaultQuery(filters.query)
+  const workspaceMatchers =
+    filters.scope === 'workspace'
+      ? filters.activeWorktreePaths.map(createAiVaultWorkspaceMatcher)
+      : []
 
-  return sessions
-    .filter((session) => {
-      if (!agentSet.has(session.agent)) {
+  const filtered = sessions.filter((session) => {
+    if (!agentSet.has(session.agent)) {
+      return false
+    }
+    // Hide plain empty sessions, but keep sessions with resumable content
+    // (some parsers only learn turns from previews, e.g. Grok) and zero-turn
+    // sessions that still carry recoverable content (queued prompts /
+    // subagent transcripts) so a lost conversation is surfaced distinctly.
+    if (
+      filters.hideEmptySessions &&
+      !isAiVaultSessionResumableContent(session) &&
+      !isAiVaultSessionRecoverableEmpty(session)
+    ) {
+      return false
+    }
+    if (filters.scope === 'workspace') {
+      const cwd = session.cwd
+      const normalizedCwd = cwd ? normalizeRuntimePathForComparison(cwd) : null
+      if (normalizedCwd === null || !workspaceMatchers.some((matches) => matches(normalizedCwd))) {
         return false
       }
-      // Hide plain empty sessions, but keep sessions with resumable content
-      // (some parsers only learn turns from previews, e.g. Grok) and zero-turn
-      // sessions that still carry recoverable content (queued prompts /
-      // subagent transcripts) so a lost conversation is surfaced distinctly.
-      if (
-        filters.hideEmptySessions &&
-        !isAiVaultSessionResumableContent(session) &&
-        !isAiVaultSessionRecoverableEmpty(session)
-      ) {
+    }
+    if (filters.scope === 'project') {
+      if (!filters.activeProjectKey) {
         return false
       }
-      if (filters.scope === 'workspace') {
-        const cwd = session.cwd
-        if (
-          !cwd ||
-          !filters.activeWorktreePaths.some((pathValue) =>
-            isAiVaultSessionInWorkspacePath(pathValue, cwd)
-          )
-        ) {
-          return false
-        }
+      if (filters.sessionProjectById?.get(session.id)?.key !== filters.activeProjectKey) {
+        return false
       }
-      if (filters.scope === 'project') {
-        if (!filters.activeProjectKey) {
-          return false
-        }
-        if (filters.sessionProjectById?.get(session.id)?.key !== filters.activeProjectKey) {
-          return false
-        }
-      }
-      return matchesQuery(session, parsedQuery, filters)
-    })
-    .sort((left, right) => compareSessions(left, right, filters.sort))
+    }
+    return matchesQuery(session, parsedQuery, filters)
+  })
+  if (filtered.length < 2) {
+    return filtered
+  }
+  return filtered
+    .map((session) => ({ session, time: sessionSortTime(session, filters.sort) }))
+    .sort((left, right) => right.time - left.time)
+    .map(({ session }) => session)
 }
 
 export function groupAiVaultSessions(
@@ -206,48 +211,48 @@ function matchesQuery(
   parsed: ParsedQuery,
   filters: Pick<AiVaultSessionFilterState, 'sessionProjectById' | 'projectLabelByKey'>
 ): boolean {
-  const searchable = [
-    session.title,
-    session.sessionId,
-    session.agent,
-    session.branch,
-    session.model,
-    session.cwd,
-    session.filePath,
-    sessionPreviewSearchText(session)
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-
-  if (parsed.terms.some((term) => !searchable.includes(term))) {
-    return false
+  if (parsed.terms.length > 0) {
+    const searchable = [
+      session.title,
+      session.sessionId,
+      session.agent,
+      session.branch,
+      session.model,
+      session.cwd,
+      session.filePath,
+      sessionPreviewSearchText(session)
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    if (parsed.terms.some((term) => !searchable.includes(term))) {
+      return false
+    }
   }
-
-  const sessionProject = filters.sessionProjectById?.get(session.id)
-  const repoLabel = (
-    sessionProject?.kind === 'repo'
-      ? (filters.projectLabelByKey?.get(sessionProject.key) ?? sessionProject.label)
-      : folderLabel(session.cwd)
-  ).toLowerCase()
-  if (parsed.repoTerms.some((term) => !repoLabel.includes(term))) {
-    return false
+  if (parsed.repoTerms.length > 0) {
+    const sessionProject = filters.sessionProjectById?.get(session.id)
+    const repoLabel = (
+      sessionProject?.kind === 'repo'
+        ? (filters.projectLabelByKey?.get(sessionProject.key) ?? sessionProject.label)
+        : folderLabel(session.cwd)
+    ).toLowerCase()
+    if (parsed.repoTerms.some((term) => !repoLabel.includes(term))) {
+      return false
+    }
   }
-
-  const pathSearch = `${session.cwd ?? ''} ${session.filePath}`.toLowerCase()
-  if (parsed.pathTerms.some((term) => !pathSearch.includes(term))) {
-    return false
+  if (parsed.pathTerms.length > 0) {
+    const pathSearch = `${session.cwd ?? ''} ${session.filePath}`.toLowerCase()
+    if (parsed.pathTerms.some((term) => !pathSearch.includes(term))) {
+      return false
+    }
   }
 
   return true
 }
 
-function compareSessions(left: AiVaultSession, right: AiVaultSession, sort: AiVaultSort): number {
-  const leftValue = sort === 'created' ? left.createdAt : left.updatedAt
-  const rightValue = sort === 'created' ? right.createdAt : right.updatedAt
-  const leftTime = Date.parse(leftValue ?? left.modifiedAt)
-  const rightTime = Date.parse(rightValue ?? right.modifiedAt)
-  return rightTime - leftTime
+function sessionSortTime(session: AiVaultSession, sort: AiVaultSort): number {
+  const value = sort === 'created' ? session.createdAt : session.updatedAt
+  return Date.parse(value ?? session.modifiedAt)
 }
 
 function getGroupIdentity(
@@ -276,19 +281,15 @@ function getGroupIdentity(
   return { key: folderGroupKey(session.cwd), label: folderLabel(session.cwd) }
 }
 
-function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {
-  if (isPathInsideOrEqual(workspacePath, sessionCwd)) {
-    return true
-  }
-
+function createAiVaultWorkspaceMatcher(workspacePath: string): (normalizedCwd: string) => boolean {
+  const matches = createNormalizedPathInsideOrEqualMatcher(workspacePath)
   const workspaceWslPath = parseWslUncPath(workspacePath)
   if (!workspaceWslPath) {
-    return false
+    return matches
   }
-
-  // WSL agent transcripts record Linux cwd values even when Orca stores the
-  // active worktree as a Windows UNC path.
-  return isPathInsideOrEqual(workspaceWslPath.linuxPath, sessionCwd)
+  // WSL transcripts record Linux cwd even when the workspace uses a UNC path.
+  const matchesLinux = createNormalizedPathInsideOrEqualMatcher(workspaceWslPath.linuxPath)
+  return (cwd) => matches(cwd) || matchesLinux(cwd)
 }
 
 function tokenizeQuery(query: string): string[] {

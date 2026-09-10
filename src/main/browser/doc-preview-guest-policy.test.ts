@@ -270,13 +270,15 @@ describe('doc preview guest policy', () => {
       })
     })
 
-    it('drops a click reported while the guest is not the contents the reader is looking at', () => {
+    it("does not mistake Electron's false webview focus flag for an untrusted click", () => {
       const { guest } = boundGuest()
       guest.isFocused.mockReturnValue(false)
 
       reportClick(guest, 'https://example.com/docs')
 
-      expect(guest.send).not.toHaveBeenCalled()
+      expect(guest.send).toHaveBeenCalledExactlyOnceWith('docPreview:externalLink', {
+        url: 'https://example.com/docs'
+      })
     })
 
     it('drops a click reported by a sender that is not a preview guest', () => {

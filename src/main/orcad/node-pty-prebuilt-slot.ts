@@ -16,6 +16,7 @@
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
+import { usesNodePtySpawnHelper } from '../../shared/node-pty-spawn-helper'
 import { nativeSlotName, type NativeHostAbi } from './native-host-abi'
 
 export type PrebuiltSlotManifest = {
@@ -27,7 +28,12 @@ export type PrebuiltSlotManifest = {
 
 export type PrebuiltSlotOutcome =
   | { installed: true; slot: string; spawnHelper: boolean }
-  | { installed: false; slot: string; why: 'no-slot' | 'no-prebuilds-dir' | 'abi-mismatch'; detail?: string }
+  | {
+      installed: false
+      slot: string
+      why: 'no-slot' | 'no-prebuilds-dir' | 'abi-mismatch'
+      detail?: string
+    }
 
 /**
  * Where a deployment's prebuilds live: beside the bundle that is running. `argv[1]` is
@@ -55,7 +61,9 @@ export function readPrebuiltSlotManifest(prebuildsDir: string): PrebuiltSlotMani
       module: typeof manifest.module === 'string' ? manifest.module : 'node-pty',
       version: manifest.version,
       nodeAbi: manifest.nodeAbi,
-      slots: Array.isArray(manifest.slots) ? manifest.slots.filter((s) => typeof s === 'string') : []
+      slots: Array.isArray(manifest.slots)
+        ? manifest.slots.filter((s) => typeof s === 'string')
+        : []
     }
   } catch {
     return null
@@ -96,11 +104,11 @@ export function installPrebuiltSlot(options: {
   mkdirSync(releaseDir, { recursive: true })
   copyFileSync(source, join(releaseDir, 'pty.node'))
 
-  // Why this matters as much as pty.node: on Unix node-pty posix_spawns
+  // Why this matters as much as pty.node: on macOS node-pty posix_spawns
   // build/Release/spawn-helper. Without it every spawn fails with ENOENT at the moment
   // a user opens a terminal, long after the "install succeeded" line.
   let spawnHelper = false
-  if (options.abi.platform !== 'win32') {
+  if (usesNodePtySpawnHelper(options.abi.platform)) {
     const helperSource = join(prebuildsDir, slot, 'spawn-helper')
     if (existsSync(helperSource)) {
       const helperDest = join(releaseDir, 'spawn-helper')

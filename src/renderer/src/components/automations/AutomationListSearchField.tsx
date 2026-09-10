@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import {
   isAutomationListArrowKey,
   shouldHandleAutomationListSearchArrowKey,
+  shouldHandleAutomationListSearchEnterKey,
   type AutomationListArrowKey
 } from './automation-list-keyboard-navigation'
 
@@ -16,6 +17,7 @@ type AutomationListSearchFieldProps = {
   onQueryChange: (query: string) => void
   onClear: () => void
   onArrowNavigate?: (key: AutomationListArrowKey) => void
+  onEnter?: () => void
   className?: string
 }
 
@@ -25,6 +27,7 @@ export function AutomationListSearchField({
   onQueryChange,
   onClear,
   onArrowNavigate,
+  onEnter,
   className
 }: AutomationListSearchFieldProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
@@ -72,6 +75,11 @@ export function AutomationListSearchField({
             // Why: ArrowUp/Down should step the visible list instead of moving the input caret.
             event.preventDefault()
             onArrowNavigate(event.key)
+            return
+          }
+          if (onEnter && shouldHandleAutomationListSearchEnterKey(event)) {
+            event.preventDefault()
+            onEnter()
             return
           }
           if (event.key !== 'Escape' || event.nativeEvent.isComposing) {
