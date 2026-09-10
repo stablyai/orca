@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildAskAnswerKeys,
+  buildAskChatRowKeys,
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
@@ -464,6 +465,30 @@ describe('buildAskAnswerKeys', () => {
         ])
       )
     ).toEqual(['1', '3'])
+  })
+})
+
+describe('buildAskChatRowKeys', () => {
+  it('plain single-select: the row after "Type something" selects and commits', () => {
+    expect(buildAskChatRowKeys(single(['Zed', 'Orca', 'Vim']).questions[0]!)).toEqual([
+      { raw: '5' }
+    ])
+  })
+
+  it('plain multi-select: the same numbered row, selected by its digit', () => {
+    // A digit on this row selects it outright; unlike the option rows it does
+    // not toggle a checkbox, and the selector closes on the keystroke.
+    expect(
+      buildAskChatRowKeys(single(['Rust', 'Swift', 'TypeScript'], true).questions[0]!)
+    ).toEqual([{ raw: '5' }])
+  })
+
+  it('preview layout: arrows past the last option to the unnumbered row', () => {
+    // The preview layout leaves this row unnumbered below the divider, so it is
+    // reached by arrowing down from the initial highlight on the first option.
+    expect(
+      buildAskChatRowKeys(singleWithPreview(['Tabs', 'Spaces', 'Mixed']).questions[0]!)
+    ).toEqual([{ raw: `${ESC}[B` }, { raw: `${ESC}[B` }, { raw: `${ESC}[B` }, { raw: '\r' }])
   })
 })
 

@@ -234,6 +234,23 @@ function rowDigit(q: AskQuestion, row: number): string | null {
   return row >= 1 && row <= addressableRowCount(q) ? String(row) : null
 }
 
+/** Keystrokes that select the selector's own "Chat about this" row, which
+ *  rejects the question and hands the chat prompt back for free typing.
+ *
+ *  The plain layouts number the row after "Type something" and a digit selects
+ *  it outright; the preview layout leaves it unnumbered below the divider, so
+ *  it is reached by arrowing past the last option from the initial highlight. */
+export function buildAskChatRowKeys(q: AskQuestion): AskAnswerKeyGroup[] {
+  if (!q.multiSelect && questionHasPreview(q)) {
+    const rows: AskAnswerKeyGroup[] = []
+    for (let step = 0; step < q.options.length; step += 1) {
+      rows.push({ raw: ASK_NEXT_ROW })
+    }
+    return [...rows, { raw: ASK_ENTER }]
+  }
+  return [{ raw: String(q.options.length + 2) }]
+}
+
 /** Answer a preview-layout question, whose row set and commit semantics differ
  *  from the plain selector: no "Type something" row, and a digit only highlights.
  *
