@@ -1,3 +1,4 @@
+import { fileIdentity } from './session-search-file-cursor'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
@@ -106,22 +107,24 @@ export class SessionSearchFileRecords {
     sessionRowId: number | null
   ): void {
     const { file } = candidate
+    const identity = fileIdentity(file)
     this.db
       .prepare(
         `INSERT INTO files(path, dev, ino, byte_offset, mtime_ms, size_bytes, session_row_id)
          VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(path) DO UPDATE SET
-           -- Why COALESCE: a host that cannot stat dev/ino (SSH, WSL, a degraded
-           -- Windows stat) must not erase an identity an earlier scan proved, or
-           -- the next rename-replace of this path becomes undetectable.
-           dev = COALESCE(excluded.dev, files.dev), ino = COALESCE(excluded.ino, files.ino),
+           -- Partial observations must never create a pair that no stat proved.
+           dev = CASE WHEN excluded.dev IS NOT NULL AND excluded.ino IS NOT NULL
+             THEN excluded.dev ELSE files.dev END,
+           ino = CASE WHEN excluded.dev IS NOT NULL AND excluded.ino IS NOT NULL
+             THEN excluded.ino ELSE files.ino END,
            byte_offset = excluded.byte_offset, mtime_ms = excluded.mtime_ms,
            size_bytes = excluded.size_bytes, session_row_id = excluded.session_row_id`
       )
       .run(
         file.path,
-        file.dev ?? null,
-        file.ino ?? null,
+        identity?.dev ?? null,
+        identity?.ino ?? null,
         byteOffset,
         file.mtimeMs,
         file.sizeBytes ?? null,

@@ -172,8 +172,7 @@ it("hands the read's identity accessor to the store", () => {
 })
 
 it('treats half a recorded identity as no identity at all', () => {
-  // A host that could stat dev but not ino: `remote-session-file-stat` spreads
-  // the two independently, and `upsertFile` preserves the half it was given.
+  // New partial observations are not stored as identities.
   const partial = {
     ...syntheticCandidate({ dev: 7 }),
     agent: 'claude' as const
@@ -188,13 +187,42 @@ it('treats half a recorded identity as no identity at all', () => {
     incomplete: false
   })
   expect(index.db.prepare('SELECT dev, ino FROM files').get()).toEqual({
-    dev: 7,
+    dev: null,
     ino: null
   })
+  // Older indexes may still carry a half-pair.
+  index.db.exec('UPDATE files SET dev = 7')
 
   // One matching number is not proof of sameness, and one mismatching number is
   // not proof of replacement. Neither compares, so neither declines.
   expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, { dev: 7, ino: 99 })?.byteOffset).toBe(100)
   expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, { dev: 8, ino: 99 })?.byteOffset).toBe(100)
   expect(store.beginWrite(syntheticCandidate({ dev: 8, ino: 99 }), 'append', 100)).not.toBeNull()
+})
+
+it.each([
+  [null, { dev: null, ino: null }],
+  [
+    { dev: 7, ino: 11 },
+    { dev: 7, ino: 11 }
+  ]
+])('never combines partial stats with the previous identity %j', (initial, expected) => {
+  const observations = [initial ?? {}, { dev: 9 }, { ino: 13 }, { dev: 17, ino: 19 }]
+  for (const [position, identity] of observations.entries()) {
+    const write = store.beginWrite(
+      syntheticCandidate(identity),
+      position ? 'append' : 'replace',
+      position * 100
+    )!
+    expect(
+      write.commit({
+        session: syntheticSession(),
+        byteOffset: (position + 1) * 100,
+        incomplete: false
+      })
+    ).toBe(true)
+    expect(index.db.prepare('SELECT dev, ino FROM files').get()).toEqual(
+      position === 3 ? { dev: 17, ino: 19 } : expected
+    )
+  }
 })

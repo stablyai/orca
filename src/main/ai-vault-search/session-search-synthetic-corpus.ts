@@ -74,6 +74,15 @@ export async function writeSyntheticTranscriptCorpus(
   const sessions = options.sessions ?? 40
   const turns = options.turnsPerSession ?? 60
   const toolWords = options.toolResultWords ?? 200
+  for (const [name, value] of Object.entries({
+    sessions,
+    turnsPerSession: turns,
+    toolResultWords: toolWords
+  })) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new RangeError(`${name} must be a finite non-negative safe integer`)
+    }
+  }
   const random = mulberry32(options.seed ?? 1)
   const root = await mkdtemp(join(tmpdir(), 'orca-search-corpus-'))
   const files: string[] = []
@@ -131,8 +140,8 @@ export async function writeSyntheticTranscriptCorpus(
           }
         })
       )
-      // One user turn, one assistant turn, one tool call, one tool result.
-      messageCount += 4
+      // Empty tool results emit no searchable message.
+      messageCount += toolWords === 0 ? 3 : 4
     }
     const path = join(root, `${sessionId}.jsonl`)
     const body = `${lines.join('\n')}\n`

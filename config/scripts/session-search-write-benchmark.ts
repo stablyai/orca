@@ -15,9 +15,7 @@ import { writeSyntheticTranscriptCorpus } from '../../src/main/ai-vault-search/s
 import { sessionCandidate } from '../../src/main/ai-vault-search/session-search-transcript-fixtures'
 import SyncDatabase from '../../src/main/sqlite/sync-database'
 
-// The cost model owed to the two-FTS-table decision. Everything runs through the
-// real transcript reader and SessionSearchStore over a synthetic corpus, so the
-// numbers include tokenization, the identifier shadow column and both FTS tables.
+// Measures the real transcript reader and search store over a synthetic corpus.
 // Never point this at a real transcript tree.
 
 /**
@@ -73,6 +71,21 @@ function tableBytes(db: SyncDatabase): Record<string, number> {
   }
 }
 
+function assertIndexedMessages(db: SyncDatabase, expected: number): number {
+  const { n } = db
+    .prepare('SELECT count(*) AS n FROM messages m JOIN sessions s ON s.id = m.session_row_id')
+    .get() as { n: number }
+  assert.equal(n, expected, 'indexed message count')
+  return n
+}
+
+async function checkpointedFileBytes(db: SyncDatabase, path: string): Promise<number> {
+  // Flush committed WAL pages before reporting the final database footprint.
+  const [checkpoint] = db.pragma('wal_checkpoint(TRUNCATE)') as { busy: number }[]
+  assert.equal(checkpoint?.busy, 0, 'storage measurement requires a completed checkpoint')
+  return (await stat(path)).size
+}
+
 // The default corpus puts tool output at about half the message text; set this
 // far higher to price the tool-row cap against the real 80-97 % band.
 const toolResultWords = Number(process.env.ORCA_SEARCH_BENCH_TOOL_WORDS ?? 200)
@@ -105,11 +118,7 @@ try {
 
     const reader = new SyncDatabase(indexPath, { readonly: true })
     try {
-      const rows = (
-        reader.prepare('SELECT count(*) AS n FROM messages').get() as {
-          n: number
-        }
-      ).n
+      const rows = assertIndexedMessages(reader, corpus.messageCount)
       const sessions = (
         reader.prepare('SELECT count(*) AS n FROM sessions').get() as {
           n: number
@@ -119,7 +128,7 @@ try {
       const bytes = tableBytes(reader)
       const perMb = (value: number): number =>
         Math.round((value / (corpus.transcriptBytes / (1024 * 1024))) * 10) / 10
-      const fileBytes = (await stat(indexPath)).size
+      const fileBytes = await checkpointedFileBytes(store.connection, indexPath)
       stalls.sort((a, b) => a - b)
       transactions.sort((a, b) => a - b)
       console.log(
@@ -195,6 +204,7 @@ try {
     const indexMs = performance.now() - started
     restoreExec()
     assert.deepEqual(errors, [])
+    assertIndexedMessages(store.connection, large.messageCount)
     transactions.sort((a, b) => a - b)
 
     // The same file again, over a generation the index already holds. That is
@@ -219,6 +229,7 @@ try {
     const reclaimMs = performance.now() - reclaimStarted
     restoreReplaceExec()
     assert.deepEqual(errors, [])
+    assertIndexedMessages(store.connection, large.messageCount)
     replaceTransactions.sort((a, b) => a - b)
 
     console.log(
@@ -233,7 +244,11 @@ try {
           replaceTransactions: replaceTransactions.length,
           maxReplaceTransactionMs: Math.round(replaceTransactions.at(-1) ?? 0),
           reclaimMs: Math.round(reclaimMs),
-          indexMb: Math.round(((await stat(largeIndexPath)).size / (1024 * 1024)) * 100) / 100
+          indexMb:
+            Math.round(
+              ((await checkpointedFileBytes(store.connection, largeIndexPath)) / (1024 * 1024)) *
+                100
+            ) / 100
         },
         null,
         2

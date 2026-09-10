@@ -117,15 +117,7 @@ export class SessionSearchIndexWriter {
     if (!row) {
       return null
     }
-    // A recorded identity that no longer matches is a different file at the same
-    // path; the rows describe the old one.
-    //
-    // Half an identity is no identity: `remote-session-file-stat` spreads dev and
-    // ino independently, so a host can record one without the other, and the
-    // COALESCE in `upsertFile` now preserves that half across a later read. One
-    // number cannot tell a rename-replace from a same-file re-read, so comparing
-    // it would decline healthy resumes on the strength of a coincidence, and
-    // `fileIdentity` refuses to build a half identity for the same reason.
+    // Older indexes can carry half-pairs; only a complete identity can prove replacement.
     if (identity && row.dev !== null && row.ino !== null) {
       if (row.dev !== identity.dev || row.ino !== identity.ino) {
         return null
