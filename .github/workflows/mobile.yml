@@ -83,3 +83,17 @@ jobs:
 
       - name: Check formatting
         run: pnpm format:check
+
+  native-dismissal:
+    runs-on: macos-15
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Check native dismissal ledger
+        run: |
+          swiftc mobile/modules/orca-notification-dismissal/ios/PushDismissalLedger.swift \
+            mobile/modules/orca-notification-dismissal/tests/PushDismissalLedgerChecks.swift \
+            -o "$RUNNER_TEMP/push-dismissal-ledger-checks"
+          "$RUNNER_TEMP/push-dismissal-ledger-checks"

@@ -1,4 +1,5 @@
-import { BrowserWindow, Notification, ipcMain } from 'electron'
+import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
+import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { Store } from '../persistence'
 import type {
   NotificationDeliveryProbeResult,
@@ -26,6 +27,8 @@ import {
 } from './notification-permission-probe'
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
+  ipcMain.removeHandler('notifications:getDesktopAwayState')
+  ipcMain.handle('notifications:getDesktopAwayState', () => readDesktopAwayState(powerMonitor))
   const recentDesktopNotifications = new Map<string, number>()
   const recentMobileNotifications = new Map<string, number>()
   resetNotificationPermissionEvidence()
@@ -119,32 +122,41 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       }
 
       const settings = store.getSettings().notifications
-      if (!settings.enabled) {
-        return { delivered: false, reason: 'disabled' }
-      }
-
-      if (
-        (args.source === 'agent-task-complete' && !settings.agentTaskComplete) ||
-        (args.source === 'terminal-bell' && !settings.terminalBell)
-      ) {
-        return { delivered: false, reason: 'source-disabled' }
-      }
+      const desktopAllowed =
+        settings.enabled &&
+        (args.source !== 'agent-task-complete' || settings.agentTaskComplete) &&
+        (args.source !== 'terminal-bell' || settings.terminalBell)
 
       const notificationOptions = buildNotificationOptions(args)
 
       // Why: desktop focus only means this computer sees the worktree; the paired phone may still need the alert.
       if (runtime && args.source !== 'test') {
         const dedupeKey = args.worktreeId ?? args.worktreeLabel ?? 'global'
-        if (reserveNotificationCooldown(recentMobileNotifications, dedupeKey, Date.now())) {
+        if (
+          reserveNotificationCooldown(
+            recentMobileNotifications,
+            JSON.stringify([desktopAllowed, args.source, args.agentState, dedupeKey]),
+            Date.now()
+          )
+        ) {
           runtime.dispatchMobileNotification({
             type: 'notification',
+            emittedAt: Date.now(),
             source: args.source,
+            ...(!desktopAllowed ? { desktopAllowed: false } : {}),
             title: notificationOptions.title,
             body: notificationOptions.body,
             worktreeId: args.worktreeId,
-            ...(args.notificationId ? { notificationId: args.notificationId } : {})
+            ...(args.notificationId ? { notificationId: args.notificationId } : {}),
+            // Why: background push needs the agent's real state to pick "needs input"
+            // vs "finished" — and to stay silent while the agent is still working.
+            ...(args.agentState ? { agentState: args.agentState } : {})
           })
         }
+      }
+
+      if (!desktopAllowed) {
+        return { delivered: false, reason: settings.enabled ? 'source-disabled' : 'disabled' }
       }
 
       const browserWindow =

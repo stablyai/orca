@@ -1,15 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  readPushNotificationsPreference,
-  savePushNotificationsEnabled
-} from '../storage/preferences'
+import { readPushNotificationsPreference } from '../storage/preferences'
+import { setRemotePushEnabled } from './push-registration'
 import { getNotificationPermissionState } from './mobile-notifications'
 import { shouldPresentNotificationOptIn } from './notification-opt-in-gate'
 
 vi.mock('../storage/preferences', () => ({
-  readPushNotificationsPreference: vi.fn(),
-  savePushNotificationsEnabled: vi.fn()
+  readPushNotificationsPreference: vi.fn()
 }))
+
+vi.mock('./push-registration', () => ({ setRemotePushEnabled: vi.fn() }))
 
 vi.mock('./mobile-notifications', () => ({
   getNotificationPermissionState: vi.fn()
@@ -18,7 +17,7 @@ vi.mock('./mobile-notifications', () => ({
 describe('notification opt-in gate', () => {
   beforeEach(() => {
     vi.mocked(readPushNotificationsPreference).mockReset()
-    vi.mocked(savePushNotificationsEnabled).mockReset()
+    vi.mocked(setRemotePushEnabled).mockReset()
     vi.mocked(getNotificationPermissionState).mockReset()
   })
 
@@ -32,7 +31,7 @@ describe('notification opt-in gate', () => {
     })
 
     await expect(shouldPresentNotificationOptIn()).resolves.toBe(true)
-    expect(savePushNotificationsEnabled).not.toHaveBeenCalled()
+    expect(setRemotePushEnabled).not.toHaveBeenCalled()
   })
 
   it.each([true, false])('preserves an existing %s mobile preference', async (value) => {
@@ -52,7 +51,7 @@ describe('notification opt-in gate', () => {
     })
 
     await expect(shouldPresentNotificationOptIn()).resolves.toBe(false)
-    expect(savePushNotificationsEnabled).toHaveBeenCalledWith(true)
+    expect(setRemotePushEnabled).toHaveBeenCalledExactlyOnceWith(true)
   })
 
   it('still presents when a pre-Android 13 default grant is not an opt-in decision', async () => {
@@ -65,7 +64,7 @@ describe('notification opt-in gate', () => {
     })
 
     await expect(shouldPresentNotificationOptIn()).resolves.toBe(true)
-    expect(savePushNotificationsEnabled).not.toHaveBeenCalled()
+    expect(setRemotePushEnabled).not.toHaveBeenCalled()
   })
 
   it('skips the gate when iOS has already denied permission', async () => {
@@ -78,7 +77,7 @@ describe('notification opt-in gate', () => {
     })
 
     await expect(shouldPresentNotificationOptIn()).resolves.toBe(false)
-    expect(savePushNotificationsEnabled).toHaveBeenCalledWith(false)
+    expect(setRemotePushEnabled).toHaveBeenCalledExactlyOnceWith(false)
   })
 
   it('does not block startup when storage or permission checks fail', async () => {

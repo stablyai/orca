@@ -107,6 +107,7 @@ docs/**
 !docs/reference/headless-linux-server.md
 !docs/reference/ime-regression-checklist.md
 !docs/reference/linux-glibc-compatibility.md
+!docs/reference/mobile-push-contract.md
 !docs/reference/macos-press-and-hold.md
 !docs/reference/orcad-operations.md
 !docs/reference/relay-grace-time-reconfiguration.md

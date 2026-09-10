@@ -2,12 +2,22 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AgentAutoAckPresence from './agent-auto-ack-presence'
 import { useAutoAckViewedAgent } from './useAutoAckViewedAgent'
 import { useAppStore } from '../store'
 import { selectFloatingWorkspaceHasUnread } from '../store/selectors'
 import { makeTab } from '../store/slices/store-test-helpers'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+
+// These suites isolate synchronous acknowledgement and layout behavior.
+vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentAutoAckPresence>()),
+  createAutoAckPresenceCheck: (_read: unknown, onPresent: () => void) => ({
+    request: onPresent,
+    dispose() {}
+  })
+}))
 
 const FLOATING_TAB_ID = 'tab-floating'
 const MAIN_TAB_ID = 'tab-main'

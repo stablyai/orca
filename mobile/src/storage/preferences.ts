@@ -30,6 +30,43 @@ export async function savePushNotificationsEnabled(enabled: boolean): Promise<vo
   await AsyncStorage.setItem(NOTIF_KEY, String(enabled))
 }
 
+const REMOTE_PUSH_HOST_REGISTRATIONS_KEY = 'orca:remotePushHostRegistrations'
+
+// Why persisted: switching off while a host is offline leaves a token the gateway
+// would still push to. The pending list is the phone's side of the desktop's
+// unregister outbox — it survives a restart so the retry actually happens.
+export type RemotePushHostRegistrations = {
+  readonly registeredHostIds: readonly string[]
+  readonly pendingUnregisterHostIds: readonly string[]
+}
+
+const EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS: RemotePushHostRegistrations = {
+  registeredHostIds: [],
+  pendingUnregisterHostIds: []
+}
+
+export async function loadRemotePushHostRegistrations(): Promise<RemotePushHostRegistrations> {
+  try {
+    const raw = await AsyncStorage.getItem(REMOTE_PUSH_HOST_REGISTRATIONS_KEY)
+    if (!raw) {
+      return EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return {
+      registeredHostIds: stringArray(parsed.registeredHostIds),
+      pendingUnregisterHostIds: stringArray(parsed.pendingUnregisterHostIds)
+    }
+  } catch {
+    return EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS
+  }
+}
+
+export async function saveRemotePushHostRegistrations(
+  value: RemotePushHostRegistrations
+): Promise<void> {
+  await AsyncStorage.setItem(REMOTE_PUSH_HOST_REGISTRATIONS_KEY, JSON.stringify(value))
+}
+
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 
 // Why: the mobile terminal fits the desktop's full column count to the phone
