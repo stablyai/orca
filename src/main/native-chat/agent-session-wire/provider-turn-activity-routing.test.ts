@@ -248,10 +248,11 @@ describe('provider turn activity routing', () => {
       })
     )
     expect(state.rows).toHaveLength(turnRows)
+    // Only compaction reaches the line; task and side-question prose is not this turn's work.
     expect(state.activities.slice(-3)).toEqual([
-      { turnId: TURN_ID, text: 'Checking the renderer state' },
+      null,
       { turnId: TURN_ID, text: 'Compacting the conversation' },
-      { turnId: TURN_ID, text: 'Exploring a side question' }
+      null
     ])
 
     translator.handle(claudeMessage({ type: 'tool_progress', tool_name: 'SecretReader' }))

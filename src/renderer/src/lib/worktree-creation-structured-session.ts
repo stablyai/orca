@@ -108,7 +108,7 @@ async function openLegacyWorktreeSurface(
 export async function launchStructuredWorktreeSession(
   args: LaunchStructuredWorktreeSessionArgs
 ): Promise<WorktreeCreationStructuredSessionResult> {
-  const { activation, primaryTabId } = args
+  let { activation, primaryTabId } = args
   const settled = { accepted: true, cancelled: false, visibilityUnknown: false }
   const { agent } = args.request
   if (!isAgentSessionHandleProvider(agent)) {
@@ -149,9 +149,17 @@ export async function launchStructuredWorktreeSession(
           return openLegacyWorktreeSurface(args, isCancelled)
         },
         onStructuredReady: (sessionId) => {
-          if (args.shouldActivateOnCompletion) {
-            activateStructuredAgentSessionById({ worktreeId: args.worktreeId, sessionId })
+          if (!args.shouldActivateOnCompletion) {
+            return
           }
+          // Why: chat selection requires its workspace to be active.
+          if (!activation) {
+            activation = activateAndRevealWorktree(args.worktreeId, {
+              providesInitialSurface: true
+            })
+            primaryTabId = activation === false ? null : activation.primaryTabId
+          }
+          activateStructuredAgentSessionById({ worktreeId: args.worktreeId, sessionId })
         }
       },
       { worktreeId: args.worktreeId }

@@ -22,7 +22,10 @@ import {
   structuredAgentSessionOptionPicks,
   structuredAgentSessionOptionSnapshot
 } from '../../../../shared/structured-agent-session-options'
-import { activeStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  hasUnansweredStructuredAgentSessionDispatch
+} from '../../../../shared/structured-agent-session-projection'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
@@ -80,6 +83,10 @@ export function useStructuredAgentSession(args: {
 
   // Refresh options each turn to confirm which model the provider actually selected.
   const turnId = activeStructuredAgentSessionTurnId(state.items)
+  // A dispatch the provider has not answered is already work; Claude's running row trails the
+  // send by seconds, and only a provider-minted turn is cancellable, so the two stay separate.
+  const isWorking =
+    turnId !== null || hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence)
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity),
     [state.activity, state.items, turnId]
@@ -210,7 +217,7 @@ export function useStructuredAgentSession(args: {
     send: (...input: Parameters<typeof outboxController.send>) =>
       !commandPending.current && outboxController.send(...input),
     retry: outboxController.retry,
-    isWorking: turnId !== null,
+    isWorking,
     turnActivity,
     ...backgroundTasksView,
     turnId,
