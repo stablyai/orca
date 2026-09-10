@@ -737,6 +737,46 @@ describe('hosted review slice', () => {
     expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(2)
   })
 
+  it('does not reuse an old-head request after the branch advances', async () => {
+    const mergedAtHead: HostedReviewInfo = {
+      ...githubReview,
+      state: 'merged',
+      headSha: 'aaaaaaa'
+    }
+    let resolveOldHead!: (value: HostedReviewInfo | null) => void
+    mockApi.hostedReview.forBranch
+      .mockResolvedValueOnce(mergedAtHead)
+      .mockImplementationOnce(
+        () =>
+          new Promise<HostedReviewInfo | null>((resolve) => {
+            resolveOldHead = resolve
+          })
+      )
+      .mockResolvedValueOnce(null)
+    const store = makeStore()
+    const fetch = store.getState().fetchHostedReviewForBranch
+    await fetch('/repo', 'feature/inflight-head', { currentHeadOid: 'aaaaaaa' })
+    const oldFetch = fetch('/repo', 'feature/inflight-head', {
+      force: true,
+      currentHeadOid: 'aaaaaaa'
+    })
+    const newFetch = fetch('/repo', 'feature/inflight-head', {
+      staleWhileRevalidate: true,
+      currentHeadOid: 'bbbbbbb'
+    })
+    resolveOldHead(mergedAtHead)
+
+    await expect(newFetch).resolves.toBeNull()
+    await expect(oldFetch).resolves.toEqual(mergedAtHead)
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
+    await expect(
+      fetch('/repo', 'feature/inflight-head', {
+        currentHeadOid: 'bbbbbbb'
+      })
+    ).resolves.toBeNull()
+    expect(mockApi.hostedReview.forBranch).toHaveBeenCalledTimes(3)
+  })
+
   it('serves a cached merged review whose confirmed contained head matches the worktree', async () => {
     const mergedBehindHead: HostedReviewInfo = {
       provider: 'github',

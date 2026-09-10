@@ -33,6 +33,7 @@ import {
 } from './hosted-review-cache-state'
 import { clearHostedReviewConflictingPrCache } from './hosted-review-pr-cache'
 import {
+  getHostedReviewRequestForHead,
   hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
   inflightHostedReviewRequests,
@@ -184,7 +185,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       return cached.data
     }
 
-    const inflightRequest = inflightHostedReviewRequests.get(requestKey)
+    const inflightRequest = getHostedReviewRequestForHead(requestKey, options?.currentHeadOid)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
       const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
       const requestStartedAt = Date.now()
@@ -291,13 +292,13 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
         }
       })()
 
-      registerInflightHostedReviewRequest(requestKey, {
+      return registerInflightHostedReviewRequest(requestKey, {
         promise: request,
         force: Boolean(options?.force),
+        currentHeadOid: options?.currentHeadOid ?? null,
         generation,
         startedAt: requestStartedAt
       })
-      return request
     }
 
     if (
