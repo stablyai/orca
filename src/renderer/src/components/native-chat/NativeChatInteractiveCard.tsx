@@ -65,7 +65,7 @@ export function NativeChatInteractiveCard({
   // Thread the sibling `toolName` from the same status entry so the question
   // parser can dispatch through the tool's registered parser (mobile parity).
   const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
-  const { sendAnswer, sendRaw, sendChatText, cancelPending, cancel } = send
+  const { sendAnswer, sendRaw, sendChatText, escapeToChat, cancelPending, cancel } = send
 
   const card = useMemo(() => {
     const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
@@ -204,13 +204,12 @@ export function NativeChatInteractiveCard({
           }
 
           if (routing.rejectsPrompt) {
-            // Nothing picked anywhere: reject the question the way the TUI's own
-            // "Chat about this" does, then reply in chat. ESC is a single
-            // immediate write, so queueing the message after it preserves order.
+            // Nothing picked anywhere: leave through the selector's own "Chat
+            // about this" row, which rejects the question and hands back the
+            // chat prompt, then send the words once it has closed.
             clearDismissTimer()
             setDismissedKey(cardKey)
-            cancel()
-            sendStrandedText()
+            escapeToChat(card.prompt, routing.chatText)
             return
           }
 

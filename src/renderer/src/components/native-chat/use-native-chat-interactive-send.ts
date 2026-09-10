@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/native-chat-agent-support'
 import {
   buildAskAnswerKeys,
+  buildAskChatRowKeys,
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
@@ -46,6 +47,11 @@ export type NativeChatInteractiveSend = {
   /** Send ordinary chat text, as the composer would. Used to escape a question
    *  to chat when the user's words have no option to attach to. */
   sendChatText: (text: string) => void
+  /** Leave a question through the selector's own "Chat about this" row, then
+   *  send `text` as an ordinary chat message once the selector has closed.
+   *  The row rejects the question and restores the chat prompt, so the words
+   *  never race a selector that is still torn down. */
+  escapeToChat: (prompt: AskPrompt, text: string) => void
   /** Stop the in-flight answer's delayed keystrokes without interrupting the
    *  agent. Scoped to selector keystrokes: a chat write carries the user's own
    *  words, which the card's dismissal must never discard. */
@@ -183,6 +189,35 @@ export function useNativeChatInteractiveSend(
     sendRaw(ESC)
   }, [cancelInFlight, sendRaw])
 
+  const escapeToChat = useCallback(
+    (prompt: AskPrompt, text: string) => {
+      const question = prompt.questions[0]
+      if (!targetPtyId || !question) {
+        return
+      }
+      cancelInFlight()
+      const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
+      const body = text.trim()
+      const handle = sendNativeChatAskAnswer(
+        settings,
+        targetPtyId,
+        buildAskChatRowKeys(question),
+        () => {
+          if (inFlightRef.current === handle) {
+            inFlightRef.current = null
+          }
+          if (body) {
+            // The chat send stays outside `inFlightRef`: these are the user's
+            // words, and the card is already dismissed by the time they go.
+            sendNativeChatMessage(settings, targetPtyId, body)
+          }
+        }
+      )
+      inFlightRef.current = handle
+    },
+    [terminalTabId, targetPtyId, cancelInFlight]
+  )
+
   const sendChatText = useCallback(
     (text: string) => {
       if (!targetPtyId || !text.trim()) {
@@ -197,5 +232,12 @@ export function useNativeChatInteractiveSend(
     [terminalTabId, targetPtyId]
   )
 
-  return { sendAnswer, sendRaw, sendChatText, cancelPending: cancelInFlight, cancel }
+  return {
+    sendAnswer,
+    sendRaw,
+    sendChatText,
+    escapeToChat,
+    cancelPending: cancelInFlight,
+    cancel
+  }
 }

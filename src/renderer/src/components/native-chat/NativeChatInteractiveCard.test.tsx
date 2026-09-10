@@ -39,6 +39,7 @@ const mocks = {
   sendAnswer: vi.fn<NativeChatInteractiveSend['sendAnswer']>(),
   sendRaw: vi.fn<NativeChatInteractiveSend['sendRaw']>(),
   sendChatText: vi.fn<NativeChatInteractiveSend['sendChatText']>(),
+  escapeToChat: vi.fn<NativeChatInteractiveSend['escapeToChat']>(),
   cancelPending: vi.fn<NativeChatInteractiveSend['cancelPending']>(),
   cancel: vi.fn<NativeChatInteractiveSend['cancel']>(),
   /** Clears the pane's question wait; the card owes it a confirmation signal. */
@@ -73,6 +74,7 @@ function cardElement(
         sendAnswer: mocks.sendAnswer,
         sendRaw: mocks.sendRaw,
         sendChatText: mocks.sendChatText,
+        escapeToChat: mocks.escapeToChat,
         cancelPending: mocks.cancelPending,
         cancel: mocks.cancel
       }}
@@ -537,14 +539,12 @@ describe('NativeChatInteractiveCard escape-to-chat routing', () => {
     typeReply('neither, use whatever the file already uses')
     fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
 
-    // No selector answer exists for unattached words, so the question is
-    // rejected the way "Chat about this" does and the text follows.
+    // No selector answer exists for unattached words, so the question leaves
+    // through the selector's own "Chat about this" row and the text follows it.
     expect(mocks.sendAnswer).not.toHaveBeenCalled()
-    expect(mocks.cancel).toHaveBeenCalledTimes(1)
-    expect(mocks.sendChatText).toHaveBeenCalledWith('neither, use whatever the file already uses')
-    expect(mocks.cancel.mock.invocationCallOrder[0]!).toBeLessThan(
-      mocks.sendChatText.mock.invocationCallOrder[0]!
-    )
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(mocks.escapeToChat).toHaveBeenCalledTimes(1)
+    expect(mocks.escapeToChat.mock.calls[0]![1]).toBe('neither, use whatever the file already uses')
   })
 
   it('delivers a pick with its note through the selector, with no chat message', () => {

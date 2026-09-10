@@ -317,6 +317,40 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.cancel).not.toHaveBeenCalled()
   })
 
+  it('escapes to chat through the selector row, sending the text only after it closes', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    act(() => {
+      result.current.escapeToChat(PROMPT, '  neither, explain first  ')
+    })
+
+    // Two options and no previews, so the "Chat about this" row is numbered 4.
+    expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledOnce()
+    expect(mocks.sendNativeChatAskAnswer.mock.calls[0]![2]).toEqual([{ raw: '4' }])
+    // The words wait for the selector to close rather than racing its teardown.
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]![3]
+    act(() => onSettled?.(true))
+
+    expect(mocks.sendNativeChatMessage).toHaveBeenCalledOnce()
+    expect(mocks.sendNativeChatMessage.mock.calls[0]![2]).toBe('neither, explain first')
+  })
+
+  it('escapes to chat with no text when the user only declined', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    act(() => result.current.escapeToChat(PROMPT, '   '))
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]![3]
+    act(() => onSettled?.(true))
+
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+  })
+
   it('cancels only the answer keystrokes, never a message send', () => {
     const answerHandle = { cancel: vi.fn(), settleAfterMs: 500 }
     const messageHandle = { cancel: vi.fn(), settleAfterMs: 500 }
