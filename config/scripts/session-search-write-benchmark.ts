@@ -16,11 +16,35 @@ import SyncDatabase from '../../src/main/sqlite/sync-database'
 
 // The cost model owed to the two-FTS-table decision. Everything runs through the
 // real transcript reader and SessionSearchStore over a synthetic corpus, so the
-// numbers include tokenization, the identifier shadow column, both FTS tables and
-// the post-write cleanup a live index pays for. Never point this at a real
-// transcript tree.
+// numbers include tokenization, the identifier shadow column and both FTS tables.
+// Never point this at a real transcript tree.
 
-/** Staging flushes synchronously, so a peer chain samples the gap each read leaves. */
+/**
+ * How long the longest single transaction held the process.
+ *
+ * With one transaction per file that is the whole stall a file costs, so it is
+ * the number the commit ceiling exists to bound. Measured by wrapping `exec`,
+ * because the writer's transactions are the only ones this benchmark runs.
+ */
+function recordTransactionDurations(durations: number[]): () => void {
+  const exec = SyncDatabase.prototype.exec
+  let started = 0
+  SyncDatabase.prototype.exec = function (this: SyncDatabase, sql: string): void {
+    if (sql === 'BEGIN IMMEDIATE') {
+      started = performance.now()
+    }
+    exec.call(this, sql)
+    if (sql === 'COMMIT' && started > 0) {
+      durations.push(performance.now() - started)
+      started = 0
+    }
+  }
+  return () => {
+    SyncDatabase.prototype.exec = exec
+  }
+}
+
+/** The writer commits synchronously, so a peer chain samples the gap each read leaves. */
 async function sampleLoopStalls(running: () => boolean, stalls: number[]): Promise<void> {
   let previous = performance.now()
   while (running()) {
@@ -56,6 +80,8 @@ try {
   const store = new SessionSearchStore(indexPath, (error) => errors.push(error))
   const unregister = registerSessionSearchIndexConsumer(store)
   const stalls: number[] = []
+  const transactions: number[] = []
+  const restoreExec = recordTransactionDurations(transactions)
   let indexing = true
   try {
     const stats = createSessionParseStats()
@@ -70,16 +96,19 @@ try {
     }
     indexing = false
     await sampler
+    restoreExec()
     const rebuildMs = performance.now() - started
     assert.deepEqual(errors, [])
 
     const reader = new SyncDatabase(indexPath, { readonly: true })
     try {
       const rows = (
-        reader.prepare('SELECT count(*) AS n FROM visible_messages').get() as { n: number }
+        reader.prepare('SELECT count(*) AS n FROM messages').get() as {
+          n: number
+        }
       ).n
       const sessions = (
-        reader.prepare('SELECT count(*) AS n FROM visible_sessions').get() as {
+        reader.prepare('SELECT count(*) AS n FROM sessions').get() as {
           n: number
         }
       ).n
@@ -89,6 +118,7 @@ try {
         Math.round((value / (corpus.transcriptBytes / (1024 * 1024))) * 10) / 10
       const fileBytes = (await stat(indexPath)).size
       stalls.sort((a, b) => a - b)
+      transactions.sort((a, b) => a - b)
       console.log(
         JSON.stringify(
           {
@@ -110,6 +140,8 @@ try {
             },
             writeAmplification: Math.round((bytes.total / corpus.transcriptBytes) * 100) / 100,
             fileWriteAmplification: Math.round((fileBytes / corpus.transcriptBytes) * 100) / 100,
+            transactions: transactions.length,
+            maxTransactionMs: Math.round((transactions.at(-1) ?? 0) * 100) / 100,
             maxLoopStallMs: Math.round(stalls.at(-1) ?? 0),
             p95LoopStallMs: Math.round(stalls[Math.floor(stalls.length * 0.95)] ?? 0),
             loopStallSamples: stalls.length,
@@ -124,6 +156,7 @@ try {
     }
   } finally {
     indexing = false
+    restoreExec()
     unregister()
     resetTranscriptConsumersForTests()
     resetSessionParseCacheForTests()
@@ -131,4 +164,56 @@ try {
   }
 } finally {
   await rm(corpus.root, { recursive: true, force: true })
+}
+
+// Phase two: one transcript far larger than any real one, to price the ceiling
+// that decides whether a file commits once or in chunks.
+const largeTurns = Number(process.env.ORCA_SEARCH_BENCH_LARGE_TURNS ?? 23_000)
+const large = await writeSyntheticTranscriptCorpus({
+  sessions: 1,
+  turnsPerSession: largeTurns,
+  seed: 2
+})
+const largeIndexPath = join(large.root, 'index.sqlite')
+try {
+  const errors: unknown[] = []
+  const store = new SessionSearchStore(largeIndexPath, (error) => errors.push(error))
+  const unregister = registerSessionSearchIndexConsumer(store)
+  const transactions: number[] = []
+  const restoreExec = recordTransactionDurations(transactions)
+  try {
+    const stats = createSessionParseStats()
+    const started = performance.now()
+    await parseAgentSessionFileCached(
+      await sessionCandidate('claude', large.files[0]!),
+      process.platform,
+      stats
+    )
+    const indexMs = performance.now() - started
+    restoreExec()
+    assert.deepEqual(errors, [])
+    transactions.sort((a, b) => a - b)
+    console.log(
+      JSON.stringify(
+        {
+          phase: 'single-large-file',
+          transcriptMb: Math.round((large.transcriptBytes / (1024 * 1024)) * 100) / 100,
+          indexMs: Math.round(indexMs),
+          transactions: transactions.length,
+          maxTransactionMs: Math.round(transactions.at(-1) ?? 0),
+          indexMb: Math.round(((await stat(largeIndexPath)).size / (1024 * 1024)) * 100) / 100
+        },
+        null,
+        2
+      )
+    )
+  } finally {
+    restoreExec()
+    unregister()
+    resetTranscriptConsumersForTests()
+    resetSessionParseCacheForTests()
+    store.close()
+  }
+} finally {
+  await rm(large.root, { recursive: true, force: true })
 }

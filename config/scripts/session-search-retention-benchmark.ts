@@ -7,7 +7,7 @@ import {
   syntheticCandidate,
   syntheticSession,
   userMessages
-} from '../../src/main/ai-vault-search/session-search-staged-write-test-fixture'
+} from '../../src/main/ai-vault-search/session-search-index-test-fixture'
 import { SessionSearchStore } from '../../src/main/ai-vault-search/session-search-store'
 import SyncDatabase from '../../src/main/sqlite/sync-database'
 
@@ -29,14 +29,11 @@ async function sampleLoopStalls(running: () => boolean, intervals: number[]): Pr
   }
 }
 
-/** What a search would still return: rows whose session is neither staged nor tombstoned. */
+/** What a search would still return: rows whose session row is still there. */
 function visibleRows(db: SyncDatabase): number {
   return (
     db
-      .prepare(
-        `SELECT count(*) AS n FROM visible_messages m
-         JOIN visible_sessions s ON s.id = m.session_row_id`
-      )
+      .prepare(`SELECT count(*) AS n FROM messages m JOIN sessions s ON s.id = m.session_row_id`)
       .get() as { n: number }
   ).n
 }
@@ -49,18 +46,21 @@ try {
     const store = new SessionSearchStore(path, (error) => errors.push(error))
     let reader: SyncDatabase | null = null
     try {
-      const staged = store.beginWrite(syntheticCandidate(), 'replace', 0)!
+      const write = store.beginWrite(syntheticCandidate(), 'replace', 0)!
       for (const message of userMessages(
         'synthetic benchmark needle repeated context for a representative coding conversation with commands and paths src/example.ts',
         ROWS
       )) {
-        staged.add(message)
+        write.add(message)
       }
       assert.equal(
-        staged.publish({ session: syntheticSession(), byteOffset: 4096, incomplete: false }),
+        write.commit({
+          session: syntheticSession(),
+          byteOffset: 4096,
+          incomplete: false
+        }),
         true
       )
-      staged.discard()
       assert.deepEqual(errors, [])
       // Truncating first is what makes walBytes below the purge's own growth.
       const checkpoint = new SyncDatabase(path)
@@ -78,7 +78,9 @@ try {
         const raw = new SyncDatabase(path)
         try {
           raw.exec('BEGIN IMMEDIATE')
-          const ids = raw.prepare('SELECT id FROM messages').all() as { id: number }[]
+          const ids = raw.prepare('SELECT id FROM messages').all() as {
+            id: number
+          }[]
           for (const { id } of ids) {
             raw.prepare('DELETE FROM messages_fts WHERE rowid=?').run(id)
             raw.prepare('DELETE FROM conversation_fts WHERE rowid=?').run(id)
@@ -91,8 +93,9 @@ try {
       } else {
         let purging = true
         const purge = store.purgeOlderThan(Date.now() + 60_000)
-        // Hiding is immediate: the tombstone commits in the first chunk, so a read one
-        // turn in already sees nothing, long before the rows are gone.
+        // Hiding is immediate: cutting the session loose from its file is the
+        // first transaction, so a read one turn in already sees nothing, long
+        // before the rows are gone.
         const hiddenEarly = yieldToEventLoop().then(() => visibleRows(probe))
         const sampler = sampleLoopStalls(() => purging, intervals)
         await purge
@@ -110,7 +113,11 @@ try {
       try {
         for (const table of ['messages_fts', 'conversation_fts']) {
           assert.equal(
-            (after.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n,
+            (
+              after.prepare(`SELECT count(*) AS n FROM ${table}`).get() as {
+                n: number
+              }
+            ).n,
             0
           )
         }
