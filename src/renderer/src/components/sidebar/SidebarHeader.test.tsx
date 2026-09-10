@@ -93,31 +93,16 @@ vi.mock('@/components/ui/popover', () => ({
 let container: HTMLDivElement
 let root: Root
 
-function createButton(): HTMLButtonElement {
-  const button = container.querySelector<HTMLButtonElement>('[aria-label="Create"]')
+function headerButton(label: string): HTMLButtonElement {
+  const button = container.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)
   if (!button) {
-    throw new Error('Create button not rendered')
+    throw new Error(`Header button not rendered: ${label}`)
   }
   return button
 }
 
-async function openCreateMenu(): Promise<void> {
-  await act(async () => {
-    // Why not click(): the Radix trigger opens on pointerdown, which happy-dom does not synthesize.
-    createButton().dispatchEvent(
-      new window.PointerEvent('pointerdown', { bubbles: true, button: 0 })
-    )
-  })
-}
-
-function createMenuItem(label: string): HTMLElement {
-  const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((candidate) =>
-    candidate.textContent?.includes(label)
-  )
-  if (!item) {
-    throw new Error(`Create menu item not rendered: ${label}`)
-  }
-  return item
+function createButton(): HTMLButtonElement {
+  return headerButton('New workspace')
 }
 
 beforeEach(() => {
@@ -152,10 +137,9 @@ describe('SidebarHeader', () => {
     })
 
     expect(createButton().disabled).toBe(false)
-    await openCreateMenu()
 
     await act(async () => {
-      createMenuItem('New workspace').click()
+      createButton().click()
     })
 
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
@@ -167,42 +151,53 @@ describe('SidebarHeader', () => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
     })
 
-    await openCreateMenu()
     await act(async () => {
-      createMenuItem('New workspace').click()
+      createButton().click()
     })
 
     expect(createButton().disabled).toBe(false)
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
   })
 
-  it('offers Add project beside New workspace under the create button', async () => {
+  it('reaches Add project and New workspace in one click each, with no menu', async () => {
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
     })
 
-    await openCreateMenu()
-
-    expect(createMenuItem('New workspace')).toBeTruthy()
-    expect(createMenuItem('Add project')).toBeTruthy()
+    expect(headerButton('New workspace')).toBeTruthy()
+    expect(headerButton('Add project')).toBeTruthy()
+    expect(container.querySelector('[data-slot="dropdown-menu-trigger"]')).toBeNull()
 
     await act(async () => {
-      createMenuItem('Add project').click()
+      headerButton('Add project').click()
     })
 
     expect(mockState.openModal).toHaveBeenCalledWith('add-repo')
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).not.toHaveBeenCalled()
   })
 
-  it('omits the shortcut hint when workspace creation is unassigned', async () => {
-    mocks.shortcutLabel.current = null
+  it('keeps the create button rightmost so the frequent action stays where it was', () => {
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
     })
 
-    await openCreateMenu()
+    const labels = [...container.querySelectorAll<HTMLElement>('[aria-label]')]
+      .map((node) => node.getAttribute('aria-label'))
+      .filter((label): label is string => label === 'Add project' || label === 'New workspace')
+    expect(labels).toEqual(['Add project', 'New workspace'])
+  })
 
-    expect(document.querySelector('[data-slot="dropdown-menu-shortcut"]')).toBeNull()
+  it('advertises the workspace shortcut on the create tooltip, and omits it when unassigned', () => {
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+    expect(container.textContent).toContain('⌘N')
+
+    mocks.shortcutLabel.current = null
+    act(() => {
+      root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
+    })
+    expect(container.textContent).not.toContain('⌘N')
   })
 
   it('opens agent activity from the bell button', () => {
@@ -275,16 +270,16 @@ describe('SidebarHeader', () => {
     )
   })
 
-  it('keeps the workspace filter alongside the active bell without Add Project', () => {
+  it('drops both project actions in the agents view, which lists activity, not projects', () => {
     mockState.sidebarBody = 'agents'
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
     })
 
     expect(container.querySelector('[aria-label="Turn off activity view"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="Create"]')).toBeTruthy()
+    expect(container.querySelector('[aria-label="New workspace"]')).toBeTruthy()
     expect(container.querySelector('[aria-label="Workspace options"]')).toBeNull()
-    expect(container.querySelector('[aria-label="Add Project"]')).toBeNull()
+    expect(container.querySelector('[aria-label="Add project"]')).toBeNull()
   })
 
   it('keeps the activity bell and actions on one row at the default sidebar width', () => {
@@ -297,8 +292,8 @@ describe('SidebarHeader', () => {
     expect(headerClasses.has('flex-wrap')).toBe(false)
     expect(headerClasses.has('h-8')).toBe(true)
     expect(container.querySelector('[aria-label="View activity"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="Add Project"]')).toBeNull()
-    expect(container.querySelector('[aria-label="Create"]')).toBeTruthy()
+    expect(container.querySelector('[aria-label="Add project"]')).toBeTruthy()
+    expect(container.querySelector('[aria-label="New workspace"]')).toBeTruthy()
   })
 
   it('keeps the same actions on one row at compact width', async () => {
@@ -307,15 +302,14 @@ describe('SidebarHeader', () => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
     })
 
-    expect(container.querySelector('[aria-label="Add Project"]')).toBeNull()
+    expect(container.querySelector('[aria-label="Add project"]')).toBeTruthy()
     expect(container.querySelector('[aria-label="View activity"]')).toBeTruthy()
-    expect(container.querySelector('[aria-label="Create"]')).toBeTruthy()
+    expect(container.querySelector('[aria-label="New workspace"]')).toBeTruthy()
     expect(container.querySelector('[aria-label="Workspace options"]')).toBeTruthy()
     expect(container.querySelector('[aria-label="More workspace actions"]')).toBeNull()
 
-    await openCreateMenu()
     await act(async () => {
-      createMenuItem('New workspace').click()
+      createButton().click()
     })
     expect(mocks.openWorkspaceCreationComposerWithTourHandoff).toHaveBeenCalledTimes(1)
   })
@@ -340,8 +334,8 @@ describe('SidebarHeader', () => {
     expect(container.querySelector('[aria-label="Open full Agents view"]')).toBeNull()
   })
 
-  // Why: the compact overflow existed only to carry Add Project, which now lives
-  // under the create button, so both widths render one identical header.
+  // Why: the compact overflow existed only to carry Add Project, which now sits
+  // beside the create button, so both widths render one identical header.
   it('renders the same actions on both sides of the old wide-layout breakpoint', () => {
     for (const width of [234, 235]) {
       mockState.sidebarWidth = width
@@ -349,8 +343,8 @@ describe('SidebarHeader', () => {
         root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
       })
       expect(container.querySelector('[aria-label="More workspace actions"]')).toBeNull()
-      expect(container.querySelector('[aria-label="Add Project"]')).toBeNull()
-      expect(container.querySelector('[aria-label="Create"]')).toBeTruthy()
+      expect(container.querySelector('[aria-label="Add project"]')).toBeTruthy()
+      expect(container.querySelector('[aria-label="New workspace"]')).toBeTruthy()
       expect(container.querySelector('[aria-label="Workspace options"]')).toBeTruthy()
     }
   })
