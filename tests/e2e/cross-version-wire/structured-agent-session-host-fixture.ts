@@ -23,7 +23,26 @@ export function structuredHostStub(
       ok: true,
       value: { command: 'compact', state: 'completed' }
     })),
-    send: vi.fn(async () => ({ ok: true, replayed: false })),
+    send: vi.fn(async () => ({
+      ok: true,
+      replayed: false,
+      fence: 1,
+      cursor: { epoch: 'epoch-a', sequence: 2 },
+      value: {
+        clientMessageId: 'client-1',
+        submission: {
+          clientMessageId: 'client-1',
+          fence: 1,
+          payloadFingerprint: 'fingerprint',
+          dispatchState: 'accepted',
+          providerItemId: 'provider-1',
+          reason: null,
+          submittedAt: 1,
+          resolvedAt: 2
+        }
+      }
+    })),
+    waitForSendSettlement: vi.fn(),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     rewind: vi.fn(async () => ({
       ok: true,

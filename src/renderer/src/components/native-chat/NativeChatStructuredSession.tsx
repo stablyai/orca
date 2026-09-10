@@ -138,12 +138,17 @@ export function NativeChatStructuredSession(
           }
         ]
       : [])
+  // Only the head of the outbox is ever dispatched, so it is the only entry a
+  // Retry can act on and the only one whose state can be holding the queue.
+  // Scanning past it named a message the user was not looking at and re-sent
+  // one from earlier in the session while their newest sat behind it.
+  const outboxHead = controller.outbox[0] ?? null
   const retryableOutboxEntry =
-    controller.outbox.find((entry) => entry.state === 'unconfirmed') ??
-    controller.outbox.find(
-      (entry) => entry.clientMessageId === controller.blockedClientMessageId
-    ) ??
-    null
+    outboxHead &&
+    (outboxHead.state === 'unconfirmed' ||
+      outboxHead.clientMessageId === controller.blockedClientMessageId)
+      ? outboxHead
+      : null
   const structuredTransport = useMemo(
     () => ({
       send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
