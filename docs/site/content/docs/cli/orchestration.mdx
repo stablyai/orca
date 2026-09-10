@@ -117,6 +117,7 @@ orca orchestration dispatch --task <taskId> --to <workerHandle> --inject --json
 - `--peek` / `--all` do not consume mail.
 - Group addresses: `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, `@grok`, `@cursor`, `@worktree:<id>` — never for `worker_done` / heartbeat.
 - Every group except `@worktree:<id>` means the live Dispatches of the sender's own Run, each addressed as `dispatch:<id>`. A sender in no Run is refused; use `run:<id>` or `dispatch:<id>`.
+- No group reaches a coordinator, which is not a Dispatch. A worker raising a blocker sends to `run:<id>`.
 - Quote PowerShell group addresses: `--to "@all"`.
 
 ```bash

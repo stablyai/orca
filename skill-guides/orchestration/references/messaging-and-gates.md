@@ -43,7 +43,11 @@ Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`,
 `@gemini`, `@droid`, `@grok`, `@cursor`, and `@worktree:<id>`. Every group but
 `@worktree:<id>` means the live Dispatches of the sender's own Run, delivered
 to each `dispatch:<id>` mailbox; a sender bound to no Run is refused and must
-name `run:<id>` or `dispatch:<id>`. Use them only for intentional fan-out
+name `run:<id>` or `dispatch:<id>`. A coordinator is not a Dispatch, so no
+group address reaches one: a worker raising a blocker sends to `run:<id>`, and
+a group from a worker reaches only its sibling workers. A worker that created
+its own Run addresses that Run's workers, not the siblings it was started
+beside. Use them only for intentional fan-out
 status or questions. `worker_done`, heartbeat, and other
 Dispatch lifecycle messages never target groups.
 

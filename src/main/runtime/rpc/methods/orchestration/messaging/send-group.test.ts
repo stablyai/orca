@@ -341,6 +341,27 @@ describe('orchestration.send group addresses', () => {
     expect(result.messages[0].to_handle).toBe(`dispatch:${droid}`)
   })
 
+  it('fans out @cursor without claiming a Claude pane discussing a text cursor', async () => {
+    // The original hazard: `@cursor` matched any pane whose TITLE contained "cursor", so a
+    // Claude pane titled "Fix the text cursor blink" received Cursor's instructions.
+    setupWithTerminals([
+      makeSummary('term_coord', { agentIdentity: 'codex' }),
+      makeSummary('term_b', { agentIdentity: 'cursor' }),
+      makeSummary('term_c', { agentIdentity: 'claude', title: '✳ Fix the text cursor blink' })
+    ])
+    const cursor = dispatchWorker('term_b')
+    dispatchWorker('term_c')
+
+    const result = (await call('orchestration.send', {
+      from: 'term_coord',
+      to: '@cursor',
+      subject: 'cursor only'
+    })) as GroupReceipt
+
+    expect(result.recipients).toBe(1)
+    expect(result.messages[0].to_handle).toBe(`dispatch:${cursor}`)
+  })
+
   it('fans out @worktree:<id> to matching worktree terminals, unchanged by Run scoping', async () => {
     setupWithTerminals([
       makeSummary('term_a', { worktreeId: 'wt_1' }),
