@@ -62,27 +62,23 @@ function makeFolderWorkspace(): FolderWorkspace {
   }
 }
 
-describe('submitFolderWorkspaceCreate launch route before hydration', () => {
+describe('submitFolderWorkspaceCreate launch route', () => {
   afterEach(() => {
     setLocalRuntimeCapabilitiesForTests([])
     Reflect.deleteProperty(window, 'api')
     vi.clearAllMocks()
   })
 
-  it('probes the local runtime instead of degrading to legacy when capabilities are unknown', async () => {
+  // `null` still means "probed, genuinely unknown" and must degrade to the legacy route. The
+  // cache and the bridge both hold the structured capability here, so only the handed-in value
+  // can produce this outcome.
+  it('degrades to the legacy route when the pre-resolved capabilities are unknown', async () => {
     setLocalRuntimeCapabilitiesForTests(null)
     const getStatus = vi
       .fn()
       .mockResolvedValue({ capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] })
     Object.assign(window, { api: { runtime: { getStatus } } })
     mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
-    mocks.startStructuredAgentLaunch.mockReturnValue({
-      sessionId: 'session-1',
-      launchResult: Promise.resolve({ sessionId: 'session-1' }),
-      isVisibilityUnknown: () => false,
-      releaseCallerAfterUnknownOutcome: () => {},
-      claimDefinitiveRefusalFallback: () => Promise.resolve()
-    })
 
     const created = await submitFolderWorkspaceCreate({
       projectGroup: makeProjectGroup(),
@@ -94,17 +90,18 @@ describe('submitFolderWorkspaceCreate launch route before hydration', () => {
       autoRenameBranchFromWork: false,
       agentCmdOverrides: {},
       settings: structuredSettings,
+      hostCapabilities: null,
       createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
       onOpenChange: vi.fn()
     })
 
     expect(created).toBe(true)
-    expect(getStatus).toHaveBeenCalled()
+    expect(getStatus).not.toHaveBeenCalled()
+    expect(mocks.startStructuredAgentLaunch).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith(
       'folder-workspace-1',
-      expect.objectContaining({ providesInitialSurface: true })
+      expect.objectContaining({ startup: expect.objectContaining({ launchAgent: 'claude' }) })
     )
-    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalled()
   })
 
   // A caller that owns a cancel gate resolves capabilities above it; re-probing here would
