@@ -150,6 +150,32 @@ describe('a chat name converging across clients', () => {
     expect(chatTab(after)?.customLabel).toBeNull()
   })
 
+  it('keeps a chat the user deliberately named after its own placeholder', () => {
+    // The two fields exist for exactly this pair. Both frames carry the identical rendered
+    // `title`, so a client with only that field cannot tell them apart and has to guess by
+    // comparing against the placeholder — which discards this user's real name.
+    const named = ingest(
+      stateWithLocalName(null),
+      hostFrame({ title: 'Codex Chat', customTitle: 'Codex Chat' })
+    )
+    const neverNamed = ingest(
+      stateWithLocalName(null),
+      hostFrame({ title: 'Codex Chat', customTitle: null })
+    )
+
+    expect(renderedLabel(named)).toBe('Codex Chat')
+    expect(renderedLabel(neverNamed)).toBe('Codex Chat')
+    // Identical on screen, and they must stay distinct underneath: the named one keeps a real
+    // name that survives a restore, the other must not acquire one it was never given.
+    expect(chatTab(named)?.customLabel).toBe('Codex Chat')
+    expect(chatTab(neverNamed)?.customLabel).toBeNull()
+
+    const persistedNamed = buildPersistedUnifiedTabSessionData(named).unifiedTabs?.[
+      WORKTREE_ID
+    ]?.find((tab) => tab.contentType === 'agent-session')
+    expect(persistedNamed?.customLabel).toBe('Codex Chat')
+  })
+
   it('persists the host name, so the desktop session write cannot revert it to the placeholder', () => {
     // The renderer rewrites the whole persisted unifiedTabs array on any tab action, and the
     // host seeds a restarted chat's name from that same customLabel. If ingestion left it null
