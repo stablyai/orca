@@ -104,9 +104,20 @@ function activeOrQueuedResumeClaimsProviderSession(
     }
     const tabId = getAgentStatusTabId(entry)
     const pane = parsePaneKey(entry.paneKey)
-    // A completed turn still owns its transcript while its exact PTY is live.
-    const completedPaneIsLive = Boolean(
-      entry.state === 'done' &&
+    if (
+      entry.agentType !== record.agent ||
+      !agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
+    ) {
+      continue
+    }
+    // Why this arm carries no workspace scope: a provider session id names one transcript, so a
+    // pane whose exact PTY is live right now already owns it wherever that pane happens to sit, and
+    // resuming forks the agent the user is watching. The scoped arm below still needs its scope —
+    // a status row with no live PTY is a claim about the past. The two ids do drift: adopting an
+    // orphaned terminal re-keys `tabsByWorktree` without re-keying the sleeping records that name
+    // the old id (workspace-session-worktree-id.ts), and a completed turn on a live pane is exactly
+    // where the drift stops being caught.
+    if (
       pane &&
       tabId === pane.tabId &&
       stablePaneHasLivePty(
@@ -115,13 +126,13 @@ function activeOrQueuedResumeClaimsProviderSession(
         state.ptyIdsByTabId,
         state.terminalLayoutsByTabId[pane.tabId]
       )
-    )
+    ) {
+      return true
+    }
     if (
+      entry.state !== 'done' &&
       worktreeTabIds.has(tabId ?? '') &&
-      entry.worktreeId === record.worktreeId &&
-      entry.agentType === record.agent &&
-      (entry.state !== 'done' || completedPaneIsLive) &&
-      agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
+      entry.worktreeId === record.worktreeId
     ) {
       return true
     }
