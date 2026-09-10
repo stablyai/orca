@@ -13,6 +13,7 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
+import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -177,6 +178,25 @@ describe('a chat that closes', () => {
 
     expect(closeSession).not.toHaveBeenCalled()
     expect(host.hasSession(SESSION)).toBe(true)
+  })
+
+  // The pane outlives the close by a few frames — a workspace delete closes the chats inside it
+  // while their panes are still mounted — so whatever a read raises in that window is what the user
+  // sees. This is the code the client narrows on to keep that window off the pane; a host that
+  // starts raising a different one there puts the red error back.
+  it('answers a read from the pane that outlived it with the code the client treats as transitional', async () => {
+    await attach()
+    await host.hold(SESSION, SURFACE)
+
+    await host.close(SESSION)
+
+    expect(host.hasSession(SESSION)).toBe(false)
+    expect(() => host.history({ sessionId: SESSION, direction: 'tail' })).toThrow(
+      AGENT_SESSION_UNATTACHED_REFUSAL_CODE
+    )
+    expect(() =>
+      host.subscribe({ id: 'sub-1', sessionId: SESSION, emit: () => undefined })
+    ).toThrow(AGENT_SESSION_UNATTACHED_REFUSAL_CODE)
   })
 
   it('does not lose the session to a release the client sent twice', async () => {
