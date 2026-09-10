@@ -1,5 +1,7 @@
-import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalCursor,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSendResult } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
