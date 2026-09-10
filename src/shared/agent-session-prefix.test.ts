@@ -15,25 +15,28 @@ function items(provider: 'claude' | 'codex', running?: string): AgentJournalRend
       {
         itemId:
           provider === 'codex' ? `codex:parent:${turnId}:0` : `claude:parent:${turnId}-prompt`,
+        revision: 1,
         body: { kind: 'message', role: 'user', blocks: [] },
         sequence: turn * 3,
         observedAt: 1
-      } as AgentJournalRenderItem
+      }
     ]
     if (running === turnId) {
       rows.push({
         itemId: `legacy:${provider}:parent:turn-lifecycle%3A${turnId}`,
+        revision: 1,
         body: { kind: 'status', text: 'Working', turnLifecycle: { turnId, state: 'running' } },
         sequence: turn * 3 + 1,
         observedAt: 1
-      } as AgentJournalRenderItem)
+      })
     }
     rows.push({
       itemId: provider === 'codex' ? `codex:parent:${turnId}:1` : `claude:parent:${turnId}-answer`,
+      revision: 1,
       body: { kind: 'message', role: 'assistant', blocks: [] },
       sequence: turn * 3 + 2,
       observedAt: 1
-    } as AgentJournalRenderItem)
+    })
     return rows
   })
 }
