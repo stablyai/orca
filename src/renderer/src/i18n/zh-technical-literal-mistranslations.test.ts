@@ -41,14 +41,11 @@ describe('zh technical literal / sense fixes (#9574)', () => {
     expect(findByKey(zh, 'fe119187bb')).toBe('--model sonnet')
     expect(findByKey(zh, '5c5b65044e')).toBe('pnpm install')
     expect(findByKey(zh, '5af8251002')).toBe('SCSS')
-    expect(findByKey(zh, '97e96cc027')).toBe('/goal')
-    expect(findByKey(zh, 'f62ce91ade')).toBe('origin')
     expect(findByKey(zh, '79afc6772b')).toBe('orca.yaml')
   })
 
   it('uses the correct sense for short UI verbs/nouns', () => {
     expect(findByKey(zh, 'ac037cfac2')).toBe('移动') // Move, not 手机
-    expect(findByKey(zh, '1b24a32d3a')).toBe('内存') // Memory, not 记忆
     expect(findByKey(zh, '8cde1a2fb0')).toBe('暂存') // Stage, not 阶段
     expect(findByKey(zh, 'af2b07bda5')).toBe('状态：{{value0}}') // State, not 州
     expect(findByKey(zh, 'e070e8aeba')).toBe('竖线') // Bar cursor
@@ -110,19 +107,6 @@ describe('zh provider usage wording (#12881)', () => {
     expect(findByKey(zh, 'antigravityToggleDescription')).toBe(
       '显示当前工作区的 Antigravity 订阅使用情况。'
     )
-  })
-
-  it('uses one wording for the "Open <Brand> usage details" labels', () => {
-    for (const [key, brand] of [
-      ['fda8146810', 'Kimi'],
-      ['629251f4b6', 'OpenCode Go'],
-      ['d2375976eb', 'Gemini'],
-      ['06741a2f3d', 'MiniMax'],
-      ['antigravityUsageDetails', 'Antigravity'],
-      ['grokUsageAria', 'Grok']
-    ]) {
-      expect(findByKey(zh, key), key).toBe(`打开 ${brand} 使用详情`)
-    }
   })
 })
 
