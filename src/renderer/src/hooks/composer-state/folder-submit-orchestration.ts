@@ -1,6 +1,6 @@
 import type { ComposerModel } from './composer-model'
 
-type FolderSubmitOrchestrationInput = Pick<
+export type FolderSubmitOrchestrationInput = Pick<
   ComposerModel,
   | 'clearNewWorkspaceDraft'
   | 'createFolderWorkspace'
@@ -41,6 +41,7 @@ import {
 } from '../../../../shared/tui-agent-launch-defaults'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
 import {
   formatWorkspaceCreateError,
@@ -104,6 +105,10 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           requestedAgent && isTuiAgentEnabled(requestedAgent, disabledTuiAgents)
             ? requestedAgent
             : null
+        // Resolved before the cancel gate because submitFolderWorkspaceCreate reaches
+        // createFolderWorkspace with no suspension of its own: probing in there would let a
+        // dismissal during the probe still create the workspace.
+        const hostCapabilities = await ensureLocalRuntimeCapabilities()
         if (isSubmissionCancelled()) {
           return
         }
@@ -147,6 +152,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           launchSource: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
           runtimeEnvironmentId: folderTargetRuntimeEnvironmentId,
           settings,
+          hostCapabilities,
           createFolderWorkspace: (input) =>
             createFolderWorkspace(input, {
               runtimeEnvironmentId: folderTargetRuntimeEnvironmentId

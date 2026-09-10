@@ -106,4 +106,39 @@ describe('submitFolderWorkspaceCreate launch route before hydration', () => {
     )
     expect(mocks.startStructuredAgentLaunch).toHaveBeenCalled()
   })
+
+  // A caller that owns a cancel gate resolves capabilities above it; re-probing here would
+  // reopen the window between that gate and createFolderWorkspace.
+  it('uses pre-resolved capabilities without probing again', async () => {
+    setLocalRuntimeCapabilitiesForTests(null)
+    const getStatus = vi.fn().mockResolvedValue({ capabilities: [] })
+    Object.assign(window, { api: { runtime: { getStatus } } })
+    mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'session-1',
+      launchResult: Promise.resolve({ sessionId: 'session-1' }),
+      isVisibilityUnknown: () => false,
+      releaseCallerAfterUnknownOutcome: () => {},
+      claimDefinitiveRefusalFallback: () => Promise.resolve()
+    })
+
+    const created = await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: 'hi',
+      lastAutoName: '',
+      linkedWorkItem: null,
+      note: '',
+      quickAgent: 'claude',
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      settings: structuredSettings,
+      hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+      onOpenChange: vi.fn()
+    })
+
+    expect(created).toBe(true)
+    expect(getStatus).not.toHaveBeenCalled()
+    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalled()
+  })
 })

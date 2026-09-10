@@ -13,6 +13,7 @@ import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { RuntimeCapability } from '../../../../shared/protocol-version'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getLinkedItemDisplayName,
@@ -69,6 +70,9 @@ type SubmitFolderWorkspaceCreateParams = {
   launchSource?: LaunchSource
   runtimeEnvironmentId?: string | null
   settings?: GlobalSettings | null
+  // Pre-resolved local capabilities. A caller that gates on cancellation must resolve them above
+  // its gate: probing in here suspends between that gate and `createFolderWorkspace` below.
+  hostCapabilities?: readonly RuntimeCapability[] | null
   createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
   onOpenChange: (open: boolean) => void
 }
@@ -90,6 +94,7 @@ export async function submitFolderWorkspaceCreate({
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
   settings,
+  hostCapabilities: preResolvedHostCapabilities,
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
@@ -147,7 +152,10 @@ export async function submitFolderWorkspaceCreate({
         executionHostId: runtimeEnvironmentId
           ? `runtime:${encodeURIComponent(runtimeEnvironmentId)}`
           : (projectGroup.connectionId ?? 'local'),
-        hostCapabilities: await ensureLocalRuntimeCapabilities(),
+        hostCapabilities:
+          preResolvedHostCapabilities === undefined
+            ? await ensureLocalRuntimeCapabilities()
+            : preResolvedHostCapabilities,
         workspaceKind: 'folder',
         promptDelivery: launchDraftPrompt ? 'draft' : 'auto-submit',
         launchText: launchDraftPrompt ?? note,
