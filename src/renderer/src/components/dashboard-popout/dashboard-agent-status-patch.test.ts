@@ -99,6 +99,27 @@ describe('patchDashboardSnapshotFromAgentStatus', () => {
     })
   })
 
+  it('keeps a completion the user already saw in the done bucket', () => {
+    const original = snapshot([card({ bucket: 'done', dotState: 'done', stateChangedAt: 250 })])
+    const ping = event({
+      state: 'done',
+      prompt: '',
+      interactivePrompt: undefined,
+      stateStartedAt: 250
+    })
+    const result = patchDashboardSnapshotFromAgentStatus(original, ping)
+
+    // Why statusUpdatedAt: the card already carries these done fields, so
+    // without it an early bail-out would satisfy the assertion.
+    expect(result.matched).toBe(true)
+    expect(result.snapshot.cards[0]).toMatchObject({
+      bucket: 'done',
+      dotState: 'done',
+      unseen: false,
+      statusUpdatedAt: ping.receivedAt
+    })
+  })
+
   it('ignores stale, wrong-workspace, and session-only events', () => {
     const original = snapshot()
     expect(

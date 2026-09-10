@@ -1,9 +1,5 @@
 import type { DashboardAgentRow } from './useDashboardData'
-import {
-  dashboardCardDisplayState,
-  type DashboardBucket,
-  type DashboardCardDotState
-} from '../../../../shared/dashboard-snapshot'
+import type { DashboardBucket, DashboardCardDotState } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from './dashboard-card-bucket'
 import type { AgentRowState } from '@/lib/agent-row-decay-state'
 
@@ -40,9 +36,9 @@ export function dashboardRowBucketProjection(
       : undefined
   const unseen =
     !isTitleDerived && (acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt
-  const bucket = dashboardBucketForDotState(
-    dashboardCardDisplayState({ dotState, workingMode, unseen })
-  )
+  // Bucket on reported state, not seen-ness: routing through
+  // dashboardCardDisplayState hid acknowledged completions in Idle (#12168).
+  const bucket = dashboardBucketForDotState(dotState)
 
   return { isTitleDerived, dotState, workingMode, unseen, bucket }
 }
