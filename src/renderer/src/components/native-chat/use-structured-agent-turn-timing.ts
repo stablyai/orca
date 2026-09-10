@@ -3,7 +3,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import type { NativeChatSettledTurn } from '../../../../shared/native-chat-turn-status'
+import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
   selectStructuredAgentRunningTurnTiming,
   selectStructuredAgentSettledTurns,
@@ -47,7 +47,7 @@ export function useStructuredAgentTurnTiming(
     hostClock?: HostClock | null
   },
   turnId: string | null
-): { settledTurns: ReadonlyMap<string, NativeChatSettledTurn>; workingStartedAt: number | null } {
+): { settledTurns: NativeChatSettledTurns; workingStartedAt: number | null } {
   const settledTurns = useMemo(
     () => selectStructuredAgentSettledTurns(items, submissions),
     [items, submissions]

@@ -10,7 +10,7 @@ import type {
   AgentJournalTurnLifecycleState
 } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
-import type { NativeChatSettledTurn } from './native-chat-turn-status'
+import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
 
 export type StructuredAgentTurnTiming = {
   state: AgentJournalTurnLifecycleState
@@ -139,17 +139,21 @@ export function structuredAgentTurnLocalStartedAt(
   return firstSeenAt - Math.max(0, hostElapsed)
 }
 
-/** The settled turns a chat surface hands to the shared turn-status selector. */
+/** What a chat surface hands to the shared turn-status selector: every turn the
+ *  host recorded, with its duration or null. A null still outranks the local
+ *  clock, so a turn whose end the host never observed shows no duration on the
+ *  surface that watched it, exactly as it will after a reload. */
 export function selectStructuredAgentSettledTurns(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = []
-): ReadonlyMap<string, NativeChatSettledTurn> {
-  const settled = new Map<string, NativeChatSettledTurn>()
+): NativeChatSettledTurns {
+  const settled = new Map<string, NativeChatSettledTurn | null>()
   for (const [userItemId, timing] of selectStructuredAgentTurnTimings(items, submissions)) {
     const workedSeconds = completedStructuredAgentTurnSeconds(timing)
-    if (workedSeconds !== null) {
-      settled.set(userItemId, { startedAt: timing.startedAt, workedSeconds })
-    }
+    settled.set(
+      userItemId,
+      workedSeconds === null ? null : { startedAt: timing.startedAt, workedSeconds }
+    )
   }
   return settled
 }

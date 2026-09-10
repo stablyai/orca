@@ -4,7 +4,7 @@ import {
   nativeChatTurnHasResponse,
   reduceNativeChatTurnTiming,
   selectNativeChatTurnStatuses,
-  type NativeChatSettledTurn,
+  type NativeChatSettledTurns,
   type NativeChatTurnStatus,
   type NativeChatTurnTimingByTurn
 } from '../../../src/shared/native-chat-turn-status'
@@ -34,7 +34,7 @@ export function useMobileNativeChatTurnStatus({
   isWorking: boolean
   workingStartedAt?: number | null
   /** Host-recorded durations; they outrank whatever this client observed. */
-  settledTurns?: ReadonlyMap<string, NativeChatSettledTurn> | null
+  settledTurns?: NativeChatSettledTurns | null
   /** Host/worktree/tab identity. Timings never carry across chat surfaces. */
   scopeKey: string
 }): {

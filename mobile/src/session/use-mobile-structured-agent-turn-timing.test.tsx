@@ -114,7 +114,8 @@ describe('useMobileStructuredAgentTurnTiming', () => {
     expect(timing?.workingStartedAt).toBe(CLIENT_NOW - 2_500)
     // The row's provider key resolves through the submission alias, not journal order.
     expect([...timing!.settledTurns]).toEqual([
-      ['orca:first', { startedAt: HOST_START, workedSeconds: 61 }]
+      ['orca:first', { startedAt: HOST_START, workedSeconds: 61 }],
+      ['u2', null]
     ])
 
     vi.setSystemTime(CLIENT_NOW + 30_000)

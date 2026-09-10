@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { NativeChatSettledTurn } from '../../../src/shared/native-chat-turn-status'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 function userMessage(id: string): NativeChatMessage {
@@ -25,7 +25,7 @@ function Harness({
   messages: readonly NativeChatMessage[]
   enabled: boolean
   isWorking?: boolean
-  settledTurns?: ReadonlyMap<string, NativeChatSettledTurn>
+  settledTurns?: NativeChatSettledTurns
   scopeKey?: string
 }): React.JSX.Element {
   const disclosure = useMobileNativeChatTurnDisclosure({
@@ -139,6 +139,32 @@ describe('useMobileNativeChatTurnDisclosure', () => {
       const row = renderer!.root.findByType('result').props.disclosure.resolveRow(0, messages[0])
       expect(row.turnStatus).toEqual({ startedAt: 500, thinking: false, workedSeconds: 197 })
       expect(row.turnKey).toBe('u1')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses local duration when the host explicitly cannot verify the end', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(1_000)
+      const messages = [userMessage('u1')]
+      act(() => {
+        renderer = create(createElement(Harness, { messages, enabled: true }))
+      })
+      vi.setSystemTime(60_000)
+      act(() => {
+        renderer?.update(
+          createElement(Harness, {
+            messages,
+            enabled: true,
+            isWorking: false,
+            settledTurns: new Map([['u1', null]])
+          })
+        )
+      })
+      const row = renderer!.root.findByType('result').props.disclosure.resolveRow(0, messages[0])
+      expect(row.turnStatus).toBeNull()
     } finally {
       vi.useRealTimers()
     }

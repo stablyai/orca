@@ -169,6 +169,11 @@ export function reduceNativeChatTurnTiming(
  *  platform observed locally. */
 export type NativeChatSettledTurn = { startedAt: number; workedSeconds: number }
 
+/** Per turn: the host's duration, or null when the host recorded the turn but
+ *  has no duration to show (still running, or its end was never observed).
+ *  Either way the host's word replaces whatever this platform clocked locally. */
+export type NativeChatSettledTurns = ReadonlyMap<string, NativeChatSettledTurn | null>
+
 /** Split the timing map into the active turn's status and the settled ones.
  *  Host-recorded durations override the locally observed ones per turn; local
  *  observation remains the floor for hosts that record nothing. */
@@ -185,7 +190,7 @@ export function selectNativeChatTurnStatuses(
     isWorking: boolean
     workingStartedAt?: number | null
     hasCurrentTurnResponse: boolean
-    settledByTurn?: ReadonlyMap<string, NativeChatSettledTurn>
+    settledByTurn?: NativeChatSettledTurns
   }
 ): { active: NativeChatTurnStatus | null; completedByTurn: Record<string, NativeChatTurnStatus> } {
   const completedByTurn = Object.fromEntries(
@@ -197,6 +202,10 @@ export function selectNativeChatTurnStatuses(
       ])
   ) as Record<string, NativeChatTurnStatus>
   for (const [turnKey, settled] of settledByTurn ?? []) {
+    if (settled === null) {
+      delete completedByTurn[turnKey]
+      continue
+    }
     completedByTurn[turnKey] = {
       startedAt: settled.startedAt,
       thinking: false,

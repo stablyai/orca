@@ -13,7 +13,7 @@ import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-ha
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { NativeChatSettledTurn } from '../../../src/shared/native-chat-turn-status'
+import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import {
@@ -55,7 +55,7 @@ type Props = {
   structuredActivityUi?: boolean
   /** Structured lane: host-recorded turn timing feeding the per-turn status rows. */
   workingStartedAt?: number | null
-  settledTurns?: ReadonlyMap<string, NativeChatSettledTurn> | null
+  settledTurns?: NativeChatSettledTurns | null
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
   /** Interrupt a provider turn. */
   onStop?: () => void

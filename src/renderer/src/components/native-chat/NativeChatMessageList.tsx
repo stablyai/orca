@@ -19,7 +19,7 @@ import type { NativeChatTurnActivity } from './native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
-import type { NativeChatSettledTurn } from '../../../../shared/native-chat-turn-status'
+import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
   nativeChatTurnDiffs,
   type NativeChatDiffReveal,
@@ -61,7 +61,7 @@ export function NativeChatMessageList({
   fontScale: number
   workingStartedAt?: number | null
   /** Host-recorded turn durations keyed by user message id (structured lane). */
-  settledTurns?: ReadonlyMap<string, NativeChatSettledTurn>
+  settledTurns?: NativeChatSettledTurns
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>

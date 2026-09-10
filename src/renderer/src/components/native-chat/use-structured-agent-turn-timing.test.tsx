@@ -111,7 +111,8 @@ describe('useStructuredAgentTurnTiming', () => {
     expect(result.current.workingStartedAt).toBe(CLIENT_NOW - 2_500)
     // The row's provider key resolves through the submission alias, not journal order.
     expect([...result.current.settledTurns]).toEqual([
-      ['orca:first', { startedAt: HOST_START, workedSeconds: 197 }]
+      ['orca:first', { startedAt: HOST_START, workedSeconds: 197 }],
+      ['u2', null]
     ])
 
     vi.setSystemTime(CLIENT_NOW + 30_000)

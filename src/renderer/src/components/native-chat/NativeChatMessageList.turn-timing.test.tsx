@@ -38,6 +38,37 @@ const session: NativeChatLiveSession = {
 const settledTurns = new Map([['user-settled', { startedAt: 1, workedSeconds: 197 }]])
 
 describe('NativeChatMessageList host-settled turn timing', () => {
+  it('does not render a local completed duration when the host cannot verify the end', () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const unknownTurns = new Map([['user-settled', null]])
+    try {
+      const { rerender } = render(
+        <NativeChatMessageList
+          session={session}
+          isWorking
+          workingStartedAt={1_000}
+          settledTurns={unknownTurns}
+          expandSignal={false}
+          fontScale={1}
+        />
+      )
+      now.mockReturnValue(60_000)
+      rerender(
+        <NativeChatMessageList
+          session={session}
+          isWorking={false}
+          workingStartedAt={null}
+          settledTurns={unknownTurns}
+          expandSignal={false}
+          fontScale={1}
+        />
+      )
+      expect(screen.queryByText(/Worked for/)).not.toBeInTheDocument()
+    } finally {
+      now.mockRestore()
+    }
+  })
+
   it('renders a host-settled duration without ever clocking the turn locally', () => {
     // A local clock nowhere near the host's: the value must still be the host's.
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
