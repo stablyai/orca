@@ -106,6 +106,10 @@ export async function sendGroupMessage(args: {
   const { terminals } = await runtime.listTerminals(undefined, undefined, {
     includeVisualLayouts: false
   })
+  // Immediately after the only await: a coordinator taken over during terminal discovery is
+  // read-only, and must be told that whatever else is wrong with its recipient set. Everything
+  // below is synchronous, so no takeover can interleave between here and the insert.
+  revalidateLegacyCoordinator?.()
   // Structured workers are on no PTY surface, so `listTerminals` cannot see them and a broadcast
   // silently missed every one. Composed here rather than inside `listTerminals`, whose result is
   // published to paired clients and to consumers that assume a summary is writable.
@@ -165,7 +169,6 @@ export async function sendGroupMessage(args: {
     )
   }
 
-  revalidateLegacyCoordinator?.()
   const threadId = params.threadId ?? `thread_${Date.now()}`
   const messages = db.insertMessages(
     uniqueRecipients.map((resolution) => ({
