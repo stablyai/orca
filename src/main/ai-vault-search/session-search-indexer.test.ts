@@ -669,6 +669,15 @@ it('stops everything on close, including work already queued', async () => {
   indexer?.close()
   await queued
 
+  // The queued pass never ran: had it run, it would have reached for a store
+  // this close had already shut, and reported the failure.
+  expect(errors).toEqual([])
+  // And the timer is gone with it, so no later tick can queue another.
+  expect(clock.pendingTimers).toBe(0)
+  clock.advance(5 * INTERVAL_MS)
+  await indexer?.settled()
+  expect(errors).toEqual([])
+
   // No store and no consumer: a scan after the close writes nothing.
   const after = transcriptPath(OTHER_SESSION_ID)
   await writeClaudeTranscript(after, ['written after the close'], OTHER_SESSION_ID)
