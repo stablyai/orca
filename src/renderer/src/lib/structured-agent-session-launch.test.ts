@@ -761,6 +761,79 @@ describe('startStructuredAgentLaunch', () => {
     expect(readOutbox(intent.sessionId)).toEqual([])
   })
 
+  it('delivers a coalesced caller the way the launch it joined already decided', async () => {
+    const worktreeId = 'wt-coalesced-delivery-mode'
+    const intent = launchIntent(worktreeId, 'coalesced-delivery-session')
+    let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockImplementation(
+      () =>
+        new Promise<{ sessionId: string; fence: number }>((resolve) => (resolveLaunch = resolve))
+    )
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(worktreeId, intent.sessionId)
+    ])
+
+    startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'PR #1 context',
+      promptDelivery: 'draft'
+    })
+    const joiner = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'PR #1 context',
+      promptDelivery: 'auto-submit'
+    })
+    resolveLaunch({ sessionId: intent.sessionId, fence: 1 })
+    await flushLaunchSettlement()
+
+    // Why: the first caller's seed is already in the composer, so submitting the joiner's copy
+    // would show the user the text AND send it.
+    expect(readOutbox(intent.sessionId)).toEqual([])
+    expect(joiner.promptDeliveryResult).toBeUndefined()
+    expect(
+      mocks.callStructuredAgentSession.mock.calls.some((call) => call[1] === 'agentSession.send')
+    ).toBe(false)
+    expect(mocks.seedDraft).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        tabId: 'structured-agent-session-coalesced-delivery-session',
+        text: 'PR #1 context'
+      })
+    )
+  })
+
+  it('never seeds a draft onto a launch that was already refused', async () => {
+    const worktreeId = 'wt-refused-coalesced-draft'
+    const intent = launchIntent(worktreeId, 'refused-coalesced-session')
+    let rejectLaunch!: (error: unknown) => void
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (rejectLaunch = reject))
+    )
+
+    const first = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'first prompt',
+      promptDelivery: 'draft'
+    })
+    // An unfinished fallback keeps the refused launch reserved, so the next caller coalesces onto it.
+    void first.claimDefinitiveRefusalFallback(() => new Promise<void>(() => {}))
+    rejectLaunch(new StructuredAgentSessionCreateRefusalError('unsupported'))
+    await expect(first.launchResult).rejects.toBeInstanceOf(
+      StructuredAgentSessionCreateRefusalError
+    )
+    await flushLaunchSettlement()
+    mocks.seedDraft.mockClear()
+    expect(mocks.createIntent).toHaveBeenCalledOnce()
+
+    startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'PR #1 context',
+      promptDelivery: 'draft'
+    })
+
+    // Why: nothing clears a seed written onto a refused launch, so it would outlive every tab.
+    expect(mocks.createIntent).toHaveBeenCalledOnce()
+    expect(mocks.seedDraft).not.toHaveBeenCalled()
+    expect(readOutbox(intent.sessionId)).toEqual([])
+  })
+
   it('cancels a close-racing launch without retrying or toasting', async () => {
     const worktreeId = 'wt-close-race'
     const intent = launchIntent(worktreeId, 'session-close-race')

@@ -38,6 +38,9 @@ export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 
 type StructuredLaunchState = StructuredLaunchRecoveryState & {
   identity: string
+  /** Fixed by the caller that opened this launch; a joiner delivers its text the same way. Without
+   *  that, two entrypoints racing one identity seed the composer AND submit. */
+  promptDelivery: StructuredAgentLaunchOptions['promptDelivery']
   callers: StructuredLaunchCallerGroup
 }
 
@@ -117,6 +120,19 @@ function launchIdentity(
     : `${agent}:${worktreeId}`
 }
 
+/** What the outbox must carry: a draft goes to the composer seed instead. */
+function outboxPromptText(options: StructuredAgentLaunchOptions): string {
+  return options.promptDelivery === 'draft' ? '' : (options.prompt?.trim() ?? '')
+}
+
+function joinLaunchDelivery(
+  options: StructuredAgentLaunchOptions,
+  established: StructuredAgentLaunchOptions['promptDelivery']
+): StructuredAgentLaunchOptions {
+  const { promptDelivery: _joinerMode, ...rest } = options
+  return established ? { ...rest, promptDelivery: established } : rest
+}
+
 function cleanupLaunchState(state: StructuredLaunchState): void {
   if (pendingStructuredLaunchesByIdentity.get(state.identity) === state) {
     pendingStructuredLaunchesByIdentity.delete(state.identity)
@@ -191,17 +207,24 @@ function structuredAgentLaunchState(
       )
       notifyStructuredLaunchListeners()
     }
-    const text = options.promptDelivery === 'draft' ? '' : (options.prompt?.trim() ?? '')
+    const joined = joinLaunchDelivery(options, existing.promptDelivery)
+    const refusedAlready = existing.callers.outcome === 'refused'
+    const text = outboxPromptText(joined)
     const stagedPrompt =
-      text && existing.callers.outcome !== 'refused'
+      text && !refusedAlready
         ? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)
         : null
+    // Why: a refused launch is already settled, so nothing would ever clear a new seed — it would
+    // live on under a tab that never opens.
+    if (!refusedAlready) {
+      launchDraft.seedStructuredAgentLaunchDraft(existing.intent.sessionId, agent, joined)
+    }
     return {
       state: existing,
       caller: addStructuredLaunchCaller({
         group: existing.callers,
         launchResult: existing.promise,
-        options,
+        options: joined,
         stagedEntry: stagedPrompt
       })
     }
@@ -213,14 +236,16 @@ function structuredAgentLaunchState(
   const intent = options.resumeFrom
     ? createStructuredAgentSessionLaunchIntent(worktreeId, agent, options.resumeFrom)
     : createStructuredAgentSessionLaunchIntent(worktreeId, agent)
-  const text = options.promptDelivery === 'draft' ? '' : (options.prompt?.trim() ?? '')
+  const text = outboxPromptText(options)
   const stagedPrompt = text
     ? enqueueStructuredAgentSessionLaunchPrompt(intent.sessionId, text)
     : null
+  launchDraft.seedStructuredAgentLaunchDraft(intent.sessionId, agent, options)
   const callers = createStructuredLaunchCallerGroup()
   const state: StructuredLaunchState = {
     identity,
     intent,
+    ...(options.promptDelivery ? { promptDelivery: options.promptDelivery } : {}),
     promise: Promise.resolve({ sessionId: '', fence: 0 }),
     visibilityUnknown: false,
     cancelled: false,
@@ -280,7 +305,6 @@ export function startStructuredAgentLaunch(
   options: StructuredAgentLaunchOptions = {}
 ): StructuredAgentLaunchResult {
   const { state, caller } = structuredAgentLaunchState(worktreeId, agent, options)
-  launchDraft.seedStructuredAgentLaunchDraft(state.intent.sessionId, agent, options)
   return {
     sessionId: state.intent.sessionId,
     launchResult: state.promise,
