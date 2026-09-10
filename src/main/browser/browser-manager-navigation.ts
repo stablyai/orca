@@ -12,7 +12,7 @@ import { BrowserManagerVisibility } from './browser-manager-visibility'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
   // Why: navigator.userAgent (read by Google's auth JS) reflects the WebContents UA,
-  // not the request header, so the header-level Firefox switch in setupClientHintsOverride
+  // not the request header, so the header-level Firefox switch in setupGoogleAuthUserAgentOverride
   // must be matched here per navigation or the two layers disagree — itself a bot tell.
   // Restores the session's base identity off the auth hosts. Native-UA profiles opt out
   // of the whole clean-UA path, so they keep their untouched identity everywhere.
@@ -24,7 +24,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     const browserPageId = this.tabIdByWebContentsId.get(guest.id)
     // Why: popup child windows get these policies but are never in tabIdByWebContentsId, so a direct
     // lookup misses the native-UA opt-out and would hand a native profile's popup the Firefox UA.
-    // That is worse than doing nothing: native sessions skip setupClientHintsOverride entirely, so
+    // That is worse than doing nothing: native sessions skip setupGoogleAuthUserAgentOverride, so
     // the popup would send the raw Electron UA on the wire while navigator.userAgent claims Firefox.
     const ownerTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
     // Session state is authoritative before renderer registration and after a native profile imports a source UA.
@@ -56,8 +56,8 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       // navigation (ERR_ABORTED) and replay the original request, which a POST-started OAuth chain
       // cannot survive — the sign-in lands on a blank tab. CDP retargets navigator.userAgent without
       // touching the navigation, and it outranks the WebContents UA from then on, so a guest that
-      // switches to it stays on it. The wire UA never depended on this write: setupClientHintsOverride
-      // rewrites User-Agent per request for auth-host URLs on its own.
+      // switches to it stays on it. The wire UA never depended on this write:
+      // setupGoogleAuthUserAgentOverride rewrites User-Agent per request for auth-host URLs on its own.
       if (options.duringRedirect === true || overrideState !== undefined) {
         if (this.canOverrideUserAgentOverCdp(guest)) {
           authOverrideIssuedOverCdp = true

@@ -5,13 +5,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
+import {
+  LOCAL_HTTPS_TEST_CERTIFICATE,
+  LOCAL_HTTPS_TEST_PRIVATE_KEY
+} from './browser-local-https-test-certificate'
 
 // Why this runs a real Electron: sites that hold a transplanted session re-check the browser
 // identity that minted it, and an `Orca/x.y.z … Electron/x.y.z` UA is not one any browser sends —
 // LinkedIn and x.com revoked live sessions over it (STA-7147). The header layer is the only place
 // that identity can be proven, and the vm-based unit tests cannot see Chromium's header emission
-// at all. Every partition must therefore strip the Electron and app tokens on the wire for
-// ordinary hosts and present the Firefox identity on Google's sign-in hosts only.
+// at all. Every clean-mode partition must therefore strip the Electron and app tokens on the
+// wire for ordinary hosts and present the Firefox identity on Google's sign-in hosts only. This
+// focused revocation fix does not claim full Chrome fingerprint parity; native mode remains the
+// fallback for sites that reject the cleaned identity, including some Turnstile deployments.
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
 const fixtureRoots: string[] = []
@@ -28,13 +34,24 @@ const FIXTURE_LAUNCH_ATTEMPTS = 2
 type CapturedRequest = {
   url: string
   userAgent: string | null
-  clientHints: string[]
+  clientHints: Record<string, string>
+}
+
+type UserAgentBrand = {
+  brand: string
+  version: string
+}
+
+type NavigatorUserAgentData = {
+  brands: UserAgentBrand[]
+  highEntropy: { fullVersionList?: UserAgentBrand[] }
 }
 
 type FixtureResult = {
   rawUserAgent: string
   sessionUserAgent: string
   navigatorUserAgent: string
+  navigatorUserAgentData: NavigatorUserAgentData | null
   requests: CapturedRequest[]
 }
 
@@ -49,8 +66,9 @@ function neverReachedElectronReady(fixtureResult: string): boolean {
 function buildFixtureMain(modulePath: string, resultPath: string): string {
   return `
 const { app, BrowserWindow, session } = require('electron')
+const { createServer } = require('node:https')
 const { writeFileSync } = require('node:fs')
-const { cleanElectronUserAgent, setupClientHintsOverride } = require(${JSON.stringify(modulePath)})
+const { cleanElectronUserAgent, setupGoogleAuthUserAgentOverride } = require(${JSON.stringify(modulePath)})
 const resultPath = ${JSON.stringify(resultPath)}
 // Why: production's UA carries an app token ("Orca/1.4.198") between the engine comment and
 // Chrome/, and an unnamed fixture emits none — which would leave half of cleanElectronUserAgent
@@ -75,39 +93,69 @@ async function run() {
   const rawUserAgent = sess.getUserAgent()
   const cleanUa = cleanElectronUserAgent(rawUserAgent)
   sess.setUserAgent(cleanUa)
-  setupClientHintsOverride(sess, cleanUa)
+  setupGoogleAuthUserAgentOverride(sess)
   mark('clean identity installed')
 
-  // Why: onSendHeaders reports the headers exactly as they leave the network stack, after the
-  // product's onBeforeSendHeaders listener has rewritten them. The requests must actually be
-  // dispatched for it to fire, so the session is pointed at a proxy that refuses every
-  // connection: nothing reaches the real hosts and every load fails fast.
-  await sess.setProxy({ proxyRules: 'http://127.0.0.1:9', proxyBypassRules: '<-loopback>' })
+  sess.setCertificateVerifyProc((_request, callback) => callback(0))
   const requests = []
   sess.webRequest.onSendHeaders({ urls: ['https://*/*'] }, (details) => {
     const headers = details.requestHeaders || {}
     const uaKey = Object.keys(headers).find((key) => key.toLowerCase() === 'user-agent')
+    const clientHints = {}
+    for (const [key, value] of Object.entries(headers)) {
+      if (key.toLowerCase().startsWith('sec-ch-ua')) {
+        clientHints[key.toLowerCase()] = value
+      }
+    }
     requests.push({
       url: details.url,
       userAgent: uaKey ? headers[uaKey] : null,
-      clientHints: Object.keys(headers)
-        .filter((key) => key.toLowerCase().startsWith('sec-ch-ua'))
-        .sort()
+      clientHints
     })
   })
 
+  const server = createServer(
+    {
+      cert: ${JSON.stringify(LOCAL_HTTPS_TEST_CERTIFICATE)},
+      key: ${JSON.stringify(LOCAL_HTTPS_TEST_PRIVATE_KEY)}
+    },
+    (_request, response) => {
+      response.setHeader('Accept-CH', 'Sec-CH-UA-Full-Version-List')
+      response.end('<!doctype html><title>identity</title>')
+    }
+  )
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', resolve)
+  })
+  const origin = 'https://127.0.0.1:' + server.address().port
   const window = new BrowserWindow({ show: false, webPreferences: { partition } })
   mark('window created')
-  for (const url of ['https://example.com/', 'https://accounts.google.com/v3/signin/identifier']) {
-    await window.loadURL(url).catch(() => {})
+  let navigatorUserAgent
+  let navigatorUserAgentData
+  try {
+    await window.loadURL(origin + '/')
+    navigatorUserAgent = await window.webContents.executeJavaScript('navigator.userAgent')
+    navigatorUserAgentData = await window.webContents.executeJavaScript(
+      "(async () => { const data = navigator.userAgentData; return data ? { brands: data.brands, highEntropy: await data.getHighEntropyValues(['fullVersionList']) } : null })()"
+    )
+    await window.webContents.executeJavaScript(
+      'fetch("/hints").then((response) => response.text())'
+    )
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
   }
+
+  // Dispatch a real auth-host request without allowing it to reach the Internet.
+  await sess.setProxy({ proxyRules: 'http://127.0.0.1:9', proxyBypassRules: '<-loopback>' })
+  await window.loadURL('https://accounts.google.com/v3/signin/identifier').catch(() => {})
   mark('navigations attempted')
-  const navigatorUserAgent = await window.webContents.executeJavaScript('navigator.userAgent')
   clearTimeout(timeout)
   writeFileSync(resultPath, JSON.stringify({
     rawUserAgent,
     sessionUserAgent: sess.getUserAgent(),
     navigatorUserAgent,
+    navigatorUserAgentData,
     requests
   }))
   window.destroy()
@@ -167,6 +215,13 @@ async function runFixture(): Promise<FixtureResult> {
   }
 }
 
+function parseClientHintBrands(value: string): UserAgentBrand[] {
+  return [...value.matchAll(/"([^"]+)";v="([^"]+)"/g)].map((match) => ({
+    brand: match[1],
+    version: match[2]
+  }))
+}
+
 describe('browser session wire identity under Electron', () => {
   it('strips the Electron and app tokens for ordinary hosts and sends Firefox to Google auth hosts', async () => {
     const result = await runFixture()
@@ -181,10 +236,26 @@ describe('browser session wire identity under Electron', () => {
     expect(result.sessionUserAgent).not.toContain('Electron/')
     expect(result.sessionUserAgent).toMatch(/\(KHTML, like Gecko\) Chrome\/[\d.]+ Safari\/537\.36$/)
 
-    const ordinary = result.requests.find((request) => request.url === 'https://example.com/')
+    const ordinary = result.requests.find((request) => request.url.endsWith('/hints'))
     expect(ordinary, JSON.stringify(result.requests)).toBeDefined()
     expect(ordinary?.userAgent).toBe(result.sessionUserAgent)
     expect(result.navigatorUserAgent).toBe(result.sessionUserAgent)
+    expect(result.navigatorUserAgentData).not.toBeNull()
+
+    // Chromium owns both client-hint surfaces. Rewriting only the request headers would make this
+    // comparison fail while leaving the legacy UA assertions above green.
+    const wireBrands = parseClientHintBrands(ordinary?.clientHints['sec-ch-ua'] ?? '')
+    expect(wireBrands).toEqual(result.navigatorUserAgentData?.brands)
+    expect(wireBrands.some(({ brand }) => /Electron|Orca/i.test(brand))).toBe(false)
+    const chromeMajor = result.sessionUserAgent.match(/Chrome\/(\d+)/)?.[1]
+    expect(wireBrands.find(({ brand }) => brand === 'Chromium')?.version).toBe(chromeMajor)
+
+    const fullVersionList = ordinary?.clientHints['sec-ch-ua-full-version-list']
+    if (fullVersionList) {
+      expect(parseClientHintBrands(fullVersionList)).toEqual(
+        result.navigatorUserAgentData?.highEntropy.fullVersionList
+      )
+    }
 
     const auth = result.requests.find((request) =>
       request.url.startsWith('https://accounts.google.com/')
@@ -192,6 +263,6 @@ describe('browser session wire identity under Electron', () => {
     expect(auth, JSON.stringify(result.requests)).toBeDefined()
     expect(auth?.userAgent).toMatch(/Firefox\/\d/)
     expect(auth?.userAgent).not.toContain('Chrome')
-    expect(auth?.clientHints).toEqual([])
+    expect(auth?.clientHints).toEqual({})
   })
 })

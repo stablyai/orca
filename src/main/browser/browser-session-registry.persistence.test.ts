@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const USER_DATA = '/user-data'
 const META_PATH = `${USER_DATA}/browser-session-meta.json`
+const RAW_ELECTRON_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Orca/1.4.198 Chrome/150.0.7871.224 Electron/43.4.1 Safari/537.36'
+const CLEAN_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.224 Safari/537.36'
 
 type FsState = {
   files: Map<string, string>
@@ -27,7 +31,8 @@ function installModuleMocks(
   copyFailures = new Set<string>()
 ): {
   sessionFromPartitionMock: ReturnType<typeof vi.fn>
-  setupClientHintsOverrideMock: ReturnType<typeof vi.fn>
+  cleanElectronUserAgentMock: ReturnType<typeof vi.fn>
+  setupGoogleAuthUserAgentOverrideMock: ReturnType<typeof vi.fn>
   browserManagerHandleGuestWillDownloadMock: ReturnType<typeof vi.fn>
   browserManagerNotifyPermissionDeniedMock: ReturnType<typeof vi.fn>
   requestSystemMediaAccessMock: ReturnType<typeof vi.fn>
@@ -35,7 +40,7 @@ function installModuleMocks(
   const sessionFromPartitionMock = vi.fn((partition: string) => ({
     partition,
     setUserAgent: vi.fn(),
-    getUserAgent: vi.fn(() => 'Mozilla/5.0 Electron/31 Orca'),
+    getUserAgent: vi.fn(() => RAW_ELECTRON_USER_AGENT),
     setPermissionRequestHandler: vi.fn(),
     setPermissionCheckHandler: vi.fn(),
     setDevicePermissionHandler: vi.fn(),
@@ -45,7 +50,8 @@ function installModuleMocks(
     clearStorageData: vi.fn().mockResolvedValue(undefined),
     clearCache: vi.fn().mockResolvedValue(undefined)
   }))
-  const setupClientHintsOverrideMock = vi.fn()
+  const cleanElectronUserAgentMock = vi.fn(() => CLEAN_USER_AGENT)
+  const setupGoogleAuthUserAgentOverrideMock = vi.fn()
   const browserManagerHandleGuestWillDownloadMock = vi.fn()
   const browserManagerNotifyPermissionDeniedMock = vi.fn()
   const requestSystemMediaAccessMock = vi.fn().mockResolvedValue(true)
@@ -119,8 +125,8 @@ function installModuleMocks(
     requestSystemMediaAccess: requestSystemMediaAccessMock
   }))
   vi.doMock('./browser-session-ua', () => ({
-    cleanElectronUserAgent: vi.fn((ua: string) => ua.replace(/\s*Electron\/\S+/, '')),
-    setupClientHintsOverride: setupClientHintsOverrideMock
+    cleanElectronUserAgent: cleanElectronUserAgentMock,
+    setupGoogleAuthUserAgentOverride: setupGoogleAuthUserAgentOverrideMock
   }))
   // This suite models replay with an in-memory filesystem. The real file-backed SQLite merge has
   // dedicated coverage; these fixtures are legacy unmarked images and keep the copy path.
@@ -149,7 +155,8 @@ function installModuleMocks(
 
   return {
     sessionFromPartitionMock,
-    setupClientHintsOverrideMock,
+    cleanElectronUserAgentMock,
+    setupGoogleAuthUserAgentOverrideMock,
     browserManagerHandleGuestWillDownloadMock,
     browserManagerNotifyPermissionDeniedMock,
     requestSystemMediaAccessMock
@@ -236,19 +243,28 @@ describe('BrowserSessionRegistry persistence', () => {
 
   it('keeps UA cleaning as the fallback for profiles without an override', async () => {
     const fsState = createFsState()
-    const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
+    const {
+      sessionFromPartitionMock,
+      cleanElectronUserAgentMock,
+      setupGoogleAuthUserAgentOverrideMock
+    } = installModuleMocks(fsState)
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
     await browserSessionRegistry.createProfile('isolated', 'Default identity')
 
     const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
-    expect(profileSession.setUserAgent).toHaveBeenCalledWith('Mozilla/5.0 Orca')
-    expect(setupClientHintsOverrideMock).toHaveBeenCalledWith(profileSession, 'Mozilla/5.0 Orca')
+    expect(cleanElectronUserAgentMock).toHaveBeenCalledWith(RAW_ELECTRON_USER_AGENT)
+    expect(profileSession.setUserAgent).toHaveBeenCalledWith(CLEAN_USER_AGENT)
+    expect(setupGoogleAuthUserAgentOverrideMock).toHaveBeenCalledWith(profileSession)
   })
 
   it('leaves UA and client hints untouched for native-mode profiles', async () => {
     const fsState = createFsState()
-    const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
+    const {
+      sessionFromPartitionMock,
+      cleanElectronUserAgentMock,
+      setupGoogleAuthUserAgentOverrideMock
+    } = installModuleMocks(fsState)
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
     await browserSessionRegistry.createProfile('isolated', 'Google', { userAgentMode: 'native' })
@@ -256,7 +272,8 @@ describe('BrowserSessionRegistry persistence', () => {
     const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
     const { getBrowserSessionUserAgentMode } = await import('./browser-session-user-agent-mode')
     expect(profileSession.setUserAgent).not.toHaveBeenCalled()
-    expect(setupClientHintsOverrideMock).not.toHaveBeenCalled()
+    expect(cleanElectronUserAgentMock).not.toHaveBeenCalled()
+    expect(setupGoogleAuthUserAgentOverrideMock).not.toHaveBeenCalled()
     expect(getBrowserSessionUserAgentMode(profileSession as never)).toBe('native')
   })
 
@@ -405,7 +422,11 @@ describe('BrowserSessionRegistry persistence', () => {
       ]
     })
 
-    const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
+    const {
+      sessionFromPartitionMock,
+      cleanElectronUserAgentMock,
+      setupGoogleAuthUserAgentOverrideMock
+    } = installModuleMocks(fsState)
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
     browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
@@ -417,12 +438,12 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(appliedUas).not.toContain(validUa)
     // Why: every non-native profile falls to Orca's own cleaned engine UA.
     expect(appliedUas.length).toBeGreaterThan(0)
-    expect(appliedUas.every((ua) => ua === 'Mozilla/5.0 Orca')).toBe(true)
+    expect(appliedUas.every((ua) => ua === CLEAN_USER_AGENT)).toBe(true)
+    expect(cleanElectronUserAgentMock).toHaveBeenCalled()
     expect(
-      setupClientHintsOverrideMock.mock.calls.every(
-        (c: unknown[]) => c[1] !== brokenUa && c[1] !== validUa
-      )
+      cleanElectronUserAgentMock.mock.calls.every(([ua]) => ua === RAW_ELECTRON_USER_AGENT)
     ).toBe(true)
+    expect(setupGoogleAuthUserAgentOverrideMock).toHaveBeenCalled()
   })
 
   it('never applies a legacy persisted UA to a native-mode profile', async () => {
@@ -487,7 +508,8 @@ describe('BrowserSessionRegistry persistence', () => {
       ]
     })
 
-    const { sessionFromPartitionMock, setupClientHintsOverrideMock } = installModuleMocks(fsState)
+    const { sessionFromPartitionMock, setupGoogleAuthUserAgentOverrideMock } =
+      installModuleMocks(fsState)
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
     browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
@@ -498,7 +520,7 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(importedSessions.length).toBeGreaterThan(0)
     expect(importedSessions.every((sess) => sess.setUserAgent.mock.calls.length === 0)).toBe(true)
     expect(
-      setupClientHintsOverrideMock.mock.calls.some(
+      setupGoogleAuthUserAgentOverrideMock.mock.calls.some(
         ([sess]) => (sess as { partition?: string }).partition === importedPartition
       )
     ).toBe(false)
