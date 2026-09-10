@@ -5,6 +5,30 @@ export type ExitedSession = { incarnationId: string; code: number }
 
 export type TerminalHostSessionRecord = Session | ExitedSession
 
+// A host retains at most this many unconsumed exits, regardless of client availability.
+export const MAX_EXIT_RECEIPTS = 1024
+
+function pruneExitReceipts(records: Map<string, TerminalHostSessionRecord>): void {
+  if (records.size <= MAX_EXIT_RECEIPTS) {
+    return
+  }
+  let excess = -MAX_EXIT_RECEIPTS
+  for (const record of records.values()) {
+    if ('code' in record) {
+      excess++
+    }
+  }
+  for (const [id, record] of records) {
+    if (excess <= 0) {
+      break
+    }
+    if ('code' in record) {
+      records.delete(id)
+      excess--
+    }
+  }
+}
+
 export function consumeExitReceipt(
   records: Map<string, TerminalHostSessionRecord>,
   sessionId: string,
@@ -30,7 +54,10 @@ export function reapSessionRecord(
     return false
   }
   if (exit) {
+    // Reinsert so receipt order follows exit time, not process creation time.
+    records.delete(sessionId)
     records.set(sessionId, exit)
+    pruneExitReceipts(records)
   } else {
     records.delete(sessionId)
   }

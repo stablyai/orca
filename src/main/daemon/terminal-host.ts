@@ -1,7 +1,11 @@
 import type { Session } from './session'
-import { consumeExitReceipt, reapSessionRecord } from './terminal-host-session-record'
-import { exitFromRecord, sessionFromRecord } from './terminal-host-session-record'
-import type { TerminalHostSessionRecord } from './terminal-host-session-record'
+import {
+  consumeExitReceipt,
+  exitFromRecord,
+  reapSessionRecord,
+  sessionFromRecord,
+  type TerminalHostSessionRecord
+} from './terminal-host-session-record'
 import {
   SessionNotFoundError,
   type SessionInfo,

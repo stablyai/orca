@@ -138,7 +138,7 @@ export async function inspectExitedIncarnationFromRuntimeController(
 
 /**
  * Best-effort acknowledgement after durable recovery. Unsupported providers/hosts retain their
- * existing policy; failures leave evidence until host shutdown or id recreation, not a retry queue.
+ * existing policy; failures leave evidence subject to host retention, not a retry queue.
  */
 export async function releaseExitedIncarnationFromRuntimeController(
   ptyId: string,

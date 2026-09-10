@@ -4,6 +4,7 @@ import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-ad
 import type { DaemonRequestRouter } from './daemon-request-router'
 import type { DaemonPtySpawnPreparations } from './daemon-pty-spawn-preparations'
 import type { DaemonRequest } from './types'
+import { MAX_EXIT_RECEIPTS, type TerminalHostSessionRecord } from './terminal-host-session-record'
 import { localProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import {
   inspectExitedIncarnationFromRuntimeController,
@@ -111,6 +112,25 @@ describe('exit receipt consumption is bookkeeping, not terminal shutdown', () =>
     expect(child.kill).not.toHaveBeenCalled()
     expect(child.forceKill).not.toHaveBeenCalled()
     expect(await harness.adapter.probePtyLiveness(id)).toBe(true)
+  })
+
+  it('returns no exit proof after eviction and safely accepts late acknowledgement', async () => {
+    await harness.adapter.spawn({ sessionId: 'live-sentinel', cols: 80, rows: 24 })
+    const host = (
+      harness.server as unknown as {
+        host: { sessions: Map<string, TerminalHostSessionRecord> }
+      }
+    ).host
+    for (let i = 0; i < MAX_EXIT_RECEIPTS; i++) {
+      host.sessions.set(`old-${i}`, { incarnationId: `old-inc-${i}`, code: 0 })
+    }
+    expect(await inspectExitedIncarnationFromRuntimeController('old-0', 'old-inc-0')).toBe(true)
+    const fresh = await exited('fresh-exit')
+    expect(await inspectExitedIncarnationFromRuntimeController('old-0', 'old-inc-0')).toBe(false)
+    expect(await inspectExitedIncarnationFromRuntimeController('old-1', 'old-inc-1')).toBe(true)
+    expect(await inspectExitedIncarnationFromRuntimeController('fresh-exit', fresh)).toBe(true)
+    expect(await harness.adapter.probePtyLiveness('live-sentinel')).toBe(true)
+    await expect(harness.adapter.consumeExitReceipt('old-0', 'old-inc-0')).resolves.toBeUndefined()
   })
 
   it('consumes only matching receipts and tolerates duplicate or missing acknowledgements', async () => {
