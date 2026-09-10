@@ -66,7 +66,17 @@ async function dispatchStructuredLaunchPrompt(
       )
       mutateEntry(entry, (current) => {
         if (strict) {
-          return operationState === 'settled-rejected' ? null : { ...current, state: 'unconfirmed' }
+          return operationState === 'settled-rejected'
+            ? null
+            : {
+                ...current,
+                state: 'unconfirmed',
+                // A host-unknown operation must be force-retried with its original id.
+                retryAfterUnknownSubmittedAt:
+                  result.refusal.code === 'agent_session_operation_unknown'
+                    ? -1
+                    : current.retryAfterUnknownSubmittedAt
+              }
         }
         return requeueStructuredAgentSessionSendRefusal(current, result.refusal.code, () =>
           createStructuredAgentSessionOperationId(() => crypto.randomUUID())

@@ -109,7 +109,7 @@ export function continueBackgroundWorktreeCreation(
 export function retryBackgroundWorktreeCreation(creationId: string): void {
   const store = useAppStore.getState()
   const entry = store.pendingWorktreeCreations[creationId]
-  if (!entry || entry.structuredLaunchRetryDisabled) {
+  if (!entry || entry.status === 'creating' || entry.structuredLaunchRetryDisabled) {
     return
   }
   store.updatePendingWorktreeCreation(creationId, {

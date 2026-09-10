@@ -567,7 +567,9 @@ describe('useComposerState host-context boundaries', () => {
     expect(section).toContain(
       'const submitLinkedWorkItem = smartGitHubMetadata?.linkedWorkItem ?? linkedWorkItem'
     )
-    expect(section).toContain('resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note)')
+    expect(section).toContain(
+      'resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note, workItemPromptDelivery)'
+    )
     expect(section).toContain('linkedWorkItem: submitLinkedWorkItem')
   })
 

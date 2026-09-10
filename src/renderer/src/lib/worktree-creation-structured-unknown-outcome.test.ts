@@ -176,6 +176,46 @@ describe('structured worktree creation unknown outcome', () => {
     })
   })
 
+  it('admits only one retry while reconciliation is already running', async () => {
+    let resolveRecovery:
+      | ((value: {
+          accepted: true
+          cancelled: false
+          visibilityUnknown: false
+          activation: false
+          primaryTabId: null
+        }) => void)
+      | undefined
+    mocks.launchStructuredWorktreeSession
+      .mockResolvedValueOnce({
+        accepted: true,
+        cancelled: false,
+        visibilityUnknown: true,
+        activation: false,
+        primaryTabId: null
+      })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveRecovery = resolve
+          })
+      )
+
+    await executeWorktreeCreation('creation-1', request)
+    retryBackgroundWorktreeCreation('creation-1')
+    retryBackgroundWorktreeCreation('creation-1')
+
+    expect(mocks.launchStructuredWorktreeSession).toHaveBeenCalledTimes(2)
+    expect(store.createWorktree).toHaveBeenCalledOnce()
+    resolveRecovery?.({
+      accepted: true,
+      cancelled: false,
+      visibilityUnknown: false,
+      activation: false,
+      primaryTabId: null
+    })
+  })
+
   it('keeps a definitive delivery failure on the existing worktree without retry', async () => {
     mocks.launchStructuredWorktreeSession.mockResolvedValue({
       accepted: true,

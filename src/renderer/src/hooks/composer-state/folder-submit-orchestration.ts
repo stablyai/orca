@@ -31,6 +31,7 @@ import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { resolveWorkItemStartPromptDelivery } from '../../../../shared/work-item-start-prompt-delivery'
 import {
   resolveFolderWorkspaceLaunchDraft,
   submitFolderWorkspaceCreate
@@ -107,9 +108,12 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
         if (isSubmissionCancelled()) {
           return
         }
+        const workItemPromptDelivery = submitLinkedWorkItem
+          ? resolveWorkItemStartPromptDelivery(settings?.workItemStartPromptDelivery)
+          : undefined
         const folderLaunchDraftText =
           agent && submitLinkedWorkItem
-            ? resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note)
+            ? resolveFolderWorkspaceLaunchDraft(submitLinkedWorkItem, note, workItemPromptDelivery)
             : null
         const folderWorkspaceCreated = await submitFolderWorkspaceCreate({
           projectGroup: selectedProjectGroup,
@@ -135,7 +139,10 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
                 {
                   agent,
                   ...(folderLaunchDraftText
-                    ? { promptDelivery: 'draft' as const, launchDraftText: folderLaunchDraftText }
+                    ? {
+                        promptDelivery: workItemPromptDelivery ?? ('draft' as const),
+                        launchDraftText: folderLaunchDraftText
+                      }
                     : {}),
                   nativeChatTranscriptIsLocalReadable:
                     isNativeChatTranscriptLocalReadable(folderTargetConnectionId)

@@ -476,10 +476,8 @@ describe('staged background worktree creation', () => {
 
     expect(continueBackgroundWorktreeCreation('creation-1', request)).toBe(true)
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
-    const stagedCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(stagedCreateCall?.[25]).toEqual(expectedOptions)
-
     store.createWorktree.mockClear()
+    store.pendingWorktreeCreations['creation-1']!.status = 'error'
     retryBackgroundWorktreeCreation('creation-1')
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
     const retryCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined

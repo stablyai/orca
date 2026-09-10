@@ -18,21 +18,16 @@ import {
   getLinkedItemDisplayName,
   toFolderWorkspaceLinkedTask
 } from './folder-workspace-composer-helpers'
-import {
-  hasExplicitTuiLaunchCustomization,
-  hasExplicitTuiAgentArgs,
-  resolveAgentLaunchRoute
-} from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { useAppStore } from '@/store'
+import { structuredWorkItemComposerPreflightUnavailableMessage } from '@/lib/launch-work-item-direct-messages'
+import { prepareFolderWorkspaceWorkItemStart } from './folder-workspace-work-item-start'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchPlatform,
-  preflightFolderWorkspaceAgentTrust,
-  resolveFolderWorkspaceLaunchDraft
+  preflightFolderWorkspaceAgentTrust
 } from './folder-workspace-agent-startup'
 
 export {
@@ -138,27 +133,23 @@ export async function submitFolderWorkspaceCreate({
         : null
   // Why: the argv-prefill plan carries the draft inside `launchCommand`, so
   // `startupPlan.draftPrompt` alone can't tell whether this launch has one.
-  const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
-  const agentLaunchRoute = quickAgent
-    ? resolveAgentLaunchRoute({
-        agent: quickAgent,
-        settings,
-        executionHostId: runtimeEnvironmentId
-          ? `runtime:${encodeURIComponent(runtimeEnvironmentId)}`
-          : (projectGroup.connectionId ?? 'local'),
-        hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
-        workspaceKind: 'folder',
-        promptDelivery: launchDraftPrompt ? 'draft' : 'auto-submit',
-        launchText: launchDraftPrompt ?? note,
-        nativeChatTranscriptIsLocalReadable: !launchIsRemote,
-        requiresTuiLaunchCustomization:
-          hasExplicitTuiAgentArgs(quickAgent, agentArgs) ||
-          hasExplicitTuiLaunchCustomization(settings, quickAgent),
-        initialSessionOptions: startupPlan?.sessionOptions
-      })
-    : 'terminal-tui'
+  const { launchText: launchDraftPrompt, resolution: routeResolution } =
+    await prepareFolderWorkspaceWorkItemStart({
+      projectGroup,
+      linkedWorkItem,
+      note,
+      agent: quickAgent,
+      agentArgs,
+      settings,
+      runtimeEnvironmentId,
+      initialSessionOptions: startupPlan?.sessionOptions
+    })
+  if (!routeResolution.ok) {
+    throw new Error(structuredWorkItemComposerPreflightUnavailableMessage())
+  }
+  const agentLaunchRoute = routeResolution.route
   const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
+  const strictWorkItemLaunch = routeResolution.workItemPromptDelivery === 'submit-after-ready'
   // Why: the pending badge should only appear when the submitted prompt can
   // actually produce the first agent message that names the workspace.
   const pendingFirstAgentMessageRename =
@@ -228,29 +219,49 @@ export async function submitFolderWorkspaceCreate({
     let structuredLaunchAccepted = structuredLaunch
     if (structuredLaunch && isAgentSessionHandleProvider(quickAgent)) {
       const launch = startStructuredAgentLaunch(folderWorkspaceKey(workspace.id), quickAgent, {
-        prompt: launchDraftPrompt ?? note
+        prompt: launchDraftPrompt ?? note,
+        ...(strictWorkItemLaunch
+          ? {
+              promptDelivery: 'submit-after-ready' as const,
+              launchOrigin: 'work-item-start' as const
+            }
+          : {})
       })
-      const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {
-        structuredLaunchAccepted = false
-        if (pendingFirstAgentMessageRename) {
-          await useAppStore
-            .getState()
-            .updateFolderWorkspace(workspace.id, { pendingFirstAgentMessageRename: true })
-            .catch(() => undefined)
-        }
-        await preflightFolderWorkspaceAgentTrust({
-          agent: quickAgent,
-          workspacePath: workspace.folderPath,
-          connectionId: workspace.connectionId ?? projectGroup.connectionId
-        })
-        activation = activateAndRevealFolderWorkspace(workspace.id, {
-          ...(startup ? { startup } : {}),
-          runtimeEnvironmentId
-        })
-      })
+      const refusalFallback = strictWorkItemLaunch
+        ? null
+        : launch.claimDefinitiveRefusalFallback(async () => {
+            structuredLaunchAccepted = false
+            if (pendingFirstAgentMessageRename) {
+              await useAppStore
+                .getState()
+                .updateFolderWorkspace(workspace.id, { pendingFirstAgentMessageRename: true })
+                .catch(() => undefined)
+            }
+            await preflightFolderWorkspaceAgentTrust({
+              agent: quickAgent,
+              workspacePath: workspace.folderPath,
+              connectionId: workspace.connectionId ?? projectGroup.connectionId
+            })
+            activation = activateAndRevealFolderWorkspace(workspace.id, {
+              ...(startup ? { startup } : {}),
+              runtimeEnvironmentId
+            })
+          })
       try {
         await launch.launchResult
+        if (strictWorkItemLaunch) {
+          const promptDelivery = await launch.promptDeliveryResult
+          if (!promptDelivery?.delivered) {
+            return false
+          }
+        }
       } catch (error) {
+        if (strictWorkItemLaunch) {
+          if (launch.isVisibilityUnknown()) {
+            launch.releaseCallerAfterUnknownOutcome()
+          }
+          return false
+        }
         if (!(error instanceof StructuredAgentSessionCreateRefusalError)) {
           return !launch.isVisibilityUnknown()
         }

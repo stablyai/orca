@@ -80,12 +80,12 @@ export async function prepareQuickWorkItemStartRoute(args: {
   settings: GlobalSettings | null | undefined
   executionHostId: string
   repoId: string
-  platform: NodeJS.Platform
   workspaceKind: 'git-worktree' | 'folder'
   hasDraftPrompt: boolean
   launchText: string
   nativeChatTranscriptIsLocalReadable: boolean
   initialSessionOptions?: Readonly<Record<string, unknown>>
+  requiresTuiLaunchCustomization?: boolean
 }): Promise<QuickWorkItemStartRouteResolution> {
   const delivery = args.hasLinkedWorkItem
     ? resolveWorkItemStartPromptDelivery(args.settings?.workItemStartPromptDelivery)
@@ -100,12 +100,10 @@ export async function prepareQuickWorkItemStartRoute(args: {
   return resolveQuickWorkItemStartRoute({
     ...args,
     hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
-    projectRuntime: getLocalRepoProjectExecutionRuntimeContext(
-      useAppStore.getState(),
-      args.repoId,
-      args.platform
-    ),
+    // Runtime policy follows the renderer host, not the WSL launch platform.
+    projectRuntime: getLocalRepoProjectExecutionRuntimeContext(useAppStore.getState(), args.repoId),
     requiresTuiLaunchCustomization:
-      args.agent !== null && hasExplicitTuiLaunchCustomization(args.settings, args.agent)
+      args.requiresTuiLaunchCustomization === true ||
+      (args.agent !== null && hasExplicitTuiLaunchCustomization(args.settings, args.agent))
   })
 }

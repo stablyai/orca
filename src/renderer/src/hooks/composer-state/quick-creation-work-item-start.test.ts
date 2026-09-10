@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { Repo } from '../../../../shared/repo-types'
@@ -10,6 +10,7 @@ import { useQuickCreationExecution } from './quick-creation-execution'
 import type { QuickCreationExecutionInput } from './quick-creation-execution-input'
 import { resolveQuickWorkItemStartRoute } from './quick-work-item-start-route'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const mocks = vi.hoisted(() => ({
   runBackgroundWorktreeCreation: vi.fn(),
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     activeRepoId: null,
     activeWorktreeId: null,
     projects: [],
-    repos: [],
+    repos: [] as Repo[],
     settings: null,
     worktreesByRepo: {}
   }
@@ -141,7 +142,15 @@ async function execute(input: QuickCreationExecutionInput): Promise<void> {
 describe('TaskPage composer work-item start delivery', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.appState.repos = []
+    Reflect.deleteProperty(window, 'api')
+    resetRendererAppPlatformCacheForTests()
     setLocalRuntimeCapabilitiesForTests([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY])
+  })
+
+  afterEach(() => {
+    Reflect.deleteProperty(window, 'api')
+    resetRendererAppPlatformCacheForTests()
   })
 
   it('routes submit-after-ready through one structured request with no draft or terminal startup', async () => {
@@ -223,6 +232,19 @@ describe('TaskPage composer work-item start delivery', () => {
     input.selectedRepoIsRemote = true
 
     await expect(execute(input)).rejects.toThrow('No workspace, terminal, or prompt was started.')
+    expect(mocks.runBackgroundWorktreeCreation).not.toHaveBeenCalled()
+  })
+
+  it('fails before creation when a Windows renderer owns a WSL checkout', async () => {
+    mocks.appState.repos = [{ ...repo, path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo' }]
+    Object.assign(window, {
+      api: { platform: { get: () => ({ platform: 'win32' as const }) } }
+    })
+    resetRendererAppPlatformCacheForTests()
+
+    await expect(
+      execute(executionInput(settingsWithDelivery('submit-after-ready'), preparedQuickSubmit()))
+    ).rejects.toThrow('No workspace, terminal, or prompt was started.')
     expect(mocks.runBackgroundWorktreeCreation).not.toHaveBeenCalled()
   })
 })

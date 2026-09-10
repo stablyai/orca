@@ -21,12 +21,16 @@ const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
 ]
 
 const ROUTE_POLICY_OWNERS = [
-  'src/renderer/src/components/sidebar/folder-workspace-composer-submit.ts',
   'src/renderer/src/hooks/composer-state/full-creation-execution.ts',
   'src/renderer/src/hooks/composer-state/quick-work-item-start-route.ts',
   'src/renderer/src/lib/launch-agent-in-new-tab.ts',
   'src/renderer/src/lib/launch-work-item-direct.ts',
   'src/renderer/src/lib/onboarding-folder-agent-startup.ts'
+]
+
+const QUICK_WORK_ITEM_ROUTE_CALLERS = [
+  'src/renderer/src/components/sidebar/folder-workspace-work-item-start.ts',
+  'src/renderer/src/hooks/composer-state/quick-creation-execution.ts'
 ]
 
 const WORK_ITEM_PROMPT_DELIVERY_POLICY_CONSUMERS = [
@@ -36,6 +40,8 @@ const WORK_ITEM_PROMPT_DELIVERY_POLICY_CONSUMERS = [
   'src/renderer/src/components/github-project/ProjectViewWrapper.tsx',
   'src/renderer/src/components/github-project/useProjectRowActions.ts',
   'src/renderer/src/components/settings/WorkItemStartBehaviorSetting.tsx',
+  'src/renderer/src/components/sidebar/folder-workspace-work-item-start.ts',
+  'src/renderer/src/hooks/composer-state/folder-submit-orchestration.ts',
   'src/renderer/src/hooks/composer-state/quick-creation-execution.ts',
   'src/renderer/src/hooks/composer-state/quick-work-item-start-route.ts'
 ]
@@ -77,6 +83,19 @@ describe('agent launch routing caller census', () => {
       .sort()
 
     expect(consumers).toEqual([...WORK_ITEM_PROMPT_DELIVERY_POLICY_CONSUMERS].sort())
+  })
+
+  it('pins every New Workspace Composer work-item branch behind the strict route', async () => {
+    const callers = (await productionFiles())
+      .filter(
+        (file) => file !== 'src/renderer/src/hooks/composer-state/quick-work-item-start-route.ts'
+      )
+      .filter((file) =>
+        readFileSync(join(REPO_ROOT, file), 'utf8').includes('prepareQuickWorkItemStartRoute({')
+      )
+      .sort()
+
+    expect(callers).toEqual([...QUICK_WORK_ITEM_ROUTE_CALLERS].sort())
   })
 
   it('keeps non-visible, resume, and floating launchers intentionally outside the route', () => {

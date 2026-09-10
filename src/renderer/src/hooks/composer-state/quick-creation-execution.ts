@@ -179,7 +179,6 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         settings,
         executionHostId,
         repoId,
-        platform: selectedRepoAgentLaunchPlatform,
         workspaceKind: selectedRepoIsGit ? 'git-worktree' : 'folder',
         hasDraftPrompt: Boolean(quickDraftPrompt),
         launchText: quickDraftPrompt ?? quickPrompt,

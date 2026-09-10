@@ -11,6 +11,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
+import type { WorkItemStartPromptDelivery } from '../../../../shared/work-item-start-prompt-delivery'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 
 export function getFolderWorkspaceAgentLaunchPlatform(
@@ -23,12 +24,17 @@ export function getFolderWorkspaceAgentLaunchPlatform(
   return parentPath && isWslUncPath(parentPath) ? 'linux' : CLIENT_PLATFORM
 }
 
-/** Resolve the linked context that should appear in the agent input without submitting. */
+/** Resolve the linked launch context; delivery policy decides draft versus structured submit. */
 export function resolveFolderWorkspaceLaunchDraft(
   linkedWorkItem: LinkedWorkItemSummary,
-  note: string
+  note: string,
+  promptDelivery: WorkItemStartPromptDelivery = 'draft'
 ): string | null {
-  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(linkedWorkItem, note)
+  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
+    linkedWorkItem,
+    note,
+    promptDelivery
+  )
   return (draftPrompt ?? prompt.trim()) || null
 }
 
