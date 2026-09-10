@@ -193,6 +193,7 @@ export const MessageRow = memo(function MessageRow({
           expandOverride={activityExpandOverride}
           activeTurnIsWorking={activeTurnIsWorking}
           structuredActivityUi={structuredActivityUi}
+          disclosureId={message.id}
         />
       ) : null}
       {showControls ? (
