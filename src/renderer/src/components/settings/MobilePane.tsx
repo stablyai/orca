@@ -4,9 +4,9 @@ import { useAppStore } from '../../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   getPairedMobileDevicesSnapshot,
-  replacePairedMobileDevices,
   usePairedMobileDevices
 } from '../mobile/paired-mobile-devices'
+import { revokePairedMobileDevice } from './mobile-pane-device-revoke'
 import { useMobilePairingDevicePolling } from './mobile-pairing-device-polling'
 import type { MobileNetworkInterface } from './mobile-network-interface-selection'
 import { MobilePairingQrSection } from './MobilePairingQrSection'
@@ -263,7 +263,7 @@ export function MobilePane(): React.JSX.Element {
   )
 
   const changeConnectionMode = useCallback(
-    (nextMode: MobilePairingConnectionMode) => {
+    (nextMode: MobilePairingConnectionMode, options?: { persist?: boolean }) => {
       if (nextMode === connectionMode) {
         return
       }
@@ -271,7 +271,12 @@ export function MobilePane(): React.JSX.Element {
       // instead of snapping back to the default.
       handledModeRef.current = nextMode
       setConnectionMode(nextMode)
-      void updateSettings({ mobilePairingConnectionMode: nextMode })
+      // Why: the persisted setting is host policy — it withdraws Relay from
+      // every paired phone. A mint-failure recovery button only promises a
+      // LAN QR, so it must not persist.
+      if (options?.persist !== false) {
+        void updateSettings({ mobilePairingConnectionMode: nextMode })
+      }
       // Why: after a Relay mint failure, LAN should mint immediately — including
       // when the renderer has not chosen an address yet (main picks the default).
       const shouldRecoverWithLan = relayMintFailure != null && nextMode === 'local-only'
@@ -355,34 +360,12 @@ export function MobilePane(): React.JSX.Element {
     loadDevices
   })
 
-  async function revokeDevice(deviceId: string) {
-    try {
-      const { revoked } = await window.api.mobile.revokeDevice({ deviceId })
-      // Why: the backend can resolve revoked=false without removing the device;
-      // surface that as an error instead of a false "Device revoked".
-      if (!revoked) {
-        throw new Error('mobile.revokeDevice returned revoked=false')
-      }
-      try {
-        // Why: the backend may have learned about another phone while Settings
-        // was open, so refresh from source-of-truth after mutating it.
-        await refreshDevices({ force: true })
-      } catch (err) {
-        console.error('mobile.listDevices failed after revoke', err)
-        const nextDevices = getPairedMobileDevicesSnapshot().filter((d) => d.deviceId !== deviceId)
-        replacePairedMobileDevices(nextDevices)
-      }
-      if (mountedRef.current) {
-        toast.success(translate('auto.components.settings.MobilePane.2e3dd0bc29', 'Device revoked'))
-      }
-    } catch {
-      if (mountedRef.current) {
-        toast.error(
-          translate('auto.components.settings.MobilePane.870e1b5ca5', 'Failed to revoke device')
-        )
-      }
-    }
-  }
+  const revokeDevice = (deviceId: string): Promise<void> =>
+    revokePairedMobileDevice({
+      deviceId,
+      refreshDevices,
+      isMounted: () => mountedRef.current
+    })
 
   return (
     <div className="space-y-6">
@@ -418,7 +401,7 @@ export function MobilePane(): React.JSX.Element {
       {relayMintFailure != null && connectionMode === 'automatic' ? (
         <MobileRelayMintFailureNotice
           failure={relayMintFailure}
-          onUseLan={() => changeConnectionMode('local-only')}
+          onUseLan={() => changeConnectionMode('local-only', { persist: false })}
           onRetry={() => void generateQR({ rotate: true })}
           onCopyDiagnostics={() => void copyRelayDiagnostics()}
           busy={loading}

@@ -39,3 +39,7 @@ export type RelayAuthCoordinatorOptions = {
 export type LiveBrokerWaitResult =
   | { broker: CoordinatedRelayBroker }
   | { broker: null; offlineReason: RelayOfflineReason | null }
+
+// skipLinger: a deliberate policy change is not pairing churn, so a broker
+// that lost demand closes now instead of holding the ten-minute linger.
+export type RelayReconcileOptions = { skipLinger?: boolean }
