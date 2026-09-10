@@ -161,6 +161,7 @@ export function WorktreeJumpPaletteBrowserRow({
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
               secondaryMatches={result.secondaryMatches}
+              elideSecondaryPathHead
               sessionAge={browserSessionAge}
               leadingBadges={
                 <>

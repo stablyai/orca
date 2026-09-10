@@ -70,12 +70,14 @@ export function HighlightedText({
 
 function PaletteOpenTabSecondaryText({
   text,
-  ranges
+  ranges,
+  elidePathHead
 }: {
   text: string
   ranges: readonly MatchRange[]
+  elidePathHead: boolean
 }): React.JSX.Element {
-  const split = splitPathHeadForElision(text, ranges)
+  const split = elidePathHead ? splitPathHeadForElision(text, ranges) : null
   const content = split ? (
     <span
       data-slot="palette-open-tab-secondary"
@@ -110,6 +112,7 @@ export function PaletteOpenTabPrimaryLine({
   secondaryText,
   secondaryRanges,
   secondaryMatches = NO_SECONDARY_MATCHES,
+  elideSecondaryPathHead = false,
   sessionAge,
   leadingBadges
 }: {
@@ -118,6 +121,7 @@ export function PaletteOpenTabPrimaryLine({
   secondaryText: string
   secondaryRanges: readonly MatchRange[]
   secondaryMatches?: readonly { text: string; ranges: readonly MatchRange[] }[]
+  elideSecondaryPathHead?: boolean
   sessionAge?: string
   leadingBadges?: React.ReactNode
 }): React.JSX.Element {
@@ -151,7 +155,11 @@ export function PaletteOpenTabPrimaryLine({
       ) : null}
       {leadingBadges}
       {showSecondary ? (
-        <PaletteOpenTabSecondaryText text={secondaryText} ranges={secondaryRanges} />
+        <PaletteOpenTabSecondaryText
+          text={secondaryText}
+          ranges={secondaryRanges}
+          elidePathHead={elideSecondaryPathHead}
+        />
       ) : null}
       {additionalSecondaryMatches.length ? (
         <>

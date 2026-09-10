@@ -75,6 +75,7 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
               secondaryMatches={result.secondaryMatches}
+              elideSecondaryPathHead={result.contentType === 'editor'}
               sessionAge={sessionAge}
               leadingBadges={
                 <>

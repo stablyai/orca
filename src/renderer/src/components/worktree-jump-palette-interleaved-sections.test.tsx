@@ -460,7 +460,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     )
   })
 
-  it('tags the worktree rail label as a branch when the visible name is the branch', async () => {
+  it('shows the branch in the location chip when the workspace display name is empty', async () => {
     await renderPalette({
       worktreesByRepo: {
         'repo-1': [makeWorktree('wt-tabs', '', { displayName: '' })]

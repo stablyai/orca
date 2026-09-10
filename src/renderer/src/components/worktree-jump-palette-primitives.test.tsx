@@ -54,6 +54,7 @@ it('elides a deep path from the head so the matched tail stays visible', () => {
         titleRanges={[]}
         secondaryText={path}
         secondaryRanges={[{ start, end: start + 'create-butt'.length }]}
+        elideSecondaryPathHead
       />
     </TooltipProvider>
   )
@@ -64,6 +65,27 @@ it('elides a deep path from the head so the matched tail stays visible', () => {
   expect(head?.textContent).toBe('/Users/me/projects/orca')
   expect(tail?.textContent).toBe('/new-create-button-design/proposals/create-button.html')
   expect(tail?.querySelector('.font-semibold')?.textContent).toBe('create-butt')
+})
+
+it('keeps slash-separated agent snippets intact', () => {
+  const snippet =
+    'Ran pnpm test src/renderer/src/components/worktree-jump-palette-primitives.test.tsx'
+  const start = snippet.indexOf('worktree-jump')
+  const { container } = render(
+    <TooltipProvider>
+      <PaletteOpenTabPrimaryLine
+        title="Agent session"
+        titleRanges={[]}
+        secondaryText={snippet}
+        secondaryRanges={[{ start, end: start + 'worktree-jump'.length }]}
+      />
+    </TooltipProvider>
+  )
+
+  const secondary = container.querySelector('[data-slot="palette-open-tab-secondary"]')
+  expect(secondary?.textContent).toBe(snippet)
+  expect(secondary?.children).toHaveLength(1)
+  expect(secondary?.querySelector('.font-semibold')?.textContent).toBe('worktree-jump')
 })
 
 it('folds the worktree into the repo chip and drops it when it repeats the repo name', () => {
