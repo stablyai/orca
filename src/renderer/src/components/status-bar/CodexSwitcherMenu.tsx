@@ -239,7 +239,9 @@ export function CodexSwitcherMenu({
                     >
                       <div className="flex w-full min-w-0 flex-col gap-0.5">
                         <div className="flex min-w-0 items-center gap-2">
-                          <span className="min-w-0 flex-1 truncate">{target.label}</span>
+                          <span className="min-w-0 flex-1 whitespace-normal break-words">
+                            {target.label}
+                          </span>
                           {target.active ? (
                             <span className="shrink-0 text-[10px] font-medium text-muted-foreground">
                               {translate(

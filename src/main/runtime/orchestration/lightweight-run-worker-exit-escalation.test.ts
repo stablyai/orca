@@ -412,7 +412,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     }
   })
 
-  it('falls back to the legacy gate when the dispatch owning Run row is gone', async () => {
+  it('preserves the dispatch Run when legacy coordinator routing is used', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const insertMessage = vi.fn((message: { to: string }) => ({
       ...message,
@@ -435,8 +435,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     expect(insertMessage).toHaveBeenCalledWith(
       expect.objectContaining({ to: coordinatorHandle, type: 'escalation' })
     )
-    // An orphaned dispatch has no Run mailbox to address, so it must not invent one.
-    expect(insertMessage.mock.calls[0]?.[0]).not.toHaveProperty('runId')
+    expect(insertMessage.mock.calls[0]?.[0]).toHaveProperty('runId', 'run-that-no-longer-exists')
   })
 
   it('still reaches the Run mailbox when the Run has no bound coordinator', async () => {

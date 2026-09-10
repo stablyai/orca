@@ -7,6 +7,9 @@ export function conversationCommandBlocked(
   record: AgentSessionRecord
 ): string | null {
   const items = ctx.journal.snapshot().items
+  if (record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded') {
+    return 'agent_session_rewind:outcome-unknown'
+  }
   if (
     record.conversationCommand?.command === 'clear' &&
     record.conversationCommand.phase === 'committed' &&
@@ -35,8 +38,14 @@ export function conversationCommandBlocked(
   ) {
     return 'Resolve the pending question or approval before using this command.'
   }
-  if (ctx.adapter.backgroundTaskState?.(ctx.sessionId)?.state === 'monitoring') {
-    return 'Stop background tasks before using this command.'
+  const backgroundTasks = ctx.adapter.backgroundTaskState?.(ctx.sessionId)
+  if (backgroundTasks?.state === 'monitoring') {
+    // Only ask for a stop the host can actually perform. A provider that
+    // exposes neither a targeted nor an untargeted stop would otherwise leave
+    // the command refused behind an instruction nobody can follow.
+    return backgroundTasks.supportsTaskStop || backgroundTasks.supportsStopAll !== false
+      ? 'Stop background tasks before using this command.'
+      : 'Wait for background tasks to finish before using this command.'
   }
   if (
     ctx.journal

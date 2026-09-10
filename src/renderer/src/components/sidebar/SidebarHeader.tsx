@@ -38,7 +38,10 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const acknowledgeIntro = React.useCallback(() => {
     void updateSettings?.({ agentsSidebarIntroShown: true })
   }, [updateSettings])
-  const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
+  const sidebarTitle =
+    groupBy === 'repo'
+      ? translate('dashboard.sidebar.projects', 'Projects')
+      : translate('dashboard.sidebar.workspaces', 'Workspaces')
   const activityLabel = translate(
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
@@ -51,7 +54,9 @@ const SidebarHeader = React.memo(function SidebarHeader({
     <div className="mt-2 flex h-8 min-w-0 items-center justify-between gap-1.5 px-2">
       <div className="flex min-w-0 items-center gap-1">
         <span
-          className="select-none pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80"
+          // Why truncate: the action cluster is shrink-0, so a long localized title
+          // (es "Espacios de trabajo") otherwise wraps out of the h-8 row.
+          className="min-w-0 truncate select-none pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80"
           data-sidebar-section-title={groupBy === 'repo' ? 'projects' : 'workspaces'}
         >
           {sidebarTitle}
@@ -127,7 +132,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
         ) : null}
         <SidebarHeaderActions
           onWorkspaceBoardMenuOpenChange={onWorkspaceBoardMenuOpenChange}
-          hideWorkspaceOptions={agentsViewActive}
+          agentsViewActive={agentsViewActive}
         />
       </div>
     </div>

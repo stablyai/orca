@@ -6,6 +6,8 @@ import {
 } from './worker-topology'
 
 function residualWorkerEffects(effects: WorkerEffect[]): WorkerEffect[] {
+  // 'reused_agent_terminal' is the retired verb agent-first creation used for its own agent
+  // terminal; rows persisted before the rename still carry it.
   return effects.filter(
     (effect) => effect.action?.startsWith('created') || effect.action === 'reused_agent_terminal'
   )

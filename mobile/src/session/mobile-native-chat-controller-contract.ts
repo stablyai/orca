@@ -28,6 +28,7 @@ export type MobileNativeChatController = {
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
   nativeChatAgentWorking: boolean
+  nativeChatCanStop: boolean
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean

@@ -1,5 +1,11 @@
 import { createHash } from 'node:crypto'
-import type { NativeChatBlock, NativeChatMessage } from '../../../shared/native-chat-types'
+import { normalizeSubagentState } from '../../../shared/native-chat-subagent-summary'
+import type {
+  NativeChatBlock,
+  NativeChatMessage,
+  NativeChatSubagentState
+} from '../../../shared/native-chat-types'
+import { boundSubagentEntryId } from '../../native-chat/subagent-entry-id-bounds'
 
 export const DEFAULT_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 40
 export const MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT = 50
@@ -7,6 +13,14 @@ const MAX_WORKER_TRANSCRIPT_BLOCKS = 6
 const MAX_WORKER_TRANSCRIPT_BLOCK_CHARS = 1_200
 const MAX_WORKER_TRANSCRIPT_INPUT_ITEMS = 20
 const MAX_WORKER_TRANSCRIPT_INPUT_NODES = 100
+// Matches the producer's per-group cap, so no group this build writes is clipped
+// here. The bound stays because the journal schema declares no maximum and a
+// remote host may run a build with a larger one.
+const MAX_WORKER_TRANSCRIPT_SUBAGENTS = 64
+// Message ids, turn ids, tool-call names and image urls, not only roster fields.
+// Equal to `MAX_SUBAGENT_FIELD_CHARS` today, kept a separate literal so a
+// roster-motivated change to that cap cannot silently move this one.
+const MAX_WORKER_TRANSCRIPT_METADATA_CHARS = 512
 const MAX_WORKER_TRANSCRIPT_RESPONSE_BYTES = 512 * 1024
 const TRUNCATION_MARKER = '\n… (truncated)'
 const DISPATCH_CAPABILITY_PATTERN = /\bdcap_[A-Za-z0-9_-]{20,}\b/g
@@ -128,6 +142,24 @@ function boundBlock(block: NativeChatBlock, state: TranscriptBoundState): Native
       input: boundToolInput(block.input, budget, 0, state)
     }
   }
+  if (block.type === 'subagent-group') {
+    const agents = block.agents.slice(0, MAX_WORKER_TRANSCRIPT_SUBAGENTS)
+    if (agents.length < block.agents.length) {
+      markClipped(state, 'Some subagents were omitted from oversized spawn groups.')
+    }
+    // Labels, ids and states come from provider-supplied strings, so they get the
+    // same redaction and clipping every other piece of transcript metadata gets.
+    return {
+      ...block,
+      groupId: clipMetadata(block.groupId, state),
+      agents: agents.map((agent) => ({
+        ...agent,
+        id: boundEntryId(agent.id, state),
+        label: clipMetadata(agent.label, state),
+        state: clipSubagentState(agent.state, state)
+      }))
+    }
+  }
   if (block.path || (block.url && isLocalFileLocator(block.url))) {
     markClipped(state, 'Local image paths were omitted from transcript output.')
     return {
@@ -163,13 +195,36 @@ function isLocalFileLocator(value: string): boolean {
   )
 }
 
+/** A roster entry's id is the roster KEY, so it is redacted like other metadata
+ *  but bounded with a digest rather than clipped: two ids sharing a 512-char
+ *  head must not collapse onto one entry. */
+function boundEntryId(value: string, state: TranscriptBoundState): string {
+  const redacted = redactSensitiveText(value, state.warnings)
+  const bounded = boundSubagentEntryId(redacted)
+  if (bounded !== redacted) {
+    markClipped(state, 'Oversized transcript metadata was clipped.')
+  }
+  return bounded
+}
+
 function clipMetadata(value: string, state: TranscriptBoundState): string {
   const redacted = redactSensitiveText(value, state.warnings)
-  if (redacted.length <= 512) {
+  if (redacted.length <= MAX_WORKER_TRANSCRIPT_METADATA_CHARS) {
     return redacted
   }
   markClipped(state, 'Oversized transcript metadata was clipped.')
-  return redacted.slice(0, 512)
+  return redacted.slice(0, MAX_WORKER_TRANSCRIPT_METADATA_CHARS)
+}
+
+/** `state` is an open string on the wire, so it takes the same bound. A value
+ *  that had to be redacted or clipped names no state any build knows, which is
+ *  exactly what `unverifiable` records. */
+function clipSubagentState(
+  value: NativeChatSubagentState,
+  state: TranscriptBoundState
+): NativeChatSubagentState {
+  const clipped = clipMetadata(value, state)
+  return clipped === value ? value : normalizeSubagentState(clipped)
 }
 
 function clipText(value: string, state: TranscriptBoundState): string {

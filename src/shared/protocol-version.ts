@@ -122,6 +122,11 @@ export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
 export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
   'session-tabs.authoritative-inventory.v1' as const
+// Why: a client advertising this retains every terminal retirement proof it receives until the
+// surface is published live again, so a session-tabs stream sends each proof once instead of
+// repeating the host's whole bounded list on every title tick.
+export const SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY =
+  'session-tabs.retirement-proof-delta.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
@@ -146,10 +151,21 @@ export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =
 // negotiation rather than by calling and reading a refusal it cannot distinguish from a real one.
 export const STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY =
   'agent-session.structured.reveal.v1' as const
+// Why: `agentSession.create` gains an optional `resumeFrom`, and its params are a STRICT union — an
+// older host rejects the unknown key as a schema error, which a client cannot tell from a real
+// refusal. Worse, without probing, a client cannot know whether a host that accepted the call
+// adopted the conversation or quietly started a blank one. Negotiate before offering the action.
+export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
+  'agent-session.structured.resume-history.v1' as const
 // Why: agentSession.subscribeStatus is additive to a surface that already shipped, so a host
 // advertising agent-session.structured.v1 may still answer it with method_not_found. Clients must
 // probe before subscribing or they reconnect forever and never show any status at all.
 export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.status-feed.v1' as const
+// The RPC is registered unconditionally; per-session rewind support is a separate check.
+export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
+// Readers must understand a monitoring roster with no available stop control.
+export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
+  'agent-session.background-task-stop.v1' as const
 // Why: adding kimi to RESUMABLE_TUI_AGENTS grows terminal.ensureAgentSession's enum, and an
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
@@ -198,7 +214,9 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
+  // Why: only the renderer runs the retirement-proof ledger; CLI and mobile must keep full lists.
+  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
 ] as const
 
 export const RUNTIME_CAPABILITIES = [
@@ -251,7 +269,10 @@ export const RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,

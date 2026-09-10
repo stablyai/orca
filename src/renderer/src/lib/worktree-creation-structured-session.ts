@@ -139,6 +139,11 @@ export async function launchStructuredWorktreeSession(args: {
       return { accepted, cancelled, visibilityUnknown, activation, primaryTabId }
     }
     if (args.shouldActivateOnCompletion) {
+      // Chat selection requires its workspace to be active.
+      if (!activation) {
+        activation = activateAndRevealWorktree(args.worktreeId, { providesInitialSurface: true })
+        primaryTabId = activation === false ? null : activation.primaryTabId
+      }
       activateStructuredAgentSessionById({
         worktreeId: args.worktreeId,
         sessionId: receipt.sessionId

@@ -55,7 +55,9 @@ describe('Claude published session close lifecycle', () => {
     expect(backgroundStates).toEqual([
       {
         state: 'monitoring',
-        tasks: [{ id: 'background-1', kind: 'agent' }],
+        tasks: [
+          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
+        ],
         supportsTaskStop: true
       }
     ])
@@ -74,7 +76,9 @@ describe('Claude published session close lifecycle', () => {
     expect(backgroundStates).toEqual([
       {
         state: 'monitoring',
-        tasks: [{ id: 'background-1', kind: 'agent' }],
+        tasks: [
+          { id: 'background-1', kind: 'agent', state: 'working', startedAt: expect.any(Number) }
+        ],
         supportsTaskStop: true
       },
       null

@@ -254,7 +254,9 @@ export class AgentSessionRecordStore {
     probe: AgentSessionOwnerProbe
     now: number
   }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
+    return this.mutate(args.sessionId, (record) =>
+      evictAgentSessionOwner({ ...args, record, journalSettlement: 'required' })
+    )
   }
 
   async transitionHandoff(

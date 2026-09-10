@@ -33,7 +33,15 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
       },
       { type: 'tool-call', name: 'Read', input: { path: 'a' } },
       { type: 'tool-result', output: 'ok', isError: false },
-      { type: 'image-ref', path: '/tmp/a.png', alt: 'screenshot' }
+      { type: 'image-ref', path: '/tmp/a.png', alt: 'screenshot' },
+      {
+        type: 'subagent-group',
+        groupId: 'claude-session:turn-1',
+        agents: [
+          { id: 'task-1', label: 'Explore', state: 'working', startedAt: 1_000 },
+          { id: 'task-2', label: 'Review', state: 'completed', tokens: 42, settledAt: 2_000 }
+        ]
+      }
     ]
   },
   { kind: 'tool-call', name: 'Read', input: undefined, state: 'running' },
@@ -143,6 +151,41 @@ describe('nested corruption is rejected', () => {
     ).toBe(false)
   })
 
+  it('rejects a subagent roster whose entries are malformed', () => {
+    // A KNOWN block type stays a known block: it must not fall through to the
+    // forward-tolerant arm just because its payload is wrong.
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'subagent-group', groupId: 'g', agents: [{ id: 'a', label: 'x' }] }]
+      })
+    ).toBe(false)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'subagent-group', groupId: 'g', agents: 'not-a-roster' }]
+      })
+    ).toBe(false)
+  })
+
+  it('keeps a state string a newer build might write admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'g',
+            agents: [{ id: 'a', label: 'x', state: 'some-future-state' }]
+          }
+        ]
+      })
+    ).toBe(true)
+  })
+
   it('rejects shallow render items and submissions', () => {
     expect(
       isAdmissibleAgentJournalRenderItem({
@@ -188,4 +231,63 @@ describe('forward tolerance', () => {
       })
     ).toBe(true)
   })
+})
+
+describe('optional notice metadata', () => {
+  it.each([
+    {},
+    { presentation: 'compaction' },
+    { presentation: 'plan-document' },
+    { tone: 'warning' },
+    { tone: 'error' },
+    { tone: 'notice' },
+    { presentation: 'future-presentation', tone: 'future-tone' }
+  ])('admits existing status and text kinds with %j', (metadata) => {
+    expect(
+      isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Readable fallback', ...metadata })
+    ).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'text', text: 'Readable fallback', ...metadata }]
+      })
+    ).toBe(true)
+  })
+  it.each([{ tone: false }, { presentation: {} }])('rejects malformed metadata: %j', (metadata) => {
+    expect(isAdmissibleAgentJournalItemBody({ kind: 'status', text: 'Text', ...metadata })).toBe(
+      false
+    )
+  })
+})
+
+describe('optional tool annotations', () => {
+  const body = { kind: 'tool-call', name: 'shell', input: null, state: 'completed' }
+  it('admits old rows and rows with optional annotations without a new kind', () => {
+    expect(isAdmissibleAgentJournalItemBody(body)).toBe(true)
+    expect(isAdmissibleAgentJournalItemBody({ ...body, exitCode: 0, durationMs: 0 })).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        ...body,
+        webSearchResults: [{ title: 'Docs', url: 'https://example.com' }]
+      })
+    ).toBe(true)
+  })
+  it('admits explicit MCP identity without constraining the raw name', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        ...body,
+        name: 'my_server/ns.tool',
+        mcpIdentity: { server: 'my_server', tool: 'ns.tool' }
+      })
+    ).toBe(true)
+  })
+  it.each([
+    { exitCode: '127' },
+    { exitCode: 1.5 },
+    { durationMs: -1 },
+    { webSearchResults: [null] }
+  ])('rejects malformed annotation %s', (metadata) =>
+    expect(isAdmissibleAgentJournalItemBody({ ...body, ...metadata })).toBe(false)
+  )
 })

@@ -2,22 +2,26 @@ import type { AppState } from '../../types'
 import { toVisibleTabType } from '../../../../../shared/tab-types'
 import type { WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
 
+export type ActiveSurfaceSourceState = Pick<
+  AppState,
+  | 'activeBrowserTabIdByWorktree'
+  | 'activeFileIdByWorktree'
+  | 'activeGroupIdByWorktree'
+  | 'activeTabIdByWorktree'
+  | 'activeTabTypeByWorktree'
+  | 'browserTabsByWorktree'
+  | 'groupsByWorktree'
+  | 'layoutByWorktree'
+  | 'openFiles'
+  | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
+>
+
 export function deriveActiveSurfaceForWorktree(
-  state: Pick<
-    AppState,
-    | 'activeBrowserTabIdByWorktree'
-    | 'activeFileIdByWorktree'
-    | 'activeGroupIdByWorktree'
-    | 'activeTabIdByWorktree'
-    | 'browserTabsByWorktree'
-    | 'groupsByWorktree'
-    | 'layoutByWorktree'
-    | 'openFiles'
-    | 'tabsByWorktree'
-    | 'unifiedTabsByWorktree'
-  >,
+  state: ActiveSurfaceSourceState,
   worktreeId: string,
-  preferredGroupId?: string | null
+  preferredGroupId?: string | null,
+  options?: { preferredTabId?: string; legacySelection?: 'remembered-type' }
 ): {
   activeBrowserTabId: string | null
   activeFileId: string | null
@@ -28,10 +32,12 @@ export function deriveActiveSurfaceForWorktree(
   const activeGroupId = preferredGroupId ?? state.activeGroupIdByWorktree[worktreeId] ?? null
   const activeGroup =
     (activeGroupId ? groups.find((group) => group.id === activeGroupId) : null) ?? groups[0] ?? null
+  const activeUnifiedTabId = options?.preferredTabId ?? activeGroup?.activeTabId
   const activeUnifiedTab =
-    activeGroup?.activeTabId != null
+    activeUnifiedTabId != null
       ? ((state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-          (tab) => tab.id === activeGroup.activeTabId && tab.groupId === activeGroup.id
+          (tab) =>
+            tab.id === activeUnifiedTabId && activeGroup != null && tab.groupId === activeGroup.id
         ) ?? null)
       : null
   const restoredFileId = state.activeFileIdByWorktree[worktreeId] ?? null
@@ -49,6 +55,14 @@ export function deriveActiveSurfaceForWorktree(
     ? terminalTabs.some((tab) => tab.id === restoredTerminalTabId)
     : false
   const hasGroupOwnedSurface = groups.length > 0 || Boolean(state.layoutByWorktree[worktreeId])
+
+  const restoreLegacyType = options?.legacySelection === 'remembered-type'
+  const restoredTabType = restoreLegacyType
+    ? (state.activeTabTypeByWorktree[worktreeId] ?? 'terminal')
+    : null
+  // Why: only a remembered browser type — or group focus, which remembers no type at all — may keep
+  // the remembered file selected under the browser surface; a stale agent-session/simulator clears it.
+  const keepRememberedFileUnderBrowser = restoredTabType === null || restoredTabType === 'browser'
 
   let activeFileId: string | null
   let activeBrowserTabId: string | null
@@ -76,8 +90,16 @@ export function deriveActiveSurfaceForWorktree(
     activeBrowserTabId = browserTabStillOpen ? restoredBrowserTabId : (browserTabs[0]?.id ?? null)
     // Why: focusing an empty split should target its default terminal area, not the previously active browser/editor in another group.
     activeTabType = 'terminal'
-  } else if (browserTabStillOpen) {
+  } else if (restoredTabType === 'terminal') {
     activeFileId = fileStillOpen ? restoredFileId : null
+    activeBrowserTabId = browserTabStillOpen ? restoredBrowserTabId : (browserTabs[0]?.id ?? null)
+    activeTabType = 'terminal'
+  } else if (restoredTabType === 'editor' && fileStillOpen) {
+    activeFileId = restoredFileId
+    activeBrowserTabId = browserTabStillOpen ? restoredBrowserTabId : (browserTabs[0]?.id ?? null)
+    activeTabType = 'editor'
+  } else if (browserTabStillOpen) {
+    activeFileId = keepRememberedFileUnderBrowser && fileStillOpen ? restoredFileId : null
     activeBrowserTabId = restoredBrowserTabId
     activeTabType = 'browser'
   } else if (fileStillOpen) {
@@ -106,20 +128,7 @@ export function deriveActiveSurfaceForWorktree(
 }
 
 export function buildActiveSurfacePatch(
-  state: Pick<
-    AppState,
-    | 'activeBrowserTabIdByWorktree'
-    | 'activeFileIdByWorktree'
-    | 'activeGroupIdByWorktree'
-    | 'activeTabIdByWorktree'
-    | 'activeTabTypeByWorktree'
-    | 'browserTabsByWorktree'
-    | 'groupsByWorktree'
-    | 'layoutByWorktree'
-    | 'openFiles'
-    | 'tabsByWorktree'
-    | 'unifiedTabsByWorktree'
-  >,
+  state: ActiveSurfaceSourceState,
   worktreeId: string,
   preferredGroupId?: string | null
 ): Pick<

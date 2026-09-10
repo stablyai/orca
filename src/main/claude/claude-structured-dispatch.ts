@@ -12,6 +12,7 @@ import type { ClaudeDispatchWaiter, ClaudeSession } from './claude-structured-se
 import { readClaudeFrameString } from './claude-structured-init-proof'
 import {
   claudeDispatchContentKey,
+  claudeDispatchInvokesSlashCommand,
   claudeDispatchMessageContent
 } from './claude-structured-dispatch-content'
 
@@ -231,9 +232,9 @@ export async function dispatchClaudeTurn(
     return { state: 'rejected', reason: (error as Error).message }
   }
   const dispatchSequence = ++session.dispatchSequence
-  const acceptsResult = input.body.blocks.some(
-    (block) => block.type === 'text' && block.text.trimStart().startsWith('/')
-  )
+  // Read the sent content, not the journal blocks: only the mapped trailing prompt decides
+  // whether Claude runs a command, so the two cannot disagree about which frame settles this.
+  const acceptsResult = claudeDispatchInvokesSlashCommand(content)
   const sentUuid = randomUUID()
   const replay = waitForReplay(
     session,

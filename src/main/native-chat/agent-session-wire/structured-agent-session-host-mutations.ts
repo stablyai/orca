@@ -1,3 +1,4 @@
+import { rewindRefusal } from './structured-rewind-refusal'
 // Everything a client can ask an ALREADY-ATTACHED session to do: send a turn, cancel one, answer a
 // prompt, change an option, read the options back.
 //
@@ -75,6 +76,10 @@ export function sendStructuredAgentSessionTurn(
   return mutate(context, caller, params.envelope, {
     ...plan,
     run: (ctx) => {
+      const rewind = context.deps.store.getRecord(ctx.sessionId)?.rewind
+      if (rewind?.phase === 'prepared' || rewind?.phase === 'provider-succeeded') {
+        return Promise.resolve(rewindRefusal('outcome-unknown'))
+      }
       const command = context.deps.store.getRecord(ctx.sessionId)?.conversationCommand
       if (
         command &&
@@ -153,6 +158,14 @@ export function readStructuredAgentSessionOptions(
     const options = await context.deps.adapter.readOptions({ sessionId, fence: session.fence })
     return {
       ...options,
+      rewind:
+        context.deps.store.getRecord(sessionId)?.rewind?.phase === 'prepared' ||
+        context.deps.store.getRecord(sessionId)?.rewind?.phase === 'provider-succeeded'
+          ? { supported: false, reason: 'outcome-unknown' }
+          : (context.deps.adapter.rewindSupport?.(sessionId) ?? {
+              supported: false,
+              reason: 'unsupported'
+            }),
       conversationCommands: context.deps.adapter.compact ? ['clear', 'compact'] : ['clear']
     }
   })

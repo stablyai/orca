@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AppState } from '@/store/types'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry,
+  type AgentStatusState
+} from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
@@ -132,11 +136,105 @@ describe('palette live status', () => {
     })
   }
 
+  // Why: Orca injects its own "<Agent> - action required" OSC title on a blocked/waiting hook and
+  // classifies that title back as evidence. Once the pane's row aged out it stopped registering its
+  // identity, so the self-authored title outranked the pane's own `done` row and the palette dot
+  // claimed a question nobody was asking.
+  it.each(['worktree', 'recent'] as const)(
+    'does not paint a stale self-authored title as a live %s question',
+    async (surface) => {
+      const staleAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
+      useAppStore.setState((s) => ({
+        tabsByWorktree: {
+          'wt-a': [{ ...makeTerminalTab('term-a', 'wt-a'), title: 'Codex - action required' }]
+        },
+        agentStatusByPaneKey: {
+          [makePaneKey('term-a', LEAF)]: makeAgentEntry('term-a', 'done', {
+            updatedAt: staleAt,
+            stateStartedAt: staleAt
+          })
+        },
+        agentStatusEpoch: s.agentStatusEpoch + 1
+      }))
+
+      if (surface === 'worktree') {
+        await render()
+      } else {
+        await act(async () => {
+          testRoot.render(
+            <PaletteLiveStatusProvider active>
+              <PaletteRecentTabStatusDot
+                row={{
+                  id: 'recent',
+                  worktreeId: 'wt-a',
+                  unifiedTabId: null,
+                  terminalTab: { id: 'term-a', title: 'Codex - action required' },
+                  worktreeLastActivityAt: 0
+                }}
+                fallback={<span data-fallback="true" />}
+              />
+            </PaletteLiveStatusProvider>
+          )
+        })
+        expect(testContainer.querySelector('[data-fallback]')).not.toBeNull()
+      }
+
+      expect(dotLabels()).not.toContain('Needs permission')
+    }
+  )
+
   it('updates a worktree dot when the agent transitions', async () => {
     setAgentState('working')
     await render()
     expect(dotLabels()).toEqual(['Working'])
     expect(testContainer.querySelector('[data-slot="tooltip-trigger"]')).not.toBeNull()
+
+    await act(async () => {
+      setAgentState('blocked')
+    })
+    expect(dotLabels()).toEqual(['Needs permission'])
+  })
+
+  it('attributes stale permission titles to their split pane without hiding a live sibling', async () => {
+    const otherLeaf = '22222222-2222-4222-8222-222222222222'
+    const staleAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
+    setAgentState('done', { updatedAt: staleAt, stateStartedAt: staleAt })
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'term-a': {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF },
+            second: { type: 'leaf', leafId: otherLeaf }
+          },
+          activeLeafId: otherLeaf,
+          expandedLeafId: null
+        }
+      },
+      runtimePaneTitlesByTabId: {
+        'term-a': { 1: 'Codex - action required', 2: 'shell' }
+      }
+    })
+
+    await render()
+    expect(dotLabels()).toEqual(['Active'])
+
+    await act(async () => {
+      useAppStore.setState({
+        runtimePaneTitlesByTabId: { 'term-a': { 2: 'Codex - action required' } }
+      })
+    })
+    expect(dotLabels()).toEqual(['Needs permission'])
+
+    await act(async () => {
+      useAppStore.setState({
+        runtimePaneTitlesByTabId: {
+          'term-a': { 1: 'Codex - action required', 2: '⠹ codex working' }
+        }
+      })
+    })
+    expect(dotLabels()).toEqual(['Working'])
 
     await act(async () => {
       setAgentState('blocked')

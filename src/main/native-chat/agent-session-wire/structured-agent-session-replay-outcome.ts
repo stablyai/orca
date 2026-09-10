@@ -1,3 +1,4 @@
+import { rewindRefusal } from './structured-rewind-refusal'
 import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
 import {
   AGENT_SESSION_WIRE_REFUSAL_CODES,
@@ -19,6 +20,9 @@ export function resolveAgentSessionReplayOutcome<TValue>(input: {
 }): AgentSessionReplayOutcomeDecision<TValue> {
   const { operationId, outcome } = input
   if (outcome.status === 'failed') {
+    if (outcome.rewindReason) {
+      return { decision: 'refuse', refusal: rewindRefusal(outcome.rewindReason).refusal }
+    }
     const code = (AGENT_SESSION_WIRE_REFUSAL_CODES as readonly string[]).includes(outcome.code)
       ? (outcome.code as AgentSessionWireRefusalCode)
       : 'agent_session_operation_invalid'

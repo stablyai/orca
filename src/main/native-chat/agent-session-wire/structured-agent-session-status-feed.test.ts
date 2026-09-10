@@ -1,9 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusEvent } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTask,
+  AgentSessionStatusEvent
+} from '../../../shared/agent-session-wire'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
 import { publishCodexTurnLifecycle } from '../../codex/codex-structured-journal-translation-turns'
 import { createDeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -53,21 +56,34 @@ async function openJournal(sessionId = SESSION, now?: () => number) {
   })
 }
 
-function indexed(session: { journal: Awaited<ReturnType<typeof openJournal>> }) {
+function indexed(session: {
+  journal: Awaited<ReturnType<typeof openJournal>>
+  hasProviderChild?: boolean
+  fence?: number
+}) {
   return {
     journal: session.journal,
+    fence: session.fence ?? 1,
+    ...(session.hasProviderChild !== undefined
+      ? { hasProviderChild: session.hasProviderChild }
+      : {}),
     params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
   }
 }
 
 function feedFor(
-  sessions: Map<string, { journal: Awaited<ReturnType<typeof openJournal>> }>,
+  sessions: Map<
+    string,
+    { journal: Awaited<ReturnType<typeof openJournal>>; hasProviderChild?: boolean; fence?: number }
+  >,
   record: Partial<AgentSessionRecord> | null = null,
-  onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
+  onStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged'],
+  readBackgroundTasks?: StructuredAgentSessionStatusFeedDeps['readBackgroundTasks']
 ) {
   let now = 1_000
   const feed = new StructuredAgentSessionStatusFeed({
     ...(onStatusChanged ? { onStatusChanged } : {}),
+    ...(readBackgroundTasks ? { readBackgroundTasks } : {}),
     sessions: {
       get: (sessionId: string) => {
         const session = sessions.get(sessionId)
@@ -88,6 +104,41 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
+  it('publishes provider ownership transitions without changing journal time', async () => {
+    const journal = await openJournal()
+    const sessions = new Map([[SESSION, { journal, hasProviderChild: true }]])
+    const { feed, events, dispose } = feedFor(sessions)
+    events.length = 0
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1 }
+    )
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ hostExecutionOwned: true, updatedAt: expect.any(Number) })
+    })
+    const firstStatus = events.at(-1)
+    expect(firstStatus?.type).toBe('status')
+    if (firstStatus?.type !== 'status') {
+      throw new Error('status publication missing')
+    }
+    const journalTime = firstStatus.session.updatedAt
+    sessions.get(SESSION)!.hasProviderChild = false
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'idle', updatedAt: journalTime })
+    })
+    const secondStatus = events.at(-1)
+    expect(secondStatus?.type).toBe('status')
+    if (secondStatus?.type === 'status') {
+      expect(secondStatus.session).not.toHaveProperty('hostExecutionOwned')
+    }
+    dispose()
+  })
+
   it('opens with every readable session and reports no status before a persisted turn', async () => {
     const journal = await openJournal()
     const { events } = feedFor(new Map([[SESSION, { journal }]]))
@@ -107,6 +158,59 @@ describe('StructuredAgentSessionStatusFeed', () => {
         ]
       }
     ])
+  })
+
+  it('stops projecting an old-host unknown submission after the owner fence advances', async () => {
+    const journal = await openJournal()
+    const session = { journal, fence: 1 }
+    const { feed, events } = feedFor(new Map([[SESSION, session]]))
+    await journal.appendSubmission({
+      clientMessageId: 'old-host',
+      payloadFingerprint: 'fp',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'slow' }] },
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'old-host',
+      state: 'unknown',
+      reason: 'ack timeout',
+      fence: 1
+    })
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ session: { status: 'working' } })
+    session.fence = 2
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ session: { status: 'idle' } })
+  })
+
+  it('publishes working from the pending submission, before the provider replays the turn', async () => {
+    const journal = await openJournal()
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]))
+    events.length = 0
+    await journal.appendSubmission({
+      clientMessageId: 'client-1',
+      payloadFingerprint: 'fingerprint-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'write a poem' }] },
+      fence: 1
+    })
+
+    feed.publish(SESSION)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'working' })
+    })
+
+    await journal.resolveDispatch({
+      clientMessageId: 'client-1',
+      state: 'accepted',
+      providerIdentity: USER_IDENTITY,
+      fence: 1
+    })
+    feed.publish(SESSION)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ status: 'idle' })
+    })
   })
 
   it('publishes working, then idle once the running marker is tombstoned, and never a repeat', async () => {
@@ -521,5 +625,180 @@ describe('StructuredAgentSessionStatusFeed', () => {
       type: 'status',
       session: expect.objectContaining({ status: 'idle', latestPrompt: 'hello' })
     })
+  })
+
+  it('reuses the journal projection across task progress and invalidates on journal changes', async () => {
+    const journal = await openJournal()
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
+      { fence: 1 }
+    )
+    await journal.appendItem(
+      TURN_IDENTITY,
+      { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-1', state: 'running' } },
+      { fence: 1 }
+    )
+    const snapshot = vi.spyOn(journal, 'snapshot')
+    let taskState: 'working' | 'waiting' = 'working'
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => ({
+      state: 'monitoring',
+      tasks: [{ id: 'child', kind: 'agent', state: taskState }]
+    }))
+    for (let tick = 1; tick <= 100; tick++) {
+      taskState = tick % 2 === 1 ? 'waiting' : 'working'
+      feed.publish(SESSION)
+    }
+    expect(events).toHaveLength(101)
+    expect(snapshot).toHaveBeenCalledTimes(1)
+    expect(events.at(-1)).toMatchObject({
+      type: 'status',
+      session: { status: 'working', backgroundTasks: [{ state: 'working' }] }
+    })
+    await journal.appendTombstone(TURN_IDENTITY, { fence: 1 })
+    feed.publish(SESSION)
+    expect(snapshot).toHaveBeenCalledTimes(2)
+    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
+  })
+
+  it('invalidates cached status on unreadability and keeps record metadata live', async () => {
+    const journal = await openJournal()
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1 }
+    )
+    const record = { options: { model: 'first-model' }, providerHandleChain: [] }
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), record)
+    record.options.model = 'second-model'
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({
+      type: 'status',
+      session: { status: 'idle', model: 'second-model' }
+    })
+    const readOnly = vi.spyOn(journal, 'isReadOnly', 'get').mockReturnValue(true)
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: null } })
+    readOnly.mockRestore()
+    feed.publish(SESSION)
+    expect(events.at(-1)).toMatchObject({ type: 'status', session: { status: 'idle' } })
+  })
+
+  it('projects live background tasks and republishes a task-only state change', async () => {
+    const journal = await openJournal()
+    let tasks = [
+      { id: 'task-1', kind: 'agent' as const, name: 'deep_review', state: 'working' as const }
+    ]
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => ({
+      state: 'monitoring',
+      tasks
+    }))
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
+      { fence: 1 }
+    )
+    feed.publish(SESSION, journal)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({
+        backgroundTasks: [{ id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working' }]
+      })
+    })
+
+    // No journal change: only the task state moved.
+    tasks = [{ id: 'task-1', kind: 'agent', name: 'deep_review', state: 'waiting' as never }]
+    const before = events.length
+    feed.publish(SESSION, journal)
+    expect(events).toHaveLength(before + 1)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({
+        backgroundTasks: [expect.objectContaining({ state: 'waiting' })]
+      })
+    })
+
+    // An identical projection is suppressed.
+    feed.publish(SESSION, journal)
+    expect(events).toHaveLength(before + 1)
+  })
+
+  it('omits task usage so a progress tick never re-broadcasts the summary', async () => {
+    const journal = await openJournal()
+    let tasks: AgentSessionBackgroundTask[] = [
+      { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working', totalTokens: 10 }
+    ]
+    const { feed, events } = feedFor(new Map([[SESSION, { journal }]]), null, undefined, () => ({
+      state: 'monitoring',
+      tasks
+    }))
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fan out' }] },
+      { fence: 1 }
+    )
+    feed.publish(SESSION, journal)
+    const before = events.length
+
+    // A `task_progress` frame moves only usage, which no status-summary reader renders;
+    // re-broadcasting the whole summary per frame would cost every remote subscriber.
+    tasks = [
+      { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working', totalTokens: 4_200 }
+    ]
+    feed.publish(SESSION, journal)
+    expect(events).toHaveLength(before)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({
+        backgroundTasks: [{ id: 'task-1', kind: 'agent', name: 'deep_review', state: 'working' }]
+      })
+    })
+
+    // A state change on the same task still reaches subscribers.
+    tasks = [
+      { id: 'task-1', kind: 'agent', name: 'deep_review', state: 'waiting', totalTokens: 4_200 }
+    ]
+    feed.publish(SESSION, journal)
+    expect(events).toHaveLength(before + 1)
+    expect(events.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({
+        backgroundTasks: [expect.objectContaining({ state: 'waiting' })]
+      })
+    })
+  })
+})
+
+/**
+ * `published` is a broadcast cache, not a roster. It deliberately never retracts — an evicted idle
+ * session is still idle, and a reloading renderer must not lose every settled row — so enumerating
+ * it lists every session this host has ever opened. Eviction's `forget-session` step deletes the
+ * session from the live map and touches nothing else, so a poller has to intersect with that map.
+ */
+describe('the polling reader answers from the live sessions, not the retained cache', () => {
+  it('drops an evicted session from the poll while a late subscriber still sees it', async () => {
+    const journal = await openJournal()
+    const sessions = new Map([[SESSION, { journal }]])
+    const { feed } = feedFor(sessions)
+    await journal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
+      { fence: 1 }
+    )
+    feed.publish(SESSION, journal)
+    expect(feed.liveSessionSummaries().map((summary) => summary.sessionId)).toEqual([SESSION])
+
+    // Exactly what eviction's `forget-session` step does; nothing else touches the feed.
+    sessions.delete(SESSION)
+
+    expect(feed.liveSessionSummaries()).toEqual([])
+    const late: AgentSessionStatusEvent[] = []
+    feed.subscribe({ id: 'list-2', emit: (event) => late.push(event) })
+    expect(late).toEqual([
+      {
+        type: 'snapshot',
+        sessions: [expect.objectContaining({ sessionId: SESSION, status: 'idle' })]
+      }
+    ])
   })
 })

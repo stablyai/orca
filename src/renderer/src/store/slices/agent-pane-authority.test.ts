@@ -156,7 +156,7 @@ describe('agent pane authority', () => {
     expect(store.getState().agentStatusByPaneKey[SIBLING]).toBeUndefined()
   })
 
-  it('can retire live pane authority while retaining a migration recovery fence', () => {
+  it('can retire live pane authority while retaining its sleeping session', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
     store.getState().registerAgentLaunchConfig(TARGET, { agentArgs: '', agentEnv: {} })
@@ -171,8 +171,7 @@ describe('agent pane authority', () => {
           prompt: 'continue',
           state: 'working',
           capturedAt: 1,
-          updatedAt: 1,
-          automaticResumeBlockedBy: 'legacy-orchestration-worker'
+          updatedAt: 1
         }
       }
     })
@@ -183,7 +182,7 @@ describe('agent pane authority', () => {
     expect(state.agentStatusByPaneKey[TARGET]).toBeUndefined()
     expect(state.agentLaunchConfigByPaneKey[TARGET]).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[TARGET]).toMatchObject({
-      automaticResumeBlockedBy: 'legacy-orchestration-worker'
+      providerSession: { key: 'session_id', id: 'session-1' }
     })
     expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toBe(true)
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)

@@ -14,6 +14,7 @@ describe('federation acknowledgment integrity', () => {
     db = new OrchestrationDb(':memory:')
     const dispatchId = `ctx_protocol_${protocolVersion}`
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: `task_protocol_${protocolVersion}`,
       homePeerFingerprint: 'home_peer',

@@ -30,8 +30,8 @@ export type AgentLaunchRoutingInput = {
     | null
     | undefined
   executionHostId: string
-  platform: NodeJS.Platform
-  hostCapabilities: readonly string[]
+  /** Capabilities of the target host; `null` = not yet established. */
+  hostCapabilities: readonly string[] | null
   workspaceKind?: 'git-worktree' | 'folder' | 'floating'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   promptDelivery?: NativeChatLaunchPromptDelivery
@@ -42,6 +42,12 @@ export type AgentLaunchRoutingInput = {
 }
 
 export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLaunchRoute {
+  if (
+    prefersStructuredNativeChatByDefault(input.settings) &&
+    structuredAgentLaunchSupported(input)
+  ) {
+    return 'structured-native-chat'
+  }
   const initialViewMode = decideInitialAgentTabViewMode({
     experimentalNativeChat: input.settings?.experimentalNativeChat,
     openAgentTabsInChatByDefault: input.settings?.openAgentTabsInChatByDefault,
@@ -53,19 +59,23 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   if (initialViewMode !== 'chat') {
     return 'terminal-tui'
   }
-  if (!prefersStructuredNativeChatByDefault(input.settings)) {
-    return 'legacy-native-chat'
-  }
-  return resolveStructuredNativeChatSupport({
-    agent: input.agent,
-    executionHostId: input.executionHostId,
-    platform: input.platform,
-    hostCapabilities: input.hostCapabilities,
-    workspaceKind: input.workspaceKind,
-    projectRuntime: input.projectRuntime,
-    isDraftPrompt: input.promptDelivery === 'draft',
-    requiresTuiLaunchCustomization: input.requiresTuiLaunchCustomization
-  }).supported
-    ? 'structured-native-chat'
-    : 'legacy-native-chat'
+  return 'legacy-native-chat'
+}
+
+// Explicit chat requests do not depend on the default view mode for new tabs.
+export function structuredAgentLaunchSupported(
+  input: Omit<AgentLaunchRoutingInput, 'launchText'>
+): boolean {
+  return (
+    input.settings?.experimentalStructuredNativeChat === true &&
+    resolveStructuredNativeChatSupport({
+      agent: input.agent,
+      executionHostId: input.executionHostId,
+      hostCapabilities: input.hostCapabilities,
+      workspaceKind: input.workspaceKind,
+      projectRuntime: input.projectRuntime,
+      isDraftPrompt: input.promptDelivery === 'draft',
+      requiresTuiLaunchCustomization: input.requiresTuiLaunchCustomization
+    }).supported
+  )
 }

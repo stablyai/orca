@@ -220,7 +220,12 @@ describe('NativeChatSessionOptionPickers', () => {
       />
     )
     await waitFor(() =>
-      expect(screen.getAllByTestId('dropdown-root')[1]?.getAttribute('data-open')).toBe('true')
+      expect(
+        screen
+          .getByRole('button', { name: 'Model Opus 4.8' })
+          .closest('[data-testid="dropdown-root"]')
+          ?.getAttribute('data-open')
+      ).toBe('true')
     )
 
     rerender(
@@ -232,7 +237,12 @@ describe('NativeChatSessionOptionPickers', () => {
       />
     )
     await waitFor(() =>
-      expect(screen.getAllByTestId('dropdown-root')[0]?.getAttribute('data-open')).toBe('true')
+      expect(
+        screen
+          .getByRole('button', { name: 'Effort High' })
+          .closest('[data-testid="dropdown-root"]')
+          ?.getAttribute('data-open')
+      ).toBe('true')
     )
   })
 
@@ -270,8 +280,8 @@ describe('NativeChatSessionOptionPickers', () => {
     )
     expect(
       screen
-        .getByRole('button', { name: 'Effort High · Fast' })
-        .compareDocumentPosition(screen.getByRole('button', { name: 'Model Opus 4.8' })) &
+        .getByRole('button', { name: 'Model Opus 4.8' })
+        .compareDocumentPosition(screen.getByRole('button', { name: 'Effort High · Fast' })) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).not.toBe(0)
 

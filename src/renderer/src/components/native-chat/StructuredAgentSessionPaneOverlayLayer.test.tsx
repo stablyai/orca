@@ -148,7 +148,7 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     expect(mocks.focusGroup).toHaveBeenCalledWith(WORKTREE_ID, GROUP_ID)
   })
 
-  it('keeps the base z-layer overridable by the working-chat stylesheet rule', () => {
+  it('keeps a working session at the base pane layer', () => {
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
@@ -157,7 +157,9 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     )
 
     expect(slot).not.toBeNull()
-    expect(slot?.classList.contains('native-chat-pane-shell')).toBe(true)
+    expect(slot?.hasAttribute('data-retained-pane-host')).toBe(true)
+    expect(slot?.classList.contains('isolate')).toBe(true)
+    expect(slot?.classList.contains('overflow-hidden')).toBe(true)
     expect(slot?.classList.contains('z-10')).toBe(true)
     expect(slot?.style.zIndex).toBe('')
     expect(slot?.querySelector('[data-native-chat-working="true"]')).not.toBeNull()

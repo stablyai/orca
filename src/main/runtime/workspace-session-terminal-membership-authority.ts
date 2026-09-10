@@ -93,17 +93,18 @@ function rebaseTabGroups(
     if (tabOrder.length === 0) {
       return []
     }
+    const tabIds = new Set(tabOrder)
     const activeTabId =
-      group.activeTabId && tabOrder.includes(group.activeTabId)
-        ? group.activeTabId
-        : (tabOrder[0] ?? null)
-    const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
+      group.activeTabId && tabIds.has(group.activeTabId) ? group.activeTabId : (tabOrder[0] ?? null)
+    const recentTabIds = group.recentTabIds?.filter((tabId) => tabIds.has(tabId))
     return [
       {
         ...group,
         tabOrder,
         activeTabId,
-        ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
+        // Why assigned even when it filters to empty: omitting the key lets `...group`
+        // re-introduce the unfiltered array, persisting ids for tabs the host dropped.
+        ...(group.recentTabIds ? { recentTabIds: recentTabIds ?? [] } : {})
       }
     ]
   })

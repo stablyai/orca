@@ -390,7 +390,7 @@ describe('OrcaRuntimeService', () => {
     expect(getSession().terminalTopologyRevisionByRepoId?.[TEST_REPO_ID]).toBe(1)
   })
 
-  it('fences provider resume and reveals one exact live legacy worker without stealing focus', async () => {
+  it('reveals one exact live legacy worker without stealing focus', async () => {
     const workerLeafId = HEADLESS_LEAF_ID
     const coordinatorLeafId = HEADLESS_SECOND_LEAF_ID
     const workerPaneKey = `legacy-worker:${workerLeafId}`
@@ -526,10 +526,7 @@ describe('OrcaRuntimeService', () => {
       resolveLegacyWorkerTerminalRecovery
     } as never)
 
-    runtime.prepareLegacyWorkerTerminalRecovery()
-    expect(
-      getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]?.automaticResumeBlockedBy
-    ).toBe('legacy-orchestration-worker')
+    expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
 
     const recovered = await runtime.reconcileLegacyWorkerTerminals({
       materializeRenderer: true

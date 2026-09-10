@@ -22,7 +22,6 @@ export function createAgentStatusRecoveryActions(
   | 'captureAllSleepingAgentSessions'
   | 'clearSleepingAgentSession'
   | 'clearSleepingAgentSessionsByPaneKey'
-  | 'setSleepingAgentAutomaticResumeBlocked'
   | 'clearSleepingAgentSessionsByWorktree'
   | 'pruneSleepingAgentSessions'
 > {
@@ -108,47 +107,6 @@ export function createAgentStatusRecoveryActions(
 
     clearSleepingAgentSession: (paneKey) => clearSleepingAgentSessionsByPaneKey([paneKey]),
     clearSleepingAgentSessionsByPaneKey,
-
-    setSleepingAgentAutomaticResumeBlocked: (paneKey, blocked) => {
-      set((s) => {
-        // The pane key is tracked even with no record: a worker settled while its tab was open
-        // is fenced before the record exists, and the record is only minted on close.
-        const wasBlocked = s.automaticResumeBlockedPaneKeys[paneKey] === true
-        let paneKeys = s.automaticResumeBlockedPaneKeys
-        if (blocked !== wasBlocked) {
-          paneKeys = { ...s.automaticResumeBlockedPaneKeys }
-          if (blocked) {
-            paneKeys[paneKey] = true
-          } else {
-            delete paneKeys[paneKey]
-          }
-        }
-        const current = s.sleepingAgentSessionsByPaneKey[paneKey]
-        if (
-          !current ||
-          (blocked
-            ? current.automaticResumeBlockedBy === 'legacy-orchestration-worker'
-            : current.automaticResumeBlockedBy === undefined)
-        ) {
-          return paneKeys === s.automaticResumeBlockedPaneKeys
-            ? s
-            : { automaticResumeBlockedPaneKeys: paneKeys }
-        }
-        const next = { ...current }
-        if (blocked) {
-          next.automaticResumeBlockedBy = 'legacy-orchestration-worker'
-        } else {
-          delete next.automaticResumeBlockedBy
-        }
-        return {
-          automaticResumeBlockedPaneKeys: paneKeys,
-          sleepingAgentSessionsByPaneKey: {
-            ...s.sleepingAgentSessionsByPaneKey,
-            [paneKey]: next
-          }
-        }
-      })
-    },
 
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
       set((s) => {

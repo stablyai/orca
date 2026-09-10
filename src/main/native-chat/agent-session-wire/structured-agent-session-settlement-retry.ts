@@ -46,15 +46,27 @@ export async function retryPendingStructuredAgentSessionSettlement(input: {
       hasProviderChild: false,
       acquisitionGeneration: null
     } as StructuredAgentSessionHostSession)
+  return retryLoadedStructuredAgentSessionSettlement({
+    deps: input.deps,
+    sessionId: input.sessionId,
+    session: retrySession,
+    now: input.now
+  })
+}
+
+export async function retryLoadedStructuredAgentSessionSettlement(input: {
+  deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'onEventSinkError'>
+  sessionId: string
+  session: Pick<StructuredAgentSessionHostSession, 'journal' | 'fence' | 'acquisitionGeneration'>
+  now: () => number
+}): Promise<boolean> {
+  const record = input.deps.store.getRecord(input.sessionId)
+  if (!record?.lease.settlementRetryRequired || !record.lease.settlementRetryId) {
+    return true
+  }
+  const retrySession = input.session
   retrySession.fence = record.lease.runtimeFence
-  const context: StructuredAgentSessionUnexpectedExitContext = {
-    store: input.deps.store,
-    sessions: input.sessions,
-    flushLifecycle: async () => ({ ok: true as const }),
-    publishFence: () => undefined,
-    hasResumeCapableHolder: () => false,
-    serialize: async <T>(_id: string, task: () => Promise<T>) => task(),
-    now: input.now,
+  const context: Pick<StructuredAgentSessionUnexpectedExitContext, 'onBarrierError'> = {
     onBarrierError: (id, error) => input.deps.onEventSinkError?.({ sessionId: id, error })
   }
   const ok = await retryUnexpectedExitSettlement({
@@ -65,7 +77,7 @@ export async function retryPendingStructuredAgentSessionSettlement(input: {
       reason: record.lease.deathEvidence?.detail ?? 'provider exited',
       cause: 'unexpected-exit',
       fence: record.lease.runtimeFence,
-      acquisitionGeneration: current?.acquisitionGeneration ?? 'recovery'
+      acquisitionGeneration: retrySession.acquisitionGeneration ?? 'recovery'
     },
     session: retrySession,
     stableSettlementId: record.lease.settlementRetryId
@@ -81,11 +93,14 @@ export async function retryPendingStructuredAgentSessionSettlement(input: {
       ) {
         throw new Error('agent_session_checkpoint_stale')
       }
+      // A dead-TUI retry still needs its stopped-owner stage; recovery-only stages end here.
+      const preserveHandoff = latest.lease.handoffStage === 'old-owner-stopped'
       return {
         ...latest,
         lease: {
           ...latest.lease,
-          handoffStage: null,
+          handoffStage: preserveHandoff ? latest.lease.handoffStage : null,
+          handoffOperationId: preserveHandoff ? latest.lease.handoffOperationId : null,
           settlementRetryRequired: undefined,
           settlementRetryId: undefined,
           lastRenewedAt: input.now()

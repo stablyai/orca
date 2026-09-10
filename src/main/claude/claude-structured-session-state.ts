@@ -88,6 +88,7 @@ export type ClaudeStructuredSessionAdapterDeps = {
   readTranscriptLeaf?: (input: {
     providerSessionId: string
     previousLeafUuid: string | null
+    intentionalRewindUuid?: string
     /** Account-scoped Claude config root that owns this provider session. */
     claudeConfigDir: string
   }) => Promise<string | null>

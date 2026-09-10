@@ -13,7 +13,8 @@ export const NATIVE_CHAT_TOOL_ACTIVITY_COPY = {
   runningNamedPreview: 'Running {{toolName}} {{preview}}',
   runningNamed: 'Running {{toolName}}',
   countOne: '1 tool call',
-  countN: '{{value0}} tool calls'
+  countN: '{{value0}} tool calls',
+  moreCalls: '+{{value0}} more'
 } as const
 
 /** Tools whose call is a shell command, so the row reads as terminal activity

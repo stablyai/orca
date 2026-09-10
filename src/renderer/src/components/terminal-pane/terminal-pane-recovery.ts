@@ -30,6 +30,10 @@ export type TerminalPaneRecoveryReason =
   | 'reattach-unverifiable'
   // A restore was requested for a certified-dead pipeline (reveal path).
   | 'restore-blocked'
+  // A spawn resolved without a PTY id, so the pane is mounted with no transport
+  // binding. pty:data for the old id then lands in the pre-handler buffer, which
+  // ACKs it — main's delivery health stays green while the pane shows nothing.
+  | 'spawn-left-pane-unbound'
 
 type RecoveryRequest = {
   tabId: string

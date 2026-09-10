@@ -109,6 +109,9 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
   // still awaiting their first PTY (ptyId null) may adopt it, which preserves
   // the mobile pre-spawn subscribe flow.
   resolveLiveLeafForHandle(handle: string): { ptyId: string | null } | null {
+    // Why the discarded call: it re-links a runtime-owned handle whose `handles` record a renderer
+    // reload cleared, so the lookup below sees it; without it a phone's held handle inspects nothing.
+    this.getLivePtyForHandle(handle)
     const record = this.handles.get(handle)
     if (!record) {
       return null

@@ -227,6 +227,7 @@ export function buildAgentStatusLiveEntry(
     ...(timing?.evidenceObservedAt !== undefined
       ? { evidenceObservedAt: timing.evidenceObservedAt }
       : {}),
+    ...(metadata?.structuredHostOwned === true ? { structuredHostOwned: true as const } : {}),
     stateStartedAt,
     agentType: identity.agentType,
     model:

@@ -10,7 +10,12 @@ import type {
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type {
+  AgentSessionHandleProvider,
+  AgentSessionProviderHandleLink
+} from '../../../shared/agent-session-provider-handle'
+import { claudeProviderHandleLink } from '../../claude/claude-structured-owner-identity'
+import { codexProviderHandleLink } from '../../codex/codex-structured-owner-identity'
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation,
@@ -59,6 +64,19 @@ export type AgentSessionAttachParams = {
   launchArgs?: string[]
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+  /**
+   * Host-resolved only. Present when this create adopts an existing provider conversation rather
+   * than starting one: it seeds the handle chain so the adapter resumes instead of creating, and
+   * names the transcript to import so the journal shows the conversation so far.
+   *
+   * Deliberately separate from `providerHandle`, which `agentSession.ensure` already supplies
+   * without adopting — presence of a handle must never be what triggers a resume.
+   */
+  adopt?: {
+    providerHandle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+    /** Omitted only when the exact committed operation replays an already-imported journal. */
+    transcriptPath?: string
+  }
 }
 
 /** Host-supplied half of the reservation. */
@@ -85,6 +103,10 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     accountHome: params.accountHome,
     runtimeKind: params.runtimeKind,
     providerHandle: params.providerHandle,
+    // Which conversation this attaches to, so an adopting create and a blank one never share an
+    // identity. The transcript path is excluded: it is where the host found that conversation this
+    // time, not part of what the caller asked for.
+    adoptedProviderHandle: params.adopt?.providerHandle,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -183,6 +205,38 @@ export async function attachJournal(input: {
   }
 }
 
+/**
+ * The first link of an adopting session's chain.
+ *
+ * `adopted` is the only origin besides `created` a chain will accept at its head, and it is the
+ * honest one here: this session did not create the conversation. The adapter appends its own
+ * `resumed` link once the provider proves the same identity root — or, when it proves the identical
+ * handle at the same fence, the validator elides that as a retry and this link stays the head.
+ */
+const ADOPTED_HANDLE_FENCE = 1
+
+function adoptedProviderHandleLink(
+  handle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>,
+  observedAt: number
+): AgentSessionProviderHandleLink {
+  return handle.kind === 'claude'
+    ? claudeProviderHandleLink({
+        sessionId: handle.sessionId,
+        leafUuid: handle.leafUuid,
+        resumed: false,
+        origin: 'adopted',
+        fence: ADOPTED_HANDLE_FENCE,
+        observedAt
+      })
+    : codexProviderHandleLink({
+        threadId: handle.threadId,
+        resumed: false,
+        origin: 'adopted',
+        fence: ADOPTED_HANDLE_FENCE,
+        observedAt
+      })
+}
+
 export function reserveRequestFor(input: {
   sessionId: string
   params: AgentSessionAttachParams
@@ -201,6 +255,13 @@ export function reserveRequestFor(input: {
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     runtimeKind: params.runtimeKind,
+    ...(params.adopt
+      ? {
+          // Fence 1 is a new record's first, and the owner probe requires the head link to carry
+          // the record's current fence.
+          adoptedHandleLink: adoptedProviderHandleLink(params.adopt.providerHandle, input.now)
+        }
+      : {}),
     expectedFence: params.envelope.expectedRuntimeFence,
     spawnToken: authority.spawnToken,
     claimKeyId: authority.claimKeyId,

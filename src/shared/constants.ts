@@ -274,6 +274,7 @@ export function getDefaultUIState(): PersistedUIState {
     agentsFilterRepoIds: [],
     agentsShowChildAgents: false,
     agentsCompactMode: true,
+    agentsShowSearch: true,
     agentsReadFilter: DEFAULT_AGENTS_READ_FILTER,
     agentsGroupBy: DEFAULT_AGENTS_GROUP_BY,
     collapsedGroups: [],

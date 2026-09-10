@@ -34,7 +34,31 @@ const ProviderFrame = z.object({
   payload: BoundedPayload
 })
 
-const KNOWN_BLOCK_TYPES = new Set(['text', 'tool-call', 'tool-result', 'image-ref'])
+const ToolMetadata = {
+  mcpIdentity: z.object({ server: z.string(), tool: z.string() }).optional(),
+  exitCode: z.number().int().optional(),
+  durationMs: z.number().nonnegative().optional(),
+  webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional()
+}
+
+const KNOWN_BLOCK_TYPES = new Set([
+  'text',
+  'tool-call',
+  'tool-result',
+  'image-ref',
+  'subagent-group'
+])
+
+/** Child-agent lifecycle stays an open string for the same reason tool states
+ *  do: a state a newer build writes must not turn the row malformed. */
+const SubagentEntry = z.object({
+  id: z.string(),
+  label: z.string(),
+  state: z.string().min(1),
+  tokens: z.number().optional(),
+  startedAt: z.number().optional(),
+  settledAt: z.number().optional()
+})
 
 /** Renderers select blocks by `type` equality and skip what they cannot draw,
  *  so an unknown block type stays admissible; a known type with a broken
@@ -44,11 +68,18 @@ const Block = z.union([
     z.object({
       type: z.literal('text'),
       text: z.string(),
+      presentation: z.string().optional(),
+      tone: z.string().optional(),
       providerFrame: ProviderFrame.optional()
     }),
     // `input: undefined` loses its key under JSON.stringify, so a persisted
     // canonical tool call may lack it entirely.
-    z.object({ type: z.literal('tool-call'), name: z.string(), input: z.unknown().optional() }),
+    z.object({
+      type: z.literal('tool-call'),
+      name: z.string(),
+      input: z.unknown().optional(),
+      ...ToolMetadata
+    }),
     z.object({
       type: z.literal('tool-result'),
       output: z.string(),
@@ -59,6 +90,11 @@ const Block = z.union([
       path: z.string().optional(),
       url: z.string().optional(),
       alt: z.string().optional()
+    }),
+    z.object({
+      type: z.literal('subagent-group'),
+      groupId: z.string(),
+      agents: z.array(SubagentEntry)
     })
   ]),
   z.object({ type: z.string() }).refine((block) => !KNOWN_BLOCK_TYPES.has(block.type))
@@ -100,6 +136,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
   MessageBody,
   z.object({
     kind: z.literal('tool-call'),
+    ...ToolMetadata,
     name: z.string(),
     // See the tool-call block: the key itself is lost when `input` is undefined.
     input: z.unknown().optional(),
@@ -125,6 +162,8 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('status'),
     text: z.string(),
+    presentation: z.string().optional(),
+    tone: z.string().optional(),
     turnLifecycle: z.object({ turnId: z.string(), state: z.string().min(1) }).optional(),
     providerFrame: ProviderFrame.optional()
   })
@@ -147,7 +186,8 @@ export const AgentJournalSubmissionSchema = z.object({
   providerItemId: z.string().nullable(),
   reason: z.string().nullable(),
   submittedAt: z.number(),
-  resolvedAt: z.number().nullable()
+  resolvedAt: z.number().nullable(),
+  recovered: z.literal(true).optional()
 })
 
 export function isAdmissibleAgentJournalItemBody(value: unknown): value is AgentJournalItemBody {

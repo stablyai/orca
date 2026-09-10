@@ -13,6 +13,7 @@ function autocomplete(
     query: '',
     triggerKey: '/:0',
     prefix: '/',
+    dispatchable: true,
     grouped: true,
     commandsEnabled: true,
     skillsEnabled: true,
@@ -21,6 +22,7 @@ function autocomplete(
         kind: 'command',
         id: 'command:clear',
         name: 'clear',
+        token: '/clear',
         description: 'Clear history',
         skillCollision: false
       },
@@ -28,6 +30,7 @@ function autocomplete(
         kind: 'skill',
         id: 'skill:browser',
         name: 'browser',
+        token: '/browser',
         description: 'Use a browser',
         sources: [{ sourceKind: 'repo', skillFilePath: '/repo/browser/SKILL.md' }]
       }

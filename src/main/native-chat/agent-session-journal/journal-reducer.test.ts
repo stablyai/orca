@@ -5,7 +5,10 @@ import {
   boundJournalKeyComponent,
   MAX_JOURNAL_KEY_COMPONENT_CHARS
 } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import {
   applyJournalRow,
@@ -14,6 +17,7 @@ import {
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
+import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
 
 const EPOCH = 'epoch-1'
@@ -442,5 +446,51 @@ describe('bounded item-key collisions', () => {
       oversizedKey,
       mimicKey
     ])
+  })
+})
+
+describe('re-adding a tombstoned row', () => {
+  it('builds the rebuilt row above the tombstone that removed it', () => {
+    const identity: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'roster' }
+    const itemId = agentJournalItemKey(identity)
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+    )
+    applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
+    expect(renderJournalState(state).items).toEqual([])
+
+    // Same identity, re-added later in the session: a revision built only from
+    // `items` would restart at 1 and lose to the tombstone forever.
+    applyJournalRow(
+      state,
+      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+    )
+    expect(renderJournalState(state).items.map((item) => item.body)).toEqual([text('second')])
+  })
+
+  // `upsertItem` clearing the tombstone on a re-add is a map-state invariant:
+  // `items` and `tombstones` stay disjoint, so a re-added row is never both
+  // present and removed. Revision ordering is now independent of it —
+  // `buildJournalTombstoneRow` takes `max(itemRevision, tombstoneRevision) + 1`
+  // — so what this pins is the map state itself, not the ranking.
+  it('removes the row again after it was re-added', () => {
+    const identity: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'roster' }
+    const itemId = agentJournalItemKey(identity)
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+    )
+    applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
+    applyJournalRow(
+      state,
+      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+    )
+    expect(state.tombstones.get(itemId)).toBeUndefined()
+
+    applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 4, fence: 1, ts: 1_004 }))
+    expect(renderJournalState(state).items).toEqual([])
   })
 })

@@ -350,6 +350,9 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     await expectSubmitted(pane)
   })
 
+  // #19542 deleted the legacy-Run write fallback, so a sender in no Run has
+  // nowhere to file mail to a bare handle: the send is refused outright, which
+  // is what keeps an unsafe pointer out of the pane on the next idle frame.
   test('keeps unbound direct mail durable without pointing to an unsafe check', async ({
     orcaPage,
     electronApp
@@ -359,6 +362,8 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     const pane = await openAgentPane()
     await driveToLiveIdle(client, pane)
 
+    // Two plain terminals, neither in a Run: `send --to <handle>` must still land durably. It
+    // files under the unbound Run, so a reopen never reads it as pre-Runs state (#19542 regression).
     const stdinBeforeScan = pane.agent.readStdin()
     const messageId = await sendMail(client, pane.handle, { subject: 'Unbound direct mail' })
     pane.agent.setTitle(CODEX_WORKING_TITLE)
@@ -366,8 +371,10 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     pane.agent.setTitle(CODEX_IDLE_TITLE)
     await waitForObservedTitle(client, pane.handle, CODEX_IDLE_TITLE)
 
+    await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
     expect(readMailRow(userDataDir, messageId)).toMatchObject({
       to_handle: pane.handle,
+      run_id: 'run_unbound',
       read: 0,
       delivered_at: null
     })
