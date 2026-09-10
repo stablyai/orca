@@ -107,6 +107,19 @@ function ingest(
   return { ...state, ...patch } as WebSessionTabsSyncState
 }
 
+const ENVIRONMENT_ID = 'env-1'
+
+/** The shape a paired host's frame actually takes: no options, no explicit clock.
+ *  `web-runtime-session-snapshot.ts` and `web-session-tabs-sync/global-session-events.ts`
+ *  both call it this way, so the local-options helper above cannot stand in for it. */
+function ingestRemote(
+  state: WebSessionTabsSyncState,
+  frame: RuntimeMobileSessionTabsResult
+): WebSessionTabsSyncState {
+  const patch = applyWebSessionTabsSnapshot(state, frame, ENVIRONMENT_ID)
+  return { ...state, ...patch } as WebSessionTabsSyncState
+}
+
 function chatTab(state: WebSessionTabsSyncState): Tab | undefined {
   return state.unifiedTabsByWorktree[WORKTREE_ID]?.find(
     (tab) => tab.contentType === 'agent-session'
@@ -191,5 +204,42 @@ describe('a chat name converging across clients', () => {
       (tab) => tab.contentType === 'agent-session'
     )
     expect(persistedChat?.customLabel).toBe('Beta')
+  })
+})
+
+describe('a chat name arriving from a paired host', () => {
+  // Same three states as above, at the remote entry point. It behaves like the local one today,
+  // which is a fact about today's code rather than a guarantee: without these, a regression on
+  // the paired path — the path both tickets are about — would leave every other arm green.
+
+  it('keeps a local rename when the paired host predates host-owned chat names', () => {
+    const before = stateWithLocalName('Alpha')
+
+    // A released host emits the agent tab without the key at all. Absent is not "unnamed":
+    // collapsing the two at ingestion would discard this rename against every shipped host.
+    const after = ingestRemote(before, hostFrame({ title: 'Codex Chat' }))
+
+    expect(chatTab(after)?.customLabel).toBe('Alpha')
+    expect(renderedLabel(after)).toBe('Alpha')
+  })
+
+  it('adopts a rename made on another client', () => {
+    const after = ingestRemote(
+      stateWithLocalName('Alpha'),
+      hostFrame({ title: 'Beta', customTitle: 'Beta' })
+    )
+
+    expect(chatTab(after)?.customLabel).toBe('Beta')
+    expect(renderedLabel(after)).toBe('Beta')
+  })
+
+  it('drops the local name when the paired host reports the chat as unnamed', () => {
+    const after = ingestRemote(
+      stateWithLocalName('Alpha'),
+      hostFrame({ title: 'Codex Chat', customTitle: null })
+    )
+
+    expect(chatTab(after)?.customLabel).toBeNull()
+    expect(renderedLabel(after)).toBe('Codex Chat')
   })
 })
