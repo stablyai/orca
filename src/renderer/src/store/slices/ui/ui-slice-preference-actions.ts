@@ -22,6 +22,10 @@ import {
 } from '../../../../../shared/status-bar-usage-mode'
 import type { WorkspaceHostScope } from '../../../../../shared/ui-chrome-types'
 import {
+  DEFAULT_STATUS_BAR_USAGE_WINDOWS,
+  normalizeStatusBarUsageWindows
+} from '../../../../../shared/status-bar-usage-windows'
+import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds
@@ -296,6 +300,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       })
     },
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
+    statusBarUsageWindows: DEFAULT_STATUS_BAR_USAGE_WINDOWS,
+    setStatusBarUsageWindows: (windows) => {
+      const normalized = normalizeStatusBarUsageWindows(windows)
+      window.api.ui.set({ statusBarUsageWindows: normalized }).catch(console.error)
+      set({ statusBarUsageWindows: normalized })
+    },
     setStatusBarUsageMode: (mode) => {
       const normalized = normalizeStatusBarUsageMode(mode)
       window.api.ui.set({ statusBarUsageMode: normalized }).catch(console.error)

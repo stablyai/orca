@@ -6,6 +6,8 @@ import type { PersistedUIState } from './persisted-ui-state-types'
 // the receiver's answer with one computed for somebody else. They must be stripped on the way to a
 // host (ui.set) and pinned to the local value on the way back (ui.get).
 export const PAIRING_LOCAL_UI_FIELDS = [
+  // Footer presentation belongs to this viewport; older hosts reject new UI keys.
+  'statusBarUsageWindows',
   // Its hostKey names authorities only the writing client can resolve — a paired
   // client's `desktop` is a different machine — and old hosts reject the unknown key.
   'automationHostFilter',

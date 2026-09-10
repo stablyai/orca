@@ -6,6 +6,8 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import type { StatusBarUsageWindows } from '../../../../shared/status-bar-usage-windows'
+import { selectStatusBarProviderWindows } from './status-bar-provider-windows'
 import { ProviderIcon, clampUsedPercent, getProviderUsageStatusLabel } from './tooltip'
 import { getTightestUsageSection } from './UsageRosterPanel'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
@@ -174,12 +176,14 @@ export function ProviderSegment({
   p,
   compact,
   display,
-  mode = 'verbose'
+  mode = 'verbose',
+  windows = 'both'
 }: {
   p: ProviderRateLimits | null
   compact: boolean
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
+  windows?: StatusBarUsageWindows
 }): React.JSX.Element {
   const provider = p?.provider ?? 'claude'
   const statusLabel = p ? getProviderUsageStatusLabel(p) : ''
@@ -228,25 +232,35 @@ export function ProviderSegment({
 
   // Has data (ok, fetching with stale data, or error with stale data)
   const isStale = p.status === 'error'
+  const visibleProvider = selectStatusBarProviderWindows(p, windows)
+  const visibleTightest =
+    visibleProvider === p ? tightest : getTightestUsageSection(visibleProvider)
 
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {mode === 'verbose' ? (
+      {!visibleTightest ? (
+        tightest ? (
+          <span>--</span>
+        ) : null
+      ) : mode === 'verbose' ? (
         <>
-          {tightest && !compact ? (
-            <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
+          {!compact ? (
+            <MiniBar
+              usedPct={clampUsedPercent(visibleTightest.window.usedPercent)}
+              display={display}
+            />
           ) : null}
-          <VerboseProviderUsage p={p} display={display} />
+          <VerboseProviderUsage p={visibleProvider} display={display} />
         </>
-      ) : tightest ? (
+      ) : (
         <WindowLabel
-          w={tightest.window}
-          label={tightest.label}
+          w={visibleTightest.window}
+          label={visibleTightest.label}
           display={display}
           showLabel={!compact}
         />
-      ) : null}
+      )}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )

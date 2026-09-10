@@ -5,6 +5,7 @@ import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { normalizeStatusBarUsageWindows } from '../../../../shared/status-bar-usage-windows'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
@@ -23,6 +24,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   )
   const statusBarUsageMode = normalizeStatusBarUsageMode(useAppStore((s) => s.statusBarUsageMode))
   const setStatusBarUsageMode = useAppStore((s) => s.setStatusBarUsageMode)
+  const statusBarUsageWindows = normalizeStatusBarUsageWindows(
+    useAppStore((s) => s.statusBarUsageWindows)
+  )
+  const setStatusBarUsageWindows = useAppStore((s) => s.setStatusBarUsageWindows)
   const [usageMenuOpen, setUsageMenuOpen] = useState(false)
   const usageMenuFocusHandoff = useStatusBarMenuFocusHandoff()
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
@@ -264,6 +269,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showSsh,
     statusBarItems,
     statusBarUsageMode,
+    statusBarUsageWindows,
+    setStatusBarUsageWindows,
     toggleStatusBarItem,
     usageMenuFocusHandoff,
     usageMenuOpen,

@@ -20,6 +20,7 @@ import type { CustomPet } from '../../../../../shared/pet-types'
 import type { ReleaseChannel } from '../../../../../shared/release-channel'
 import type { ChangelogData, UpdateStatus } from '../../../../../shared/update-status-types'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
+import type { StatusBarUsageWindows } from '../../../../../shared/status-bar-usage-windows'
 import type { PersistedUIWriteBaseline } from '../persisted-ui-write-baseline'
 import type { UISliceCore } from './ui-slice-contract-core'
 
@@ -106,6 +107,8 @@ export type UISlicePreferences = {
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
   statusBarUsageMode: StatusBarUsageMode
   setStatusBarUsageMode: (mode: StatusBarUsageMode) => void
+  statusBarUsageWindows: StatusBarUsageWindows
+  setStatusBarUsageWindows: (windows: StatusBarUsageWindows) => void
 }
 
 export type UISliceSurfaces = {

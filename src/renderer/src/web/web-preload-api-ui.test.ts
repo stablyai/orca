@@ -14,9 +14,7 @@ import {
 } from './web-preload-api-test-harness'
 
 describe('web before-unload persistence', () => {
-  beforeEach(() => {
-    vi.resetModules()
-  })
+  beforeEach(() => vi.resetModules())
 
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -461,6 +459,7 @@ describe('web UI preload API', () => {
   // without wiring the web read seam fails here rather than shipping. The host sample differs from
   // the browser's for every field, so only the pin makes this pass.
   const browserLocalUiSamples: Record<PairingLocalUiField, unknown> = {
+    statusBarUsageWindows: 'weekly',
     automationHostFilter: { kind: 'host', hostKey: 'browser-local-host-key' },
     hideWorkspacesFromOtherDevices: true,
     manualRepoOrder: [{ hostId: 'runtime:web-env-1', repoId: 'repo-b' }],
@@ -476,6 +475,7 @@ describe('web UI preload API', () => {
     manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 }
   }
   const hostUiSamples: Record<PairingLocalUiField, unknown> = {
+    statusBarUsageWindows: 'session',
     automationHostFilter: { kind: 'all' },
     hideWorkspacesFromOtherDevices: false,
     manualRepoOrder: [{ hostId: 'local', repoId: 'repo-a' }],
