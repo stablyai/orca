@@ -1,4 +1,11 @@
 {
+  "multiplexer": {
+    "deleteWorktree": "Delete worktree…",
+    "layoutName": "Multiplexer {{value0}}",
+    "addLayout": "Add multiplexer",
+    "deleteLayout": "Delete multiplexer",
+    "deleteLayoutDescription": "Delete this saved layout? Workspaces and running terminals will not be deleted."
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",

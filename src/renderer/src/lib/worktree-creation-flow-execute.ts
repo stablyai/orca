@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { requestWorkspaceMultiplexerAdd } from '@/components/workspace-multiplexer/workspace-multiplexer-add-request'
 import { useAppStore } from '@/store'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
@@ -172,9 +173,12 @@ export async function executeWorktreeCreation(
   // means the user still expects this task-launch handoff when it becomes ready;
   // the entry guard prevents a late trust preflight from reviving a cancelled create.
   const completionState = useAppStore.getState()
+  const addToMultiplexer =
+    preparedRequest.addToMultiplexer && completionState.activeView === 'multiplexer'
   const shouldActivateOnCompletion =
     completionState.pendingWorktreeCreations[creationId] !== undefined &&
-    (isPendingCreationSurfaceVisible(creationId) ||
+    (addToMultiplexer ||
+      isPendingCreationSurfaceVisible(creationId) ||
       (completionState.activeView === 'terminal' &&
         completionState.activePendingCreationId === null))
 
@@ -182,6 +186,7 @@ export async function executeWorktreeCreation(
   let primaryTabId: string | null
   if (shouldActivateOnCompletion) {
     activation = activateAndRevealWorktree(worktree.id, {
+      ...(addToMultiplexer ? { preserveActiveView: true } : {}),
       sidebarRevealBehavior: 'auto',
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
@@ -190,6 +195,9 @@ export async function executeWorktreeCreation(
       ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
     })
     primaryTabId = activation === false ? null : activation.primaryTabId
+    if (activation && addToMultiplexer) {
+      requestWorkspaceMultiplexerAdd({ worktreeId: worktree.id, executionHostId: worktree.hostId })
+    }
   } else {
     // The user moved on. Seed the worktree's terminal + setup in the background
     // (setActiveTab only writes global focus for the active worktree, so this is

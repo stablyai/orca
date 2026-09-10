@@ -1,4 +1,10 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  addWorkspaceMultiplexer,
+  selectWorkspaceMultiplexer,
+  removeWorkspaceMultiplexer
+} from '../../../../../shared/workspace-multiplexer-collections'
 import { rewindHistoryIndexPastView } from '../worktree-nav-history'
 import {
   EMPTY_WORKSPACE_MULTIPLEXER_STATE,
@@ -8,8 +14,21 @@ import {
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     workspaceMultiplexer: EMPTY_WORKSPACE_MULTIPLEXER_STATE,
+    addWorkspaceMultiplexer: () =>
+      get().setWorkspaceMultiplexer(
+        addWorkspaceMultiplexer(get().workspaceMultiplexer, createBrowserUuid())
+      ),
+    selectWorkspaceMultiplexer: (id) =>
+      get().setWorkspaceMultiplexer(selectWorkspaceMultiplexer(get().workspaceMultiplexer, id)),
+    removeWorkspaceMultiplexer: (id) =>
+      get().setWorkspaceMultiplexer(removeWorkspaceMultiplexer(get().workspaceMultiplexer, id)),
     setWorkspaceMultiplexer: (multiplexer) => {
-      const normalized = normalizeWorkspaceMultiplexerState(multiplexer)
+      const current = get().workspaceMultiplexer
+      const normalized = normalizeWorkspaceMultiplexerState({
+        activeLayoutId: current.activeLayoutId,
+        savedLayouts: current.savedLayouts,
+        ...multiplexer
+      })
       set({ workspaceMultiplexer: normalized })
       window.api.ui.set({ workspaceMultiplexer: normalized }).catch(console.error)
     },

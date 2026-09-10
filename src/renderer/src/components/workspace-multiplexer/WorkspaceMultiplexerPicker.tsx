@@ -52,12 +52,20 @@ export function WorkspaceMultiplexerPicker({
   const worktreeIds = useMemo(() => items.map((item) => item.worktreeId), [items])
   const activityStatuses = useWorktreeActivityStatuses(worktreeIds)
   const workspaceStatuses = useAppStore((state) => state.workspaceStatuses)
-  const handleCreateWorktree = (): void => {
+  const handleCreateWorktree = (item?: WorkspaceMultiplexerCatalogItem): void => {
+    const state = useAppStore.getState()
+    const worktree = item
+      ? getWorktreeOnHostFromState(state, item.worktreeId, item.executionHostId)
+      : undefined
+    if (item && (!worktree || item.workspaceKind !== 'worktree')) {
+      return
+    }
     setOpen(false)
     queueMicrotask(() =>
-      useAppStore
-        .getState()
-        .openModal('new-workspace-composer', { telemetrySource: 'command_palette' })
+      state.openModal('new-workspace-composer', {
+        ...(worktree ? { initialRepoId: worktree.repoId } : {}),
+        telemetrySource: 'command_palette'
+      })
     )
   }
   const handleDeleteWorktree = (item: WorkspaceMultiplexerCatalogItem): void => {
@@ -109,7 +117,10 @@ export function WorkspaceMultiplexerPicker({
                 heading={
                   <span className="flex min-w-0 items-center gap-1.5">
                     <RepoBadgeMark color={group.projectBadgeColor} />
-                    <span className="truncate text-[13px] font-semibold text-foreground">
+                    <span
+                      className="min-w-0 truncate text-[13px] font-semibold text-foreground"
+                      title={group.projectName}
+                    >
                       {group.projectName}
                     </span>
                     {group.projectGroupName ? (
@@ -121,6 +132,34 @@ export function WorkspaceMultiplexerPicker({
                       <span className="ml-auto shrink-0 text-[10px] font-normal text-muted-foreground">
                         {group.hostLabel}
                       </span>
+                    ) : null}
+                    {group.items[0]?.workspaceKind === 'worktree' ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="ml-auto shrink-0 text-muted-foreground"
+                            aria-label={`${translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')}: ${group.projectName}`}
+                            data-workspace-multiplexer-create-project={group.identity}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.stopPropagation()
+                              }
+                            }}
+                            onClick={() => handleCreateWorktree(group.items[0])}
+                          >
+                            <Plus aria-hidden />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {translate(
+                            'auto.components.NewWorkspaceComposerModal.createWorktree',
+                            'Create worktree'
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
                     ) : null}
                   </span>
                 }
@@ -228,7 +267,7 @@ export function WorkspaceMultiplexerPicker({
                             : item.path}
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <div className="flex max-w-[30%] shrink-0 items-center gap-1.5 overflow-hidden text-[10px] text-muted-foreground">
                         {terminalCount > 0 ? (
                           <span
                             className="inline-flex h-5 items-center gap-1 rounded-md border border-border bg-muted/40 px-1.5 tabular-nums"
@@ -251,7 +290,7 @@ export function WorkspaceMultiplexerPicker({
                           </span>
                         ) : null}
                         {multiplexerCount > 0 ? (
-                          <span>
+                          <span className="truncate">
                             {translate(
                               'auto.components.workspace.multiplexer.WorkspaceMultiplexerPicker.inMultiplexer',
                               '{{value0}} in Workspace Multiplexer',
@@ -283,7 +322,7 @@ export function WorkspaceMultiplexerPicker({
                                 event.stopPropagation()
                                 handleDeleteWorktree(item)
                               }}
-                              className="text-muted-foreground transition-opacity can-hover:opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100 group-data-[selected=true]/workspace:opacity-100 hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100"
+                              className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                             >
                               <Trash2 aria-hidden />
                             </Button>
@@ -304,7 +343,7 @@ export function WorkspaceMultiplexerPicker({
               type="button"
               variant="ghost"
               onMouseDown={(event) => event.preventDefault()}
-              onClick={handleCreateWorktree}
+              onClick={() => handleCreateWorktree()}
               className="h-9 w-full justify-start rounded-sm px-3 text-xs font-normal"
             >
               <GitBranchPlus className="size-3.5 text-muted-foreground" />

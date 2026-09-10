@@ -122,6 +122,21 @@ export function WorkspaceMultiplexerTile({
     [onPortalTarget, slot.id]
   )
   const sectionRef = useRef<HTMLElement | null>(null)
+  // Portaled terminals bubble React events to their owner, not this tile.
+  useEffect(() => {
+    const section = sectionRef.current
+    const focus = (): void => {
+      if (!isFocused) {
+        onFocus()
+      }
+    }
+    section?.addEventListener('pointerdown', focus, true)
+    section?.addEventListener('focusin', focus)
+    return () => {
+      section?.removeEventListener('pointerdown', focus, true)
+      section?.removeEventListener('focusin', focus)
+    }
+  }, [isFocused, onFocus])
   const setSectionRef = useCallback(
     (element: HTMLElement | null) => {
       sectionRef.current = element
@@ -297,8 +312,6 @@ export function WorkspaceMultiplexerTile({
       data-workspace-multiplexer-pane-id={pane.id}
       data-workspace-multiplexer-slot-id={slot.id}
       data-workspace-multiplexer-drop-target={centerDropTarget ? '' : undefined}
-      onPointerDownCapture={onFocus}
-      onFocusCapture={onFocus}
     >
       {!hasTabGroup ? (
         <div className="flex h-10 shrink-0 items-center border-b border-border bg-muted/20 pr-2">

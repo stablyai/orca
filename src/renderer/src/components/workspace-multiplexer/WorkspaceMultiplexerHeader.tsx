@@ -2,6 +2,7 @@ import { ArrowLeft, PanelsTopLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { WorkspaceMultiplexerPicker } from './WorkspaceMultiplexerPicker'
+import { WorkspaceMultiplexerSwitcher } from './WorkspaceMultiplexerSwitcher'
 import type { WorkspaceMultiplexerCatalogItem } from './workspace-multiplexer-model'
 
 export function WorkspaceMultiplexerHeader({
@@ -31,12 +32,7 @@ export function WorkspaceMultiplexerHeader({
       </Button>
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <PanelsTopLeft className="size-3.5 shrink-0 text-muted-foreground" />
-        <h1 className="truncate text-sm font-semibold text-foreground">
-          {translate(
-            'auto.components.workspace.multiplexer.WorkspaceMultiplexerPage.title',
-            'Workspace Multiplexer'
-          )}
-        </h1>
+        <WorkspaceMultiplexerSwitcher />
       </div>
       <WorkspaceMultiplexerPicker
         items={items}

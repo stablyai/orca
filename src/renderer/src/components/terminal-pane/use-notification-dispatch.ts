@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
+import { TERMINAL_NOTIFICATION_EVENT, type TerminalNotificationDetail } from '@/constants/terminal'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
@@ -173,6 +174,13 @@ export function dispatchTerminalNotification(
       }
     }
   }
+
+  const notificationTabId = event.paneKey ? getPaneKeyTabId(event.paneKey) : null
+  window.dispatchEvent?.(
+    new CustomEvent<TerminalNotificationDetail>(TERMINAL_NOTIFICATION_EVENT, {
+      detail: { worktreeId, tabId: notificationTabId }
+    })
+  )
 
   if (event.suppressOsNotification) {
     return

@@ -500,6 +500,24 @@ describe('delete worktree flow', () => {
     )
   })
 
+  it('forces the existing confirmation even when skip-confirm is enabled', () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    setWorktrees([{ id: 'wt-1', instanceId: 'instance-1', displayName: 'one' }])
+    const onDeleted = vi.fn()
+    runWorktreeDelete('wt-1', { forceConfirm: true, expectedInstanceId: 'instance-1', onDeleted })
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+    expect(onDeleted).not.toHaveBeenCalled()
+    expect(mocks.state.openModal).toHaveBeenCalledWith(
+      'delete-worktree',
+      expect.objectContaining({
+        worktreeId: 'wt-1',
+        allowSkipConfirm: false,
+        onDeleted,
+        worktreeDeleteIdentities: [{ id: 'wt-1', instanceId: 'instance-1' }]
+      })
+    )
+  })
+
   it('rejects a delayed delete when the path now belongs to a different instance', () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
     setWorktrees([{ id: 'wt-1', instanceId: 'instance-2' }])

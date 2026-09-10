@@ -19,11 +19,16 @@ export type WorkspaceMultiplexerPane = {
   slotOrder: string[]
 }
 
-export type WorkspaceMultiplexerState = {
+export type WorkspaceMultiplexerLayout = {
   slots: WorkspaceMultiplexerSlot[]
   panes: WorkspaceMultiplexerPane[]
   /** TabGroupLayoutNode leaves store Multiplexer pane ids, not terminal tab-group ids. */
   layout: TabGroupLayoutNode | null
+}
+
+export type WorkspaceMultiplexerState = WorkspaceMultiplexerLayout & {
+  activeLayoutId?: string
+  savedLayouts?: { id: string; name: string; layout: WorkspaceMultiplexerLayout }[]
 }
 
 export const EMPTY_WORKSPACE_MULTIPLEXER_STATE: WorkspaceMultiplexerState = {
@@ -52,7 +57,20 @@ export function remapWorkspaceMultiplexerWorktreeId(
     changed = true
     return { ...slot, worktreeId: newWorktreeId }
   })
-  return changed ? { ...state, slots } : state
+  const savedLayouts = state.savedLayouts?.map((saved) => {
+    const layout = remapWorkspaceMultiplexerWorktreeId(
+      saved.layout,
+      oldWorktreeId,
+      newWorktreeId,
+      executionHostId
+    )!
+    if (layout === saved.layout) {
+      return saved
+    }
+    changed = true
+    return { ...saved, layout }
+  })
+  return changed ? { ...state, slots, ...(savedLayouts ? { savedLayouts } : {}) } : state
 }
 
 const MAX_MULTIPLEXER_SLOTS = 24
@@ -109,7 +127,7 @@ function normalizeLayout(
   return { type: 'split', direction: input.direction, first, second, ratio }
 }
 
-export function normalizeWorkspaceMultiplexerState(value: unknown): WorkspaceMultiplexerState {
+function normalizeWorkspaceMultiplexerLayout(value: unknown): WorkspaceMultiplexerLayout {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return EMPTY_WORKSPACE_MULTIPLEXER_STATE
   }
@@ -221,4 +239,36 @@ export function normalizeWorkspaceMultiplexerState(value: unknown): WorkspaceMul
       : { type: 'leaf', groupId: pane.id }
   }
   return { slots, panes, layout }
+}
+
+export function normalizeWorkspaceMultiplexerState(value: unknown): WorkspaceMultiplexerState {
+  const layout = normalizeWorkspaceMultiplexerLayout(value)
+  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  if (!Array.isArray(input.savedLayouts)) {
+    return layout
+  }
+  const ids = new Set<string>()
+  const savedLayouts: NonNullable<WorkspaceMultiplexerState['savedLayouts']> = []
+  for (const raw of input.savedLayouts.slice(0, 24)) {
+    if (!raw || typeof raw !== 'object') {
+      continue
+    }
+    const id = nonEmptyString(raw.id)
+    if (!id || ids.has(id)) {
+      continue
+    }
+    ids.add(id)
+    savedLayouts.push({
+      id,
+      name: nonEmptyString(raw.name)?.slice(0, 80) ?? 'Multiplexer',
+      layout: normalizeWorkspaceMultiplexerLayout(raw.layout)
+    })
+  }
+  if (!savedLayouts.length) {
+    return layout
+  }
+  const active = savedLayouts.find((item) => item.id === input.activeLayoutId) ?? savedLayouts[0]!
+  // The top-level layout remains the active projection for existing callers and older saves.
+  active.layout = layout
+  return { ...layout, activeLayoutId: active.id, savedLayouts }
 }

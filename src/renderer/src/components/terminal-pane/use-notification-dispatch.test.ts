@@ -146,6 +146,7 @@ describe('dispatchTerminalNotification', () => {
       markAgentCompletionPaneUnread: vi.fn()
     }
     vi.stubGlobal('window', {
+      dispatchEvent: vi.fn(),
       api: {
         notifications: {
           dispatch: vi.fn().mockResolvedValue({ delivered: true })
@@ -157,6 +158,20 @@ describe('dispatchTerminalNotification', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
+
+  it.each(['terminal-bell', 'agent-task-complete'] as const)(
+    'emits visual attention for %s even when OS delivery is suppressed',
+    (source) => {
+      dispatchTerminalNotification('wt-primary', { source, paneKey, suppressOsNotification: true })
+      expect(window.dispatchEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'orca-terminal-notification',
+          detail: { worktreeId: 'wt-primary', tabId: 'tab-1' }
+        })
+      )
+      expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    }
+  )
 
   it('uses a live pane key when marking inactive worktree attention', () => {
     dispatchTerminalNotification('wt-primary', {

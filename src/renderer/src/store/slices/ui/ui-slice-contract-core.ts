@@ -195,6 +195,9 @@ export type UISliceCore = {
   openMobilePage: () => void
   closeMobilePage: () => void
   workspaceMultiplexer: WorkspaceMultiplexerState
+  addWorkspaceMultiplexer: () => void
+  selectWorkspaceMultiplexer: (id: string) => void
+  removeWorkspaceMultiplexer: (id: string) => void
   setWorkspaceMultiplexer: (multiplexer: WorkspaceMultiplexerState) => void
   openWorkspaceMultiplexer: () => void
   closeWorkspaceMultiplexer: () => void

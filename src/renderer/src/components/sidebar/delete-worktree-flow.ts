@@ -101,8 +101,15 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   )
   const hasLineageChildren = deleteLineage.descendants.length > 0
   const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
-  if (skipConfirm && !hasLineageChildren) {
-    void runWorktreeDeleteWithToast(toWorktreeRemovalTarget(target), target.displayName)
+  if (skipConfirm && !hasLineageChildren && !options.forceConfirm) {
+    const removalTarget = toWorktreeRemovalTarget(target)
+    void runWorktreeDeleteWithToast(removalTarget, target.displayName, {
+      onForceDeleted: (deletedTarget) => options.onDeleted?.([deletedTarget])
+    }).then((deleted) => {
+      if (deleted) {
+        options.onDeleted?.([removalTarget])
+      }
+    })
     return
   }
   state.openModal('delete-worktree', {
@@ -113,7 +120,8 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
           lineageDeleteIdentities: toWorktreeDeleteIdentities(deleteLineage.deleteAllTargets)
         }
       : {}),
-    ...(hasLineageChildren ? { allowSkipConfirm: false } : {})
+    ...(hasLineageChildren || options.forceConfirm ? { allowSkipConfirm: false } : {}),
+    ...(options.onDeleted ? { onDeleted: options.onDeleted } : {})
   })
 }
 

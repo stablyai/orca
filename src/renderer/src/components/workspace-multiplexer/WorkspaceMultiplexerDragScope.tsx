@@ -200,6 +200,9 @@ export function WorkspaceMultiplexerDragScope({
         drag.onDragMove(event)
         return
       }
+      if (activeWorkspaceDragRef.current?.slotId !== event.active.data.current.slotId) {
+        return
+      }
       setHoveredWorkspaceDropTarget(resolveWorkspaceMultiplexerDropTarget(event))
     },
     [drag]
@@ -209,6 +212,9 @@ export function WorkspaceMultiplexerDragScope({
       const dragData = event.active.data.current
       if (!isWorkspaceMultiplexerSlotDragData(dragData)) {
         drag.onDragEnd(event)
+        return
+      }
+      if (activeWorkspaceDragRef.current?.slotId !== dragData.slotId) {
         return
       }
       const target = resolveWorkspaceMultiplexerDropTarget(event)
@@ -231,11 +237,11 @@ export function WorkspaceMultiplexerDragScope({
     [clearWorkspaceDrag, commitWorkspaceMultiplexer, drag, onWorkspaceDrop]
   )
   const onDragCancel = useCallback(() => {
-    if (activeWorkspaceDragRef.current) {
-      clearWorkspaceDrag()
-      return
+    const wasWorkspaceDrag = activeWorkspaceDragRef.current !== null
+    clearWorkspaceDrag()
+    if (!wasWorkspaceDrag) {
+      drag.onDragCancel()
     }
-    drag.onDragCancel()
   }, [clearWorkspaceDrag, drag])
 
   return (

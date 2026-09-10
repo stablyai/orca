@@ -1,4 +1,5 @@
 import { Suspense, useRef } from 'react'
+import { useAppStore } from '@/store'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
 import Sidebar from '../components/Sidebar'
@@ -68,6 +69,7 @@ function WorktreeSidebar({
 }
 
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
+  const multiplexerId = useAppStore((state) => state.workspaceMultiplexer.activeLayoutId)
   const { activeView, activeWorktreeId, activePendingCreationId, creationLayoutActive } = layout
   return (
     <>
@@ -79,7 +81,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'activity' ? <ActivityPrototypePage /> : null}
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
       {activeView === 'mobile' ? <MobilePage /> : null}
-      {activeView === 'multiplexer' ? <WorkspaceMultiplexerPage /> : null}
+      {activeView === 'multiplexer' ? <WorkspaceMultiplexerPage key={multiplexerId} /> : null}
       {activeView === 'terminal' && creationLayoutActive && activePendingCreationId ? (
         <WorktreeCreationPanel
           creationId={activePendingCreationId}

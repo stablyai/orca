@@ -228,6 +228,25 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ workspaceMultiplexer })
   })
 
+  it('keeps saved layouts when existing callers replace only the active layout', () => {
+    const setUI = vi.fn((_update: Partial<PersistedUIState>) => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+    const empty = { slots: [], panes: [], layout: null }
+    store.getState().addWorkspaceMultiplexer()
+    const secondId = store.getState().workspaceMultiplexer.activeLayoutId!
+    store.getState().setWorkspaceMultiplexer(empty)
+    expect(store.getState().workspaceMultiplexer.savedLayouts).toHaveLength(2)
+    store.getState().selectWorkspaceMultiplexer('default')
+    const persisted = setUI.mock.calls.at(-1)![0]
+    const restored = createUIStore()
+    restored.getState().hydratePersistedUI(makePersistedUI(persisted), 'startup')
+    expect(restored.getState().workspaceMultiplexer.activeLayoutId).toBe('default')
+    expect(restored.getState().workspaceMultiplexer.savedLayouts).toHaveLength(2)
+    restored.getState().removeWorkspaceMultiplexer(secondId)
+    expect(restored.getState().workspaceMultiplexer.savedLayouts).toHaveLength(1)
+  })
+
   it('falls back to terminal when the persisted active view is not a known view', () => {
     const store = createUIStore()
 

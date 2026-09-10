@@ -1,4 +1,11 @@
 {
+  "multiplexer": {
+    "deleteWorktree": "워크트리 삭제…",
+    "layoutName": "멀티플렉서 {{value0}}",
+    "addLayout": "멀티플렉서 추가",
+    "deleteLayout": "멀티플렉서 삭제",
+    "deleteLayoutDescription": "이 배치를 삭제할까요? 워크스페이스와 실행 중인 터미널은 삭제되지 않습니다."
+  },
   "app": {
     "recoverableError": {
       "rootTitle": "Orca에 렌더러 오류가 발생했습니다.",

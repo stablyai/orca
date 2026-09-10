@@ -81,4 +81,23 @@ describe('activateTabAndFocusPane', () => {
     expect(requestAnimationFrame).not.toHaveBeenCalled()
     expect(dispatchEvent).not.toHaveBeenCalled()
   })
+
+  it('dispatches tab-only notification highlights after mounting', () => {
+    let frame: FrameRequestCallback | undefined
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn((callback) => {
+        frame = callback
+        return 1
+      })
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', { dispatchEvent })
+    activateTabAndFocusPane('tab-1', null, { flashFocusedPane: true })
+    frame!(0)
+    expect(dispatchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: { tabId: 'tab-1', leafId: null, flashFocusedPane: true } })
+    )
+  })
 })

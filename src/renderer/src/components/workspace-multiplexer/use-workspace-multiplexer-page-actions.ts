@@ -1,9 +1,13 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
+import type { TabSplitDirection } from '@/store/slices/tabs'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import type { WorkspaceMultiplexerSlot } from '../../../../shared/workspace-multiplexer-types'
 import {
+  activateWorkspaceMultiplexerSlot,
   findWorkspaceMultiplexerPaneForSlot,
   insertWorkspaceMultiplexerSlot,
   removeWorkspaceMultiplexerSlot
@@ -24,26 +28,19 @@ import {
 
 export function useWorkspaceMultiplexerPageActions(
   catalog: readonly WorkspaceMultiplexerCatalogItem[]
-): {
-  focusedSlotId: string | null
-  setFocusedSlotId: Dispatch<SetStateAction<string | null>>
-  expandedPaneId: string | null
-  setExpandedPaneId: Dispatch<SetStateAction<string | null>>
-  focusSlot: (
-    slot: WorkspaceMultiplexerSlot,
-    workspace: WorkspaceMultiplexerCatalogItem | null
-  ) => boolean
-  focusWorkspaceSlot: (slotId: string) => void
-  addWorkspace: (workspace: WorkspaceMultiplexerCatalogItem, sourceSlotId?: string | null) => void
-  removeWorkspace: (slotId: string) => void
-} {
+) {
   const [focusedSlotId, setFocusedSlotId] = useState<string | null>(
-    useAppStore.getState().workspaceMultiplexer.slots[0]?.id ?? null
+    () => useAppStore.getState().workspaceMultiplexer.panes[0]?.activeSlotId ?? null
   )
   const [expandedPaneId, setExpandedPaneId] = useState<string | null>(null)
   const focusSlot = useCallback(
     (slot: WorkspaceMultiplexerSlot, workspace: WorkspaceMultiplexerCatalogItem | null) => {
       setFocusedSlotId(slot.id)
+      const pane = findWorkspaceMultiplexerPaneForSlot(
+        useAppStore.getState().workspaceMultiplexer,
+        slot.id
+      )
+      setExpandedPaneId((current) => (current === pane?.id ? current : null))
       if (!workspace) {
         return false
       }
@@ -86,17 +83,26 @@ export function useWorkspaceMultiplexerPageActions(
   )
   const focusWorkspaceSlot = useCallback(
     (slotId: string) => {
-      const slot = useAppStore
-        .getState()
-        .workspaceMultiplexer.slots.find((item) => item.id === slotId)
+      const state = useAppStore.getState()
+      const slot = state.workspaceMultiplexer.slots.find((item) => item.id === slotId)
       if (slot) {
+        const pane = findWorkspaceMultiplexerPaneForSlot(state.workspaceMultiplexer, slotId)
+        if (pane && pane.activeSlotId !== slotId) {
+          state.setWorkspaceMultiplexer(
+            activateWorkspaceMultiplexerSlot(state.workspaceMultiplexer, pane.id, slotId)
+          )
+        }
         focusSlot(slot, findWorkspaceMultiplexerCatalogItem(catalog, slot))
       }
     },
     [catalog, focusSlot]
   )
   const addWorkspace = useCallback(
-    (workspace: WorkspaceMultiplexerCatalogItem, sourceSlotId?: string | null): void => {
+    (
+      workspace: WorkspaceMultiplexerCatalogItem,
+      sourceSlotId?: string | null,
+      direction: TabSplitDirection = 'right'
+    ): void => {
       let state = useAppStore.getState()
       if (
         !workspaceMultiplexerOwnsTerminalTabs(
@@ -173,7 +179,8 @@ export function useWorkspaceMultiplexerPageActions(
         insertWorkspaceMultiplexerSlot(
           multiplexer,
           slot,
-          sourceSlotId ?? focusedSlotId ?? multiplexer.slots[0]?.id ?? null
+          sourceSlotId ?? focusedSlotId ?? multiplexer.slots[0]?.id ?? null,
+          direction
         )
       )
       if (focusSlot(slot, workspace) && !terminalTab) {
@@ -184,7 +191,7 @@ export function useWorkspaceMultiplexerPageActions(
   )
   useEffect(() => {
     const handleAddRequest = (event: Event): void => {
-      const { worktreeId, executionHostId } = (
+      const { worktreeId, executionHostId, terminal } = (
         event as CustomEvent<WorkspaceMultiplexerAddRequestDetail>
       ).detail
       const state = useAppStore.getState()
@@ -198,16 +205,53 @@ export function useWorkspaceMultiplexerPageActions(
           item.worktreeId === worktreeId &&
           (!executionHostId || item.executionHostId === executionHostId)
       )
-      if (!workspace) {
+      if (
+        !workspace ||
+        !workspaceMultiplexerOwnsTerminalTabs(
+          workspace,
+          state.unifiedTabsByWorktree[worktreeId] ?? [],
+          state.restoredRuntimeHostIdByWorkspaceSessionKey[worktreeId]
+        )
+      ) {
         return
       }
-      const existingSlot = state.workspaceMultiplexer.slots.find(
+      const terminalTab =
+        terminal &&
+        (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+          (tab) => tab.contentType === 'terminal' && tab.entityId === terminal.tabId
+        )
+      if (terminal && !terminalTab) {
+        return
+      }
+      const matchingSlots = state.workspaceMultiplexer.slots.filter(
         (slot) => workspaceMultiplexerSlotIdentity(slot) === workspace.identity
       )
+      const groupId = terminalTab?.groupId ?? state.activeGroupIdByWorktree[worktreeId]
+      const existingSlot =
+        matchingSlots.find((slot) => slot.groupId === groupId) ??
+        (terminal ? undefined : matchingSlots[0])
+      if (terminalTab) {
+        state.focusGroup(worktreeId, terminalTab.groupId)
+        state.activateTab(terminalTab.id, { worktreeId })
+        if (existingSlot) {
+          state.setWorkspaceMultiplexer({
+            ...state.workspaceMultiplexer,
+            slots: state.workspaceMultiplexer.slots.map((slot) =>
+              slot.id === existingSlot.id
+                ? { ...slot, activeTerminalTabId: terminalTab.entityId }
+                : slot
+            )
+          })
+        }
+      }
       if (existingSlot) {
         focusWorkspaceSlot(existingSlot.id)
       } else {
         addWorkspace(workspace)
+      }
+      if (terminal) {
+        activateTabAndFocusPane(terminal.tabId, terminal.leafId, terminal)
+        focusTerminalTabSurface(terminal.tabId, terminal.leafId)
       }
     }
     window.addEventListener(WORKSPACE_MULTIPLEXER_ADD_REQUEST_EVENT, handleAddRequest)

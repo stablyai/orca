@@ -14,6 +14,8 @@ export type WorktreeBatchDeleteOptions = {
 export type WorktreeDeleteIdentity = Pick<Worktree, 'id' | 'instanceId' | 'hostId'>
 
 export type WorktreeDeleteOptions = {
+  forceConfirm?: boolean
+  onDeleted?: (targets: WorktreeRemovalTarget[]) => void
   expectedInstanceId?: string
   /** Why (STA-4343): the id-keyed map holds one row per `repoId::path`, so a row
    *  that knows its host must say so or the delete lands on the other one. */

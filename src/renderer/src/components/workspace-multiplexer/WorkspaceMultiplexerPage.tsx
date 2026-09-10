@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
+import TabPaneColumnSplitDragOverlay from '../tab-group/TabPaneColumnSplitDragOverlay'
 import { useShallow } from 'zustand/react/shallow'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { createBrowserUuid } from '@/lib/browser-uuid'
@@ -29,6 +30,8 @@ import {
 } from './workspace-multiplexer-layout'
 import { useWorkspaceMultiplexerDrag } from './use-workspace-multiplexer-drag'
 import { useWorkspaceMultiplexerPageActions } from './use-workspace-multiplexer-page-actions'
+import { useWorkspaceMultiplexerAddOffer } from './use-workspace-multiplexer-add-offer'
+import { useWorkspaceMultiplexerCompletion } from './use-workspace-multiplexer-completion'
 
 export default function WorkspaceMultiplexerPage(): React.JSX.Element {
   const store = useAppStore(
@@ -98,7 +101,9 @@ export default function WorkspaceMultiplexerPage(): React.JSX.Element {
     addWorkspace,
     removeWorkspace
   } = useWorkspaceMultiplexerPageActions(catalog)
+  useWorkspaceMultiplexerAddOffer(catalog)
   const pageElementRef = useRef<HTMLDivElement | null>(null)
+  useWorkspaceMultiplexerCompletion(pageElementRef)
   const setPageElement = useCallback((element: HTMLDivElement | null) => {
     pageElementRef.current = element
     if (!element) {
@@ -136,8 +141,12 @@ export default function WorkspaceMultiplexerPage(): React.JSX.Element {
   ])
 
   const focusTarget =
-    store.multiplexer.slots.find((slot) => slot.id === focusedSlotId) ??
-    store.multiplexer.slots[0] ??
+    store.multiplexer.slots.find(
+      (slot) =>
+        slot.id === focusedSlotId &&
+        store.multiplexer.panes.some((pane) => pane.activeSlotId === slot.id)
+    ) ??
+    store.multiplexer.slots.find((slot) => slot.id === store.multiplexer.panes[0]?.activeSlotId) ??
     null
   const focusTargetWorkspace = focusTarget
     ? findWorkspaceMultiplexerCatalogItem(catalog, focusTarget)
@@ -223,6 +232,7 @@ export default function WorkspaceMultiplexerPage(): React.JSX.Element {
         multiplexerDrag.dropTargetSlotId !== undefined ? '' : undefined
       }
     >
+      {multiplexerDrag.preview && <TabPaneColumnSplitDragOverlay {...multiplexerDrag.preview} />}
       <WorkspaceMultiplexerHeader
         items={catalog}
         slotCountByIdentity={slotCountByIdentity}

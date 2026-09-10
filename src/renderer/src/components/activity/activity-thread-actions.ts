@@ -1,4 +1,5 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { requestWorkspaceMultiplexerAdd } from '../workspace-multiplexer/workspace-multiplexer-add-request'
 import { activateStructuredAgentSessionTab } from '@/lib/structured-agent-session-tab-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/worktree-jump-navigation'
 import { useAppStore } from '@/store'
@@ -93,6 +94,20 @@ export function createActivityThreadActions({
     if (!hasLiveTerminal && !hasLiveAgentSession) {
       return
     }
+    const parsed = parsePaneKey(thread.paneKey)
+    if (state.activeView === 'multiplexer' && hasLiveTerminal) {
+      requestWorkspaceMultiplexerAdd({
+        worktreeId: worktree.id,
+        executionHostId,
+        terminal: {
+          tabId: thread.tab.id,
+          leafId: parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null,
+          flashFocusedPane: true,
+          scrollToBottomIfOutputSinceLastView: true
+        }
+      })
+      return
+    }
     if (state.activeRepoId !== worktree.repoId) {
       state.setActiveRepo(worktree.repoId)
     }
@@ -106,7 +121,6 @@ export function createActivityThreadActions({
       return
     }
     state.setActiveTabType('terminal')
-    const parsed = parsePaneKey(thread.paneKey)
     activateTabAndFocusPane(
       thread.tab.id,
       parsed && parsed.tabId === thread.tab.id ? parsed.leafId : null,

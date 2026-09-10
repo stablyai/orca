@@ -6,6 +6,7 @@ import {
 } from '@/components/terminal-pane/terminal-pane-split-request-routing'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { requestWorkspaceMultiplexerAdd } from '@/components/workspace-multiplexer/workspace-multiplexer-add-request'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
@@ -126,6 +127,19 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         scrollToBottomIfOutputSinceLastView
       }) => {
         const store = useAppStore.getState()
+        if (store.activeView === 'multiplexer') {
+          requestWorkspaceMultiplexerAdd({
+            worktreeId,
+            terminal: {
+              tabId,
+              leafId: leafId ?? null,
+              ackPaneKeyOnSuccess,
+              flashFocusedPane,
+              scrollToBottomIfOutputSinceLastView
+            }
+          })
+          return
+        }
         activateTerminalInitiatedWorktree(store, worktreeId)
         store.setActiveTab(tabId)
         store.revealWorktreeInSidebar(worktreeId)

@@ -2,6 +2,8 @@ import type { TerminalPaneSplitSource } from '../../../shared/feature-education-
 
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'
 export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
+export const TERMINAL_NOTIFICATION_EVENT = 'orca-terminal-notification'
+export type TerminalNotificationDetail = { worktreeId: string; tabId: string | null }
 export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
 export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'

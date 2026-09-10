@@ -25,7 +25,7 @@ export function activateTabAndFocusPane(
   setActiveTabType('terminal')
   setActiveTab(tabId)
   cancelPendingFocusPaneFrame()
-  if (leafId === null) {
+  if (leafId === null && !opts?.flashFocusedPane) {
     return
   }
   // Why: defer one frame so the new TerminalPane has mounted its

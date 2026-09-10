@@ -6,7 +6,11 @@ const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
   activateTabAndFocusPane: vi.fn(),
   activateStructuredAgentSessionTab: vi.fn(),
-  activateAndRevealWorkspace: vi.fn()
+  activateAndRevealWorkspace: vi.fn(),
+  requestWorkspaceMultiplexerAdd: vi.fn()
+}))
+vi.mock('../workspace-multiplexer/workspace-multiplexer-add-request', () => ({
+  requestWorkspaceMultiplexerAdd: mocks.requestWorkspaceMultiplexerAdd
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
@@ -97,6 +101,28 @@ describe('activity thread host routing', () => {
       '11111111-1111-4111-8111-111111111111',
       { flashFocusedPane: true, scrollToBottomIfOutputSinceLastView: true }
     )
+  })
+
+  it('keeps notification navigation inside the multiplexer with host-scoped focus and flash', () => {
+    mocks.getState.mockReturnValue({ ...mocks.getState(), activeView: 'multiplexer' })
+    const actions = createActivityThreadActions({
+      getMarkAllReadThreads: () => [thread],
+      acknowledgeAgents,
+      unacknowledgeAgents: vi.fn(),
+      setSelectedPaneKey
+    })
+    actions.selectThread(thread)
+    expect(mocks.requestWorkspaceMultiplexerAdd).toHaveBeenCalledWith({
+      worktreeId: thread.worktree.id,
+      executionHostId: REMOTE_HOST,
+      terminal: {
+        tabId: thread.tab.id,
+        leafId: '11111111-1111-4111-8111-111111111111',
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      }
+    })
+    expect(setActiveWorktree).not.toHaveBeenCalled()
   })
 
   it('activates a structured agent session instead of looking for a terminal pane', () => {

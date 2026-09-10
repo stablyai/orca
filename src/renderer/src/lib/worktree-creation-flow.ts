@@ -35,7 +35,9 @@ function revealPendingCreation(
   })
   // Why: the creation panel only renders under the terminal view (App content
   // router), so force it active so the panel is what fills the content area.
-  store.setActiveView('terminal')
+  if (!request.addToMultiplexer) {
+    store.setActiveView('terminal')
+  }
   store.setSidebarOpen(true)
 }
 
@@ -47,13 +49,19 @@ function revealPendingCreation(
  */
 export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): string {
   const store = useAppStore.getState()
+  request = {
+    ...request,
+    ...(store.activeView === 'multiplexer' ? { addToMultiplexer: true } : {})
+  }
   const existingCreationId = findPendingLinkedWorkItemCreationId(
     store.pendingWorktreeCreations,
     request
   )
   if (existingCreationId) {
     store.setActivePendingWorktreeCreation(existingCreationId)
-    store.setActiveView('terminal')
+    if (!request.addToMultiplexer) {
+      store.setActiveView('terminal')
+    }
     store.setSidebarOpen(true)
     return existingCreationId
   }
@@ -67,6 +75,10 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
 
 /** Stage a pending entry before async preflight so the UI shows immediate progress. */
 export function beginBackgroundWorktreePreparation(request: WorktreeCreationRequest): string {
+  request = {
+    ...request,
+    ...(useAppStore.getState().activeView === 'multiplexer' ? { addToMultiplexer: true } : {})
+  }
   const creationId = createBrowserUuid()
   revealPendingCreation(creationId, request, 'preparing')
   return creationId
@@ -81,6 +93,12 @@ export function continueBackgroundWorktreeCreation(
   const store = useAppStore.getState()
   if (!store.pendingWorktreeCreations[creationId]) {
     return false
+  }
+  request = {
+    ...request,
+    ...(store.pendingWorktreeCreations[creationId].request.addToMultiplexer
+      ? { addToMultiplexer: true }
+      : {})
   }
   // Why: the remote/runtime create path emits no progress events, so the stepped
   // checklist would freeze on step 1. Use the request's captured repo owner so
@@ -97,7 +115,9 @@ export function continueBackgroundWorktreeCreation(
   // the pending row alive without reselecting the creation panel in that case.
   if (options.revealCreationSurface !== false) {
     store.setActivePendingWorktreeCreation(creationId)
-    store.setActiveView('terminal')
+    if (!request.addToMultiplexer) {
+      store.setActiveView('terminal')
+    }
     store.setSidebarOpen(true)
   }
   void executeWorktreeCreation(creationId, request)
