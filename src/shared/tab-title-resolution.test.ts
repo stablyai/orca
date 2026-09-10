@@ -205,4 +205,35 @@ describe('tab title resolution', () => {
       )
     ).toBe('Run build')
   })
+  it('lets a manual rename outrank a provider conversation name', () => {
+    const named = {
+      customTitle: null as string | null,
+      conversationName: 'Fix the lease probe',
+      quickCommandLabel: null,
+      generatedTitle: 'Generated',
+      title: 'zsh'
+    }
+
+    expect(resolveTerminalTabTitle(named, true)).toBe('Fix the lease probe')
+    expect(resolveTerminalTabTitle({ ...named, customTitle: 'My own name' }, true)).toBe(
+      'My own name'
+    )
+    // Still ahead of the live title and the generated one.
+    expect(resolveTerminalTabTitle({ ...named, conversationName: null }, true)).toBe('Generated')
+  })
+
+  it('ranks a unified conversation name under the user label and over the rest', () => {
+    const named = {
+      customLabel: null as string | null,
+      conversationName: 'Fix the lease probe',
+      quickCommandLabel: 'Run build',
+      generatedLabel: 'Fix flaky tests',
+      label: 'zsh'
+    }
+
+    expect(resolveUnifiedTabLabel(named, true)).toBe('Fix the lease probe')
+    expect(resolveUnifiedTabLabel({ ...named, customLabel: 'My own name' }, true)).toBe(
+      'My own name'
+    )
+  })
 })

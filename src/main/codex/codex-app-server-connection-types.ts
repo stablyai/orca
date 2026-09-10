@@ -5,6 +5,8 @@ export type CodexAppServerServerRequest = {
 }
 
 export type CodexAppServerConnectionHandlers = {
+  /** Publishes ownership before the handshake so cancellation can reap the child. */
+  onConnection?: (connection: CodexAppServerConnection) => void
   onNotification?: (method: string, params: unknown) => void
   onServerRequest?: (request: CodexAppServerServerRequest) => void
   onUnhandledFrame?: (kind: string, payload: unknown) => void

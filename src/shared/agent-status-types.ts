@@ -168,6 +168,11 @@ export type AgentStatusEntry = {
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
+  /** A structured chat's settled name, already resolved between the user's rename
+   *  and the provider's. Carried apart from `terminalTitle` because that field is
+   *  laundered through heuristics built for OSC titles scraped off a pty, which
+   *  null a legitimate name like `auth/login`. This one is authoritative. */
+  conversationName?: string
   /** False when the status belongs to a non-terminal owner that restores itself. */
   terminalResumeEligible?: false
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */

@@ -28,6 +28,18 @@ function optionSession(request: CodexAppServerConnection['request']): CodexSessi
     acquisitionGeneration: 'generation-1',
     threadId: 'thread-1',
     historyPath: null,
+    cwd: '/work/repo',
+    launch: {
+      command: 'codex',
+      args: ['app-server'],
+      cwd: '/work/repo',
+      codexHome: null,
+      resumeThreadId: null
+    },
+    conversationName: null,
+    conversationNameRevision: 0,
+    naming: null,
+    namingAttempted: false,
     prompts: new CodexAcquisitionWindow().prompts,
     options: new Map(),
     reportedOptions: { model: 'gpt-live', effort: 'high' },

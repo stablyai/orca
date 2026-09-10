@@ -234,6 +234,8 @@ async function resolveClaudeSessionFile(
     const files = await walkSessionFiles(projectsDir, 'claude', [], {
       extensions: new Set(['.jsonl']),
       filePredicate: (path) => basename(path) === targetName,
+      // Only `files[0]` is ever used, and this runs on every acquisition.
+      stopAfterFirstMatch: true,
       signal
     })
     if (files[0]) {
@@ -291,6 +293,7 @@ async function findCodexRolloutInDirs(
         : (
             await walkSessionFiles(sessionsDir, 'codex', [], {
               ...scanOptions,
+              stopAfterFirstMatch: true,
               signal
             })
           )[0]
@@ -335,6 +338,8 @@ async function resolveOmpSessionFile(
 ): Promise<string | null> {
   const files = await walkSessionFiles(sessionsDir, 'omp', [], {
     extensions: new Set(['.jsonl']),
+    // Why: only `files[0]` is used, so the rest of the walk is pure cost.
+    stopAfterFirstMatch: true,
     // Why: a session's task-subagent transcripts live in its same-named
     // `<stamp>_<uuid>/` artifact dir, and a label-named child can still end in
     // `_<session id>` — so descending would let a subagent transcript win the

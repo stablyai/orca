@@ -41,7 +41,35 @@ export function claudeQueryAsyncCanceller(
   return typeof cancel === 'function' ? cancel.bind(query) : null
 }
 
+/**
+ * generate_session_title is a runtime Query method the shipped 0.3.251 declaration
+ * omits. With `persist` the CLI writes the name into its own transcript as an
+ * `ai-title` record, which is where Orca reads it back from on a later attach.
+ * The typeof guard is its degradation path.
+ */
+type ClaudeQueryTitleGenerator = {
+  generateSessionTitle?: (
+    description: string,
+    options?: { persist?: boolean }
+  ) => Promise<string | null | undefined>
+}
+
+export function claudeQueryTitleGenerator(
+  query: Query
+):
+  | ((description: string, options?: { persist?: boolean }) => Promise<string | null | undefined>)
+  | null {
+  const generate = (query as unknown as ClaudeQueryTitleGenerator).generateSessionTitle
+  return typeof generate === 'function' ? generate.bind(query) : null
+}
+
 export type ClaudeControlOptions = { timeoutMs?: number }
+
+/** A title, a CLI that answered without one, or a CLI that has no such request. */
+export type ClaudeSessionTitleResult =
+  | { outcome: 'named'; title: string }
+  | { outcome: 'declined' }
+  | { outcome: 'unsupported' }
 
 /**
  * Run one native Query control method under Orca's deadline and error classification.
@@ -95,6 +123,13 @@ export type ClaudeControlSurface = {
   supportedModels: (options?: ClaudeControlOptions) => Promise<unknown[]>
   initializationResult: (options?: ClaudeControlOptions) => Promise<unknown>
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
+  /** Always present, like `getSettings`, so a caller never probes for the method.
+   *  `unsupported` is distinguished from `declined` because a caller must not
+   *  record "we already asked" against a CLI that could not be asked. */
+  generateSessionTitle: (
+    description: string,
+    options?: ClaudeControlOptions & { persist?: boolean }
+  ) => Promise<ClaudeSessionTitleResult>
 }
 
 type InterruptingQuery = {
@@ -144,6 +179,21 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
       runClaudeControl('list_models', () => query.supportedModels(), options?.timeoutMs),
     initializationResult: (options) =>
       runClaudeControl('initialize', () => query.initializationResult(), options?.timeoutMs),
+    generateSessionTitle: (description, options) => {
+      const generate = claudeQueryTitleGenerator(query)
+      if (!generate) {
+        return Promise.resolve({ outcome: 'unsupported' as const })
+      }
+      return runClaudeControl(
+        'generate_session_title',
+        () => generate(description, { persist: options?.persist === true }),
+        options?.timeoutMs
+      ).then((title) =>
+        typeof title === 'string' && title.trim()
+          ? { outcome: 'named' as const, title: title.trim() }
+          : { outcome: 'declined' as const }
+      )
+    },
     getSettings: (options) => {
       const read = claudeQuerySettingsReader(query)
       return read

@@ -42,7 +42,10 @@ export function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
   if (ownerTabs) {
     const tab = ownerTabs.find((candidate) => candidate.id === tabId)
     return Boolean(
-      tab?.customTitle?.trim() || tab?.quickCommandLabel?.trim() || tab?.generatedTitle?.trim()
+      tab?.customTitle?.trim() ||
+      tab?.conversationName?.trim() ||
+      tab?.quickCommandLabel?.trim() ||
+      tab?.generatedTitle?.trim()
     )
   }
   for (const tabs of Object.values(state.tabsByWorktree)) {
@@ -51,7 +54,10 @@ export function agentStatusTabAlreadyHasProtectedOrGeneratedTitle(
       continue
     }
     return Boolean(
-      tab.customTitle?.trim() || tab.quickCommandLabel?.trim() || tab.generatedTitle?.trim()
+      tab.customTitle?.trim() ||
+      tab.conversationName?.trim() ||
+      tab.quickCommandLabel?.trim() ||
+      tab.generatedTitle?.trim()
     )
   }
   return false
@@ -131,6 +137,9 @@ export function getRetainedFallbackTab(entry: AgentStatusEntry, worktreeId: stri
     ptyId: null,
     worktreeId,
     title: entry.terminalTitle ?? 'Agent',
+    // Its own slot, not the user-intent one: a generated name must stay
+    // distinguishable from a rename the user typed.
+    conversationName: entry.conversationName ?? null,
     customTitle: null,
     color: null,
     sortOrder: 0,

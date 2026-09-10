@@ -10,6 +10,7 @@ import {
   type ClaudeStructuredSessionAdapterDeps
 } from '../claude/claude-structured-session-adapter'
 import { claudeProviderHandleLink } from '../claude/claude-structured-owner-identity'
+import { readClaudeTranscriptConversationName } from '../claude/claude-transcript-conversation-name'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import {
   readClaudeTranscriptLeafUuid,
@@ -35,6 +36,14 @@ export type StructuredClaudeRuntimeAdapterDeps = {
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
   ) => void
+  onConversationName?: (sessionId: string, conversationName: string) => void
+  readNamingState?: (sessionId: string) => {
+    conversationName: string | null
+    namingAttempted: boolean
+  }
+  markNamingAttempted?: (sessionId: string) => void
+  onNamingError?: (scope: string, error: unknown) => void
+  onConversationNameCleared?: (sessionId: string) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 }
 
@@ -93,6 +102,22 @@ export function createStructuredClaudeRuntimeAdapter(
       return transcriptPath
         ? await readClaudeTranscriptLeafUuid(transcriptPath, providerSessionId, previousLeafUuid)
         : null
+    },
+    ...(deps.onConversationName ? { onConversationName: deps.onConversationName } : {}),
+    ...(deps.readNamingState ? { readNamingState: deps.readNamingState } : {}),
+    ...(deps.markNamingAttempted ? { markNamingAttempted: deps.markNamingAttempted } : {}),
+    ...(deps.onNamingError ? { onNamingError: deps.onNamingError } : {}),
+    ...(deps.onConversationNameCleared
+      ? { onConversationNameCleared: deps.onConversationNameCleared }
+      : {}),
+    readTranscriptConversationName: async ({ providerSessionId, claudeConfigDir }) => {
+      const transcriptPath = await resolveSessionFilePath('claude', providerSessionId, {
+        claudeProjectsDir: join(claudeConfigDir, 'projects')
+      })
+      // No transcript is no evidence either way, never a cleared name.
+      return transcriptPath
+        ? await readClaudeTranscriptConversationName(transcriptPath)
+        : { kind: 'unknown' as const }
     },
     onEvent: (event) => {
       if (

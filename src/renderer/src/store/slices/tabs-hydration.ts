@@ -266,6 +266,7 @@ function hydrateLegacyFormat(
         ...(tt.quickCommandLabel?.trim() ? { quickCommandLabel: tt.quickCommandLabel.trim() } : {}),
         ...(tt.generatedTitle?.trim() ? { generatedLabel: tt.generatedTitle.trim() } : {}),
         customLabel: tt.customTitle,
+        conversationName: tt.conversationName ?? null,
         color: tt.color,
         sortOrder: tt.sortOrder,
         createdAt: tt.createdAt,

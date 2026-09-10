@@ -48,6 +48,17 @@ export function structuredAgentSessionHostTeardownPhases(collaborators: {
   ]
 }
 
+/** Runs every teardown phase against the host's own collaborators, then closes its journals. */
+export function tearDownStructuredAgentSessionHostCollaborators(input: {
+  collaborators: Parameters<typeof structuredAgentSessionHostTeardownPhases>[0]
+  sessions: Map<string, StructuredAgentSessionHostSession>
+}): Promise<void> {
+  return tearDownStructuredAgentSessionHost({
+    phases: structuredAgentSessionHostTeardownPhases(input.collaborators),
+    sessions: input.sessions
+  })
+}
+
 export async function tearDownStructuredAgentSessionHost(input: {
   phases: readonly StructuredAgentSessionTeardownPhase[]
   sessions: Map<string, StructuredAgentSessionHostSession>

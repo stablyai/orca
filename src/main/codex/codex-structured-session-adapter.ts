@@ -4,7 +4,6 @@ import type {
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
-import { isCodexAppServerRequestError } from './codex-app-server-connection'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
@@ -16,6 +15,7 @@ import type { CodexJournalTranslationAdmission } from './codex-structured-journa
 import { answerCodexPrompt } from './codex-structured-prompt-replies'
 import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
 import { supportsCodexStructuredLocation } from './codex-structured-location-support'
+import { CodexNamingOrphanRegistry } from './codex-naming-orphan-registry'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
   applyCodexStructuredSessionOption,
@@ -34,9 +34,14 @@ import {
   deliverCodexServerRequest,
   deliverCodexUnhandledFrame
 } from './codex-structured-provider-events'
+import {
+  captureCodexConversationName,
+  startCodexConversationNamingForTurn
+} from './codex-conversation-name-turn'
 import { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
+import { compactCodexSession } from './codex-structured-compact-turn'
 
 export type {
   CodexStructuredLaunch,
@@ -48,11 +53,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   private readonly compactions = new StructuredSessionCompaction()
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
+  private readonly namingOrphans: CodexNamingOrphanRegistry
   private readonly turnCancellation: CodexStructuredTurnCancellation
   private readonly notificationRetries: ReturnType<typeof createCodexStructuredNotificationRetry>
   private readonly teardown: CodexStructuredSessionTeardown
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
+    this.namingOrphans = new CodexNamingOrphanRegistry(deps.onNamingError)
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
       translate: (sessionId, session, method, params) =>
@@ -65,7 +72,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       ...(deps.onBackgroundTasksChanged
         ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
         : {}),
-      forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null)
+      forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null),
+      namingOrphans: this.namingOrphans
     })
     this.turnCancellation = new CodexStructuredTurnCancellation({
       captureTurnProcesses: deps.captureTurnProcesses,
@@ -90,6 +98,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       deps: this.deps,
       sessions: this.sessions,
       acquisitions: this.acquisitions,
+      namingOrphans: this.namingOrphans,
       turnCancellation: this.turnCancellation,
       notificationRetries: this.notificationRetries,
       deliver: (acquisition, sessionId, event, retainedBytes) =>
@@ -130,6 +139,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (this.turnCancellation.handleNotification(sessionId, session, method, params)) {
       return { accepted: true }
     }
+    captureCodexConversationName(sessionId, session, method, params, this.deps)
     return deliverCodexNotification(sessionId, session, method, params, (current, event) =>
       this.emit(current, event)
     )
@@ -166,18 +176,16 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     sessionId: string,
     request: Parameters<typeof deliverCodexServerRequest>[2]
   ): void {
-    deliverCodexServerRequest(sessionId, this.sessions.get(sessionId), request, (session, event) =>
-      this.emit(session, event)
+    const session = this.sessions.get(sessionId)
+    deliverCodexServerRequest(sessionId, session, request, (current, event) =>
+      this.emit(current, event)
     )
   }
 
   private handleUnhandledFrame(sessionId: string, kind: string, params: unknown): void {
-    deliverCodexUnhandledFrame(
-      sessionId,
-      this.sessions.get(sessionId),
-      kind,
-      params,
-      (session, event) => this.emit(session, event)
+    const session = this.sessions.get(sessionId)
+    deliverCodexUnhandledFrame(sessionId, session, kind, params, (current, event) =>
+      this.emit(current, event)
     )
   }
 
@@ -198,12 +206,20 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   }): Promise<AgentSessionDispatchOutcome> {
     const session = this.session(input.sessionId)
     session.dispatchPending = true
+    let outcome: AgentSessionDispatchOutcome
     try {
       await this.turnCancellation.captureBaseline(session)
-      return await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
+      outcome = await dispatchCodexTurn(session, input, this.deps.requestTimeoutMs)
     } finally {
+      // Rewind must be free again the moment the send settles; naming runs after.
       session.dispatchPending = false
     }
+    if (outcome.state === 'accepted') {
+      // The accepted user message is the first thing worth naming the thread
+      // after, and the only text this session is sure Codex received.
+      startCodexConversationNamingForTurn(input.sessionId, session, input.body, this.deps)
+    }
+    return outcome
   }
 
   async cancelTurn(input: {
@@ -227,30 +243,14 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
     codexRewind.recoverCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
 
-  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) => {
-    const session = this.session(input.sessionId)
-    return this.compactions.run(
-      input.sessionId,
-      session.threadId,
-      async () => {
-        await this.turnCancellation.captureBaseline(session)
-        return session.connection
-          .request(
-            'thread/compact/start',
-            { threadId: session.threadId },
-            { timeoutMs: this.deps.requestTimeoutMs }
-          )
-          .catch((error) => {
-            if (isCodexAppServerRequestError(error)) {
-              return { error: error.message }
-            }
-            throw error
-          })
-      },
-      input.onLateResult,
-      input.turnId
+  compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
+    compactCodexSession(
+      this.session(input.sessionId),
+      this.compactions,
+      this.turnCancellation,
+      input,
+      this.deps.requestTimeoutMs
     )
-  }
 
   async answerPrompt(input: {
     sessionId: string

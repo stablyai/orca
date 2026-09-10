@@ -375,6 +375,254 @@ describe('structured session cold restoration', () => {
     )
   })
 
+  it('publishes a restored session under the conversation name its record kept', async () => {
+    const runtime = new OrcaRuntimeService()
+    const internal = runtime as unknown as {
+      hasPersistedStructuredAgentSessionStore(): boolean
+      getKnownWorkspaceSessionWorktreeIds(): Set<string>
+      hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
+      refreshMobileSessionPtyRecords(): Promise<Set<string> | null>
+      ensureStructuredAgentSessionHost(): Promise<void>
+    }
+    internal.hasPersistedStructuredAgentSessionStore = () => true
+    internal.getKnownWorkspaceSessionWorktreeIds = () => new Set()
+    internal.hydrateHeadlessMobileSessionTabsFromWorkspaceSession = () => new Set()
+    internal.refreshMobileSessionPtyRecords = async () => new Set()
+    internal.ensureStructuredAgentSessionHost = async () => undefined
+    setStructuredAgentSessionHost({
+      reconcileRestartLeases: async () => undefined,
+      restoreReadableSessions: async () => undefined,
+      listSessionTabs: () => [
+        {
+          sessionId: 'agent-session:named-codex',
+          workspaceId: 'workspace-1',
+          agent: 'codex',
+          title: 'Fix the lease probe'
+        }
+      ]
+    } as never)
+
+    await runtime.restoreStructuredAgentSessionTabs()
+
+    const restored = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(restored.tabs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'agent-session:named-codex',
+          title: 'Fix the lease probe'
+        })
+      ])
+    )
+  })
+
+  it('relabels an open chat tab when its provider names the conversation', async () => {
+    const runtime = new OrcaRuntimeService()
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      agent: 'codex',
+      activate: true
+    })
+    const before = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(before.tabs[0]).toMatchObject({ title: 'Codex Chat' })
+
+    runtime.applyStructuredAgentSessionConversationName({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      conversationName: 'Fix the lease probe'
+    })
+
+    const after = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(after.tabs[0]).toMatchObject({ title: 'Fix the lease probe' })
+    expect(after.snapshotVersion).toBeGreaterThan(before.snapshotVersion ?? 0)
+  })
+
+  it('stores a background relabel without pushing a snapshot at every subscriber', async () => {
+    const runtime = new OrcaRuntimeService()
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      agent: 'codex',
+      activate: true
+    })
+    const emit = vi.fn()
+    ;(
+      runtime as unknown as { emitMobileSessionTabsSnapshot: unknown }
+    ).emitMobileSessionTabsSnapshot = emit
+
+    // The startup sweep's own call shape, once per restored session.
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      agent: 'codex',
+      activate: false,
+      notify: false,
+      title: 'Fix the lease probe'
+    })
+
+    // The desktop renderer subscribes to this feed, so a sweep landing after it
+    // connects would fan out one full tab list per named session.
+    expect(emit).not.toHaveBeenCalled()
+    const after = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(after.tabs[0]).toMatchObject({ title: 'Fix the lease probe' })
+  })
+
+  it('emits the snapshot the store kept, not the candidate handed to it', async () => {
+    const runtime = new OrcaRuntimeService()
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      agent: 'codex',
+      activate: true
+    })
+    const emitted: unknown[] = []
+    ;(
+      runtime as unknown as { emitMobileSessionTabsSnapshot: unknown }
+    ).emitMobileSessionTabsSnapshot = (snapshot: unknown) => emitted.push(snapshot)
+    // A pending conversation replacement rewrites every snapshot on its way into
+    // the store, so the candidate and the stored object are not the same object.
+    setStructuredAgentSessionHost({
+      conversationReplacements: () => [
+        {
+          workspaceId: 'workspace-1',
+          sourceSessionId: 'session-1',
+          sessionId: 'session-2',
+          agent: 'codex'
+        }
+      ]
+    } as never)
+
+    runtime.applyStructuredAgentSessionConversationName({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      conversationName: 'Fix the lease probe'
+    })
+
+    // A client mirror fed the pre-store candidate would keep a replaced tab
+    // under an identical snapshotVersion.
+    const kept = (
+      runtime as unknown as { mobileSessionTabsByWorktree: Map<string, unknown> }
+    ).mobileSessionTabsByWorktree.get('workspace-1')
+    expect(emitted).toHaveLength(1)
+    expect(emitted[0]).toBe(kept)
+  })
+
+  it('publishes nothing when the name it was given is the one already shown', async () => {
+    const runtime = new OrcaRuntimeService()
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      agent: 'codex',
+      activate: true
+    })
+    runtime.applyStructuredAgentSessionConversationName({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      conversationName: 'Fix the lease probe'
+    })
+    const settled = await runtime.listMobileSessionTabs('id:workspace-1')
+
+    runtime.applyStructuredAgentSessionConversationName({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      conversationName: 'Fix the lease probe'
+    })
+
+    const again = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(again.snapshotVersion).toBe(settled.snapshotVersion)
+  })
+
+  it('labels a revealed chat with the name its record already holds', async () => {
+    const runtime = new OrcaRuntimeService()
+    // Reveal, re-open and create publish no title. Only the startup sweep did,
+    // and resume reports the same name so the unchanged-name short circuit means
+    // nothing ever repairs the label afterwards.
+    setStructuredAgentSessionHost({
+      setSessionTabVisibility: async () => undefined,
+      readConversationName: () => 'Fix the lease probe'
+    } as never)
+
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'revealed-codex',
+      agent: 'codex',
+      activate: true
+    })
+
+    const snapshot = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(snapshot.tabs[0]).toMatchObject({
+      id: 'agent-session:revealed-codex',
+      title: 'Fix the lease probe'
+    })
+  })
+
+  it('keeps the placeholder for a chat whose record holds no name', async () => {
+    const runtime = new OrcaRuntimeService()
+    setStructuredAgentSessionHost({
+      setSessionTabVisibility: async () => undefined,
+      readConversationName: () => null
+    } as never)
+
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'unnamed-codex',
+      agent: 'codex',
+      activate: true
+    })
+
+    const snapshot = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(snapshot.tabs[0]).toMatchObject({ title: 'Codex Chat' })
+  })
+
+  it('returns a cleared chat to its placeholder rather than a null title', async () => {
+    const runtime = new OrcaRuntimeService()
+    setStructuredAgentSessionHost({
+      setSessionTabVisibility: async () => undefined,
+      readConversationName: () => 'Fix the lease probe'
+    } as never)
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'cleared-codex',
+      agent: 'codex',
+      activate: true
+    })
+
+    runtime.applyStructuredAgentSessionConversationName({
+      workspaceId: 'workspace-1',
+      sessionId: 'cleared-codex',
+      conversationName: null
+    })
+
+    // `title` is a required string on the published tab; a null reaches every
+    // client's snapshot builder and throws on `tab.title.trim()`.
+    const snapshot = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(snapshot.tabs[0]).toMatchObject({ title: 'Codex Chat' })
+    expect(typeof snapshot.tabs[0]?.title).toBe('string')
+  })
+
+  it('returns a cleared Claude chat to the Claude placeholder', async () => {
+    const runtime = new OrcaRuntimeService()
+    setStructuredAgentSessionHost({
+      setSessionTabVisibility: async () => undefined,
+      readConversationName: () => 'Lease probe flake'
+    } as never)
+    await runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'cleared-claude',
+      agent: 'claude',
+      activate: true
+    })
+
+    runtime.applyStructuredAgentSessionConversationName({
+      workspaceId: 'workspace-1',
+      sessionId: 'cleared-claude',
+      conversationName: null
+    })
+
+    const snapshot = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(snapshot.tabs[0]).toMatchObject({ title: 'Claude Chat' })
+  })
+
   it('commits the host close when the renderer already removed the structured tab', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.setNotifier({

@@ -43,10 +43,7 @@ import {
   settleStructuredAgentSessionLateDispatch,
   type StructuredAgentSessionMutationContext
 } from './structured-agent-session-host-mutations'
-import {
-  structuredAgentSessionHostTeardownPhases,
-  tearDownStructuredAgentSessionHost
-} from './structured-agent-session-host-teardown'
+import { tearDownStructuredAgentSessionHostCollaborators } from './structured-agent-session-host-teardown'
 import type {
   StructuredAgentSessionCaller,
   StructuredAgentSessionHostDeps,
@@ -211,7 +208,7 @@ export class StructuredAgentSessionHost {
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
     providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)
 
-  listSessionTabs = () => listStructuredAgentSessionTabs(this.sessions)
+  listSessionTabs = () => listStructuredAgentSessionTabs(this.sessions, this.deps.store.getRecord)
 
   /** Last projected status for every structured session this host still holds, for non-subscribing
    *  readers. The retained projections of forgotten sessions are deliberately not included. */
@@ -257,13 +254,13 @@ export class StructuredAgentSessionHost {
     this.runtimeState.flushEventSink(sessionId)
 
   async flushAllStreamedEvents(): Promise<void> {
-    await tearDownStructuredAgentSessionHost({
-      phases: structuredAgentSessionHostTeardownPhases({
+    await tearDownStructuredAgentSessionHostCollaborators({
+      collaborators: {
         holds: this.holds,
         runtimeState: this.runtimeState,
         handoffs: this.handoffs,
         tasks: this.tasks
-      }),
+      },
       sessions: this.sessions
     })
   }
@@ -344,6 +341,10 @@ export class StructuredAgentSessionHost {
   publishBackgroundTaskState: StructuredAgentSessionBackgroundTaskChannel['publish'] = (...args) =>
     this.backgroundTasks.publish(...args)
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
+
+  /** The provider's name for one conversation, for a surface publishing its tab. */
+  readConversationName = (sessionId: string): string | null =>
+    this.deps.store.getRecord(sessionId)?.conversationName ?? null
 
   /** Every session's projected status for session lists; unlike `subscribe`, retains nothing. */
   subscribeStatus = (subscriber: StructuredAgentSessionStatusSubscriber): (() => void) =>

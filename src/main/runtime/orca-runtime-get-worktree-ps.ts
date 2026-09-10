@@ -29,6 +29,7 @@ import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-termi
 import { resolveStartupShell, tokenizeStartupCommand } from '../../shared/tui-agent-startup-shell'
 import { resolveCodexStructuredAppServerArgs } from '../codex/codex-structured-app-server-args'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
+import { renameStructuredConversationTab } from './structured-conversation-tab-name'
 import { hostname } from 'node:os'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
@@ -164,6 +165,12 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         claudeStructuredAuthPolicyForSettings(this.requireStore().getSettings()),
       // Same gate and same settings as agentSession.createSupport, re-read on every acquisition.
       getClaudeManagedAccountGateSettings: () => this.requireStore().getSettings(),
+      onConversationName: ({ sessionId, workspaceId, conversationName }) =>
+        this.applyStructuredAgentSessionConversationName({
+          workspaceId,
+          sessionId,
+          conversationName
+        }),
       // Structured chat has no agent CLI hooks, so this projection is what the first-work
       // workspace rename listens to instead of `agentStatus:set`.
       onSessionStatusChanged: (summary, options) => {
@@ -216,6 +223,28 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       resolveTuiAgentLaunchArgs('codex', settings.agentDefaultArgs),
       shell ?? 'posix'
     )
+  }
+
+  applyStructuredAgentSessionConversationName(input: {
+    workspaceId: string
+    sessionId: string
+    conversationName: string | null
+    /** False for a background republish, which must store the name without
+     *  pushing a full tab list at every live subscriber. */
+    notify?: boolean
+  }): void {
+    const snapshot = renameStructuredConversationTab(
+      this.mobileSessionTabsByWorktree.get(input.workspaceId),
+      input
+    )
+    if (!snapshot) {
+      return
+    }
+    // Publish the stored version, which may differ from the candidate.
+    const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+    if (input.notify !== false) {
+      this.emitMobileSessionTabsSnapshot(stored)
+    }
   }
 
   protected createStructuredAgentSessionHandoffTransport(): StructuredAgentSessionHandoffTransport {

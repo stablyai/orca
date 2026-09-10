@@ -22,6 +22,7 @@ function sessionFor(send = vi.fn().mockResolvedValue(undefined)): ClaudeSession 
     retiredDispatchWaiters: [],
     replayContentFallbackBlocked: false,
     backgroundTasks: new ClaudeBackgroundTaskTracker(),
+    namingAttempted: false,
     commands: new ClaudeSlashCommandCatalog(),
     dispatchSequence: 0,
     optionMutationSequence: 0,

@@ -10,6 +10,7 @@ import {
   closeCodexPublishedSession,
   closeCodexSession
 } from './codex-structured-session-close'
+import type { CodexNamingOrphanRegistry } from './codex-naming-orphan-registry'
 import type {
   CodexAcquisitionRegistry,
   CodexSession,
@@ -25,6 +26,8 @@ export type CodexStructuredSessionTeardownDeps = {
     state: AgentSessionBackgroundTaskState | null
   ) => void
   forgetNotificationRetries: (sessionId: string) => void
+  /** Naming children a session close could not prove stopped; drained at shutdown. */
+  namingOrphans?: CodexNamingOrphanRegistry
 }
 
 export class CodexStructuredSessionTeardown {
@@ -35,7 +38,8 @@ export class CodexStructuredSessionTeardown {
       sessionId,
       this.deps.sessions,
       this.deps.acquisitions,
-      this.deps.onEvent
+      this.deps.onEvent,
+      this.deps.namingOrphans
     )
     return this.settled(sessionId, closed)
   }
@@ -45,7 +49,11 @@ export class CodexStructuredSessionTeardown {
       this.deps.sessions,
       sessionId,
       this.deps.onEvent,
-      { allowFailedSettlement: true, requestedClose: false }
+      {
+        allowFailedSettlement: true,
+        requestedClose: false,
+        namingOrphans: this.deps.namingOrphans
+      }
     )
     return this.settled(sessionId, closed)
   }
@@ -72,13 +80,17 @@ export class CodexStructuredSessionTeardown {
       requestedClose: false,
       expectedFence: fence,
       expectedAcquisitionGeneration: acquisitionGeneration,
-      unexpectedReason: reason
+      unexpectedReason: reason,
+      namingOrphans: this.deps.namingOrphans
     }).then((closed) => this.settled(sessionId, closed))
   }
 
   closeAll = (): Promise<void> =>
-    closeAllCodexSessions(this.deps.sessions, this.deps.acquisitions, (sessionId) =>
-      this.close(sessionId)
+    closeAllCodexSessions(
+      this.deps.sessions,
+      this.deps.acquisitions,
+      (sessionId) => this.close(sessionId),
+      this.deps.namingOrphans
     )
 
   private settled(sessionId: string, closed: boolean): boolean {

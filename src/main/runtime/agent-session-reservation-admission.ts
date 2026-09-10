@@ -7,6 +7,7 @@
  */
 
 import {
+  agentSessionOperationKey,
   evaluateAgentSessionOperation,
   pruneAgentSessionOperationRows,
   type AgentSessionOperationDecision,
@@ -264,4 +265,36 @@ function createAgentSessionRecord(
       deathEvidence: null
     }
   }
+}
+
+/**
+ * The whole reservation transition: adjudicate the operation, replay a recorded
+ * outcome, or apply a fresh reservation and record its ledger row.
+ *
+ * Lives beside the pieces it orchestrates rather than in the store, which owns
+ * durability and serialization rather than reservation policy.
+ */
+export function commitAgentSessionReservation(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest,
+  leaseTtlMs: number
+): AgentSessionReserveResult {
+  const decision = evaluateAgentSessionReserveOperation(state, request)
+  if (decision.decision === 'refused') {
+    throw new Error(decision.code)
+  }
+  if (decision.decision === 'replay') {
+    let record = requireAgentSessionRecordForReplay(state, decision.row, request.sessionId)
+    if (decision.row.outcome.status === 'pending' && request.handoffOperationId !== null) {
+      record = admitPendingAgentSessionReservationReplay(record, request)
+    }
+    return { record, disposition: 'replayed' as const, operationRow: decision.row }
+  }
+  const result = applyAgentSessionReservation(state, request, leaseTtlMs)
+  state.operations.set(
+    agentSessionOperationKey(request.operation.callerKey, request.operation.operationId),
+    decision.row
+  )
+  state.records.set(result.record.sessionId, result.record)
+  return { ...result, operationRow: decision.row }
 }

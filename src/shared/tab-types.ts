@@ -62,6 +62,8 @@ export type Tab = {
   /** Stable AI Vault conversation name, bound to its provider session identity. */
   aiVaultTitle?: AiVaultSessionTitle | null
   quickCommandLabel?: string | null
+  /** Provider-supplied conversation name; ranks below the user's own rename. */
+  conversationName?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number

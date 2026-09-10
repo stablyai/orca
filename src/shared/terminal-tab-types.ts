@@ -17,6 +17,9 @@ export type TerminalTab = {
   aiVaultTitle?: AiVaultSessionTitle | null
   /** Stable label from the tab-bar Quick Command that created this terminal. */
   quickCommandLabel?: string | null
+  /** Provider-supplied conversation name. Separate from `customTitle` so a
+   *  generated name can never be mistaken for, or outrank, a user's rename. */
+  conversationName?: string | null
   customTitle: string | null
   color: string | null
   /** Pinned tabs survive "close others"; host-persisted for remote servers. */

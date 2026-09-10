@@ -426,6 +426,46 @@ describe('StructuredAgentSessionStatusBridge', () => {
     expect(feed().target).toEqual({ kind: 'environment', environmentId: 'env-1' })
   })
 
+  it('names the sidebar row with the conversation name the tab now carries', async () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, label: 'Fix the lease probe' }] }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
+
+    expect(statuses()).toEqual([expect.objectContaining({ terminalTitle: 'Fix the lease probe' })])
+  })
+
+  it('carries the name as an authoritative field, not only as the live title', async () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { 'wt-1': [{ ...structuredTab, label: 'auth/login' }] }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
+
+    // `terminalTitle` is laundered by heuristics meant for scraped pty titles,
+    // which null a name like this one; the row reads the authoritative field.
+    expect(statuses()).toEqual([expect.objectContaining({ conversationName: 'auth/login' })])
+  })
+
+  it("keeps the user's own rename above the provider's conversation name", async () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [{ ...structuredTab, label: 'Fix the lease probe', customLabel: 'My chat' }]
+      }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
+
+    act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
+
+    expect(statuses()).toEqual([expect.objectContaining({ terminalTitle: 'My chat' })])
+  })
+
   it('does not project an unknown provider as Codex', async () => {
     mocks.store?.setState({
       unifiedTabsByWorktree: {

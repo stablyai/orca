@@ -9,13 +9,19 @@ import {
   isCodexAppServerRequestError,
   type CodexAppServerConnection
 } from './codex-app-server-connection'
-import { readCodexThreadId, readCodexThreadPath } from './codex-structured-thread-facts'
+import {
+  readCodexThreadId,
+  readCodexThreadName,
+  readCodexThreadPath
+} from './codex-structured-thread-facts'
 
 export type CodexOpenedThread = {
   threadId: string
   thread?: Record<string, unknown>
   /** Rollout file Codex named, when it named one. */
   historyPath: string | null
+  /** Conversation name already stored for the thread, when it has one. */
+  name?: string
   historyMode?: 'legacy' | 'paginated'
   model?: string
   effort?: string
@@ -89,10 +95,12 @@ export async function openCodexThread(
       : {}
   const model = nonEmptyString(result.model)
   const effort = nonEmptyString(result.reasoningEffort)
+  const name = readCodexThreadName(opened)
   return {
     threadId,
     thread,
     historyPath: readCodexThreadPath(opened),
+    ...(name ? { name } : {}),
     ...(thread.historyMode === 'legacy' || thread.historyMode === 'paginated'
       ? { historyMode: thread.historyMode }
       : {}),

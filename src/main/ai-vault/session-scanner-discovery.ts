@@ -121,6 +121,11 @@ export type SessionFileWalkOptions = {
   // rootDir, so pruned subtrees are never stat'd or parsed.
   directoryPredicate?: (name: string, depth: number) => boolean
   readDirectory?: (dirPath: string) => Promise<Dirent[]>
+  /** Stop traversing as soon as one file matches. For a caller that only wants
+   *  `files[0]`, walking the rest of the tree is pure cost — on a home with
+   *  thousands of transcripts it is most of the call. Traversal order is
+   *  unchanged, so the file returned is the same one. */
+  stopAfterFirstMatch?: boolean
   signal?: AbortSignal
 }
 
@@ -147,6 +152,18 @@ export async function forEachSessionFile(
   onFile: (path: string) => Promise<void>,
   depth = 0
 ): Promise<void> {
+  await visitSessionFiles(dirPath, agent, issues, options, onFile, depth)
+}
+
+/** Returns true once `stopAfterFirstMatch` is satisfied, unwinding the recursion. */
+async function visitSessionFiles(
+  dirPath: string,
+  agent: AiVaultAgent,
+  issues: AiVaultScanIssue[],
+  options: SessionFileWalkOptions,
+  onFile: (path: string) => Promise<void>,
+  depth: number
+): Promise<boolean> {
   options.signal?.throwIfAborted()
   let entries
   try {
@@ -160,7 +177,7 @@ export async function forEachSessionFile(
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
-    return
+    return false
   }
 
   for (const entry of entries) {
@@ -170,7 +187,9 @@ export async function forEachSessionFile(
       // Skip whole subtrees an agent never wants (e.g. subagent transcripts),
       // avoiding the readdir cost of descending into them.
       if (options.directoryPredicate?.(entry.name, depth) ?? true) {
-        await forEachSessionFile(fullPath, agent, issues, options, onFile, depth + 1)
+        if (await visitSessionFiles(fullPath, agent, issues, options, onFile, depth + 1)) {
+          return true
+        }
       }
       continue
     }
@@ -180,6 +199,10 @@ export async function forEachSessionFile(
       (options.filePredicate?.(fullPath) ?? true)
     ) {
       await onFile(fullPath)
+      if (options.stopAfterFirstMatch) {
+        return true
+      }
     }
   }
+  return false
 }

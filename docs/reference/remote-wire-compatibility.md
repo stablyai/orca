@@ -159,6 +159,24 @@ The harness covers the terminal stream and the structured agent-session surface.
 RPCs, mobile/E2EE framing, or the relay transport. A change on those paths still needs its
 own reasoning against the three rules above.
 
+### Uncovered in practice: conversation names on the session-tab channel
+
+Structured conversation naming publishes a provider-supplied name onto the session-tab sync
+channel — the channel the harness does not cover. Nothing on the wire changes shape, so
+Rule 1 is satisfied, but two properties still have to hold by reasoning:
+
+- **What the host publishes reaches old clients.** The name is written to an agent-session
+  tab's existing `title`; a client from before naming renders it as an ordinary tab title,
+  which is the intended degradation. Putting it in a new field instead would leave those
+  clients showing the default label forever.
+- **How often it publishes.** Naming republishes the snapshot on every name change plus a
+  startup sweep, so a paired client sees more snapshot versions than it used to. Any client
+  that treats a version bump as a reason to re-render the whole tab strip pays for it.
+
+A future change that moves the name to a *new* field on this channel, or that adds an opcode
+to carry it, is no longer Rule 1 and must be capability-negotiated — decoders drop unknown
+opcodes silently, so an old client would simply lose the name with no error.
+
 ## Worked example: `agentWait` on terminal and worker reads
 
 `terminal.show`, `orchestration.workerShow` and `orchestration.federationShow` carry an

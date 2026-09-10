@@ -9,10 +9,12 @@ import {
   cancelClaudeTurn,
   stopClaudeBackgroundTasks
 } from './claude-structured-control-actions'
+import { startClaudeConversationNaming } from './claude-conversation-name-turn'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
 import { acquireClaudeSession } from './claude-structured-session-acquisition'
+import { hydrateClaudeConversationName } from './claude-conversation-name-hydration'
 export { CLAUDE_STRUCTURED_INIT_TIMEOUT_MS } from './claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import { setClaudeStructuredOption } from './claude-structured-options'
@@ -30,7 +32,7 @@ import {
   closeClaudeSession,
   settleClaudeExitedSession
 } from './claude-structured-session-close'
-import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
+import { persistClaudeSessionHandle } from './claude-structured-session-handle-persistence'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
@@ -60,8 +62,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = () =>
     this.deps.readTranscriptLeaf ? { supported: true } : { supported: false, reason: 'unsupported' }
 
-  acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
-    acquireClaudeSession({
+  acquire = async (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> => {
+    const acquired = await acquireClaudeSession({
       input,
       deps: this.deps,
       sessions: this.sessions,
@@ -74,6 +76,9 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         settleExit: (sessionId, exit) => this.settleUnexpectedExit(sessionId, exit)
       }
     })
+    hydrateClaudeConversationName(input.identity.sessionId, this.sessions, this.deps)
+    return acquired
+  }
 
   private deliver(attempt: ClaudeAcquisitionAttempt, sessionId: string, event: () => void): void {
     if (!attempt.published) {
@@ -142,7 +147,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       }
       // Persist the transcript-derived cursor before publishing the lifecycle
       // event that lets the host release and reacquire this exact child.
-      await this.persistSessionHandle(sessionId, exit.session).catch(() => undefined)
+      await persistClaudeSessionHandle(sessionId, exit.session, this.deps).catch(() => undefined)
       if (this.exits.get(sessionId) !== exit) {
         settleClaudeExitedSession(exit.session)
         return
@@ -163,30 +168,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       }
     })()
     return exit.settlementPromise
-  }
-
-  private async persistSessionHandle(sessionId: string, session: ClaudeSession): Promise<void> {
-    try {
-      const transcriptLeaf = this.deps.readTranscriptLeaf
-        ? await readClaudeTranscriptLeafWithReproof({
-            readTranscriptLeaf: this.deps.readTranscriptLeaf,
-            providerSessionId: session.providerSessionId,
-            previousLeafUuid: session.leafUuid,
-            claudeConfigDir: session.claudeConfigDir
-          })
-        : null
-      if (transcriptLeaf) {
-        session.leafUuid = transcriptLeaf
-      }
-    } catch {
-      // A stale or unavailable tail must not overwrite the last observed leaf.
-    }
-    await this.deps.persistHandle?.({
-      sessionId,
-      providerSessionId: session.providerSessionId,
-      leafUuid: session.leafUuid,
-      fence: session.fence
-    })
   }
 
   private emit(session: ClaudeSession | null, event: ClaudeStructuredSessionEvent): void {
@@ -218,12 +199,23 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, promptKey, questionId)
   }
 
-  dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
-    dispatchClaudeTurn(
-      this.session(input.sessionId),
+  dispatch: StructuredAgentSessionAdapter['dispatch'] = async (input) => {
+    const session = this.session(input.sessionId)
+    const outcome = await dispatchClaudeTurn(
+      session,
       input,
       this.deps.dispatchAckTimeoutMs ?? DISPATCH_ACK_TIMEOUT_MS
     )
+    if (outcome.state === 'accepted') {
+      // The accepted user message is the only text this session is sure the CLI
+      // received, and the first thing worth naming the conversation after.
+      startClaudeConversationNaming(input.sessionId, session, input.body, {
+        ...this.deps,
+        ...(this.deps.onNamingError ? { onError: this.deps.onNamingError } : {})
+      })
+    }
+    return outcome
+  }
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
     compactClaudeSession(

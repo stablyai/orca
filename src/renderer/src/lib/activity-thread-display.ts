@@ -96,12 +96,22 @@ export function getActivityThreadWorkspaceTitle(
 /** Stable task identity for Activity sidebar rows — not the latest follow-up turn. */
 export function getActivityThreadTaskTitle(args: {
   entry: Pick<AgentStatusEntry, 'orchestration' | 'prompt' | 'stateHistory'>
-  tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title' | 'defaultTitle'>
+  tab: Pick<
+    TerminalTab,
+    'customTitle' | 'conversationName' | 'generatedTitle' | 'title' | 'defaultTitle'
+  >
   generatedTitlesEnabled: boolean
 }): string {
   const customTitle = args.tab.customTitle?.trim()
   if (customTitle) {
     return customTitle
+  }
+
+  // Ranked exactly as resolveTerminalTabTitle does: under the user's rename,
+  // over everything derived.
+  const conversationName = args.tab.conversationName?.trim()
+  if (conversationName) {
+    return conversationName
   }
 
   const orchestrationLabel = orchestrationLabelForEntry(args.entry)

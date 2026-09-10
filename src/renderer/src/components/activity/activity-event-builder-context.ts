@@ -40,6 +40,7 @@ function terminalTabFromAgentSessionTab(tab: Tab): TerminalTab {
     worktreeId: tab.worktreeId,
     title: tab.customLabel ?? tab.generatedLabel ?? tab.label,
     customTitle: tab.customLabel,
+    conversationName: tab.conversationName ?? null,
     color: tab.color,
     isPinned: tab.isPinned,
     sortOrder: tab.sortOrder,

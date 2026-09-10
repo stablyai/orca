@@ -11,6 +11,7 @@ import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
 import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { CodexConversationNamingTask } from './codex-conversation-naming-task'
 
 export type CodexStructuredLaunch = {
   command: string
@@ -46,6 +47,13 @@ export type CodexStructuredSessionAdapterDeps = {
   /** Host capability seam; production uses the native Windows process table. */
   isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
+  /** Codex named (or renamed) the thread behind this session. */
+  onConversationName?: (sessionId: string, conversationName: string) => void
+  /** Codex reports the thread has no name any more. */
+  onConversationNameCleared?: (sessionId: string) => void
+  readNamingAttempted?: (sessionId: string) => boolean
+  markNamingAttempted?: (sessionId: string) => void
+  onNamingError?: (scope: string, error: unknown) => void
   onBackgroundTasksChanged?: (
     sessionId: string,
     state: AgentSessionBackgroundTaskState | null
@@ -70,7 +78,13 @@ export type CodexSession = {
   fence: number
   acquisitionGeneration: string
   threadId: string
+  cwd: string
+  launch: CodexStructuredLaunch
   historyPath: string | null
+  conversationName: string | null
+  conversationNameRevision: number
+  naming: CodexConversationNamingTask | null
+  namingAttempted: boolean
   historyMode?: 'legacy' | 'paginated'
   activeTurnIds?: Set<string>
   dispatchPending?: boolean

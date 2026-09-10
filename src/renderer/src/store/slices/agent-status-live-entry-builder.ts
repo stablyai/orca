@@ -263,6 +263,11 @@ export function buildAgentStatusLiveEntry(
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
       : {}),
+    // Retained across updates like the title is: a status refresh that carries
+    // no name must not blank the row's label.
+    ...((metadata?.conversationName ?? existing?.conversationName)
+      ? { conversationName: (metadata?.conversationName ?? existing?.conversationName)! }
+      : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     acceptedStatusSeq: (existing?.acceptedStatusSeq ?? 0) + 1,

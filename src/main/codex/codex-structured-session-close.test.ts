@@ -9,6 +9,7 @@ import {
   CodexStructuredSessionAdapter,
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
+import type { CodexConversationNamingTask } from './codex-conversation-naming-task'
 import { handleCodexSessionExit } from './codex-structured-session-close'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexSession } from './codex-structured-session-state'
@@ -74,6 +75,61 @@ function claudeAdapterStub(): StructuredAgentSessionAdapter {
 }
 
 describe('Codex structured session close lifecycle', () => {
+  it('hands an unproven naming turn to the orphan registry instead of retaining it', async () => {
+    const connection: CodexAppServerConnection = {
+      pid: 4321,
+      closed: true,
+      request: async () => ({}),
+      notify: () => {},
+      respond: () => {},
+      respondWithError: () => {},
+      close: async () => true
+    }
+    const naming = { close: vi.fn(async () => false) } as unknown as CodexConversationNamingTask
+    const session = {
+      connection,
+      ended: false,
+      requestedClose: false,
+      backgroundTasks: new CodexBackgroundTaskTracker(THREAD),
+      fence: 7,
+      acquisitionGeneration: 'generation-1',
+      threadId: THREAD,
+      historyPath: null,
+      cwd: '/work/repo',
+      launch: {
+        command: 'codex',
+        args: ['app-server'],
+        cwd: '/work/repo',
+        codexHome: null,
+        resumeThreadId: null
+      },
+      conversationName: null,
+      conversationNameRevision: 0,
+      naming,
+      namingAttempted: false,
+      prompts: { clear: vi.fn() } as unknown as CodexSession['prompts'],
+      options: new Map(),
+      reportedOptions: {},
+      turnIdWaiters: [],
+      translator: {
+        handle: vi.fn().mockReturnValue({ accepted: true }),
+        dispose: vi.fn()
+      } as unknown as NonNullable<CodexSession['translator']>
+    } as CodexSession
+
+    handleCodexSessionExit({
+      sessions: new Map([['session-1', session]]),
+      sessionId: 'session-1',
+      connection,
+      error: new Error('provider exited')
+    })
+
+    expect(naming.close).toHaveBeenCalledOnce()
+    // Ownership moves to the registry: the session must not keep an unproven
+    // best-effort child that a later close would have to wait on.
+    expect(session.naming).toBeNull()
+  })
+
   it('forwards a one-shot exit when lifecycle admission is rejected', () => {
     const connection: CodexAppServerConnection = {
       pid: 4321,
@@ -98,6 +154,18 @@ describe('Codex structured session close lifecycle', () => {
       acquisitionGeneration: 'generation-1',
       threadId: THREAD,
       historyPath: null,
+      cwd: '/work/repo',
+      launch: {
+        command: 'codex',
+        args: ['app-server'],
+        cwd: '/work/repo',
+        codexHome: null,
+        resumeThreadId: null
+      },
+      conversationName: null,
+      conversationNameRevision: 0,
+      naming: null,
+      namingAttempted: false,
       prompts,
       options: new Map(),
       reportedOptions: {},

@@ -28,6 +28,7 @@ describe('Claude structured processless acquisition', () => {
         pid: undefined,
         closed: true,
         exitVerdict: { root: 'processless', tree: 'exited' },
+        generateSessionTitle: async () => ({ outcome: 'declined' as const }),
         initializationResult: async () => {
           handlers.onFault?.(fault)
           throw fault

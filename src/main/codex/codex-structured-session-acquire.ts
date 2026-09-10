@@ -9,6 +9,7 @@ import {
   stopSupersededCodexAcquisition
 } from './codex-structured-acquisition-lifecycle'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import type { CodexNamingOrphanRegistry } from './codex-naming-orphan-registry'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
@@ -40,6 +41,7 @@ export async function acquireCodexStructuredSession(input: {
   deps: CodexStructuredSessionAdapterDeps
   sessions: Map<string, CodexSession>
   acquisitions: CodexAcquisitionRegistry
+  namingOrphans: CodexNamingOrphanRegistry
   turnCancellation: CodexStructuredTurnCancellation
   notificationRetries: CodexStructuredNotificationRetry
   deliver: (
@@ -65,6 +67,7 @@ export async function acquireCodexStructuredSession(input: {
     deps,
     sessions,
     acquisitions,
+    namingOrphans,
     turnCancellation,
     notificationRetries
   } = input
@@ -95,7 +98,7 @@ export async function acquireCodexStructuredSession(input: {
       previous: previousAttempt
     })
     acquisitions.assertCurrent(sessionId, attempt)
-    if (!(await closeCodexPublishedSession(sessions, sessionId, deps.onEvent))) {
+    if (!(await closeCodexPublishedSession(sessions, sessionId, deps.onEvent, { namingOrphans }))) {
       throw new Error(`codex app-server for session ${sessionId} could not be stopped`)
     }
     acquisitions.assertCurrent(sessionId, attempt)
@@ -143,6 +146,9 @@ export async function acquireCodexStructuredSession(input: {
               error,
               prompts: acquisition.prompts,
               onBackgroundTasksChanged: deps.onBackgroundTasksChanged,
+              // An unexpected death orphans the naming child too; shutdown
+              // still has to prove that one stopped.
+              namingOrphans,
               ...(deps.onEvent ? { onEvent: deps.onEvent } : {})
             })
           } finally {
@@ -196,7 +202,13 @@ export async function acquireCodexStructuredSession(input: {
       connection,
       ...codexSessionLifecycle(acquireInput.fence, acquired.acquisitionGeneration as string),
       threadId: opened.threadId,
+      cwd: launch.cwd,
+      launch,
       historyPath: opened.historyPath,
+      conversationName: opened.name ?? null,
+      conversationNameRevision: 0,
+      naming: null,
+      namingAttempted: false,
       historyMode: opened.historyMode,
       activeTurnIds: new Set(),
       prompts: acquisition.prompts,
@@ -216,6 +228,10 @@ export async function acquireCodexStructuredSession(input: {
     }
     turnCancellation.register(session)
     sessions.set(sessionId, session)
+    // A resumed thread arrives already named; only a rename is notified after this.
+    if (session.conversationName) {
+      deps.onConversationName?.(sessionId, session.conversationName)
+    }
     for (const event of acquisition.drain()) {
       event()
     }

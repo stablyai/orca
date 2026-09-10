@@ -59,6 +59,18 @@ function useStructuredAgentSessionStatusSummary(
   )
 }
 
+/** The sidebar row reads this as its live title, so the user's own rename has to
+ *  outrank the provider's conversation name here as it does in the tab strip.
+ *
+ *  Note for whoever also lands the AI Vault session-name work on terminal rows:
+ *  for a Codex structured session its `aiVaultTitle` and the name arriving here
+ *  are the SAME thread name reached two ways — live from the app-server, versus
+ *  `session_index.jsonl` via AI Vault sync. Reconcile them into one source
+ *  rather than letting both feed the row. */
+function rowTitle(tab: StructuredTab): string {
+  return tab.customLabel?.trim() || tab.label
+}
+
 function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | null): void {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const store = useAppStore.getState()
@@ -94,7 +106,8 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
     current.lastAssistantMessage === summary.lastAssistantMessage &&
     current.sessionBoundary === desired.sessionBoundary &&
     current.updatedAt === summary.updatedAt &&
-    current.terminalTitle === tab.label &&
+    current.terminalTitle === rowTitle(tab) &&
+    current.conversationName === rowTitle(tab) &&
     current.tabId === tab.id &&
     current.worktreeId === tab.worktreeId &&
     current.terminalResumeEligible === false &&
@@ -110,7 +123,7 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
   store.setAgentStatus(
     paneKey,
     desired,
-    tab.label,
+    rowTitle(tab),
     {
       updatedAt: summary.updatedAt,
       // This ordered host feed can correct a legacy publication clock after upgrade.
@@ -124,6 +137,7 @@ function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | 
     { tabId: tab.id, worktreeId: tab.worktreeId },
     {
       ...(summary.providerSession ? { providerSession: summary.providerSession } : {}),
+      conversationName: rowTitle(tab),
       terminalResumeEligible: false,
       ...(summary.hostExecutionOwned ? { structuredHostOwned: true as const } : {})
     }

@@ -165,6 +165,26 @@ function responseLine(targetBytes: number, id: number): string {
 }
 
 describe('openCodexAppServerConnection', () => {
+  it('publishes the child before initialize so cancellation can stop a stalled handshake', async () => {
+    const { child, spawnImpl, written } = stubChild()
+    let owned: CodexAppServerConnection | undefined
+    const opening = openCodexAppServerConnection(
+      { command: 'codex', args: ['app-server'] },
+      {
+        onConnection: (connection) => {
+          owned = connection
+        }
+      },
+      spawnImpl
+    )
+    const failed = rejection(opening)
+    expect(owned).toBeDefined()
+    expect(written[0]?.method).toBe('initialize')
+    await expect(owned!.close()).resolves.toBe(true)
+    await expect(failed).resolves.toBeInstanceOf(Error)
+    child.stdout.destroy()
+  })
+
   it('advertises the experimental API required for rollout-path resume', async () => {
     const { child, spawnImpl, written } = stubChild()
     answerInitialize(child)

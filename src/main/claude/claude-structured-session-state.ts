@@ -2,6 +2,7 @@ import type {
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
+import type { ClaudeTranscriptConversationName } from './claude-transcript-conversation-name'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type {
   ClaudeStreamJsonConnection,
@@ -84,6 +85,23 @@ export type ClaudeStructuredSessionAdapterDeps = {
     leafUuid: string | null
     fence: number
   }) => Promise<void>
+  /** Claude named (or the user renamed) the conversation behind this session. */
+  onConversationName?: (sessionId: string, conversationName: string) => void
+  /** The user deleted the name in the CLI. */
+  onConversationNameCleared?: (sessionId: string) => void
+  /** The durable naming state, so a re-acquisition does not retitle. */
+  readNamingState?: (sessionId: string) => {
+    conversationName: string | null
+    namingAttempted: boolean
+  }
+  markNamingAttempted?: (sessionId: string) => void
+  onNamingError?: (scope: string, error: unknown) => void
+  /** The name Claude already persisted for this provider session, if any. Its
+   *  stream carries no title frame, so the transcript is the only source. */
+  readTranscriptConversationName?: (input: {
+    providerSessionId: string
+    claudeConfigDir: string
+  }) => Promise<ClaudeTranscriptConversationName>
   /** Read the durable transcript branch after a child has flushed its final rows. */
   readTranscriptLeaf?: (input: {
     providerSessionId: string
@@ -140,6 +158,11 @@ export type ClaudeSession = {
   /** Provider uuid of the most recently admitted turn, if one is active. */
   activeTurnId?: string
   backgroundTasks: ClaudeBackgroundTaskTracker
+  /** Guards a second attempt within this live session only; the durable marker
+   *  on the record is what survives eviction. See claude-conversation-name-turn. */
+  namingAttempted: boolean
+  conversationNameRead?: Promise<ClaudeTranscriptConversationName>
+  conversationNameReadSequence?: number
   /** The `/` surface the CLI reports for itself; seeded from init, kept current
    *  by later init and `commands_changed` frames. */
   commands: ClaudeSlashCommandCatalog

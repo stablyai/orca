@@ -1,5 +1,6 @@
 import type { CodexAppServerConnection } from './codex-app-server-connection-types'
 import { closeProcessRegistry } from '../../shared/child-process/close-process-registry'
+import type { CodexNamingOrphanRegistry } from './codex-naming-orphan-registry'
 import {
   cancelCodexAcquisitionAttempt,
   type CodexAcquisitionRegistry,
@@ -18,6 +19,7 @@ export function handleCodexSessionExit(input: {
   allowFailedSettlement?: boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
   onBackgroundTasksChanged?: CodexStructuredSessionAdapterDeps['onBackgroundTasksChanged']
+  namingOrphans?: CodexNamingOrphanRegistry
 }): boolean {
   const session = input.sessions.get(input.sessionId)
   if (!session || session.connection !== input.connection || session.ended) {
@@ -45,6 +47,7 @@ export function handleCodexSessionExit(input: {
     event.settlementRetryRequired = true
   }
   session.ended = true
+  orphanCodexNamingChild(session, input.namingOrphans)
   session.backgroundTasks.clear()
   input.onBackgroundTasksChanged?.(input.sessionId, null)
   session.unbindReadingControl?.()
@@ -64,6 +67,7 @@ export async function closeCodexPublishedSession(
     expectedFence?: number
     expectedAcquisitionGeneration?: string
     unexpectedReason?: Error
+    namingOrphans?: CodexNamingOrphanRegistry
   }
 ): Promise<boolean> {
   const session = sessions.get(sessionId)
@@ -82,6 +86,9 @@ export async function closeCodexPublishedSession(
   session.requestedClose = options?.requestedClose ?? true
   // Keep the session indexed until the child exit is observed. A timeout or
   // failed kill must leave the live connection available for a safe retry.
+  // Naming teardown starts alongside it but is handed off rather than awaited:
+  // a best-effort title generator that will not die must not strand the chat.
+  orphanCodexNamingChild(session, options?.namingOrphans)
   const exited = await session.connection.close()
   if (exited !== true) {
     return false
@@ -106,11 +113,28 @@ export async function closeCodexPublishedSession(
   return true
 }
 
+/** Detaches the naming child so its exit proof never gates session teardown. */
+function orphanCodexNamingChild(
+  session: CodexSession,
+  namingOrphans: CodexNamingOrphanRegistry | undefined
+): void {
+  const naming = session.naming
+  if (!naming) {
+    return
+  }
+  session.naming = null
+  // Started unconditionally: `?.` would short-circuit the argument and leave
+  // the child running whenever no registry is wired.
+  const closing = naming.close().catch(() => false)
+  namingOrphans?.adopt(naming, closing)
+}
+
 export async function closeCodexSession(
   sessionId: string,
   sessions: Map<string, CodexSession>,
   acquisitions: CodexAcquisitionRegistry,
-  onEvent?: (event: CodexStructuredSessionEvent) => void
+  onEvent?: (event: CodexStructuredSessionEvent) => void,
+  namingOrphans?: CodexNamingOrphanRegistry
 ): Promise<boolean> {
   const attempt = acquisitions.get(sessionId)
   if (!(await cancelCodexAcquisitionAttempt(attempt))) {
@@ -119,13 +143,41 @@ export async function closeCodexSession(
   if (attempt) {
     acquisitions.deleteIfCurrent(sessionId, attempt)
   }
-  return closeCodexPublishedSession(sessions, sessionId, onEvent)
+  return closeCodexPublishedSession(sessions, sessionId, onEvent, { namingOrphans })
+}
+
+/** A child that died unexpectedly: closed only if the session is still the one that owned it. */
+export function forceCloseUnexpectedCodexSession(
+  sessions: Map<string, CodexSession>,
+  sessionId: string,
+  fence: number,
+  acquisitionGeneration: string,
+  reason: Error,
+  onEvent?: (event: CodexStructuredSessionEvent) => void
+): Promise<boolean> {
+  const session = sessions.get(sessionId)
+  if (
+    !session ||
+    session.ended ||
+    session.fence !== fence ||
+    session.acquisitionGeneration !== acquisitionGeneration
+  ) {
+    return Promise.resolve(false)
+  }
+  return closeCodexPublishedSession(sessions, sessionId, onEvent, {
+    allowFailedSettlement: true,
+    requestedClose: false,
+    expectedFence: fence,
+    expectedAcquisitionGeneration: acquisitionGeneration,
+    unexpectedReason: reason
+  })
 }
 
 export async function closeAllCodexSessions(
   sessions: Map<string, CodexSession>,
   acquisitions: CodexAcquisitionRegistry,
-  close: (sessionId: string) => Promise<boolean>
+  close: (sessionId: string) => Promise<boolean>,
+  namingOrphans?: CodexNamingOrphanRegistry
 ): Promise<void> {
   acquisitions.close()
   await closeProcessRegistry({
@@ -135,4 +187,7 @@ export async function closeAllCodexSessions(
     closeEntry: close,
     failureMessage: 'codex structured session shutdown could not prove every child stopped'
   })
+  // Sessions hand their unproven naming children here on the way out, so this
+  // drain runs last — shutdown still proves every child stopped.
+  await namingOrphans?.closeAll()
 }

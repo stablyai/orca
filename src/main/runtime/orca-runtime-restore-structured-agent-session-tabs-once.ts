@@ -73,6 +73,10 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       if (session.agent !== 'codex' && session.agent !== 'claude') {
         continue
       }
+      // Belt-and-braces: a session id cannot contain ':' (SESSION_ID_PATTERN in
+      // agent-session-record), so a prefixed key cannot reach the host's map.
+      // Stripped here rather than at the lookup so the tab id and the record it
+      // is labelled from can never disagree.
       let sessionId = session.sessionId
       while (sessionId.startsWith('agent-session:')) {
         sessionId = sessionId.slice('agent-session:'.length)
@@ -93,18 +97,41 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     agent: 'claude' | 'codex'
     activate: boolean
     notify?: boolean
+    title?: string
     replacesSessionId?: string
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     if (typeof host?.setSessionTabVisibility === 'function') {
       await host.setSessionTabVisibility(input.sessionId, true)
     }
+    // Every publication labels itself from the record, so a revealed or reopened
+    // chat shows the name it already has. Only the startup sweep passes a title,
+    // and an unchanged name never fans out, so nothing else would repair it.
+    const title =
+      input.title?.trim() ||
+      (typeof host?.readConversationName === 'function'
+        ? (host.readConversationName(input.sessionId) ?? '')
+        : '')
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
     if (existing?.tabs.some((tab) => tab.id === id)) {
-      // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
-      // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
+      const conversationName = title
+      // A background re-publish only relabels an existing tab — it never re-adds one — and with
+      // `notify: false` it emits nothing at all, so it cannot re-surface a client whose mirror
+      // lost the tab; healing one needs `activate` or an explicit republish.
       if (!input.activate) {
+        // Republishing an already-open tab is how a restored session hands over
+        // the name it was persisted with; the rest of the snapshot is unchanged.
+        if (conversationName) {
+          this.applyStructuredAgentSessionConversationName({
+            workspaceId: input.workspaceId,
+            sessionId: input.sessionId,
+            conversationName,
+            // The startup sweep runs once per session; without this each named
+            // one would push the whole tab list at every live subscriber.
+            ...(input.notify !== undefined ? { notify: input.notify } : {})
+          })
+        }
         return
       }
       const priorGroups = existing.tabGroups ?? []
@@ -122,7 +149,11 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         tabGroups: priorGroups.map((group) =>
           group.id === groupId ? { ...group, activeTabId: id } : group
         ),
-        tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
+        tabs: existing.tabs.map((tab) => ({
+          ...tab,
+          isActive: tab.id === id,
+          ...(conversationName && tab.id === id ? { title: conversationName } : {})
+        }))
       }
       const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
       if (input.notify !== false) {
@@ -133,7 +164,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
-      title: defaultAgentChatLabel(input.agent),
+      title: title || defaultAgentChatLabel(input.agent),
       sessionId: input.sessionId,
       ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {}),
       agent: input.agent,

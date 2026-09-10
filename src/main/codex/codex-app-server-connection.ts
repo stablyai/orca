@@ -281,6 +281,7 @@ export async function openCodexAppServerConnection(
   }
 
   try {
+    handlers.onConnection?.(connection)
     await initializeCodexAppServerConnection(connection)
   } catch (error) {
     if ((await close()) !== true) {

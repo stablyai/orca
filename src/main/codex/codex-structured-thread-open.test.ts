@@ -131,3 +131,28 @@ describe('openCodexThread', () => {
     expect(request).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('openCodexThread conversation name', () => {
+  it('carries the stored thread name back from a resume', async () => {
+    const request = vi.fn(async () => ({
+      thread: { id: 'thread-1', name: 'Fix the lease probe' }
+    }))
+
+    await expect(
+      openCodexThread(connectionFor(request), { cwd: '/w', resumeThreadId: 'thread-1' }, 2_000)
+    ).resolves.toMatchObject({ threadId: 'thread-1', name: 'Fix the lease probe' })
+  })
+
+  it('reports no name for a thread the app-server has not named', async () => {
+    const request = vi.fn(async () => ({ thread: { id: 'thread-1' } }))
+
+    const opened = await openCodexThread(
+      connectionFor(request),
+      { cwd: '/w', resumeThreadId: null },
+      2_000
+    )
+
+    expect(opened.threadId).toBe('thread-1')
+    expect(opened.name).toBeUndefined()
+  })
+})
