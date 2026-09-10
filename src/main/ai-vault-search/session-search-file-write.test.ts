@@ -593,11 +593,16 @@ it('writes nothing for an incomplete read and owes the file a whole re-read', ()
   expect(counts(index.db)).toMatchObject({
     sessions: 0,
     messages: 0,
-    files: 0,
     full: 0
   })
-  // No row at all: nothing was written, so there is nothing to mark. The next
-  // pass reads the file because the index holds nothing for it.
+  // One row, holding nothing but the failure: an incomplete read indexes no
+  // content, and the count of how often it has happened at this stat is the
+  // only thing that stops the file being read again on every pass.
+  expect(index.db.prepare('SELECT byte_offset, state, fail_count FROM files').get()).toMatchObject({
+    byte_offset: 0,
+    state: 'failed',
+    fail_count: 1
+  })
   expect(errors).toEqual([])
 })
 

@@ -247,12 +247,22 @@ export class SessionSearchStore {
   setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {
     try {
       if (state === 'failed') {
+        // Inserted when there is no row, because the common unreadable file is
+        // one the index never managed to hold: a transcript behind the wrong
+        // mode bits fails on its very first read, and with nowhere to write the
+        // count it would be read again on every pass for the life of the
+        // process. The cursor is zero and there is no session, which is what
+        // "the index holds nothing for this file" already looks like.
         this.db
           .prepare(
-            `UPDATE files SET state = 'failed', fail_count = fail_count + 1, failed_mtime_ms = ?
-             WHERE path = ?`
+            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
+             VALUES (?, 0, ?, 'failed', 1, ?)
+             ON CONFLICT(path) DO UPDATE SET
+               state = 'failed',
+               fail_count = files.fail_count + 1,
+               failed_mtime_ms = excluded.failed_mtime_ms`
           )
-          .run(atMtimeMs ?? null, path)
+          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
         return
       }
       this.db

@@ -174,7 +174,11 @@ it('indexes nothing at all from a read that was incomplete from the start', asyn
   expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({
     n: 0
   })
-  expect(cursor()).toBeUndefined()
+  // No cursor, because nothing was read through. The row exists all the same:
+  // it is where the failure is counted, and a file that fails on its first read
+  // is exactly the one that has no row of its own to count on.
+  expect(cursor()).toBe(0)
+  expect(owed()).toMatchObject({ state: 'failed', fail_count: 1 })
 })
 
 it('drops a file whose parser returned no session', async () => {
