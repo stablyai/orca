@@ -22,8 +22,12 @@ import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launc
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { useAppStore } from '@/store'
-import { structuredWorkItemComposerPreflightUnavailableMessage } from '@/lib/launch-work-item-direct-messages'
+import {
+  structuredWorkItemComposerPreflightUnavailableMessage,
+  structuredWorkItemPromptDeliveryFailedMessage
+} from '@/lib/launch-work-item-direct-messages'
 import { prepareFolderWorkspaceWorkItemStart } from './folder-workspace-work-item-start'
+import { toast } from 'sonner'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchPlatform,
@@ -252,7 +256,11 @@ export async function submitFolderWorkspaceCreate({
         if (strictWorkItemLaunch) {
           const promptDelivery = await launch.promptDeliveryResult
           if (!promptDelivery?.delivered) {
-            return false
+            if (promptDelivery?.failureNotified !== true && !promptDelivery?.deliveryUnknown) {
+              toast.error(structuredWorkItemPromptDeliveryFailedMessage())
+            }
+            // The existing workspace/session owns every delivery outcome; never invite a sibling create.
+            return true
           }
         }
       } catch (error) {
@@ -260,7 +268,8 @@ export async function submitFolderWorkspaceCreate({
           if (launch.isVisibilityUnknown()) {
             launch.releaseCallerAfterUnknownOutcome()
           }
-          return false
+          // An unknown launch may still publish this workspace's only session.
+          return true
         }
         if (!(error instanceof StructuredAgentSessionCreateRefusalError)) {
           return !launch.isVisibilityUnknown()

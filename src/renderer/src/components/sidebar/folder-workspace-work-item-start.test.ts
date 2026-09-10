@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   activateAndRevealFolderWorkspace: vi.fn(),
   ensureAgentStartupInTerminal: vi.fn(),
   startStructuredAgentLaunch: vi.fn(),
+  toastError: vi.fn(),
   store: {
     activeRepoId: null,
     activeWorktreeId: null,
@@ -39,6 +40,8 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 vi.mock('@/lib/structured-agent-session-launch', () => ({
   startStructuredAgentLaunch: mocks.startStructuredAgentLaunch
 }))
+
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
@@ -219,7 +222,7 @@ describe('Folder Workspace work-item start policy', () => {
     })
     const args = strictCreateArgs()
 
-    await expect(submitFolderWorkspaceCreate(args)).resolves.toBe(false)
+    await expect(submitFolderWorkspaceCreate(args)).resolves.toBe(true)
 
     expect(args.createFolderWorkspace).toHaveBeenCalledOnce()
     expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledOnce()
@@ -227,5 +230,71 @@ describe('Folder Workspace work-item start policy', () => {
     expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledOnce()
     expect(mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]).not.toHaveProperty('startup')
+  })
+
+  it('preserves the only session when prompt delivery remains unknown', async () => {
+    const releaseCallerAfterUnknownOutcome = vi.fn()
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'codex-session-1',
+      launchResult: Promise.resolve({ sessionId: 'codex-session-1', fence: 1 }),
+      promptDeliveryResult: Promise.resolve({
+        delivered: false,
+        failureNotified: false,
+        deliveryUnknown: true
+      }),
+      isVisibilityUnknown: () => false,
+      releaseCallerAfterUnknownOutcome,
+      claimDefinitiveRefusalFallback: vi.fn()
+    })
+    const args = strictCreateArgs()
+
+    await expect(submitFolderWorkspaceCreate(args)).resolves.toBe(true)
+
+    expect(args.createFolderWorkspace).toHaveBeenCalledOnce()
+    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledOnce()
+    expect(releaseCallerAfterUnknownOutcome).not.toHaveBeenCalled()
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
+  })
+
+  it('releases an unknown launch caller without making creation retryable', async () => {
+    const releaseCallerAfterUnknownOutcome = vi.fn(() => true)
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'codex-session-1',
+      launchResult: Promise.reject(new Error('agent launch visibility unknown')),
+      promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: true }),
+      isVisibilityUnknown: () => true,
+      releaseCallerAfterUnknownOutcome,
+      claimDefinitiveRefusalFallback: vi.fn()
+    })
+    const args = strictCreateArgs()
+
+    await expect(submitFolderWorkspaceCreate(args)).resolves.toBe(true)
+
+    expect(args.createFolderWorkspace).toHaveBeenCalledOnce()
+    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledOnce()
+    expect(releaseCallerAfterUnknownOutcome).toHaveBeenCalledOnce()
+    expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
+  })
+
+  it('reports a definitive prompt failure without making creation retryable', async () => {
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'codex-session-1',
+      launchResult: Promise.resolve({ sessionId: 'codex-session-1', fence: 1 }),
+      promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: false }),
+      isVisibilityUnknown: () => false,
+      releaseCallerAfterUnknownOutcome: vi.fn(),
+      claimDefinitiveRefusalFallback: vi.fn()
+    })
+    const args = strictCreateArgs()
+
+    await expect(submitFolderWorkspaceCreate(args)).resolves.toBe(true)
+
+    expect(args.createFolderWorkspace).toHaveBeenCalledOnce()
+    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledOnce()
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'The structured agent session did not accept the work item prompt. Orca did not retry or start another writer.'
+    )
+    expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
   })
 })
