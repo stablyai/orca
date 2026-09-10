@@ -36,6 +36,14 @@ const TypeParams = z.object({
 
 const ButtonParams = z.object({
   name: z.string(),
+  longPress: z.boolean().optional(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const PostureParams = z.object({
+  posture: z.enum(['folded', 'unfolded']),
   device: z.string().optional(),
   emulator: z.string().optional(),
   worktree: z.string().optional()
@@ -185,6 +193,11 @@ export const EMULATOR_METHODS: RpcMethod[] = [
     name: 'emulator.button',
     params: ButtonParams,
     handler: async (params, { runtime }) => runtime.emulatorButton(params)
+  }),
+  defineMethod({
+    name: 'emulator.posture',
+    params: PostureParams,
+    handler: async (params, { runtime }) => runtime.emulatorPosture(params)
   }),
   defineMethod({
     name: 'emulator.rotate',

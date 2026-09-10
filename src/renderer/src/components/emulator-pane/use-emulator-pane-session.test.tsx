@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
 import {
   consumePrelaunchedSimulatorSession,
@@ -50,6 +50,7 @@ const deviceList = devices.map((device) => ({
 
 let attachDeferred: Deferred<AttachResult>
 let rotateDeferred: Deferred<void>
+let runtimeCall: Mock<(request: RuntimeCallRequest) => Promise<unknown>>
 let container: HTMLDivElement
 let root: Root
 let latest: ReturnType<typeof useEmulatorPaneSession> | null = null
@@ -108,6 +109,23 @@ async function flushEffects(): Promise<void> {
   })
 }
 
+function readRotateOrientations(calls: RuntimeCallRequest[][]): string[] {
+  return calls
+    .filter(([request]) => request.method === 'emulator.rotate')
+    .map(([request]) => {
+      const params = request.params
+      if (
+        !params ||
+        typeof params !== 'object' ||
+        !('orientation' in params) ||
+        typeof params.orientation !== 'string'
+      ) {
+        throw new Error('Expected emulator.rotate orientation')
+      }
+      return params.orientation
+    })
+}
+
 describe('useEmulatorPaneSession', () => {
   beforeEach(() => {
     ;(
@@ -124,25 +142,26 @@ describe('useEmulatorPaneSession', () => {
       wsUrl: 'ws://127.0.0.1:3100/ws'
     })
     useAppStore.setState({ settings: null })
+    runtimeCall = vi.fn(async ({ method }: RuntimeCallRequest) => {
+      if (method === 'emulator.listDevices') {
+        return runtimeSuccess(deviceList)
+      }
+      if (method === 'emulator.attach') {
+        return runtimeSuccess(await attachDeferred.promise)
+      }
+      if (method === 'emulator.rotate') {
+        return runtimeSuccess(await rotateDeferred.promise)
+      }
+      if (method === 'emulator.shutdown') {
+        return runtimeSuccess({ deviceUdid: 'device-b' })
+      }
+      throw new Error(`Unexpected RPC method: ${method}`)
+    })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
         runtime: {
-          call: vi.fn(async ({ method }: RuntimeCallRequest) => {
-            if (method === 'emulator.listDevices') {
-              return runtimeSuccess(deviceList)
-            }
-            if (method === 'emulator.attach') {
-              return runtimeSuccess(await attachDeferred.promise)
-            }
-            if (method === 'emulator.rotate') {
-              return runtimeSuccess(await rotateDeferred.promise)
-            }
-            if (method === 'emulator.shutdown') {
-              return runtimeSuccess({ deviceUdid: 'device-b' })
-            }
-            throw new Error(`Unexpected RPC method: ${method}`)
-          })
+          call: runtimeCall
         }
       }
     })
@@ -239,8 +258,59 @@ describe('useEmulatorPaneSession', () => {
       await attachDeferred.promise
       await Promise.resolve()
     })
-
     expect(latest?.visualOrientation).toBe('portrait')
+  })
+
+  it('alternates legacy no-argument rotation between portrait and landscape', async () => {
+    await act(async () => {
+      root.render(<Probe />)
+    })
+    await flushEffects()
+
+    for (let index = 0; index < 3; index += 1) {
+      let rotatePromise: Promise<void> = Promise.resolve()
+      await act(async () => {
+        rotatePromise = latest?.sendRotate() ?? Promise.resolve()
+        await Promise.resolve()
+      })
+      await act(async () => {
+        rotateDeferred.resolve()
+        await rotatePromise
+        await Promise.resolve()
+      })
+    }
+
+    expect(readRotateOrientations(runtimeCall.mock.calls)).toEqual([
+      'landscape_left',
+      'portrait',
+      'landscape_left'
+    ])
+  })
+
+  it('keeps explicit directional rotation on the four-position sequence', async () => {
+    await act(async () => {
+      root.render(<Probe />)
+    })
+    await flushEffects()
+
+    for (const direction of ['left', 'left', 'left'] as const) {
+      let rotatePromise: Promise<void> = Promise.resolve()
+      await act(async () => {
+        rotatePromise = latest?.sendRotate(direction) ?? Promise.resolve()
+        await Promise.resolve()
+      })
+      await act(async () => {
+        rotateDeferred.resolve()
+        await rotatePromise
+        await Promise.resolve()
+      })
+    }
+
+    expect(readRotateOrientations(runtimeCall.mock.calls)).toEqual([
+      'landscape_left',
+      'portrait_upside_down',
+      'landscape_right'
+    ])
   })
 
   it('keeps simulator discovery setup errors during auto attach', async () => {

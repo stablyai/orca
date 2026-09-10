@@ -12,6 +12,7 @@ type StreamSize = {
 
 type EmulatorScreenStreamContentProps = {
   loading: boolean
+  onScreenshotCanvasChange?: (canvas: HTMLCanvasElement | null) => void
   onStreamError: () => void
   onStreamSize: (size: StreamSize) => void
   previewUrl?: string
@@ -24,9 +25,11 @@ type EmulatorScreenStreamContentProps = {
 
 // Android sessions stream H.264 over scrcpy://<serial>; iOS uses an MJPEG http URL.
 const SCRCPY_PREFIX = 'scrcpy://'
+const noopScreenshotCanvasChange = (): void => {}
 
 export function EmulatorScreenStreamContent({
   loading,
+  onScreenshotCanvasChange = noopScreenshotCanvasChange,
   onStreamError,
   onStreamSize,
   previewUrl,
@@ -45,7 +48,8 @@ export function EmulatorScreenStreamContent({
     androidDeviceId ?? undefined,
     streamKey,
     showStream && Boolean(androidDeviceId),
-    onStreamSize
+    onStreamSize,
+    onScreenshotCanvasChange
   )
   const frameStream = useEmulatorFrameStream(
     androidDeviceId ? undefined : previewUrl,

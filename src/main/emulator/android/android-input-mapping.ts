@@ -42,7 +42,9 @@ const BUTTON_KEYCODES: Record<string, number> = {
   volume_up: 24,
   volup: 24,
   volume_down: 25,
-  voldown: 25
+  voldown: 25,
+  wear_button_1: 265,
+  wear_button_2: 266
 }
 
 // Accepts the canonical names plus the common aliases above. Throws

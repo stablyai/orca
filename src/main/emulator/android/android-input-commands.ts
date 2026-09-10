@@ -6,6 +6,10 @@ import {
   normalizedToDevicePixels,
   type DeviceScreenSize
 } from './android-input-mapping'
+import type {
+  EmulatorButtonOptions,
+  EmulatorPosture
+} from '../../../shared/emulator-device-controls'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
 
 // Android control via `adb shell input`, so it works without the scrcpy server.
@@ -83,14 +87,26 @@ export async function androidButton(
   runner: AndroidCommandRunner,
   sdk: AndroidSdkPaths,
   serial: string,
-  name: string
+  name: string,
+  options?: EmulatorButtonOptions
+): Promise<void> {
+  const keyeventArgs = ['input', 'keyevent']
+  if (options?.longPress) {
+    keyeventArgs.push('--longpress')
+  }
+  keyeventArgs.push(String(androidButtonKeycode(name)))
+  ensureAdbOk(await runner(sdk.adb, androidShellArgs(serial, keyeventArgs)), 'adb button')
+}
+
+export async function androidSetPosture(
+  runner: AndroidCommandRunner,
+  sdk: AndroidSdkPaths,
+  serial: string,
+  posture: EmulatorPosture
 ): Promise<void> {
   ensureAdbOk(
-    await runner(
-      sdk.adb,
-      androidShellArgs(serial, ['input', 'keyevent', String(androidButtonKeycode(name))])
-    ),
-    'adb button'
+    await runner(sdk.adb, ['-s', serial, 'emu', posture === 'folded' ? 'fold' : 'unfold']),
+    'adb posture'
   )
 }
 
