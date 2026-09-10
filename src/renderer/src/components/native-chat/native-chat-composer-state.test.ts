@@ -521,13 +521,13 @@ describe('native skill and command picker', () => {
 
   it('treats a one-edit token swap as a new trigger occurrence', () => {
     expect(editReplacesTriggerToken('/foo', '/bar', '/:0')).toBe(true)
-    expect(editReplacesTriggerToken('use $foo', 'use $bar', '$:4')).toBe(true)
+    expect(editReplacesTriggerToken('use /foo', 'use /bar', '/:4')).toBe(true)
   })
 
   it('keeps suppression while typing or deleting inside the dismissed token', () => {
     expect(editReplacesTriggerToken('/foo', '/food', '/:0')).toBe(false)
     expect(editReplacesTriggerToken('/food', '/foo', '/:0')).toBe(false)
-    expect(editReplacesTriggerToken('use $foo now', 'ran $foo now', '$:4')).toBe(false)
+    expect(editReplacesTriggerToken('use /foo now', 'ran /foo now', '/:4')).toBe(false)
   })
 
   it('suppresses only the dismissed trigger occurrence', () => {
