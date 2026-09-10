@@ -9,7 +9,6 @@ import {
   SessionSearchIndexWriter,
   type SessionSearchStagedWrite
 } from './session-search-index-writer'
-import { warmSessionSearchPages } from './session-search-page-warmup'
 import { deleteExpiredSearchFiles } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
 
@@ -36,7 +35,6 @@ export class SessionSearchStore {
   private retentionCutoffMs: number | null = null
   private cleanupRequested = false
   private cleanup: Promise<void> | null = null
-  private warmed: Promise<void> | null = null
   private lastIndexedAt: string | null = null
   private writeFailures = 0
   // Files this index knows it is behind on. Filled by a declined or abandoned
@@ -229,19 +227,6 @@ export class SessionSearchStore {
         this.onError(error)
       }
     }
-  }
-
-  /**
-   * Reads the messages table through so its pages are warm before the first
-   * query joins against it. Nothing calls this yet: there is no query to warm
-   * for, and warming the FTS pages is the query engine's call to make once it
-   * knows which of them it touches.
-   */
-  warm(): Promise<void> {
-    this.warmed ??= warmSessionSearchPages(this.db, () => this.closed).catch((error) =>
-      this.onError(error)
-    )
-    return this.warmed
   }
 
   close(): void {
