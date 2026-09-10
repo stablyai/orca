@@ -11,6 +11,7 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from './agent-session-wire'
+import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 
 export type StructuredAgentSessionState = {
   epoch: string | null
@@ -123,15 +124,25 @@ function mergeItems(
 
 function mergeSubmissions(
   current: readonly AgentJournalSubmission[],
-  incoming: readonly AgentJournalSubmission[]
+  incoming: readonly AgentJournalSubmission[],
+  items: readonly AgentJournalRenderItem[]
 ): AgentJournalSubmission[] {
   const byId = new Map(current.map((submission) => [submission.clientMessageId, submission]))
   for (const submission of incoming) {
     byId.set(submission.clientMessageId, submission)
   }
-  return [...byId.values()]
-    .sort((left, right) => left.submittedAt - right.submittedAt)
-    .slice(-MAX_RETAINED_SUBMISSIONS)
+  const sorted = [...byId.values()].sort((left, right) => left.submittedAt - right.submittedAt)
+  const itemIds = new Set(
+    items
+      .filter((item) => item.body.kind === 'message' && item.body.role === 'user')
+      .map((item) => item.itemId)
+  )
+  // Loaded user messages need their provider alias for durable turn attribution.
+  return sorted.filter(
+    (submission, index) =>
+      index >= sorted.length - MAX_RETAINED_SUBMISSIONS ||
+      itemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
+  )
 }
 
 export function reduceStructuredAgentSession(
@@ -184,7 +195,7 @@ export function reduceStructuredAgentSession(
       fence: action.page.fence ?? null,
       items: action.page.items,
       submissions: sameEpoch
-        ? mergeSubmissions(state.submissions, action.page.submissions)
+        ? mergeSubmissions(state.submissions, action.page.submissions, action.page.items)
         : action.page.submissions,
       hasOlder: action.page.hasOlder,
       status: 'ready',
@@ -202,10 +213,11 @@ export function reduceStructuredAgentSession(
     if (state.epoch !== action.requestedEpoch || action.page.epoch !== action.requestedEpoch) {
       return state
     }
+    const items = mergeItems(state.items, action.page.items, action.page.removedItemIds)
     return {
       ...state,
-      items: mergeItems(state.items, action.page.items, action.page.removedItemIds),
-      submissions: mergeSubmissions(state.submissions, action.page.submissions),
+      items,
+      submissions: mergeSubmissions(state.submissions, action.page.submissions, items),
       hasOlder: action.page.hasOlder
     }
   }
@@ -246,16 +258,18 @@ export function reduceStructuredAgentSession(
   ) {
     return state
   }
+  const items = journalUnchanged
+    ? state.items
+    : mergeItems(state.items, event.batch.items, event.batch.removedItemIds)
   return {
     ...state,
     cursor: event.batch.cursor,
     fence: event.fence ?? state.fence,
-    items: journalUnchanged
-      ? state.items
-      : mergeItems(state.items, event.batch.items, event.batch.removedItemIds),
-    submissions: journalUnchanged
-      ? state.submissions
-      : mergeSubmissions(state.submissions, event.batch.submissions),
+    items,
+    submissions:
+      event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
+        ? state.submissions
+        : mergeSubmissions(state.submissions, event.batch.submissions, items),
     status: 'ready',
     error: undefined,
     handoff: event.handoff ?? state.handoff,
