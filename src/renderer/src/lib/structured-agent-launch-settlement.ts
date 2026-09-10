@@ -22,16 +22,15 @@ export type StructuredAgentLaunchSettlement =
       promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
     }
   | ({ kind: 'refused-then-legacy' } & StructuredAgentLegacyFallbackResult)
-  | { kind: 'cancelled'; sessionId: string }
+  | {
+      kind: 'cancelled'
+      sessionId: string
+      /** The legacy surface the refusal fallback had already opened when the cancel arrived; it
+       *  outlives the cancel, so the caller must report its tab rather than the pre-launch one. */
+      fallback?: StructuredAgentLegacyFallbackResult
+    }
   | { kind: 'visibility-unknown'; sessionId: string }
   | { kind: 'failed'; error: unknown }
-
-export type StructuredAgentLaunchCancellation = {
-  isCancelled: () => boolean
-  /** Fires the moment the caller abandons the launch. The loop cancels eagerly on it so a staged
-   *  prompt is discarded before it can reach the provider; a token read only after awaits is late. */
-  subscribe: (onCancel: () => void) => () => void
-}
 
 export type StructuredAgentLaunchHooks = {
   /** What this flow did before structured chat existed: activate with a startup payload, set the
@@ -39,7 +38,9 @@ export type StructuredAgentLaunchHooks = {
    *  Resume has no legacy equivalent, so a refusal without this hook settles as `failed`. */
   legacyFallback?: () => Promise<StructuredAgentLegacyFallbackResult>
   onStructuredReady?: (sessionId: string) => void
-  cancellation?: StructuredAgentLaunchCancellation
+  /** Abort the moment the caller abandons the launch. The loop cancels on the event, not only by
+   *  polling after awaits, so a staged prompt is discarded before it can reach the provider. */
+  signal?: AbortSignal
 }
 
 /**
@@ -54,8 +55,9 @@ export async function settleStructuredAgentLaunch(
   hooks: StructuredAgentLaunchHooks
 ): Promise<StructuredAgentLaunchSettlement> {
   const launch = startStructuredAgentLaunch(worktreeId, agent, options)
+  const signal = hooks.signal
   let cancelRequested = false
-  const isCancelled = (): boolean => cancelRequested || hooks.cancellation?.isCancelled() === true
+  const isCancelled = (): boolean => cancelRequested || signal?.aborted === true
   const cancelLaunch = (): void => {
     if (cancelRequested) {
       return
@@ -63,7 +65,7 @@ export async function settleStructuredAgentLaunch(
     cancelRequested = true
     cancelStructuredAgentLaunch(worktreeId, launch.sessionId)
   }
-  const unsubscribe = hooks.cancellation?.subscribe(cancelLaunch)
+  signal?.addEventListener('abort', cancelLaunch, { once: true })
   // Why: the caller may have been abandoned between its own check and this subscription.
   if (isCancelled()) {
     cancelLaunch()
@@ -85,7 +87,8 @@ export async function settleStructuredAgentLaunch(
     : null
   const cancelled = (): StructuredAgentLaunchSettlement => ({
     kind: 'cancelled',
-    sessionId: launch.sessionId
+    sessionId: launch.sessionId,
+    ...(fallback.result ? { fallback: fallback.result } : {})
   })
   try {
     const receipt = await launch.launchResult
@@ -129,6 +132,6 @@ export async function settleStructuredAgentLaunch(
     }
     return { kind: 'failed', error }
   } finally {
-    unsubscribe?.()
+    signal?.removeEventListener('abort', cancelLaunch)
   }
 }

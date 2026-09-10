@@ -54,26 +54,18 @@ const fallbackResult = {
   primaryTabId: 'fallback-tab'
 }
 
-/** A caller-side cancel signal: `fire` is what the caller's store subscription would call. */
+/** A caller-side cancel signal: `fire` is what the caller's store subscription would abort on. */
 function fakeCancellation(initiallyCancelled = false) {
-  let cancelled = initiallyCancelled
-  const unsubscribe = vi.fn()
-  const listeners: (() => void)[] = []
+  const controller = new AbortController()
+  if (initiallyCancelled) {
+    controller.abort()
+  }
+  const removeEventListener = vi.spyOn(controller.signal, 'removeEventListener')
   return {
-    unsubscribe,
-    fire: () => {
-      cancelled = true
-      for (const listener of listeners) {
-        listener()
-      }
-    },
-    hook: {
-      isCancelled: () => cancelled,
-      subscribe: vi.fn((onCancel: () => void) => {
-        listeners.push(onCancel)
-        return unsubscribe
-      })
-    }
+    /** The loop must drop its listener on settle, not leave the signal holding the closure. */
+    removeEventListener,
+    fire: () => controller.abort(),
+    signal: controller.signal
   }
 }
 
@@ -151,7 +143,7 @@ describe('settleStructuredAgentLaunch', () => {
     expect(claimDefinitiveRefusalFallback).not.toHaveBeenCalled()
   })
 
-  it('returns cancelled and discards a legacy fallback that was mid-flight', async () => {
+  it('reports the surface of a legacy fallback that finished before the cancel', async () => {
     fakeLaunch({
       launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
     })
@@ -168,14 +160,18 @@ describe('settleStructuredAgentLaunch', () => {
       'worktree-1',
       'codex',
       {},
-      { legacyFallback, cancellation: cancellation.hook }
+      { legacyFallback, signal: cancellation.signal }
     )
     await vi.waitFor(() => expect(legacyFallback).toHaveBeenCalledOnce())
     cancellation.fire()
     finishFallback()
 
-    // Current behavior: the fallback's tab is not reported back even though it opened.
-    await expect(settlement).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
+    // Why: the fallback's terminal outlives the cancel, so its tab is the caller's real surface.
+    await expect(settlement).resolves.toEqual({
+      kind: 'cancelled',
+      sessionId: 'session-1',
+      fallback: fallbackResult
+    })
     expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledExactlyOnceWith(
       'worktree-1',
       'session-1'
@@ -231,7 +227,7 @@ describe('settleStructuredAgentLaunch', () => {
         {},
         {
           onStructuredReady,
-          cancellation: fakeCancellation(true).hook
+          signal: fakeCancellation(true).signal
         }
       )
     ).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
@@ -251,7 +247,7 @@ describe('settleStructuredAgentLaunch', () => {
         {},
         {
           legacyFallback,
-          cancellation: fakeCancellation(true).hook
+          signal: fakeCancellation(true).signal
         }
       )
     ).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
@@ -272,7 +268,7 @@ describe('settleStructuredAgentLaunch', () => {
       'worktree-1',
       'codex',
       {},
-      { onStructuredReady, cancellation: cancellation.hook }
+      { onStructuredReady, signal: cancellation.signal }
     )
     expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
     cancellation.fire()
@@ -281,12 +277,12 @@ describe('settleStructuredAgentLaunch', () => {
       'worktree-1',
       'session-1'
     )
-    expect(cancellation.unsubscribe).not.toHaveBeenCalled()
+    expect(cancellation.removeEventListener).not.toHaveBeenCalled()
 
     resolveLaunch({ sessionId: 'session-1', fence: 1 })
     await expect(settlement).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
     expect(onStructuredReady).not.toHaveBeenCalled()
-    expect(cancellation.unsubscribe).toHaveBeenCalledOnce()
+    expect(cancellation.removeEventListener).toHaveBeenCalledOnce()
   })
 
   it('honours a cancellation that fired before the loop subscribed', async () => {
@@ -297,15 +293,14 @@ describe('settleStructuredAgentLaunch', () => {
       'worktree-1',
       'codex',
       {},
-      { cancellation: cancellation.hook }
+      { signal: cancellation.signal }
     )
-    expect(cancellation.hook.subscribe).toHaveBeenCalledOnce()
     expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledExactlyOnceWith(
       'worktree-1',
       'session-1'
     )
     await expect(settlement).resolves.toEqual({ kind: 'cancelled', sessionId: 'session-1' })
-    expect(cancellation.unsubscribe).toHaveBeenCalledOnce()
+    expect(cancellation.removeEventListener).toHaveBeenCalledOnce()
   })
 
   it('unsubscribes from the cancel signal once a launch settles without cancelling', async () => {
@@ -313,9 +308,9 @@ describe('settleStructuredAgentLaunch', () => {
     const cancellation = fakeCancellation()
 
     await expect(
-      settleStructuredAgentLaunch('worktree-1', 'codex', {}, { cancellation: cancellation.hook })
+      settleStructuredAgentLaunch('worktree-1', 'codex', {}, { signal: cancellation.signal })
     ).resolves.toEqual({ kind: 'structured', sessionId: 'session-1' })
     expect(mocks.cancelStructuredAgentLaunch).not.toHaveBeenCalled()
-    expect(cancellation.unsubscribe).toHaveBeenCalledOnce()
+    expect(cancellation.removeEventListener).toHaveBeenCalledOnce()
   })
 })
