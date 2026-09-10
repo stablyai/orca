@@ -9,6 +9,7 @@ import {
   Pencil,
   Pin,
   PinOff,
+  RefreshCw,
   X
 } from 'lucide-react'
 import {
@@ -20,6 +21,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
+import { isExternalReloadableEditorTab } from '@/components/editor/editor-autosave'
+import { requestEditorTabDiskReload } from '@/components/editor/editor-tab-disk-reload'
 import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { OpenFile } from '../../store/slices/editor'
@@ -105,6 +108,7 @@ export function EditorFileTabContextMenu({
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
+  const canReloadFromDisk = isExternalReloadableEditorTab(file)
 
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
@@ -189,32 +193,46 @@ export function EditorFileTabContextMenu({
           )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        {canShowMarkdownPreview ? (
-          <>
-            <DropdownMenuItem
-              onSelect={() => {
-                onActivate()
-                onOpenMarkdownPreview(
-                  {
-                    filePath: file.filePath,
-                    relativePath: file.relativePath,
-                    worktreeId: file.worktreeId,
-                    runtimeEnvironmentId: file.runtimeEnvironmentId,
-                    language: resolvedLanguage
-                  },
-                  { sourceFileId: file.id }
-                )
-              }}
-            >
-              <Eye className="size-3.5" />
-              {translate(
-                'auto.components.tab.bar.EditorFileTabContextMenu.bfd5797ef4',
-                'Open Markdown Preview'
-              )}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-          </>
+        {canReloadFromDisk ? (
+          <DropdownMenuItem
+            onSelect={() => {
+              // Why activate first: a background tab's reload lands lazily on
+              // reveal — activating makes the fresh content visible immediately.
+              onActivate()
+              requestEditorTabDiskReload(file.id)
+            }}
+          >
+            <RefreshCw className="size-3.5" />
+            {translate(
+              'components.tab.bar.EditorFileTabContextMenu.reloadFromDisk',
+              'Reload from Disk'
+            )}
+          </DropdownMenuItem>
         ) : null}
+        {canShowMarkdownPreview ? (
+          <DropdownMenuItem
+            onSelect={() => {
+              onActivate()
+              onOpenMarkdownPreview(
+                {
+                  filePath: file.filePath,
+                  relativePath: file.relativePath,
+                  worktreeId: file.worktreeId,
+                  runtimeEnvironmentId: file.runtimeEnvironmentId,
+                  language: resolvedLanguage
+                },
+                { sourceFileId: file.id }
+              )
+            }}
+          >
+            <Eye className="size-3.5" />
+            {translate(
+              'auto.components.tab.bar.EditorFileTabContextMenu.bfd5797ef4',
+              'Open Markdown Preview'
+            )}
+          </DropdownMenuItem>
+        ) : null}
+        {canReloadFromDisk || canShowMarkdownPreview ? <DropdownMenuSeparator /> : null}
         <DropdownMenuItem
           onSelect={() => {
             void window.api.ui.writeClipboardText(file.filePath)
