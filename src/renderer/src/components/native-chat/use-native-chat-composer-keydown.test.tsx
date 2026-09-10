@@ -2,7 +2,13 @@
 
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { EMPTY_HISTORY, type ComposerAutocomplete } from './native-chat-composer-state'
+import {
+  applyPickerSuggestion,
+  deriveComposerAutocomplete,
+  EMPTY_HISTORY,
+  type ComposerAutocomplete
+} from './native-chat-composer-state'
+import { getNativeChatAgentProfile } from '../../../../shared/native-chat-agent-profiles'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
 
 const COMMAND = {
@@ -29,7 +35,7 @@ function picker(items = [COMMAND]): Extract<ComposerAutocomplete, { mode: 'slash
   }
 }
 
-function setup(autocomplete: ComposerAutocomplete = picker(), composing = false) {
+function setup(autocomplete: ComposerAutocomplete = picker(), composing = false, draft = '/') {
   const callbacks = {
     completePickerItem: vi.fn(),
     dispatchPickerCommand: vi.fn(),
@@ -45,7 +51,7 @@ function setup(autocomplete: ComposerAutocomplete = picker(), composing = false)
     useNativeChatComposerKeyDown({
       autocomplete,
       activeSuggestion: 0,
-      draft: '/',
+      draft,
       history: EMPTY_HISTORY,
       isComposing: () => composing,
       ...callbacks
@@ -82,6 +88,36 @@ describe('useNativeChatComposerKeyDown', () => {
     handler(keyEvent('Enter') as never)
     expect(callbacks.send).toHaveBeenCalledOnce()
   })
+
+  it.each(['claude', 'openclaude', 'codex', 'grok'] as const)(
+    'completes mid-prompt command Enter without dispatching or losing prose for %s',
+    (agent) => {
+      const draft = 'Explain /cle before continuing'
+      const caret = 'Explain /cle'.length
+      const autocomplete = deriveComposerAutocomplete(
+        draft,
+        caret,
+        [COMMAND],
+        [],
+        getNativeChatAgentProfile(agent)
+      )
+      expect(autocomplete.mode).toBe('slash')
+      const { handler, callbacks } = setup(autocomplete, false, draft)
+      const event = keyEvent('Enter')
+      handler(event as never)
+
+      expect(event.preventDefault).toHaveBeenCalledOnce()
+      expect(callbacks.dispatchPickerCommand).not.toHaveBeenCalled()
+      expect(callbacks.send).not.toHaveBeenCalled()
+      expect(callbacks.completePickerItem).toHaveBeenCalledOnce()
+      const [item] = callbacks.completePickerItem.mock.calls[0]
+      expect(applyPickerSuggestion(draft, caret, item)).toEqual({
+        draft: 'Explain /clear  before continuing',
+        caret: 'Explain /clear '.length,
+        insertedToken: '/clear'
+      })
+    }
+  )
 
   it('dismisses Escape without interrupting the agent', () => {
     const { handler, callbacks } = setup()
