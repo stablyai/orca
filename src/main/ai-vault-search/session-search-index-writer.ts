@@ -117,7 +117,11 @@ export class SessionSearchIndexWriter {
     // cursor worth continuing: it has no session row to hang new rows off, so
     // this read makes one. Declining instead would force a whole re-read of
     // that file on every pass for as long as it grows.
-    return this.stage(candidate, existing, mode === 'append' ? existing.session_row_id : null)
+    return this.stage(
+      candidate,
+      existing,
+      mode === 'append' ? (existing?.session_row_id ?? null) : null
+    )
   }
 
   /** Invalidation hides the generation immediately; cleanup does the expensive deletes later. */
