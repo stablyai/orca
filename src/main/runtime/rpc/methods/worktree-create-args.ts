@@ -37,6 +37,8 @@ export function buildManagedWorktreeCreateArgs(
     linkedGiteaPR: params.linkedGiteaPR,
     linkedWorkItem: params.linkedWorkItem,
     linkedTaskSourceContext: params.linkedTaskSourceContext,
+    linkedOdooTicket: params.linkedOdooTicket,
+    linkedOdooInstanceId: params.linkedOdooInstanceId,
     comment: params.comment,
     displayName: params.displayName,
     displayNameKind: params.displayNameKind,

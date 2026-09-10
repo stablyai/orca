@@ -1,4 +1,6 @@
 import { canShowWorkspaceDeleteQuickAction } from './workspace-delete-quick-action'
+import { getWorktreeCardOdooTicketDisplay } from './worktree-card-odoo-ticket-display'
+import { useWorktreeCardOdooTicket } from './use-worktree-card-odoo-ticket'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import type { ResolvedWorktreeCardProps } from './worktree-card-model'
 import { useWorktreeCardActivationActions } from './use-worktree-card-activation-actions'
@@ -8,6 +10,7 @@ import { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-details
 import { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 import { useWorktreeCardSecondaryDetails } from './use-worktree-card-secondary-details'
 import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-actions'
+import { resolveDashboardCardOdooTicket } from '@/components/dashboard/dashboard-card-context'
 
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const { worktree, repo } = props
@@ -35,12 +38,25 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const showIssue = foundation.cardProps.includes('issue')
   const showLinearIssue = foundation.cardProps.includes('linear-issue')
   const showJiraIssue = foundation.cardProps.includes('jira-issue')
+  const showOdooTicket = foundation.cardProps.includes('odoo-ticket')
   const showPR = foundation.cardProps.includes('pr')
   const showAutomation = foundation.cardProps.includes('automation')
   const showCli = foundation.cardProps.includes('cli')
   const showComment = foundation.cardProps.includes('comment')
   const showPorts = foundation.cardProps.includes('ports')
   const shouldRefreshHostedReview = foundation.newCardStyle ? showStatus : showPR
+  // Resolved rather than read flat: a workspace started from a ticket may hold the
+  // link only as `linkedWorkItem`, and the badge would then never appear on it.
+  const linkedOdoo = resolveDashboardCardOdooTicket(worktree)
+  const odooTicket = useWorktreeCardOdooTicket({
+    linkedOdooTicket: linkedOdoo?.id ?? null,
+    linkedOdooInstanceId: worktree.linkedOdooInstanceId ?? linkedOdoo?.instanceId ?? null,
+    enabled: showOdooTicket
+  })
+  const odooTicketDisplay = getWorktreeCardOdooTicketDisplay(
+    { linkedOdooTicket: linkedOdoo?.id ?? null },
+    odooTicket
+  )
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 
@@ -115,6 +131,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     showIssue,
     showLinearIssue,
     showJiraIssue,
+    showOdooTicket,
     showPR,
     showAutomation,
     showCli,
@@ -124,6 +141,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     linearIssue: linked.linearIssue,
     linearIssueDisplay: linked.linearIssueDisplay,
     jiraIssueDisplay: linked.jiraIssueDisplay,
+    odooTicketDisplay,
     prDisplay: review.prDisplay,
     linkedGitLabMR: review.linkedGitLabMR,
     linkedBitbucketPR: review.linkedBitbucketPR,

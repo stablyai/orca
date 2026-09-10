@@ -67,6 +67,7 @@ function renderHeader(
     syncTaskStatusFromWorkspaceBoard: false,
     onSyncTaskStatusFromWorkspaceBoardChange: vi.fn(),
     onRenameStatus: vi.fn(),
+    onChangeStatusOdooStage: vi.fn(),
     onChangeStatusColor: vi.fn(),
     onChangeStatusIcon: vi.fn(),
     onMoveStatus: vi.fn(),

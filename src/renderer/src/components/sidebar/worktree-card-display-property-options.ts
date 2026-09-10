@@ -30,6 +30,15 @@ export const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
     }
   },
   {
+    id: 'odoo-ticket',
+    get label() {
+      return translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.odooTicketOption',
+        'Odoo ticket'
+      )
+    }
+  },
+  {
     id: 'pr',
     get label() {
       return translate(

@@ -222,5 +222,8 @@ export function shouldPreserveWorkspaceSourceOnRepoChange(
     return false
   }
   const provider = getWorkspaceSourceProvider(item)
-  return provider === 'linear' || provider === 'jira'
+  // Why phrased as "not repo-scoped": listing the account-backed providers kept
+  // 'odoo' out and silently dropped Odoo links on a repo switch. Only the code
+  // hosts are repo-scoped, so any other provider survives by default.
+  return provider !== 'github' && provider !== 'gitlab'
 }

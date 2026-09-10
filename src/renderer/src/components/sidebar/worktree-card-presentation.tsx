@@ -44,6 +44,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     metaIssue,
     metaLinearIssue,
     metaJiraIssue,
+    metaOdooTicket,
     metaReview,
     metaComment,
     metaAutomationProvenance,
@@ -51,6 +52,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     hoverIssue,
     hoverLinearIssue,
     hoverJiraIssue,
+    hoverOdooTicket,
     hoverReview,
     hoverComment,
     linearIssue,
@@ -133,6 +135,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
       issue: hoverIssue,
       linearIssue: hoverLinearIssue,
       jiraIssue: hoverJiraIssue,
+      odooTicket: hoverOdooTicket,
       review: hoverReview,
       comment: hoverComment,
       automationProvenance: metaAutomationProvenance,
@@ -151,6 +154,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
             issue={metaIssue}
             linearIssue={metaLinearIssue}
             jiraIssue={metaJiraIssue}
+            odooTicket={metaOdooTicket}
             review={metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
@@ -211,6 +215,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
             issue={metaIssue}
             linearIssue={metaLinearIssue}
             jiraIssue={metaJiraIssue}
+            odooTicket={metaOdooTicket}
             review={newCardStyle ? null : metaReview}
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
@@ -226,6 +231,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
         issue={metaIssue}
         linearIssue={metaLinearIssue}
         jiraIssue={metaJiraIssue}
+        odooTicket={metaOdooTicket}
         review={metaReview}
         comment={metaComment}
         automationProvenance={metaAutomationProvenance}

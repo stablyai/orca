@@ -30,6 +30,9 @@ export function useTaskSourceProviderReadiness(
   const linearConnected = useLinearProviderConnected()
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
+  const odooStatus = useAppStore((s) => s.odooStatus)
+  const odooStatusChecked = useAppStore((s) => s.odooStatusChecked)
+  const odooStatusContextKey = useAppStore((s) => s.odooStatusContextKey)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
 
@@ -58,6 +61,8 @@ export function useTaskSourceProviderReadiness(
     preflightStatus.glab.authenticated === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
+  const odooChecking = odooStatusContextKey !== providerRuntimeContextKey || !odooStatusChecked
+  const odooConnected = !odooChecking && odooStatus.connected === true
   const linearChecking =
     linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked
   // Normalization returns a new array, so memoize by provider contents.
@@ -89,6 +94,11 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      odoo: {
+        connected: odooConnected,
+        checking: odooChecking,
+        visible: visible.has('odoo')
       }
     }
   }, [
@@ -101,6 +111,8 @@ export function useTaskSourceProviderReadiness(
     linearSkillInstalled,
     linearSkillLoading,
     linearSkillSettled,
+    odooChecking,
+    odooConnected,
     reviewChecking,
     reviewUnavailable,
     visibleProvidersKey

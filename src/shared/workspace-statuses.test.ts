@@ -3,6 +3,7 @@ import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN,
+  ODOO_STAGE_NAME_MAX_LENGTH,
   clampWorkspaceBoardColumnWidth,
   cloneDefaultWorkspaceStatuses,
   normalizePersistedWorkspaceStatuses,
@@ -296,5 +297,26 @@ describe('workspace status visuals', () => {
     expect(clampWorkspaceBoardColumnWidth(100)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MIN)
     expect(clampWorkspaceBoardColumnWidth(321.6)).toBe(322)
     expect(clampWorkspaceBoardColumnWidth(900)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MAX)
+  })
+})
+
+describe('odooStageName normalization', () => {
+  const statusWithStage = (odooStageName: string): unknown[] => [
+    { id: 'todo', label: 'Todo', odooStageName }
+  ]
+
+  it('keeps a short stage name verbatim', () => {
+    expect(normalizeWorkspaceStatuses(statusWithStage('  En cours  '))[0]?.odooStageName).toBe(
+      'En cours'
+    )
+  })
+
+  it('truncates on code points so an emoji at the limit keeps both surrogates', () => {
+    const name = `${'a'.repeat(ODOO_STAGE_NAME_MAX_LENGTH - 1)}🚀tail`
+    const stored = normalizeWorkspaceStatuses(statusWithStage(name))[0]?.odooStageName ?? ''
+    expect(Array.from(stored)).toHaveLength(ODOO_STAGE_NAME_MAX_LENGTH)
+    expect(stored.endsWith('🚀')).toBe(true)
+    // A UTF-16 slice would have left a lone high surrogate here.
+    expect(stored).toBe(`${'a'.repeat(ODOO_STAGE_NAME_MAX_LENGTH - 1)}🚀`)
   })
 })

@@ -32,7 +32,8 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     hostLabelById,
     taskSourceHostAvailability,
     accountBackedTaskSourceHostId,
-    accountBackedTaskSourceHostAvailability
+    accountBackedTaskSourceHostAvailability,
+    odooInstanceName
   } = model
   const taskSourceAvailabilityNoticeByProvider = useMemo<
     Partial<Record<TaskProvider, TaskSourceAvailabilityNotice>>
@@ -100,6 +101,13 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      odoo:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('odoo'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -121,7 +129,7 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
       providerLabel,
       repoContexts: taskSourceRepoContexts,
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'odoo'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       accountHostId: accountBackedTaskSourceHostId,
@@ -129,7 +137,8 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
       selectedRepoCount: selectedRepos.length,
       linearWorkspaceName:
         selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
-      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null,
+      odooInstanceName
     })
   }, [
     selectedJiraSite,
@@ -140,6 +149,7 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     accountBackedTaskSourceHostAvailability,
     accountBackedTaskSourceHostId,
     hostLabelById,
+    odooInstanceName,
     taskSourceHostAvailability,
     taskSourceRepoContexts
   ])
@@ -149,11 +159,11 @@ export function useTaskPageSourceSummary(model: TaskPageSourceAvailabilityPrelud
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'odoo'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'odoo'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById

@@ -5203,8 +5203,7 @@
           "395e541d5d": "Statuts",
           "34f03eb0de": "Paramètres du tableau",
           "26cbc92150": "Paramètres du tableau des espaces de travail",
-          "87d24a0c2f": "Synchroniser le tableau et le statut des issues",
-          "4c2eaa78cc": "Déplacer un espace de travail lié met à jour le statut de son issue Linear quand un état de workflow correspondant existe."
+          "87d24a0c2f": "Synchroniser le tableau et le statut des issues"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Vide",
@@ -12893,7 +12892,6 @@
           "c767ab7061": "Configuration du skill"
         },
         "IntegrationsStep": {
-          "277f30eb34": "Linear, GitLab, Bitbucket, Azure DevOps, Gitea et Jira se trouvent dans Paramètres > Intégrations.",
           "3a3e360289": "Autres sources de tâches",
           "80e3ce0bc9": "Revérifier",
           "04ef416712": "Ajouter l'accès Linear",

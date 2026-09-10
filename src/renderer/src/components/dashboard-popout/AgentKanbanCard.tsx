@@ -11,6 +11,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentKanbanCardOdooPill, sameOdooTicket } from './AgentKanbanCardOdooPill'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -109,7 +110,8 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.stateChangedAt === b.stateChangedAt &&
     a.unseen === b.unseen &&
     a.askSummary === b.askSummary &&
-    a.conversationName === b.conversationName
+    a.conversationName === b.conversationName &&
+    sameOdooTicket(a.odooTicket, b.odooTicket)
   )
 }
 
@@ -312,6 +314,14 @@ export const AgentKanbanCard = memo(
               </div>
             ) : null}
           </>
+        ) : null}
+
+        {/* Own row: the pill is itself a button, which cannot nest inside the
+            footer button below. Mirrors the tag row on an Odoo kanban card. */}
+        {card.odooTicket ? (
+          <div className="flex w-full min-w-0 items-center">
+            <AgentKanbanCardOdooPill ticket={card.odooTicket} />
+          </div>
         ) : null}
 
         <button

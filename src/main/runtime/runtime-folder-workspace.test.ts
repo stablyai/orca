@@ -117,6 +117,8 @@ describe('mergeRuntimeFolderWorkspace', () => {
       linkedBitbucketPR: null,
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null,
+      linkedOdooTicket: null,
+      linkedOdooInstanceId: null,
       linkedWorkItem: null,
       linkedTaskSourceContext: null,
       isArchived: false,

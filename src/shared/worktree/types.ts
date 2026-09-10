@@ -8,7 +8,7 @@ import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
 import type { WorktreeIdentity } from './identity'
 
 export type WorkspaceLinkedItem = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'odoo'
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
@@ -16,6 +16,9 @@ export type WorkspaceLinkedItem = {
   linearIdentifier?: string
   jiraIdentifier?: string
   repoId?: string
+  /** Which saved Odoo instance the ticket belongs to; tickets are only
+   *  addressable per instance, unlike repo-scoped providers. */
+  odooInstanceId?: string
 }
 
 // ─── Worktree (git-level) ────────────────────────────────────────────
@@ -56,6 +59,8 @@ export type WorkspaceStatusDefinition = {
   label: string
   color?: string
   icon?: string
+  /** Odoo stage this column maps to; the board sync matches it by name. */
+  odooStageName?: string
 }
 
 export type Worktree = {
@@ -100,6 +105,10 @@ export type Worktree = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  /** Odoo tickets are only addressable per instance, so the stage sync and the
+   *  sidebar card read this pair rather than `linkedWorkItem` alone. */
+  linkedOdooTicket?: number | null
+  linkedOdooInstanceId?: string | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean

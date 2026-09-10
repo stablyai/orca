@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { GlobalSettings } from '../shared/global-settings-types'
 import type { PersistedState } from '../shared/persisted-state-types'
+import { TASK_PROVIDERS } from '../shared/task-providers'
 import {
   getDefaultPersistedState,
   ONBOARDING_FINAL_STEP,
@@ -92,7 +93,7 @@ describe('Store', () => {
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.showAutomationsButton).toBe(true)
-    expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(settings.visibleTaskProviders).toEqual([...TASK_PROVIDERS])
     expect(settings.openInApplications).toEqual([
       { id: 'vscode', label: 'VS Code', command: 'code' }
     ])

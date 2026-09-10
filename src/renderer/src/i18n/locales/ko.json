@@ -4545,8 +4545,7 @@
           "395e541d5d": "상태",
           "34f03eb0de": "보드 설정",
           "26cbc92150": "워크스페이스 보드 설정",
-          "87d24a0c2f": "보드와 이슈 상태 동기화",
-          "4c2eaa78cc": "연결된 워크스페이스를 이동하면 일치하는 워크플로 상태가 있을 때 Linear 이슈 상태가 업데이트됩니다."
+          "87d24a0c2f": "보드와 이슈 상태 동기화"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "비어 있음",
@@ -11724,7 +11723,6 @@
           "c767ab7061": "스킬 설정"
         },
         "IntegrationsStep": {
-          "277f30eb34": "Linear, GitLab, Bitbucket, Azure DevOps, Gitea 및 Jira는 설정 > 연동에 있습니다.",
           "3a3e360289": "더 많은 작업 소스",
           "80e3ce0bc9": "재확인",
           "04ef416712": "Linear 연결 추가",

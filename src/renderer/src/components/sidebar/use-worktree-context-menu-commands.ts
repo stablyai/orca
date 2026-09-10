@@ -13,6 +13,7 @@ import {
   planWorkspaceStatusAssignment,
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
+import { useWorkspaceStatusProviderSync } from './use-workspace-status-provider-sync'
 
 export function useWorktreeContextMenuCommands(args: {
   activeContextWorktrees: readonly Worktree[]
@@ -91,6 +92,7 @@ export function useWorktreeContextMenuCommands(args: {
       void args.moveProjectToGroup(args.repo.id, null)
     }
   }, [args])
+  const syncWorkspaceStatusToProviders = useWorkspaceStatusProviderSync()
   const handleAssignWorkspaceStatus = useCallback(
     (status: string) => {
       args.setMenuOpenState(false)
@@ -116,8 +118,12 @@ export function useWorktreeContextMenuCommands(args: {
             )
           )
       )
+      // Why: the context menu has no board callback, but a status change is a
+      // status change — push it to the linked task providers here too, or "Move
+      // to Status" silently diverges from the board's drag-and-drop.
+      syncWorkspaceStatusToProviders(plan.localWriteIds, status)
     },
-    [args]
+    [args, syncWorkspaceStatusToProviders]
   )
   const handleRename = useCallback(() => {
     args.openModal('edit-meta', {

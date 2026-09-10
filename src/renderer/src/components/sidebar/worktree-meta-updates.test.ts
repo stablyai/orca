@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
+  buildOdooTicketMetaUpdate,
   buildWorktreeMetaUpdates,
   parseGitLabMergeRequestNumberForMetaField,
   type WorktreeMetaDraft,
@@ -27,6 +28,7 @@ function makeSnapshot(overrides: Partial<WorktreeMetaSnapshot> = {}): WorktreeMe
     issueInput: '',
     issueProvider: 'github',
     prInput: '',
+    odooInput: '',
     ...overrides
   }
 }
@@ -409,5 +411,79 @@ describe('buildWorktreeMetaUpdates', () => {
 
   it('clears a comment with empty string, never a present-undefined key', () => {
     expect(buildUpdates({ commentInput: '  ' }, { comment: 'old note' }).comment).toBe('')
+  })
+})
+
+const INSTANCES = [
+  { id: 'a', serverUrl: 'https://acme.odoo.com' },
+  { id: 'b', serverUrl: 'https://other.odoo.com' }
+]
+
+describe('buildOdooTicketMetaUpdate', () => {
+  it('clears both slots on empty input', () => {
+    expect(
+      buildOdooTicketMetaUpdate({ odooInput: '  ', instances: INSTANCES, fallbackInstanceId: 'a' })
+    ).toEqual({ linkedOdooTicket: null, linkedOdooInstanceId: null })
+  })
+
+  it('leaves the link untouched on unparseable non-empty input', () => {
+    expect(
+      buildOdooTicketMetaUpdate({
+        odooInput: 'nope',
+        instances: INSTANCES,
+        fallbackInstanceId: 'a'
+      })
+    ).toEqual({})
+  })
+
+  it('uses the fallback instance for a raw ticket number', () => {
+    expect(
+      buildOdooTicketMetaUpdate({ odooInput: '42', instances: INSTANCES, fallbackInstanceId: 'a' })
+    ).toEqual({ linkedOdooTicket: 42, linkedOdooInstanceId: 'a' })
+  })
+
+  it('emits nothing when the seeded ticket id is saved untouched', () => {
+    // A comment-only save on a worktree linked to instance B, while instance A is
+    // the active one, must not rebind the link to A.
+    expect(
+      buildOdooTicketMetaUpdate({
+        odooInput: '42',
+        seededInput: '42',
+        instances: INSTANCES,
+        fallbackInstanceId: 'a'
+      })
+    ).toEqual({})
+  })
+
+  it('still resolves once the seeded ticket id is edited', () => {
+    expect(
+      buildOdooTicketMetaUpdate({
+        odooInput: '43',
+        seededInput: '42',
+        instances: INSTANCES,
+        fallbackInstanceId: 'a'
+      })
+    ).toEqual({ linkedOdooTicket: 43, linkedOdooInstanceId: 'a' })
+  })
+
+  it('clears the link when a seeded ticket id is emptied', () => {
+    expect(
+      buildOdooTicketMetaUpdate({
+        odooInput: '',
+        seededInput: '42',
+        instances: INSTANCES,
+        fallbackInstanceId: 'a'
+      })
+    ).toEqual({ linkedOdooTicket: null, linkedOdooInstanceId: null })
+  })
+
+  it('resolves the instance from a pasted URL origin', () => {
+    expect(
+      buildOdooTicketMetaUpdate({
+        odooInput: 'https://other.odoo.com/odoo/project/1/task/42',
+        instances: INSTANCES,
+        fallbackInstanceId: 'a'
+      })
+    ).toEqual({ linkedOdooTicket: 42, linkedOdooInstanceId: 'b' })
   })
 })

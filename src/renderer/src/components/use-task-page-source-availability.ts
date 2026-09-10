@@ -14,6 +14,8 @@ import {
   getTaskSourceCacheScope
 } from '../../../shared/task-source-context'
 import { useTaskPageSourceSummary } from './use-task-page-source-summary'
+import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 export type TaskPageSourceAvailabilityPreludeModel = ReturnType<
   typeof useTaskPageSourceAvailabilityPrelude
 >
@@ -138,8 +140,22 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   const jiraTaskSourceScopeKey = jiraTaskSourceContext
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
+  const odooStatus = useAppStore((s) => s.odooStatus)
+  // Why: Odoo is account-backed, so the source label names the connected
+  // instance; 'all' only reads as a span when more than one is connected.
+  const odooInstanceName = useMemo(() => {
+    const instances = odooStatus.instances ?? []
+    const selected = odooStatus.selectedInstanceId ?? odooStatus.activeInstanceId ?? null
+    if (selected === 'all') {
+      return instances.length > 1
+        ? translate('auto.components.task.page.odoo.allInstances', 'All instances')
+        : null
+    }
+    const match = instances.find((instance) => instance.id === selected)
+    return match?.database ?? match?.displayName ?? odooStatus.viewer?.login ?? null
+  }, [odooStatus])
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    if (taskSource !== 'linear' && taskSource !== 'jira' && taskSource !== 'odoo') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)
@@ -156,6 +172,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     jiraTaskSourceContext: typeof jiraTaskSourceContext
     jiraTaskSourceScopeKey: typeof jiraTaskSourceScopeKey
     accountBackedTaskSourceHostAvailability: typeof accountBackedTaskSourceHostAvailability
+    odooInstanceName: typeof odooInstanceName
   }
   nextModel.getTaskPickerRepoHostLabel = getTaskPickerRepoHostLabel
   nextModel.taskSourceHostAvailability = taskSourceHostAvailability
@@ -166,6 +183,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   nextModel.jiraTaskSourceContext = jiraTaskSourceContext
   nextModel.jiraTaskSourceScopeKey = jiraTaskSourceScopeKey
   nextModel.accountBackedTaskSourceHostAvailability = accountBackedTaskSourceHostAvailability
+  nextModel.odooInstanceName = odooInstanceName
   return nextModel
 }
 export function useTaskPageSourceAvailability(model: TaskPageRuntimeHostsModel) {

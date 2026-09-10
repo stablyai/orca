@@ -29,11 +29,21 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type OdooTaskProviderIdentity = {
+  provider: 'odoo'
+  instanceId?: string | null
+  serverUrl?: string | null
+  // Odoo servers host several databases, so the identity is only unique with it.
+  database?: string | null
+  projectId?: number | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | OdooTaskProviderIdentity
 
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
@@ -79,6 +89,14 @@ export function normalizeTaskProviderIdentity(
         siteUrl: normalizeNonEmptyString(raw.siteUrl),
         projectKey: normalizeNonEmptyString(raw.projectKey)
       }
+    case 'odoo':
+      return {
+        provider,
+        instanceId: normalizeNonEmptyString(raw.instanceId),
+        serverUrl: normalizeNonEmptyString(raw.serverUrl),
+        database: normalizeNonEmptyString(raw.database),
+        projectId: normalizePositiveInteger(raw.projectId)
+      }
   }
 }
 
@@ -112,6 +130,12 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
       )
     case 'jira':
       return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
+    case 'odoo':
+      return (
+        ['instanceId', 'serverUrl', 'database'].every((key) =>
+          isNullableOptionalString(raw[key])
+        ) && isNullableOptionalPositiveInteger(raw.projectId)
+      )
   }
 }
 
@@ -119,7 +143,8 @@ const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
-  jira: ['siteId', 'siteUrl', 'projectKey']
+  jira: ['siteId', 'siteUrl', 'projectKey'],
+  odoo: ['instanceId', 'serverUrl', 'database', 'projectId']
 }
 
 export function areTaskProviderIdentitiesEqual(
@@ -157,6 +182,10 @@ export function taskProviderIdentityCachePart(
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'odoo':
+      return [identity.instanceId ?? identity.serverUrl, identity.database, identity.projectId]
+        .filter(Boolean)
+        .join('/')
   }
 }
 
@@ -167,4 +196,12 @@ function normalizeNonEmptyString(value: unknown): string | null {
 
 function isNullableOptionalString(value: unknown): boolean {
   return value === undefined || value === null || typeof value === 'string'
+}
+
+function normalizePositiveInteger(value: unknown): number | null {
+  return Number.isSafeInteger(value) && (value as number) > 0 ? (value as number) : null
+}
+
+function isNullableOptionalPositiveInteger(value: unknown): boolean {
+  return value === undefined || value === null || normalizePositiveInteger(value) !== null
 }

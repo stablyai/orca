@@ -233,6 +233,9 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
     hasGitHubDetail: Boolean(dialogWorkItem),
     hasGitLabDetail: Boolean(gitlabDialogItem),
     hasJiraDetail: Boolean(selectedJiraIssue),
+    // Odoo's detail is a Sheet overlay that slides over the list instead of
+    // replacing it, so the list chrome stays visible and is never hidden.
+    hasOdooDetail: false,
     hasLinearIssueDetail: Boolean(selectedLinearIssue),
     hasLinearProjectContext: Boolean(selectedLinearProject),
     hasLinearViewContext: Boolean(selectedLinearCustomView)

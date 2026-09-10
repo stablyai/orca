@@ -1,3 +1,4 @@
+import { isTaskProvider } from './task-providers'
 import type { WorkspaceLinkedItem } from './worktree/types'
 
 export function areWorkspaceLinkedItemsEqual(
@@ -18,7 +19,10 @@ export function areWorkspaceLinkedItemsEqual(
     a.url === b.url &&
     (a.linearIdentifier ?? null) === (b.linearIdentifier ?? null) &&
     (a.jiraIdentifier ?? null) === (b.jiraIdentifier ?? null) &&
-    (a.repoId ?? null) === (b.repoId ?? null)
+    (a.repoId ?? null) === (b.repoId ?? null) &&
+    // Why: Odoo ticket ids only identify a ticket within one instance, so two
+    // instances can hand out the same number for unrelated tickets.
+    (a.odooInstanceId ?? null) === (b.odooInstanceId ?? null)
   )
 }
 
@@ -27,12 +31,10 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     return null
   }
   const raw = value as Partial<WorkspaceLinkedItem>
-  if (
-    raw.provider !== 'github' &&
-    raw.provider !== 'gitlab' &&
-    raw.provider !== 'linear' &&
-    raw.provider !== 'jira'
-  ) {
+  // Why derived rather than an inline list: this check kept 'odoo' out while the
+  // type gained it, so every Odoo linked item normalized to null. Reusing the
+  // single TASK_PROVIDERS source of truth makes that drift impossible.
+  if (!isTaskProvider(raw.provider)) {
     return null
   }
   if (raw.type !== 'issue' && raw.type !== 'pr' && raw.type !== 'mr') {
@@ -62,6 +64,9 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
       : {}),
     ...(typeof raw.repoId === 'string' && raw.repoId.trim().length > 0
       ? { repoId: raw.repoId.trim() }
+      : {}),
+    ...(typeof raw.odooInstanceId === 'string' && raw.odooInstanceId.trim().length > 0
+      ? { odooInstanceId: raw.odooInstanceId.trim() }
       : {})
   }
 }

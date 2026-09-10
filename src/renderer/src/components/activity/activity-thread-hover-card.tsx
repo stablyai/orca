@@ -26,6 +26,9 @@ import { useWorktreeCardReviewDetails } from '../sidebar/use-worktree-card-revie
 import { useWorktreeCardLinkedDetails } from '../sidebar/use-worktree-card-linked-details'
 import { useWorktreeCardLifecycleEffects } from '../sidebar/use-worktree-card-lifecycle-effects'
 import { useWorktreeCardSecondaryDetails } from '../sidebar/use-worktree-card-secondary-details'
+import { useWorktreeCardOdooTicket } from '../sidebar/use-worktree-card-odoo-ticket'
+import { getWorktreeCardOdooTicketDisplay } from '../sidebar/worktree-card-odoo-ticket-display'
+import { WorktreeCardOdooDetailSection } from '../sidebar/WorktreeCardOdooDetailSection'
 import { getReviewLabel } from '../sidebar/worktree-review-helpers'
 import { ActivityThreadHoverCardSummary } from './activity-thread-hover-card-summary'
 import type { AgentPaneThread } from './activity-thread-types'
@@ -101,6 +104,15 @@ function ActivityThreadHoverCardContent({
     prDisplay: review.prDisplay
   })
 
+  // Why: the hover card shows every linked-work-item section unconditionally,
+  // so the Odoo read is always enabled here rather than gated on card props.
+  const odooTicket = useWorktreeCardOdooTicket({
+    linkedOdooTicket: worktree.linkedOdooTicket,
+    linkedOdooInstanceId: worktree.linkedOdooInstanceId,
+    enabled: true
+  })
+  const odooTicketDisplay = getWorktreeCardOdooTicketDisplay(worktree, odooTicket)
+
   const hoverDetailsOpen = detailsHoverControl.hoverOpen
 
   useWorktreeCardLifecycleEffects({
@@ -133,6 +145,7 @@ function ActivityThreadHoverCardContent({
     showIssue: true,
     showLinearIssue: true,
     showJiraIssue: true,
+    showOdooTicket: true,
     showPR: true,
     showAutomation: true,
     showCli: true,
@@ -142,6 +155,7 @@ function ActivityThreadHoverCardContent({
     linearIssue: linked.linearIssue,
     linearIssueDisplay: linked.linearIssueDisplay,
     jiraIssueDisplay: linked.jiraIssueDisplay,
+    odooTicketDisplay,
     prDisplay: review.prDisplay,
     linkedGitLabMR: review.linkedGitLabMR,
     linkedBitbucketPR: review.linkedBitbucketPR,
@@ -303,6 +317,9 @@ function ActivityThreadHoverCardContent({
             </WorktreeCardDetailSectionContent>
           </WorktreeCardDetailSection>
         )}
+
+        {/* Odoo Ticket */}
+        <WorktreeCardOdooDetailSection odooTicket={secondary.hoverOdooTicket} />
 
         {/* Jira Issue */}
         {secondary.hoverJiraIssue && (

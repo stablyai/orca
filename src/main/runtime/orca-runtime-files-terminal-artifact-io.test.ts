@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { link, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { link, readFile, rm, symlink, utimes, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { renameMock, resolveAuthorizedPathMock, statMock } from './orca-runtime-files-mock-registry'
 import {
@@ -341,7 +341,16 @@ describe('RuntimeFileCommands', () => {
       const target = absoluteFileTarget(result)
 
       await rm(artifactPath)
+      // Same byte count as the original on purpose — this asserts that a swapped
+      // file is caught by identity, not by a size change. That leaves inode and
+      // mtime to carry the difference, and a container filesystem can hand back
+      // the freed inode with a timestamp inside the same granularity, making the
+      // grant read as fresh. Pushing mtime back keeps the case deterministic
+      // wherever the suite runs.
       await writeFile(artifactPath, 'changed!')
+      // Not read back first: `stat` is mocked in this suite, so the timestamp is
+      // set outright rather than derived from the file.
+      await utimes(artifactPath, new Date(), new Date(Date.now() + 5_000))
 
       await expect(
         commands.readTerminalArtifactPreview(

@@ -148,6 +148,8 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedBitbucketPR: params.linkedBitbucketPR,
         linkedAzureDevOpsPR: params.linkedAzureDevOpsPR,
         linkedGiteaPR: params.linkedGiteaPR,
+        linkedOdooTicket: params.linkedOdooTicket,
+        linkedOdooInstanceId: params.linkedOdooInstanceId,
         linkedWorkItem: params.linkedWorkItem,
         linkedTaskSourceContext: params.linkedTaskSourceContext,
         comment: params.comment,

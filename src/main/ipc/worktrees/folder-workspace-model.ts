@@ -53,6 +53,10 @@ export function mergeFolderWorkspace(repo: Repo, worktreeId: string, meta: Workt
     linkedBitbucketPR: meta.linkedBitbucketPR ?? null,
     linkedAzureDevOpsPR: meta.linkedAzureDevOpsPR ?? null,
     linkedGiteaPR: meta.linkedGiteaPR ?? null,
+    // Odoo's pair rides alongside linkedWorkItem: the stage sync and sidebar
+    // card read the ticket id + instance directly off the worktree.
+    linkedOdooTicket: meta.linkedOdooTicket ?? null,
+    linkedOdooInstanceId: meta.linkedOdooInstanceId ?? null,
     linkedWorkItem: meta.linkedWorkItem ?? null,
     linkedTaskSourceContext: meta.linkedTaskSourceContext ?? null,
     isArchived: meta.isArchived ?? false,

@@ -111,6 +111,12 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
       ? { linkedAzureDevOpsPR: request.linkedAzureDevOpsPR }
       : {}),
     ...(request.linkedGiteaPR !== undefined ? { linkedGiteaPR: request.linkedGiteaPR } : {}),
+    // Odoo needs its own pair: the stage sync and the sidebar card read the
+    // ticket id + instance rather than `linkedWorkItem`.
+    ...(request.linkedOdooTicket !== undefined ? { linkedOdooTicket: request.linkedOdooTicket } : {}),
+    ...(request.linkedOdooInstanceId !== undefined
+      ? { linkedOdooInstanceId: request.linkedOdooInstanceId }
+      : {}),
     ...(request.linkedWorkItem !== undefined ? { linkedWorkItem: request.linkedWorkItem } : {}),
     ...(request.linkedTaskSourceContext !== undefined
       ? { linkedTaskSourceContext: request.linkedTaskSourceContext }

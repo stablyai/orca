@@ -4559,8 +4559,7 @@
           "395e541d5d": "Estados",
           "34f03eb0de": "Ajustes del tablero",
           "26cbc92150": "Ajustes del tablero de espacios de trabajo",
-          "87d24a0c2f": "Sincronizar tablero y estado de issue",
-          "4c2eaa78cc": "Al mover un espacio de trabajo vinculado, se actualiza el estado de su issue de Linear cuando existe un estado de workflow coincidente."
+          "87d24a0c2f": "Sincronizar tablero y estado de issue"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "Vacío",
@@ -11681,7 +11680,6 @@
           "c767ab7061": "Configuración de skills"
         },
         "IntegrationsStep": {
-          "277f30eb34": "Linear, GitLab, Bitbucket, Azure DevOps, Gitea y Jira se encuentran en Configuración > Integraciones.",
           "3a3e360289": "Más fuentes de tareas",
           "80e3ce0bc9": "Volver a comprobar",
           "04ef416712": "Agregar acceso Linear",

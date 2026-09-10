@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TaskProvider } from '../../../../shared/task-providers'
+import { TASK_PROVIDERS, type TaskProvider } from '../../../../shared/task-providers'
 import {
   getAutoExpandedTaskProvider,
   getIncompleteVisibleTaskProviders,
@@ -11,7 +11,8 @@ import {
   type TaskProviderReadiness
 } from './task-source-setup-state'
 
-const ORDER: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+// Derived so a new provider joins the visible list here the moment it ships.
+const ORDER: readonly TaskProvider[] = TASK_PROVIDERS
 
 function buildReadiness(
   overrides: Partial<Record<TaskProvider, Partial<TaskProviderReadiness>>> = {}
@@ -26,7 +27,8 @@ function buildReadiness(
       skillChecking: false,
       visible: true
     },
-    jira: { connected: true, checking: false, visible: true }
+    jira: { connected: true, checking: false, visible: true },
+    odoo: { connected: true, checking: false, visible: true }
   }
   for (const provider of ORDER) {
     Object.assign(base[provider], overrides[provider])
@@ -166,14 +168,16 @@ describe('task-source-setup-state', () => {
       github: { connected: false },
       gitlab: { connected: false },
       linear: { connected: false, skillInstalled: false },
-      jira: { connected: false }
+      jira: { connected: false },
+      odoo: { connected: false }
     })
 
     expect(getIncompleteVisibleTaskProviders(ORDER, untouched)).toEqual([
       'github',
       'gitlab',
       'linear',
-      'jira'
+      'jira',
+      'odoo'
     ])
     expect(getStalledVisibleTaskProviders(ORDER, untouched)).toEqual([])
   })

@@ -20,7 +20,10 @@ const AUDITED_NON_NET_FETCH_CALLS = new Map<string, number>([
   ['main/rate-limits/minimax/minimax-request-context.ts', 2],
   // Injected HttpClient, not a session: resolves to net.fetch on defaultSession
   // (main/host/electron-http-client.ts) or to the global-fetch-audited Node fallback.
-  ['main/jira/authenticated-request.ts', 1]
+  ['main/jira/authenticated-request.ts', 1],
+  // Injected HttpClient, same as Jira above; the Odoo transport also applies the
+  // environment proxy to the client's session before the call.
+  ['main/odoo/json-rpc.ts', 1]
 ])
 
 // `globalThis.fetch` / `global.fetch` belong to global-fetch-call-site-audit.test.ts.

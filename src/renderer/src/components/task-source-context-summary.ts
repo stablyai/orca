@@ -45,21 +45,22 @@ export function getTaskSourceContextSummary(args: {
   selectedRepoCount?: number
   linearWorkspaceName?: string | null
   jiraSiteName?: string | null
+  odooInstanceName?: string | null
 }): TaskSourceContextSummary {
   switch (args.provider) {
     case 'github':
     case 'gitlab':
       return getRepoBackedTaskSourceSummary(args)
     case 'linear':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.linearWorkspaceName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
     case 'jira':
+    case 'odoo':
+      // Account-backed providers differ only in which account label they carry.
       return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.jiraSiteName,
+        accountLabel: {
+          linear: args.linearWorkspaceName,
+          jira: args.jiraSiteName,
+          odoo: args.odooInstanceName
+        }[args.provider],
         accountHostId: args.accountHostId,
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
@@ -198,6 +199,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'odoo':
+      return identity.database ?? identity.serverUrl ?? identity.instanceId ?? null
   }
 }
 

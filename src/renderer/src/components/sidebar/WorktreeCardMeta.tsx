@@ -1,9 +1,7 @@
 import React from 'react'
-import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
-import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
+import { ExternalLink, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
-import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
@@ -13,13 +11,13 @@ import {
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetadataActionIcon } from './WorktreeCardMetadataControls'
 import { hasWorktreeCardDetails, WorktreeCardMetaBadges } from './WorktreeCardMetaBadges'
-import { LinearStateBadge } from './WorktreeCardMetadataStatusBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { getReviewLabel } from './worktree-review-helpers'
 import type {
   WorktreeCardIssueDisplay,
   WorktreeCardJiraIssueDisplay,
   WorktreeCardLinearIssueDisplay,
+  WorktreeCardOdooTicketDisplay,
   WorktreeCardMetaBadgesProps,
   WorktreeCardMetaBadgesRootProps,
   WorktreeCardDetailsHoverProps
@@ -29,6 +27,8 @@ import { WorktreeCardReviewDetailSection } from './WorktreeCardReviewDetailSecti
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
 import { WorktreeCardCliDetailSection } from './WorktreeCardCliDetailSection'
 import { WorktreeCardIssueDetailSection } from './WorktreeCardIssueDetailSection'
+import { WorktreeCardLinearDetailSection } from './WorktreeCardLinearDetailSection'
+import { WorktreeCardOdooDetailSection } from './WorktreeCardOdooDetailSection'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
 import { CommentMarkdownAsync, preloadCommentMarkdown } from './comment-markdown-lazy'
 
@@ -39,6 +39,7 @@ export type {
   WorktreeCardIssueDisplay,
   WorktreeCardJiraIssueDisplay,
   WorktreeCardLinearIssueDisplay,
+  WorktreeCardOdooTicketDisplay,
   WorktreeCardMetaBadgesProps,
   WorktreeCardMetaBadgesRootProps,
   WorktreeCardDetailsHoverProps
@@ -56,6 +57,7 @@ export function WorktreeCardDetailsHover({
   issue,
   linearIssue,
   jiraIssue,
+  odooTicket,
   review,
   comment,
   automationProvenance,
@@ -75,6 +77,7 @@ export function WorktreeCardDetailsHover({
   onOpenGitHubIssueInOrca,
   onOpenIssueInBrowser,
   onOpenLinearIssueInOrca,
+  onOpenOdooTicketInOrca,
   onOpenReviewInOrca,
   onOpenReviewInBrowser,
   onUnlinkReview,
@@ -169,6 +172,7 @@ export function WorktreeCardDetailsHover({
       issue,
       linearIssue,
       jiraIssue,
+      odooTicket,
       review,
       comment,
       automationProvenance,
@@ -232,62 +236,19 @@ export function WorktreeCardDetailsHover({
             }
           />
 
-          {linearIssue && (
-            <WorktreeCardDetailSection>
-              <DetailHeader
-                icon={<LinearIcon className="size-3 text-muted-foreground" />}
-                label={translate(
-                  'auto.components.sidebar.WorktreeCardMeta.5e982e6128',
-                  'Linear {{value0}}',
-                  { value0: linearIssue.identifier }
-                )}
-                actions={
-                  <>
-                    {linearIssue.url && onOpenLinearIssueInOrca && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
-                          'Open in Orca'
-                        )}
-                        onClick={dismissAndRun(onOpenLinearIssueInOrca)}
-                      >
-                        <MonitorUp className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {linearIssue.url && (
-                      <MetadataActionIcon
-                        label={translate(
-                          'auto.components.sidebar.WorktreeCardMeta.e42941631a',
-                          'View on Linear'
-                        )}
-                        href={linearIssue.url}
-                      >
-                        <ExternalLink className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                  </>
-                }
-              />
-              <WorktreeCardDetailSectionContent className="space-y-1.5">
-                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                  {linearIssue.title}
-                </div>
-                {((linearIssue.labels && linearIssue.labels.length > 0) ||
-                  linearIssue.stateName) && (
-                  <div className="flex flex-wrap gap-1">
-                    {linearIssue.stateName && (
-                      <LinearStateBadge stateName={linearIssue.stateName} />
-                    )}
-                    {(linearIssue.labels ?? []).map((label) => (
-                      <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
-                        {label}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-              </WorktreeCardDetailSectionContent>
-            </WorktreeCardDetailSection>
-          )}
+          <WorktreeCardLinearDetailSection
+            linearIssue={linearIssue}
+            onOpenLinearIssueInOrca={
+              onOpenLinearIssueInOrca ? dismissAndRun(onOpenLinearIssueInOrca) : undefined
+            }
+          />
+
+          <WorktreeCardOdooDetailSection
+            odooTicket={odooTicket ?? null}
+            onOpenOdooTicketInOrca={
+              onOpenOdooTicketInOrca ? dismissAndRun(onOpenOdooTicketInOrca) : undefined
+            }
+          />
 
           {jiraIssue && (
             <WorktreeCardDetailSection>

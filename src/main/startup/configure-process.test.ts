@@ -594,12 +594,25 @@ describe('disableUnsupportedChromiumFeatures', () => {
 describe('enableMainProcessGpuFeatures', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+  const originalSessionEnv = {
+    WAYLAND_DISPLAY: process.env.WAYLAND_DISPLAY,
+    XDG_SESSION_TYPE: process.env.XDG_SESSION_TYPE,
+    ELECTRON_OZONE_PLATFORM_HINT: process.env.ELECTRON_OZONE_PLATFORM_HINT
+  }
 
   function setPlatform(platform: NodeJS.Platform): void {
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: platform
     })
+  }
+
+  // Why: non-Wayland assertions must own every session signal the source reads,
+  // rather than inherit whatever the developer's own session happens to set.
+  function useX11Session(): void {
+    delete process.env.WAYLAND_DISPLAY
+    delete process.env.ELECTRON_OZONE_PLATFORM_HINT
+    process.env.XDG_SESSION_TYPE = 'x11'
   }
 
   afterEach(() => {
@@ -611,6 +624,13 @@ describe('enableMainProcessGpuFeatures', () => {
     } else {
       process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
     }
+    for (const [name, value] of Object.entries(originalSessionEnv)) {
+      if (value === undefined) {
+        delete process.env[name]
+      } else {
+        process.env[name] = value
+      }
+    }
   })
 
   it('appends VS Code-style GPU channel flags without unsafe WebGPU/Vulkan opt-ins', async () => {
@@ -618,6 +638,7 @@ describe('enableMainProcessGpuFeatures', () => {
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
     delete process.env.ORCA_E2E_USER_DATA_DIR
+    useX11Session()
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     enableMainProcessGpuFeatures()
 
@@ -692,6 +713,11 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
       'enable-features',
       expect.stringContaining('EstablishGpuChannelAsync')
+    )
+    // Why: dropping both channel flags leaves nothing to append, so the switch must be skipped entirely.
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.any(String)
     )
   })
 
@@ -823,6 +849,7 @@ describe('enableMainProcessGpuFeatures', () => {
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
     delete process.env.ORCA_E2E_USER_DATA_DIR
+    useX11Session()
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('ExistingFeature')
     enableMainProcessGpuFeatures()

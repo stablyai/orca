@@ -142,6 +142,7 @@ describe('Store', () => {
       'issue',
       'linear-issue',
       'jira-issue',
+      'odoo-ticket',
       'pr',
       'automation',
       'cli',

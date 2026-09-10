@@ -32,6 +32,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  linkedOdooTicket?: number | null
+  linkedOdooInstanceId?: string | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   comment?: string

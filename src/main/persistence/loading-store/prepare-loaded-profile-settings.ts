@@ -99,11 +99,22 @@ export function prepareLoadedProfileSettings(
   })
   const visibleTaskProvidersDefaultedForJira =
     parsed.settings?.visibleTaskProvidersDefaultedForJira === true
-  const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
+  const jiraMigratedVisibleTaskProviders = visibleTaskProvidersDefaultedForJira
     ? rawTaskProviderSettings.visibleTaskProviders
     : rawTaskProviderSettings.visibleTaskProviders.includes('jira')
       ? rawTaskProviderSettings.visibleTaskProviders
       : [...rawTaskProviderSettings.visibleTaskProviders, 'jira' as const]
+  // Why: a stored provider list is filtered, never extended, so a profile saved
+  // before Odoo existed would never gain it and the provider would simply be
+  // absent from Tasks with nothing to explain why. Guarded by its own flag so a
+  // deliberate opt-out afterwards stays honoured, exactly like the Jira pass.
+  const visibleTaskProvidersDefaultedForOdoo =
+    parsed.settings?.visibleTaskProvidersDefaultedForOdoo === true
+  const migratedVisibleTaskProviders = visibleTaskProvidersDefaultedForOdoo
+    ? jiraMigratedVisibleTaskProviders
+    : jiraMigratedVisibleTaskProviders.includes('odoo')
+      ? jiraMigratedVisibleTaskProviders
+      : [...jiraMigratedVisibleTaskProviders, 'odoo' as const]
   const taskProviderSettings = normalizeTaskProviderSettings({
     visibleTaskProviders: migratedVisibleTaskProviders,
     defaultTaskSource: rawTaskProviderSettings.defaultTaskSource
@@ -124,7 +135,7 @@ export function prepareLoadedProfileSettings(
   if (migratePrimarySelectionPlatformDefault || stampPrimarySelectionTerminalDefaults) {
     markNeedsSave()
   }
-  if (!visibleTaskProvidersDefaultedForJira) {
+  if (!visibleTaskProvidersDefaultedForJira || !visibleTaskProvidersDefaultedForOdoo) {
     markNeedsSave()
   }
   const claudeAgentTeamsDefaultDisabledMigrated =

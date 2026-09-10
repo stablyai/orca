@@ -51,6 +51,12 @@ export async function requestRuntimeRemoteWorktree(
         ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
         : {}),
       ...(args.linkedGiteaPR != null ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+      // Odoo needs its own pair: the stage sync and the sidebar card read the
+      // ticket id + instance rather than `linkedWorkItem`.
+      ...(args.linkedOdooTicket !== undefined ? { linkedOdooTicket: args.linkedOdooTicket } : {}),
+      ...(args.linkedOdooInstanceId !== undefined
+        ? { linkedOdooInstanceId: args.linkedOdooInstanceId }
+        : {}),
       ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
       ...(args.linkedTaskSourceContext !== undefined
         ? { linkedTaskSourceContext: args.linkedTaskSourceContext }

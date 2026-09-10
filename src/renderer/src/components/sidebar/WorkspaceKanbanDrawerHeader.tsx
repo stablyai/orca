@@ -21,6 +21,7 @@ type WorkspaceKanbanDrawerHeaderProps = {
   syncTaskStatusFromWorkspaceBoard: boolean
   onSyncTaskStatusFromWorkspaceBoardChange: (enabled: boolean) => void
   onRenameStatus: (statusId: string, label: string) => void
+  onChangeStatusOdooStage: (statusId: string, stageName: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
   onMoveStatus: (statusId: string, direction: -1 | 1) => void
@@ -43,6 +44,7 @@ export default function WorkspaceKanbanDrawerHeader({
   syncTaskStatusFromWorkspaceBoard,
   onSyncTaskStatusFromWorkspaceBoardChange,
   onRenameStatus,
+  onChangeStatusOdooStage,
   onChangeStatusColor,
   onChangeStatusIcon,
   onMoveStatus,
@@ -105,6 +107,7 @@ export default function WorkspaceKanbanDrawerHeader({
           syncTaskStatusFromWorkspaceBoard={syncTaskStatusFromWorkspaceBoard}
           onSyncTaskStatusFromWorkspaceBoardChange={onSyncTaskStatusFromWorkspaceBoardChange}
           onRenameStatus={onRenameStatus}
+          onChangeStatusOdooStage={onChangeStatusOdooStage}
           onChangeStatusColor={onChangeStatusColor}
           onChangeStatusIcon={onChangeStatusIcon}
           onMoveStatus={onMoveStatus}

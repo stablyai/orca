@@ -4540,8 +4540,7 @@
           "395e541d5d": "ステータス",
           "34f03eb0de": "ボード設定",
           "26cbc92150": "ワークスペースボードの設定",
-          "87d24a0c2f": "ボードと Issue のステータスを同期",
-          "4c2eaa78cc": "リンク済みワークスペースを移動すると、一致するワークフロー状態がある場合に Linear Issue のステータスが更新されます。"
+          "87d24a0c2f": "ボードと Issue のステータスを同期"
         },
         "WorkspaceKanbanStatusLane": {
           "8ad104642b": "空の",
@@ -11681,7 +11680,6 @@
           "c767ab7061": "スキルセットアップ"
         },
         "IntegrationsStep": {
-          "277f30eb34": "Linear、GitLab、Bitbucket、Azure DevOps、Gitea、Jira は [設定] > [連携] にあります。",
           "3a3e360289": "その他のタスクソース",
           "80e3ce0bc9": "再確認",
           "04ef416712": "Linear アクセスを追加",

@@ -100,6 +100,18 @@ describe('workspace source policy', () => {
         url: 'https://gitlab.example.com/g/p/-/work_items/3'
       })
     ).toBe(false)
+    // Why: an Odoo ticket belongs to an instance, not a repo, so picking the
+    // implementation repo must not drop the link the ticket button just made.
+    expect(
+      shouldPreserveWorkspaceSourceOnRepoChange({
+        provider: 'odoo',
+        type: 'issue',
+        number: 80,
+        title: '#80 Guard empty password',
+        url: 'https://odoo.example.com/odoo/project/7/task/80',
+        odooInstanceId: 'instance-a'
+      })
+    ).toBe(true)
     // Why: a null source (branch-only) has nothing to preserve; callers guard on this.
     expect(shouldPreserveWorkspaceSourceOnRepoChange(null)).toBe(false)
   })

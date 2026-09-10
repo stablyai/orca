@@ -25,6 +25,8 @@ export const WORKTREE_META_PERSISTED_DEFAULTS = {
   linkedGiteaPR: null,
   linkedWorkItem: null,
   linkedTaskSourceContext: null,
+  linkedOdooTicket: null,
+  linkedOdooInstanceId: null,
   isArchived: false,
   isPinned: false
 } as const satisfies Partial<WorktreeMeta>

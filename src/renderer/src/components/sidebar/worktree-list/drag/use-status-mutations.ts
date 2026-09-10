@@ -15,6 +15,7 @@ import {
   type WorktreeDragGroup
 } from '../../worktree-manual-order'
 import { buildWorkspaceKanbanSidebarDropUpdates } from '../../workspace-kanban-sidebar-drop'
+import { useWorkspaceStatusProviderSync } from '../../use-workspace-status-provider-sync'
 import type { SortBy } from '../../smart-sort'
 import type { WorktreeStatusDropAtIndexArgs } from './drop-commit-context'
 import type { WorktreeManualOrderCatalog } from '../../worktree-manual-order-catalog'
@@ -30,6 +31,7 @@ export function useWorktreeStatusMutations(args: {
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const updateWorktreesMeta = useAppStore((s) => s.updateWorktreesMeta)
   const setSortBy = useAppStore((s) => s.setSortBy)
+  const syncWorkspaceStatusToProviders = useWorkspaceStatusProviderSync()
   const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
 
   const moveWorktreeToStatus = useCallback(
@@ -194,8 +196,24 @@ export function useWorktreeStatusMutations(args: {
       }
       useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       void updateWorktreesMeta(result.updates)
+      // Manual-order-only entries carry no status change, so only the ones that
+      // actually moved lane are worth pushing to the task providers.
+      const movedIds = result.updates
+        .filter((entry) => entry.updates.workspaceStatus !== undefined)
+        .map((entry) => entry.worktreeId)
+      if (movedIds.length > 0) {
+        syncWorkspaceStatusToProviders(movedIds, dropArgs.status)
+      }
     },
-    [manualOrderCatalog, setSortBy, sortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
+    [
+      manualOrderCatalog,
+      setSortBy,
+      sortBy,
+      syncWorkspaceStatusToProviders,
+      updateWorktreesMeta,
+      worktreeMap,
+      workspaceStatuses
+    ]
   )
 
   return {
