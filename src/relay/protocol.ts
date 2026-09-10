@@ -50,18 +50,36 @@ export function encodeHandshakeFrame(msg: HandshakeMessage): Buffer {
   return encodeFrame(MessageType.Handshake, 0, 0, payload)
 }
 
+// Why the fields are checked and not just the type: this frame arrives before any credential, and
+// both sides interpolate its version fields into log lines. `JSON.parse` can produce values a
+// template literal throws on, so anything that reaches a reader must already be a string.
+const HANDSHAKE_STRING_FIELDS: Readonly<Record<HandshakeMessage['type'], readonly string[]>> = {
+  'orca-relay-handshake': ['version'],
+  'orca-relay-handshake-ok': ['version'],
+  'orca-relay-handshake-mismatch': ['expected', 'got'],
+  'orca-relay-handshake-credential-mismatch': []
+}
+
 export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
-  const msg = JSON.parse(payload.toString('utf-8')) as HandshakeMessage
-  const t = (msg as { type?: string }).type
-  if (
-    t !== 'orca-relay-handshake' &&
-    t !== 'orca-relay-handshake-ok' &&
-    t !== 'orca-relay-handshake-mismatch' &&
-    t !== 'orca-relay-handshake-credential-mismatch'
-  ) {
-    throw new Error(`Unknown handshake type: ${t}`)
+  const parsed: unknown = JSON.parse(payload.toString('utf-8'))
+  if (typeof parsed !== 'object' || parsed === null) {
+    throw new Error('Handshake payload is not an object')
   }
-  return msg
+  const msg = parsed as Record<string, unknown>
+  const t = msg.type
+  const required =
+    typeof t === 'string' && Object.hasOwn(HANDSHAKE_STRING_FIELDS, t)
+      ? HANDSHAKE_STRING_FIELDS[t as HandshakeMessage['type']]
+      : null
+  if (required === null) {
+    throw new Error(`Unknown handshake type: ${String(t)}`)
+  }
+  for (const field of required) {
+    if (typeof msg[field] !== 'string') {
+      throw new Error(`Handshake field ${field} is not a string`)
+    }
+  }
+  return msg as unknown as HandshakeMessage
 }
 
 export const KEEPALIVE_SEND_MS = 5_000
