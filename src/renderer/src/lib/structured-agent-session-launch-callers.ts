@@ -18,6 +18,8 @@ export type StructuredRefusalFallback = () =>
 export type StructuredAgentLaunchOptions = {
   prompt?: string
   promptDelivery?: 'auto-submit' | 'submit-after-ready'
+  /** Reconciliation reuses the durable pre-create prompt instead of staging a second send. */
+  reuseStagedPrompt?: boolean
   onPromptDelivered?: () => void
   /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
    *  identity, not a preference — see `launchIdentity`. */

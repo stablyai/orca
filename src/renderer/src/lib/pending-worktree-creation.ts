@@ -14,6 +14,7 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
+import type { WorkItemStartPromptDelivery } from '../../../shared/work-item-start-prompt-delivery'
 
 /** Two-phase status reported by the main process while a worktree is created.
  *  `preparing` covers renderer-side preflight before `createWorktree` starts;
@@ -79,6 +80,8 @@ export type WorktreeCreationRequest = {
   agent: TuiAgent | null
   /** Renderer-owned route decision captured at submit time and reused on retry. */
   agentLaunchRoute?: AgentLaunchRoute
+  /** Captured linked-item behavior; strict delivery must survive background retries unchanged. */
+  workItemStartPromptDelivery?: WorkItemStartPromptDelivery
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -137,6 +140,8 @@ export type PendingWorktreeCreation = {
   provisioningLog?: string
   /** Existing worktree whose uncertain structured launch must be reconciled instead of recreated. */
   structuredLaunchRecoveryWorktreeId?: string
+  /** Strict failures with a definitive verdict cannot safely resend the prompt. */
+  structuredLaunchRetryDisabled?: boolean
   request: WorktreeCreationRequest
 }
 

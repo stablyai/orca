@@ -132,17 +132,19 @@ export default function WorktreeCreationPanel({
                   'Something went wrong while creating the worktree.'
                 )}
             </span>
-            <button
-              type="button"
-              onClick={() => retryBackgroundWorktreeCreation(creationId)}
-              className="inline-flex items-center gap-1 text-foreground hover:underline"
-            >
-              <RotateCcw className="size-3" />
-              {translate(
-                'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
-                'Retry'
-              )}
-            </button>
+            {!entry.structuredLaunchRetryDisabled ? (
+              <button
+                type="button"
+                onClick={() => retryBackgroundWorktreeCreation(creationId)}
+                className="inline-flex items-center gap-1 text-foreground hover:underline"
+              >
+                <RotateCcw className="size-3" />
+                {translate(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
+                  'Retry'
+                )}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={dismiss}

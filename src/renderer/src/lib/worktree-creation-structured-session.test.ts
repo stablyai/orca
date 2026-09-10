@@ -64,6 +64,7 @@ vi.mock('@/lib/launch-structured-agent-session', () => ({
 }))
 
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 
 describe('launchStructuredWorktreeSession', () => {
   beforeEach(() => {
@@ -207,5 +208,117 @@ describe('launchStructuredWorktreeSession', () => {
       mocks.activateStructuredAgentSessionById.mock.invocationCallOrder[0]
     )
     expect(result.activation).toEqual({ primaryTabId: null })
+  })
+
+  it('preserves work-item identity and waits for authoritative prompt delivery', async () => {
+    const claimDefinitiveRefusalFallback = vi.fn()
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'session-1',
+      launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+      promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false }),
+      claimDefinitiveRefusalFallback
+    })
+    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: null })
+
+    await expect(
+      launchStructuredWorktreeSession({
+        creationId: 'creation-1',
+        request: {
+          repoId: 'repo-1',
+          name: 'routing-recovery',
+          setupDecision: 'run',
+          agent: 'codex',
+          agentLaunchRoute: 'structured-native-chat',
+          workItemStartPromptDelivery: 'submit-after-ready',
+          pendingFirstAgentMessageRename: false,
+          note: '',
+          startupPlan: null,
+          quickPrompt: 'https://github.com/example/repo/issues/58',
+          quickTelemetry: null
+        },
+        worktreeId: 'worktree-1',
+        shouldActivateOnCompletion: true,
+        fallbackStartupOpt: undefined,
+        activation: false,
+        primaryTabId: null
+      })
+    ).resolves.toMatchObject({ accepted: true, visibilityUnknown: false })
+
+    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledWith('worktree-1', 'codex', {
+      prompt: 'https://github.com/example/repo/issues/58',
+      promptDelivery: 'submit-after-ready',
+      launchOrigin: 'work-item-start'
+    })
+    expect(claimDefinitiveRefusalFallback).not.toHaveBeenCalled()
+    expect(mocks.activateStructuredAgentSessionById).toHaveBeenCalledOnce()
+  })
+
+  it('fails closed without terminal fallback when strict prompt delivery is refused', async () => {
+    const claimDefinitiveRefusalFallback = vi.fn()
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'session-1',
+      launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+      promptDeliveryResult: Promise.resolve({ delivered: false, failureNotified: false }),
+      claimDefinitiveRefusalFallback
+    })
+
+    const result = await launchStructuredWorktreeSession({
+      creationId: 'creation-1',
+      request: {
+        repoId: 'repo-1',
+        name: 'routing-recovery',
+        setupDecision: 'run',
+        agent: 'codex',
+        workItemStartPromptDelivery: 'submit-after-ready',
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: 'Fix the route',
+        quickTelemetry: null
+      },
+      worktreeId: 'worktree-1',
+      shouldActivateOnCompletion: true,
+      fallbackStartupOpt: undefined,
+      activation: false,
+      primaryTabId: null
+    })
+
+    expect(result.failure).toBe('prompt-delivery')
+    expect(claimDefinitiveRefusalFallback).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('fails closed without terminal fallback when the strict launch is refused', async () => {
+    const claimDefinitiveRefusalFallback = vi.fn()
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'session-1',
+      launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported')),
+      claimDefinitiveRefusalFallback
+    })
+
+    const result = await launchStructuredWorktreeSession({
+      creationId: 'creation-1',
+      request: {
+        repoId: 'repo-1',
+        name: 'routing-recovery',
+        setupDecision: 'run',
+        agent: 'codex',
+        workItemStartPromptDelivery: 'submit-after-ready',
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: 'Fix the route',
+        quickTelemetry: null
+      },
+      worktreeId: 'worktree-1',
+      shouldActivateOnCompletion: true,
+      fallbackStartupOpt: undefined,
+      activation: false,
+      primaryTabId: null
+    })
+
+    expect(result).toMatchObject({ accepted: false, failure: 'launch-refused' })
+    expect(claimDefinitiveRefusalFallback).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 })

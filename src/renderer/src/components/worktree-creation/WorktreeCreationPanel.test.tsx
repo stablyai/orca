@@ -178,4 +178,20 @@ describe('WorktreeCreationPanel', () => {
     expect(container.textContent).toContain('git worktree add failed')
     expect(container.querySelector('pre')).toBeNull()
   })
+
+  it('does not offer a resend after a definitive structured delivery failure', async () => {
+    mocks.state.pendingWorktreeCreations['create-1'] = {
+      ...mocks.state.pendingWorktreeCreations['create-1'],
+      status: 'error',
+      error: 'The structured agent session did not accept the prompt.',
+      structuredLaunchRecoveryWorktreeId: 'worktree-1',
+      structuredLaunchRetryDisabled: true
+    }
+
+    const container = await renderPanel(false)
+
+    expect(container.textContent).toContain('The structured agent session did not accept')
+    expect(container.textContent).not.toContain('Retry')
+    expect(container.textContent).toContain('Dismiss')
+  })
 })

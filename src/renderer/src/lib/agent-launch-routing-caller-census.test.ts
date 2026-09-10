@@ -23,7 +23,7 @@ const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
 const ROUTE_POLICY_OWNERS = [
   'src/renderer/src/components/sidebar/folder-workspace-composer-submit.ts',
   'src/renderer/src/hooks/composer-state/full-creation-execution.ts',
-  'src/renderer/src/hooks/composer-state/quick-creation-execution.ts',
+  'src/renderer/src/hooks/composer-state/quick-work-item-start-route.ts',
   'src/renderer/src/lib/launch-agent-in-new-tab.ts',
   'src/renderer/src/lib/launch-work-item-direct.ts',
   'src/renderer/src/lib/onboarding-folder-agent-startup.ts'

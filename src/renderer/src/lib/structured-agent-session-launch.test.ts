@@ -514,7 +514,7 @@ describe('startStructuredAgentLaunch', () => {
     expect(toast.error).not.toHaveBeenCalled()
   })
 
-  it('reuses the queued prompt without a second delivery after unknown recovery', async () => {
+  it('reuses and delivers the queued prompt exactly once after unknown recovery', async () => {
     const worktreeId = 'wt-unknown-prompt-retry'
     const intent = launchIntent(worktreeId)
     const firstFallback = vi.fn()
@@ -522,29 +522,52 @@ describe('startStructuredAgentLaunch', () => {
     mocks.launch.mockRejectedValue(new Error('offline'))
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([])
 
-    const first = startStructuredAgentLaunch(worktreeId, 'codex', { prompt: 'only once' })
+    const first = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'only once',
+      promptDelivery: 'submit-after-ready',
+      launchOrigin: 'work-item-start'
+    })
     const firstFallbackResult = first.claimDefinitiveRefusalFallback(firstFallback)
     await expect(first.launchResult).rejects.toThrow('offline')
     expect(first.releaseCallerAfterUnknownOutcome()).toBe(true)
+    const [staged] = readOutbox(intent.sessionId)
 
     vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
       publishedSnapshot(worktreeId, intent.sessionId)
     ])
-    const retry = startStructuredAgentLaunch(worktreeId, 'codex')
+    mocks.callStructuredAgentSession.mockImplementation(async (_target, method) =>
+      method === 'agentSession.history'
+        ? { ok: true, page: { fence: 1 } }
+        : { ok: true, value: { submission: { dispatchState: 'accepted' } } }
+    )
+    const retry = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'only once',
+      promptDelivery: 'submit-after-ready',
+      launchOrigin: 'work-item-start',
+      reuseStagedPrompt: true
+    })
     await expect(retry.launchResult).resolves.toEqual({ sessionId: intent.sessionId, fence: 1 })
+    await expect(retry.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
 
     await expect(firstFallbackResult).resolves.toBe(false)
     expect(firstFallback).not.toHaveBeenCalled()
-    expect(readOutbox(intent.sessionId)).toEqual([
+    expect(readOutbox(intent.sessionId)).toEqual([])
+    const sendCalls = mocks.callStructuredAgentSession.mock.calls.filter(
+      ([, method]) => method === 'agentSession.send'
+    )
+    expect(sendCalls).toHaveLength(1)
+    expect(sendCalls[0]).toEqual([
+      { kind: 'local' },
+      'agentSession.send',
       expect.objectContaining({
+        envelope: expect.objectContaining({ clientOperationId: staged?.clientMessageId }),
         body: expect.objectContaining({ blocks: [{ type: 'text', text: 'only once' }] })
       })
     ])
-    expect(mocks.callStructuredAgentSession).not.toHaveBeenCalledWith(
-      { kind: 'local' },
-      'agentSession.send',
-      expect.anything()
-    )
+    expect(mocks.createIntent).toHaveBeenCalledOnce()
   })
 
   it('runs only the retry fallback when unknown recovery is refused', async () => {

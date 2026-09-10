@@ -670,6 +670,9 @@
         },
         "work": {
           "item": {
+            "composer": {
+              "structuredUnavailable": "Submit after ready requires a local structured Codex or Claude session without custom launch arguments. No workspace, terminal, or prompt was started."
+            },
             "direct": {
               "3de6371df3": "Could not build the agent launch command.",
               "67e103dd60": "Workspace created but could not be activated.",

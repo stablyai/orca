@@ -40,6 +40,12 @@ export const structuredWorkItemLaunchUnavailableMessage = (): string =>
     'Submit after ready requires a local structured Codex or Claude session without custom launch arguments. The workspace was created, but no agent or prompt was started.'
   )
 
+export const structuredWorkItemComposerPreflightUnavailableMessage = (): string =>
+  translate(
+    'auto.lib.launch.work.item.composer.structuredUnavailable',
+    'Submit after ready requires a local structured Codex or Claude session without custom launch arguments. No workspace, terminal, or prompt was started.'
+  )
+
 export const structuredWorkItemPromptDeliveryFailedMessage = (): string =>
   translate(
     'auto.lib.launch.work.item.direct.structuredPromptDeliveryFailed',

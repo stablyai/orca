@@ -63,6 +63,11 @@ describe('TaskPage workspace creation source boundaries', () => {
     expect(quickSubmit).toContain(
       '...(input.issueCommand ? { issueCommand: input.issueCommand } : {})'
     )
+    expect(quickSubmit).toContain('settings?.workItemStartPromptDelivery')
+    expect(quickSubmit).toContain('prepareQuickWorkItemStartRoute({')
+    expect(quickSubmit).toContain(
+      'workItemStartPromptDelivery: routeResolution.workItemPromptDelivery'
+    )
   })
 
   it('routes TaskPage GitHub starts directly to the composer', () => {

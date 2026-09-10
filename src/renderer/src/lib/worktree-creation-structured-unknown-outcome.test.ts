@@ -13,6 +13,7 @@ const request: WorktreeCreationRequest = {
   setupDecision: 'run',
   agent: 'codex',
   agentLaunchRoute: 'structured-native-chat',
+  workItemStartPromptDelivery: 'submit-after-ready',
   pendingFirstAgentMessageRename: false,
   note: '',
   startupPlan: null,
@@ -133,7 +134,8 @@ describe('structured worktree creation unknown outcome', () => {
     expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
       status: 'error',
       error: 'Could not confirm whether Codex chat opened. Retry to check again.',
-      structuredLaunchRecoveryWorktreeId: 'worktree-1'
+      structuredLaunchRecoveryWorktreeId: 'worktree-1',
+      structuredLaunchRetryDisabled: false
     })
     expect(store.removePendingWorktreeCreation).not.toHaveBeenCalled()
     expect(mocks.ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
@@ -172,5 +174,31 @@ describe('structured worktree creation unknown outcome', () => {
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
       cleanupVm: false
     })
+  })
+
+  it('keeps a definitive delivery failure on the existing worktree without retry', async () => {
+    mocks.launchStructuredWorktreeSession.mockResolvedValue({
+      accepted: true,
+      cancelled: false,
+      visibilityUnknown: false,
+      failure: 'prompt-delivery',
+      activation: false,
+      primaryTabId: null
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith(
+      'creation-1',
+      expect.objectContaining({
+        status: 'error',
+        structuredLaunchRecoveryWorktreeId: 'worktree-1',
+        structuredLaunchRetryDisabled: true
+      })
+    )
+    retryBackgroundWorktreeCreation('creation-1')
+    expect(store.createWorktree).toHaveBeenCalledOnce()
+    expect(mocks.launchStructuredWorktreeSession).toHaveBeenCalledOnce()
+    expect(mocks.ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
   })
 })

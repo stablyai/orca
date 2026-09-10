@@ -4,6 +4,10 @@ import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structured-session'
+import {
+  structuredWorkItemLaunchUnavailableMessage,
+  structuredWorkItemPromptDeliveryFailedMessage
+} from '@/lib/launch-work-item-direct-messages'
 
 export function markStructuredWorktreeLaunchUnconfirmed(
   creationId: string,
@@ -15,7 +19,25 @@ export function markStructuredWorktreeLaunchUnconfirmed(
       'auto.lib.worktree.creation.flow.structured.launch.unknown',
       'Could not confirm whether Codex chat opened. Retry to check again.'
     ),
-    structuredLaunchRecoveryWorktreeId: worktreeId
+    structuredLaunchRecoveryWorktreeId: worktreeId,
+    structuredLaunchRetryDisabled: false
+  })
+}
+
+export function markStructuredWorktreeLaunchFailed(
+  creationId: string,
+  worktreeId: string,
+  failure: 'launch-refused' | 'prompt-delivery'
+): void {
+  const error =
+    failure === 'launch-refused'
+      ? structuredWorkItemLaunchUnavailableMessage()
+      : structuredWorkItemPromptDeliveryFailedMessage()
+  useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+    status: 'error',
+    error,
+    structuredLaunchRecoveryWorktreeId: worktreeId,
+    structuredLaunchRetryDisabled: true
   })
 }
 
@@ -42,6 +64,10 @@ export async function retryStructuredWorktreeLaunch(
   }
   if (structuredSession.visibilityUnknown) {
     markStructuredWorktreeLaunchUnconfirmed(creationId, worktreeId)
+    return
+  }
+  if (structuredSession.failure) {
+    markStructuredWorktreeLaunchFailed(creationId, worktreeId, structuredSession.failure)
     return
   }
   await completeWorktreeCreation({

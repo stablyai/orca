@@ -233,6 +233,19 @@ describe('resolveQuickCreateLinkedWorkItemPrompt', () => {
       draftPrompt: 'note\n\nhttps://github.com/acme/repo/issues/42'
     })
   })
+
+  it('promotes linked context to a submitted prompt only when explicitly configured', () => {
+    expect(
+      resolveQuickCreateLinkedWorkItemPrompt(
+        { number: 42, url: 'https://github.com/acme/repo/issues/42' },
+        'note',
+        'submit-after-ready'
+      )
+    ).toEqual({
+      prompt: 'note\n\nhttps://github.com/acme/repo/issues/42',
+      draftPrompt: null
+    })
+  })
 })
 
 describe('getLaunchableWorkItemDraftContent', () => {

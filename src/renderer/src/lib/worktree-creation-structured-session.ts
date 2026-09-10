@@ -19,6 +19,7 @@ export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
   cancelled: boolean
   visibilityUnknown: boolean
+  failure?: 'launch-refused' | 'prompt-delivery'
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
 }
@@ -49,6 +50,7 @@ export async function launchStructuredWorktreeSession(args: {
   let { activation, primaryTabId } = args
   let accepted = true
   let visibilityUnknown = false
+  let failure: WorktreeCreationStructuredSessionResult['failure']
   const agent = args.request.agent
   if (!isAgentSessionHandleProvider(agent)) {
     return { accepted, cancelled: false, visibilityUnknown, activation, primaryTabId }
@@ -57,13 +59,18 @@ export async function launchStructuredWorktreeSession(args: {
     return { accepted, cancelled: true, visibilityUnknown, activation, primaryTabId }
   }
 
-  const launch = startStructuredAgentLaunch(
-    args.worktreeId,
-    agent,
-    args.recoverUnknownLaunch
-      ? {}
-      : { prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt }
-  )
+  const strictWorkItemLaunch = args.request.workItemStartPromptDelivery === 'submit-after-ready'
+  const prompt = args.request.launchDraftPrompt ?? args.request.quickPrompt
+  const launch = startStructuredAgentLaunch(args.worktreeId, agent, {
+    ...(strictWorkItemLaunch || !args.recoverUnknownLaunch ? { prompt } : {}),
+    ...(strictWorkItemLaunch
+      ? {
+          promptDelivery: 'submit-after-ready' as const,
+          launchOrigin: 'work-item-start' as const,
+          ...(args.recoverUnknownLaunch ? { reuseStagedPrompt: true } : {})
+        }
+      : {})
+  })
   let cancelled = false
   const cancelLaunch = (): void => {
     if (cancelled) {
@@ -80,63 +87,83 @@ export async function launchStructuredWorktreeSession(args: {
   if (!useAppStore.getState().pendingWorktreeCreations[args.creationId]) {
     cancelLaunch()
   }
-  const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {
-    accepted = false
-    if (cancelled) {
-      return
-    }
-    if (args.request.pendingFirstAgentMessageRename) {
-      await useAppStore
-        .getState()
-        .updateWorktreeMeta(args.worktreeId, { pendingFirstAgentMessageRename: true })
-        .catch(() => undefined)
-    }
-    if (cancelled) {
-      return
-    }
-    const worktree = useAppStore
-      .getState()
-      .allWorktrees?.()
-      .find((candidate) => candidate.id === args.worktreeId)
-    if (args.request.agent && worktree?.path) {
-      const repoConnectionId = useAppStore
-        .getState()
-        .repos.find((repo) => repo.id === args.request.repoId)?.connectionId
-      await preflightAgentTrust({
-        agent: args.request.agent,
-        workspacePath: worktree.path,
-        connectionId: repoConnectionId
+  const refusalFallback = strictWorkItemLaunch
+    ? null
+    : launch.claimDefinitiveRefusalFallback(async () => {
+        accepted = false
+        if (cancelled) {
+          return
+        }
+        if (args.request.pendingFirstAgentMessageRename) {
+          await useAppStore
+            .getState()
+            .updateWorktreeMeta(args.worktreeId, { pendingFirstAgentMessageRename: true })
+            .catch(() => undefined)
+        }
+        if (cancelled) {
+          return
+        }
+        const worktree = useAppStore
+          .getState()
+          .allWorktrees?.()
+          .find((candidate) => candidate.id === args.worktreeId)
+        if (args.request.agent && worktree?.path) {
+          const repoConnectionId = useAppStore
+            .getState()
+            .repos.find((repo) => repo.id === args.request.repoId)?.connectionId
+          await preflightAgentTrust({
+            agent: args.request.agent,
+            workspacePath: worktree.path,
+            connectionId: repoConnectionId
+          })
+        }
+        if (cancelled) {
+          return
+        }
+        if (args.shouldActivateOnCompletion) {
+          const fallbackActivation = activateAndRevealWorktree(args.worktreeId, {
+            sidebarRevealBehavior: 'auto',
+            createNewTerminalForStartup: true,
+            ...(args.fallbackStartupOpt ? { startup: args.fallbackStartupOpt } : {})
+          })
+          activation = fallbackActivation
+          primaryTabId = fallbackActivation === false ? null : fallbackActivation.primaryTabId
+          return
+        }
+        primaryTabId = ensureWorktreeHasInitialTerminal(
+          useAppStore.getState(),
+          args.worktreeId,
+          args.fallbackStartupOpt,
+          undefined,
+          undefined,
+          undefined,
+          { activateCreatedTabs: false, createNewTerminalForStartup: true }
+        )
       })
-    }
-    if (cancelled) {
-      return
-    }
-    if (args.shouldActivateOnCompletion) {
-      const fallbackActivation = activateAndRevealWorktree(args.worktreeId, {
-        sidebarRevealBehavior: 'auto',
-        createNewTerminalForStartup: true,
-        ...(args.fallbackStartupOpt ? { startup: args.fallbackStartupOpt } : {})
-      })
-      activation = fallbackActivation
-      primaryTabId = fallbackActivation === false ? null : fallbackActivation.primaryTabId
-      return
-    }
-    primaryTabId = ensureWorktreeHasInitialTerminal(
-      useAppStore.getState(),
-      args.worktreeId,
-      args.fallbackStartupOpt,
-      undefined,
-      undefined,
-      undefined,
-      { activateCreatedTabs: false, createNewTerminalForStartup: true }
-    )
-  })
 
   try {
     const receipt = await launch.launchResult
     if (cancelled) {
       await retireCancelledStructuredSession(args.worktreeId, launch.sessionId)
       return { accepted, cancelled, visibilityUnknown, activation, primaryTabId }
+    }
+    if (strictWorkItemLaunch) {
+      const promptDelivery = await launch.promptDeliveryResult
+      if (cancelled) {
+        await retireCancelledStructuredSession(args.worktreeId, launch.sessionId)
+        return { accepted, cancelled, visibilityUnknown, activation, primaryTabId }
+      }
+      if (promptDelivery?.delivered !== true) {
+        failure = 'prompt-delivery'
+        return {
+          accepted,
+          cancelled,
+          visibilityUnknown,
+          failure,
+          activation,
+          primaryTabId
+        }
+      }
     }
     if (args.shouldActivateOnCompletion) {
       // Chat selection requires its workspace to be active.
@@ -155,7 +182,12 @@ export async function launchStructuredWorktreeSession(args: {
       return { accepted, cancelled, visibilityUnknown, activation, primaryTabId }
     }
     if (error instanceof StructuredAgentSessionCreateRefusalError) {
-      await refusalFallback
+      if (strictWorkItemLaunch) {
+        accepted = false
+        failure = 'launch-refused'
+      } else {
+        await refusalFallback
+      }
     } else {
       visibilityUnknown = launch.isVisibilityUnknown()
       if (visibilityUnknown) {
@@ -165,5 +197,12 @@ export async function launchStructuredWorktreeSession(args: {
   } finally {
     unsubscribe()
   }
-  return { accepted, cancelled, visibilityUnknown, activation, primaryTabId }
+  return {
+    accepted,
+    cancelled,
+    visibilityUnknown,
+    ...(failure ? { failure } : {}),
+    activation,
+    primaryTabId
+  }
 }

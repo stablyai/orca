@@ -10,7 +10,8 @@ import {
 } from '@/lib/launch-structured-agent-session'
 import {
   discardStructuredAgentSessionLaunchOutbox,
-  enqueueStructuredAgentSessionLaunchPrompt
+  enqueueStructuredAgentSessionLaunchPrompt,
+  findStructuredAgentSessionLaunchPrompt
 } from '@/components/native-chat/structured-agent-session-outbox-storage'
 import {
   launchAndReconcile,
@@ -207,7 +208,8 @@ function structuredAgentLaunchState(
   const identity = structuredAgentLaunchIdentity(worktreeId, agent, options)
   const existing = pendingStructuredLaunchesByIdentity.get(identity)
   if (existing) {
-    if (existing.visibilityUnknown) {
+    const recoveringUnknown = existing.visibilityUnknown
+    if (recoveringUnknown) {
       existing.callers.outcome = 'pending'
       existing.promise = reconcileUnknownLaunch(existing)
       trackLaunchSettlement(existing, existing.promise)
@@ -217,7 +219,9 @@ function structuredAgentLaunchState(
     const text = options.prompt?.trim() ?? ''
     const stagedPrompt =
       text && existing.callers.outcome !== 'refused'
-        ? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)
+        ? ((options.reuseStagedPrompt && recoveringUnknown
+            ? findStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text)
+            : null) ?? enqueueStructuredAgentSessionLaunchPrompt(existing.intent.sessionId, text))
         : null
     return {
       state: existing,

@@ -1,40 +1,7 @@
-import type { ComposerModel } from './composer-model'
-
-type QuickCreationExecutionInput = Pick<
-  ComposerModel,
-  | 'clearNewWorkspaceDraft'
-  | 'createMultiple'
-  | 'effectivePresetId'
-  | 'ephemeralVmRecipes'
-  | 'ephemeralVmsEnabled'
-  | 'isSubmissionCancelled'
-  | 'linkedGitLabIssue'
-  | 'linkedGitLabMR'
-  | 'normalizedSparseDirectories'
-  | 'onCreated'
-  | 'parentWorktreeId'
-  | 'persistDraft'
-  | 'persistSetupAgentStartupPolicy'
-  | 'prepareQuickSubmit'
-  | 'resetForNextCreate'
-  | 'resolvedInitialWorkspaceStatus'
-  | 'selectedEphemeralVmRecipeId'
-  | 'selectedRepoAgentLaunchPlatform'
-  | 'selectedRepoExecutionHostId'
-  | 'selectedRepoIsGit'
-  | 'selectedRepoIsRemote'
-  | 'selectedRepoSettings'
-  | 'selectedRepoStartupShell'
-  | 'selectedWorkspaceTarget'
-  | 'settings'
-  | 'sparseEnabled'
-  | 'taskSourceContext'
-  | 'telemetrySource'
->
-
 import { useCallback } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { resolveWorkItemStartPromptDelivery } from '../../../../shared/work-item-start-prompt-delivery'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { useAppStore } from '@/store'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
@@ -45,12 +12,10 @@ import { translate } from '@/i18n/i18n'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
 import { buildQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest } from './quick-creation-request'
+import { prepareQuickWorkItemStartRoute } from './quick-work-item-start-route'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import {
-  hasExplicitTuiLaunchCustomization,
-  resolveAgentLaunchRoute
-} from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import { structuredWorkItemComposerPreflightUnavailableMessage } from '@/lib/launch-work-item-direct-messages'
+import type { QuickCreationExecutionInput } from './quick-creation-execution-input'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -126,9 +91,16 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       } = prepared
 
       const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
+      const workItemPromptDelivery = submitLinkedWorkItem
+        ? resolveWorkItemStartPromptDelivery(settings?.workItemStartPromptDelivery)
+        : undefined
 
       const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+        resolveQuickCreateLinkedWorkItemPrompt(
+          promptLinkedWorkItem,
+          trimmedNote,
+          workItemPromptDelivery
+        )
 
       const {
         startupPlan,
@@ -198,22 +170,26 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         }
       }
 
-      const agentLaunchRoute = agent
-        ? resolveAgentLaunchRoute({
-            agent,
-            settings,
-            executionHostId: ephemeralVmRecipe
-              ? 'runtime:pending-ephemeral-vm'
-              : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? 'local'),
-            hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
-            workspaceKind: selectedRepoIsGit ? 'git-worktree' : 'folder',
-            promptDelivery: quickDraftPrompt ? 'draft' : 'auto-submit',
-            launchText: quickDraftPrompt ?? quickPrompt,
-            nativeChatTranscriptIsLocalReadable: !selectedRepoIsRemote,
-            requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(settings, agent),
-            initialSessionOptions: startupPlan?.sessionOptions
-          })
-        : 'terminal-tui'
+      const executionHostId = ephemeralVmRecipe
+        ? 'runtime:pending-ephemeral-vm'
+        : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? 'local')
+      const routeResolution = await prepareQuickWorkItemStartRoute({
+        agent,
+        hasLinkedWorkItem: submitLinkedWorkItem !== null,
+        settings,
+        executionHostId,
+        repoId,
+        platform: selectedRepoAgentLaunchPlatform,
+        workspaceKind: selectedRepoIsGit ? 'git-worktree' : 'folder',
+        hasDraftPrompt: Boolean(quickDraftPrompt),
+        launchText: quickDraftPrompt ?? quickPrompt,
+        nativeChatTranscriptIsLocalReadable: !selectedRepoIsRemote,
+        initialSessionOptions: startupPlan?.sessionOptions
+      })
+      if (!routeResolution.ok) {
+        throw new Error(structuredWorkItemComposerPreflightUnavailableMessage())
+      }
+      const agentLaunchRoute = routeResolution.route
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
 
       const request = buildQuickCreationRequest({
@@ -241,6 +217,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         pushTarget: submitPushTarget,
         agent,
         agentLaunchRoute,
+        workItemStartPromptDelivery: routeResolution.workItemPromptDelivery,
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,

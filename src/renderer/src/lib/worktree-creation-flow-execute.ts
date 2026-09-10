@@ -21,7 +21,10 @@ import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mo
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structured-session'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
-import { markStructuredWorktreeLaunchUnconfirmed } from '@/lib/worktree-creation-structured-recovery'
+import {
+  markStructuredWorktreeLaunchFailed,
+  markStructuredWorktreeLaunchUnconfirmed
+} from '@/lib/worktree-creation-structured-recovery'
 
 // Why: activePendingCreationId can outlive the terminal route when the user
 // switches app views; only the terminal route renders the creation panel.
@@ -225,6 +228,10 @@ export async function executeWorktreeCreation(
     }
     if (structuredSession.visibilityUnknown) {
       markStructuredWorktreeLaunchUnconfirmed(creationId, worktree.id)
+      return
+    }
+    if (structuredSession.failure) {
+      markStructuredWorktreeLaunchFailed(creationId, worktree.id, structuredSession.failure)
       return
     }
   }
