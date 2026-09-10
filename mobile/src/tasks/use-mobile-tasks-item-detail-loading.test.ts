@@ -31,11 +31,15 @@ describe('Linear detail settlement', () => {
       setItems: vi.fn()
     } as unknown as Parameters<typeof useMobileTasksItemDetailLoading>[0])
     refuseIssue({ ok: false, error: { message: 'issue refused' } })
-    for (let i = 0; i < 8; i++) await Promise.resolve()
+    for (let i = 0; i < 8; i++) {
+      await Promise.resolve()
+    }
     expect(setDetailError).toHaveBeenLastCalledWith('')
     expect(setDetailLoading).toHaveBeenLastCalledWith(true)
     rejectComments(new Error('comments transport failed'))
-    for (let i = 0; i < 8; i++) await Promise.resolve()
+    for (let i = 0; i < 8; i++) {
+      await Promise.resolve()
+    }
     expect(setDetailError).toHaveBeenLastCalledWith('comments transport failed')
     expect(setDetailLoading).toHaveBeenLastCalledWith(false)
     expect(setDetailPayload).toHaveBeenCalledTimes(1)

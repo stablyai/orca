@@ -106,6 +106,16 @@
         "file": "mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx",
         "line": 189
       }
+    },
+    {
+      "id": "new-workspace-runtime-context-null-settings-typeerror",
+      "status": "ticket",
+      "description": "useNewWorkspaceRuntimeContext throws an unhandled TypeError when settings.get fulfills with a null/absent result: .settings is read off a cast with no guard and the void async effect has no catch",
+      "main": {
+        "sha": "aac38d698f",
+        "file": "mobile/src/components/use-new-workspace-runtime-context.ts",
+        "line": 53
+      }
     }
   ]
 }

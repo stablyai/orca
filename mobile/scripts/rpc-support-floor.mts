@@ -11,7 +11,9 @@ function constants(source: string): Record<string, number> {
     /export const ((?:RUNTIME|DESKTOP|MOBILE)_PROTOCOL_VERSION|MIN_COMPATIBLE_(?:RUNTIME_CLIENT|RUNTIME_SERVER|MOBILE|DESKTOP)_VERSION)\s*=\s*(\w+)/g
   )) {
     const value = /^\d+$/.test(match[2]) ? Number(match[2]) : result[match[2]]
-    if (value !== undefined) result[match[1]] = value
+    if (value !== undefined) {
+      result[match[1]] = value
+    }
   }
   return result
 }
@@ -33,8 +35,11 @@ for (const value of [
   desktop.MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   mobile.MOBILE_PROTOCOL_VERSION,
   mobile.MIN_COMPATIBLE_DESKTOP_VERSION
-])
-  if (!Number.isInteger(value)) throw new Error('Missing protocol gate constant')
+]) {
+  if (!Number.isInteger(value)) {
+    throw new Error('Missing protocol gate constant')
+  }
+}
 const tags = (
   await git(
     'tag',
@@ -72,7 +77,9 @@ const namespaces = [
 const floors = []
 for (const namespace of namespaces) {
   const candidates = tags.filter((tag) => namespace.pattern.test(tag))
-  if (!candidates.length) throw new Error(`No tags for ${namespace.name}`)
+  if (!candidates.length) {
+    throw new Error(`No tags for ${namespace.name}`)
+  }
   const inspected = []
   let floor: unknown, atMinimum3: unknown
   for (const tag of candidates) {
@@ -86,12 +93,16 @@ for (const namespace of namespaces) {
     }
     const values = constants(source)
     const version = values[namespace.protocol] ?? values.DESKTOP_PROTOCOL_VERSION
-    if (!Number.isInteger(version)) throw new Error(`Missing protocol at ${tag}:${namespace.file}`)
+    if (!Number.isInteger(version)) {
+      throw new Error(`Missing protocol at ${tag}:${namespace.file}`)
+    }
     const peerMinimum =
       namespace.file === desktopPath
         ? (values.MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION ?? values.MIN_COMPATIBLE_MOBILE_VERSION)
         : values.MIN_COMPATIBLE_DESKTOP_VERSION
-    if (!Number.isInteger(peerMinimum)) throw new Error(`Missing peer minimum at ${tag}`)
+    if (!Number.isInteger(peerMinimum)) {
+      throw new Error(`Missing peer minimum at ${tag}`)
+    }
     const clientProtocol =
       namespace.file === desktopPath
         ? mobile.MOBILE_PROTOCOL_VERSION
@@ -105,11 +116,19 @@ for (const namespace of namespaces) {
         values[namespace.protocol] === undefined ? 'DESKTOP_PROTOCOL_VERSION' : namespace.protocol
     }
     inspected.push(evidence)
-    if (!floor && version >= namespace.minimum && clientProtocol >= peerMinimum) floor = evidence
-    if (!atMinimum3 && version >= 3 && clientProtocol >= peerMinimum) atMinimum3 = evidence
-    if (floor && atMinimum3) break
+    if (!floor && version >= namespace.minimum && clientProtocol >= peerMinimum) {
+      floor = evidence
+    }
+    if (!atMinimum3 && version >= 3 && clientProtocol >= peerMinimum) {
+      atMinimum3 = evidence
+    }
+    if (floor && atMinimum3) {
+      break
+    }
   }
-  if (!floor || !atMinimum3) throw new Error(`No compatible floor in ${namespace.name}`)
+  if (!floor || !atMinimum3) {
+    throw new Error(`No compatible floor in ${namespace.name}`)
+  }
   floors.push({
     namespace: namespace.name,
     consideredTags: candidates,

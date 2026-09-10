@@ -1,12 +1,7 @@
 {
   "schemaVersion": 1,
-  "scope": [
-    "mobile/src",
-    "mobile/app"
-  ],
-  "excludes": [
-    "*.generated.*"
-  ],
+  "scope": ["mobile/src", "mobile/app"],
+  "excludes": [],
   "entries": [
     {
       "file": "mobile/app/connection-log.tsx",
@@ -316,12 +311,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "browser.back",
-          "browser.forward",
-          "browser.goto",
-          "browser.reload"
-        ]
+        "methods": ["browser.back", "browser.forward", "browser.goto", "browser.reload"]
       }
     },
     {
@@ -1813,11 +1803,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "ssh.getState",
-          "status.get",
-          "worktree.show"
-        ]
+        "methods": ["ssh.getState", "status.get", "worktree.show"]
       }
     },
     {
@@ -2941,11 +2927,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "host.platform",
-          "settings.get",
-          "ssh.listTargetSummaries"
-        ]
+        "methods": ["host.platform", "settings.get", "ssh.listTargetSummaries"]
       }
     },
     {
@@ -4283,10 +4265,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "github.resolveReviewThread",
-          "github.updatePRTitle"
-        ]
+        "methods": ["github.resolveReviewThread", "github.updatePRTitle"]
       }
     },
     {
@@ -7406,7 +7385,10 @@
           "agentSession.hold",
           "agentSession.options",
           "agentSession.release",
-          "agentSession.send"
+          "agentSession.respondToApproval",
+          "agentSession.respondToQuestion",
+          "agentSession.send",
+          "agentSession.setOption"
         ]
       }
     },
@@ -8415,11 +8397,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "git.discard",
-          "git.stage",
-          "git.unstage"
-        ]
+        "methods": ["git.discard", "git.stage", "git.unstage"]
       }
     },
     {
@@ -10674,6 +10652,62 @@
       "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
       "line": 133,
       "column": 19,
+      "symbol": "sendRequest",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 149,
+      "column": 63,
+      "symbol": "'sendRequest'",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 150,
+      "column": 11,
+      "symbol": "sendRequest",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 158,
+      "column": 52,
+      "symbol": "'sendRequest'",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
+      "file": "mobile/src/session/use-mobile-native-chat-file-search.test.ts",
+      "line": 162,
+      "column": 22,
       "symbol": "sendRequest",
       "method": "dynamic",
       "kind": "request",
@@ -13028,11 +13062,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "browser.back",
-          "browser.forward",
-          "browser.reload"
-        ]
+        "methods": ["browser.back", "browser.forward", "browser.reload"]
       }
     },
     {
@@ -14628,10 +14658,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "git.bulkStage",
-          "git.push"
-        ]
+        "methods": ["git.bulkStage", "git.push"]
       }
     },
     {
@@ -16385,10 +16412,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "gitlab.addIssueComment",
-          "gitlab.addMRComment"
-        ]
+        "methods": ["gitlab.addIssueComment", "gitlab.addMRComment"]
       }
     },
     {
@@ -16432,10 +16456,49 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "gitlab.updateIssue",
-          "gitlab.updateMR"
-        ]
+        "methods": ["gitlab.updateIssue", "gitlab.updateMR"]
+      }
+    },
+    {
+      "file": "mobile/src/tasks/use-mobile-tasks-item-detail-loading.test.ts",
+      "line": 19,
+      "column": 11,
+      "symbol": "sendRequest",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
+      "file": "mobile/src/tasks/use-mobile-tasks-item-detail-loading.test.ts",
+      "line": 24,
+      "column": 17,
+      "symbol": "sendRequest",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
+      "file": "mobile/src/tasks/use-mobile-tasks-item-detail-loading.test.ts",
+      "line": 46,
+      "column": 12,
+      "symbol": "sendRequest",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
       }
     },
     {
@@ -16559,6 +16622,48 @@
       "role": "call"
     },
     {
+      "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.test.ts",
+      "line": 12,
+      "column": 11,
+      "symbol": "sendRequest",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
+      "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.test.ts",
+      "line": 18,
+      "column": 17,
+      "symbol": "sendRequest",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
+      "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.test.ts",
+      "line": 33,
+      "column": 12,
+      "symbol": "sendRequest",
+      "method": "dynamic",
+      "kind": "request",
+      "policy": "unclassified",
+      "role": "reference",
+      "descriptor": {
+        "kind": "access-reference",
+        "methods": []
+      }
+    },
+    {
       "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.tsx",
       "line": 65,
       "column": 32,
@@ -16599,10 +16704,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "github.updateIssue",
-          "github.updatePRState"
-        ]
+        "methods": ["github.updateIssue", "github.updatePRState"]
       }
     },
     {
@@ -16666,10 +16768,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "github.project.clearItemField",
-          "github.project.updateItemField"
-        ]
+        "methods": ["github.project.clearItemField", "github.project.updateItemField"]
       }
     },
     {
@@ -16813,10 +16912,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "github.project.updateIssueBySlug",
-          "github.project.updatePullRequestBySlug"
-        ]
+        "methods": ["github.project.updateIssueBySlug", "github.project.updatePullRequestBySlug"]
       }
     },
     {
@@ -16960,10 +17056,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "github.createIssue",
-          "gitlab.createIssue"
-        ]
+        "methods": ["github.createIssue", "gitlab.createIssue"]
       }
     },
     {
@@ -17887,7 +17980,10 @@
           "agentSession.hold",
           "agentSession.options",
           "agentSession.release",
+          "agentSession.respondToApproval",
+          "agentSession.respondToQuestion",
           "agentSession.send",
+          "agentSession.setOption",
           "aiVault.listSessions",
           "aiVault.prepareSessionResume",
           "browser.back",
@@ -18068,11 +18164,7 @@
         ],
         "owner": "Jinwoo",
         "policyId": "transport-forwarding",
-        "scenarioIds": [
-          "transport:fulfilled",
-          "transport:refused",
-          "transport:rejection"
-        ],
+        "scenarioIds": ["transport:fulfilled", "transport:refused", "transport:rejection"],
         "reason": "transport port, below the operation boundary"
       }
     },
@@ -18116,11 +18208,7 @@
         ],
         "owner": "Jinwoo",
         "policyId": "transport-forwarding",
-        "scenarioIds": [
-          "transport:fulfilled",
-          "transport:refused",
-          "transport:rejection"
-        ],
+        "scenarioIds": ["transport:fulfilled", "transport:refused", "transport:rejection"],
         "reason": "transport port, below the operation boundary"
       }
     },
@@ -18944,11 +19032,7 @@
         ],
         "owner": "Jinwoo",
         "policyId": "transport-forwarding",
-        "scenarioIds": [
-          "transport:fulfilled",
-          "transport:refused",
-          "transport:rejection"
-        ],
+        "scenarioIds": ["transport:fulfilled", "transport:refused", "transport:rejection"],
         "reason": "transport port, below the operation boundary"
       }
     },
@@ -18963,10 +19047,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "browser.screencast",
-          "runtime.clientEvents.subscribe"
-        ]
+        "methods": ["browser.screencast", "runtime.clientEvents.subscribe"]
       }
     },
     {
@@ -18980,10 +19061,7 @@
       "role": "call",
       "descriptor": {
         "kind": "caller-resolved",
-        "methods": [
-          "browser.screencast",
-          "runtime.clientEvents.subscribe"
-        ]
+        "methods": ["browser.screencast", "runtime.clientEvents.subscribe"]
       }
     },
     {
@@ -19485,7 +19563,10 @@
           "agentSession.hold",
           "agentSession.options",
           "agentSession.release",
+          "agentSession.respondToApproval",
+          "agentSession.respondToQuestion",
           "agentSession.send",
+          "agentSession.setOption",
           "aiVault.listSessions",
           "aiVault.prepareSessionResume",
           "browser.back",
@@ -19666,11 +19747,7 @@
         ],
         "owner": "Jinwoo",
         "policyId": "transport-forwarding",
-        "scenarioIds": [
-          "transport:fulfilled",
-          "transport:refused",
-          "transport:rejection"
-        ],
+        "scenarioIds": ["transport:fulfilled", "transport:refused", "transport:rejection"],
         "reason": "transport port, below the operation boundary"
       }
     },
@@ -21243,7 +21320,10 @@
           "agentSession.hold",
           "agentSession.options",
           "agentSession.release",
+          "agentSession.respondToApproval",
+          "agentSession.respondToQuestion",
           "agentSession.send",
+          "agentSession.setOption",
           "aiVault.listSessions",
           "aiVault.prepareSessionResume",
           "browser.back",
@@ -21424,11 +21504,7 @@
         ],
         "owner": "Jinwoo",
         "policyId": "transport-forwarding",
-        "scenarioIds": [
-          "transport:fulfilled",
-          "transport:refused",
-          "transport:rejection"
-        ],
+        "scenarioIds": ["transport:fulfilled", "transport:refused", "transport:rejection"],
         "reason": "transport port, below the operation boundary"
       }
     },
@@ -21486,11 +21562,7 @@
         ],
         "owner": "Jinwoo",
         "policyId": "transport-forwarding",
-        "scenarioIds": [
-          "transport:fulfilled",
-          "transport:refused",
-          "transport:rejection"
-        ],
+        "scenarioIds": ["transport:fulfilled", "transport:refused", "transport:rejection"],
         "reason": "transport port, below the operation boundary"
       }
     },
