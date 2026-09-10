@@ -103,6 +103,7 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
           items,
           triggerKey: '/',
           prefix: '/',
+          dispatchable: true,
           grouped: true,
           commandsEnabled: true,
           skillsEnabled: true,

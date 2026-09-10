@@ -52,8 +52,7 @@ describe('provider-exit recovery tickets', () => {
       journal: {
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch,
-        pendingSubmissions: () => [],
-        resolveDispatch: vi.fn()
+        markPendingSubmissionsUnknown: vi.fn(async () => [])
       }
     } as unknown as StructuredAgentSessionHostSession
     const store = {
@@ -94,11 +93,15 @@ describe('provider-exit recovery tickets', () => {
 
     expect(result).toMatchObject({ settlementRetryRequired: false, releasedFence: 8 })
     expect(appendLifecycleBatch).toHaveBeenCalledOnce()
+    expect(session.journal.markPendingSubmissionsUnknown).toHaveBeenCalledWith(
+      7,
+      'provider_exited_before_acknowledgement'
+    )
     expect(session.hasProviderChild).toBe(false)
   })
 
   it('settles a submission the dead child never acknowledged', async () => {
-    const resolveDispatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 2 }))
+    const markPendingSubmissionsUnknown = vi.fn(async () => ['client-1'])
     const session = {
       hasProviderChild: true,
       fence: 7,
@@ -106,8 +109,7 @@ describe('provider-exit recovery tickets', () => {
       journal: {
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
-        pendingSubmissions: () => [{ clientMessageId: 'client-1' }],
-        resolveDispatch
+        markPendingSubmissionsUnknown
       }
     } as unknown as StructuredAgentSessionHostSession
 
@@ -144,13 +146,10 @@ describe('provider-exit recovery tickets', () => {
       }
     )
 
-    expect(resolveDispatch).toHaveBeenCalledWith({
-      clientMessageId: 'client-1',
-      state: 'unknown',
-      reason: 'provider_exited_before_acknowledgement',
-      fence: 7,
-      recovered: true
-    })
+    expect(markPendingSubmissionsUnknown).toHaveBeenCalledWith(
+      7,
+      'provider_exited_before_acknowledgement'
+    )
   })
 
   it('does not release or reacquire while terminal settlement retry is still failing', async () => {
@@ -159,12 +158,11 @@ describe('provider-exit recovery tickets', () => {
       fence: 7,
       acquisitionGeneration: GENERATION,
       journal: {
+        markPendingSubmissionsUnknown: vi.fn(async () => []),
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => {
           throw new Error('journal still unavailable')
-        }),
-        pendingSubmissions: () => [],
-        resolveDispatch: vi.fn()
+        })
       }
     } as unknown as StructuredAgentSessionHostSession
     const release = vi.fn()

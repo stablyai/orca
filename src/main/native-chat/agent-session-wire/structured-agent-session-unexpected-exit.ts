@@ -4,9 +4,7 @@ import type {
   AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
-import { markJournalPendingSubmissionsUnknown } from '../agent-session-journal/journal-pending-submission-recovery'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import {
   boundJournalStatusText,
@@ -83,6 +81,15 @@ export async function settleUnexpectedStructuredAgentSessionExit(
         settlementRetryRequired = true
         context.onBarrierError?.(unexpectedEvent.sessionId, error)
       }
+      try {
+        await session.journal.markPendingSubmissionsUnknown(
+          session.fence,
+          'provider_exited_before_acknowledgement'
+        )
+      } catch (error) {
+        settlementRetryRequired = true
+        context.onBarrierError?.(unexpectedEvent.sessionId, error)
+      }
       if (unexpectedEvent.settlementRetryRequired || settlementRetryRequired) {
         const retried = await retryUnexpectedExitSettlement({
           context,
@@ -96,19 +103,6 @@ export async function settleUnexpectedStructuredAgentSessionExit(
         if (!settlementFailed) {
           settlementRetryRequired = false
         }
-      }
-      // A submission still `pending` was written to the child that just died,
-      // so its acknowledgement can never arrive. This is the process fact that
-      // puts delivery in doubt; elapsed time never does.
-      try {
-        await markJournalPendingSubmissionsUnknown(
-          session.journal,
-          session.fence,
-          DISPATCH_DOUBT_PROVIDER_EXITED
-        )
-      } catch (error) {
-        // The next attach settles them from its own crash boundary.
-        context.onBarrierError?.(unexpectedEvent.sessionId, error)
       }
     } finally {
       // Provider exit was positively observed, so release the owner even when
@@ -185,6 +179,10 @@ export async function retryUnexpectedExitSettlement(input: {
   stableSettlementId: string
 }): Promise<boolean> {
   try {
+    await input.session.journal.markPendingSubmissionsUnknown(
+      input.session.fence,
+      'provider_exited_before_acknowledgement'
+    )
     const mutations = unexpectedExitFallbackMutations(
       input.event,
       input.session,

@@ -115,6 +115,15 @@ export async function performSend(
   if (!redeliver) {
     await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
     ctx.publish()
+  } else {
+    // Retry resumes work without moving or duplicating the original message.
+    await ctx.journal.resolveDispatch({
+      clientMessageId: input.clientMessageId,
+      state: 'unknown',
+      reason: 'dispatch_retry_in_progress',
+      fence: ctx.fence
+    })
+    ctx.publish()
   }
 
   const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
@@ -155,8 +164,7 @@ export async function performSend(
         clientMessageId: input.clientMessageId,
         state: 'unknown',
         reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
-        fence: ctx.fence,
-        recovered: true
+        fence: ctx.fence
       })
     } catch {
       // Nothing further to record; the pending row is settled on the next attach.

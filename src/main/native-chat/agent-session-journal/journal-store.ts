@@ -245,9 +245,7 @@ export class AgentSessionJournal {
     }))
   }
 
-  /** On restart every `pending` submission becomes `unknown` before the session
-   *  accepts a writer; `reason` names the process fact for callers settling a
-   *  different one. Orca never re-sends on the user's behalf. */
+  /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
   async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
     return markJournalPendingSubmissionsUnknown(this, fence, reason)
   }

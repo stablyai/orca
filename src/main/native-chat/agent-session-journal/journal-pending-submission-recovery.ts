@@ -9,7 +9,14 @@ export async function markJournalPendingSubmissionsUnknown(
   fence: number,
   reason: string = DISPATCH_DOUBT_HOST_RESTARTED
 ): Promise<string[]> {
-  const pending = journal.pendingSubmissions().map((entry) => entry.clientMessageId)
+  const pending = journal
+    .submissions()
+    .filter(
+      (entry) =>
+        entry.dispatchState === 'pending' ||
+        (entry.dispatchState === 'unknown' && entry.recovered !== true)
+    )
+    .map((entry) => entry.clientMessageId)
   for (const clientMessageId of pending) {
     await journal.resolveDispatch({
       clientMessageId,

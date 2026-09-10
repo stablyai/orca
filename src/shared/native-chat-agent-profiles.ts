@@ -3,7 +3,6 @@ import { getAgentSlashCommands, type SlashCommandSuggestion } from './native-cha
 
 export type NativeChatAgentProfile = {
   skillPrefix: '$' | '/'
-  groupedSlash: boolean
   /** OpenClaude reads Claude-owned roots, so this can differ from the agent. */
   skillSourceOwner: AgentType
 }
@@ -11,22 +10,18 @@ export type NativeChatAgentProfile = {
 const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfile>> = {
   codex: {
     skillPrefix: '$',
-    groupedSlash: false,
     skillSourceOwner: 'codex'
   },
   claude: {
     skillPrefix: '/',
-    groupedSlash: true,
     skillSourceOwner: 'claude'
   },
   openclaude: {
     skillPrefix: '/',
-    groupedSlash: true,
     skillSourceOwner: 'claude'
   },
   grok: {
     skillPrefix: '/',
-    groupedSlash: true,
     skillSourceOwner: 'grok'
   }
 }
