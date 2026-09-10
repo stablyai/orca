@@ -2,6 +2,7 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
+import type { ClaudeSessionTitle } from './claude-agent-sdk-control-requests'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -157,6 +158,16 @@ export function fakeClaude(
         connection.calls.push({ subtype: 'cancel_async_message', params: { uuid } })
         routed('cancel_async_message', { uuid })
       },
+      generateSessionTitle: async (description, titleOptions) => {
+        connection.calls.push({
+          subtype: 'generate_session_title',
+          params: { description, persist: titleOptions?.persist === true }
+        })
+        const routedTitle = routed('generate_session_title', { description }) as
+          | ClaudeSessionTitle
+          | undefined
+        return routedTitle ?? { outcome: 'declined' }
+      },
       stopTask: async (taskId) => {
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
         routed('stop_task', { taskId })
@@ -198,7 +209,8 @@ export function adapterFor(
   initTimeoutMs?: number,
   readTranscriptLeaf?: ClaudeStructuredSessionAdapterDeps['readTranscriptLeaf'],
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle'],
-  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged']
+  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged'],
+  overrides: Partial<ClaudeStructuredSessionAdapterDeps> = {}
 ): ClaudeStructuredSessionAdapter {
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -223,16 +235,28 @@ export function adapterFor(
         persistedHandles.push(handle)
       }),
     ...(onBackgroundTasksChanged ? { onBackgroundTasksChanged } : {}),
-    ...(readTranscriptLeaf ? { readTranscriptLeaf } : {})
+    ...(readTranscriptLeaf ? { readTranscriptLeaf } : {}),
+    ...overrides
   })
 }
 
 export async function acquired(
   claude: ReturnType<typeof fakeClaude>,
   launch: Partial<ClaudeStructuredLaunch> = {},
-  events: ClaudeStructuredSessionEvent[] = []
+  events: ClaudeStructuredSessionEvent[] = [],
+  overrides: Partial<ClaudeStructuredSessionAdapterDeps> = {}
 ): Promise<ClaudeStructuredSessionAdapter> {
-  const adapter = adapterFor(claude, launch, events)
+  const adapter = adapterFor(
+    claude,
+    launch,
+    events,
+    [],
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    overrides
+  )
   await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
   return adapter
 }
