@@ -1,7 +1,12 @@
 import type { RunRow } from '../../../../orchestration/types'
 
-// Why: home_database and coordinator_pane_key are runtime routing state; no caller reads them.
-const INTERNAL_RUN_COLUMNS = ['home_database', 'coordinator_pane_key'] as const
+// Why: home_database, coordinator_pane_key, and coordinator_principal are runtime routing/identity
+// state; no caller reads them. coordinator_handle deliberately stays — old clients consume it.
+const INTERNAL_RUN_COLUMNS = [
+  'home_database',
+  'coordinator_pane_key',
+  'coordinator_principal'
+] as const
 
 export type RunReceipt = Omit<RunRow, (typeof INTERNAL_RUN_COLUMNS)[number]>
 
