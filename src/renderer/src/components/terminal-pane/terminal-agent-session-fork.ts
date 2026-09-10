@@ -9,10 +9,8 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
-import {
-  getForkAgentLaunchPlatform,
-  preflightForkAgentTrust
-} from './terminal-agent-session-fork-agent-preflight'
+import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-launch-platform'
+import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -231,7 +229,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
     return copyAgentSessionForkContext(fork)
   }
-  await preflightForkAgentTrust({
+  await preflightAgentTrust({
     agent: fork.agent,
     workspacePath: created.worktree.path,
     connectionId: sourceRepo?.connectionId

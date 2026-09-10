@@ -1,5 +1,3 @@
-import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 
@@ -18,25 +16,4 @@ export function getForkAgentLaunchPlatform(args: {
     return 'linux'
   }
   return undefined
-}
-
-export async function preflightForkAgentTrust(args: {
-  agent: TuiAgent
-  workspacePath?: string | null
-  connectionId?: string | null
-}): Promise<void> {
-  const { agent, workspacePath, connectionId } = args
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preflight || !workspacePath || !window.api.agentTrust?.markTrusted) {
-    return
-  }
-  try {
-    await window.api.agentTrust.markTrusted({
-      preset: preflight,
-      workspacePath,
-      ...(connectionId ? { connectionId } : {})
-    })
-  } catch {
-    // Best-effort: if the trust artifact cannot be written, keep the existing launch path.
-  }
 }
