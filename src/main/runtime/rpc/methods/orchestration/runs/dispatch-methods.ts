@@ -9,6 +9,7 @@ import {
 } from '../../../../orchestration/task-dispatch-refusal'
 import { resolveRunScope } from './run-scope'
 import { DispatchParams, DispatchShowParams } from '../schemas'
+import { resolveTaskTerminalProvenance } from '../task-provenance'
 
 export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
   defineMethod({
@@ -77,6 +78,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
           task
         )
       }
+      const provenance = await resolveTaskTerminalProvenance(runtime, to)
 
       const dispatchAuthority = runtime.getOrchestrationDispatchAuthority(to)
       const assigneePaneKey =
@@ -131,6 +133,7 @@ export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
         creator: resolveDispatchCreator(runtime, params.from),
         maxDepth: runtime.getNestedWorkerMaxDepth()
       })
+      db.updateTaskProvenance(task.id, provenance)
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({
             dispatchId: ctx.id,

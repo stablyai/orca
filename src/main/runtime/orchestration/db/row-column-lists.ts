@@ -24,6 +24,8 @@ export const TASK_COLUMNS = [
   'run_id',
   'parent_id',
   'created_by_terminal_handle',
+  'worktree_id',
+  'branch',
   'created_by_pane_key',
   'created_by_process_incarnation',
   'created_by_run_generation',
