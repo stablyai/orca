@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { activePaneIsCoveredByNativeChat } from '@/components/terminal-pane/native-chat-covered-pane'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 import {
   syncRuntimeGraph,
@@ -70,6 +71,13 @@ export function focusRuntimeTerminalSurface(
   const manager = registered?.getManager()
   if (!manager) {
     return false
+  }
+  // Why: mirrors focus-terminal-tab-surface.ts's chat-view bail — the xterm is covered by the
+  // chat portal, so focusing it pulls the caret out of the composer. `true` = handled, because
+  // `false` sends the caller to the DOM fallback, which for a structured tab id focuses an
+  // unrelated tab's xterm.
+  if (activePaneIsCoveredByNativeChat(manager)) {
+    return true
   }
   if (!leafId) {
     manager.getActivePane()?.terminal.focus()

@@ -11,6 +11,7 @@ import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState } from './native-chat-view-state'
+import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
@@ -99,6 +100,13 @@ export function NativeChatStructuredSession(
   const activeStoppingBackgroundTasks =
     stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
   const prompt = controller.prompts[0] ?? null
+  useNativeChatComposerRevealFocus({
+    rootRef,
+    composerRef,
+    isVisible: props.isVisible,
+    isFocusedGroup: props.isFocusedGroup,
+    composerReady: prompt === null
+  })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const questions =
     questionBody?.questions ??

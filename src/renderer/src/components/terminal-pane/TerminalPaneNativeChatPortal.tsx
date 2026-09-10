@@ -20,6 +20,7 @@ export function TerminalPaneNativeChatPortal({
     contextMenu,
     effectiveChatViewMode,
     expandedPaneId,
+    isActive,
     isRendererVisible,
     managedPanes,
     readNativeChatTerminalScreen,
@@ -74,6 +75,7 @@ export function TerminalPaneNativeChatPortal({
           sessionId={structuredSessionId}
           agent={structuredChatAgent}
           isVisible={isRendererVisible}
+          isFocusedGroup={isActive}
           target={structuredChatTarget}
           contextMenuActions={contextMenuActions}
         />
@@ -81,6 +83,7 @@ export function TerminalPaneNativeChatPortal({
         <NativeChatView
           terminalTabId={tabId}
           isVisible={isRendererVisible}
+          isFocusedGroup={isActive}
           paneKey={makePaneKey(tabId, chatPane.leafId)}
           targetPtyId={chatPanePtyId}
           launchAgent={chatPaneLaunchAgent}
