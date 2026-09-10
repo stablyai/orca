@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { Profiler } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
@@ -168,6 +168,52 @@ describe('background-tasks strip header', () => {
     ])
     expect(header).toHaveAttribute('aria-label', '4 background tasks')
     expect(header.querySelectorAll('svg')).toHaveLength(1)
+  })
+})
+
+describe('settled rows beside their live siblings', () => {
+  // Retention is the PR's headline: a finished child stays visible, keeps the
+  // usage it ended on, and stops claiming a clock or a stop control.
+  it('keeps a settled row with its final usage, no clock and no stop', () => {
+    render(
+      <NativeChatBackgroundTasksStatus
+        isVisible
+        tasks={[
+          {
+            id: 'agent-live',
+            kind: 'agent',
+            description: 'live child',
+            startedAt: 1_000,
+            totalTokens: 4_100
+          }
+        ]}
+        settledTasks={[
+          {
+            id: 'agent-settled',
+            kind: 'agent',
+            description: 'settled child',
+            state: 'done',
+            startedAt: 500,
+            totalTokens: 18_130
+          }
+        ]}
+        indicatorActive
+        supportsTaskStop
+        supportsStopAll
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        onStop={() => {}}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    const agents = screen.getByRole('list', { name: 'Agents' })
+    const rows = within(agents).getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    // First seen first: the settled sibling started earlier.
+    expect(rows[0].textContent).toBe('settled child18.1k')
+    expect(rows[1].textContent).toMatch(/^live child4\.1k · .+Stop$/)
+    expect(within(rows[1]).getByRole('button', { name: 'Stop live child' })).toBeInTheDocument()
+    expect(within(rows[0]).queryByRole('button')).toBeNull()
   })
 })
 
