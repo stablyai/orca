@@ -216,6 +216,24 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.cursorUsageTitle', 'Cursor Usage'),
+    description: translate(
+      'auto.components.settings.accounts.search.cursorUsageDescription',
+      'Read-only Cursor desktop and cursor-agent login for Cursor Models, Other Models, and Grok Bot usage.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.cursorKeyword', 'cursor'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -223,5 +241,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
-  ...getAccountsGrokSearchEntries()
+  ...getAccountsGrokSearchEntries(),
+  ...getAccountsCursorSearchEntries()
 ])

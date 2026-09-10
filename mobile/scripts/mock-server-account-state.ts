@@ -2,6 +2,7 @@ import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
 } from '../../src/shared/codex-reset-credit-scope'
+import { createMockCursorRateLimits } from './mock-server-cursor-state'
 
 type MockCodexUsage = {
   availableResetCredits: number
@@ -227,6 +228,7 @@ export function createMockAccountsSnapshot() {
         status: 'ok' as const
       },
       codex: codexLimits,
+      cursor: createMockCursorRateLimits(fixtureStartedAt),
       claudeTarget: { runtime: 'host' as const, wslDistro: null },
       codexTarget: { runtime: 'host' as const, wslDistro: null },
       inactiveClaudeAccounts: [],

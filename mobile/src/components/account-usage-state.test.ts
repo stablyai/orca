@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  getBucketResetLabel,
+  getBucketUsageBarState,
+  getHostProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
   getWindowResetLabel,
@@ -206,6 +209,60 @@ describe('getUsageBarState', () => {
       usedPercent: null,
       unavailable: false,
       loading: true
+    })
+  })
+})
+
+describe('Cursor bucket usage', () => {
+  it('reads the optional Cursor rate-limit slot from a host snapshot', () => {
+    const cursor = makeLimits({
+      provider: 'cursor',
+      status: 'ok',
+      buckets: [
+        {
+          name: 'Cursor Models',
+          usedPercent: 41,
+          windowMinutes: 43_200,
+          resetsAt: 2,
+          resetDescription: 'Sep 30'
+        }
+      ]
+    })
+    const base = makeSnapshot()
+    const snapshot: AccountsSnapshot = {
+      ...base,
+      rateLimits: { ...base.rateLimits, cursor }
+    }
+
+    expect(getHostProviderRateLimits(snapshot, 'cursor')).toBe(cursor)
+  })
+
+  it('maps named pools to bar and reset state without inventing missing pools', () => {
+    const now = Date.parse('2026-09-01T12:00:00Z')
+    const limits = makeLimits({
+      provider: 'cursor',
+      status: 'ok',
+      buckets: [
+        {
+          name: 'Grok Bot',
+          usedPercent: 12,
+          windowMinutes: 10_080,
+          resetsAt: now + 4 * 24 * 60 * 60_000,
+          resetDescription: null
+        }
+      ]
+    })
+
+    expect(getBucketUsageBarState(limits, 'Grok Bot')).toEqual({
+      usedPercent: 12,
+      unavailable: false,
+      loading: false
+    })
+    expect(getBucketResetLabel(limits, 'Grok Bot', now)).toBe('Resets in 4d')
+    expect(getBucketUsageBarState(limits, 'Cursor Models')).toEqual({
+      usedPercent: null,
+      unavailable: true,
+      loading: false
     })
   })
 })

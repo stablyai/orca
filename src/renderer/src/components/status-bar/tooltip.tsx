@@ -97,6 +97,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'grok') {
     return <AgentIcon agent="grok" size={13} />
   }
+  if (provider === 'cursor') {
+    return <AgentIcon agent="cursor" size={13} />
+  }
   return <ClaudeIcon size={13} />
 }
 
@@ -285,7 +288,14 @@ export function ProviderPanel({
     )
   }
 
-  if (p.status === 'error' && !p.session && !p.weekly && !p.fableWeekly && !p.monthly) {
+  if (
+    p.status === 'error' &&
+    !p.session &&
+    !p.weekly &&
+    !p.fableWeekly &&
+    !p.monthly &&
+    !p.buckets?.length
+  ) {
     return (
       <div className={`text-xs ${className ?? 'w-full'}`}>
         <div className={`flex items-center gap-1.5 font-medium ${textClass}`}>
@@ -321,6 +331,14 @@ export function ProviderPanel({
           {name}
         </div>
         <div className={faintClass}>{updatedAgo}</div>
+        {p.usageMetadata?.accountEmail ? (
+          <div className={mutedClass}>{p.usageMetadata.accountEmail}</div>
+        ) : null}
+        {p.usageMetadata?.subscriptionStatus || p.planType ? (
+          <div className={faintClass}>
+            {[p.planType, p.usageMetadata?.subscriptionStatus].filter(Boolean).join(' · ')}
+          </div>
+        ) : null}
         {resetCreditCount !== null && resetCreditCount !== undefined ? (
           <div className={mutedClass}>
             {resetCreditCount === 1
@@ -356,7 +374,7 @@ export function ProviderPanel({
       {p.error ? (
         <ErrorMessage
           message={p.error}
-          stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly)}
+          stale={!!(p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length)}
           inverted={inverted}
         />
       ) : null}

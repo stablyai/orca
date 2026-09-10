@@ -18,6 +18,7 @@ export function StatusBarVisibilityMenu({
   controller: StatusBarController
 }): React.JSX.Element {
   const {
+    cursorAvailable,
     detectedAgentIds,
     menuOpen,
     menuPoint,
@@ -131,6 +132,21 @@ export function StatusBarVisibilityMenu({
           >
             <AgentIcon agent="grok" size={14} />
             {translate('auto.components.status.bar.StatusBar.grokUsageMenu', 'Grok Usage')}
+          </DropdownMenuCheckboxItem>
+        )}
+        {cursorAvailable && (
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('cursor')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('cursor')
+            }}
+          >
+            <AgentIcon agent="cursor" size={14} />
+            {translate(
+              'auto.components.status.bar.StatusBarVisibilityMenu.cursorUsage',
+              'Cursor Usage'
+            )}
           </DropdownMenuCheckboxItem>
         )}
         <DropdownMenuCheckboxItem

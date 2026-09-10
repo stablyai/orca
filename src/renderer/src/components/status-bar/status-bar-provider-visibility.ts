@@ -18,6 +18,7 @@ export type UsageProviderSettings = Pick<
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
   grokAuthConfigured: boolean
+  cursorAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
@@ -29,6 +30,7 @@ type UsageProviderSnapshots = {
   antigravity: ProviderRateLimits | null | undefined
   minimax: ProviderRateLimits | null | undefined
   grok: ProviderRateLimits | null | undefined
+  cursor: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -79,7 +81,8 @@ export function hasUsageProviderSettings(
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
-    settings?.grokAuthConfigured === true
+    settings?.grokAuthConfigured === true ||
+    settings?.cursorAuthConfigured === true
   )
 }
 
@@ -114,7 +117,21 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
   }
+  if (providerId === 'cursor') {
+    return settings.cursorAuthConfigured === true
+  }
   return false
+}
+
+export function isCursorStatusBarAvailable(
+  provider: ProviderRateLimits | null | undefined,
+  cursorAuthConfigured: boolean
+): boolean {
+  return (
+    getVisibleUsageProvider('cursor', provider, {
+      cursorAuthConfigured
+    }) !== null
+  )
 }
 
 function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRateLimits {
@@ -159,6 +176,9 @@ export function isUsageEmptyState(
   const antigravitySnapshotPending =
     hasUsageProviderSettingsForProvider('antigravity', settings) &&
     isProviderSnapshotPending(providers.antigravity)
+  const cursorSnapshotPending =
+    hasUsageProviderSettingsForProvider('cursor', settings) &&
+    isProviderSnapshotPending(providers.cursor)
   if (
     isProviderSnapshotPending(providers.claude) ||
     isProviderSnapshotPending(providers.codex) ||
@@ -167,7 +187,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
     isProviderSnapshotPending(providers.minimax) ||
-    isProviderSnapshotPending(providers.grok)
+    isProviderSnapshotPending(providers.grok) ||
+    cursorSnapshotPending
   ) {
     return false
   }
@@ -180,6 +201,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&
     !isProviderConfigured(providers.minimax) &&
-    !isProviderConfigured(providers.grok)
+    !isProviderConfigured(providers.grok) &&
+    !isProviderConfigured(providers.cursor)
   )
 }

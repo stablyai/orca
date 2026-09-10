@@ -15,7 +15,11 @@ vi.mock('./settings-search-keywords', () => ({
   translateSearchKeyword: (_key: string, fallback: string) => [fallback]
 }))
 
-import { getAccountsMiniMaxSearchEntries, getAccountsPaneSearchEntries } from './accounts-search'
+import {
+  getAccountsCursorSearchEntries,
+  getAccountsMiniMaxSearchEntries,
+  getAccountsPaneSearchEntries
+} from './accounts-search'
 
 describe('getAccountsMiniMaxSearchEntries', () => {
   it('returns a single entry that targets the MiniMax session cookie flow', () => {
@@ -40,5 +44,17 @@ describe('getAccountsMiniMaxSearchEntries', () => {
     const allEntries = getAccountsPaneSearchEntries()
     const titles = allEntries.map((entry) => entry.title)
     expect(titles).toContain('MiniMax Usage')
+  })
+})
+
+describe('getAccountsCursorSearchEntries', () => {
+  it('describes the read-only Cursor usage pools and is included in the pane index', () => {
+    const [entry] = getAccountsCursorSearchEntries()
+
+    expect(entry.title).toBe('Cursor Usage')
+    expect(entry.description).toContain('Cursor Models')
+    expect(entry.description).toContain('Grok Bot')
+    expect(entry.keywords).toEqual(expect.arrayContaining(['cursor', 'rate limit', 'status bar']))
+    expect(getAccountsPaneSearchEntries().map((item) => item.title)).toContain('Cursor Usage')
   })
 })
