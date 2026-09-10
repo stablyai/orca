@@ -431,7 +431,8 @@ describe('structured chat adoption guard on the launch path', () => {
 
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
-      failureNotified: false
+      failureNotified: false,
+      deliveryUnknown: true
     })
     expect(mockCreateTab).not.toHaveBeenCalled()
   })

@@ -29,6 +29,17 @@ const ROUTE_POLICY_OWNERS = [
   'src/renderer/src/lib/onboarding-folder-agent-startup.ts'
 ]
 
+const WORK_ITEM_PROMPT_DELIVERY_POLICY_CONSUMERS = [
+  'src/main/persistence/applying-settings/settings-update.ts',
+  'src/main/persistence/loading-store/normalize-loaded-global-settings.ts',
+  'src/main/runtime/runtime-client-settings.ts',
+  'src/renderer/src/components/github-project/ProjectViewWrapper.tsx',
+  'src/renderer/src/components/github-project/useProjectRowActions.ts',
+  'src/renderer/src/components/settings/WorkItemStartBehaviorSetting.tsx',
+  'src/renderer/src/hooks/composer-state/quick-creation-execution.ts',
+  'src/renderer/src/hooks/composer-state/quick-work-item-start-route.ts'
+]
+
 async function productionFiles(): Promise<string[]> {
   return glob(['src/**/*.ts', 'src/**/*.tsx'], {
     cwd: REPO_ROOT,
@@ -55,6 +66,17 @@ describe('agent launch routing caller census', () => {
       )
       .sort()
     expect(owners).toEqual([...ROUTE_POLICY_OWNERS].sort())
+  })
+
+  it('pins every persisted work-item prompt-delivery policy consumer', async () => {
+    const consumers = (await productionFiles())
+      .filter((file) => file !== 'src/shared/work-item-start-prompt-delivery.ts')
+      .filter((file) =>
+        readFileSync(join(REPO_ROOT, file), 'utf8').includes('resolveWorkItemStartPromptDelivery(')
+      )
+      .sort()
+
+    expect(consumers).toEqual([...WORK_ITEM_PROMPT_DELIVERY_POLICY_CONSUMERS].sort())
   })
 
   it('keeps non-visible, resume, and floating launchers intentionally outside the route', () => {

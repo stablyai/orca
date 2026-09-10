@@ -213,7 +213,7 @@ describe('launchWorkItemDirect structured submission', () => {
     expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledOnce()
     expect(mocks.pasteDraftWhenAgentReady).not.toHaveBeenCalled()
     expect(mocks.toastError).toHaveBeenCalledWith(
-      'The structured agent session did not accept the work item prompt. Open the chat and send it manually; Orca did not retry.'
+      'The structured agent session did not accept the work item prompt. Orca did not retry or start another writer.'
     )
   })
 

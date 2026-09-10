@@ -8,6 +8,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { PreparedQuickSubmit } from './composer-submit-model'
 import { useQuickCreationExecution } from './quick-creation-execution'
 import type { QuickCreationExecutionInput } from './quick-creation-execution-input'
+import { resolveQuickWorkItemStartRoute } from './quick-work-item-start-route'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 
 const mocks = vi.hoisted(() => ({
@@ -161,6 +162,19 @@ describe('TaskPage composer work-item start delivery', () => {
     expect(request).not.toHaveProperty('launchDraftPrompt')
   })
 
+  it('preserves explicit draft delivery for linked items', async () => {
+    await execute(executionInput(settingsWithDelivery('draft'), preparedQuickSubmit()))
+
+    expect(mocks.runBackgroundWorktreeCreation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentLaunchRoute: 'terminal-tui',
+        workItemStartPromptDelivery: 'draft',
+        quickPrompt: '',
+        launchDraftPrompt: linkedIssue.url
+      })
+    )
+  })
+
   it('keeps draft as the compatibility default for linked items', async () => {
     await execute(executionInput(settingsWithDelivery(), preparedQuickSubmit()))
 
@@ -168,7 +182,6 @@ describe('TaskPage composer work-item start delivery', () => {
       expect.objectContaining({
         agentLaunchRoute: 'terminal-tui',
         workItemStartPromptDelivery: 'draft',
-        quickPrompt: '',
         launchDraftPrompt: linkedIssue.url
       })
     )
@@ -185,6 +198,23 @@ describe('TaskPage composer work-item start delivery', () => {
     expect(mocks.runBackgroundWorktreeCreation.mock.calls[0]?.[0]).not.toHaveProperty(
       'workItemStartPromptDelivery'
     )
+  })
+
+  it('does not change an ordinary composer draft route', () => {
+    const result = resolveQuickWorkItemStartRoute({
+      agent: 'codex',
+      hasLinkedWorkItem: false,
+      settings: settingsWithDelivery('submit-after-ready'),
+      executionHostId: 'local',
+      hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      workspaceKind: 'git-worktree',
+      hasDraftPrompt: true,
+      launchText: 'ordinary composer draft',
+      nativeChatTranscriptIsLocalReadable: true,
+      requiresTuiLaunchCustomization: false
+    })
+
+    expect(result).toEqual({ ok: true, route: 'terminal-tui' })
   })
 
   it('fails before workspace creation when strict structured support is unavailable', async () => {
