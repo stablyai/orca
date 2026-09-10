@@ -45,7 +45,7 @@ export type AgentHookInstallStatus = {
 export type RemoteAgentHookInstallReport = {
   targetId: string
   remoteHome: string | null
-  state: 'installed' | 'partial' | 'skipped' | 'error'
+  state: 'installed' | 'partial' | 'skipped' | 'error' | 'unavailable'
   detail: string | null
   statuses: AgentHookInstallStatus[]
 }
