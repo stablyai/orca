@@ -132,6 +132,13 @@ export function chainIsSignedByProxyCa(
     return false
   }
 
+  // Why filter up front: an end-entity certificate must never be honoured as an
+  // issuer, however the bundle was assembled.
+  const usable = anchors.filter((anchor) => anchor.ca && isWithinValidityWindow(anchor, now))
+  if (!usable.length) {
+    return false
+  }
+
   const leaf = certs[0]
   if (!leaf || !isWithinValidityWindow(leaf, now)) {
     return false
@@ -139,33 +146,27 @@ export function chainIsSignedByProxyCa(
   // Why: a self-signed anchor verifies against its own key, so presenting the
   // anchor as the end-entity certificate would otherwise satisfy the check while
   // proving no possession of the private key.
-  if (anchors.some((anchor) => leaf.raw.equals(anchor.raw))) {
+  if (usable.some((anchor) => leaf.raw.equals(anchor.raw))) {
     return false
   }
+
+  // Test every step of the verified path, not just its top: an anchor may be
+  // pinned at any depth, and a chain that continues past it to a root would
+  // otherwise walk straight by the certificate that was actually configured.
   let current = leaf
   for (const next of certs.slice(1)) {
+    if (usable.some((anchor) => signedBy(current, anchor))) {
+      return true
+    }
     if (!isWithinValidityWindow(next, now) || !next.ca || !signedBy(current, next)) {
-      break
+      return false
+    }
+    if (usable.some((anchor) => next.raw.equals(anchor.raw))) {
+      return true
     }
     current = next
   }
-
-  for (const anchor of anchors) {
-    // Why `ca`: an end-entity certificate must never be honoured as an issuer,
-    // however the file was assembled.
-    if (!anchor.ca || !isWithinValidityWindow(anchor, now)) {
-      continue
-    }
-    // Reaching the anchor itself counts only when at least one signature was
-    // verified on the way; otherwise the peer simply replayed the public cert.
-    if (current !== leaf && current.raw.equals(anchor.raw)) {
-      return true
-    }
-    if (signedBy(current, anchor)) {
-      return true
-    }
-  }
-  return false
+  return usable.some((anchor) => signedBy(current, anchor))
 }
 
 function matchesHost(leaf: X509Certificate, hostname: string): boolean {

@@ -3,7 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { X509Certificate } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { LEAF, PROXY_CA, ROGUE_LEAF, UNRELATED_CA } from './__fixtures__/proxy-ca-fixtures'
+import {
+  CHAINED_LEAF,
+  INTERMEDIATE_CA,
+  LEAF,
+  PROXY_CA,
+  ROGUE_LEAF,
+  ROOT_CA,
+  UNRELATED_CA
+} from './__fixtures__/proxy-ca-fixtures'
 import {
   applyProxyCaTrustToSession,
   chainIsSignedByProxyCa,
@@ -98,6 +106,20 @@ describe('proxy CA trust', () => {
     expect(chainIsSignedByProxyCa([ROGUE_LEAF, PROXY_CA], anchors(PROXY_CA))).toBe(false)
     // Replaying the anchor alone proves nothing either.
     expect(chainIsSignedByProxyCa([PROXY_CA], anchors(PROXY_CA))).toBe(false)
+  })
+
+  it('accepts an anchor pinned at any depth of the presented chain', () => {
+    const chain = [CHAINED_LEAF, INTERMEDIATE_CA, ROOT_CA]
+    // Pinning the root is the obvious case.
+    expect(chainIsSignedByProxyCa(chain, anchors(ROOT_CA))).toBe(true)
+    // Pinning the intermediate is equally valid, and must not be walked past.
+    expect(chainIsSignedByProxyCa(chain, anchors(INTERMEDIATE_CA))).toBe(true)
+    // A chain that stops at the pinned intermediate still verifies.
+    expect(chainIsSignedByProxyCa([CHAINED_LEAF, INTERMEDIATE_CA], anchors(INTERMEDIATE_CA))).toBe(
+      true
+    )
+    // An unrelated anchor still does not.
+    expect(chainIsSignedByProxyCa(chain, anchors(UNRELATED_CA))).toBe(false)
   })
 
   it('fails closed when no hostname is supplied', () => {
