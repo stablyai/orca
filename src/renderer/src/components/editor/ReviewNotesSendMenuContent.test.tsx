@@ -34,6 +34,7 @@ const harness = vi.hoisted(() => ({
     leafId: string
     agentType: TuiAgent
     tabTitle: string
+    customTitle: string | null
     status: 'eligible' | 'disabled'
     disabledReason?: string
   }[],
@@ -371,6 +372,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       },
       {
@@ -379,6 +381,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Codex',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -427,6 +430,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'First session',
+        customTitle: null,
         status: 'eligible'
       },
       {
@@ -435,6 +439,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Second session',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -525,6 +530,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_B,
         agentType: 'codex',
         tabTitle: 'Codex',
+        customTitle: null,
         status: 'disabled',
         disabledReason: 'Agent needs permission'
       }
@@ -582,6 +588,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -608,6 +615,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'codex',
         tabTitle: 'Codex',
+        customTitle: null,
         status: 'disabled',
         disabledReason: 'Agent status is stale'
       }
@@ -635,6 +643,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -671,6 +680,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -699,6 +709,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -725,6 +736,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -737,6 +749,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'disabled',
         disabledReason: 'Agent status is stale'
       }
@@ -761,6 +774,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
@@ -787,6 +801,7 @@ describe('ReviewNotesSendMenuContent', () => {
         leafId: LEAF_A,
         agentType: 'claude',
         tabTitle: 'Terminal 1',
+        customTitle: null,
         status: 'eligible'
       }
     ]
