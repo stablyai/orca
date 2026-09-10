@@ -47,6 +47,19 @@ const PLAIN_SINGLE: AskPrompt = {
   ]
 }
 
+/** Case 2.3: one plain multi-select question, three options, nothing checked.
+ *  The checkbox layout numbers its chat row the same as the single-select one,
+ *  so the escape sequence must not vary by layout. */
+const PLAIN_MULTI: AskPrompt = {
+  questions: [
+    {
+      question: 'Which languages?',
+      multiSelect: true,
+      options: [{ label: 'Rust' }, { label: 'Swift' }, { label: 'TypeScript' }]
+    }
+  ]
+}
+
 /** Case M.3: question 1 answered by pick, question 2 by prose only. */
 const MIXED: AskPrompt = {
   questions: [
@@ -94,6 +107,25 @@ describe('stranded text reaches chat', () => {
     expect(wrote('I would rather use Helix')).toBe(true)
     // The words follow the row rather than racing it.
     expect(mocks.writes.findIndex((w) => w.includes('I would rather use Helix'))).toBeGreaterThan(0)
+  })
+
+  it('case 2.3: a multi-select with no checkbox ticked escapes through the same chat row', async () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    act(() => result.current.escapeToChat(PLAIN_MULTI, 'I prefer Zig'))
+    act(() => result.current.cancelPending())
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+
+    // Checkbox rows do not shift the chat row: it stays options.length + 2.
+    expect(mocks.writes[0]).toBe('5')
+    expect(wrote('I prefer Zig')).toBe(true)
+    expect(mocks.writes.findIndex((w) => w.includes('I prefer Zig'))).toBeGreaterThan(0)
+    // No Submit-tab keystroke may follow the row, which would re-enter the selector.
+    expect(mocks.writes.some((w) => w === '\x1b[C' || w === '\t')).toBe(false)
   })
 
   it('case M.3: the stranded question survives a cancel while the answer is in flight', async () => {
