@@ -67,13 +67,16 @@ function kindCountLabel(kind: TaskKind, count: number): string {
  *  replaces the breakdown entirely — never a partial enumeration. */
 const HEADER_SEGMENT_CAP = 3
 
+/** Done comes last but must be present: the headline counts settled rows too,
+ *  so omitting it made the breakdown contradict its own count. */
 const HEADER_STATE_ORDER: readonly RunState[] = [
   'working',
   'monitoring',
   'waiting',
   'blocked',
   'unverifiable',
-  'idle'
+  'idle',
+  'done'
 ]
 
 const ATTENTION_STATES: ReadonlySet<RunState> = new Set(['waiting', 'unverifiable', 'blocked'])
@@ -161,8 +164,11 @@ export function backgroundTasksHeaderContent(
             '1 shell command'
           )
         : kindCountLabel(group.kind, 1)
+    // A still-growing clock on finished work would lie, exactly as on the row.
     const elapsed =
-      group.kind === 'command' ? backgroundTaskElapsedLabel(entry.task, options.now) : null
+      group.kind === 'command' && !entry.settled
+        ? backgroundTaskElapsedLabel(entry.task, options.now)
+        : null
     return {
       segments: [{ text: subject, kind: group.kind }],
       detail: elapsed ?? backgroundTaskStateWord(entry.state)
@@ -174,7 +180,8 @@ export function backgroundTasksHeaderContent(
   })).filter((entry) => entry.count > 0)
   return {
     segments: [{ text: kindCountLabel(group.kind, count), kind: group.kind }],
-    // Done produces no segment: a finished sibling earns no colour above the composer.
+    // Done is accounted for in the muted detail but never earns its own emphasised
+    // segment: a finished sibling claims no colour above the composer.
     detail:
       stateCounts.length > 0
         ? stateCounts

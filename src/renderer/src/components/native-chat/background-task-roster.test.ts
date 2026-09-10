@@ -111,7 +111,7 @@ describe('backgroundTasksHeaderContent', () => {
     })
   })
 
-  it('drops the state list when every task is done', () => {
+  it('says how many of the counted rows are done when every task has settled', () => {
     expect(
       header(
         [],
@@ -121,7 +121,36 @@ describe('backgroundTasksHeaderContent', () => {
           agent('c', { state: 'done' })
         ]
       )
-    ).toEqual({ segments: [{ text: '3 agents', kind: 'agent' }], detail: null })
+    ).toEqual({ segments: [{ text: '3 agents', kind: 'agent' }], detail: '3 done' })
+  })
+
+  it('accounts for settled siblings so the breakdown sums to the count', () => {
+    const content = header(
+      [agent('live')],
+      [
+        agent('s1', { state: 'done' }),
+        agent('s2', { state: 'done' }),
+        agent('s3', { state: 'done' }),
+        agent('s4', { state: 'done' })
+      ]
+    )
+    expect(content).toEqual({
+      segments: [{ text: '5 agents', kind: 'agent' }],
+      detail: '1 working, 4 done'
+    })
+    // The headline count and its own breakdown must never contradict each other.
+    const headline = Number(content.segments[0].text.split(' ')[0])
+    const counted = (content.detail ?? '')
+      .split(', ')
+      .reduce((sum, part) => sum + Number(part.split(' ')[0]), 0)
+    expect(counted).toBe(headline)
+  })
+
+  it('drops the elapsed clock from a settled shell command', () => {
+    // The row already refuses a still-growing clock on finished work; so must the header.
+    expect(
+      header([], [{ id: 's', kind: 'command', state: 'done', startedAt: NOW - 72_000 }])
+    ).toEqual({ segments: [{ text: '1 shell command', kind: 'command' }], detail: 'done' })
   })
 
   it('counts unknown tasks instead of hiding them', () => {
