@@ -79,14 +79,14 @@ export function publishCodexCompletedTool(
       timestamp
     )
   } else if (item?.type === 'FileChange' || item?.type === 'file_change') {
-    const changes = Array.isArray(item.changes) ? item.changes : []
-    for (const value of changes) {
+    const changes = asRecord(item.changes) ?? {}
+    for (const [path, value] of Object.entries(changes)) {
       const change = asRecord(value)
       publishToolContent(
         accumulator,
         [
-          { type: 'tool_use', name: 'apply_patch', input: { path: change?.path } },
-          { type: 'tool_result', content: change?.diff }
+          { type: 'tool_use', name: 'apply_patch', input: { path } },
+          { type: 'tool_result', content: change?.unified_diff ?? change?.content }
         ],
         timestamp
       )

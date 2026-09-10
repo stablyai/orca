@@ -80,6 +80,26 @@ it.each(['/repo/pericardium.ts', 'PROJ-12345', 'C++', 'cafe\u0301ine'])(
   }
 )
 
+it.each(['\u0305', '\u030d', '\u0332'])(
+  'cuts at a combining mark unicode61 treats as a separator: %s',
+  async (mark) => {
+    const index = await openSessionSearchIndexFile('ss-rows-unicode-separator')
+    try {
+      const text = `${'x'.repeat(7997)}${mark}pericardium`
+      for (const row of searchMessageRows([{ role: 'user', text, timestamp: null }])) {
+        insertSearchMessage(index.db, 1, row)
+      }
+      expect(
+        index.db
+          .prepare("SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'pericardium'")
+          .get()
+      ).toEqual({ n: 1 })
+    } finally {
+      await index.close()
+    }
+  }
+)
+
 it('backs up to any whitespace, not only a newline', () => {
   // An ideographic space separates words in a CJK transcript exactly as a
   // space does here, and a newline-only backoff tears the token after it.

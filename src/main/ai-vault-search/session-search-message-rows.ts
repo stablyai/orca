@@ -20,8 +20,11 @@ const CHUNK_TARGET_CHARS = 8000
  */
 const TOOL_ROW_CHARS = 3072
 
-// Keep unicode61's tokenchars and combining marks intact, including before an available space.
-const TOKEN_BOUNDARY = /[^\p{L}\p{N}\p{M}\p{Co}_.\-/+\uD800-\uDFFF]/u
+// Keep unicode61's tokenchars intact, including before an available space.
+// SQLite ext/fts5/fts5_unicode2.c: sqlite3Fts5UnicodeIsdiacritic, with remove_diacritics=1.
+const FOLDED_DIACRITIC =
+  /[\u0300-\u0304\u0306-\u030c\u030f\u0311\u031b\u0323-\u0328\u032d-\u032e\u0330-\u0331]/
+const TOKEN_BOUNDARY = /[^\p{L}\p{N}\p{Co}_.\-/+\uD800-\uDFFF]/u
 
 /**
  * Index just past the last token boundary in `[floor, end)`, or -1 when the
@@ -31,7 +34,7 @@ const TOKEN_BOUNDARY = /[^\p{L}\p{N}\p{M}\p{Co}_.\-/+\uD800-\uDFFF]/u
  */
 function lastTokenBoundaryEnd(text: string, floor: number, end: number): number {
   for (let at = end - 1; at >= floor; at--) {
-    if (TOKEN_BOUNDARY.test(text[at]!)) {
+    if (TOKEN_BOUNDARY.test(text[at]!) && !FOLDED_DIACRITIC.test(text[at]!)) {
       return at + 1
     }
   }

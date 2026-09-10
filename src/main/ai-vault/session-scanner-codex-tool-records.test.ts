@@ -65,7 +65,11 @@ it.each([false, true])(
   }
 )
 
-it('publishes paginated file changes without counting them as conversation', () => {
+it.each([
+  { type: 'add', content: '+ addedneedle' },
+  { type: 'delete', content: '+ addedneedle' },
+  { type: 'update', unified_diff: '+ addedneedle', move_path: null }
+])('publishes paginated $type file changes', (change) => {
   const messages: TranscriptMessage[] = []
   const state = createCodexSessionResumeState(file, null, {
     active: true,
@@ -75,7 +79,7 @@ it('publishes paginated file changes without counting them as conversation', () 
   state.consumeLineBytes!(
     record('event_msg', {
       type: 'item_completed',
-      item: { type: 'FileChange', changes: [{ path: 'src/changed.ts', diff: '+ addedneedle' }] }
+      item: { type: 'FileChange', changes: { 'src/changed.ts': change } }
     })
   )
   expect(messages.map((message) => [message.role, message.text])).toEqual([
