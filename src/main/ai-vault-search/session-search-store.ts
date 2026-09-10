@@ -13,11 +13,6 @@ import {
 import { deleteExpiredSearchFiles, drainOrphanedMessages } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
 
-// A paused store keeps recording what it declined, so the set needs a ceiling.
-// Above it the oldest record goes and the drop is counted, because a re-read set
-// that silently forgets is worse than one that says it is incomplete.
-export const STALE_PATH_LIMIT = 20_000
-
 /**
  * What a row still owes a reader.
  *

@@ -143,7 +143,6 @@ it('declines a behind cursor in beginRead before it ever reaches the store', () 
 it("hands the read's identity accessor to the store", () => {
   const captured: unknown[] = []
   const stub = {
-    acceptsCandidate: () => true,
     indexedFile: () => null,
     beginWrite: (
       _candidate: unknown,
@@ -154,7 +153,7 @@ it("hands the read's identity accessor to the store", () => {
       captured.push(identity)
       return { add: () => undefined, commit: () => true }
     },
-    markStale: () => undefined
+    setFileState: () => undefined
   } as unknown as SessionSearchStore
   const identity = (): null => null
 
