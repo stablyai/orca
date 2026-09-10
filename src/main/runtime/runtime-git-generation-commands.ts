@@ -1,5 +1,8 @@
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
-import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
+import {
+  getCommitMessageModelDiscoveryHostKey,
+  getCommitMessageModelDiscoveryHostKeyForLocalRuntime
+} from '../../shared/commit-message-host-key'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -246,6 +249,21 @@ export class RuntimeGitGenerationCommands {
     }
     cancelGeneratePullRequestFieldsLocal(target.worktree.path)
     return { ok: true }
+  }
+
+  /**
+   * Which host a discovery for `worktreeSelector` would run its agent CLI on, in the same
+   * `local` / `wsl:<distro>` / `ssh:<id>` vocabulary the renderer caches this fact under. Every
+   * worktree on one host answers the same key, so a caller can cache one probe per host.
+   */
+  async resolveRuntimeCommitMessageDiscoveryHostKey(worktreeSelector: string): Promise<string> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const route = runtimeGitRouteForTarget(target)
+    return route.kind === 'ssh'
+      ? getCommitMessageModelDiscoveryHostKey(route.connectionId)
+      : getCommitMessageModelDiscoveryHostKeyForLocalRuntime(
+          localGitOptionsForTarget(target).wslDistro
+        )
   }
 
   async discoverRuntimeCommitMessageModels(

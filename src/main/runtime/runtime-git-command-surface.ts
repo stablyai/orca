@@ -25,6 +25,7 @@ type RuntimeGitCommandName =
   | 'commitRuntimeGit'
   | 'generateRuntimeCommitMessage'
   | 'discoverRuntimeCommitMessageModels'
+  | 'resolveRuntimeCommitMessageDiscoveryHostKey'
   | 'cancelRuntimeGenerateCommitMessage'
   | 'generateRuntimePullRequestFields'
   | 'cancelRuntimeGeneratePullRequestFields'
@@ -68,6 +69,8 @@ export function installRuntimeGitCommandSurface(
     commitRuntimeGit: commands.commitRuntimeGit.bind(commands),
     generateRuntimeCommitMessage: commands.generateRuntimeCommitMessage.bind(commands),
     discoverRuntimeCommitMessageModels: commands.discoverRuntimeCommitMessageModels.bind(commands),
+    resolveRuntimeCommitMessageDiscoveryHostKey:
+      commands.resolveRuntimeCommitMessageDiscoveryHostKey.bind(commands),
     cancelRuntimeGenerateCommitMessage: commands.cancelRuntimeGenerateCommitMessage.bind(commands),
     generateRuntimePullRequestFields: commands.generateRuntimePullRequestFields.bind(commands),
     cancelRuntimeGeneratePullRequestFields:

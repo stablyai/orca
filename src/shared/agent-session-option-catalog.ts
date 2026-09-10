@@ -90,6 +90,45 @@ export function mergeDiscoveredAuthoritativeModels(
   })
 }
 
+/**
+ * Whether a host's CLI-probe answer REPLACES the seed's membership or merely extends it.
+ *
+ * Its scope is CLI-probe membership only — what `listModels` stdout claims. A probe that merely
+ * extends is, by construction, not a complete list — the Codex catalog says so of itself — so
+ * nothing may be refused against it. Both the picker's merge below and `worker-start`'s reject
+ * gate read this, so what is offered and what is accepted cannot drift apart.
+ *
+ * A live session's own model list is a DIFFERENT authority, outside this function's scope: Codex's
+ * app-server `model/list` and Claude's SDK `supportedModels()` each speak for one connected
+ * session and already decide their own membership. Routing either through here would hand it the
+ * extend-only verdict and delete a rejection that exists today — see
+ * `applyValidatedCodexStructuredSessionOption`.
+ */
+export function discoveredModelsReplaceSeed(
+  agent: AgentType,
+  catalog: AgentSessionOptionCatalog
+): boolean {
+  return agent === 'claude' || catalog.discoveredModelsAreAuthoritative === true
+}
+
+/**
+ * The models a host's probe answer offers for `agent`: Claude's list replaces the seed outright,
+ * an authoritative list decides membership while keeping seeded option menus, and a list that only
+ * extends unions with the seed.
+ */
+export function resolveDiscoveredCatalogModels(
+  agent: AgentType,
+  catalog: AgentSessionOptionCatalog,
+  discovered: readonly CatalogModel[]
+): CatalogModel[] {
+  if (!discoveredModelsReplaceSeed(agent, catalog)) {
+    return mergeCatalogModels(catalog.models, discovered)
+  }
+  return agent === 'claude'
+    ? [...discovered]
+    : mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
+}
+
 export function sessionOptionValueIsValid(value: unknown): value is SessionOptionValue {
   return typeof value === 'string' || typeof value === 'boolean'
 }
