@@ -24,7 +24,7 @@ export function useHostProtocolGates(): HostStatusGates {
 // whole host UI (sidebar + detail stack) while the host list and other hosts stay usable.
 export function HostProtocolGate({ hostId, children }: Props) {
   const { client, state } = useHostClient(hostId)
-  const gates = useHostStatusGates({ client, connState: state })
+  const gates = useHostStatusGates({ hostId, client, connState: state })
   const { compatVerdict, statusPending } = gates
   const mountedHostIdRef = useRef<string | null>(null)
   const hostKey = hostId ?? null

@@ -1,5 +1,4 @@
 import type { RpcClient } from './rpc-client'
-import type { HostProtocolAdmission } from './host-protocol-admission'
 
 type SubscriptionRecord = {
   method: string
@@ -11,7 +10,6 @@ type SubscriptionRecord = {
 }
 
 export type LogicalSubscriptionRegistryContext = {
-  admission?: HostProtocolAdmission
   isClosed: () => boolean
   isSuspended: () => boolean
   activeSession: () => RpcClient
@@ -20,8 +18,8 @@ export type LogicalSubscriptionRegistryContext = {
 
 /**
  * The logical subscriptions of a stable client: each record outlives the physical
- * session it is currently attached to, and survives suspend, migration and admission
- * changes by re-attaching rather than by asking the caller to resubscribe.
+ * session it is currently attached to, and survives suspend and migration by
+ * re-attaching rather than by asking the caller to resubscribe.
  */
 export class LogicalSubscriptionRegistry {
   private readonly records = new Map<number, SubscriptionRecord>()
@@ -59,23 +57,6 @@ export class LogicalSubscriptionRegistry {
     }
   }
 
-  // Why: the verdict can flip within one generation, so drop what became denied and
-  // attach what became allowed — a denied subscription was never sent to the host.
-  reconcileAdmission(): void {
-    const { admission } = this.context
-    if (!admission) {
-      return
-    }
-    for (const record of this.records.values()) {
-      if (!admission.allows(record.method)) {
-        record.disposePhysical?.()
-        record.disposePhysical = null
-      } else if (!record.disposePhysical && !this.context.isSuspended()) {
-        this.attach(record, this.context.activeSession(), this.context.generation())
-      }
-    }
-  }
-
   updateTerminalViewport(terminal: string, viewport: { cols: number; rows: number }): void {
     for (const record of this.records.values()) {
       if (
@@ -87,8 +68,7 @@ export class LogicalSubscriptionRegistry {
         record.params = { ...record.params, viewport }
       }
     }
-    const { admission } = this.context
-    if (!this.context.isSuspended() && (!admission || admission.allows('terminal.subscribe'))) {
+    if (!this.context.isSuspended()) {
       this.context.activeSession().updateTerminalSubscriptionViewport(terminal, viewport)
     }
   }
@@ -123,11 +103,6 @@ export class LogicalSubscriptionRegistry {
     session: RpcClient,
     subscriptionGeneration: number
   ): void {
-    const { admission } = this.context
-    if (admission && !admission.allows(record.method)) {
-      record.disposePhysical = null
-      return
-    }
     record.disposePhysical = session.subscribe(
       record.method,
       record.params,

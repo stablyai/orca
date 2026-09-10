@@ -71,6 +71,7 @@ export default function ConnectionLogScreen() {
   const selected = hosts.find((h) => h.id === selectedId) ?? null
   const { client, state } = useHostClient(selected?.id)
   const { desktopAppVersion: liveDesktopAppVersion } = useHostStatusGates({
+    hostId: selected?.id,
     client,
     connState: state
   })
