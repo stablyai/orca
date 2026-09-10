@@ -10,7 +10,7 @@ const APNS_HOSTS: Record<ApnsEnvironment, string> = {
   sandbox: 'api.sandbox.push.apple.com'
 }
 
-const DEAD_TOKEN_REASONS = new Set(['BadDeviceToken', 'Unregistered', 'DeviceTokenNotForTopic'])
+const DEAD_TOKEN_REASONS = new Set(['BadDeviceToken', 'Unregistered'])
 
 export type ApnsClientOptions = {
   topic: string

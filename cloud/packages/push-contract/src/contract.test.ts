@@ -45,6 +45,7 @@ describe('push contract limits', () => {
       sessionTtlMs: 86_400_000,
       notificationTtlSeconds: 300,
       unauthenticatedRequestsPerMinutePerIp: 30,
+      authenticatedRequestsPerMinutePerIp: 6_000,
       authenticatedRequestsPerMinutePerHost: 600
     })
     expect(PUSH_DEFAULTS.apnsTopic).toBe('com.stably.orca.mobile')

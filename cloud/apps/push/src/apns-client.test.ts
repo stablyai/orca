@@ -126,8 +126,7 @@ describe('apns client', () => {
   it.each([
     [410, 'Unregistered'],
     [400, 'BadDeviceToken'],
-    [400, 'Unregistered'],
-    [400, 'DeviceTokenNotForTopic']
+    [400, 'Unregistered']
   ])('classifies %i %s as a dead token', async (status, reason) => {
     const fake = fakeTransport({ status, body: JSON.stringify({ reason }) })
     const client = new ApnsClient({
@@ -142,6 +141,7 @@ describe('apns client', () => {
 
   it.each([
     [400, 'PayloadTooLarge'],
+    [400, 'DeviceTokenNotForTopic'],
     [429, 'TooManyRequests'],
     [500, 'InternalServerError']
   ])('treats %i %s with the appropriate retry policy', async (status, reason) => {

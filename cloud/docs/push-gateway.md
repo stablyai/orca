@@ -304,10 +304,10 @@ Delete the downloaded `.p8` from disk when you are done. It is the whole credent
 A push token stops working when the app is uninstalled, when the user restores to a new device,
 or when iOS reissues it. Both providers report this, and the shapes differ:
 
-- APNs: HTTP 410, or 400 with `BadDeviceToken`, `Unregistered`, or `DeviceTokenNotForTopic`.
-  `DeviceTokenNotForTopic` also fires when a sandbox token is sent to the production host, which
-  is a configuration bug rather than a dead token; check `apns_environment` on the registration
-  before concluding the device is gone.
+- APNs: HTTP 410, or 400 with `BadDeviceToken` or `Unregistered`.
+  `DeviceTokenNotForTopic` is a provider configuration error and leaves the registration live.
+  Check the APNs topic and environment; future notifications can resume after correction without
+  phone re-registration. The failed notification is not retried for this non-transient error.
 - FCM: `UNREGISTERED`, or `INVALID_ARGUMENT` whose message names the token.
 
 The gateway marks the registration `dead_at` and returns `status: "dead"` for it, and the
