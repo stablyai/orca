@@ -104,7 +104,9 @@ export function structuredAgentSessionLaunchFeasible(
   request: AgentSessionStructuredFeasibilityRequest
 ): boolean {
   const { settings, ...args } = request
-  return structuredAgentLaunchSupported(buildAgentLaunchRouteInput({ ...store, settings }, args))
+  // Why: the narrow settings ride on the built input, not the store, so a caller names the exact
+  // settings this answer turns on without having to hold a whole store-shaped object.
+  return structuredAgentLaunchSupported({ ...buildAgentLaunchRouteInput(store, args), settings })
 }
 
 /** The one place a launch route is decided. Delivery mode is fixed here too, so the settle loop

@@ -245,7 +245,7 @@ function structuredAgentLaunchState(
   const state: StructuredLaunchState = {
     identity,
     intent,
-    ...(options.promptDelivery ? { promptDelivery: options.promptDelivery } : {}),
+    promptDelivery: options.promptDelivery,
     promise: Promise.resolve({ sessionId: '', fence: 0 }),
     visibilityUnknown: false,
     cancelled: false,

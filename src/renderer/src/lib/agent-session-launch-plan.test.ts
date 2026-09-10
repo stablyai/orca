@@ -185,9 +185,13 @@ describe('structuredAgentSessionLaunchFeasible', () => {
       settings
     })
 
-    expect(mocks.buildAgentLaunchRouteInput).toHaveBeenCalledWith(
-      expect.objectContaining({ settings }),
-      { agent: 'codex', workspace: { kind: 'git-worktree', worktreeId: 'wt-1' } }
+    expect(mocks.buildAgentLaunchRouteInput).toHaveBeenCalledWith(store, {
+      agent: 'codex',
+      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
+    })
+    // The builder's input carries no settings, so seeing them here proves the named copy won.
+    expect(mocks.structuredAgentLaunchSupported).toHaveBeenCalledWith(
+      expect.objectContaining({ ...ROUTE_INPUT, settings })
     )
   })
 })
