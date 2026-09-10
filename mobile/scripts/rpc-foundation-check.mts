@@ -10,48 +10,15 @@ import { runProcess } from '../../src/shared/child-process/run-process.ts'
 
 const root = resolve(import.meta.dirname, '../..')
 const artifacts = resolve(root, 'mobile/rpc-foundation')
-const contracts: Record<string, string[]> = {
-  step0: [
-    'inventory=',
-    'support-floor=',
-    'deltas=',
-    'baseline=',
-    'regression=',
-    'require-all-current-calls',
-    'require-no-dynamic-calls',
-    'require-regressions=',
-    'require-floor-derived-from-protocol-gate',
-    'require-retirement-decision',
-    'require-gate-fail-closed',
-    'require-below-floor-block-e2e',
-    'allow-lane-b-deferred',
-    'slice=',
-    'pr-head=',
-    'require-native-rpc-inventory'
-  ],
-  step0_5: ['policies=', 'require-partition-fixtures'],
-  step1: ['scenarios=', 'goldens=', 'determinism-runs=', 'require-mutants='],
-  step2: [
-    'slice=',
-    'pr-head=',
-    'require-no-duplicate-wire-declarations',
-    'require-catalog-generated-no-drift',
-    'require-protocol-model',
-    'require-no-protocol-diff',
-    'require-parse-parity',
-    'require-metro-bundle',
-    'require-webview-import-smoke'
-  ],
-  step3: [
-    'slice=',
-    'certificate=',
-    'require-pairings=',
-    'require-transports=',
-    'require-mutants',
-    'require-branded-target-cases',
-    'require-delivery-identity='
-  ]
-}
+const step0Flags = [
+  'inventory=',
+  'deltas=',
+  'baseline=',
+  'regression=',
+  'require-all-current-calls',
+  'require-regressions=',
+  'require-native-rpc-inventory'
+]
 const [step, ...args] = process.argv.slice(2)
 const flags = new Map<string, string>()
 function required(name: string): string {
@@ -172,34 +139,11 @@ async function checkStep0(): Promise<void> {
       }
     }
   }
-  if (flags.has('require-all-current-calls') || flags.has('require-no-dynamic-calls')) {
-    await generator(
-      'rpc-access-inventory',
-      artifact('inventory'),
-      flags.has('require-no-dynamic-calls') ? ['--require-no-dynamic-calls'] : []
-    )
-  }
-  if (
-    flags.has('require-floor-derived-from-protocol-gate') ||
-    flags.has('require-retirement-decision')
-  ) {
-    await generator('rpc-support-floor', artifact('support-floor'))
-  }
-  if (flags.has('slice')) {
-    await generator('rpc-slice-manifest', artifact('slice'), ['--pr-head', required('pr-head')])
+  if (flags.has('require-all-current-calls')) {
+    await generator('rpc-access-inventory', artifact('inventory'))
   }
   if (flags.has('require-native-rpc-inventory')) {
     await generator('rpc-native-inventory', resolve(artifacts, 'native-rpc-inventory.json'))
-  }
-  await generator('rpc-acceptance-census', resolve(artifacts, 'STEP0_5-TODO.md'))
-  for (const flag of ['require-gate-fail-closed', 'require-below-floor-block-e2e']) {
-    if (!flags.has(flag)) {
-      continue
-    }
-    if (!flags.has('allow-lane-b-deferred')) {
-      throw new Error(`--${flag}: not implemented; lane B required`)
-    }
-    console.log(`--${flag}: deferred to lane B`)
   }
   if (flags.has('require-regressions')) {
     const seeds = JSON.parse(readFileSync(resolve(artifacts, 'regression-seeds.json'), 'utf8'))
@@ -225,12 +169,12 @@ async function checkStep0(): Promise<void> {
   await vitest(ratchet)
 }
 try {
-  if (!contracts[step]) {
-    throw new Error(`Expected subcommand: ${Object.keys(contracts).join(', ')}`)
+  if (step !== 'step0') {
+    throw new Error('Expected subcommand: step0')
   }
   for (let i = 0; i < args.length; i++) {
     const name = args[i].replace(/^--/, '')
-    const contract = contracts[step].find((value) => value.replace(/=$/, '') === name)
+    const contract = step0Flags.find((value) => value.replace(/=$/, '') === name)
     if (!args[i].startsWith('--') || !contract || flags.has(name)) {
       throw new Error(`Unknown or duplicate flag: ${args[i]}`)
     }
@@ -240,13 +184,8 @@ try {
     }
     flags.set(name, value)
   }
-  if (step !== 'step0') {
-    console.error(`${step}: not implemented`)
-    process.exitCode = 2
-  } else {
-    await checkStep0()
-    console.log('step0: all requested checks passed')
-  }
+  await checkStep0()
+  console.log('step0: all requested checks passed')
 } catch (error) {
   console.error(error instanceof Error ? error.message : error)
   process.exitCode = 1
