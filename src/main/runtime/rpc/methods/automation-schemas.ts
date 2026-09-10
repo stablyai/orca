@@ -1,6 +1,7 @@
 // Why: the automation method table stays readable only if its field-level validation lives beside it rather than inside it.
 import { z } from 'zod'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
+import { isValidAutomationTimezone } from '../../../../shared/automation-zoned-occurrences'
 import {
   MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
   normalizeAutomationPrecheckTimeoutSeconds
@@ -35,6 +36,11 @@ const ExecutionHostId = requiredString('Missing host id').transform((value, ctx)
 const AutomationSchedule = requiredString('Missing trigger').refine(isValidAutomationSchedule, {
   message: 'Invalid automation trigger'
 })
+
+const AutomationTimezone = OptionalString.refine(
+  (value) => value === undefined || isValidAutomationTimezone(value),
+  { message: 'Invalid automation timezone' }
+)
 
 const AutomationPrecheck = z
   .object({
@@ -156,7 +162,7 @@ export const AutomationCreate = z.object({
   baseBranch: OptionalPlainString,
   setupDecision: SetupDecision,
   reuseSession: OptionalBoolean,
-  timezone: OptionalString,
+  timezone: AutomationTimezone,
   rrule: AutomationSchedule,
   dtstart: requiredNumber('Missing trigger start time'),
   enabled: OptionalBoolean,
@@ -178,7 +184,7 @@ const AutomationUpdateFields = z.object({
   baseBranch: OptionalNullablePlainString,
   setupDecision: SetupDecision,
   reuseSession: OptionalBoolean,
-  timezone: OptionalString,
+  timezone: AutomationTimezone,
   rrule: AutomationSchedule.optional(),
   dtstart: requiredNumber('Missing trigger start time').optional(),
   enabled: OptionalBoolean,

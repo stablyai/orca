@@ -22,6 +22,8 @@ orca automations create \
 
 `--trigger` accepts presets such as `hourly`, `daily`, `weekdays`, and `weekly`, plus cron expressions or RRULE strings. Use `--timezone <tz>` when the schedule should follow a specific IANA timezone instead of the runtime default.
 
+Cron and RRULE times are evaluated in the saved timezone on the scheduling host, including hourly schedules in zones with fractional-hour offsets. Updating only `--timezone` also recomputes the next run. At a daylight-saving transition, nonexistent local times are skipped and repeated local times match both instants. Invalid timezone names are rejected; an existing invalid timezone pauses the automation when due and records an explanation in run history.
+
 ## Choose where runs happen
 
 Use `--repo <selector>` when each run should create or select work in a repository. Use `--workspace <selector>` when the automation should run inside an existing Orca worktree instead:
