@@ -38,8 +38,9 @@ describe('native chat block guards', () => {
 })
 
 describe('source priority', () => {
-  it('ranks transcript > hook > scrape', () => {
-    expect(NATIVE_CHAT_SOURCE_PRIORITY.transcript).toBeGreaterThan(NATIVE_CHAT_SOURCE_PRIORITY.hook)
+  it('ranks transcript > rpc > hook > scrape', () => {
+    expect(NATIVE_CHAT_SOURCE_PRIORITY.transcript).toBeGreaterThan(NATIVE_CHAT_SOURCE_PRIORITY.rpc)
+    expect(NATIVE_CHAT_SOURCE_PRIORITY.rpc).toBeGreaterThan(NATIVE_CHAT_SOURCE_PRIORITY.hook)
     expect(NATIVE_CHAT_SOURCE_PRIORITY.hook).toBeGreaterThan(NATIVE_CHAT_SOURCE_PRIORITY.scrape)
   })
 })

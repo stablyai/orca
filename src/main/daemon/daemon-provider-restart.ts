@@ -52,7 +52,8 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   const currentOnly = getCurrentDaemonAdapter(currentAdapter)
   const legacyAdapters = getLegacyDaemonAdapters(currentAdapter)
 
-  // Step 1: synthesize pty:exit for every active session BEFORE teardown — the daemon's shutdown path never fans onExit to clients (session.ts:246-252), so the renderer would otherwise never see exits.
+  // Capture the outgoing sessions before cleanup clears the daemon, but do not
+  // release their writer fences until cleanup proves their processes are gone.
   const fallbackKilledCount =
     currentAdapter instanceof DegradedDaemonPtyProvider
       ? await currentAdapter.shutdownFallbackSessions()
@@ -64,18 +65,21 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   const killedCount =
     new Set([...currentOnly.getActiveSessionIds(), ...currentDaemonSessionIds]).size +
     fallbackKilledCount
-  currentOnly.fanoutSyntheticExits(-1)
-  if (currentAdapter instanceof DegradedDaemonPtyProvider) {
-    currentAdapter.fanoutCurrentDaemonSyntheticExits(-1)
-  }
-
-  // Step 2: detach renderer listeners — after step 1 (so synthesized exits land) and before step 6 (no stale binding).
-  unbindLocalProviderListeners()
-
-  // Step 3: kill the current-protocol daemon process; legacy adapters untouched.
+  // Step 1: kill the current-protocol daemon process; legacy adapters untouched.
   let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
   try {
     await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+
+    // Step 2: only now synthesize exits. Renderer handback can reserve an OMP
+    // session path from this callback, so doing it before physical termination
+    // would admit a writer beside the outgoing daemon process.
+    currentOnly.fanoutSyntheticExits(-1)
+    if (currentAdapter instanceof DegradedDaemonPtyProvider) {
+      currentAdapter.fanoutCurrentDaemonSyntheticExits(-1)
+    }
+
+    // Step 3: detach renderer listeners after synthesized exits land and before swap.
+    unbindLocalProviderListeners()
 
     // Step 4: reuse the existing spawner so the respawn closure baked into long-lived adapters stays valid (do NOT new one).
     currentSpawner.resetHandle()
@@ -122,11 +126,9 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     await newCurrent.establishLifecycleLease()
     releaseDaemonAdoptionLease(currentSpawner.getHandle())
 
-    // Re-wrap in a router only if legacy adapters exist; they're preserved by reference and still route to their pre-upgrade daemons.
-    newProvider =
-      legacyAdapters.length > 0
-        ? new DaemonPtyRouter({ current: newCurrent, legacy: legacyAdapters })
-        : newCurrent
+    // Every normal daemon route stays wrapped so its fresh spawns observe the
+    // main-process OMP writer fence; legacy adapters remain preserved by reference.
+    newProvider = new DaemonPtyRouter({ current: newCurrent, legacy: legacyAdapters })
     if (newProvider instanceof DaemonPtyRouter) {
       await newProvider.discoverLegacySessions()
     }

@@ -27,6 +27,7 @@ const harness = vi.hoisted(() => ({
   slotRenders: 0,
   slotMounts: 0,
   observedParkedCounts: new Set<number>(),
+  shortcutCalls: 0,
   watcherEntries: new Set<string>()
 }))
 
@@ -53,7 +54,9 @@ vi.mock('../../store', async () => {
 })
 
 vi.mock('../native-chat/use-native-chat-toggle-shortcut', () => ({
-  useNativeChatToggleShortcut: () => {}
+  useNativeChatToggleShortcut: () => {
+    harness.shortcutCalls += 1
+  }
 }))
 
 vi.mock('./terminal-parking-e2e-overrides', () => ({
@@ -267,6 +270,7 @@ describe('force-park exemption flips under capability changes', () => {
           </StrictMode>
         )
       })
+      expect(harness.shortcutCalls).toBeGreaterThan(0)
 
       const allPtyIds = TAB_IDS.map(ptyIdFor)
       for (let flip = 0; flip < 6; flip += 1) {

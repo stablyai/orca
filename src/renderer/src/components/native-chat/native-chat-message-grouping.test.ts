@@ -33,6 +33,23 @@ describe('orderNativeChatMessages', () => {
     expect(ordered.map((m) => m.id)).toEqual(['a', 'z'])
   })
 
+  it('keeps an OMP split reasoning row ahead of its same-timestamp assistant sibling', () => {
+    const reasoning = msg({
+      id: 'dede2b79:reasoning',
+      role: 'reasoning',
+      timestamp: 5
+    })
+    const assistant = msg({ id: 'dede2b79', role: 'assistant', timestamp: 5 })
+    expect(orderNativeChatMessages([assistant, reasoning]).map((m) => m.id)).toEqual([
+      'dede2b79:reasoning',
+      'dede2b79'
+    ])
+    expect(orderNativeChatMessages([reasoning, assistant]).map((m) => m.id)).toEqual([
+      'dede2b79:reasoning',
+      'dede2b79'
+    ])
+  })
+
   it('sorts the streaming preview after real content but before optimistic echoes', () => {
     const ordered = orderNativeChatMessages([
       msg({ id: 'pending:abc', role: 'user', timestamp: 20, source: 'scrape' }),

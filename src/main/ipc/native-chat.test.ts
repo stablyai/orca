@@ -59,6 +59,7 @@ async function invokeReadSession(args: {
   sessionId: string
   limit?: number
   transcriptPath?: string
+  beforeOffset?: number
 }): Promise<unknown> {
   registerNativeChatHandlers()
   const handler = handlers.get('nativeChat:readSession')
@@ -153,8 +154,19 @@ describe('nativeChat:readSession handler', () => {
         agent: 'claude',
         sessionId: 'sess-limit',
         limit: 4
-      })) as { messages: { id: string }[] }
+      })) as { messages: { id: string }[]; beforeOffset: number }
       expect(wider.messages.map((m) => m.id)).toEqual(['u-2', 'u-3', 'u-4', 'u-5'])
+
+      // XLR-R1-001: the reported cursor must continue STRICTLY before the loaded
+      // window. Raising `limit` saturates at the wire ceiling, so this is the
+      // only route left to records behind a long transcript's window.
+      const older = (await invokeReadSession({
+        agent: 'claude',
+        sessionId: 'sess-limit',
+        limit: 2,
+        beforeOffset: wider.beforeOffset
+      })) as { messages: { id: string }[] }
+      expect(older.messages.map((m) => m.id)).toEqual(['u-1'])
     } finally {
       if (previousHome === undefined) {
         delete process.env.HOME

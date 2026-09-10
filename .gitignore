@@ -102,6 +102,8 @@ docs/**
 !docs/STYLEGUIDE.md
 !docs/agent-skill-sharing-implementation-checklist.md
 !docs/mobile-terminal-shortcut-bar.md
+!docs/omp-rpc-chat-adapter-plan.md
+!docs/omp-rpc-dependency-followups.md
 !docs/reference/
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md

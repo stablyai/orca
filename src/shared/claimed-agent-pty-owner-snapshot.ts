@@ -144,6 +144,17 @@ export function buildClaimedAgentPtyOwnerIndex(
   return result
 }
 
+export function countClaimedAgentPtyOwners(
+  live: ReadonlyMap<string, LiveAgentSessionOwner>,
+  conflicts: ReadonlyMap<string, readonly LiveAgentSessionOwner[]>
+): number {
+  let count = live.size
+  for (const owners of conflicts.values()) {
+    count += owners.length
+  }
+  return count
+}
+
 function addUniqueEvidence(
   evidenceByKey: Map<string, LiveAgentSessionOwner[]>,
   owner: AgentSessionOwnerBinding

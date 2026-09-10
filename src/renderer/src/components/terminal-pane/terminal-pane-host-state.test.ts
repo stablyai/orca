@@ -143,6 +143,22 @@ describe('selectTerminalPaneHostState', () => {
     expect(host.sshReconnectError).toContain('ssh-keygen -R devbox')
   })
 
+  // XLR-009: RPC ownership resolves locality from the worktree host ladder, so
+  // the transcript gate on the same pane must too -- otherwise chat is admitted
+  // (and routed to local IPC) for a worktree acquisition already refused.
+  it('refuses local readability for an ssh worktree under a local repo row', () => {
+    const state = makeState({
+      repos: [{ id: 'repo-shared' }],
+      worktreesByRepo: {
+        'repo-shared': [{ id: 'wt-remote', repoId: 'repo-shared', hostId: 'ssh:target-1' }]
+      }
+    })
+
+    expect(
+      selectTerminalPaneHostState(state, 'wt-remote').nativeChatTranscriptIsLocalReadable
+    ).toBe(false)
+  })
+
   it('keeps runtime-owned SSH plumbing out of reconnect UI', () => {
     const state = makeState({
       repos: [{ id: 'repo-ephemeral', connectionId: 'runtime-ssh-vm-a' }],

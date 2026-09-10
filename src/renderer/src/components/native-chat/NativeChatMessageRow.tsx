@@ -21,6 +21,7 @@ import { nativeChatProseToMarkdown } from './native-chat-prose'
 import {
   NativeChatAgentControls,
   NativeChatImageAttachments,
+  NativeChatReasoningLabel,
   ProviderFrameRow
 } from './NativeChatTranscriptChrome'
 import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
@@ -192,6 +193,7 @@ export const MessageRow = memo(function MessageRow({
         isSystem && 'text-xs text-muted-foreground'
       )}
     >
+      {isReasoning ? <NativeChatReasoningLabel /> : null}
       <NativeChatImageAttachments
         blocks={prose}
         runtimeContext={runtimeContext}

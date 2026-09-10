@@ -33,6 +33,7 @@ function Transcript({ items }: { items: AgentJournalRenderItem[] }) {
     sessionId: 'session',
     agent: 'claude',
     hasMore: false,
+    omitsOlderRecords: false,
     loadingEarlier: false,
     loadEarlier,
     readPhase: 'ready'

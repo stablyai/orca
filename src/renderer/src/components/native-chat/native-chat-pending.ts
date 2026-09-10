@@ -51,7 +51,7 @@ const PENDING_SEND_LIMIT = 8
 const pendingSendCache = new Map<string, NativeChatPendingSend[]>()
 let pendingSendCounter = 0
 
-function pendingSendScopeKey(scope: NativeChatPendingSendScope): string {
+export function pendingSendScopeKey(scope: NativeChatPendingSendScope): string {
   return `${scope.paneKey}\0${scope.agent}`
 }
 

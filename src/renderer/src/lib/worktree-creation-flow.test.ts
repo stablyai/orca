@@ -108,6 +108,19 @@ beforeEach(() => {
   store.tabsByWorktree = {}
   store.unifiedTabsByWorktree = {}
   vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
+  // Why here and not per-describe: `globalThis.window` is a plain assignment, not a stubbed global,
+  // so a surface installed inside one test leaks into every later one. A test that installs a
+  // never-resolving `markTrusted` would then hang any later test whose agent carries a
+  // `preflightTrust` preset, long before it reaches its own assertions.
+  globalThis.window = {
+    api: {
+      ephemeralVm: {
+        attachWorkspace: vi.fn(),
+        cleanup: vi.fn(),
+        onProvisionEvent: vi.fn(() => vi.fn())
+      }
+    }
+  } as never
 })
 
 function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
@@ -157,15 +170,6 @@ describe('runBackgroundWorktreeCreation', () => {
     store.setupProjectExistingFolder.mockReset()
     store.refreshRuntimeEnvironmentStatus.mockReset()
     prepareEphemeralVmWorkspaceTargetMock.mockReset()
-    globalThis.window = {
-      api: {
-        ephemeralVm: {
-          attachWorkspace: vi.fn(),
-          cleanup: vi.fn(),
-          onProvisionEvent: vi.fn(() => vi.fn())
-        }
-      }
-    } as never
   })
 
   it('uses the captured repo-owner progress mode instead of focused runtime state', () => {

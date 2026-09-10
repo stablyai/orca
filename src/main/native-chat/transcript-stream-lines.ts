@@ -3,7 +3,13 @@ import { StringDecoder } from 'node:string_decoder'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { transcriptFallbackId } from './transcript-fallback-id'
 
-type TranscriptDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
+// Why: a decoder may split one line into several messages (omp's
+// reasoning-before-reply split, decodeOmpTranscriptLine) — the other agents'
+// decoders are unaffected and keep returning a single message or null.
+type TranscriptDecoder = (
+  line: string,
+  fallbackId: string
+) => NativeChatMessage | NativeChatMessage[] | null
 
 export async function decodeTranscriptStream(
   stream: Readable,
@@ -44,9 +50,14 @@ export async function decodeTranscriptStream(
     if (!line) {
       return
     }
-    const message = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
-    if (message) {
-      messages.push(message)
+    const decoded = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
+    if (decoded === null) {
+      return
+    }
+    if (Array.isArray(decoded)) {
+      messages.push(...decoded)
+    } else {
+      messages.push(decoded)
     }
   }
 }

@@ -29,12 +29,14 @@ function Probe({
   scopeKey,
   structured = false,
   disabled = false,
+  withoutTarget = false,
   isComposing,
   onReady
 }: {
   scopeKey: string
   structured?: boolean
   disabled?: boolean
+  withoutTarget?: boolean
   isComposing: () => boolean
   onReady: (api: ProbeApi) => void
 }): React.JSX.Element {
@@ -48,7 +50,7 @@ function Probe({
     caret,
     disabled,
     isComposing,
-    resolveTarget: () => (structured ? null : target),
+    resolveTarget: () => (structured || withoutTarget ? null : target),
     textareaRef,
     setCaret,
     setDraft: (updater) => setDraftValue((previous) => updater(previous)),
@@ -69,7 +71,7 @@ function Probe({
 async function renderProbe(
   scopeKey: string,
   structured = false,
-  options: { disabled?: boolean; isComposing?: () => boolean } = {}
+  options: { disabled?: boolean; isComposing?: () => boolean; withoutTarget?: boolean } = {}
 ): Promise<{
   draft: () => string
   latest: () => ProbeApi
@@ -95,6 +97,7 @@ async function renderProbe(
           scopeKey: nextScopeKey,
           structured,
           disabled,
+          withoutTarget: options.withoutTarget,
           isComposing,
           onReady
         })
@@ -343,6 +346,18 @@ describe('useNativeChatComposerAttachments', () => {
       probe.latest().clearImageAttachments()
     })
     expect(revoke).not.toHaveBeenCalled()
+    act(() => probe.root.unmount())
+  })
+
+  it('explains why an RPC-owned pane cannot accept an attachment without a PTY', async () => {
+    const probe = await renderProbe('leaf-1', false, { withoutTarget: true })
+
+    await act(async () => {
+      probe.latest().attachResolvedPaths(['/tmp/orca-native-chat-no-pty.png'])
+    })
+
+    expect(probe.latest().imageAttachments).toEqual([])
+    expect(probe.notice()).toBe('Image attachments need a live terminal.')
     act(() => probe.root.unmount())
   })
 })

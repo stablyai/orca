@@ -194,10 +194,16 @@ function parseTranscriptWindow(
       try {
         JSON.parse(line)
         const absoluteLineStart = window.startOffset + relativeCursor
-        const message = decode(line, transcriptFallbackId(filePath, absoluteLineStart))
-        if (message) {
+        // Why: a decoder may split one line into several messages (omp's
+        // reasoning-before-reply split); push them in the decoded order.
+        const decoded = decode(line, transcriptFallbackId(filePath, absoluteLineStart))
+        if (decoded !== null) {
           const destination = initialRead ? decodedMessages : messages
-          destination.push(message)
+          if (Array.isArray(decoded)) {
+            destination.push(...decoded)
+          } else {
+            destination.push(decoded)
+          }
         }
       } catch {
         malformed++

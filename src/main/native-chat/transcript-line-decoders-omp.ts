@@ -8,6 +8,11 @@
 // needs a stateful decoder contract shared by every agent, not an omp-only fix.
 
 import {
+  ompAdvisorNotesText,
+  ompAdvisorTurnId,
+  readOmpAdvisorNotes
+} from '../../shared/omp-advisor-notes'
+import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
   type NativeChatMessage
@@ -31,11 +36,32 @@ import { toolResultOutput } from './transcript-record-blocks'
 export function decodeOmpTranscriptLine(
   line: string,
   fallbackId: string
-): NativeChatMessage | null {
+): NativeChatMessage | NativeChatMessage[] | null {
   const record = parseJsonObject(line)
   if (!record || (record.type !== 'message' && record.type !== 'custom_message')) {
     return null
   }
+  const decoded = decodeOmpRecord(record, fallbackId)
+  if (decoded === null) {
+    return null
+  }
+  // The message's OWN clock, not the envelope's write time. An RPC history page
+  // carries only the inner message (omp-rpc-history-decode.ts), so this is the
+  // one reading both sources share — and the envelope is stamped at persist
+  // time, seconds later. Cross-source record identity needs the shared one.
+  const originTimestamp = parseTimestamp(asRecord(record.message)?.timestamp)
+  if (originTimestamp === null) {
+    return decoded
+  }
+  return Array.isArray(decoded)
+    ? decoded.map((message) => ({ ...message, originTimestamp }))
+    : { ...decoded, originTimestamp }
+}
+
+function decodeOmpRecord(
+  record: Record<string, unknown>,
+  fallbackId: string
+): NativeChatMessage | NativeChatMessage[] | null {
   const id = extractString(record.id) ?? fallbackId
   const timestamp = parseTimestamp(record.timestamp)
 
@@ -43,7 +69,14 @@ export function decodeOmpTranscriptLine(
     // Why: these extension-authored turns reach the model, and omp's own
     // transcript renders them — but only when `display` is set; the rest are
     // extension state it never shows (CustomMessageEntry, session-entries.d.ts).
-    const customBlocks = record.display === true ? ompContentBlocks(record.content) : []
+    if (record.display !== true) {
+      return null
+    }
+    const advisor = decodeOmpAdvisorCard(record, id, timestamp)
+    if (advisor) {
+      return advisor
+    }
+    const customBlocks = ompContentBlocks(record.content)
     return customBlocks.length === 0
       ? null
       : { id, role: 'system', blocks: customBlocks, timestamp, source: 'transcript' }
@@ -56,6 +89,7 @@ export function decodeOmpTranscriptLine(
   const role = extractString(message.role)
 
   if (role === 'toolResult') {
+    const toolCallId = extractString(message.toolCallId)
     return {
       id,
       role: 'tool',
@@ -63,7 +97,8 @@ export function decodeOmpTranscriptLine(
         {
           type: 'tool-result',
           output: toolResultOutput(message.content),
-          ...(message.isError === true ? { isError: true } : {})
+          ...(message.isError === true ? { isError: true } : {}),
+          ...(toolCallId ? { toolCallId } : {})
         }
       ],
       timestamp,
@@ -108,8 +143,28 @@ export function decodeOmpTranscriptLine(
   if ((role === 'custom' || role === 'hookMessage') && message.display !== true) {
     return null
   }
-  const blocks = ompContentBlocks(message.content)
-  if (blocks.length === 0) {
+  // The hydrated `get_messages_page` path re-wraps a bare AgentMessage in this
+  // envelope (omp-rpc-history-decode.ts), so an advisor card reaches the
+  // decoder here as well as through `custom_message` — both must resolve to the
+  // same turn identity or the two copies render twice.
+  if (role === 'custom') {
+    const advisor = decodeOmpAdvisorCard(message, id, timestamp)
+    if (advisor) {
+      return advisor
+    }
+  }
+  // Bug 2a (wave 7): omp's `thinking` content blocks used to flatten into the
+  // same message's `blocks` as ordinary text, rendering reasoning as plain
+  // assistant prose — visually indistinguishable from the reply, and
+  // inconsistent with the RPC overlay path, which already models reasoning as
+  // its own `role: 'reasoning'` message (omp-rpc-turn-reducer.ts). Split the
+  // content array into a reasoning bucket and everything else instead, so a
+  // mixed thinking+reply turn becomes two messages (reasoning first) and a
+  // thinking-only turn becomes a reasoning message rather than an assistant
+  // one. The reasoning message keeps a suffixed, still-stable id so it never
+  // collides with the primary message's own (unchanged) id.
+  const { reasoningBlocks, blocks } = ompSplitReasoningContent(message.content)
+  if (blocks.length === 0 && reasoningBlocks.length === 0) {
     // Why: omp stamps an aborted turn onto the assistant message itself
     // (`stopReason: 'aborted'`), and when nothing streamed before the abort the
     // content is empty — so the turn would silently vanish. Surface it as the
@@ -125,7 +180,49 @@ export function decodeOmpTranscriptLine(
       : null
   }
   const messageRole = role === 'assistant' ? 'assistant' : role === 'user' ? 'user' : 'system'
-  return { id, role: messageRole, blocks, timestamp, source: 'transcript' }
+  const messages: NativeChatMessage[] = []
+  if (reasoningBlocks.length > 0) {
+    messages.push({
+      id: `${id}:reasoning`,
+      role: 'reasoning',
+      blocks: reasoningBlocks,
+      timestamp,
+      source: 'transcript'
+    })
+  }
+  if (blocks.length > 0) {
+    messages.push({ id, role: messageRole, blocks, timestamp, source: 'transcript' })
+  }
+  return messages.length === 1 ? messages[0] : messages
+}
+
+/** An advisor note batch, rendered as its own attributed row rather than the
+ *  agent-facing `<advisory>` XML the generic custom-message path would show
+ *  verbatim. The `turnId` (content plus the card's own clock) is what collapses
+ *  this copy against the live RPC frame's (omp-rpc-turn-overlay.ts) — no
+ *  carrier supplies a shared id. Null when the record is not an advisor card. */
+function decodeOmpAdvisorCard(
+  record: Record<string, unknown>,
+  id: string,
+  timestamp: number | null
+): NativeChatMessage | null {
+  const notes = readOmpAdvisorNotes(record)
+  // A bare AgentMessage carries the card clock as epoch ms on the message
+  // itself; a persisted entry has only the ISO envelope, which omp stamped
+  // from that same value.
+  const cardClock = typeof record.timestamp === 'number' ? record.timestamp : timestamp
+  const turnId = ompAdvisorTurnId(notes, cardClock)
+  if (!turnId) {
+    return null
+  }
+  return {
+    id,
+    role: 'system',
+    blocks: [{ type: 'text', text: ompAdvisorNotesText(notes) }],
+    timestamp,
+    source: 'transcript',
+    turnId
+  }
 }
 
 /** A bash/python execution cell: the invocation, then its captured output. */
@@ -191,6 +288,37 @@ function ompContentBlocks(content: unknown): NativeChatBlock[] {
   return blocks
 }
 
+/** Splits one omp content array into its reasoning portion (`thinking`
+ *  entries, each becoming a plain text block) and everything else, preserving
+ *  each bucket's own relative order. Realistically only ever populated for an
+ *  assistant turn, but content-shape driven (not role-gated) so a turn with no
+ *  thinking entries costs nothing extra. */
+function ompSplitReasoningContent(content: unknown): {
+  reasoningBlocks: NativeChatBlock[]
+  blocks: NativeChatBlock[]
+} {
+  if (!Array.isArray(content)) {
+    return { reasoningBlocks: [], blocks: ompContentBlocks(content) }
+  }
+  const reasoningBlocks: NativeChatBlock[] = []
+  const blocks: NativeChatBlock[] = []
+  for (const item of content) {
+    const record = asRecord(item)
+    if (record?.type === 'thinking') {
+      const text = extractString(record.thinking) ?? extractString(record.text)
+      if (text) {
+        reasoningBlocks.push({ type: 'text', text })
+      }
+      continue
+    }
+    const block = ompContentBlock(record)
+    if (block) {
+      blocks.push(block)
+    }
+  }
+  return { reasoningBlocks, blocks }
+}
+
 /** Map one omp content entry; unknown block types yield null and are dropped. */
 function ompContentBlock(record: Record<string, unknown> | null): NativeChatBlock | null {
   if (!record) {
@@ -207,7 +335,13 @@ function ompContentBlock(record: Record<string, unknown> | null): NativeChatBloc
     }
     case 'toolCall': {
       const name = extractString(record.name) ?? 'tool'
-      return { type: 'tool-call', name, input: record.arguments }
+      const toolCallId = extractString(record.id)
+      return {
+        type: 'tool-call',
+        name,
+        input: record.arguments,
+        ...(toolCallId ? { toolCallId } : {})
+      }
     }
     case 'image':
       // Why: omp stores images as content-addressed blob handles

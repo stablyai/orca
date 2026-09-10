@@ -115,11 +115,18 @@ export async function readIncrementalTranscriptMessages(
     if (lifecycle) {
       onLifecycle?.(lifecycle)
     }
-    const message = decode(line, fallbackId)
-    if (!message) {
+    // Why: a decoder may split one line into several messages (omp's
+    // reasoning-before-reply split) — this reader walks forward
+    // (incrementally, tracking state.offset), so no reversal is needed.
+    const decoded = decode(line, fallbackId)
+    if (decoded === null) {
       return
     }
-    messages.push(message)
+    if (Array.isArray(decoded)) {
+      messages.push(...decoded)
+    } else {
+      messages.push(decoded)
+    }
     if (onBatch && messages.length >= APPEND_BATCH_MESSAGE_LIMIT) {
       onBatch(messages.splice(0))
     }

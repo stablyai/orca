@@ -1,4 +1,4 @@
-import type { AgentTrustPreset } from './agent-trust-presets'
+import type { AgentTrustPreset } from '../shared/agent-trust-preset'
 import { upsertProjectTrustLevelInContent } from './codex/config-toml-trust'
 import { getActiveMultiplexer } from './ssh/ssh-target-registry'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
@@ -20,13 +20,51 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
   }
 
   const workspacePath = await canonicalizeRemoteWorkspacePath(fsProvider, args.workspacePath)
-  if (args.preset === 'codex') {
+  if (args.preset === 'claude') {
+    await markRemoteClaudeProjectTrusted(fsProvider, home, workspacePath)
+  } else if (args.preset === 'codex') {
     await markRemoteCodexProjectTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'cursor') {
     await markRemoteCursorWorkspaceTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'copilot') {
     await markRemoteCopilotFolderTrusted(fsProvider, home, workspacePath)
   }
+}
+
+async function markRemoteClaudeProjectTrusted(
+  fsProvider: IFilesystemProvider,
+  remoteHome: string,
+  workspacePath: string
+): Promise<void> {
+  const configPath = `${remoteHome}/.claude.json`
+  const existing = await readRemoteTextFile(fsProvider, configPath)
+  let config: Record<string, unknown> = {}
+  try {
+    if (existing) {
+      const parsed = JSON.parse(existing)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return
+      }
+      config = parsed as Record<string, unknown>
+    }
+  } catch {
+    return
+  }
+  const projects =
+    config.projects && typeof config.projects === 'object' && !Array.isArray(config.projects)
+      ? (config.projects as Record<string, unknown>)
+      : {}
+  const project =
+    projects[workspacePath] &&
+    typeof projects[workspacePath] === 'object' &&
+    !Array.isArray(projects[workspacePath])
+      ? (projects[workspacePath] as Record<string, unknown>)
+      : {}
+  config.projects = {
+    ...projects,
+    [workspacePath]: { ...project, hasTrustDialogAccepted: true }
+  }
+  await fsProvider.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`)
 }
 
 async function resolveRemoteHome(connectionId: string): Promise<string | null> {

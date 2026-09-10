@@ -31,7 +31,13 @@ import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
-export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
+// Why: a decoder may split one line into several messages (omp's
+// reasoning-before-reply split, decodeOmpTranscriptLine) — the other agents'
+// decoders are unaffected and keep returning a single message or null.
+export type NativeChatLineDecoder = (
+  line: string,
+  fallbackId: string
+) => NativeChatMessage | NativeChatMessage[] | null
 
 export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
@@ -137,18 +143,40 @@ export async function readNativeChatTranscriptTailFile(
       }
       cursor = start
     }
-    if (cursor === 0 && lineParts.length > 0 && newestFirst.length <= limit) {
-      decodeLine(0, newestFirst)
+    // Why the walk decides `hasMore`, not the window: the walk stops as soon as
+    // it holds more than `limit` messages, so when the boundary record below
+    // is absorbed whole the window can end up at the oldest message READ while
+    // older lines were never reached.
+    let reachedFileStart = false
+    if (cursor === 0) {
+      if (lineParts.length > 0 && newestFirst.length <= limit) {
+        decodeLine(0, newestFirst)
+        reachedFileStart = true
+      } else {
+        reachedFileStart = lineParts.length === 0
+      }
     }
     const chronological = newestFirst.toReversed()
     // Why: slice(-0) returns the whole array, so a non-positive limit must
     // window to nothing explicitly rather than leak every buffered record.
-    const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
+    let startIndex = limit > 0 ? Math.max(0, chronological.length - limit) : chronological.length
+    // Why soft, not hard: one source record can decode into several messages
+    // (omp's reasoning-before-reply split) that share an offset. Cutting between
+    // them would drop a sibling here and, because `beforeOffset` is that same
+    // record's offset, hand the survivor back again on the next page.
+    while (
+      startIndex > 0 &&
+      startIndex < chronological.length &&
+      chronological[startIndex - 1].offset === chronological[startIndex].offset
+    ) {
+      startIndex--
+    }
+    const selected = chronological.slice(startIndex)
     return {
       messages: selected.map((entry) => entry.message),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
-      hasMore: limit > 0 && chronological.length > limit,
+      hasMore: limit > 0 && (startIndex > 0 || !reachedFileStart),
       beforeOffset: selected[0]?.offset ?? end,
       ...(malformedRecordCount > 0 ? { malformedRecordCount } : {}),
       ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {})
@@ -204,8 +232,19 @@ export async function readNativeChatTranscriptTailFile(
     // records so reconnect snapshots can replay completion without guessing
     // from the last visible assistant message.
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
-    const message = decode(line, fallbackId)
-    if (message) {
+    // Why: this walk is newest-line-first, and the whole `newestFirst` array
+    // is reversed exactly once at the end (`chronological`) to produce
+    // chronological order — a line that splits into several messages (omp's
+    // reasoning-before-reply split) must be pushed in the OPPOSITE of its own
+    // chronological order here, so that single whole-array reverse restores
+    // reasoning-before-reply instead of flipping it, exactly like inter-line
+    // order already relies on that same reverse.
+    const decoded = decode(line, fallbackId)
+    if (decoded === null) {
+      return
+    }
+    const decodedMessages = Array.isArray(decoded) ? decoded.toReversed() : [decoded]
+    for (const message of decodedMessages) {
       messages.push({ message, offset: lineOffset })
     }
   }

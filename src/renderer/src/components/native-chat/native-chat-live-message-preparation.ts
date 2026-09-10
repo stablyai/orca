@@ -2,12 +2,30 @@ import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-ag
 import { surfaceSkillInvocationUserTurns } from '../../../../shared/native-chat-command-envelope'
 import { normalizeImageTranscriptMessages } from '../../../../shared/native-chat-image-transcript-markers'
 import type { AgentType, NativeChatMessage } from '../../../../shared/native-chat-types'
+import { mergeOmpRpcHydratedHistory } from './native-chat-rpc-history-merge'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
 
+/**
+ * `rpcHistoryMessages` is a hydrated OMP RPC history snapshot, folded in LAST
+ * and deliberately not passed through the cross-source pass below: that pass
+ * dedupes by turn content, which would undo the positional reconciliation
+ * `mergeOmpRpcHydratedHistory` performed and collapse a repeated turn whose
+ * copies only one window reaches. Each side is prepared on its own — a
+ * single-source list, so the pass is a no-op for it — and then spliced.
+ */
 export function prepareNativeChatLiveMessages(
   messages: NativeChatMessage[],
-  agent: AgentType
+  agent: AgentType,
+  rpcHistoryMessages: readonly NativeChatMessage[] = []
 ): NativeChatMessage[] {
+  const prepared = prepareOneSource(messages, agent)
+  if (rpcHistoryMessages.length === 0) {
+    return prepared
+  }
+  return mergeOmpRpcHydratedHistory(prepared, prepareOneSource([...rpcHistoryMessages], agent))
+}
+
+function prepareOneSource(messages: NativeChatMessage[], agent: AgentType): NativeChatMessage[] {
   const commandNames = new Set(getVerifiedNativeChatCommands(agent).map((command) => command.name))
   const surfaced = surfaceSkillInvocationUserTurns(messages, commandNames)
   const normalized = normalizeImageTranscriptMessages(surfaced)

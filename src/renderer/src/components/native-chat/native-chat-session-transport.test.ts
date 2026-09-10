@@ -62,8 +62,14 @@ describe('getNativeChatSessionTransport — selection', () => {
 
     await transport.readSession('claude', 'sess-1', 40, '/t/path')
 
-    expect(nativeChatReadSession).toHaveBeenCalledWith('claude', 'sess-1', 40, '/t/path')
+    expect(nativeChatReadSession).toHaveBeenCalledWith('claude', 'sess-1', 40, '/t/path', undefined)
     expect(runtimeEnvironmentsCall).not.toHaveBeenCalled()
+
+    // The continuation cursor has to reach the local reader too: growing `limit`
+    // saturates at the wire ceiling on every transport (XLR-R1-001).
+    await transport.readSession('claude', 'sess-1', 200, '/t/path', 4096)
+
+    expect(nativeChatReadSession).toHaveBeenLastCalledWith('claude', 'sess-1', 200, '/t/path', 4096)
   })
 
   it('returns the runtime adapter for an owner on the desktop client', async () => {
@@ -102,6 +108,40 @@ describe('getNativeChatSessionTransport — selection', () => {
     // An invalid lifecycle payload is dropped, leaving prose recovery to settle.
     await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
       messages: [message('invalid')]
+    })
+  })
+
+  // XLR-R1-001: dropping the host's cursor here is what stranded pagination at
+  // the wire ceiling — the client had nothing left to continue from.
+  it('retains a valid continuation cursor from a runtime read and drops a bogus one', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    runtimeEnvironmentsCall
+      .mockResolvedValueOnce(okEnvelope({ messages: [message('a')], beforeOffset: 4096 }))
+      .mockResolvedValueOnce(okEnvelope({ messages: [message('b')], beforeOffset: -1 }))
+      .mockResolvedValueOnce(okEnvelope({ messages: [message('c')], beforeOffset: 'nope' }))
+    const transport = getNativeChatSessionTransport(ENV)
+
+    await expect(transport.readSession('claude', 'sess-1', 200, undefined, 8192)).resolves.toEqual({
+      messages: [message('a')],
+      beforeOffset: 4096
+    })
+    expect(runtimeEnvironmentsCall).toHaveBeenCalledWith({
+      selector: ENV,
+      method: 'nativeChat.readSession',
+      params: {
+        agent: 'claude',
+        sessionId: 'sess-1',
+        limit: 200,
+        transcriptPath: undefined,
+        beforeOffset: 8192
+      },
+      timeoutMs: 15_000
+    })
+    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
+      messages: [message('b')]
+    })
+    await expect(transport.readSession('claude', 'sess-1')).resolves.toEqual({
+      messages: [message('c')]
     })
   })
 
@@ -317,13 +357,135 @@ describe('runtime subscribe', () => {
       pending: true
     })
     // Dropping `pending` would settle an empty read; carrying it onto the real
-    // snapshot would keep the view unsettled over real history. hasMore proves the
-    // pending frame did not consume the initial slot — only the initial branch
-    // infers a filled window from the limit.
+    // snapshot would keep the view unsettled over real history. The labelled
+    // hasMore is the compat inference, applied to every window-bearing frame.
     expect(onFrame).toHaveBeenNthCalledWith(2, {
       type: 'snapshot',
       messages: [message('m-1')],
+      hasMore: true,
+      hasMoreInferred: true
+    })
+  })
+
+  // SA-011: the inferred value is `messages.length >= limit`, which is equally
+  // true of a snapshot sitting on the transcript head. Labelling it keeps the
+  // Load-earlier affordance while denying it the 'measured' grade the advisor
+  // horizon retires cards on (native-chat-pagination.ts).
+  it('labels a hasMore it synthesized for a runtime that omitted one', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe(
+      { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1', limit: 2 },
+      onFrame
+    )
+    await Promise.resolve()
+
+    deliver({ type: 'snapshot', messages: [message('m-1'), message('m-2')] })
+
+    expect(onFrame).toHaveBeenCalledWith({
+      type: 'snapshot',
+      messages: [message('m-1'), message('m-2')],
+      hasMore: true,
+      hasMoreInferred: true
+    })
+  })
+
+  it('leaves a host-reported hasMore unlabeled so it keeps its measurement', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe(
+      { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1', limit: 2 },
+      onFrame
+    )
+    await Promise.resolve()
+
+    deliver({ type: 'snapshot', messages: [message('m-1')], hasMore: true })
+
+    expect(onFrame).toHaveBeenCalledWith({
+      type: 'snapshot',
+      messages: [message('m-1')],
       hasMore: true
+    })
+  })
+
+  // SA-012: the compat inference is a property of the frame carrying `hasMore`,
+  // not of the frame's position in the stream. A reconnect snapshot from an
+  // omitting runtime that lands after the initial read is the same exact-fill
+  // ambiguity, and defaulting it to false would hide Load-earlier for good.
+  it('infers and labels hasMore on a post-initial snapshot from an omitting runtime', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe(
+      { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1', limit: 2 },
+      onFrame
+    )
+    await Promise.resolve()
+
+    // Settle the initial read first, so the next frame takes the post-initial path.
+    deliver({ type: 'snapshot', messages: [message('m-0')], hasMore: false })
+    deliver({ type: 'snapshot', messages: [message('m-1'), message('m-2')] })
+
+    expect(onFrame).toHaveBeenNthCalledWith(2, {
+      type: 'snapshot',
+      messages: [message('m-1'), message('m-2')],
+      hasMore: true,
+      hasMoreInferred: true
+    })
+  })
+
+  it('infers and labels hasMore on a replacement from an omitting runtime', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe(
+      { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1', limit: 2 },
+      onFrame
+    )
+    await Promise.resolve()
+
+    deliver({ type: 'snapshot', messages: [message('m-0')], hasMore: false })
+    // Inode replacement (rotated transcript) that exactly fills the window.
+    deliver({ type: 'replacement', messages: [message('m-1'), message('m-2')] })
+
+    expect(onFrame).toHaveBeenNthCalledWith(2, {
+      type: 'replacement',
+      messages: [message('m-1'), message('m-2')],
+      hasMore: true,
+      hasMoreInferred: true
+    })
+  })
+
+  it('leaves a post-initial hasMore the runtime sent unlabeled and un-upgraded', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    const { deliver } = stubSubscribe()
+    const onFrame = vi.fn()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe(
+      { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1', limit: 2 },
+      onFrame
+    )
+    await Promise.resolve()
+
+    deliver({ type: 'snapshot', messages: [message('m-0')], hasMore: false })
+    // A current runtime that exactly fills the window and counted the head.
+    deliver({ type: 'replacement', messages: [message('m-1'), message('m-2')], hasMore: false })
+
+    expect(onFrame).toHaveBeenNthCalledWith(2, {
+      type: 'replacement',
+      messages: [message('m-1'), message('m-2')],
+      hasMore: false
     })
   })
 

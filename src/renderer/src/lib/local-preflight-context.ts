@@ -11,6 +11,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { getIndexedRepoMap, getIndexedWorktreeById } from '@/store/worktree-repo-index'
 import { getProviderRuntimeContextKey } from './provider-runtime-context'
+import { getLocalFolderProjectRuntimeContext } from './local-folder-project-runtime-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
   getCachedWindowsTerminalCapabilities,
@@ -32,10 +33,7 @@ export {
   resetLocalPreflightContextCachesForTests
 } from './local-preflight-context-cache'
 
-type LocalProjectRuntimeState = Pick<
-  AppState,
-  'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'
->
+type LocalProjectRuntimeState = Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'projects' | 'repos' | 'settings' | 'worktreesByRepo'> & Partial<Pick<AppState, 'activeWorkspaceExecutionHostId' | 'folderWorkspaces' | 'projectGroups' | 'restoredRuntimeHostIdByWorkspaceSessionKey'>>
 
 // Why: the shared indexes are WeakMap-keyed on slice identity, so a fresh `{}`
 // or `[]` fallback would miss the cache on every read.
@@ -65,6 +63,12 @@ export function getLocalProjectExecutionRuntimeContext(
 
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return undefined
+  }
+  const folderWorkspaceId = worktreeId?.startsWith('folder:')
+    ? worktreeId.slice('folder:'.length)
+    : null
+  if (folderWorkspaceId) {
+    return getLocalFolderProjectRuntimeContext(state, folderWorkspaceId, appPlatform, wslContext)
   }
   const worktree = getLocalWorktree(state, worktreeId)
   const repo = getLocalRuntimeRepoForWorktree(state, worktree)

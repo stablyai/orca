@@ -59,7 +59,6 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
-
   useNativeChatToggleShortcut(worktreeId, isWorktreeActive)
 
   const leaveWorktreeIfEmpty = useCallback(() => {

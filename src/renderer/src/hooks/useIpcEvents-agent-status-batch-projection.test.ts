@@ -619,4 +619,73 @@ describe('useIpcEvents agent status snapshot integration', () => {
       vi.useRealTimers()
     }
   })
+  it.each([
+    ['omp', 'omp-session-1'],
+    ['prime-agent', 'prime-session-1']
+  ] as const)(
+    'records a %s resume-identity row instead of dropping it as non-Pi',
+    async (agentType, sessionId) => {
+      const recordAgentProviderSession = vi.fn()
+      const setAgentStatus = vi.fn()
+      const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+        current: null
+      }
+      const storeState: StoreLike = buildStoreState({
+        setAgentStatus,
+        recordAgentProviderSession,
+        workspaceSessionReady: true,
+        tabsByWorktree: {
+          'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+        },
+        terminalLayoutsByTabId: {
+          'tab-future': {
+            root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+            activeLeafId: FUTURE_LEAF_ID,
+            expandedLeafId: null
+          }
+        }
+      })
+      stubReactSyncEffect()
+      vi.doMock('../store', () => ({
+        useAppStore: {
+          subscribe: vi.fn(() => () => {}),
+          getState: () => storeState
+        }
+      }))
+      stubAuxiliaryModules()
+      vi.stubGlobal(
+        'window',
+        buildWindowApi({
+          onSet: (cb) => {
+            onSetListenerRef.current = cb
+            return () => {}
+          }
+        })
+      )
+
+      const { useIpcEvents } = await import('./useIpcEvents')
+      useIpcEvents()
+      if (typeof onSetListenerRef.current !== 'function') {
+        throw new Error('Expected agentStatus.onSet listener to be registered')
+      }
+      onSetListenerRef.current({
+        paneKey: FUTURE_PANE_KEY,
+        state: 'done',
+        prompt: '',
+        agentType,
+        providerSession: { key: 'session_id', id: sessionId },
+        providerSessionOnly: true,
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_700_000_000_000
+      })
+
+      expect(setAgentStatus).not.toHaveBeenCalled()
+      expect(recordAgentProviderSession).toHaveBeenCalledTimes(1)
+      expect(recordAgentProviderSession.mock.calls[0]?.[1]).toBe(agentType)
+      expect(recordAgentProviderSession.mock.calls[0]?.[2]).toEqual({
+        key: 'session_id',
+        id: sessionId
+      })
+    }
+  )
 })

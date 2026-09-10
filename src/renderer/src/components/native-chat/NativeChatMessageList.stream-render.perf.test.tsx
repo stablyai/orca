@@ -64,6 +64,7 @@ function sessionWith(messages: NativeChatMessage[]): NativeChatLiveSession {
     sessionId: 'session-1',
     agent: 'codex',
     hasMore: false,
+    omitsOlderRecords: false,
     loadingEarlier: false,
     loadEarlier: vi.fn(),
     readPhase: 'ready'

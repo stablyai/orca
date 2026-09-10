@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { resolveNativeChatSession } from './native-chat-pane-resolution'
+import {
+  resolveNativeChatSession,
+  resolveEffectiveNativeChatSessionId
+} from './native-chat-pane-resolution'
 
 function entry(
   overrides: Partial<AgentStatusEntry> & Pick<AgentStatusEntry, 'paneKey'>
@@ -308,5 +311,39 @@ describe('resolveNativeChatSession', () => {
         ptyId: 'pty-1'
       })
     ).toBeNull()
+  })
+})
+
+describe('resolveEffectiveNativeChatSessionId', () => {
+  it('prefers the resolved omp identity over the hook-derived sessionId', () => {
+    expect(resolveEffectiveNativeChatSessionId('hook-session', 'resolved-session')).toBe(
+      'resolved-session'
+    )
+  })
+
+  it('falls back to the hook-derived sessionId when no resolved identity exists (non-omp panes, or before ownership ever resolves)', () => {
+    expect(resolveEffectiveNativeChatSessionId('hook-session', null)).toBe('hook-session')
+  })
+
+  it('returns null when no source has a value (Bug 1: never a stale session id)', () => {
+    expect(resolveEffectiveNativeChatSessionId(null, null, null)).toBeNull()
+  })
+
+  it("prefers the id OMP itself published over the on-disk resolver's guess", () => {
+    // session_info_update carries session.sessionId from the child that owns
+    // the pane — ground truth. The on-disk resolver degrades to an mtime guess
+    // whenever no breadcrumb is available, and a cwd with several sessions can
+    // make that guess pick the wrong transcript.
+    expect(resolveEffectiveNativeChatSessionId('hook-session', 'mtime-guess', 'wire-session')).toBe(
+      'wire-session'
+    )
+  })
+
+  it('keeps the resolved identity while OMP has published no session id yet', () => {
+    // The frame only arrives once a builtin republishes the session, so the
+    // resolver stays the answer for the whole pre-command life of the pane.
+    expect(resolveEffectiveNativeChatSessionId('hook-session', 'resolved-session', null)).toBe(
+      'resolved-session'
+    )
   })
 })

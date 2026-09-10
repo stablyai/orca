@@ -2,6 +2,7 @@ import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { selectNativeChatWorktreeConnectionId } from '../native-chat/native-chat-runtime-owner'
 import {
   selectRuntimeAwareSshError,
   selectRuntimeAwareSshStatus,
@@ -23,8 +24,15 @@ export type TerminalPaneHostState = {
 
 function computeTerminalPaneHostState(state: AppState, worktreeId: string): TerminalPaneHostState {
   const connectionId = getConnectionIdFromState(state, worktreeId)
-  const nativeChatTranscriptIsLocalReadableResult =
-    isNativeChatTranscriptLocalReadable(connectionId)
+  // Readability answers from the authoritative worktree host ladder, not the
+  // repo-only resolver above (XLR-009): a worktree stamped `ssh:` under a
+  // repository row marked local resolves to null here, so the chat gate called
+  // its remote transcript locally readable while RPC ownership -- which reads
+  // the same ladder -- correctly refused the pane. Reconnect state below stays
+  // on the repo-level connection it has always described.
+  const nativeChatTranscriptIsLocalReadableResult = isNativeChatTranscriptLocalReadable(
+    selectNativeChatWorktreeConnectionId(state, worktreeId)
+  )
   const sshReconnectTargetId =
     connectionId && !isRuntimeOwnedSshTargetId(connectionId) ? connectionId : null
   if (!sshReconnectTargetId) {

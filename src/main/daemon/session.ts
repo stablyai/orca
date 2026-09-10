@@ -1,4 +1,5 @@
 import { isValidPtySize } from './daemon-pty-size'
+import { prepareSessionFinalSnapshot } from './session-final-snapshot'
 import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
 import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
@@ -252,6 +253,10 @@ export class Session {
     return this.output.getCwd()
   }
 
+  getSlavePath(): string | null {
+    return this.subprocess.slavePath ?? null
+  }
+
   getForegroundProcess(options?: { rawFallback?: boolean }): string | null {
     return this.subprocess.getForegroundProcess(options)
   }
@@ -275,12 +280,7 @@ export class Session {
   }
 
   prepareForFinalSnapshot(): string {
-    const held = this.shellReady.releaseHeldBytes()
-    this.startupIngress.snapshotBarrier()
-    // Why last: snapshotBarrier can emit held spans into the barrier, and a
-    // teardown checkpoint mid-episode must not lose the barrier's queued bytes.
-    this.recoveryBarrier.flushPending()
-    return held
+    return prepareSessionFinalSnapshot(this.shellReady, this.startupIngress, this.recoveryBarrier)
   }
 
   dispose(): void {

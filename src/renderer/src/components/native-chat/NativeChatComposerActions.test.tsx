@@ -114,4 +114,29 @@ describe('NativeChatComposerActions', () => {
     expect(onSend).not.toHaveBeenCalled()
     expect(onStop).not.toHaveBeenCalled()
   })
+  it('shows and activates the OMP follow-up toggle when provided', () => {
+    const onToggle = vi.fn()
+    const props = {
+      attachDisabled: false,
+      dictationDisabled: false,
+      sendDisabled: false,
+      isWorking: true,
+      isDictating: false,
+      isDictationHoldMode: false,
+      onAttach: vi.fn(),
+      onDictationToggle: vi.fn(),
+      onDictationHoldStart: vi.fn(),
+      onDictationHoldEnd: vi.fn(),
+      onSend: vi.fn(),
+      onStop: vi.fn(),
+      sessionOptionsSurface: null,
+      sessionOptionsSnapshot: []
+    }
+    const { rerender } = render(<NativeChatComposerActions {...props} />)
+    expect(screen.queryByRole('button', { name: 'Follow up' })).toBeNull()
+
+    rerender(<NativeChatComposerActions {...props} followUp={{ active: false, onToggle }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Follow up' }))
+    expect(onToggle).toHaveBeenCalledOnce()
+  })
 })

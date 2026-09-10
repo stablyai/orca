@@ -1,8 +1,26 @@
+import type { AgentType } from '../../../../shared/agent-status-types'
+import { nativeChatRequiresLocalTranscript } from '../../../../shared/native-chat-agent-support'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+
+/** Whether this renderer may render a chat surface for a leaf AT ALL, given who
+ *  actually executes it. Agents whose hook discloses no transcript path (OMP,
+ *  Grok) are only reachable by scanning a sessions root on a disk this process
+ *  can read, so a leaf executing on another host has no readable transcript —
+ *  reading local disk for it is the silent substitution
+ *  docs/reference/ssh-execution-boundary.md forbids. Agent-conditioned on
+ *  purpose: Claude/Codex disclose their own path and stay renderable over SSH.
+ *  An unknown agent cannot be shown to need a local transcript, so it is not
+ *  refused here — the toggle gate that knows the agent is what closes that. */
+export function nativeChatHostCanRenderLeafTranscript(args: {
+  agent: TuiAgent | AgentType | null | undefined
+  transcriptIsLocalReadable: boolean
+}): boolean {
+  return !nativeChatRequiresLocalTranscript(args.agent) || args.transcriptIsLocalReadable
+}
 
 function layoutNodeContainsLeaf(node: TerminalPaneLayoutNode | null, leafId: string): boolean {
   if (!node) {
@@ -92,10 +110,27 @@ export function resolveNativeChatLeafRoute(args: {
   activeLeafIsEligible: boolean
   chatLeafHasConfirmedAgentExit?: boolean
   structuredSessionId?: string | null
+  /** The owning leaf's host verdict from `nativeChatHostCanRenderLeafTranscript`.
+   *  Absent means the caller has no verdict to offer; only an explicit `false`
+   *  retires the leaf. */
+  hostCanRenderTranscript?: boolean
 }): NativeChatLeafRoute {
   const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit && !args.structuredSessionId
+  if (args.hostCanRenderTranscript === false) {
+    // Why (XLR-034): the owning leaf is retained across a Terminal↔Chat toggle
+    // by design — the pane-anchored RPC owner must survive it — which also
+    // means the toggle BACK into Chat is never re-gated by active-leaf
+    // eligibility. So once the authoritative execution host says this renderer
+    // cannot read the pane's transcript (a worktree that resolved to `ssh:`
+    // beneath a repository row still marked local), the retained leaf is
+    // exactly what lets Chat reopen against local disk for a remotely owned
+    // session. Drop the ownership; `exitChat` only when Chat is what is showing.
+    return { chatLeafId: null, exitChat: args.isChatViewMode }
+  }
   if (!args.isChatViewMode) {
-    return { chatLeafId: null, exitChat: false }
+    // Keep the owning leaf stable while its Chat surface is hidden. The
+    // pane-anchored RPC owner must survive Terminal↔Chat view toggles.
+    return { chatLeafId: args.chatLeafId, exitChat: false }
   }
   if (args.structuredSessionId) {
     return {

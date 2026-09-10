@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { cleanupDaemonForProtocol as cleanupDaemonForProtocolOriginal } from './daemon-protocol-cleanup'
 import { PROTOCOL_VERSION } from './types'
 
 const {
@@ -16,13 +17,15 @@ const {
   rebindLocalProviderListenersMock,
   trackDaemonReplacedMock,
   trackDaemonRetiredMock,
+  cleanupDaemonForProtocolMock,
   importFresh,
   mockOnlyDaemonSocketAlive,
   installDefaultNetConnectStub,
   moduleFactories
-} = await vi.hoisted(async () =>
-  (await import('./daemon-init-test-harness')).createDaemonInitMocks()
-)
+} = await vi.hoisted(async () => {
+  const mocks = (await import('./daemon-init-test-harness')).createDaemonInitMocks()
+  return { ...mocks, cleanupDaemonForProtocolMock: vi.fn() }
+})
 
 vi.mock('fs', () => moduleFactories.fs())
 vi.mock('child_process', async (importOriginal) =>
@@ -41,6 +44,13 @@ vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent()
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
+vi.mock('./daemon-protocol-cleanup', async (importOriginal) => {
+  const actual = await importOriginal<{
+    cleanupDaemonForProtocol: typeof cleanupDaemonForProtocolOriginal
+  }>()
+  cleanupDaemonForProtocolMock.mockImplementation(actual.cleanupDaemonForProtocol)
+  return { ...actual, cleanupDaemonForProtocol: cleanupDaemonForProtocolMock }
+})
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   beforeEach(() => {
@@ -76,6 +86,46 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(originalAdapter.fanoutSyntheticExits).toHaveBeenCalledWith(-1)
     // Ordering invariant: synthetic exits must reach the renderer *before* listeners are torn down (Step 1 before 2).
     expect(order).toEqual(['fanout', 'unbind'])
+  })
+
+  it('does not fan out synthetic exits until daemon cleanup has physically completed', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const originalAdapter = adapterInstances[0]
+    let releaseCleanup!: () => void
+    const cleanupBarrier = new Promise<void>((resolve) => {
+      releaseCleanup = resolve
+    })
+    let markCleanupEntered!: () => void
+    const cleanupEntered = new Promise<void>((resolve) => {
+      markCleanupEntered = resolve
+    })
+    cleanupDaemonForProtocolMock.mockImplementationOnce(async () => {
+      markCleanupEntered()
+      await cleanupBarrier
+      return { cleaned: true, killedCount: 1 }
+    })
+
+    const restarting = mod.restartDaemon()
+    await cleanupEntered
+
+    expect(originalAdapter.fanoutSyntheticExits).not.toHaveBeenCalled()
+
+    releaseCleanup()
+    await restarting
+    expect(originalAdapter.fanoutSyntheticExits).toHaveBeenCalledWith(-1)
+  })
+
+  it('does not release OMP writer fences when daemon cleanup lacks physical PTY exit proof', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const originalAdapter = adapterInstances[0]
+    cleanupDaemonForProtocolMock.mockRejectedValueOnce(
+      new Error('Daemon shutdown did not prove physical PTY exit')
+    )
+
+    await expect(mod.restartDaemon()).rejects.toThrow('Daemon shutdown did not prove physical PTY exit')
+    expect(originalAdapter.fanoutSyntheticExits).not.toHaveBeenCalled()
   })
 
   it('uses daemon-owned idle retirement after a failed manual-restart adoption', async () => {
@@ -189,14 +239,19 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(spawnerInstances).toHaveLength(1)
   })
 
-  it('swaps the module-level adapter and re-binds listeners after the new provider is installed', async () => {
+  it('swaps the fenced module-level router and re-binds listeners after it is installed', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
+    const { DaemonPtyRouter } = await import('./daemon-pty-router')
 
-    // initDaemonPtyProvider calls setLocalPtyProvider once with the original.
+    // initDaemonPtyProvider keeps even a no-legacy daemon behind the router so
+    // normal terminal launches observe the main-process OMP writer fence.
     expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(1)
     const originalProvider = setLocalPtyProviderMock.mock.calls[0][0]
-    expect(originalProvider).toBe(adapterInstances[0])
+    expect(originalProvider).toBeInstanceOf(DaemonPtyRouter)
+    expect((originalProvider as InstanceType<typeof DaemonPtyRouter>).getCurrentAdapter()).toBe(
+      adapterInstances[0]
+    )
     expect(mod.getDaemonProvider()).toBe(originalProvider)
 
     await mod.restartDaemon()
@@ -204,8 +259,12 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const replacementAdapter = adapterInstances[1]
     // Second call: swap to the replacement provider (Step 6).
     expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(2)
-    expect(setLocalPtyProviderMock.mock.calls[1][0]).toBe(replacementAdapter)
-    expect(mod.getDaemonProvider()).toBe(replacementAdapter)
+    const replacementProvider = setLocalPtyProviderMock.mock.calls[1][0]
+    expect(replacementProvider).toBeInstanceOf(DaemonPtyRouter)
+    expect((replacementProvider as InstanceType<typeof DaemonPtyRouter>).getCurrentAdapter()).toBe(
+      replacementAdapter
+    )
+    expect(mod.getDaemonProvider()).toBe(replacementProvider)
 
     // Step 7: rebind must run *after* Step 6 (the provider swap).
     const rebindOrder = rebindLocalProviderListenersMock.mock.invocationCallOrder.at(-1) ?? -1
@@ -320,19 +379,16 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(adapterInstances.some((instance) => instance.protocolVersion === 9)).toBe(true)
   })
 
-  it('restart path with no legacy adapters yields a bare DaemonPtyAdapter (not wrapped in a router)', async () => {
+  it('keeps the daemon OMP write fence installed across a no-legacy restart', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()
 
-    // initDaemonPtyProvider yields a bare adapter when no legacy adapters exist — confirm that shape persists across restart.
-    const { DaemonPtyAdapter } = await import('./daemon-pty-adapter')
     const { DaemonPtyRouter } = await import('./daemon-pty-router')
-    expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyAdapter)
+    expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyRouter)
 
     await mod.restartDaemon()
 
-    expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyAdapter)
-    expect(mod.getDaemonProvider()).not.toBeInstanceOf(DaemonPtyRouter)
+    expect(mod.getDaemonProvider()).toBeInstanceOf(DaemonPtyRouter)
   })
 
   it('orders Step 3 (cleanup) → Step 4 (resetHandle + ensureRunning) → Step 5 (new adapter) → Step 6 (replaceProvider) → Step 7 (rebind)', async () => {
@@ -387,8 +443,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       if (method === 'listSessions') {
         return { sessions: [{ sessionId: 'live-1', isAlive: true }] }
       }
-      // `shutdown` RPC — daemon exits before reply lands; return undefined.
-      return undefined
+      return { physicalPtyExitVerified: true }
     })
     const ensureConnectedMock = vi.fn(async () => {})
     const disconnectMock = vi.fn()

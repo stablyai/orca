@@ -28,6 +28,7 @@ const session: NativeChatLiveSession = {
   sessionId: 'session-1',
   agent: 'codex',
   hasMore: false,
+  omitsOlderRecords: false,
   loadingEarlier: false,
   loadEarlier: vi.fn(),
   readPhase: 'ready'
@@ -564,6 +565,31 @@ describe('NativeChatMessageList assistant messages', () => {
       'aria-expanded',
       'false'
     )
+  })
+
+  it('labels reasoning separately from assistant prose', () => {
+    render(
+      <NativeChatMessageList
+        session={{
+          ...session,
+          messages: [
+            {
+              id: 'reasoning-1',
+              role: 'reasoning',
+              blocks: [{ type: 'text', text: 'Inspect the transport boundary.' }],
+              timestamp: 1,
+              source: 'transcript'
+            }
+          ]
+        }}
+        isWorking={false}
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(screen.getByText('Reasoning')).toBeInTheDocument()
+    expect(screen.getByText('Inspect the transport boundary.')).toBeInTheDocument()
   })
 })
 

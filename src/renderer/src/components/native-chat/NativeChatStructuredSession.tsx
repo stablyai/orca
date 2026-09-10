@@ -76,6 +76,9 @@ export function NativeChatStructuredSession(
       agent: props.agent,
       ...(controller.error ? { error: controller.error } : {}),
       hasMore: controller.hasOlder,
+      // The cursor read owner reports an affordance, not a measurement, and no
+      // horizon inference runs on this surface — leave it unproven (SA-008).
+      omitsOlderRecords: false,
       loadingEarlier: controller.loadingOlder,
       loadEarlier: () => void controller.loadOlder(),
       readPhase:

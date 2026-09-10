@@ -13,11 +13,15 @@ import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
+import { randomUUID } from 'node:crypto'
+import { localOmpRpcSessionWriteFence } from '../omp-rpc/omp-rpc-local-session-write-fence'
+import { DaemonPtySessionWriteFence } from './daemon-pty-session-write-fence'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
+  private readonly ptySpawnFences = new DaemonPtySessionWriteFence()
   private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
 
@@ -27,8 +31,9 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.ownerResolver = new DaemonSessionOwnerResolver(this.allAdapters(), this.sessionAdapters)
     this.subscriptions = new DaemonPtyAdapterSubscriptionFanout(
       this.allAdapters(),
-      (id) => {
-        this.ownerResolver.forgetRoute(id)
+      (payload) => {
+        this.ownerResolver.forgetRoute(payload.id)
+        this.ptySpawnFences.release(payload.id, payload.incarnationId)
       },
       (adapter) => this.ownerResolver.invalidateProvider(adapter)
     )
@@ -44,7 +49,31 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
     const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
     const target = adapter ?? this.current
-    const result = await target.spawn(opts)
+    const fenceOwner = `daemon-pty:${randomUUID()}`
+    const fencedSessionFilePath = localOmpRpcSessionWriteFence.reservePtySpawn(
+      opts.command,
+      opts.cwd ?? '',
+      fenceOwner
+    )
+    let result: PtySpawnResult
+    try {
+      result = await target.spawn(opts)
+    } catch (error) {
+      if (fencedSessionFilePath) {
+        localOmpRpcSessionWriteFence.release(fencedSessionFilePath, fenceOwner)
+      }
+      throw error
+    }
+    if (fencedSessionFilePath && !result.exitedBeforeSpawnReply) {
+      this.ptySpawnFences.reserve(
+        result.id,
+        fencedSessionFilePath,
+        fenceOwner,
+        result.incarnationId
+      )
+    } else if (fencedSessionFilePath) {
+      localOmpRpcSessionWriteFence.release(fencedSessionFilePath, fenceOwner)
+    }
     // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
     if (!result.exitedBeforeSpawnReply) {
       this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
@@ -137,6 +166,10 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async getCwd(id: string): Promise<string> {
     return this.adapterFor(id).getCwd(id)
+  }
+
+  async getSlavePath(id: string): Promise<string | undefined> {
+    return await this.adapterFor(id).getSlavePath?.(id)
   }
 
   async getInitialCwd(id: string): Promise<string> {

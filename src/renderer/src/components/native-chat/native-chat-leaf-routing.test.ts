@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  nativeChatHostCanRenderLeafTranscript,
   nativeChatLaunchAgentForLeaf,
   nativeChatLeafOwnsTabWideEvidence,
   resolveNativeChatLeafRoute
@@ -260,7 +261,7 @@ describe('resolveNativeChatLeafRoute', () => {
     ).toEqual({ chatLeafId: 'restored-agent', exitChat: false })
   })
 
-  it('clears leaf ownership after returning to terminal view', () => {
+  it('retains leaf ownership while showing terminal view', () => {
     expect(
       resolveNativeChatLeafRoute({
         isChatViewMode: false,
@@ -269,6 +270,75 @@ describe('resolveNativeChatLeafRoute', () => {
         chatLeafStillMounted: true,
         activeLeafIsEligible: true
       })
+    ).toEqual({ chatLeafId: 'agent-leaf', exitChat: false })
+  })
+
+  // XLR-034: retention is what makes the toggle back into Chat skip active-leaf
+  // eligibility, so it must not survive the pane's execution host moving off
+  // this client — otherwise Chat reopens against local disk for a remotely
+  // owned session (docs/reference/ssh-execution-boundary.md).
+  it('drops the retained leaf once the authoritative host cannot serve its transcript', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: false,
+        chatLeafId: 'agent-leaf',
+        activeLeafId: 'agent-leaf',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        hostCanRenderTranscript: false
+      })
     ).toEqual({ chatLeafId: null, exitChat: false })
+  })
+
+  it('exits a showing chat whose leaf the authoritative host can no longer serve', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'agent-leaf',
+        activeLeafId: 'agent-leaf',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        hostCanRenderTranscript: false
+      })
+    ).toEqual({ chatLeafId: null, exitChat: true })
+  })
+
+  it('keeps a structured session that the host verdict does not object to', () => {
+    expect(
+      resolveNativeChatLeafRoute({
+        isChatViewMode: true,
+        chatLeafId: 'adopted-agent',
+        activeLeafId: 'adopted-agent',
+        chatLeafStillMounted: true,
+        activeLeafIsEligible: true,
+        structuredSessionId: 'codex_thread-1',
+        hostCanRenderTranscript: true
+      })
+    ).toEqual({ chatLeafId: 'adopted-agent', exitChat: false })
+  })
+})
+
+describe('nativeChatHostCanRenderLeafTranscript', () => {
+  it('refuses an OMP leaf whose transcript lives on another host', () => {
+    expect(
+      nativeChatHostCanRenderLeafTranscript({ agent: 'omp', transcriptIsLocalReadable: false })
+    ).toBe(false)
+  })
+
+  it('admits an OMP leaf this renderer can read', () => {
+    expect(
+      nativeChatHostCanRenderLeafTranscript({ agent: 'omp', transcriptIsLocalReadable: true })
+    ).toBe(true)
+  })
+
+  it('leaves agents that disclose their own transcript path renderable over SSH', () => {
+    // Claude/Codex hooks publish the transcript path, so the reader never
+    // scans this client's disk for them.
+    expect(
+      nativeChatHostCanRenderLeafTranscript({ agent: 'claude', transcriptIsLocalReadable: false })
+    ).toBe(true)
+    expect(
+      nativeChatHostCanRenderLeafTranscript({ agent: null, transcriptIsLocalReadable: false })
+    ).toBe(true)
   })
 })

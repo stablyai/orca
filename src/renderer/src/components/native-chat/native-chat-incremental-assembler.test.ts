@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { normalizeImageTranscriptMessages } from '../../../../shared/native-chat-image-transcript-markers'
+import { ompAdvisorNotesText, ompAdvisorTurnId } from '../../../../shared/omp-advisor-notes'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
 import {
   applyAppends,
   createIncrementalAssembler,
   reset
 } from './native-chat-incremental-assembler'
+import { OMP_RPC_ADVISOR_ID_PREFIX } from './omp-rpc-turn-overlay'
 
 function msg(
   overrides: Partial<NativeChatMessage> & Pick<NativeChatMessage, 'id'>
@@ -196,5 +198,40 @@ describe('incremental assembler — oracle differential', () => {
         ]
       }
     ])
+  })
+})
+
+// The live ordering the pane actually sees: the RPC overlay's advisor row is
+// already in the base list when the transcript tailer appends its own copy.
+// The append supersedes rather than duplicates, and still matches a rebuild.
+describe('incremental assembler — OMP advisor card supersession', () => {
+  const notes = [{ note: 'Stay silent.', severity: 'nit' as const }]
+  const advisorTurnId = ompAdvisorTurnId(notes, 10) as string
+  const advisorText = ompAdvisorNotesText(notes)
+
+  const overlay = msg({
+    id: `${OMP_RPC_ADVISOR_ID_PREFIX}live`,
+    role: 'system',
+    source: 'rpc',
+    turnId: advisorTurnId,
+    blocks: [{ type: 'text', text: advisorText }],
+    timestamp: 10
+  })
+  const persisted = msg({
+    id: 'rec-adv',
+    role: 'system',
+    source: 'transcript',
+    turnId: advisorTurnId,
+    blocks: [{ type: 'text', text: advisorText }],
+    timestamp: 10
+  })
+
+  it('replaces the overlay copy when the transcript copy appends', () => {
+    const assembler = createIncrementalAssembler()
+    reset(assembler, [msg({ id: 'a', timestamp: 1 }), overlay])
+    const after = applyAppends(assembler, [persisted])
+
+    expect(after.map((message) => message.id)).toEqual(['a', 'rec-adv'])
+    expect(after).toEqual(fullRebuild([msg({ id: 'a', timestamp: 1 }), overlay, persisted]))
   })
 })

@@ -11,6 +11,7 @@ import {
   parseRuntimeNativeChatTurnLifecycle,
   RUNTIME_NATIVE_CHAT_READ_ERROR
 } from './native-chat-runtime-contract'
+import { nativeChatBridgeHasMore } from './native-chat-pagination'
 
 /** The read/subscribe surface the live-session hook needs, decoupled from where
  *  the transcript actually lives. Same shape as `window.api.nativeChat`, so the
@@ -43,8 +44,8 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
  *  using this adapter (R3). Preserves whatever `subscribe` returns (sync fn on
  *  desktop, promise on the web bridge) — the hook's teardown handles both (R6). */
 const localNativeChatTransport: NativeChatSessionTransport = {
-  readSession: (agent, sessionId, limit, transcriptPath) =>
-    window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath),
+  readSession: (agent, sessionId, limit, transcriptPath, beforeOffset) =>
+    window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath, beforeOffset),
   subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
 }
 
@@ -52,12 +53,12 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
   const target: RuntimeClientTarget = { kind: 'environment', environmentId }
 
   return {
-    readSession: async (agent, sessionId, limit, transcriptPath) => {
+    readSession: async (agent, sessionId, limit, transcriptPath, beforeOffset) => {
       try {
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          { agent, sessionId, limit, transcriptPath },
+          { agent, sessionId, limit, transcriptPath, beforeOffset },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -153,6 +154,13 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     frame?.type === 'replacement') &&
                   Array.isArray(frame.messages)
                 ) {
+                  // Every window-bearing frame resolves hasMore the same way,
+                  // whatever its position in the stream (SA-012).
+                  const historyWindow = nativeChatBridgeHasMore(
+                    frame.hasMore,
+                    frame.messages.length,
+                    limit
+                  )
                   if (!receivedInitial) {
                     if (!pending) {
                       receivedInitial = true
@@ -160,7 +168,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     onFrame({
                       type: 'snapshot',
                       messages: frame.messages,
-                      hasMore: frame.hasMore ?? frame.messages.length >= (limit ?? 300),
+                      ...historyWindow,
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {}),
                       ...(pending ? { pending: true } : {})
@@ -169,7 +177,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                     onFrame({
                       type: 'snapshot',
                       messages: frame.messages,
-                      hasMore: frame.hasMore ?? false,
+                      ...historyWindow,
                       ...(frame.error ? { error: frame.error } : {}),
                       ...(lifecycle ? { lifecycle } : {}),
                       ...(pending ? { pending: true } : {})
@@ -180,7 +188,7 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
                         ? {
                             type: 'replacement',
                             messages: frame.messages,
-                            hasMore: frame.hasMore ?? false,
+                            ...historyWindow,
                             ...(lifecycle ? { lifecycle } : {})
                           }
                         : {

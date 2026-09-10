@@ -20,6 +20,7 @@ export function createTerminalLayoutActions(
 ): Pick<
   TerminalSlice,
   | 'replaceTerminalLayoutPanePtyId'
+  | 'clearTerminalLayoutPanePtyId'
   | 'setTabPaneExpanded'
   | 'setTabCanExpandPane'
   | 'setTabLayout'
@@ -38,6 +39,41 @@ export function createTerminalLayoutActions(
             [tabId]: {
               ...layout,
               ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
+            }
+          }
+        }
+      })
+    },
+    // Why (D1/D2 stale-record fix, wave 10): `killPtyBeforeOmpRpcAcquire`
+    // suppresses the pty exit and kills it before the RPC acquire call, so
+    // the normal crash-exit teardown (pty-exit-hibernate.ts's onExit),
+    // which would otherwise clear this same leaf's binding via
+    // `clearExitedPanePtyLayoutBinding`, never runs for a suppressed exit —
+    // that skip is intentional there because the codebase's other
+    // suppress-then-kill callers (codex-detached-pane-restart.ts) always
+    // follow with an immediate synchronous rebind. Decision 1's kill has no
+    // such immediate rebind (RPC ownership needs no pty at all), so without
+    // this, `ptyIdsByLeafId[leafId]` keeps advertising a process that is
+    // gone until (if ever) a later hand-back's `replaceTerminalLayoutPanePtyId`
+    // overwrites it — a real gap whenever that hand-back itself fails.
+    // Guarded on `ptyId` still matching so a race that already rebound the
+    // leaf to something newer is never clobbered.
+    clearTerminalLayoutPanePtyId: (tabId, leafId, ptyId) => {
+      set((s) => {
+        const layout = s.terminalLayoutsByTabId[tabId]
+        const existingBindings = layout?.ptyIdsByLeafId
+        if (!layout || !existingBindings || existingBindings[leafId] !== ptyId) {
+          return {}
+        }
+        const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } = layout
+        const nextBindings = { ...existingBindings }
+        delete nextBindings[leafId]
+        return {
+          terminalLayoutsByTabId: {
+            ...s.terminalLayoutsByTabId,
+            [tabId]: {
+              ...layoutWithoutPtyBindings,
+              ...(Object.keys(nextBindings).length > 0 ? { ptyIdsByLeafId: nextBindings } : {})
             }
           }
         }

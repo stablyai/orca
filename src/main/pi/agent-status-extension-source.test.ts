@@ -178,8 +178,8 @@ describe('getPiAgentStatusExtensionSource', () => {
     )
     await harness.callHook('agent_start')
 
-    expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    expect(harness.fetchMock.mock.calls[0]?.[1]?.body).toBe(
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
+    expect(harness.fetchMock.mock.calls[1]?.[1]?.body).toBe(
       JSON.stringify({
         paneKey: 'pane-1',
         launchToken: 'launch-1',

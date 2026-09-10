@@ -8,7 +8,9 @@ import {
 } from './native-chat-incremental-assembler'
 import { prepareNativeChatLiveMessages } from './native-chat-live-message-preparation'
 import { mergeNativeChatLiveSession } from './native-chat-live-status'
+import { ompAdvisorNotesText, ompAdvisorTurnId } from '../../../../shared/omp-advisor-notes'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
+import { OMP_RPC_ADVISOR_ID_PREFIX } from './omp-rpc-turn-overlay'
 
 const CLAUDE_COMMANDS = new Set(
   getVerifiedNativeChatCommands('claude').map((command) => command.name)
@@ -401,3 +403,120 @@ function mulberry32(seed: number): () => number {
     return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296
   }
 }
+
+describe('preparation with hydrated RPC history', () => {
+  it('keeps the repeated turn the RPC window alignment preserved', () => {
+    // The two 'again' turns are one repeat, and the transcript tail only
+    // reaches the newer one. The RPC fold resolves that positionally, so the
+    // legacy cross-source rebuild must not run over the result and collapse
+    // the older copy onto the transcript's — hence the fold comes last.
+    const transcript = [
+      message('disk-2', {
+        role: 'user',
+        blocks: [{ type: 'text', text: 'again' }],
+        timestamp: 20
+      })
+    ]
+    const rpcHistory: NativeChatMessage[] = [
+      message('omp-rpc-history-0', {
+        role: 'user',
+        blocks: [{ type: 'text', text: 'again' }],
+        timestamp: 10,
+        source: 'rpc'
+      }),
+      message('omp-rpc-history-1', {
+        role: 'user',
+        blocks: [{ type: 'text', text: 'again' }],
+        timestamp: 20,
+        source: 'rpc'
+      })
+    ]
+
+    const prepared = prepareNativeChatLiveMessages(transcript, 'claude', rpcHistory)
+
+    expect(prepared.map((entry) => entry.id)).toEqual(['omp-rpc-history-0', 'disk-2'])
+  })
+
+  it('still reconciles the transcript across its own sources before folding history in', () => {
+    // The scrape/transcript collapse the second pass exists for still has to
+    // happen — it just has to happen on the transcript side of the fold.
+    const transcript = [
+      message('scrape-1', {
+        role: 'user',
+        blocks: [{ type: 'text', text: 'shared prompt' }],
+        timestamp: 10,
+        source: 'scrape'
+      }),
+      message('disk-1', {
+        role: 'user',
+        blocks: [{ type: 'text', text: 'shared prompt' }],
+        timestamp: 10
+      })
+    ]
+    const rpcHistory: NativeChatMessage[] = [
+      message('omp-rpc-history-0', {
+        role: 'user',
+        blocks: [{ type: 'text', text: 'shared prompt' }],
+        timestamp: 10,
+        source: 'rpc'
+      }),
+      message('omp-rpc-history-1', {
+        blocks: [{ type: 'text', text: 'unflushed reply' }],
+        timestamp: 20,
+        source: 'rpc'
+      })
+    ]
+
+    const prepared = prepareNativeChatLiveMessages(transcript, 'claude', rpcHistory)
+
+    expect(prepared.map((entry) => entry.id)).toEqual(['disk-1', 'omp-rpc-history-1'])
+  })
+
+  it('keeps the transcript array by identity when no history was hydrated', () => {
+    const messages = [message('user', { role: 'user', blocks: [{ type: 'text', text: 'hi' }] })]
+
+    expect(prepareNativeChatLiveMessages(messages, 'claude', [])).toBe(messages)
+  })
+})
+
+describe('preassembled native-chat live sessions — OMP advisor cards', () => {
+  const notes = [
+    { note: 'Watch the coupling.', severity: 'concern' as const, advisor: 'Architecture' }
+  ]
+  const advisorTurnId = ompAdvisorTurnId(notes, 2) as string
+  const advisorText = ompAdvisorNotesText(notes)
+
+  // A mixed-source list routes through the assembler's cross-source pass, so
+  // the presentation transforms must not strip the turnId the advisor copies
+  // collapse on.
+  it('collapses the RPC and transcript advisor copies through the live-message path', () => {
+    const mixed = [
+      message('reply', { source: 'transcript', timestamp: 1 }),
+      message(`${OMP_RPC_ADVISOR_ID_PREFIX}live`, {
+        role: 'system',
+        source: 'rpc',
+        turnId: advisorTurnId,
+        blocks: [{ type: 'text', text: advisorText }],
+        timestamp: 2
+      }),
+      message('rec-adv', {
+        role: 'system',
+        source: 'transcript',
+        turnId: advisorTurnId,
+        blocks: [{ type: 'text', text: advisorText }],
+        timestamp: 2
+      })
+    ]
+
+    const prepared = prepareNativeChatLiveMessages(mixed, 'omp')
+
+    expect(prepared.map((entry) => entry.id)).toEqual(['reply', 'rec-adv'])
+    expect(prepared).toEqual(
+      assembleNativeChatSession({
+        sources: { transcript: mixed },
+        sessionId: 'session-1',
+        agent: 'omp'
+      }).messages
+    )
+  })
+})

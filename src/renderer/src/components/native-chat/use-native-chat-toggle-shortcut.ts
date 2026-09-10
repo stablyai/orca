@@ -6,11 +6,11 @@ import { resolveNativeChatTabAgentEvidence } from '../tab-bar/native-chat-tab-ag
 import { canToggleNativeChat } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
-import { getConnectionIdFromState } from '@/lib/connection-context'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
 } from './native-chat-leaf-routing'
+import { selectNativeChatWorktreeConnectionId } from './native-chat-runtime-owner'
 
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,
@@ -89,8 +89,13 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
           launchAgent: detectedAgent || !tabWideFallbackSafe ? null : terminalTab?.launchAgent,
           detectedAgent,
           resolvedAgent: detectedAgent ? null : titleFallbackAgent,
+          // The authoritative worktree host ladder, not the repo-only resolver
+          // (XLR-034/XLR-009): a worktree stamped `ssh:` beneath a repository
+          // row marked local resolves to null there, so this chord admitted
+          // Chat for a pane whose transcript lives on another host — and the
+          // retained owning leaf then reopened it against local disk.
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-            getConnectionIdFromState(state, worktreeId)
+            selectNativeChatWorktreeConnectionId(state, worktreeId)
           ),
           isChatViewMode: tab.viewMode === 'chat'
         })

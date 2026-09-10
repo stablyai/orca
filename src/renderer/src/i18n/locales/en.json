@@ -17089,7 +17089,16 @@
         "pendingAttachmentLimit": "Too many attachments are waiting. Finish composing before attaching more.",
         "viewAttachment": "View image",
         "imagePreview": "Full-size image preview",
-        "imagePreviewUnavailable": "Preview unavailable"
+        "imagePreviewUnavailable": "Preview unavailable",
+        "ompRpcSendFailed": "Message could not be sent to the agent.",
+        "ompRpcSendSuperseded": "Message was not sent: the pane's agent session was replaced first.",
+        "ompRpcCommandSendFailed": "Command {{command}} could not be sent to the agent.",
+        "ompRpcCommandSendSuperseded": "Command {{command}} was not sent: the pane's agent session was replaced first.",
+        "followUp": "Follow up",
+        "attachmentsRequirePty": "Image attachments need a live terminal.",
+        "imagesRequirePty": "Image attachments need a live terminal; remove them to send this as a chat message.",
+        "commandRequiresPty": "This command needs a live terminal and cannot run over the agent connection.",
+        "ompRpcLocalCommandUnavailable": "This command could not be run: the agent connection did not answer and there is no live terminal."
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -17277,6 +17286,19 @@
       "conversationCommand": {
         "pendingWork": "Wait for pending work and messages to finish before using this command.",
         "unconfirmed": "Conversation operation was not confirmed."
+      },
+      "extensionUi": {
+        "autoResolves": "Resolves automatically if left unanswered.",
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "inputPlaceholder": "Type your answer…",
+        "submit": "Submit"
+      },
+      "reasoningLabel": "Reasoning",
+      "commandMarker": {
+        "ran": "Ran {{command}}",
+        "outputTruncated": "_Output truncated._",
+        "localCommandNote": "Local command — agent not invoked"
       }
     },
     "tab": {
