@@ -22,11 +22,21 @@ import {
 // separate frames, so there is a frame where the row exists and `ptyIdsByTabId` is still empty.
 // An empty handle map for a row the host is still publishing is `unverifiable`, never `exited`
 // (docs/reference/ssh-execution-boundary.md), so nothing may be resumed off it.
+//
+// HOW TO ASSERT ON THIS MODULE, because the obvious way cannot fail. "Did the waiter release" is
+// NOT an observable here: a waiter released for the wrong reason is immediately re-parked by the
+// replayed sweep, so the store, the record and the parked count all read identically one tick
+// later. A mutation that released every waiter on any tab's handle survived twelve tests written
+// that way. What a spurious release actually costs is the deadline — the re-park starts a fresh
+// budget — so the assertion has to advance the clock: park, advance part of the budget, do the
+// thing, then advance to the ORIGINAL deadline and require the pane to decide on schedule.
 
 const initialAppStoreState = useAppStore.getState()
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const WEB_TAB_ID = 'web-terminal-host-tab-1'
+const SECOND_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+const SECOND_TAB_ID = 'web-terminal-host-tab-2'
 const RUNTIME_ENV_ID = 'env-handle-gap'
 
 function makeRuntimeOwnedWorktree(): ReturnType<typeof makeCreatedAgentWorktree> {
@@ -74,17 +84,45 @@ function seedMirroredWorkspace(worktree: ReturnType<typeof makeCreatedAgentWorkt
   useAppStore.setState(state as AppState)
 }
 
+/** A second published mirrored row in the same environment, with its own leaf binding. */
+function seedSecondMirroredPane(worktreeId: string): void {
+  const before = useAppStore.getState()
+  useAppStore.setState({
+    tabsByWorktree: {
+      [worktreeId]: [
+        ...(before.tabsByWorktree[worktreeId] ?? []),
+        { id: SECOND_TAB_ID, title: 'Claude 2', ptyId: null } as never
+      ]
+    },
+    terminalLayoutsByTabId: {
+      ...before.terminalLayoutsByTabId,
+      [SECOND_TAB_ID]: {
+        root: { type: 'leaf', leafId: SECOND_LEAF_ID },
+        activeLeafId: SECOND_LEAF_ID,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [SECOND_LEAF_ID]: 'remote:env-handle-gap@@term_2' }
+      } as never
+    }
+  } as never)
+}
+
 /** The capture the reported flow produces: recorded mid-turn, so it is active work, not history. */
-function seedActiveSleepingRecord(worktreeId: string): string {
-  const paneKey = makePaneKey(WEB_TAB_ID, LEAF_ID)
+function seedActiveSleepingRecordFor(
+  worktreeId: string,
+  tabId: string,
+  leafId: string,
+  sessionId: string
+): string {
+  const paneKey = makePaneKey(tabId, leafId)
   useAppStore.setState({
     sleepingAgentSessionsByPaneKey: {
+      ...useAppStore.getState().sleepingAgentSessionsByPaneKey,
       [paneKey]: {
         paneKey,
-        tabId: WEB_TAB_ID,
+        tabId,
         worktreeId,
         agent: 'claude',
-        providerSession: { key: 'session_id', id: 'handle-gap-session' },
+        providerSession: { key: 'session_id', id: sessionId },
         connectionId: null,
         prompt: '',
         state: 'working',
@@ -96,6 +134,10 @@ function seedActiveSleepingRecord(worktreeId: string): string {
     }
   } as never)
   return paneKey
+}
+
+function seedActiveSleepingRecord(worktreeId: string): string {
+  return seedActiveSleepingRecordFor(worktreeId, WEB_TAB_ID, LEAF_ID, 'handle-gap-session')
 }
 
 describe('resume across the mirror handle gap', () => {
@@ -263,5 +305,96 @@ describe('resume across the mirror handle gap', () => {
 
     expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+  })
+
+  // Why this is not the test above: there the wait had already expired before the reconnect, so
+  // the stale verdict was a map entry. Here the wait is still armed when the generation moves, and
+  // its deadline then fires on a connection that has had no chance at all to publish the handle.
+  it('does not let a wait armed on the previous connection decide the new one', () => {
+    const worktree = makeRuntimeOwnedWorktree()
+    seedMirroredWorkspace(worktree)
+    const paneKey = seedActiveSleepingRecord(worktree.id)
+    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+
+    // The host reconnects one millisecond before the wait's own deadline.
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS - 1)
+    setRuntimeEnvironmentConnectionGenerationForTests(RUNTIME_ENV_ID, 1)
+    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
+    vi.advanceTimersByTime(1)
+
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+    // Re-armed, not held: the new connection gets its own budget and then decides.
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(1)
+  })
+
+  it('releases only the pane whose handle landed when two panes share the environment', () => {
+    const worktree = makeRuntimeOwnedWorktree()
+    seedMirroredWorkspace(worktree)
+    seedSecondMirroredPane(worktree.id)
+    const firstPaneKey = seedActiveSleepingRecordFor(worktree.id, WEB_TAB_ID, LEAF_ID, 'session-1')
+    const secondPaneKey = seedActiveSleepingRecordFor(
+      worktree.id,
+      SECOND_TAB_ID,
+      SECOND_LEAF_ID,
+      'session-2'
+    )
+    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(2)
+
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
+    useAppStore.setState({ ptyIdsByTabId: { [WEB_TAB_ID]: ['remote:env-handle-gap@@term_1'] } })
+
+    // The first pane owns its live PTY; the second is still undecided, not resumed.
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
+    const after = useAppStore.getState()
+    expect(after.sleepingAgentSessionsByPaneKey[firstPaneKey]).toBeDefined()
+    expect(after.sleepingAgentSessionsByPaneKey[secondPaneKey]).toBeDefined()
+    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+
+    // Why the clock matters: releasing the second pane here and letting the replay re-park it
+    // would look identical right now and silently restart its budget. Its own deadline still has
+    // to land on the original schedule.
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[secondPaneKey]).toBeUndefined()
+  })
+
+  it('does not release or reschedule a park because another environment published a handle', () => {
+    const worktree = makeRuntimeOwnedWorktree()
+    seedMirroredWorkspace(worktree)
+    const paneKey = seedActiveSleepingRecord(worktree.id)
+    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
+    useAppStore.setState({
+      ptyIdsByTabId: { 'web-terminal-other-env-tab': ['remote:env-other@@term_1'] }
+    })
+
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    // The unrelated handle must not have restarted this pane's budget.
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+  })
+
+  it('leaves no waiter or timer behind when the environment tears its rows down mid-park', () => {
+    const worktree = makeRuntimeOwnedWorktree()
+    seedMirroredWorkspace(worktree)
+    seedActiveSleepingRecord(worktree.id)
+    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+
+    // Teardown drops every row the environment owned.
+    useAppStore.setState({ tabsByWorktree: {}, terminalLayoutsByTabId: {} } as never)
+
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
+    // Nothing may still be scheduled against the torn-down environment.
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

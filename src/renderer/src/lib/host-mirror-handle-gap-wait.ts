@@ -26,6 +26,8 @@ export const HOST_MIRROR_HANDLE_GAP_DEADLINE_MS = WEB_SESSION_TAB_RPC_TIMEOUT_MS
 type HandleGapWaiter = {
   worktreeId: string
   tabId: string
+  /** Connection generation the wait was armed on; its verdict is void on any other. */
+  generation: number
   deadline: ReturnType<typeof setTimeout>
   run: () => void
 }
@@ -141,11 +143,22 @@ export function parkUntilHostMirrorHandleLands(
     existing.run = run
     return
   }
+  const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
   const deadline = setTimeout(() => {
-    recordExpiredWait(environmentId, key)
+    // Why the generation is re-read: a reconnect mid-park makes this wait's silence
+    // evidence about a connection that is gone. Recording it would let a wait armed
+    // milliseconds before the reconnect authorize a resume on the new one — the #19735
+    // fork with an extra step. Release without a verdict instead; the replay re-parks
+    // and the new connection gets its own full budget.
+    if (
+      waitersByPane.get(key)?.generation ===
+      getRuntimeEnvironmentConnectionGeneration(environmentId)
+    ) {
+      recordExpiredWait(environmentId, key)
+    }
     releaseWaiter(key)
   }, HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
-  waitersByPane.set(key, { worktreeId, tabId, deadline, run })
+  waitersByPane.set(key, { worktreeId, tabId, generation, deadline, run })
   startStoreSubscription()
 }
 
