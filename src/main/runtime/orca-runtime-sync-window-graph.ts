@@ -84,6 +84,9 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
     const graphSyncedAt = this.nextTitleObservationSequence()
+    // Bumped before the leaf loop so surfaces this statement records are stamped with it, and a
+    // surface recorded after it is immune until the next one (pty-recorded-surface-topology.ts).
+    this.graphSequence += 1
 
     // Why: renderer reloads can briefly republish the same leaf with no ptyId;
     // keep live CLI handles usable while the UI graph rebuilds.
