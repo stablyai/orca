@@ -202,6 +202,16 @@ export class SessionSearchStore {
   }
 
   /**
+   * Forgets the drop count. Only a completed full sweep may call this: it has
+   * just re-enumerated every root, so a path dropped before it is back in the
+   * queue if it is still owed, and the count would otherwise report an
+   * incompleteness that no longer exists for the rest of the process.
+   */
+  forgetDroppedPending(): void {
+    this.droppedStalePaths = 0
+  }
+
+  /**
    * Hands the re-read set to its scheduler and clears it.
    *
    * These paths are behind, not merely dirty: the index declined their last read
@@ -220,14 +230,13 @@ export class SessionSearchStore {
     return this.stale.size
   }
 
-  /** Files the index currently holds, for a status that reports what is there. */
+  /**
+   * Files the index currently holds, for a status that reports what is there.
+   * Throws on a handle that cannot answer; zero is a number a caller would
+   * render, and "the index is empty" is not what a broken handle means.
+   */
   get indexedFileCount(): number {
-    try {
-      return Number((this.db.prepare('SELECT count(*) AS n FROM files').get() as { n: number }).n)
-    } catch (error) {
-      this.onError(error)
-      return 0
-    }
+    return Number((this.db.prepare('SELECT count(*) AS n FROM files').get() as { n: number }).n)
   }
 
   /**
@@ -236,17 +245,16 @@ export class SessionSearchStore {
    * why only a sweep asks.
    */
   indexedSources(): SessionSearchIndexedSource[] {
-    try {
-      return this.db
-        .prepare(
-          `SELECT f.path AS path, s.agent AS agent, s.codex_home AS codexHome
-           FROM files f LEFT JOIN sessions s ON s.id = f.session_row_id`
-        )
-        .all() as SessionSearchIndexedSource[]
-    } catch (error) {
-      this.onError(error)
-      return []
-    }
+    // Throws rather than answering with an empty list. The caller is a sweep
+    // deciding which rows nothing rediscovered, and an empty answer reads as
+    // "the index holds nothing that is missing" — the one conclusion a handle
+    // that cannot be read must never be allowed to reach.
+    return this.db
+      .prepare(
+        `SELECT f.path AS path, s.agent AS agent, s.codex_home AS codexHome
+         FROM files f LEFT JOIN sessions s ON s.id = f.session_row_id`
+      )
+      .all() as SessionSearchIndexedSource[]
   }
 
   /**

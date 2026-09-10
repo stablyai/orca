@@ -17,7 +17,20 @@ import {
 import { runSessionSearchReconcileCycle } from './session-search-reconciler'
 import { sessionSearchHistoryCutoffMs } from './session-search-retention-policy'
 import { SessionSearchStore } from './session-search-store'
+import { SessionSearchUnreadableFiles } from './session-search-unreadable-files'
 import { SessionSearchWorkLoop } from './session-search-work-loop'
+
+/**
+ * Database paths a live indexer already owns.
+ *
+ * One process, one writer, one consumer registration per index. Two indexers on
+ * one path both register with the reader, so every transcript is read and
+ * written twice and the second write is fenced by the first at random. The
+ * immutable design's recipe is close-then-construct, so the ordering that
+ * causes this is exactly the ordering the recipe rules out; this is what says so
+ * rather than letting it corrupt quietly.
+ */
+const liveIndexerPaths = new Set<string>()
 
 /**
  * Owns freshness for the index store: a whole-machine sweep, then a timer that
@@ -52,6 +65,7 @@ export class SessionSearchIndexer {
   private readonly recentPerAgent: number
   private readonly fullSweepEveryCycles: number
   private readonly indexingStatus = new SessionSearchIndexingStatus()
+  private readonly onError: (error: unknown) => void
 
   private readonly loop: SessionSearchWorkLoop
   private readonly store: SessionSearchStore
@@ -63,6 +77,7 @@ export class SessionSearchIndexer {
   private fullSweepDue = false
   private started = false
   private closed = false
+  private readonly unreadable = new SessionSearchUnreadableFiles()
 
   constructor(private readonly options: SessionSearchIndexerOptions) {
     this.clock = options.clock ?? systemSessionSearchClock
@@ -76,14 +91,18 @@ export class SessionSearchIndexer {
       options.fullSweepEveryCycles ?? DEFAULT_SESSION_SEARCH_FULL_SWEEP_EVERY_CYCLES
     )
     const onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
+    this.onError = onError
     this.loop = new SessionSearchWorkLoop({
       clock: this.clock,
       intervalMs: this.intervalMs,
-      onFailure: (error) => {
-        this.indexingStatus.failed()
-        onError(error)
-      }
+      onFailure: onError
     })
+    if (liveIndexerPaths.has(options.databasePath)) {
+      throw new Error(
+        `SessionSearchIndexer: ${options.databasePath} already has a live indexer; close it first`
+      )
+    }
+    liveIndexerPaths.add(options.databasePath)
     // Store, registration and indexer share one lifetime, which is what makes
     // the object immutable: there is no second open to get out of step with.
     this.store = new SessionSearchStore(options.databasePath, onError)
@@ -123,10 +142,24 @@ export class SessionSearchIndexer {
   }
 
   status(): SessionSearchIndexStatus {
-    // Counted in the store, not tallied per attempt: an attempt counter reports
-    // files the index does not hold, and reports them again next cycle.
-    this.indexingStatus.setFilesIndexed(this.store.indexedFileCount)
-    this.indexingStatus.setPending(this.store.pendingFileCount, this.store.droppedPendingFileCount)
+    this.indexingStatus.setUnreadableFiles(this.unreadable.size)
+    // A closed indexer reports what it last knew, not what a shut handle says.
+    // Reading the store here answered zero files and reported a database error
+    // to the owner, for a call whose whole job is to describe what happened.
+    if (!this.closed) {
+      // Counted in the store, not tallied per attempt: an attempt counter
+      // reports files the index does not hold, and reports them again next
+      // cycle. A handle that cannot answer leaves the last numbers standing.
+      try {
+        this.indexingStatus.setFilesIndexed(this.store.indexedFileCount)
+        this.indexingStatus.setPending(
+          this.store.pendingFileCount,
+          this.store.droppedPendingFileCount
+        )
+      } catch (error) {
+        this.onError(error)
+      }
+    }
     return this.indexingStatus.snapshot()
   }
 
@@ -142,6 +175,7 @@ export class SessionSearchIndexer {
     this.loop.close()
     this.unregister()
     this.store.close()
+    liveIndexerPaths.delete(this.options.databasePath)
   }
 
   /** Tests only: everything else drives this through the timer. */
@@ -174,7 +208,15 @@ export class SessionSearchIndexer {
       // flag again, and clearing it on the way out would erase that request
       // along with this pass's own. An unfinished sweep sets it back itself.
       this.fullSweepDue = false
-      await this.sweep(cutoffMs, listings, overdue, signal)
+      try {
+        await this.sweep(cutoffMs, listings, overdue, signal)
+      } catch (error) {
+        // The flag is this method's to hold, so it is this method's to give
+        // back: a sweep that threw part way learned nothing, and losing the
+        // flag here would leave nothing armed to try again.
+        this.fullSweepDue = true
+        throw error
+      }
       return
     }
     await this.cycle(listings, overdue, signal)
@@ -191,12 +233,22 @@ export class SessionSearchIndexer {
       roots: this.options.roots,
       status: this.indexingStatus,
       cutoffMs,
+      recentPerAgent: this.recentPerAgent,
       previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,
       listings,
       overdue,
+      heldOut: (candidate) => this.unreadable.holdsOut(candidate),
+      onIndexed: (candidate) => this.unreadable.clear(candidate.file.path),
+      onFailed: (candidate) => this.unreadable.record(candidate),
       signal
     })
     this.indexingStatus.sweepFinished(sweep.completed)
+    if (sweep.completed) {
+      // Before the requeue, not after: this sweep re-enumerated every root, so
+      // a drop from before it no longer means anything is missing, while what
+      // this sweep hands back and the queue cannot hold does.
+      this.store.forgetDroppedPending()
+    }
     this.requeue(sweep.deferred)
     if (!sweep.completed) {
       // A sweep stays due until one finishes: an aborted one saw part of the
@@ -225,6 +277,9 @@ export class SessionSearchIndexer {
       status: this.indexingStatus,
       recentPerAgent: this.recentPerAgent,
       overdue,
+      heldOut: (candidate) => this.unreadable.holdsOut(candidate),
+      onIndexed: (candidate) => this.unreadable.clear(candidate.file.path),
+      onFailed: (candidate) => this.unreadable.record(candidate),
       previousRecent: this.previousRecent,
       previousRootsWithFiles: this.previousRootsWithFiles ?? undefined,
       listings,

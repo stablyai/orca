@@ -264,6 +264,12 @@ it('drops the oldest record rather than growing without a bound, and says so', (
   const kept = store.takeStale().map((candidate) => candidate.file.path)
   expect(kept).not.toContain('/transcript-0.jsonl')
   expect(kept).toContain(`/transcript-${STALE_PATH_LIMIT + 4}.jsonl`)
+
+  // A drop says the queue is missing something. A completed full sweep
+  // re-enumerates every root, so it is what makes that stop being true; the
+  // count is a report on the current queue, not a lifetime tally.
+  store.forgetDroppedPending()
+  expect(store.droppedPendingFileCount).toBe(0)
 })
 
 it('keeps the session list running when the index write fails', async () => {

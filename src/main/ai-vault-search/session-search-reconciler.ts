@@ -40,6 +40,10 @@ export type SessionSearchReconcileArgs = {
   recentPerAgent: number
   /** True once the pass is out of wall time; the rest comes back as `deferred`. */
   overdue?: () => boolean
+  /** True for a file that has failed at this stat often enough to stop trying. */
+  heldOut?: (candidate: SessionFileCandidate) => boolean
+  onIndexed?: (candidate: SessionFileCandidate) => void
+  onFailed?: (candidate: SessionFileCandidate) => void
   /** Paths the previous cycle watched; one missing from this one may be gone. */
   previousRecent: ReadonlySet<string>
   /** Real roots that listed transcripts on the previous pass; undefined before the first. */
@@ -100,12 +104,14 @@ export async function runSessionSearchReconcileCycle(
           signal,
           forced,
           overdue: args.overdue,
+          heldOut: args.heldOut,
           onIndexed: (candidate, bytes) => {
             owed.delete(candidate.file.path)
             status.indexed(bytes)
+            args.onIndexed?.(candidate)
           },
           onSkipped: (candidate) => owed.delete(candidate.file.path),
-          onFailed: () => status.failed()
+          onFailed: (candidate) => args.onFailed?.(candidate)
         }
       )
     } catch (error) {

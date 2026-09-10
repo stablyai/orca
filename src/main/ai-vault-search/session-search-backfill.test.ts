@@ -56,6 +56,7 @@ function sweep(
     roots: harness.roots,
     status: new SessionSearchIndexingStatus(),
     cutoffMs: null,
+    recentPerAgent: 12,
     listings: new SessionSearchDirectoryListings(),
     ...overrides
   })
@@ -81,10 +82,8 @@ it('retires nothing and reports nothing when a sweep is aborted', async () => {
     )
   }
   const controller = new AbortController()
-  const status = new SessionSearchIndexingStatus()
-  status.indexed = () => controller.abort()
 
-  const aborted = await sweep({ status, signal: controller.signal })
+  const aborted = await sweep({ onIndexed: () => controller.abort(), signal: controller.signal })
   expect(aborted.completed).toBe(false)
   expect(aborted.degradedRoots).toEqual([])
   expect(aborted.watchPaths.size).toBe(0)

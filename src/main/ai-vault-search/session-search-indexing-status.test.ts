@@ -80,13 +80,11 @@ it('starts a new sweep from zero, keeping what the store counts', () => {
   const status = startedStatus()
   status.beginSweep()
   status.indexed(500)
-  status.failed()
   status.setFilesIndexed(2)
   status.setPending(4, 2)
   status.beginSweep()
   expect(status.snapshot()).toMatchObject({
     bytesIndexed: 0,
-    failures: 0,
     filesIndexed: 2,
     filesPending: 4,
     droppedPending: 2

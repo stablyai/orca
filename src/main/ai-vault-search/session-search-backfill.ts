@@ -1,11 +1,12 @@
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { ensureSessionParseCacheLoaded } from '../ai-vault/session-parse-cache-persistence'
+import { SessionNewestFiles } from '../ai-vault/session-newest-files'
 import {
   cursorChatMetaRefusals,
   withCursorChatMetaScan
 } from '../ai-vault/session-scanner-cursor-chat-meta'
 import { recordSessionScanIssue } from '../ai-vault/session-scan-issues'
-import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import type { SessionFileCandidate, SessionFileDiscovery } from '../ai-vault/session-scanner-types'
 import {
   mergeDegradedRoots,
   scanIssueDegradedRoots,
@@ -36,16 +37,30 @@ export type SessionSearchBackfillArgs = {
   status: SessionSearchIndexingStatus
   /** Oldest transcript mtime worth indexing, or null for all history. */
   cutoffMs: number | null
+  /** The recency rule the cycles after this sweep will apply; seeds their watch set. */
+  recentPerAgent: number
   /** Real roots that listed transcripts on the previous pass; undefined before the first. */
   previousRootsWithFiles?: ReadonlySet<string>
   /** True once the pass is out of wall time; the rest comes back as `deferred`. */
   overdue?: () => boolean
+  /** True for a file that has failed at this stat often enough to stop trying. */
+  heldOut?: (candidate: SessionFileCandidate) => boolean
+  onIndexed?: (candidate: SessionFileCandidate) => void
+  onFailed?: (candidate: SessionFileCandidate) => void
   listings: SessionSearchDirectoryReader
   signal?: AbortSignal
 }
 
 export type SessionSearchBackfillResult = {
-  /** What the next pass watches: only what this one could not settle. */
+  /**
+   * What the next pass watches: this sweep's own recency window, plus anything
+   * it could not settle.
+   *
+   * The window has to be in here. A cycle proves a deletion by comparing what
+   * the previous pass watched against what it discovers, so a sweep that
+   * watched nothing leaves the cycle after it with no candidates at all, and a
+   * transcript deleted in that interval survives until the next sweep.
+   */
   watchPaths: Set<string>
   /** Real roots this sweep listed transcripts under, for the next pass to compare against. */
   rootsWithFiles: Set<string>
@@ -85,7 +100,6 @@ export async function runSessionSearchBackfill(
     })
     const issues: AiVaultScanIssue[] = [...swept.issues]
     const eligible = swept.candidates.filter((candidate) => store.acceptsCandidate(candidate))
-    status.failed(issues.length)
 
     let completed = true
     let deferred: SessionFileCandidate[] = []
@@ -93,8 +107,12 @@ export async function runSessionSearchBackfill(
       const pass = await runSessionSearchIndexPass(store, eligible, {
         signal,
         overdue: args.overdue,
-        onIndexed: (_candidate, bytes) => status.indexed(bytes),
-        onFailed: () => status.failed()
+        heldOut: args.heldOut,
+        onIndexed: (candidate, bytes) => {
+          status.indexed(bytes)
+          args.onIndexed?.(candidate)
+        },
+        onFailed: (candidate) => args.onFailed?.(candidate)
       })
       deferred = pass.deferred
     } catch (error) {
@@ -121,7 +139,19 @@ export async function runSessionSearchBackfill(
     // a real observation and this is the absence of one.
     const previousRootsWithFiles = args.previousRootsWithFiles
     const discoveredPaths = new Set(swept.candidates.map((candidate) => candidate.file.path))
-    const held = completed ? store.indexedSources().map((source) => source.path) : []
+    let held: string[] = []
+    if (completed) {
+      try {
+        held = store.indexedSources().map((source) => source.path)
+      } catch (error) {
+        // A handle that cannot be read proves nothing about what is missing, so
+        // this sweep concludes nothing and does not count as one that finished.
+        if (!signal?.aborted) {
+          throw error
+        }
+        completed = false
+      }
+    }
     // Rows the sweep did not rediscover, including any under no root this scan
     // walks: the walk judges each on its own directory and proves nothing about
     // one it cannot reach, so a reconfigured root keeps its rows rather than
@@ -168,15 +198,41 @@ export async function runSessionSearchBackfill(
     }
 
     return {
-      // Only what this pass could not settle. Watching every discovered path
-      // would make the next cycle re-walk the whole machine to learn nothing:
-      // an old file deleted between two sweeps is the next sweep's to find,
-      // which is the same promise the recency window already makes.
-      watchPaths: new Set([...retirement.unverifiable, ...retirement.unchecked]),
+      // This sweep's recency window, plus what it could not settle. Not every
+      // discovered path: that would make the next cycle re-walk the whole
+      // machine to learn nothing, and an old file deleted between two sweeps is
+      // the next sweep's to find, which is the promise the window already makes.
+      watchPaths: new Set([
+        ...(completed ? recentWindowPaths(swept.discoveries, args.recentPerAgent) : []),
+        ...retirement.unverifiable,
+        ...retirement.unchecked
+      ]),
       rootsWithFiles,
       degradedRoots,
       deferred,
       completed
     }
+  })
+}
+
+/**
+ * The paths a cycle's own discovery would return, taken from this sweep's.
+ *
+ * The same selection, through the same class discovery applies it with and per
+ * the same unit it applies it to — one discovery, which is one root, or the set
+ * of alternates a merged discovery reports as one. Re-running discovery under
+ * the cycle's limit would walk every tree a second time; spelling the rule out
+ * here would be a second spelling of it.
+ */
+function recentWindowPaths(
+  discoveries: readonly SessionFileDiscovery[],
+  recentPerAgent: number
+): string[] {
+  return discoveries.flatMap((discovery) => {
+    const newest = new SessionNewestFiles(recentPerAgent)
+    for (const file of discovery.files) {
+      newest.add(file)
+    }
+    return newest.newest().map((file) => file.path)
   })
 }

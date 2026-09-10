@@ -58,19 +58,18 @@ it('hands back everything it drained when a cycle is aborted', async () => {
   expect(store.pendingFileCount).toBe(QUEUED_FILES)
 
   const controller = new AbortController()
-  const status = new SessionSearchIndexingStatus()
   let reads = 0
-  // None of these paths exist, so every read fails; abort once a few have run.
-  status.failed = () => {
-    if (++reads >= READS_BEFORE_ABORT) {
-      controller.abort()
-    }
-  }
 
   const cycle = await runSessionSearchReconcileCycle({
     store,
     roots: harness.roots,
-    status,
+    status: new SessionSearchIndexingStatus(),
+    // None of these paths exist, so every read fails; abort once a few have run.
+    onFailed: () => {
+      if (++reads >= READS_BEFORE_ABORT) {
+        controller.abort()
+      }
+    },
     recentPerAgent: 12,
     previousRecent: new Set(),
     listings: new SessionSearchDirectoryListings(),

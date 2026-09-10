@@ -15,7 +15,11 @@ export type SessionSearchIndexStatus = {
   phase: SessionSearchIndexPhase
   /** Files the index holds right now, counted in the store. */
   filesIndexed: number
-  /** Transcript bytes this pass read; zero on a start that re-reads nothing. */
+  /**
+   * Transcript bytes the pass that just ran read. Per pass, not since start: a
+   * counter that only reset on sweeps sawtoothed every `fullSweepEveryCycles`,
+   * which reads as activity nobody caused.
+   */
   bytesIndexed: number
   /** Files the index knows it is behind on and has not read yet. */
   filesPending: number
@@ -24,7 +28,12 @@ export type SessionSearchIndexStatus = {
    * incomplete, so coverage cannot be reported as whole until the next sweep.
    */
   droppedPending: number
-  failures: number
+  /**
+   * Files the index has given up re-reading until their stat changes. A gauge,
+   * not a tally: it falls when one becomes readable again, and a non-zero value
+   * is a coverage gap the user can act on rather than an event that has passed.
+   */
+  unreadableFiles: number
   degradedRoots: SessionSearchDegradedRoot[]
   lastReconcileAt: number | null
 }
@@ -39,7 +48,7 @@ export class SessionSearchIndexingStatus {
   private bytesIndexed = 0
   private filesPending = 0
   private droppedPending = 0
-  private failures = 0
+  private unreadableFiles = 0
   private degradedRoots: SessionSearchDegradedRoot[] = []
   private lastReconcileAt: number | null = null
 
@@ -50,7 +59,7 @@ export class SessionSearchIndexingStatus {
       bytesIndexed: this.bytesIndexed,
       filesPending: this.filesPending,
       droppedPending: this.droppedPending,
-      failures: this.failures,
+      unreadableFiles: this.unreadableFiles,
       degradedRoots: this.degradedRoots.map((root) => ({ ...root })),
       lastReconcileAt: this.lastReconcileAt
     }
@@ -75,7 +84,9 @@ export class SessionSearchIndexingStatus {
     if (this.working) {
       return 'indexing'
     }
-    if (this.degradedRoots.length > 0) {
+    // A file the index cannot read is a gap waiting will not close, so it is
+    // degradation rather than work in progress.
+    if (this.degradedRoots.length > 0 || this.unreadableFiles > 0) {
       return 'degraded'
     }
     return this.sweptClean && this.filesPending === 0 ? 'current' : 'indexing'
@@ -106,21 +117,20 @@ export class SessionSearchIndexingStatus {
   }
 
   beginSweep(): void {
-    this.working = true
-    this.bytesIndexed = 0
-    this.failures = 0
+    this.beginCycle()
   }
 
   beginCycle(): void {
     this.working = true
+    this.bytesIndexed = 0
   }
 
   indexed(bytes: number): void {
     this.bytesIndexed += bytes
   }
 
-  failed(count = 1): void {
-    this.failures += count
+  setUnreadableFiles(files: number): void {
+    this.unreadableFiles = files
   }
 
   setPending(pending: number, dropped: number): void {

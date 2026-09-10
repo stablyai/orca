@@ -21,6 +21,8 @@ export type SessionSearchIndexPassOptions = {
   overdue?: () => boolean
   /** Paths whose stored cursor must not be trusted, so the read is forced whole. */
   forced?: ReadonlySet<string>
+  /** True for a file that has failed at this stat often enough to stop trying. */
+  heldOut?: (candidate: SessionFileCandidate) => boolean
   onIndexed?: (candidate: SessionFileCandidate, bytes: number) => void
   /** The index already covers this file, or can never index it; nothing is owed. */
   onSkipped?: (candidate: SessionFileCandidate) => void
@@ -57,6 +59,12 @@ export async function runSessionSearchIndexPass(
       options.onSkipped?.(candidate)
       continue
     }
+    // Skipped rather than read: a read is what re-records the file as owed, so
+    // holding it out has to happen before one, not after.
+    if (options.heldOut?.(candidate) === true) {
+      options.onSkipped?.(candidate)
+      continue
+    }
     const forced = mustReadWhole(store, candidate, options.forced)
     if (!forced && indexIsCurrent(store, candidate)) {
       options.onSkipped?.(candidate)
@@ -70,6 +78,9 @@ export async function runSessionSearchIndexPass(
       deferred.push(candidate)
       continue
     }
+    // The deadline check reads a clock the owner may close behind: everything
+    // below touches the store, so stop here rather than on a shut handle.
+    throwIfAiVaultScanCancelled(options.signal)
     read += 1
     // Discovery's size, not the post-read one. A file that grew between the
     // stat and the read is reported short, deliberately: re-statting every file
@@ -89,6 +100,8 @@ export async function runSessionSearchIndexPass(
         stats,
         forced ? 'whole' : 'any'
       )
+      // Closing during a read aborts it, and every line below reads the store.
+      throwIfAiVaultScanCancelled(options.signal)
       // Took it, not moved: the test is whether the index now covers this file
       // at this stat, which is the same question the skip at the top asks. A
       // cursor comparison looks equivalent and is not -- a forced re-read of an

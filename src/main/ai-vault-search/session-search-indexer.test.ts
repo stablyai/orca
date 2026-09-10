@@ -326,11 +326,10 @@ it('reads what one pass has time for and finishes the rest on the next', async (
   expect(sessionsMatching('deadlined')).toHaveLength(4)
 
   // Settled, and it stays settled: nothing changed, so the cycle after this
-  // one has no reason to open any of them again.
+  // one opens none of them, and reports reading nothing.
   clock.costPerNowMs = 0
-  const bytes = indexer?.status().bytesIndexed
   await nextCycle()
-  expect(indexer?.status()).toMatchObject({ filesPending: 0, bytesIndexed: bytes })
+  expect(indexer?.status()).toMatchObject({ filesPending: 0, bytesIndexed: 0 })
 })
 
 // First enablement inside a running app is the normal case, not an edge: the
@@ -413,8 +412,118 @@ it('counts a file as indexed only when the index actually took it', async () => 
   expect(afterSweep).toBeGreaterThan(0)
 
   // Nothing changed, so the next cycle reads nothing and must claim nothing.
+  // `bytesIndexed` is what the pass that just ran read, so it is zero here.
   await indexer?.reconcile()
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 1, bytesIndexed: afterSweep })
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 1, bytesIndexed: 0 })
+})
+
+// Round 10, H1. A cycle proves a deletion by comparing what the previous pass
+// watched against what it discovers. A sweep used to watch only what it could
+// not settle, which is nothing on a healthy machine, so the cycle after a sweep
+// had no candidates at all and the cycle after that no longer remembered the
+// file: a transcript deleted in that interval survived until the next sweep,
+// up to `fullSweepEveryCycles` later.
+it('retires a transcript deleted between a sweep and the cycle after it', async () => {
+  const going = transcriptPath()
+  const staying = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(going, ['a session deleted right after the sweep'], SESSION_ID)
+  await writeClaudeTranscript(staying, ['a surviving session'], OTHER_SESSION_ID)
+  await newIndexer().start()
+  expect(sessionsMatching('deleted')).toEqual([SESSION_ID])
+
+  // No cycle in between: the sweep is the only pass that has seen this file.
+  await rm(going)
+  await nextCycle()
+
+  expect(sessionsMatching('deleted')).toEqual([])
+  expect(sessionsMatching('surviving')).toEqual([OTHER_SESSION_ID])
+})
+
+// Round 10, M1. A transcript the reader cannot open is recorded stale by the
+// consumer on every attempt, so it was re-read every cycle for ever: pending
+// stuck at one, a failure count climbing without bound, and a phase that never
+// left `indexing`. One file with the wrong mode bits read as a real backlog.
+it.skipIf(!CAN_DENY_READ)('stops re-reading a transcript it cannot read', async () => {
+  const path = transcriptPath()
+  await writeClaudeTranscript(path, ['a session behind the wrong mode bits'], SESSION_ID)
+  await chmod(path, 0o000)
+  try {
+    await newIndexer().start()
+    for (let cycle = 0; cycle < 4; cycle++) {
+      await nextCycle()
+    }
+
+    // Held out, not queued: the queue is empty, the count is a gauge of files
+    // being held rather than a tally of attempts, and the phase says the index
+    // knows it is not covering something.
+    expect(indexer?.status()).toMatchObject({
+      filesPending: 0,
+      unreadableFiles: 1,
+      phase: 'degraded'
+    })
+
+    // And the hold is released by the only thing that can mean the file
+    // changed: its stat.
+    await chmod(path, 0o644)
+    const later = new Date(Date.now() + 60_000)
+    await utimes(path, later, later)
+    await nextCycle()
+
+    expect(sessionsMatching('mode')).toEqual([SESSION_ID])
+    expect(indexer?.status()).toMatchObject({ unreadableFiles: 0, phase: 'current' })
+  } finally {
+    await chmod(path, 0o644)
+  }
+})
+
+// Round 10, M2. `close()` mid-pass left the pass reading a shut handle: three
+// `database is not open` errors reached the owner, for a close they asked for.
+it('reports nothing to its owner when it is closed part way through a pass', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['one'], SESSION_ID)
+  const other = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(other, ['two'], OTHER_SESSION_ID)
+  const later = new Date(Date.now() + 60_000)
+  await utimes(other, later, later)
+  newIndexer()
+
+  // Between two files: the pass reads the clock once per file it is about to
+  // read, and closing there is what a quit during a sweep looks like.
+  let closed = false
+  clock.onNow = () => {
+    if (closed || indexedSessionCount() === 0) {
+      return
+    }
+    closed = true
+    indexer?.close()
+  }
+  await indexer?.start()
+  await indexer?.settled()
+  clock.onNow = null
+
+  expect(errors).toEqual([])
+})
+
+// Round 10, M2, the other half: `status()` on a closed indexer opened a shut
+// database, reported the failure, and answered zero files.
+it('reports what it last knew after it is closed, without reading the database', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['indexed before the close'], SESSION_ID)
+  await newIndexer().start()
+  expect(indexer?.status().filesIndexed).toBe(1)
+
+  indexer?.close()
+
+  expect(indexer?.status()).toMatchObject({ phase: 'closed', filesIndexed: 1 })
+  expect(errors).toEqual([])
+})
+
+// Round 10, L1. Two indexers on one database both register with the reader, so
+// every transcript is read and written twice and the second write is fenced by
+// the first at random. The recipe for every configuration change is
+// close-then-construct, so the ordering that causes this is the one the recipe
+// rules out; this is what says so rather than letting it corrupt quietly.
+it('refuses a second indexer on a database one already owns', () => {
+  newIndexer()
+  expect(() => newIndexer()).toThrow(/already has a live indexer/)
 })
 
 // PR 2 records a cursor no append continues for a file a chunked read left half
