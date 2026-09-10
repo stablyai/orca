@@ -223,6 +223,11 @@ export class SessionSearchStore {
   }
 
   close(): void {
+    // node:sqlite throws ERR_INVALID_STATE on a second close, and a store is
+    // closed both by its owner and by a test's teardown.
+    if (this.closed) {
+      return
+    }
     this.closed = true
     this.db.close()
   }

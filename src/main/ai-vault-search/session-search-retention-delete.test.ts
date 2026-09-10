@@ -1,5 +1,7 @@
 import { expect, it } from 'vitest'
+import { inSessionParseFileLane } from '../ai-vault/session-parse-file-lane'
 import type SyncDatabase from '../sqlite/sync-database'
+import { discardSearchBatch } from './session-search-pending-deletes'
 import {
   deleteExpiredSearchFiles,
   RETENTION_DELETE_ROWS_PER_STEP
@@ -177,6 +179,70 @@ it('cancels retention between batches and resumes without exposing a partial ses
     expect(count(index.db, 'messages')).toBe(0)
   } finally {
     store.close()
+    await index.close()
+  }
+})
+
+it('never leaves a batch tombstone behind the batch row it names', async () => {
+  const index = await openSessionSearchIndexFile('ss-retention-orphan-batch')
+  const db = index.db
+  try {
+    seed(db, 1, 1, 1)
+    const batchId = Number(
+      db.prepare('INSERT INTO search_write_batches(session_row_id) VALUES (?)').run(1)
+        .lastInsertRowid
+    )
+    db.prepare("INSERT INTO messages(session_row_id,batch_id,role) VALUES (1,?,'user')").run(
+      batchId
+    )
+
+    // Retention snapshots an empty tombstone set, then blocks on this path's
+    // parse lane, which an in-flight read of the same file holds.
+    let release = (): void => undefined
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const lane = inSessionParseFileLane('1', () => held)
+    const purge = deleteExpiredSearchFiles(
+      db,
+      100,
+      () => false,
+      () => undefined
+    )
+    await new Promise((resolve) => setImmediate(resolve))
+
+    // That read ends without publishing. It appended onto a session that is
+    // live, so discard writes a batch-keyed tombstone instead of retiring one.
+    discardSearchBatch(db, 1, batchId, false)
+    release()
+    await lane
+    await purge
+
+    // Retiring the session took the batch row with it, which frees the rowid.
+    expect(count(db, 'search_write_batches')).toBe(0)
+    expect(count(db, 'search_pending_deletes')).toBe(0)
+
+    // The next read takes that rowid. A surviving tombstone for it would delete
+    // this batch's staged rows, and the session would publish missing messages.
+    seed(db, 2, 1, 100)
+    const reused = Number(
+      db.prepare('INSERT INTO search_write_batches(session_row_id) VALUES (?)').run(2)
+        .lastInsertRowid
+    )
+    expect(reused).toBe(batchId)
+    const staged = Number(
+      db
+        .prepare("INSERT INTO messages(session_row_id,batch_id,role) VALUES (2,?,'user')")
+        .run(reused).lastInsertRowid
+    )
+    await deleteExpiredSearchFiles(
+      db,
+      null,
+      () => false,
+      () => undefined
+    )
+    expect(db.prepare('SELECT id FROM messages WHERE id=?').get(staged)).toBeDefined()
+  } finally {
     await index.close()
   }
 })

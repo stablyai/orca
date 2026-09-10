@@ -311,6 +311,24 @@ describe('visibility views', () => {
       db.close()
     }
   })
+
+  it('subtracts the tombstones through an index rather than scanning them', async () => {
+    const db = openSessionSearchDatabase(await tempDatabasePath())
+    try {
+      for (const view of [VISIBLE_MESSAGES, VISIBLE_SESSIONS]) {
+        const plan = (
+          db.prepare(`EXPLAIN QUERY PLAN SELECT id FROM ${view}`).all() as { detail: string }[]
+        )
+          .map((row) => row.detail)
+          .join(' ')
+        // Without the partial index this reads "SCAN search_pending_deletes",
+        // once per statement, on every read either view serves.
+        expect(plan).toContain('search_pending_deletes_session')
+      }
+    } finally {
+      db.close()
+    }
+  })
 })
 
 it("retries a Windows lock that outlives rmSync's own retries", async () => {

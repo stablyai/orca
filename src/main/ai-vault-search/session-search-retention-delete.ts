@@ -78,6 +78,11 @@ export async function deleteExpiredSearchFiles(
               db.prepare('DELETE FROM search_write_batches WHERE session_row_id=?').run(
                 pending.session_row_id
               )
+              // Invariant: a batch tombstone never outlives its batch row, or the
+              // freed rowid comes back and the tombstone deletes a live batch's rows.
+              db.prepare(
+                'DELETE FROM search_pending_deletes WHERE session_row_id=? AND batch_id IS NOT NULL'
+              ).run(pending.session_row_id)
               db.prepare('DELETE FROM sessions WHERE id = ?').run(pending.session_row_id)
             } else {
               db.prepare('DELETE FROM search_write_batches WHERE id=?').run(pending.batch_id)

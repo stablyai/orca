@@ -176,6 +176,14 @@ it('retires a batch appended onto a live session when the writer dies', async ()
   }
 })
 
+it('closes twice without turning the second call into an error', () => {
+  store.close()
+  // node:sqlite throws ERR_INVALID_STATE on a second close of one handle, and a
+  // store is closed both by whoever owns it and by a teardown that cannot know.
+  expect(() => store.close()).not.toThrow()
+  store = new SessionSearchStore(index.path, (error) => errors.push(error))
+})
+
 it('drains the rows an incomplete read staged, without waiting for another write', async () => {
   replayTranscriptRead({
     messages: userMessages('incompleteread', 300),
