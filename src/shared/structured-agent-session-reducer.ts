@@ -11,7 +11,15 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from './agent-session-wire'
+import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+
+/** The last host clock sample: `hostNow - receivedAt` is the client's skew from the host,
+ *  which is what lets a client attaching mid-turn anchor its live counter on the real start. */
+export type StructuredAgentHostClock = {
+  hostNow: number
+  receivedAt: number
+}
 
 export type StructuredAgentSessionState = {
   epoch: string | null
@@ -26,6 +34,8 @@ export type StructuredAgentSessionState = {
   backgroundTasks?: AgentSessionBackgroundTaskState | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
+  /** Absent until a frame from a host that stamps `hostNow` has been applied. */
+  hostClock?: StructuredAgentHostClock
 }
 
 export type StructuredAgentSessionAction =
@@ -49,34 +59,14 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
 
 const MAX_RETAINED_SUBMISSIONS = 256
 
-function backgroundTaskStatesEqual(
-  left: AgentSessionBackgroundTaskState | null | undefined,
-  right: AgentSessionBackgroundTaskState | null | undefined
-): boolean {
-  if (left === right) {
-    return true
-  }
-  if (
-    !left ||
-    !right ||
-    left.state !== right.state ||
-    left.supportsTaskStop !== right.supportsTaskStop ||
-    left.supportsStopAll !== right.supportsStopAll
-  ) {
-    return false
-  }
-  if (left.tasks === right.tasks) {
-    return true
-  }
-  if (!left.tasks || !right.tasks || left.tasks.length !== right.tasks.length) {
-    return false
-  }
-  return left.tasks.every(
-    (task, index) =>
-      task.id === right.tasks?.[index]?.id &&
-      task.kind === right.tasks[index]?.kind &&
-      task.description === right.tasks[index]?.description
-  )
+/** A frame without `hostNow` (older host) leaves the previous sample in place. */
+function hostClockField(
+  hostNow: number | undefined,
+  receivedAt: number,
+  previous: StructuredAgentHostClock | undefined
+): { hostClock?: StructuredAgentHostClock } {
+  const hostClock = hostNow !== undefined ? { hostNow, receivedAt } : previous
+  return hostClock ? { hostClock } : {}
 }
 
 function replacePage(
@@ -145,9 +135,11 @@ function mergeSubmissions(
   )
 }
 
+/** `receivedAt` is the client clock at apply time; callers pass it so the reducer stays pure. */
 export function reduceStructuredAgentSession(
   state: StructuredAgentSessionState,
-  action: StructuredAgentSessionAction
+  action: StructuredAgentSessionAction,
+  receivedAt: number = Date.now()
 ): StructuredAgentSessionState {
   if (action.type === 'loading') {
     // Keep the last transcript visible while a reconnect rehydrates the stream.
@@ -182,6 +174,7 @@ export function reduceStructuredAgentSession(
           ...(action.page.backgroundTasks !== undefined
             ? { backgroundTasks: action.page.backgroundTasks }
             : {}),
+          ...hostClockField(action.page.hostNow, receivedAt, state.hostClock),
           status: 'ready',
           error: undefined
         }
@@ -206,7 +199,8 @@ export function reduceStructuredAgentSession(
         ? { backgroundTasks: action.page.backgroundTasks }
         : state.backgroundTasks !== undefined
           ? { backgroundTasks: state.backgroundTasks }
-          : {})
+          : {}),
+      ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
   if (action.type === 'older-page') {
@@ -218,7 +212,8 @@ export function reduceStructuredAgentSession(
       ...state,
       items,
       submissions: mergeSubmissions(state.submissions, action.page.submissions, items),
-      hasOlder: action.page.hasOlder
+      hasOlder: action.page.hasOlder,
+      ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
   const event = action.event
@@ -228,7 +223,8 @@ export function reduceStructuredAgentSession(
   if (event.type === 'snapshot' || event.type === 'reset') {
     return {
       ...replacePage(event.page, event.fence, event.handoff, event.backgroundTasks, event.activity),
-      commands: event.commands
+      commands: event.commands,
+      ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
   if (state.epoch !== event.batch.cursor.epoch) {
@@ -275,7 +271,8 @@ export function reduceStructuredAgentSession(
     handoff: event.handoff ?? state.handoff,
     commands: event.commands !== undefined ? event.commands : state.commands,
     ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
-    ...(activity !== undefined ? { activity } : {})
+    ...(activity !== undefined ? { activity } : {}),
+    ...hostClockField(event.hostNow, receivedAt, state.hostClock)
   }
 }
 

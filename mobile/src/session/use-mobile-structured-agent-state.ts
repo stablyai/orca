@@ -65,7 +65,7 @@ export function useMobileStructuredAgentState(args: {
       }
       setSessionStates((current) => {
         const previous = current.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION
-        const next = reduceStructuredAgentSession(previous, action)
+        const next = reduceStructuredAgentSession(previous, action, Date.now())
         if (next === previous) {
           return current
         }

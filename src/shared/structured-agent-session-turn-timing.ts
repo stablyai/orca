@@ -63,8 +63,10 @@ export function selectStructuredAgentTurnTimings(
 ): ReadonlyMap<string, StructuredAgentTurnTiming> {
   const itemIds = new Set(items.map((item) => item.itemId))
   const aliases = new Map<string, string>()
+  // Codex folds a send issued mid-turn into the running turn under the SAME provider
+  // key, so the earliest submission that names a key is the prompt that opened the turn.
   for (const submission of submissions) {
-    if (submission.providerItemId) {
+    if (submission.providerItemId && !aliases.has(submission.providerItemId)) {
       aliases.set(submission.providerItemId, agentJournalSubmissionKey(submission.clientMessageId))
     }
   }
@@ -119,14 +121,22 @@ export function completedStructuredAgentTurnSeconds(
     : null
 }
 
-/** A local-clock anchor for the live counter that carries no host/client skew:
- *  the client's first sighting of the running row, moved back by the host-side
- *  lag between turn-start receipt and the row's append. Both terms are single-clock. */
+/** A local-clock anchor for the live counter that carries no host/client skew.
+ *  With the host's own clock at publish time, the anchor is the client's first
+ *  sighting moved back by how long the host says the turn has already run, so a
+ *  client attaching mid-turn counts from the real start. Without it, only the
+ *  host-side lag between turn-start receipt and the row's append is known, and
+ *  the counter starts at first sight. Every difference is single-clock. */
 export function structuredAgentTurnLocalStartedAt(
   timing: StructuredAgentTurnTiming,
-  firstSeenAt: number
+  firstSeenAt: number,
+  hostNow?: number
 ): number {
-  return firstSeenAt - Math.max(0, timing.observedAt - timing.startedAt)
+  const hostElapsed =
+    hostNow !== undefined && Number.isFinite(hostNow)
+      ? hostNow - timing.startedAt
+      : timing.observedAt - timing.startedAt
+  return firstSeenAt - Math.max(0, hostElapsed)
 }
 
 /** The settled turns a chat surface hands to the shared turn-status selector. */

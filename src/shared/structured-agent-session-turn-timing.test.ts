@@ -272,3 +272,69 @@ describe('provider-measured duration', () => {
     ).toBeNull()
   })
 })
+
+describe('coalesced sends and canonical rows', () => {
+  const accepted = (clientMessageId: string, providerItemId: string) => ({
+    clientMessageId,
+    fence: 1,
+    payloadFingerprint: 'fp',
+    dispatchState: 'accepted' as const,
+    providerItemId,
+    reason: null,
+    submittedAt: 1,
+    resolvedAt: 2
+  })
+
+  it('gives a turn shared by two accepted sends to the prompt that opened it', () => {
+    const items = [
+      user('orca:first'),
+      user('orca:second'),
+      lifecycle('t1', {
+        state: 'completed',
+        userItemId: 'codex:thread:t1:0',
+        startedAt: 1_000,
+        completedAt: 5_000
+      })
+    ]
+    const timings = selectStructuredAgentTurnTimings(items, [
+      accepted('first', 'codex:thread:t1:0'),
+      accepted('second', 'codex:thread:t1:0')
+    ])
+    expect([...timings.keys()]).toEqual(['orca:first'])
+  })
+
+  it('reads a canonical turn item exactly like the legacy carrier', () => {
+    sequence += 1
+    const canonical: AgentJournalRenderItem = {
+      itemId: 'legacy:codex:s:turn-lifecycle%3At9',
+      revision: 2,
+      sequence,
+      observedAt: 1_000,
+      body: {
+        kind: 'turn',
+        turnId: 't9',
+        state: 'completed',
+        userItemId: 'orca:u9',
+        startedAt: 1_000,
+        completedAt: 9_000,
+        durationMs: 7_172
+      }
+    }
+    const timings = selectStructuredAgentTurnTimings([user('orca:u9'), canonical])
+    expect(timings.get('orca:u9')).toMatchObject({ state: 'completed', durationMs: 7_172 })
+    expect(selectStructuredAgentSettledTurns([user('orca:u9'), canonical]).get('orca:u9')).toEqual({
+      startedAt: 1_000,
+      workedSeconds: 7
+    })
+    expect(selectStructuredAgentRunningTurnTiming([canonical], 't9')?.startedAt).toBe(1_000)
+  })
+})
+
+describe('structuredAgentTurnLocalStartedAt with the host clock', () => {
+  it('counts a mid-turn attach from the real start, not from first sight', () => {
+    const timing = { state: 'running' as const, startedAt: 50_000, observedAt: 50_000 }
+    // Host says the turn has run 40s; client clock is arbitrary.
+    expect(structuredAgentTurnLocalStartedAt(timing, 3_600_000, 90_000)).toBe(3_600_000 - 40_000)
+    expect(structuredAgentTurnLocalStartedAt(timing, 3_600_000, 40_000)).toBe(3_600_000)
+  })
+})

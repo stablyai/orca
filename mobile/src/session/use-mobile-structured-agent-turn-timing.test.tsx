@@ -63,13 +63,15 @@ describe('useMobileStructuredAgentTurnTiming', () => {
   function Harness({
     items,
     submissions = NO_SUBMISSIONS,
-    turnId
+    turnId,
+    hostClock
   }: {
     items: readonly AgentJournalRenderItem[]
     submissions?: readonly AgentJournalSubmission[]
     turnId: string | null
+    hostClock?: { hostNow: number; receivedAt: number }
   }): null {
-    timing = useMobileStructuredAgentTurnTiming(items, submissions, turnId)
+    timing = useMobileStructuredAgentTurnTiming({ items, submissions, hostClock }, turnId)
     return null
   }
 
@@ -123,6 +125,30 @@ describe('useMobileStructuredAgentTurnTiming', () => {
 
     act(() => renderer?.update(createElement(Harness, { items, turnId: null })))
     expect(timing?.workingStartedAt).toBeNull()
+
+    // With a host clock that said the turn was 35s old 5s ago, the anchor sits
+    // 40s before first sight, wherever the client's absolute clock is.
+    vi.setSystemTime(CLIENT_NOW + 60_000)
+    const next = [
+      ...items,
+      user('u3', 5),
+      lifecycle(
+        't3',
+        6,
+        { state: 'running', startedAt: HOST_START + 150_000 },
+        HOST_START + 150_100
+      )
+    ]
+    act(() =>
+      renderer?.update(
+        createElement(Harness, {
+          items: next,
+          turnId: 't3',
+          hostClock: { hostNow: HOST_START + 185_000, receivedAt: CLIENT_NOW + 55_000 }
+        })
+      )
+    )
+    expect(timing?.workingStartedAt).toBe(CLIENT_NOW + 60_000 - 40_000)
   })
 
   it('leaves the anchor null when an older host records no start', () => {

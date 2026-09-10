@@ -125,6 +125,9 @@ export type AgentSessionHistoryPage = {
   hasNewer: boolean
   /** Present on hosts that expose provider-owned background task lifecycle. */
   backgroundTasks?: AgentSessionBackgroundTaskState | null
+  /** Host wall clock (ms epoch) when the page was read, so a client attaching mid-turn
+   *  can anchor a live counter on the real start. Absent from older hosts. */
+  hostNow?: number
 }
 
 export type AgentSessionHistoryResult =
@@ -149,8 +152,11 @@ export type AgentSessionJournalBatch = {
   submissions: AgentJournalSubmission[]
 }
 
+/** Host wall clock (ms epoch) stamped once per published frame; see `AgentSessionHistoryPage`. */
+type AgentSessionHostClockField = { hostNow?: number }
+
 export type AgentSessionSubscribeEvent =
-  | {
+  | ({
       type: 'snapshot'
       sessionId: string
       page: AgentSessionHistoryPage
@@ -161,8 +167,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Latest provider-authored turn activity; optional for mixed-version hosts. */
       activity?: AgentSessionTurnActivity | null
-    }
-  | {
+    } & AgentSessionHostClockField)
+  | ({
       type: 'batch'
       sessionId: string
       batch: AgentSessionJournalBatch
@@ -174,8 +180,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
-    }
-  | {
+    } & AgentSessionHostClockField)
+  | ({
       type: 'reset'
       sessionId: string
       reset: AgentJournalResetReason
@@ -186,7 +192,7 @@ export type AgentSessionSubscribeEvent =
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       activity?: AgentSessionTurnActivity | null
-    }
+    } & AgentSessionHostClockField)
   | { type: 'end' }
 
 // ─── Status feed ────────────────────────────────────────────────────────────

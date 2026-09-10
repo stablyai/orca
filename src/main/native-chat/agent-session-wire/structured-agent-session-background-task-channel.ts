@@ -31,9 +31,15 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       request
     })
     const backgroundTasks = this.state(request.sessionId)
-    return backgroundTasks === undefined
-      ? result
-      : { ...result, page: { ...result.page, backgroundTasks } }
+    const hostNow = this.deps.now?.() ?? Date.now()
+    return {
+      ...result,
+      page: {
+        ...result.page,
+        hostNow,
+        ...(backgroundTasks !== undefined ? { backgroundTasks } : {})
+      }
+    }
   }
 
   subscribe(input: AgentSessionSubscribeInput): () => void {

@@ -85,7 +85,7 @@ export function useStructuredAgentSession(args: {
     () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity),
     [state.activity, state.items, turnId]
   )
-  const turnTiming = useStructuredAgentTurnTiming(state.items, state.submissions, turnId)
+  const turnTiming = useStructuredAgentTurnTiming(state, turnId)
   const backgroundTasksView = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
 
   useEffect(() => {

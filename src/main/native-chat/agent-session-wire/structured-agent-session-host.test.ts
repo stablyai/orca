@@ -324,6 +324,8 @@ describe('send', () => {
     const page = host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items).toHaveLength(1)
     expect(page.ok && page.page.fence).toBe(1)
+    // The injected host clock, so a client can anchor a live counter on it.
+    expect(page.page.hostNow).toBe(NOW)
     expect(page.providerSession).toEqual({ key: 'session_id', id: THREAD })
   })
 

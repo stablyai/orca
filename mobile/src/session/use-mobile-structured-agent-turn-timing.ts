@@ -12,22 +12,40 @@ import {
 
 type TurnAnchor = { turnId: string; startedAt: number | null }
 
+/** The host's clock as last published, paired with the client clock at receipt. */
+type HostClock = { hostNow: number; receivedAt: number }
+
 /** The live turn's local-clock anchor. Null when its row carries no host start
  *  (older hosts), so local observation applies. */
-function anchorRunningTurn(items: readonly AgentJournalRenderItem[], turnId: string): TurnAnchor {
+function anchorRunningTurn(
+  items: readonly AgentJournalRenderItem[],
+  turnId: string,
+  hostClock: HostClock | null | undefined
+): TurnAnchor {
   const timing = selectStructuredAgentRunningTurnTiming(items, turnId)
-  return {
-    turnId,
-    startedAt: timing ? structuredAgentTurnLocalStartedAt(timing, Date.now()) : null
+  if (!timing) {
+    return { turnId, startedAt: null }
   }
+  const now = Date.now()
+  // Advance the published host clock by the client time since receipt; both
+  // terms stay single-clock, so a mid-turn attach counts from the real start.
+  const hostNow = hostClock ? hostClock.hostNow + (now - hostClock.receivedAt) : undefined
+  return { turnId, startedAt: structuredAgentTurnLocalStartedAt(timing, now, hostNow) }
 }
 
 /** Host-recorded turn timing for the structured lane: settled durations straight
  *  off the journal, and a skew-free start for the live counter stamped once per
  *  turn so re-renders never move it. */
 export function useMobileStructuredAgentTurnTiming(
-  items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[],
+  {
+    items,
+    submissions,
+    hostClock
+  }: {
+    items: readonly AgentJournalRenderItem[]
+    submissions: readonly AgentJournalSubmission[]
+    hostClock?: HostClock | null
+  },
   turnId: string | null
 ): { settledTurns: ReadonlyMap<string, NativeChatSettledTurn>; workingStartedAt: number | null } {
   const settledTurns = useMemo(
@@ -44,7 +62,7 @@ export function useMobileStructuredAgentTurnTiming(
     return { settledTurns, workingStartedAt: null }
   }
   if (anchor?.turnId !== turnId) {
-    const next = anchorRunningTurn(items, turnId)
+    const next = anchorRunningTurn(items, turnId, hostClock)
     setAnchor(next)
     return { settledTurns, workingStartedAt: next.startedAt }
   }

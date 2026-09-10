@@ -72,7 +72,8 @@ export class StructuredAgentSessionHost {
   })
   private readonly subscribers = new AgentSessionSubscribers({
     readCommands: (sessionId) => this.deps.adapter.readCommands?.(sessionId),
-    onJournalPublished: (sessionId, journal) => this.statusFeed.publish(sessionId, journal)
+    onJournalPublished: (sessionId, journal) => this.statusFeed.publish(sessionId, journal),
+    now: () => this.now()
   })
   private readonly tasks = new StructuredAgentSessionTaskQueue()
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState

@@ -272,7 +272,7 @@ export function useMobileStructuredAgentSession(args: {
     [state.items, state.submissions]
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)
-  const turnTiming = useMobileStructuredAgentTurnTiming(state.items, state.submissions, turnId)
+  const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
   const status = state.status === 'idle' ? 'idle' : state.status
   const approvalPrompt = useMemo(
     () => state.items.find(pendingStructuredApproval) ?? null,
