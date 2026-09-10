@@ -231,19 +231,18 @@ export class SessionSearchStore {
   }
 
   /**
-   * What this index believes it holds, for a scheduler that has to notice a
-   * source that vanished while nothing was running. `paths` narrows it to a
-   * lookup; omitting it walks the whole table, which only a full sweep does.
+   * Every source this index believes it holds, for the sweep that has to notice
+   * one that vanished while nothing was running. A whole-table walk, which is
+   * why only a sweep asks.
    */
-  indexedSources(paths?: readonly string[]): SessionSearchIndexedSource[] {
-    const sql = `SELECT f.path AS path, s.agent AS agent, s.codex_home AS codexHome
-      FROM files f LEFT JOIN sessions s ON s.id = f.session_row_id`
+  indexedSources(): SessionSearchIndexedSource[] {
     try {
-      if (!paths) {
-        return this.db.prepare(sql).all() as SessionSearchIndexedSource[]
-      }
-      const one = this.db.prepare(`${sql} WHERE f.path = ?`)
-      return paths.flatMap((path) => one.all(path) as SessionSearchIndexedSource[])
+      return this.db
+        .prepare(
+          `SELECT f.path AS path, s.agent AS agent, s.codex_home AS codexHome
+           FROM files f LEFT JOIN sessions s ON s.id = f.session_row_id`
+        )
+        .all() as SessionSearchIndexedSource[]
     } catch (error) {
       this.onError(error)
       return []
