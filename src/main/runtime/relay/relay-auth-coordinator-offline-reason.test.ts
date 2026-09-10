@@ -49,20 +49,24 @@ describe('RelayAuthCoordinator offline reason', () => {
     })
   })
 
-  it('carries broker_unavailable when openBroker rejects', async () => {
+  it('carries broker_unavailable once the wait budget outlasts a retried open failure', async () => {
+    // Why the budget: a transient open failure arms a retry, and the waiter sits
+    // through it; the cause surfaces only when the wait itself gives up.
+    vi.useFakeTimers()
+    const openBroker = vi.fn().mockRejectedValue(new Error('transport failure'))
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
-      openBroker: async () => {
-        throw new Error('transport failure')
-      },
-      onStatus: vi.fn()
+      openBroker,
+      onStatus: vi.fn(),
+      random: () => 0.5
     })
     coordinator.reconcile()
 
-    await expect(coordinator.waitForLiveBrokerResult()).resolves.toEqual({
-      broker: null,
-      offlineReason: 'broker_unavailable'
-    })
+    const waiter = coordinator.waitForLiveBrokerResult(5_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    await expect(waiter).resolves.toEqual({ broker: null, offlineReason: 'broker_unavailable' })
+    expect(openBroker.mock.calls.length).toBeGreaterThan(1)
+    vi.useRealTimers()
   })
 
   it('carries auth_unavailable, not signed_out, when the session read itself fails', async () => {
@@ -81,10 +85,9 @@ describe('RelayAuthCoordinator offline reason', () => {
     })
     coordinator.reconcile()
 
-    await expect(coordinator.waitForLiveBrokerResult()).resolves.toEqual({
-      broker: null,
-      offlineReason: 'auth_unavailable'
-    })
+    const waiter = coordinator.waitForLiveBrokerResult(5_000)
+    await vi.advanceTimersByTimeAsync(5_000)
+    await expect(waiter).resolves.toEqual({ broker: null, offlineReason: 'auth_unavailable' })
     expect(openBroker).not.toHaveBeenCalled()
     vi.useRealTimers()
   })
