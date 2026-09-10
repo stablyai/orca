@@ -14,8 +14,8 @@ import { SessionSearchTypoRepair } from './session-search-typo-repair'
 // The operator-only walk: rows per page, and how far past a full candidate set
 // it will read before giving up on finding more matches.
 const RECENT_PAGE_ROWS = 512
-// Ids per `loadSessions` statement, left well under the 999-parameter floor so
-// the filter's own bound values fit beside them.
+// Ids per `loadSessions` statement, with room to spare for the filter's own
+// bound values beside them.
 const SESSION_ID_BATCH = 500
 const RECENT_SCAN_FACTOR = 20
 
@@ -165,10 +165,15 @@ export class SessionSearchRetrieval {
 
   /**
    * Read in batches, because the id list is as long as the candidate limit and
-   * every id is a bound parameter. SQLite's default `SQLITE_MAX_VARIABLE_NUMBER`
-   * is 999 on builds older than 3.32, and a caller may raise the candidate
-   * limit — the tuning doc says it may — so a single statement is one settings
-   * change away from `too many SQL variables` on somebody's host.
+   * every id is a bound parameter, so a single statement scales with a knob the
+   * tuning doc invites a host to raise.
+   *
+   * Not a fix for a reachable failure, and worth saying so: SQLite has bound
+   * `SQLITE_MAX_VARIABLE_NUMBER` at 32,766 since 3.32, every runtime this stack
+   * supports is past that, and the measured limit on this one is higher still.
+   * A candidate limit that large is not a configuration anyone would choose.
+   * The batch is here so the ceiling belongs to this file rather than to
+   * whichever SQLite the process happened to link.
    */
   loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
     const rows: SessionRow[] = []

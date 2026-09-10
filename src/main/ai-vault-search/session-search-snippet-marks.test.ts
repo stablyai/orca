@@ -73,3 +73,40 @@ it('leaves a transcript’s own brackets in the text it shows', async () => {
   )
   expect(hit?.evidence?.snippet).toContain('[[ -f')
 })
+
+it('picks by comparison, so a private-use code point in content cannot pose as a mark', async () => {
+  // The marks are private-use code points, and a transcript may hold one:
+  // agent output carries Nerd Font glyphs, which live in the same block. So the
+  // column is chosen by comparing a marked rendering against an unmarked one,
+  // not by looking for a mark in the text.
+  harness = await openSessionSearchHarness('ss-snippet-marks-private-use')
+  addSyntheticSession(harness.db, {
+    id: 1,
+    text: 'the \uE000 glyph a font printed here',
+    toolText: TOOL
+  })
+
+  const [hit] = harness.engine.search({ query: 'zebrafish' }).hits
+  expect(hit?.evidence?.snippet).toContain('zebrafish')
+  expect(hit?.evidence?.snippet).not.toContain('glyph')
+})
+
+it('truncates on the last real mark, not on a bracket the transcript wrote', async () => {
+  // Over the character ceiling the snippet is cut, and it must not cut between
+  // an open mark and its close. Finding that open mark by searching for `[[`
+  // stops at the transcript's own bracket instead and throws away everything
+  // after it.
+  harness = await openSessionSearchHarness('ss-snippet-marks-truncation')
+  const long = (letter: string): string =>
+    Array.from({ length: 5 }, () => `${letter.repeat(55)}/tail`).join(' ')
+  addSyntheticSession(harness.db, {
+    id: 1,
+    text: `zebrafish ${long('p')} [[ ${long('q')}`
+  })
+
+  const snippet = harness.engine.search({ query: 'zebrafish' }).hits[0]?.evidence?.snippet ?? ''
+  expect(snippet).toContain('[[zebrafish]]')
+  // The cut is the character ceiling, so the text after the transcript's own
+  // bracket survives up to it.
+  expect(snippet).toContain('qqqqq')
+})

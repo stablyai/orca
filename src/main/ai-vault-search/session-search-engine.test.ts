@@ -395,23 +395,24 @@ describe('the engine carries its own schema and puts it back', () => {
 })
 
 describe('a query the engine had to cut says so', () => {
-  it('cuts the query on a whole code point, never through a surrogate pair', async () => {
-    // A bare slice at 512 can land between the two halves of an astral
-    // character, and the lone half matches nothing and cannot be echoed back.
+  it('answers a query whose cap falls inside an astral character', async () => {
+    // The cut is on a whole code point rather than a code unit, so nothing
+    // downstream is handed half a surrogate pair. That is hygiene rather than a
+    // behaviour: the planner's tokenizer does not treat a lone surrogate as a
+    // token character, so it drops out of the terms either way. What this pins
+    // is that the boundary is answerable at all.
     const { db, engine } = await open('ss-engine-surrogate-cap')
-    addSyntheticSession(db, { id: 1, text: 'needle' })
-    const query = `${'x'.repeat(SESSION_SEARCH_QUERY_MAX_LENGTH - 1)}😀 needle`
-    const result = engine.search({ query })
+    const kept = 'x'.repeat(SESSION_SEARCH_QUERY_MAX_LENGTH - 2)
+    addSyntheticSession(db, { id: 1, text: kept })
+    const result = engine.search({ query: `${kept} 😀 tail` })
     expect(result.truncated.query).toBe(true)
-    // The emoji straddles the cap, so the cut has to fall before it.
-    expect(query.slice(0, SESSION_SEARCH_QUERY_MAX_LENGTH).at(-1)).toBe('\ud83d')
-    expect(result.hits).toEqual([])
+    expect(result.hits.map((hit) => hit.sessionId)).toEqual(['1'])
   })
 
-  it('loads more candidate sessions than SQLite will bind in one statement', async () => {
+  it('loads a candidate set larger than one batch of bound ids', async () => {
     // The id list is as long as the candidate limit and every id is a bound
-    // parameter, so one statement is a raised limit away from `too many SQL
-    // variables` on a host whose SQLite caps at 999.
+    // parameter. No SQLite this stack can run refuses 1,100 of them, so this
+    // pins that batching returns the same answer, not that it rescues one.
     const { db, engine } = await open('ss-engine-id-batching', {
       sessionCandidateLimit: 1200
     })
