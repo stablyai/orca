@@ -19,6 +19,7 @@ import { useMobilePairingQrInvalidation } from './use-mobile-pairing-qr-invalida
 import { useMobileInstallActions } from './use-mobile-install-actions'
 import { useMobilePagePairedDevices } from './use-mobile-page-paired-devices'
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import { collectMobileRelayDiagnosticsPayload } from './mobile-relay-diagnostics-payload'
 import {
   type MobilePairingAddressChange,
   useMobilePairingAddressPreference
@@ -146,13 +147,11 @@ export default function MobilePage(): React.JSX.Element {
     if (relayMintFailure == null) {
       return
     }
-    // Why: users share this payload — the selected address would leak a LAN/Tailscale IP or hostname.
-    const payload = {
-      kind: 'mobile_pairing_relay_failure',
-      preferredConnectionMode: connectionMode,
-      failure: relayMintFailure,
-      at: new Date().toISOString()
-    }
+    // Why: users share this payload — an address (selected or relay cell) would leak a LAN/Tailscale IP or hostname.
+    const payload = await collectMobileRelayDiagnosticsPayload({
+      connectionMode,
+      failure: relayMintFailure
+    })
     try {
       await window.api.ui.writeClipboardText(JSON.stringify(payload, null, 2))
       if (mountedRef.current) {

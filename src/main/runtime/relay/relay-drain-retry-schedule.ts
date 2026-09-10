@@ -1,5 +1,4 @@
-const RETRY_BASE_MS = 1_000
-const RETRY_MAX_MS = 5 * 60_000
+import { computeRetryDelayMs } from './relay-retry-backoff'
 
 export class RelayDrainRetrySchedule {
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -15,17 +14,11 @@ export class RelayDrainRetrySchedule {
     if (this.timer) {
       return
     }
-    const exponent = Math.min(this.attempt, Math.ceil(Math.log2(RETRY_MAX_MS / RETRY_BASE_MS)))
-    const capMs = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** exponent)
-    this.attempt++
-    const jitterMs = Math.floor(this.random() * (capMs + 1))
-    this.timer = setTimeout(
-      () => {
-        this.timer = null
-        retry()
-      },
-      Math.max(jitterMs, retryAfterMs)
-    )
+    const delayMs = computeRetryDelayMs(this.attempt++, retryAfterMs, this.random)
+    this.timer = setTimeout(() => {
+      this.timer = null
+      retry()
+    }, delayMs)
   }
 
   reset(): void {

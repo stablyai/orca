@@ -5,37 +5,22 @@ import {
 import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { RelayBrokerStatus } from './relay-session-broker'
 import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
+import type { RelayOfflineReason } from './relay-offline-reason'
+import { computeRetryDelayMs } from './relay-retry-backoff'
+import type {
+  CoordinatedRelayBroker,
+  LiveBrokerWaitResult,
+  RelayAuthContext,
+  RelayAuthCoordinatorOptions,
+  RelayAuthIdentity
+} from './relay-auth-coordinator-contract'
 
-export type RelayAuthIdentity = {
-  userId: string
-  profileId: string
-  organizationId: string
-}
-
-export type RelayAuthContext = {
-  identity: RelayAuthIdentity
-  accessToken: string
-  relayEntitled: boolean
-}
-
-export type CoordinatedRelayBroker = {
-  closeNow(hostCloseReason?: RelayHostCloseReason): void
-  isLive?(): boolean
-  readonly endpoint?: { cellUrl: string } | null
-}
-
-type RelayAuthCoordinatorOptions = {
-  readContext: () => Promise<RelayAuthContext | null>
-  hasDemand?: (context: RelayAuthContext) => boolean
-  openBroker: (input: {
-    context: RelayAuthContext
-    isCurrent: () => boolean
-    refreshAccessToken: () => Promise<string | null>
-  }) => Promise<CoordinatedRelayBroker>
-  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
-  lingerMs?: number
-  random?: () => number
-}
+export type {
+  CoordinatedRelayBroker,
+  LiveBrokerWaitResult,
+  RelayAuthContext,
+  RelayAuthIdentity
+} from './relay-auth-coordinator-contract'
 
 type BrokerOwnership = {
   identityKey: string
@@ -47,12 +32,20 @@ function identityKey(identity: RelayAuthIdentity): string {
   return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
 }
 
+function offlineReasonForOpenFailure(
+  retryable: boolean,
+  reachedRelay: string | undefined
+): RelayOfflineReason {
+  if (reachedRelay === undefined) {
+    return 'auth_unavailable'
+  }
+  return retryable ? 'broker_unavailable' : 'broker_rejected'
+}
+
 export class RelayAuthCoordinator {
-  // Why: recover brief failures quickly without turning a sustained outage into auth/director load.
-  private static readonly RETRY_BASE_MS = 1_000
-  private static readonly RETRY_MAX_MS = 5 * 60_000
   private readonly options: RelayAuthCoordinatorOptions
   private authEpoch = 0
+  private offlineReason: RelayOfflineReason | null = null
   private ownership: BrokerOwnership | null = null
   private readonly pendingOwnerships = new Set<BrokerOwnership>()
   private latestReconcile: Promise<void> = Promise.resolve()
@@ -94,13 +87,17 @@ export class RelayAuthCoordinator {
     this.retryAttempt = 0
     this.invalidatePendingOwnerships()
     this.invalidateOwnership(hostCloseReason)
-    this.publish('offline')
+    this.publish('offline', hostCloseReason)
   }
 
   // Why derived rather than passed in: the coordinator republishes `registered`
   // after the broker already announced its cell, so a call site that forgot the
   // cell would silently blank it moments after the broker set it.
-  private publish(status: RelayBrokerStatus): void {
+  private publish(status: RelayBrokerStatus, offlineReason?: RelayOfflineReason): void {
+    // Why only 'offline' keeps a reason: requireActiveBroker reads it to name
+    // the cause, and a stale reason must not survive the coordinator going
+    // back online (or offline again for an unrelated, unclassified cause).
+    this.offlineReason = status === 'offline' ? (offlineReason ?? null) : null
     this.options.onStatus(
       status,
       relayStatusCellUrl(status, this.ownership?.broker?.endpoint?.cellUrl)
@@ -136,18 +133,29 @@ export class RelayAuthCoordinator {
   }
 
   async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
+    return (await this.waitForLiveBrokerResult()).broker
+  }
+
+  // Why the caller maps offlineReason to a code instead of the coordinator
+  // throwing: the mint-failure vocabulary belongs to the RPC layer.
+  async waitForLiveBrokerResult(): Promise<LiveBrokerWaitResult> {
     while (!this.stopped) {
       const broker = this.getLiveBroker()
       if (broker) {
-        return broker
+        return { broker }
       }
       const pending = this.latestReconcile
       await pending
       if (pending === this.latestReconcile) {
-        return this.getLiveBroker()
+        return this.settledLiveBrokerResult()
       }
     }
-    return null
+    return { broker: null, offlineReason: this.offlineReason }
+  }
+
+  private settledLiveBrokerResult(): LiveBrokerWaitResult {
+    const broker = this.getLiveBroker()
+    return broker ? { broker } : { broker: null, offlineReason: this.offlineReason }
   }
 
   stop(): void {
@@ -170,7 +178,7 @@ export class RelayAuthCoordinator {
         // by a 401). A present-but-unentitled context is still a signed-in
         // desktop, and "sign in to reconnect" would be wrong advice for it.
         this.invalidateOwnership(context ? undefined : RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-        this.publish('offline')
+        this.publish('offline', context ? 'not_entitled' : RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
         return
       }
       const nextIdentityKey = identityKey(context.identity)
@@ -241,8 +249,11 @@ export class RelayAuthCoordinator {
           '[relay] broker reconcile failed:',
           error instanceof Error ? error.message : String(error)
         )
-        this.publish('offline')
-        if (shouldRetryRelayConnectionError(error)) {
+        const retryable = shouldRetryRelayConnectionError(error)
+        // retryIdentityKey is set only once the context read succeeded, so its
+        // absence means the failure never reached the relay.
+        this.publish('offline', offlineReasonForOpenFailure(retryable, retryIdentityKey))
+        if (retryable) {
           const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
           this.scheduleRetry(epoch, retryIdentityKey, retryAfterMs)
         }
@@ -254,17 +265,7 @@ export class RelayAuthCoordinator {
     if (this.retryTimer || !this.isEpochCurrent(epoch)) {
       return
     }
-    const exponent = Math.min(
-      this.retryAttempt,
-      Math.ceil(Math.log2(RelayAuthCoordinator.RETRY_MAX_MS / RelayAuthCoordinator.RETRY_BASE_MS))
-    )
-    const capMs = Math.min(
-      RelayAuthCoordinator.RETRY_MAX_MS,
-      RelayAuthCoordinator.RETRY_BASE_MS * 2 ** exponent
-    )
-    this.retryAttempt++
-    const random = this.options.random ?? Math.random
-    const delayMs = Math.max(Math.floor(random() * (capMs + 1)), retryAfterMs)
+    const delayMs = computeRetryDelayMs(this.retryAttempt++, retryAfterMs, this.options.random)
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null
       if (this.isEpochCurrent(epoch)) {
