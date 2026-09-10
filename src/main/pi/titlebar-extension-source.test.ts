@@ -552,6 +552,34 @@ describe('getPiTitlebarExtensionSource', () => {
     await expect(harness.callHook('agent_settled')).resolves.toBeUndefined()
   })
 
+  it('clears the 80ms spinner when getSessionName throws after session replace', async () => {
+    let live = true
+    const harness = createHarness({
+      sessionNameImpl: () => {
+        if (!live) {
+          throw new Error(
+            'This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx'
+          )
+        }
+        return SESSION
+      }
+    })
+
+    await harness.callHook('agent_start')
+    await vi.advanceTimersByTimeAsync(80)
+    const titlesBeforeStale = harness.titles.length
+    expect(titlesBeforeStale).toBeGreaterThan(0)
+    expect(vi.getTimerCount()).toBe(1)
+
+    live = false
+    await vi.advanceTimersByTimeAsync(80)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.titles.length).toBe(titlesBeforeStale)
+
+    await vi.advanceTimersByTimeAsync(240)
+    expect(harness.titles.length).toBe(titlesBeforeStale)
+  })
+
   it('survives a session name that throws on a stale runtime', async () => {
     let live = true
     const harness = createHarness({
