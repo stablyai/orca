@@ -7,10 +7,11 @@
 // `followOnAppend` + `scrollEndThreshold` keep a reader who is already at the
 // bottom pinned there as a turn streams.
 //
-// Every measurement here is in the scroll container's own coordinate space —
-// `offsetTop` / `offsetHeight`, never `getBoundingClientRect`. The transcript is
-// zoomable, and a rect is in viewport pixels while `scrollTop` is not: mixing
-// them puts the window in the wrong place by exactly the zoom factor.
+// Every measurement here ends up in the scroll container's own coordinate space,
+// which means `offsetTop` / `offsetHeight` rather than a bounding rect. The
+// transcript is zoomable, and a rect is in viewport pixels while `scrollTop` is
+// not: mixing the two puts the window out of place by exactly the zoom factor.
+// One path does read rects, and it converts them back before using them.
 
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual'
@@ -42,10 +43,9 @@ export type NativeChatTranscriptWindow = {
 }
 
 /** Distance from a container's scroll origin down to a descendant, in the
- *  container's own scroll pixels. `offsetTop` rather than a rect because the transcript
- *  is zoomed: rects are viewport pixels, `scrollTop` is not. Absolutely
- *  positioned windowed rows are placed with `top`, never a transform, so this
- *  stays true through the window as well. */
+ *  container's own scroll pixels, or null when there is no chain to walk.
+ *  Absolutely positioned windowed rows are placed with `top`, never a transform,
+ *  so `offsetTop` stays true through the window as well. */
 export function nativeChatScrollOffsetWithin(
   element: HTMLElement,
   container: HTMLElement
