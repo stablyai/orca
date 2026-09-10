@@ -16,8 +16,9 @@ import {
   isWorkspaceSessionRecord,
   mergeWorkspaceSessionArrayField,
   mergeWorkspaceSessionRecordField,
+  worktreeIdForPaneKey,
   type WorkspaceSessionRecord
-} from './workspace-session-host-records'
+} from '../../../shared/workspace-session-host-records'
 
 /**
  * Split / merge the unified WorkspaceSessionState across per-host partitions.
@@ -274,12 +275,7 @@ export function splitWorkspaceSessionByHost(
           templates,
           field,
           value,
-          (paneKey) => {
-            const separator = paneKey.lastIndexOf(':')
-            return separator > 0
-              ? ctx.worktreeIdByTabId.get(paneKey.slice(0, separator))
-              : undefined
-          },
+          (paneKey) => worktreeIdForPaneKey(ctx.worktreeIdByTabId, paneKey),
           ctx
         )
         break

@@ -258,6 +258,222 @@ describe('ssh host partition workspaces with no terminal tabs', () => {
   })
 })
 
+describe('ssh host partition rows the host has nothing for', () => {
+  /** The base half of a legacy split: `local` still holds this workspace's editor state, including
+   *  an unsaved draft, while the SSH partition holds only empty rows for it. The workspace is
+   *  adoptable (the base has no terminal tabs for it), and every worktree-keyed row it adopts is a
+   *  replacing write — so an empty host row landing on a populated base row is a real deletion. */
+  function emptyHostRowsOverBaseDraft(hostOpenFiles: boolean) {
+    const draftFile = {
+      filePath: `${WORKTREE_PATH}/src/main.ts`,
+      relativePath: 'src/main.ts',
+      worktreeId: WORKTREE_ID,
+      language: 'typescript',
+      dirtyDraftContent: 'unsaved work'
+    }
+    return {
+      local: session({
+        tabsByWorktree: {},
+        openFilesByWorktree: { [WORKTREE_ID]: [draftFile] },
+        activeTabTypeByWorktree: { [WORKTREE_ID]: 'editor' }
+      } as unknown as WorkspaceSessionState),
+      [SSH_HOST_ID]: session({
+        tabsByWorktree: { [WORKTREE_ID]: [] },
+        ...(hostOpenFiles ? { openFilesByWorktree: { [WORKTREE_ID]: [] } } : {})
+      } as unknown as WorkspaceSessionState)
+    }
+  }
+
+  it('does not let an empty host row destroy an unsaved draft the base alone holds', async () => {
+    // The host having no open files is not evidence the base's are gone. Losing this is worse than
+    // the bug the adoption exists to fix: RemoteWorkspaceSession carries terminal fields only, so
+    // nothing can recover a `dirtyDraftContent` once the read has dropped it.
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(emptyHostRowsOverBaseDraft(true) as never),
+      repos
+    )
+
+    expect(read.session.openFilesByWorktree?.[WORKTREE_ID]?.[0]?.dirtyDraftContent).toBe(
+      'unsaved work'
+    )
+  })
+
+  it('still adopts a populated host row over the base leftovers', async () => {
+    // The other side of the same rule: the guard must be about the host having nothing, not about
+    // the base having something, or adoption stops repairing the split it exists for.
+    const partitions = emptyHostRowsOverBaseDraft(false)
+    partitions[SSH_HOST_ID] = session({
+      ...partitions[SSH_HOST_ID],
+      openFilesByWorktree: {
+        [WORKTREE_ID]: [
+          {
+            filePath: `${WORKTREE_PATH}/src/host.ts`,
+            relativePath: 'src/host.ts',
+            worktreeId: WORKTREE_ID,
+            language: 'typescript'
+          }
+        ]
+      }
+    } as unknown as WorkspaceSessionState)
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(partitions as never),
+      repos
+    )
+
+    expect(
+      read.session.openFilesByWorktree?.[WORKTREE_ID]?.map((file) => file.relativePath)
+    ).toEqual(['src/host.ts'])
+  })
+
+  it('adopts the layout of a tab the host slice names only in unifiedTabs', async () => {
+    // `buildWorktreeIdByTabId` — the index the split routes by — resolves unified-only tabs as well
+    // as `tabsByWorktree` ones, so their tab-keyed rows are written to this partition. A read that
+    // discovered tabs from `tabsByWorktree` alone routed them in and never brought them back.
+    const partitions = {
+      local: session({ tabsByWorktree: {} }),
+      [SSH_HOST_ID]: session({
+        tabsByWorktree: {},
+        unifiedTabs: {
+          [WORKTREE_ID]: [{ id: 'tab-unified', type: 'terminal', worktreeId: WORKTREE_ID }]
+        },
+        terminalLayoutsByTabId: { 'tab-unified': { direction: 'row', panes: [] } }
+      } as unknown as WorkspaceSessionState)
+    }
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(partitions as never),
+      repos
+    )
+
+    expect(read.session.terminalLayoutsByTabId?.['tab-unified']).toBeDefined()
+  })
+})
+
+describe('ssh host partition adoption on a contested bare id', () => {
+  /** A worktree id is `repoId::path` with no host component, so one repo registered on two hosts
+   *  publishes the SAME id for two DIFFERENT workspaces (STA-4343). The contention split parks the
+   *  co-claimant's rows so the primary's write cannot erase them — but ssh slices are deliberately
+   *  kept out of that claimant set, on the premise that `local` and `ssh:<target>` are one workspace
+   *  written twice. A contested id is exactly where that premise fails, and adoption cannot see it
+   *  from `(base, host)` alone. */
+  const RUNTIME_HOST_ID: ExecutionHostId = 'runtime:r1'
+  const contestedRepos = [
+    { id: REPO_ID, connectionId: TARGET_ID, executionHostId: null },
+    { id: 'repo-rt', connectionId: null, executionHostId: RUNTIME_HOST_ID }
+  ]
+
+  function contestedPartitions() {
+    return {
+      local: session({
+        tabsByWorktree: {},
+        openFilesByWorktree: {
+          [WORKTREE_ID]: [
+            {
+              filePath: '/local/checkout/feature/src/main.ts',
+              relativePath: 'src/main.ts',
+              worktreeId: WORKTREE_ID,
+              language: 'typescript',
+              dirtyDraftContent: 'local unsaved work'
+            }
+          ]
+        }
+      } as unknown as WorkspaceSessionState),
+      [RUNTIME_HOST_ID]: session({
+        tabsByWorktree: { [WORKTREE_ID]: [] },
+        activeTabTypeByWorktree: { [WORKTREE_ID]: 'terminal' }
+      } as unknown as WorkspaceSessionState),
+      [SSH_HOST_ID]: session({
+        tabsByWorktree: {},
+        openFilesByWorktree: {
+          [WORKTREE_ID]: [
+            {
+              filePath: '/remote/checkout/feature/src/other.ts',
+              relativePath: 'src/other.ts',
+              worktreeId: WORKTREE_ID,
+              language: 'typescript'
+            }
+          ]
+        }
+      } as unknown as WorkspaceSessionState)
+    }
+  }
+
+  it("does not overwrite a contested workspace's own rows with the ssh workspace's", async () => {
+    // The read names `local` primary for this id and parks the runtime claimant, so routing writes
+    // whatever survives here back into local's own partition. Replacing local's rows with the SSH
+    // workspace's would persist one workspace's editor state as another's — and destroy the draft.
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(contestedPartitions() as never),
+      contestedRepos
+    )
+
+    expect(read.session.openFilesByWorktree?.[WORKTREE_ID]?.[0]?.dirtyDraftContent).toBe(
+      'local unsaved work'
+    )
+  })
+
+  it('still fills a gap on a contested id', async () => {
+    // Declining to replace is not declining to repair: a row no claimant answered is still adopted.
+    const partitions = contestedPartitions()
+    partitions[SSH_HOST_ID] = session({
+      ...partitions[SSH_HOST_ID],
+      activeFileIdByWorktree: { [WORKTREE_ID]: '/remote/checkout/feature/src/other.ts' }
+    } as unknown as WorkspaceSessionState)
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(partitions as never),
+      contestedRepos
+    )
+
+    expect(read.session.activeFileIdByWorktree?.[WORKTREE_ID]).toBe(
+      '/remote/checkout/feature/src/other.ts'
+    )
+  })
+
+  it('does not let a legacy bare recency key move another host workspace of the same id', async () => {
+    // `lastVisitedAtByWorktreeId` is the one worktree-keyed field whose key may name its own host,
+    // and the split has a dedicated branch for that. A bare key carries no host, so it cannot be
+    // told apart from the base's own entry for the id — replacing moves Cmd+J recency permanently.
+    const partitions = {
+      local: session({
+        tabsByWorktree: {},
+        lastVisitedAtByWorktreeId: { [WORKTREE_ID]: 1000 }
+      } as unknown as WorkspaceSessionState),
+      [SSH_HOST_ID]: session({
+        tabsByWorktree: { [WORKTREE_ID]: [] },
+        lastVisitedAtByWorktreeId: { [WORKTREE_ID]: 9999 }
+      } as unknown as WorkspaceSessionState)
+    }
+
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(partitions as never),
+      repos
+    )
+
+    expect(read.session.lastVisitedAtByWorktreeId?.[WORKTREE_ID]).toBe(1000)
+  })
+
+  it('still adopts a host-qualified recency key, which names its own owner', async () => {
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi({
+        local: session({
+          tabsByWorktree: {},
+          lastVisitedAtByWorktreeId: { [WORKTREE_ID]: 1000 }
+        } as unknown as WorkspaceSessionState),
+        [SSH_HOST_ID]: session({
+          tabsByWorktree: { [WORKTREE_ID]: [] },
+          lastVisitedAtByWorktreeId: { [`${SSH_HOST_ID}|${WORKTREE_ID}`]: 9999 }
+        } as unknown as WorkspaceSessionState)
+      } as never),
+      repos
+    )
+
+    expect(read.session.lastVisitedAtByWorktreeId?.[`${SSH_HOST_ID}|${WORKTREE_ID}`]).toBe(9999)
+    expect(read.session.lastVisitedAtByWorktreeId?.[WORKTREE_ID]).toBe(1000)
+  })
+})
+
 describe('ssh host partition write/read round trip', () => {
   /** The two halves pinned together through the shipping write path. Testing the read against a
    *  hand-built partition is what let an editor-only workspace fall out: the fixture asserted the

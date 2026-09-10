@@ -11,7 +11,7 @@ import { workspaceSessionPartitionHostId } from '../../../shared/workspace-sessi
 import {
   isWorkspaceSessionRecord,
   type WorkspaceSessionRecord
-} from './workspace-session-host-records'
+} from '../../../shared/workspace-session-host-records'
 import type { WorkspaceRuntimeOwnerProjection } from './workspace-runtime-host-ownership'
 import {
   mergeWorkspaceSessionsFromHosts,
@@ -183,21 +183,27 @@ function shadowHostEntries(
  *
  *  `primaryHostBySessionKey` records where each key's live row came from — including the
  *  uncontested single-partition case, so the write path can put every row back in its own
- *  partition instead of re-deriving an owner that may not match. */
+ *  partition instead of re-deriving an owner that may not match. It is therefore NOT the contested
+ *  set; `contestedSessionKeys` is, and only it says a bare id names more than one workspace. */
 export function extractContestedHostSessionEntries(slices: HostSessionSlices): {
   slices: HostSessionSlices
   shadow: HostSessionSlices
   primaryHostBySessionKey: Record<string, ExecutionHostId>
+  contestedSessionKeys: Set<string>
 } {
   const shadow: HostSessionSlices = {}
   const hostIds = definedHostIds(slices)
   const hostIdsByKey = indexHostIdsBySessionKey(slices, hostIds)
   const primaryHostBySessionKey: Record<string, ExecutionHostId> = {}
+  const contestedSessionKeys = new Set<string>()
   for (const [key, owners] of hostIdsByKey) {
     primaryHostBySessionKey[key] = pickPrimaryHostForClaims(owners)
+    if (owners.length > 1) {
+      contestedSessionKeys.add(key)
+    }
   }
   if (hostIds.length < 2) {
-    return { slices, shadow, primaryHostBySessionKey }
+    return { slices, shadow, primaryHostBySessionKey, contestedSessionKeys }
   }
   const primaryByKey = new Map<string, ExecutionHostId>()
   for (const [key, owners] of hostIdsByKey) {
@@ -206,7 +212,7 @@ export function extractContestedHostSessionEntries(slices: HostSessionSlices): {
     }
   }
   if (primaryByKey.size === 0) {
-    return { slices, shadow, primaryHostBySessionKey }
+    return { slices, shadow, primaryHostBySessionKey, contestedSessionKeys }
   }
   const next: HostSessionSlices = { ...slices }
   for (const hostId of hostIds) {
@@ -220,7 +226,7 @@ export function extractContestedHostSessionEntries(slices: HostSessionSlices): {
       shadow[hostId] = result.shadow
     }
   }
-  return { slices: next, shadow, primaryHostBySessionKey }
+  return { slices: next, shadow, primaryHostBySessionKey, contestedSessionKeys }
 }
 
 export function mergeWorkspaceSessionsWithHostShadow(slices: HostSessionSlices): {
@@ -228,13 +234,15 @@ export function mergeWorkspaceSessionsWithHostShadow(slices: HostSessionSlices):
   slices: HostSessionSlices
   shadow: HostSessionSlices
   primaryHostBySessionKey: Record<string, ExecutionHostId>
+  contestedSessionKeys: Set<string>
 } {
   const extracted = extractContestedHostSessionEntries(slices)
   return {
     session: mergeWorkspaceSessionsFromHosts(extracted.slices),
     slices: extracted.slices,
     shadow: extracted.shadow,
-    primaryHostBySessionKey: extracted.primaryHostBySessionKey
+    primaryHostBySessionKey: extracted.primaryHostBySessionKey,
+    contestedSessionKeys: extracted.contestedSessionKeys
   }
 }
 
