@@ -9,6 +9,8 @@ import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-regi
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
+import { buildJcodeRuntimeDir, shouldInjectJcodeRuntimeDir } from '../../shared/jcode-runtime-dir'
+import { makePaneKey } from '../../shared/stable-pane-id'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -271,6 +273,29 @@ describe('registerPtyHandlers', () => {
     it('lets caller-provided env override LANG', async () => {
       const env = await spawnAndGetEnv({ LANG: 'fr_FR.UTF-8' })
       expect(env.LANG).toBe('fr_FR.UTF-8')
+    })
+
+    it('stamps a per-pane jcode runtime dir on local spawns', async () => {
+      const leafId = '7bad1a11-ba5f-4d47-9761-d5d7ac6e975f'
+      const tabId = 'tab-1'
+      const paneKey = makePaneKey(tabId, leafId)
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        env: { ORCA_PANE_KEY: paneKey },
+        tabId,
+        leafId,
+        worktreeId: 'wt-1'
+      })
+      const spawnOptions = spawnMock.mock.calls.at(-1)![2] as { env: Record<string, string> }
+      // Why: buildJcodeRuntimeDirEnv intentionally omits the var on win32.
+      if (shouldInjectJcodeRuntimeDir(process.platform)) {
+        expect(spawnOptions.env.JCODE_RUNTIME_DIR).toBe(buildJcodeRuntimeDir(paneKey))
+      } else {
+        expect(spawnOptions.env.JCODE_RUNTIME_DIR).toBeUndefined()
+      }
     })
     it('strips inherited Claude child-session stamps from a local spawn env', async () => {
       // Why: the local provider spreads main's process.env, so a GUI launched from

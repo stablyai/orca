@@ -16,6 +16,9 @@ type TerminalCapabilityRepliesDeps = {
   sendInput: (data: string) => boolean | void
   isReplaying: () => boolean
   da1Response?: string
+  /** Why: jcode themes itself; answering its OSC color burst can land before its
+   *  composer is ready and render the reply as pre-typed text. */
+  skipOscColorQueryReplies?: boolean
 }
 
 function isPrimaryDeviceAttributesQuery(params: (number | number[])[]): boolean {
@@ -140,7 +143,7 @@ export function installTerminalCapabilityReplyHandlers(
         if (!slots) {
           return false
         }
-        if (deps.isReplaying()) {
+        if (deps.isReplaying() || deps.skipOscColorQueryReplies === true) {
           return true
         }
         return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
@@ -153,7 +156,7 @@ export function installTerminalCapabilityReplyHandlers(
         if (!slots) {
           return false
         }
-        if (deps.isReplaying()) {
+        if (deps.isReplaying() || deps.skipOscColorQueryReplies === true) {
           return true
         }
         return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)

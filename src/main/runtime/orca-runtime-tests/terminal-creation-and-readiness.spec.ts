@@ -16,6 +16,11 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import {
+  buildJcodeRuntimeDir,
+  JCODE_RUNTIME_DIR_ENV_KEY,
+  shouldInjectJcodeRuntimeDir
+} from '../../../shared/jcode-runtime-dir'
 
 describe('OrcaRuntimeService', () => {
   it('creates visible terminal sessions without asking the renderer to focus a tab', async () => {
@@ -78,6 +83,15 @@ describe('OrcaRuntimeService', () => {
     const spawnedLeafId = spawnedEnv.ORCA_PANE_KEY.slice(`${spawnedEnv.ORCA_TAB_ID}:`.length)
     expect(spawnedEnv.ORCA_WORKTREE_ID).toBe(TEST_WORKTREE_ID)
     expect(spawnedEnv.ORCA_AGENT_LAUNCH_TOKEN).toMatch(UUID_RE)
+    // Why: the runtime spawn path must stamp the per-pane jcode runtime dir
+    // exactly like the renderer pty:spawn path (unix platforms only).
+    if (shouldInjectJcodeRuntimeDir(process.platform)) {
+      expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBe(
+        buildJcodeRuntimeDir(spawnedEnv.ORCA_PANE_KEY)
+      )
+    } else {
+      expect(spawnedEnv[JCODE_RUNTIME_DIR_ENV_KEY]).toBeUndefined()
+    }
     expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',

@@ -353,9 +353,10 @@
           "0708ed89f1": "Claude",
           "fc80296033": "Devin",
           "da41abbdd4": "Ante",
+          "mimo_code_label": "MiMo Code",
+          "jcode_label": "Jcode",
           "060d152fb5": "Trae",
-          "d443a47995": "Prime Agent",
-          "mimo_code_label": "MiMo Code"
+          "d443a47995": "Prime Agent"
         },
         "skill": {
           "cli": {

@@ -192,6 +192,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     // (#7329), so send immediately.
     sendInput: session.sendDesktopQueryReplyImmediate,
     isReplaying: () => isPaneReplaying(session.deps.replayingPanesRef, session.pane.id),
+    skipOscColorQueryReplies: !session.shouldAnswerPaneOscColorQueries(),
     ...(session.isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   session.respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(

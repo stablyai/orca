@@ -54,6 +54,11 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     const candidate = resolveLaunchAgentCandidate(useAppStore.getState())
     return isTuiAgent(candidate) ? candidate : null
   }
+  // Why: jcode themes itself; answering its OSC color burst can land before its
+  // composer is ready and render the reply as pre-typed text (the main-side
+  // startup ingress already skips it, the renderer must skip the answer too).
+  session.shouldAnswerPaneOscColorQueries = (): boolean =>
+    session.resolveExpectedLaunchTuiAgent() !== 'jcode'
   // Why: a launched/hook-known agent pane must confirm — not trust — a 133;D so a
   // full-screen agent's leaked nested-shell 133;D can't clear its tab identity,
   // even on a restore where no command-start read has recorded evidence yet.

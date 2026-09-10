@@ -160,6 +160,18 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     extensions: ['.json'],
     filePredicate: (filePath) => basename(filePath).startsWith('session_')
   },
+  jcode: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(
+        options.jcodeSessionsDir ??
+          join(process.env.JCODE_HOME?.trim() || join(homedir(), '.jcode'), 'sessions'),
+        wslHomeDirs,
+        ['.jcode', 'sessions']
+      ),
+    extensions: ['.json'],
+    // Why: skip the live .journal.jsonl appends and consolidated backups.
+    filePredicate: (filePath) => basename(filePath).startsWith('session_')
+  },
   rovo: {
     rootDirs: (options, wslHomeDirs) =>
       sessionRootDirs(options.rovoSessionsDir ?? ROVO_SESSIONS_DIR, wslHomeDirs, [

@@ -16,6 +16,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'omp',
   'prime-agent',
   'copilot',
+  'jcode',
   'kimi'
 ] as const satisfies readonly TuiAgent[]
 
@@ -224,6 +225,10 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'jcode': {
+      const id = readSessionId(payload, ['session_id', 'sessionId'])
+      return id ? { key: 'session_id', id } : null
+    }
     // Why: OMP's managed extension reports the authoritative CLI resume id.
     case 'omp': {
       const id = readSessionId(payload, ['session_id'])
@@ -288,5 +293,7 @@ export function getAgentResumeArgv(
     // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
     case 'kimi':
       return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
+    case 'jcode':
+      return providerSession.key === 'session_id' ? ['jcode', '--resume', id] : null
   }
 }

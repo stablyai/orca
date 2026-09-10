@@ -10,7 +10,8 @@ import {
 } from './commit-message-text-generation'
 import {
   createChildTerminationExpectation,
-  createMockDiscoveryChild
+  createMockDiscoveryChild,
+  withPlatform
 } from './commit-message-text-generation-test-harness'
 
 const { terminateWindowsProcessTreeMock } = vi.hoisted(() => ({
@@ -40,6 +41,33 @@ beforeEach(() => {
 })
 
 describe('generateCommitMessageFromContext', () => {
+  it('fails clearly before spawning when a jcode argv prompt exceeds the Windows command line', async () => {
+    await withPlatform('win32', async () => {
+      const pending = generateCommitMessageFromContext(
+        {
+          branch: 'main',
+          stagedSummary: 'M\tREADME.md',
+          stagedPatch: `+${'x'.repeat(40_000)}`
+        },
+        {
+          agentId: 'jcode',
+          model: 'default'
+        },
+        {
+          kind: 'local',
+          cwd: '/repo',
+          env: { ...process.env }
+        }
+      )
+
+      await expect(pending).resolves.toMatchObject({
+        success: false,
+        error: expect.stringContaining('too large for the Windows command line')
+      })
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+  })
+
   it('keeps local commit-message and pull-request cancellation lanes separate', async () => {
     const children: {
       pid: number

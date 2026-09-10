@@ -19,6 +19,7 @@ import { extractCommandCodeToolFields } from './providers/command-code-tool-fiel
 import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
+import { extractJcodeToolFields } from './providers/jcode-tool-fields'
 
 export function isGrokIdleNotification(message: string | undefined): boolean {
   if (!message) {
@@ -78,6 +79,9 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'jcode':
+      // Why: jcode hooks carry no UserPromptSubmit; a fresh/attached session_start is the only durable turn boundary.
+      return eventName === 'session_start'
   }
 }
 
@@ -102,6 +106,15 @@ export function hasExplicitUserPrompt(
     isNewTurnEvent(source, eventName) &&
     resolvedPromptText.trim().length > 0
   ) {
+    return true
+  }
+  if (
+    source === 'jcode' &&
+    (eventName === 'post_tool' || eventName === 'turn_end') &&
+    hasTranscriptPromptEvidence &&
+    resolvedPromptText.trim().length > 0
+  ) {
+    // Why: jcode hooks carry no prompt field; only the journal-backed prompt counts as explicit user text.
     return true
   }
   if (extractedPrompt.source === 'role_user_text') {
@@ -170,5 +183,7 @@ export function extractToolFields(
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
       return extractClaudeToolFields(eventName, hookPayload)
+    case 'jcode':
+      return extractJcodeToolFields(eventName, hookPayload)
   }
 }

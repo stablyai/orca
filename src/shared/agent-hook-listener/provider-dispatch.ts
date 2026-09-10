@@ -7,6 +7,7 @@ import type { HookListenerState } from './listener-state'
 import type { ExtractedPromptText } from './prompt-fields'
 import { isNewTurnEvent } from './provider-event-routing'
 import { readLastUserPromptFromTranscript } from './transcript-lines'
+import { readLastJcodeUserPromptFromHookPayload } from '../jcode-session-files'
 import { normalizeAntigravityEvent } from './providers/antigravity-events'
 import { normalizeAmpEvent } from './providers/amp-events'
 import { normalizeClaudeEvent } from './providers/claude-events'
@@ -22,6 +23,7 @@ import { normalizeCopilotEvent } from './providers/copilot-events'
 import { normalizeHermesEvent } from './providers/hermes-events'
 import { normalizeDevinEvent } from './providers/devin-events'
 import { normalizeKimiEvent } from './providers/kimi-events'
+import { normalizeJcodeEvent } from './providers/jcode-events'
 
 export type ProviderDispatchResult = {
   payload: ParsedAgentStatusPayload | null
@@ -148,6 +150,19 @@ export function normalizeProviderEvent(input: {
     case 'kimi':
       payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)
       break
+    case 'jcode': {
+      const transcriptPrompt = readLastJcodeUserPromptFromHookPayload(hookPayload)
+      // Why: the reader returns null (not undefined) when no journal prompt is
+      // recoverable; only a real transcript hit counts as prompt evidence.
+      hasTranscriptPromptEvidence = transcriptPrompt !== null
+      promptInteractionKey = transcriptPrompt?.interactionKey
+      resolvedPromptText = transcriptPrompt?.text ?? ''
+      if (promptText && extractedPrompt.source !== 'message') {
+        resolvedPromptText = promptText
+      }
+      payload = normalizeJcodeEvent(state, eventName, resolvedPromptText, paneKey, hookPayload)
+      break
+    }
   }
 
   return { payload, resolvedPromptText, promptInteractionKey, hasTranscriptPromptEvidence }

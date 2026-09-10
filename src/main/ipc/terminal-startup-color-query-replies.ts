@@ -31,7 +31,11 @@ function shouldReplyToStartupTerminalColorQueries(args: {
   launchConfig?: SleepingAgentLaunchConfig
 }): boolean {
   if (isTuiAgent(args.launchAgent)) {
-    return true
+    // Why: jcode starts its own terminal-color query burst before its TUI input
+    // loop is ready and renders the cooked reply (`10;rgb:…` / `11;rgb:…`) as
+    // composer text (same class as #12112, which fixed opencode). jcode themes
+    // itself, so answer no startup queries for it.
+    return args.launchAgent !== 'jcode'
   }
   const agentKindParse =
     args.telemetry?.agent_kind !== undefined

@@ -8,6 +8,7 @@ import {
   isolatedScanRoots,
   jsonLines,
   writeAntigravityScannerFixture,
+  writeJcodeSessionFixture,
   writeOmpScannerFixture,
   writePrimeAgentScannerFixture
 } from './session-scanner-test-fixtures'
@@ -716,13 +717,14 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    await writeJcodeSessionFixture(roots)
+
     const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
       new Set(AI_VAULT_AGENTS)
     )
-
     const commandByAgent = new Map(
       result.sessions.map((session) => [session.agent, session.resumeCommand])
     )
@@ -763,6 +765,9 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
+    )
+    expect(commandByAgent.get('jcode')).toBe(
+      "cd '/tmp/jcode' && jcode --resume 'session_jcode-session'"
     )
 
     const ompSession = result.sessions.find((session) => session.agent === 'omp')

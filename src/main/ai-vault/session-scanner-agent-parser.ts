@@ -6,6 +6,7 @@ import { parseClineSessionFile } from './session-scanner-cline-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
+import { parseJcodeSessionFile } from './session-scanner-jcode-parser'
 import {
   looksLikeOpenCodeSqliteCandidate,
   splitOpenCodeSqliteCandidate
@@ -100,5 +101,7 @@ export async function parseAgentSessionFile(
       return parseDevinSessionFile(candidate.file, platform, messages)
     case 'kimi':
       return parseKimiSessionFile(candidate.file, platform, messages)
+    case 'jcode':
+      return parseJcodeSessionFile(candidate.file, platform, messages)
   }
 }

@@ -104,7 +104,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           releaseStablePaneCreate?.()
           throw error
         }
-        const env = this.buildTerminalWorkspaceEnv(
+        const env = await this.buildTerminalWorkspaceEnv(
           workspace,
           {
             ...baseEnv,

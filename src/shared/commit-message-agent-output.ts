@@ -6,6 +6,31 @@ export function cleanGeneratedCommitMessage(raw: string): string {
   // unwrap by scanning boundaries instead of building newline-sized arrays.
   let text = normalizeGeneratedCommitMessageLineFeeds(raw).trim()
 
+  // Why: jcode --json emits a `{"text": …}` envelope (its plain-text mode
+  // mixes thinking and a "[Tokens]…" usage line into stdout); extract the
+  // answer field when the output is such an envelope.
+  if (text.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(text) as unknown
+      if (
+        typeof parsed === 'object' &&
+        parsed !== null &&
+        typeof (parsed as Record<string, unknown>).text === 'string'
+      ) {
+        text = (parsed as Record<string, string>).text.trim()
+      }
+    } catch {
+      // not a JSON envelope; fall through to the plain-text cleanup
+    }
+  }
+
+  // Why: jcode prints a trailing "[Tokens] upload: …" usage line after the
+  // answer; strip it so the result stays clean for branch/commit naming.
+  const tokensUsageIndex = text.search(/\n\[Tokens\]\s/)
+  if (tokensUsageIndex !== -1) {
+    text = text.slice(0, tokensUsageIndex).trimEnd()
+  }
+
   // Why: real commit messages never start with an ellipsis or the word
   // "Generating"/"Thinking" — those leak from CLIs that print a status line
   // before the actual response.
