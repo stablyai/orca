@@ -8,6 +8,7 @@ import {
 import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
+import { LogicalSubscriptionRegistry } from './logical-subscription-registry'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
@@ -23,15 +24,6 @@ export function isLogicalClientCutoverError(error: unknown): boolean {
     error instanceof LogicalClientCutoverError ||
     (error instanceof Error && error.message === 'RPC interrupted by connection migration')
   )
-}
-
-type SubscriptionRecord = {
-  method: string
-  params: unknown
-  listener: (result: unknown) => void
-  options?: Parameters<RpcClient['subscribe']>[3]
-  disposePhysical: (() => void) | null
-  cancelled: boolean
 }
 
 type PendingRequest = {
@@ -74,9 +66,14 @@ export function createStableLogicalRpcClient(
   let generation = 1
   let closed = false
   let suspended = false
-  let nextSubscriptionId = 0
   let activeStateUnsubscribe: (() => void) | null = null
-  const subscriptions = new Map<number, SubscriptionRecord>()
+  const subscriptions = new LogicalSubscriptionRegistry({
+    admission,
+    isClosed: () => closed,
+    isSuspended: () => suspended,
+    activeSession: () => activeSession,
+    generation: () => generation
+  })
   const pendingRequests = new Set<PendingRequest>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
@@ -112,14 +109,7 @@ export function createStableLogicalRpcClient(
               } else {
                 if (method === 'status.get' && admission) {
                   admission.observe(response)
-                  for (const record of subscriptions.values()) {
-                    if (!admission.allows(record.method)) {
-                      record.disposePhysical?.()
-                      record.disposePhysical = null
-                    } else if (!record.disposePhysical && !suspended) {
-                      attachSubscription(record, activeSession, generation)
-                    }
-                  }
+                  subscriptions.reconcileAdmission()
                 }
                 resolve(response)
               }
@@ -136,44 +126,11 @@ export function createStableLogicalRpcClient(
       if (closed) {
         return () => {}
       }
-      const id = ++nextSubscriptionId
-      const record: SubscriptionRecord = {
-        method,
-        params,
-        listener,
-        options,
-        disposePhysical: null,
-        cancelled: false
-      }
-      subscriptions.set(id, record)
-      if (!suspended) {
-        attachSubscription(record, activeSession, generation)
-      }
-      return () => {
-        if (record.cancelled) {
-          return
-        }
-        record.cancelled = true
-        record.disposePhysical?.()
-        record.disposePhysical = null
-        subscriptions.delete(id)
-      }
+      return subscriptions.add(method, params, listener, options)
     },
 
     updateTerminalSubscriptionViewport(terminal, viewport) {
-      for (const record of subscriptions.values()) {
-        if (
-          record.params &&
-          typeof record.params === 'object' &&
-          'terminal' in record.params &&
-          record.params.terminal === terminal
-        ) {
-          record.params = { ...record.params, viewport }
-        }
-      }
-      if (!suspended && (!admission || admission.allows('terminal.subscribe'))) {
-        activeSession.updateTerminalSubscriptionViewport(terminal, viewport)
-      }
+      subscriptions.updateTerminalViewport(terminal, viewport)
     },
 
     getState: () => state,
@@ -196,10 +153,7 @@ export function createStableLogicalRpcClient(
       closed = true
       activeStateUnsubscribe?.()
       activeStateUnsubscribe = null
-      for (const record of subscriptions.values()) {
-        record.disposePhysical?.()
-      }
-      subscriptions.clear()
+      subscriptions.disposeAll()
       // Why: let the physical close settle in-flight requests — it knows which
       // frames were written and marks those delivery-unknown; a blanket local
       // reject would erase that distinction.
@@ -214,10 +168,7 @@ export function createStableLogicalRpcClient(
       suspended = true
       activeStateUnsubscribe?.()
       activeStateUnsubscribe = null
-      for (const record of subscriptions.values()) {
-        record.disposePhysical?.()
-        record.disposePhysical = null
-      }
+      subscriptions.detachAll()
       // Why: let the physical close settle in-flight requests — it knows which
       // frames were written and marks those delivery-unknown (a suspend can cut
       // over a half-open relay whose sends may already be delivered).
@@ -271,11 +222,7 @@ export function createStableLogicalRpcClient(
 
       // Why: replay on the authenticated replacement before closing the old
       // session, but fence callbacks until the generation becomes current.
-      for (const record of subscriptions.values()) {
-        const disposePrevious = record.disposePhysical
-        attachSubscription(record, nextSession, nextGeneration)
-        disposePrevious?.()
-      }
+      subscriptions.replayOnto(nextSession, nextGeneration)
       generation = nextGeneration
       activeSession = nextSession
       activePath = path
@@ -320,27 +267,6 @@ export function createStableLogicalRpcClient(
     if (failed && forwarder.forwarded() && state !== 'connected') {
       publishState('disconnected')
     }
-  }
-
-  function attachSubscription(
-    record: SubscriptionRecord,
-    session: RpcClient,
-    subscriptionGeneration: number
-  ): void {
-    if (admission && !admission.allows(record.method)) {
-      record.disposePhysical = null
-      return
-    }
-    record.disposePhysical = session.subscribe(
-      record.method,
-      record.params,
-      (result) => {
-        if (!closed && !record.cancelled && generation === subscriptionGeneration) {
-          record.listener(result)
-        }
-      },
-      record.options
-    )
   }
 
   function bindActiveState(session: RpcClient, sessionGeneration: number): void {
