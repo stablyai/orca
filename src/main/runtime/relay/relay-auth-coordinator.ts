@@ -5,16 +5,16 @@ import {
 import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { RelayBrokerStatus } from './relay-session-broker'
 import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
-import type { RelayOfflineReason } from './relay-offline-reason'
+import { relayOfflineReasonForOpenFailure, type RelayOfflineReason } from './relay-offline-reason'
 import { RelayRetrySchedule } from './relay-retry-schedule'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
-import type {
-  CoordinatedRelayBroker,
-  LiveBrokerWaitResult,
-  RelayAuthContext,
-  RelayAuthCoordinatorOptions,
-  RelayAuthIdentity,
-  RelayReconcileOptions as ReconcileOptions
+import {
+  relayAuthIdentityKey as identityKey,
+  type CoordinatedRelayBroker,
+  type LiveBrokerWaitResult,
+  type RelayAuthContext,
+  type RelayAuthCoordinatorOptions,
+  type RelayReconcileOptions as ReconcileOptions
 } from './relay-auth-coordinator-contract'
 
 export type {
@@ -28,20 +28,6 @@ type BrokerOwnership = {
   identityKey: string
   broker: CoordinatedRelayBroker | null
   valid: boolean
-}
-
-function identityKey(identity: RelayAuthIdentity): string {
-  return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
-}
-
-function offlineReasonForOpenFailure(
-  retryable: boolean,
-  reachedRelay: string | undefined
-): RelayOfflineReason {
-  if (reachedRelay === undefined) {
-    return 'auth_unavailable'
-  }
-  return retryable ? 'broker_unavailable' : 'broker_rejected'
 }
 
 export class RelayAuthCoordinator {
@@ -283,25 +269,30 @@ export class RelayAuthCoordinator {
           error instanceof Error ? error.message : String(error)
         )
         const retryable = shouldRetryRelayConnectionError(error)
-        // retryIdentityKey is set only once the context read succeeded, so its
-        // absence means the failure never reached the relay.
-        this.publish('offline', offlineReasonForOpenFailure(retryable, retryIdentityKey))
+        this.publish('offline', relayOfflineReasonForOpenFailure(retryable, retryIdentityKey))
         if (retryable) {
           const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
-          this.scheduleRetry(epoch, retryIdentityKey, retryAfterMs)
+          this.scheduleRetry(epoch, retryIdentityKey, retryAfterMs, options)
         }
       }
     }
   }
 
-  private scheduleRetry(epoch: number, expectedIdentityKey?: string, retryAfterMs = 0): void {
+  // options ride along so a policy-change reconcile that failed transiently
+  // still skips the linger when its retry finally observes no demand.
+  private scheduleRetry(
+    epoch: number,
+    expectedIdentityKey: string | undefined,
+    retryAfterMs: number,
+    options: ReconcileOptions | undefined
+  ): void {
     if (!this.isEpochCurrent(epoch)) {
       return
     }
     this.retry.schedule(retryAfterMs, () => {
       if (this.isEpochCurrent(epoch)) {
         // Retry still re-reads entitlement and demand; the timer grants no authority.
-        this.beginReconcile(false, expectedIdentityKey)
+        this.beginReconcile(false, expectedIdentityKey, options)
       }
     })
   }

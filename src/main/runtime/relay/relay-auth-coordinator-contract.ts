@@ -8,6 +8,10 @@ export type RelayAuthIdentity = {
   organizationId: string
 }
 
+export function relayAuthIdentityKey(identity: RelayAuthIdentity): string {
+  return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
+}
+
 export type RelayAuthContext = {
   identity: RelayAuthIdentity
   accessToken: string

@@ -25,6 +25,19 @@ const RELAY_OFFLINE_REASON_CODES: Record<RelayOfflineReason, string> = {
   broker_rejected: 'relay_broker_rejected'
 }
 
+// reachedRelay is the identity key the open was attempted for; it is set only
+// once the context read succeeded, so its absence means the failure never
+// reached the relay.
+export function relayOfflineReasonForOpenFailure(
+  retryable: boolean,
+  reachedRelay: string | undefined
+): RelayOfflineReason {
+  if (reachedRelay === undefined) {
+    return 'auth_unavailable'
+  }
+  return retryable ? 'broker_unavailable' : 'broker_rejected'
+}
+
 // Why a lookup table instead of a switch: exhaustive over RelayOfflineReason,
 // so a new reason fails typecheck here instead of silently falling back.
 export function relayOfflineReasonMintFailureCode(reason: RelayOfflineReason | null): string {
