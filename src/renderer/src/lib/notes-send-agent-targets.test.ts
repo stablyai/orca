@@ -135,6 +135,7 @@ describe('notes send agent targets', () => {
     ])
   })
 
+  /** A status-backed target headlines the tab's rename over the live pane title. */
   it('prefers the tab custom title over the live title when the user renamed the tab', () => {
     const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
     const targets = deriveNotesSendAgentTargets(
@@ -505,6 +506,7 @@ describe('notes send agent targets', () => {
     ])
   })
 
+  /** A title-hint-promoted launch-agent target also headlines the tab's rename. */
   it('prefers the tab custom title over the live title for a title-hint-promoted launch-agent pane', () => {
     const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
     const targets = deriveNotesSendAgentTargets(

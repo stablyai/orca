@@ -455,6 +455,7 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(collectText(items[1])).toContain('Claude')
   })
 
+  /** The primary label shows the user's rename; the agent type moves to the secondary line. */
   it('headlines the tab custom title instead of the agent type label', () => {
     const statusPaneKey = makePaneKey(TAB_A, LEAF_A)
     setStore({
