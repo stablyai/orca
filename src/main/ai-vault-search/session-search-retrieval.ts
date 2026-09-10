@@ -101,7 +101,7 @@ export class SessionSearchRetrieval {
     if (exact) {
       return { ...exact, plan }
     }
-    const repaired = this.repair(plan)
+    const repaired = this.repair(plan, scope.scope)
     const effective = repaired ?? plan
     const literal = repaired ? this.literal(repaired, scope) : null
     const found = literal ?? {
@@ -171,14 +171,19 @@ export class SessionSearchRetrieval {
     return rows.filter((row) => scope.matchesOperators(row))
   }
 
-  private repair(plan: SessionSearchQueryPlan): SessionSearchQueryPlan | null {
+  private repair(
+    plan: SessionSearchQueryPlan,
+    scope: SessionSearchScope
+  ): SessionSearchQueryPlan | null {
     if (!this.typoRepair) {
       return null
     }
     const typoRepair = this.typoRepair
     let changed = false
     const body = plan.body.map((term) => {
-      const fix = typoRepair.correct(term)
+      // Repaired inside the scope the search will run in, so a spelling only
+      // tool output carries neither suppresses a repair nor becomes one.
+      const fix = typoRepair.correct(term, scope)
       if (fix && fix !== term.toLowerCase()) {
         changed = true
         return fix

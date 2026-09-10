@@ -33,7 +33,7 @@ afterEach(async () => {
   harness = null
 })
 
-/** Two rows in both FTS tables and the vocabulary, and no session row for them. */
+/** Two rows in the FTS table and the vocabulary, and no session row for them. */
 function plantOrphans(db: SyncDatabase): number[] {
   const rowids: number[] = []
   for (let n = 0; n < 2; n++) {
@@ -86,7 +86,7 @@ it('never repairs a term onto a spelling only orphaned rows carry', async () => 
   const { harness: open } = await withOrphans()
   // `marmoset` is in the vocabulary twice, which is what would make it the
   // repair for `marmosett` if the repair trusted the vocabulary alone.
-  expect(new SessionSearchTypoRepair(open.db).correct('marmosett')).toBeNull()
+  expect(new SessionSearchTypoRepair(open.db).correct('marmosett', 'all')).toBeNull()
   expect(open.engine.search({ query: 'marmosett' }).planner.repairedTerms).toBeUndefined()
 })
 
