@@ -75,6 +75,10 @@ export type PreparedQuickSubmit = QuickSubmitSource & {
   createDisplayName: string | undefined
   pendingFirstAgentMessageRename: boolean
   trimmedNote: string
+  /** Launch text the agent submits on start; empty when the prompt must stay reviewable. */
+  quickPrompt: string
+  /** Launch text pre-filled but unsent, so linked provider prose can be reviewed first. */
+  quickDraftPrompt: string | null
 }
 
 export type ComposerSubmitModel = {

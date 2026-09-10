@@ -199,7 +199,7 @@ export function getLaunchableWorkItemDraftContent(args: {
   return args.url
 }
 
-export function resolveQuickCreateLinkedWorkItemPrompt(
+export function resolveQuickCreateAgentPrompt(
   linkedWorkItem:
     | (Pick<
         {
@@ -213,9 +213,11 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
       > & { linkedContext?: LinkedWorkItemContext })
     | null
     | undefined,
-  note: string
+  note: string,
+  agentPrompt = ''
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
+  const trimmedAgentPrompt = agentPrompt.trim()
   const linearBlock = isLinearWorkItemReference(linkedWorkItem)
     ? buildLinearLaunchContextBlock({
         provider: linkedWorkItem?.provider,
@@ -231,6 +233,13 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
     : linkedUrl
       ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
       : null
+  if (trimmedAgentPrompt) {
+    // Why: the user authored this prompt, so it launches submitted — but linked
+    // provider prose must stay reviewable, so it rides along as a draft instead.
+    return draftPrompt
+      ? { prompt: '', draftPrompt: [trimmedAgentPrompt, draftPrompt].join('\n\n') }
+      : { prompt: trimmedAgentPrompt, draftPrompt: null }
+  }
   const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
   return {
     prompt: isLinearTypedOnly ? trimmedNote : '',
