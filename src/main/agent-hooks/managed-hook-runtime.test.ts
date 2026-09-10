@@ -4,12 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeChildProcess from 'node:child_process'
 
-const { resolveCodexCommandMock, runCodexAppServerSessionMock } = vi.hoisted(() => ({
-  resolveCodexCommandMock: vi.fn(() => '/stub/codex'),
+const { runCodexAppServerSessionMock } = vi.hoisted(() => ({
   runCodexAppServerSessionMock: vi.fn()
 }))
 
-vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
 vi.mock('../codex/codex-app-server-session', () => ({
   runCodexAppServerSession: runCodexAppServerSessionMock
 }))
@@ -48,8 +46,6 @@ function stubProbeFailure(error: Error): void {
 
 beforeEach(() => {
   execFileMock.mockReset()
-  resolveCodexCommandMock.mockReset()
-  resolveCodexCommandMock.mockReturnValue('/stub/codex')
   runCodexAppServerSessionMock.mockReset()
   // Why: `installManagedHooks` proves a skipped probe through the login-shell run log, so the
   // probe must really spawn unless a case above stubs it. The mock loses `promisify.custom`,
@@ -148,15 +144,36 @@ describe.runIf(process.platform !== 'win32')('resolveRelayCodexHome', () => {
     stubCodexHomeProbe('/srv/codex///')
 
     await expect(resolveRelayCodexHome('/home/orca')).resolves.toBe('/srv/codex')
-    expect(runCodexAppServerSessionMock).toHaveBeenCalledWith(
-      {
-        command: '/stub/codex',
-        args: ['app-server'],
-        cliPath: '/stub/codex',
-        timeoutMs: 8_000
-      },
-      expect.any(Function)
-    )
+  })
+
+  // Why these three are pinned together: each one on its own silently degrades
+  // into the ~/.codex fallback, which reads as "not redirected" rather than as a
+  // failure, so a regression here looks like success.
+  it('asks Codex through a login shell, under the installer s home', async () => {
+    vi.stubEnv('SHELL', '/bin/bash')
+    stubCodexHomeProbe('/srv/codex')
+
+    await expect(resolveRelayCodexHome('/home/orca')).resolves.toBe('/srv/codex')
+
+    const [invocation] = runCodexAppServerSessionMock.mock.calls[0] ?? []
+    // A launcher wrapper lives on the login shell's PATH only; this process's
+    // PATH is a non-login SSH exec and never has ~/.local/bin on it.
+    expect(invocation).toMatchObject({ command: '/bin/bash', cliPath: null })
+    expect(invocation.args[0]).toBe('-lc')
+    expect(invocation.args[1]).toMatch(/^exec codex .*app-server$/)
+    // Parent and child must agree on which account is being configured...
+    expect(invocation.env).toEqual({ HOME: '/home/orca' })
+    // ...and Orca's own managed-account CODEX_HOME must not be read back.
+    expect(invocation.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
+  })
+
+  it('passes -c to a login shell that rejects -lc', async () => {
+    vi.stubEnv('SHELL', '/bin/sh')
+    stubCodexHomeProbe('/srv/codex')
+
+    await resolveRelayCodexHome('/home/orca')
+
+    expect(runCodexAppServerSessionMock.mock.calls[0]?.[0].args[0]).toBe('-c')
   })
 
   it.each([

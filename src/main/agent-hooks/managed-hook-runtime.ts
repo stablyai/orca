@@ -6,9 +6,8 @@ import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers
 import type { AgentHookTarget } from '../../shared/agent-hook-types'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 import { withManagedHookInstallLock } from './managed-hook-install-lock'
-import { resolveCodexCommand } from '../codex-cli/command'
+import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { runCodexAppServerSession } from '../codex/codex-app-server-session'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import {
   readManagedHookHostIdentity,
   scopeManagedHookHostIdentity
@@ -77,6 +76,16 @@ function normalizeCodexHome(candidate: unknown): string | null {
   return normalized
 }
 
+/**
+ * The shell an agent PTY starts, and the flag that makes it read the user's
+ * profile — which is what puts a launcher wrapper's directory on `PATH`.
+ */
+function loginShellInvocation(): { shell: string; flag: string } {
+  const shell = resolveLoginShell()
+  const shellName = basename(shell)
+  return { shell, flag: shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc' }
+}
+
 function resolveLoginShell(): string {
   const candidate = process.env.SHELL || userInfo().shell || '/bin/sh'
   if (!candidate.startsWith('/') || candidate.includes('\\') || hasControlCharacter(candidate)) {
@@ -109,13 +118,25 @@ export async function resolveRelayCodexHome(home: string, signal?: AbortSignal):
   const fallback = defaultCodexHome(home)
   try {
     signal?.throwIfAborted()
-    const command = resolveCodexCommand()
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, ['app-server'])
+    // Why the login shell: `resolveCodexCommand()` reads this process's PATH, and
+    // the relay starts over a non-login SSH exec whose PATH has no `~/.local/bin`.
+    // It would resolve the real binary and never see the launcher wrapper that
+    // #19598 is about — the wrapper is reachable only once the profile has run.
+    const { shell, flag } = loginShellInvocation()
     const resolvedHome = await runCodexAppServerSession(
       {
-        command: spawnCmd,
-        args: spawnArgs,
-        cliPath: command,
+        command: shell,
+        args: [flag, `exec codex ${CODEX_READ_ONLY_APP_SERVER_ARGS.join(' ')}`],
+        // Why null: the launcher is the shell, not the CLI, so there is no host
+        // CLI path to pair a `node` against — the wsl.exe case.
+        cliPath: null,
+        // Why pin HOME: parent and child must agree on which account is being
+        // configured. Why strip: Orca exports CODEX_HOME/ORCA_CODEX_HOME for its
+        // own managed accounts, and reading one back would report Orca's answer
+        // as if the host user had redirected there. A redirect the user's profile
+        // or wrapper sets is unaffected — the login shell re-exports it.
+        env: { HOME: home },
+        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
         timeoutMs: CODEX_HOME_PROBE_TIMEOUT_MS
       },
       async (_rpc, initializeResult) =>
