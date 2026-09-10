@@ -388,13 +388,13 @@ describe('sendRemoteRuntimeRequest', () => {
     })
   })
 
-  it('aborts and closes an in-flight one-shot socket', async () => {
+  it('aborts and terminates an in-flight one-shot socket without a close-handshake wait', async () => {
     let requestObserved: () => void = () => {}
     const observed = new Promise<void>((resolve) => {
       requestObserved = resolve
     })
     const server = await createOneShotServer({ onRequest: requestObserved })
-    const closeSpy = vi.spyOn(WebSocketClient.prototype, 'close')
+    const terminateSpy = vi.spyOn(WebSocketClient.prototype, 'terminate')
     const controller = new AbortController()
     try {
       const request = sendRemoteRuntimeRequest(
@@ -409,9 +409,9 @@ describe('sendRemoteRuntimeRequest', () => {
 
       controller.abort()
       await expect(request).rejects.toMatchObject({ name: 'AbortError' })
-      expect(closeSpy).toHaveBeenCalled()
+      expect(terminateSpy).toHaveBeenCalled()
     } finally {
-      closeSpy.mockRestore()
+      terminateSpy.mockRestore()
     }
   })
 

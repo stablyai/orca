@@ -63,7 +63,13 @@ List every machine the current Orca host can target and the selector for each on
 orca host list --json
 ```
 
-The result includes this machine, its registered [SSH targets](/docs/ssh), and paired [Remote Orca Servers](/docs/remote-servers). Use `--host local` for this machine, `--host ssh:<target-id>` for an SSH target, and `--environment <server-name>` for a paired server. SSH rows include the detected remote platform (`linux`, `darwin`, or `win32`) after the target connects; older or disconnected targets report `platform unknown`. They also include `connected` and, when known, the SSH lifecycle `connectionStatus`. SSH labels and paired-server names also resolve when they are unique; use the IDs from `host list` when names collide. If you put a machine name on the wrong selector, Orca reports the matching machine and the flag to use instead of returning an empty result.
+The result includes this machine, all its registered [SSH targets](/docs/ssh), and all paired [Remote Orca Servers](/docs/remote-servers)—not only connected hosts. Use `--host local`, `--host ssh:<target-id>`, or `--environment <environment-id>` respectively. Unique SSH labels and paired-server names also resolve; the printed IDs avoid name collisions.
+
+Platform (`linux`, `darwin`, or `win32`) comes from the host, not its name or the machine running the CLI. SSH rows use the app's known SSH platform and connection lifecycle. Paired servers are probed with existing `status.get` / `host.platform` RPCs, so a server update is not normally required. If neither RPC supplies the platform, the output says `platform unknown`.
+
+Paired connectivity is a **fresh CLI probe**, marked `[probe]` in text and `connectionSource: "probe"` in JSON; it does not describe or change the desktop's persistent connection. A successful status probe reports `connected: true`. Failed or unattempted probes retain the row, omit `connected`, and report `connectionStatus: "unknown"` plus a safe `probeError` (`runtime_timeout`, `status_unavailable`, or `probe_failed`). Unknown does not mean the machine or its processes stopped. No stale platform is guessed for an unreachable host.
+
+Probes use at most four concurrent connections and a five-second total paired-server scan budget, including legacy platform fallbacks. They do not change saved pairing metadata or last-used ordering. Run `orca environment list` for a saved-server listing without network probes.
 
 ## Runtime commands
 

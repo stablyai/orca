@@ -1,12 +1,9 @@
 import type { RuntimeClient } from './runtime-client'
+import { mapWithConcurrency } from '../shared/map-with-concurrency'
+import { performance } from 'node:perf_hooks'
+import type { SshTargetSummary } from '../shared/ssh-types'
 
-export type SshTargetSummary = {
-  id: string
-  label: string
-  remotePlatform?: 'linux' | 'darwin' | 'win32'
-  connected?: boolean
-  connectionStatus?: string
-}
+export type { SshTargetSummary } from '../shared/ssh-types'
 export type EnvironmentSummary = { id: string; name: string }
 
 export type HostAlternatives = {
@@ -101,52 +98,75 @@ export function crossKindNextSteps(
 
 // Why: only display identity crosses this boundary — the RPC deliberately withholds addresses
 // and credentials — and an enumeration failure must never mask the error we are explaining.
-export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSummary[]> {
+export async function listSshTargets(
+  client: RuntimeClient,
+  options?: { inventory: true }
+): Promise<SshTargetSummary[]> {
+  const deadline = performance.now() + 5_000
+  const call = (method: string) =>
+    options?.inventory
+      ? client.call<{ targets: SshTargetSummary[] }>(method, undefined, {
+          timeoutMs: Math.max(1, Math.ceil(deadline - performance.now()))
+        })
+      : client.call<{ targets: SshTargetSummary[] }>(method)
+  let targets: SshTargetSummary[]
   try {
-    const result = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargetSummaries')
-    return result.result.targets
+    targets = (await call('ssh.listTargetSummaries')).result.targets
   } catch (error) {
     // Why: hosts predating listTargetSummaries still answer listTargets, and both are served by
     // the same summariser. Without this an old host looks like one with no SSH targets at all,
     // which would reject a target id that is actually valid there.
     if (error instanceof Error && 'code' in error && error.code === 'method_not_found') {
       try {
-        const legacy = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargets')
-        return await enrichLegacySshTargetStates(client, legacy.result.targets)
-      } catch {
+        targets = (await call('ssh.listTargets')).result.targets
+      } catch (legacyError) {
+        if (options?.inventory) {
+          throw legacyError
+        }
         return []
       }
+    } else {
+      if (options?.inventory) {
+        throw error
+      }
+      return []
     }
-    return []
   }
+  return options?.inventory ? enrichLegacySshTargetStates(client, targets, deadline) : targets
 }
 
 async function enrichLegacySshTargetStates(
   client: RuntimeClient,
-  targets: SshTargetSummary[]
+  targets: SshTargetSummary[],
+  deadline: number
 ): Promise<SshTargetSummary[]> {
-  return Promise.all(
-    targets.map(async (target) => {
-      try {
-        const response = await client.call<{
-          state: {
-            status?: string
-            remotePlatform?: 'linux' | 'darwin' | 'win32'
-          } | null
-        }>('ssh.getState', { targetId: target.id })
-        const state = response.result.state
-        return {
-          ...target,
-          ...(state?.status === undefined
-            ? {}
-            : { connected: state.status === 'connected', connectionStatus: state.status }),
-          ...(state?.remotePlatform === undefined ? {} : { remotePlatform: state.remotePlatform })
-        }
-      } catch {
-        return target
+  return mapWithConcurrency(targets, 4, async (target) => {
+    if (target.connected !== undefined || performance.now() >= deadline) {
+      return target
+    }
+    try {
+      const response = await client.call<{
+        state: {
+          status?: SshTargetSummary['connectionStatus']
+          remotePlatform?: SshTargetSummary['remotePlatform']
+        } | null
+      }>(
+        'ssh.getState',
+        { targetId: target.id },
+        { timeoutMs: Math.max(1, Math.ceil(deadline - performance.now())) }
+      )
+      const state = response.result.state
+      return {
+        ...target,
+        ...(state?.status === undefined
+          ? {}
+          : { connected: state.status === 'connected', connectionStatus: state.status }),
+        ...(state?.remotePlatform === undefined ? {} : { remotePlatform: state.remotePlatform })
       }
-    })
-  )
+    } catch {
+      return target
+    }
+  })
 }
 
 // Why: `--host ssh:<id>` was never validated, so an unknown target answered ok:true with an

@@ -154,6 +154,7 @@ describe('ssh RPC methods', () => {
       result: { targets: [{ id: 'ssh-1', label: 'Dev box' }] }
     })
     expect(JSON.stringify(response)).not.toContain('remotePlatform')
+    expect(JSON.stringify(response)).not.toContain('connected')
   })
 
   it('reports disconnected lifecycle states without calling them connected', async () => {
