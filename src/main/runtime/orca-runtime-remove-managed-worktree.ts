@@ -10,11 +10,13 @@ import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cl
 import { getRuntimeWorktreeRemovalOptionsKey } from './runtime-worktree-selection'
 import { withWorktreeSpan } from '../observability/instrumentation'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
-import { resolveWorktreeRemovalRoute } from '../worktree-removal-execution-host-route'
+import {
+  resolveWorktreeRemovalHome,
+  resolveWorktreeRemovalRoute
+} from '../worktree-removal-execution-host-route'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { listWorktreesStrict } from '../git/worktree'
 import { findRegisteredDeletableWorktree } from '../worktree-removal-safety'
-import { resolveWorktreeRemovalHome } from '../worktree-removal-execution-host-route'
 import { removeRuntimeUnregisteredWorktree } from './runtime-unregistered-worktree-removal'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
 import { formatWorktreeRemovalError } from '../ipc/worktree-logic'
