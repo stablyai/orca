@@ -27,6 +27,7 @@ import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree
 } from '../worktree-removal-safety'
+import { CLIENT_REMOVAL_HOME } from '../worktree-removal-home-guard'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
 
@@ -79,7 +80,12 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   const refreshedWorktrees = args.hasLocalOptions
     ? await listWorktreesStrict(repo.path, localOptions)
     : await listWorktreesStrict(repo.path)
-  const refreshed = findRegisteredDeletableWorktree(repo.path, canonicalPath, refreshedWorktrees)
+  const refreshed = findRegisteredDeletableWorktree(
+    repo.path,
+    canonicalPath,
+    refreshedWorktrees,
+    CLIENT_REMOVAL_HOME
+  )
   if (!refreshed) {
     throw new Error(
       `Worktree registration changed during deletion: ${canonicalPath}. Retry deletion.`
@@ -176,6 +182,7 @@ async function cleanupOrphanedDirectory(
     await canSafelyRemoveOrphanedWorktreeDirectory(
       toLocalWorktreeRuntimePath(path, options),
       toLocalWorktreeRuntimePath(repo.path, options),
+      CLIENT_REMOVAL_HOME,
       access.statPath,
       access.readPath
     )
