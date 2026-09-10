@@ -255,6 +255,31 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
     hook.unmount()
   })
 
+  // Third suppression path (review): the returned-failure release above frees the *module* latch,
+  // but the caller sets its closure-local `requestedInitialTerminal` whenever the dispatch reports
+  // it owned the create — including when that create returned `{ status: 'failed' }`. A thrown
+  // failure never sets it and retries on the very next frame; since the create reports every RPC
+  // and network failure as a return rather than a throw, the live path was the one that suppressed
+  // the whole subscription. A failed create must leave the closure free to retry, exactly like a
+  // thrown one.
+  it('retries on the next frame of the same subscription after a create that returned failed', async () => {
+    mocks.createTerminal.mockResolvedValue({ status: 'failed', message: 'host unreachable' })
+
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    const subscription = findActiveSubscription(0)
+    await publish(subscription, { type: 'snapshot', ...emptyActiveSnapshot(1) })
+    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().tabsByWorktree[WORKTREE]).toBeUndefined()
+
+    // Same closure, next accepted frame: nothing was created, so the workspace is still
+    // never-initialized and the retry is the only thing that will ever give it a terminal.
+    await publish(subscription, { type: 'snapshot', ...emptyActiveSnapshot(2) })
+    expect(mocks.createTerminal).toHaveBeenCalledTimes(2)
+    hook.unmount()
+  })
+
   // Readiness review: the inverse hazard of the test above. A create that succeeds but whose frame
   // never lands (host accepted, the mirror never got a row) must not hold the latch until environment
   // teardown. The frame right after the settle is the mirror's answer and may not seed (pre-mirror

@@ -18,8 +18,10 @@ import {
  * is parked as awaiting-mirror and released by the next frame the mirror accepts for the worktree
  * (see web-runtime-initial-terminal-bootstrap.ts).
  *
- * Returns true when this call owned the create, so the caller can keep its closure-local flag in
- * step; false when another closure already held the latch.
+ * Returns true only when this call owned a create that was not reported as failed, because the
+ * caller latches a closure-local flag on it. A failure must report false whichever way it arrives:
+ * releasing the shared latch alone still leaves the subscription that issued the failed create
+ * unable to retry for as long as its closure lives, which is the same suppression one level up.
  */
 export async function dispatchWebRuntimeInitialTerminalBootstrap(
   environmentId: string,
@@ -36,11 +38,12 @@ export async function dispatchWebRuntimeInitialTerminalBootstrap(
     throw error
   }
   // Why check the outcome: the create reports RPC and network failures as `{ status: 'failed' }`
-  // rather than throwing, so the catch above never sees them.
-  if (
-    outcome.status === 'failed' ||
-    Object.hasOwn(useAppStore.getState().tabsByWorktree, worktreeId)
-  ) {
+  // rather than throwing, so the catch above never sees them. Both arms report the same way.
+  if (outcome.status === 'failed') {
+    endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+    return false
+  }
+  if (Object.hasOwn(useAppStore.getState().tabsByWorktree, worktreeId)) {
     endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
   } else {
     markWebRuntimeInitialTerminalBootstrapAwaitingMirror(environmentId, worktreeId)
