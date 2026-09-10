@@ -75,3 +75,46 @@ describe('MessageRow control visibility', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 })
+
+describe('MessageRow fork control', () => {
+  it('lives inside the hover/focus cluster rather than standing beside the row', () => {
+    const onFork = vi.fn()
+    render(
+      <MessageRow
+        message={{
+          id: 'message',
+          role: 'assistant',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Message text' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+        forkEligible
+        onFork={onFork}
+      />
+    )
+    const copy = screen.getByRole('button', { name: 'Copy message' })
+    const scroll = screen.getByRole('button', { name: 'Scroll this message to top' })
+    const fork = screen.getByRole('button', { name: 'Fork from this turn' })
+    const time = screen.getByRole('time')
+    // Same parent as copy, so it inherits that cluster's reveal instead of duplicating the classes.
+    expect(Array.from(copy.parentElement!.children)).toEqual([copy, scroll, fork, time])
+    expect(fork.parentElement).toHaveClass(
+      'can-hover:opacity-0',
+      'group-hover:opacity-100',
+      'group-has-[:focus-visible]:opacity-100',
+      'group-has-[:focus-visible]:pointer-events-auto'
+    )
+    // The keyboard half of that pattern only works if the control itself can take focus.
+    fork.focus()
+    expect(fork).toHaveFocus()
+    fork.click()
+    expect(onFork).toHaveBeenCalledExactlyOnceWith('message')
+  })
+
+  it('draws no fork control on a row that does not anchor a forkable turn', () => {
+    renderMessage('assistant')
+    expect(screen.queryByRole('button', { name: 'Fork from this turn' })).toBeNull()
+  })
+})

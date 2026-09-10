@@ -156,15 +156,23 @@ export function readStructuredAgentSessionOptions(
       throw new Error('structured_agent_session_options_unsupported')
     }
     const options = await context.deps.adapter.readOptions({ sessionId, fence: session.fence })
+    const record = context.deps.store.getRecord(sessionId)
+    // Only a fork that reached a provider child carries lineage; `attempted` may hold none. The key
+    // is OMITTED rather than nulled — both create and attach canonicalizers drop `undefined`, so a
+    // null would move the payload fingerprint of every ordinary session.
+    const forkedFromSessionId =
+      record?.fork?.phase === 'completed' || record?.fork?.phase === 'provider-succeeded'
+        ? record.fork.sourceSessionId
+        : undefined
     return {
       ...options,
       fork: context.deps.adapter.forkSupport?.(sessionId) ?? {
         supported: false,
         reason: 'unsupported'
       },
+      ...(forkedFromSessionId ? { forkedFrom: { sessionId: forkedFromSessionId } } : {}),
       rewind:
-        context.deps.store.getRecord(sessionId)?.rewind?.phase === 'prepared' ||
-        context.deps.store.getRecord(sessionId)?.rewind?.phase === 'provider-succeeded'
+        record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
           ? { supported: false, reason: 'outcome-unknown' }
           : (context.deps.adapter.rewindSupport?.(sessionId) ?? {
               supported: false,

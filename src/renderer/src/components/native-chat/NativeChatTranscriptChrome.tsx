@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Image as ImageIcon } from 'lucide-react'
+import { ArrowUp, GitFork, Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { basename } from '@/lib/path'
@@ -243,15 +243,21 @@ export function NativeChatImageAttachments({
   )
 }
 
+const AGENT_CONTROL_BUTTON =
+  'flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50'
+
 export function NativeChatAgentControls({
   markdown,
   timestamp,
   onScrollToTop,
+  fork,
   className
 }: {
   markdown: string
   timestamp: number | null
   onScrollToTop: () => void
+  /** Present only on the row that anchors a forkable turn. */
+  fork?: { onFork: () => void; pending: boolean }
   className?: string
 }): React.JSX.Element {
   return (
@@ -265,10 +271,22 @@ export function NativeChatAgentControls({
           'Scroll this message to top'
         )}
         title={translate('components.native-chat.scrollMessageToTop', 'Scroll this message to top')}
-        className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className={AGENT_CONTROL_BUTTON}
       >
         <ArrowUp className="size-3.5" />
       </button>
+      {fork ? (
+        <button
+          type="button"
+          onClick={fork.onFork}
+          disabled={fork.pending}
+          aria-label={translate('components.native-chat.forkFromTurn', 'Fork from this turn')}
+          title={translate('components.native-chat.forkFromTurn', 'Fork from this turn')}
+          className={AGENT_CONTROL_BUTTON}
+        >
+          <GitFork className="size-3.5" />
+        </button>
+      ) : null}
       <NativeChatMessageTimestamp timestamp={timestamp} />
     </div>
   )

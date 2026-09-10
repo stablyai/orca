@@ -5,6 +5,8 @@ export type StructuredSessionConversationSupport = {
   sessionId: string
   commands: readonly AgentSessionConversationCommand[]
   forkSupported?: boolean
+  /** Parent chat this session was forked from; absent on hosts that predate the field. */
+  forkedFromSessionId?: string
 }
 
 export function structuredSessionForkState(
@@ -14,6 +16,7 @@ export function structuredSessionForkState(
 ) {
   return {
     forkSupported: support?.sessionId === sessionId && support.forkSupported === true,
+    forkedFromSessionId: support?.sessionId === sessionId ? support.forkedFromSessionId : undefined,
     journalItems: state.items,
     forkSource:
       state.fence !== null && state.cursor

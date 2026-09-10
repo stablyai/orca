@@ -106,7 +106,8 @@ export function useStructuredAgentSession(args: {
           setConversationSupport({
             sessionId,
             commands: result.conversationCommands ?? [],
-            forkSupported
+            forkSupported,
+            forkedFromSessionId: result.forkedFrom?.sessionId
           })
           setOptionState((current) =>
             current.record === activeOptionRecordRef.current

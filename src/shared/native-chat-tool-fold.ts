@@ -10,11 +10,16 @@ import {
 import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import { isNoiseMessage } from './native-chat-noise'
 
-function isToolOnlyMessage(message: NativeChatMessage): boolean {
+/** A block set that is nothing but tool activity. Such a row is folded into the assistant row
+ *  above it and draws none of its own, so nothing may anchor a control to it. */
+export function isToolOnlyBlockSet(blocks: readonly NativeChatBlock[]): boolean {
   return (
-    message.blocks.length > 0 &&
-    message.blocks.every((block) => isToolCallBlock(block) || isToolResultBlock(block))
+    blocks.length > 0 && blocks.every((block) => isToolCallBlock(block) || isToolResultBlock(block))
   )
+}
+
+function isToolOnlyMessage(message: NativeChatMessage): boolean {
+  return isToolOnlyBlockSet(message.blocks)
 }
 
 function isHarnessSidecarToolMessage(message: NativeChatMessage): boolean {

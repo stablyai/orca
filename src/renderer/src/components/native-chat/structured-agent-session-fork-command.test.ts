@@ -64,7 +64,7 @@ describe('fork create intent replay', () => {
     const first = forkStructuredSessionFromTurn(args)
     const second = forkStructuredSessionFromTurn(args)
     expect(second).toBe(first)
-    finish({ ok: true })
+    finish({ ok: true, value: { sessionId: 'child' } })
     await first
     expect(call).toHaveBeenCalledTimes(1)
   })
@@ -73,7 +73,7 @@ describe('fork create intent replay', () => {
     const args = input()
     call
       .mockResolvedValueOnce({ ok: false, refusal: { forkReason: 'busy' } })
-      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true, value: { sessionId: 'child' } })
     await expect(forkStructuredSessionFromTurn(args)).rejects.toThrow('Wait for this conversation')
     await forkStructuredSessionFromTurn(args)
     expect(call.mock.calls[1]?.[2].envelope.sessionId).not.toBe(
@@ -96,7 +96,7 @@ describe('fork create intent replay', () => {
     const args = input()
     call
       .mockRejectedValueOnce(new CapabilityError('Forking requires a newer Orca server.'))
-      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true, value: { sessionId: 'child' } })
     await expect(forkStructuredSessionFromTurn(args)).rejects.toThrow('newer Orca server')
     // Nothing was sent, so the retired attempt must not replay the abandoned child id.
     await forkStructuredSessionFromTurn(args)
@@ -113,7 +113,7 @@ describe('fork create intent replay', () => {
       await expect(forkStructuredSessionFromTurn(input())).rejects.toThrow('could not be confirmed')
     }
     call.mockReset()
-    call.mockResolvedValue({ ok: true })
+    call.mockResolvedValue({ ok: true, value: { sessionId: 'child' } })
     // The 202nd fork in this app session must still reach the host.
     await forkStructuredSessionFromTurn(input())
     expect(call).toHaveBeenCalledTimes(1)

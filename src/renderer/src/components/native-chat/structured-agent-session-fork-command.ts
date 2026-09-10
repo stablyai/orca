@@ -15,17 +15,19 @@ import {
 } from '@/runtime/structured-agent-session-client'
 import { translate } from '@/i18n/i18n'
 
-type ForkAttempt = { params: StructuredAgentSessionCreateParams; running?: Promise<void> }
+type ForkAttempt = { params: StructuredAgentSessionCreateParams; running?: Promise<string> }
 
 const attempts = new Map<string, ForkAttempt>()
 const MAX_TRACKED_ATTEMPTS = 128
 
+/** Resolves with the CHILD session id so the caller can offer a way into it; a fork publishes its
+ *  tab without activating it. */
 export function forkStructuredSessionFromTurn(input: {
   target: RuntimeClientTarget
   worktree: string
   agent: 'claude' | 'codex'
   source: AgentSessionForkSource
-}): Promise<void> {
+}): Promise<string> {
   const key = JSON.stringify([
     input.target.kind === 'local' ? 'local' : input.target.environmentId,
     input.worktree,
@@ -61,6 +63,7 @@ export function forkStructuredSessionFromTurn(input: {
           throw refusalError(key, result.refusal.forkReason)
         }
         attempts.delete(key)
+        return result.value.sessionId
       },
       (error: unknown) => {
         // The capability guard runs before the request leaves the client, so no child exists: the

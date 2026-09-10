@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { selectAgentSessionPrefix, structuredForkEligibleItems } from './agent-session-prefix'
+import {
+  selectAgentSessionPrefix,
+  structuredForkEligibleItems,
+  structuredForkTurnAnchors
+} from './agent-session-prefix'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import {
   AGENT_SESSION_PREFIX_MAX_BYTES,
@@ -118,5 +122,77 @@ describe('bounded conversation prefix', () => {
     expect(agentSessionPrefixWithinBounds(['é'.repeat(AGENT_SESSION_PREFIX_MAX_BYTES / 2)])).toBe(
       false
     )
+  })
+})
+
+/** A turn whose assistant side is text -> tool call -> text: the shape a normal turn actually has,
+ *  and the one that used to expose an action on every row. */
+function multiRowTurn(): AgentJournalRenderItem[] {
+  const rows: [string, AgentJournalRenderItem['body']][] = [
+    [
+      'codex:parent:a:0',
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Ask' }] }
+    ],
+    [
+      'codex:parent:a:1',
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Looking' }] }
+    ],
+    [
+      'codex:parent:a:2',
+      {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', name: 'read', input: {} }]
+      }
+    ],
+    [
+      'codex:parent:a:3',
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answered' }] }
+    ]
+  ]
+  return rows.map(([itemId, body], index) => ({
+    itemId,
+    revision: 1,
+    body,
+    sequence: index,
+    observedAt: 1
+  }))
+}
+
+describe('one fork action per turn', () => {
+  it('exposes a single action for a turn that spans several assistant rows', () => {
+    const history = multiRowTurn()
+    expect(structuredForkEligibleItems(history)).toEqual(new Set(['codex:parent:a:3']))
+  })
+
+  it('resolves every row of that turn to the SAME target, so two clicks cannot mint two forks', () => {
+    const anchors = structuredForkTurnAnchors(multiRowTurn())
+    // The dedupe that matters is here, not in eligibility: the fork command keys its replay table
+    // by the resolved target, so sibling rows join one attempt however they were surfaced.
+    expect(anchors.get('codex:parent:a:1')).toBe('codex:parent:a:3')
+    expect(anchors.get('codex:parent:a:2')).toBe('codex:parent:a:3')
+    expect(new Set(anchors.values()).size).toBe(1)
+  })
+
+  it('never anchors on a trailing tool-only row, which the transcript folds away', () => {
+    const history = multiRowTurn()
+    // Drop the closing prose: the last assistant row is now pure tool activity, which renders no
+    // row of its own and so could carry no control.
+    const folded = history.slice(0, 3)
+    expect(structuredForkEligibleItems(folded)).toEqual(new Set(['codex:parent:a:1']))
+  })
+
+  it('keeps the whole turn out while it is still running', () => {
+    const live: AgentJournalRenderItem[] = [
+      ...multiRowTurn(),
+      {
+        itemId: 'legacy:codex:parent:turn-lifecycle%3Aa',
+        revision: 1,
+        body: { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'a', state: 'running' } },
+        sequence: 4,
+        observedAt: 1
+      }
+    ]
+    expect(structuredForkTurnAnchors(live).size).toBe(0)
   })
 })

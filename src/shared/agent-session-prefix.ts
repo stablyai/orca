@@ -11,6 +11,7 @@ import type { AgentSessionProviderHandle } from './agent-session-provider-handle
 import type { AgentSessionRewindReason, AgentSessionRewindRecord } from './agent-session-rewind'
 import { agentSessionPrefixWithinBounds } from './agent-session-prefix-bounds'
 import { activeStructuredAgentSessionTurnId } from './structured-agent-session-projection'
+import { isToolOnlyBlockSet } from './native-chat-tool-fold'
 
 type PrefixSelection =
   | { ok: false; reason: AgentSessionRewindReason }
@@ -164,23 +165,53 @@ function liveTurn(
   return key?.provider === 'codex' ? key.turnId === activeTurnId : isLastTurn
 }
 
-export function structuredForkEligibleItems(items: readonly AgentJournalRenderItem[]): Set<string> {
+/** The fork target for every assistant row that has one, keyed by the row a user can click.
+ *
+ *  A turn contributes exactly ONE target. Every assistant row inside a settled turn resolves to a
+ *  byte-identical prefix — `completedTurnEnd` extends the boundary to the next prompt whichever row
+ *  is named — so per-row targets let two clicks on one turn mint two identical children. Mapping
+ *  the siblings onto a shared anchor makes that impossible rather than merely unlikely.
+ *
+ *  The anchor is the turn's last assistant row that the transcript still DRAWS: a trailing
+ *  tool-only row is folded into the row above it and renders nothing, so it can carry no control. */
+export function structuredForkTurnAnchors(
+  items: readonly AgentJournalRenderItem[]
+): Map<string, string> {
   const activeTurnId = activeStructuredAgentSessionTurnId(items)
   const lastPrompt = items.findLastIndex(
     (item) => item.body.kind === 'message' && item.body.role === 'user'
   )
-  const eligible = new Set<string>()
-  items.forEach((item, index) => {
-    if (item.body.kind !== 'message' || item.body.role !== 'assistant') {
-      return
-    }
+  const anchors = new Map<string, string>()
+  let turn: { itemId: string; index: number; drawn: boolean }[] = []
+  const settle = (): void => {
+    const anchor = turn.findLast((row) => row.drawn) ?? turn.at(-1)
     // Parsing every key is wasted work on the idle journal a fork is actually taken from.
     if (
-      activeTurnId === null ||
-      !liveTurn(activeTurnId, parseAgentJournalItemKey(item.itemId), index > lastPrompt)
+      anchor &&
+      (activeTurnId === null ||
+        !liveTurn(activeTurnId, parseAgentJournalItemKey(anchor.itemId), anchor.index > lastPrompt))
     ) {
-      eligible.add(item.itemId)
+      for (const row of turn) {
+        anchors.set(row.itemId, anchor.itemId)
+      }
+    }
+    turn = []
+  }
+  items.forEach((item, index) => {
+    if (item.body.kind !== 'message') {
+      return
+    }
+    if (item.body.role === 'user') {
+      settle()
+    } else if (item.body.role === 'assistant') {
+      turn.push({ itemId: item.itemId, index, drawn: !isToolOnlyBlockSet(item.body.blocks) })
     }
   })
-  return eligible
+  settle()
+  return anchors
+}
+
+/** The rows that show a fork action: one per settled turn, derived from the anchors. */
+export function structuredForkEligibleItems(items: readonly AgentJournalRenderItem[]): Set<string> {
+  return new Set(structuredForkTurnAnchors(items).values())
 }

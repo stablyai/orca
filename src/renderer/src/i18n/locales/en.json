@@ -17259,7 +17259,10 @@
       "forkUnsupported": "This conversation cannot be forked.",
       "forkHistoryLimit": "This turn carries too much history to fork.",
       "forkStaleEpoch": "This conversation moved on. Reopen it and fork the turn again.",
-      "forkUnconfirmed": "A fork could not be confirmed. Retry the same turn to check its outcome."
+      "forkUnconfirmed": "A fork could not be confirmed. Retry the same turn to check its outcome.",
+      "forkCreated": "Forked this turn into a new chat",
+      "openForkedChat": "Open forked chat",
+      "forkedFrom": "Forked from"
     },
     "tab": {
       "bar": {

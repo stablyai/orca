@@ -1,4 +1,15 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
+import {
+  call,
+  clearStructuredHostStub,
+  envelope,
+  hostCalls,
+  installStructuredHostStub,
+  runtimeCalls,
+  SESSION,
+  STRUCTURED_CLIENT
+} from './structured-agent-session-rpc.test-fixture'
 import { commitStructuredAgentSessionCreate } from './structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
@@ -58,5 +69,65 @@ describe('fork tab publication barrier', () => {
       activate: true
     })
     expect(attach).not.toHaveBeenCalled()
+  })
+})
+
+/** Who takes the surface. A fork branches the conversation the user is reading, so its tab is
+ *  published unactivated; every other create still takes the surface it always did. */
+describe('surface ownership of a created chat', () => {
+  const WORKTREE = 'id:workspace-1'
+  const FORK_FROM = {
+    sessionId: 'parent-session',
+    itemId: 'codex:parent:turn-1:1',
+    expectedEpoch: 'epoch-a',
+    expectedRuntimeFence: 1
+  }
+
+  beforeEach(() => {
+    installStructuredHostStub()
+  })
+
+  afterEach(() => {
+    clearStructuredHostStub()
+  })
+
+  function createParams(fields: { forkFrom?: typeof FORK_FROM }) {
+    return {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields: { worktree: WORKTREE, agent: 'codex', ...fields }
+        })
+      }),
+      worktree: WORKTREE,
+      agent: 'codex',
+      ...fields
+    }
+  }
+
+  it('publishes a forked chat without activating its tab', async () => {
+    const created = await call(
+      'agentSession.create',
+      createParams({ forkFrom: FORK_FROM }),
+      STRUCTURED_CLIENT
+    )
+    expect(created).toMatchObject({ ok: true, result: { ok: true } })
+    expect(hostCalls.fork).toHaveBeenCalledTimes(1)
+    expect(hostCalls.attach).not.toHaveBeenCalled()
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: SESSION, activate: false })
+    )
+  })
+
+  it('still activates an ordinary create', async () => {
+    const created = await call('agentSession.create', createParams({}), STRUCTURED_CLIENT)
+    expect(created).toMatchObject({ ok: true, result: { ok: true } })
+    expect(hostCalls.attach).toHaveBeenCalledTimes(1)
+    expect(hostCalls.fork).not.toHaveBeenCalled()
+    expect(runtimeCalls.publishStructuredAgentSessionTab).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: SESSION, activate: true })
+    )
   })
 })

@@ -362,6 +362,10 @@ export type AgentSessionCommandsResult = {
  *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
   fork?: AgentSessionForkSupport
+  /** Lineage, not capability: the session this one was forked FROM, by Orca session id. Absent
+   *  whenever no fork produced this session, and absent from every host that predates the field —
+   *  absence is the whole degrade path, so nothing negotiates a capability for it. */
+  forkedFrom?: { sessionId: string }
   rewind?: AgentSessionRewindSupport
   conversationCommands?: readonly AgentSessionConversationCommand[]
   models: AgentSessionModelOption[]

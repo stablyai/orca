@@ -180,7 +180,9 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
         runtime: ctx.runtime,
         caller: callerFor(ctx),
         prepared,
-        activate: true
+        // A fork branches the conversation the user is currently reading, so its tab is published
+        // beside the parent without taking the surface. Every other create still activates.
+        activate: !prepared.forkFrom
       })
     }
   }),

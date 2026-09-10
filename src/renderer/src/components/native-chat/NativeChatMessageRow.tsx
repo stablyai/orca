@@ -44,7 +44,10 @@ export const MessageRow = memo(function MessageRow({
   deliveryFailed = false,
   activityExpandOverride,
   structuredActivityUi = true,
-  runtimeContext
+  runtimeContext,
+  forkEligible = false,
+  forkPending = false,
+  onFork
 }: {
   message: NativeChatMessage
   previousTodoWrite?: NativeChatToolCallBlock
@@ -60,6 +63,10 @@ export const MessageRow = memo(function MessageRow({
   activityExpandOverride?: boolean
   structuredActivityUi?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
+  /** Set on the single row that anchors a forkable turn; passed only there so the row memo holds. */
+  forkEligible?: boolean
+  forkPending?: boolean
+  onFork?: (itemId: string) => void
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
   // One pass per block set: a streaming turn re-renders this row on every frame, and these
@@ -98,6 +105,8 @@ export const MessageRow = memo(function MessageRow({
       onScrollMessageToTop(rowRef.current)
     }
   }, [onScrollMessageToTop])
+  const messageId = message.id
+  const forkThisTurn = useCallback(() => onFork?.(messageId), [onFork, messageId])
 
   // Skip rows with nothing renderable so the transcript shows no empty/ghost
   // bubble.
@@ -227,6 +236,7 @@ export const MessageRow = memo(function MessageRow({
           markdown={markdown}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
+          fork={forkEligible && onFork ? { onFork: forkThisTurn, pending: forkPending } : undefined}
           className="mt-1 -mb-5 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100"
         />
       ) : null}

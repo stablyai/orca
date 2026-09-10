@@ -1,6 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { ArrowDown, GitFork } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { ArrowDown } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import { translate } from '@/i18n/i18n'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
@@ -280,6 +279,9 @@ export function NativeChatMessageList({
                     ? turnStatuses.completedByTurn[turnKey]
                     : undefined
               const receipt = receipts.get(message.id)
+              // Only the eligible row gets the handler: handing it to every row would make the
+              // whole transcript re-render whenever the fork action is rebuilt.
+              const forkEligible = forkAction?.eligibleIds.has(message.id) === true
               const turnDiff =
                 turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined
               return (
@@ -310,20 +312,11 @@ export function NativeChatMessageList({
                       structuredActivityUi={showTurnStatus}
                       activityExpandOverride={turnKey ? expandedTurnIds.has(turnKey) : undefined}
                       runtimeContext={runtimeContext}
+                      forkEligible={forkEligible}
+                      forkPending={forkAction?.pending}
+                      onFork={forkEligible ? forkAction?.onFork : undefined}
                     />
                   )}
-                  {forkAction?.eligibleIds.has(message.id) ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="self-start text-muted-foreground"
-                      disabled={forkAction.pending}
-                      onClick={() => forkAction.onFork(message.id)}
-                    >
-                      <GitFork className="size-3.5" />
-                      {translate('components.native-chat.forkFromTurn', 'Fork from this turn')}
-                    </Button>
-                  ) : null}
                   {showTurnStatus &&
                   status &&
                   (index !== latestUserIndex || showTypingIndicator || !isWorking) ? (
