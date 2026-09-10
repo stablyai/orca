@@ -78,8 +78,10 @@ export function relayProtocolOfferAdmits(
   }
   // Why default to `max`: a peer that names one version speaks exactly that one.
   const min = offer?.minProtocolVersion === undefined ? max : readVersion(offer.minProtocolVersion)
-  if (min === null || min > max) {
+  if (min === null) {
     return false
   }
+  // An inverted range admits nothing rather than being reordered into something the peer never
+  // offered: `min > max` simply fails this band.
   return ownVersion >= min && ownVersion <= max
 }
