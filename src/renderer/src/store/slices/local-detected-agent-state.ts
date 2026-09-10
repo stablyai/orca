@@ -90,9 +90,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           const isCurrent = (): boolean =>
             requestGeneration === localDetectionGeneration &&
             detectPromises.get(contextKey) === pending
-          if (isCurrent()) {
-            await publishDetectedAgentExecutables(context, isCurrent)
-          }
+          await publishDetectedAgentExecutables(context, isCurrent)
           if (isCurrent()) {
             failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = legacyDetectContextKey === contextKey
@@ -197,9 +195,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           const isCurrent = (): boolean =>
             requestGeneration === localDetectionGeneration &&
             refreshPromises.get(contextKey) === pending
-          if (isCurrent()) {
-            await publishDetectedAgentExecutables(context, isCurrent)
-          }
+          await publishDetectedAgentExecutables(context, isCurrent)
           if (isCurrent()) {
             failedDetectContextKeys.delete(contextKey)
             const exposeToLegacy = legacyRefreshContextKey === contextKey

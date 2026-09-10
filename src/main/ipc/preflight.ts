@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
+import { detectInstalledAgentExecutables } from '../preflight/detect-host-agent-executables'
 import {
-  detectInstalledAgentExecutables,
   detectInstalledAgentsWithShellPathHydration,
   detectRemoteAgents,
   detectRemoteWindowsTerminalCapabilities,
@@ -17,6 +17,7 @@ import type {
 // ../preflight/agent-detection so the runtime can call it without ipcMain.
 // Re-exported here so existing importers of `ipc/preflight` keep working.
 export * from '../preflight/agent-detection'
+export { detectInstalledAgentExecutables } from '../preflight/detect-host-agent-executables'
 
 export function registerPreflightHandlers(): void {
   ipcMain.handle(

@@ -16,6 +16,9 @@ export async function publishDetectedAgentExecutables(
   context: PreflightRuntimeContext | undefined,
   isCurrent: () => boolean
 ): Promise<void> {
+  if (!isCurrent()) {
+    return
+  }
   latestPublication += 1
   const publication = latestPublication
   try {
