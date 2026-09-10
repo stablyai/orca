@@ -164,6 +164,11 @@ export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.statu
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
 // Readers must understand a monitoring roster with no available stop control.
+// Why: a `turn` journal item replaced the status row that used to carry a turn's lifecycle. A
+// client that predates it would render the unknown kind as text, so the host publishes the legacy
+// status form to clients that do not advertise this. Transitional: drop the downgrade once no
+// supported release lacks the capability.
+export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' as const
 export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
   'agent-session.background-task-stop.v1' as const
 // Why: the host now publishes rows for work that is live inside a turn, and such
@@ -280,6 +285,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,

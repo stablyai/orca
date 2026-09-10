@@ -29,7 +29,7 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { resolveBaselineReleaseRef } from './release-checkout'
-import { structuredHostStub } from './structured-agent-session-host-fixture'
+import { structuredHostStub, turnItemSkew } from './structured-agent-session-host-fixture'
 import {
   loadAgentSessionWireBuild,
   WORKING_TREE,
@@ -440,6 +440,20 @@ describe('cross-version structured agent sessions', () => {
         ...legacyClientCapabilities(),
         STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
       ])
+    })
+  })
+
+  describe('a client that predates the turn item', () => {
+    beforeEach(() => turnItemSkew.install(SESSION, WORKSPACE))
+    afterEach(() => setStructuredAgentSessionHost(null))
+
+    it('is published the status carrier where a capable client gets the turn item', async () => {
+      const params = paramsFor('agentSession.history')
+      for (const [clientCapabilities, item] of turnItemSkew.clients(baseline, current)) {
+        const client = { clientKind: 'runtime' as const, clientCapabilities }
+        const replies = await callBuild(current, 'agentSession.history', params, client)
+        expect(replies[0]).toMatchObject({ ok: true, result: { page: { items: [item] } } })
+      }
     })
   })
 

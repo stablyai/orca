@@ -109,7 +109,8 @@ async function finalizeClaudePublishedSession(
   const ended = {
     type: 'ended',
     sessionId: input.sessionId,
-    reason: 'claude session closed'
+    reason: 'claude session closed',
+    observedAt: Date.now()
   } as const
   let callbackError: unknown
   let callbackThrew = false

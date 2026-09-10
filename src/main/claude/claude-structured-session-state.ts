@@ -31,6 +31,8 @@ export type ClaudeStructuredSessionEvent =
       message: Record<string, unknown>
       /** Present only when this replay acknowledged Orca's in-flight dispatch. */
       startsTurn?: true
+      /** Host clock at receipt; stamped on turn boundaries only. */
+      observedAt?: number
     }
   | { type: 'provider-frame'; sessionId: string; kind: string; payload: unknown }
   | { type: 'prompt'; sessionId: string; prompt: ClaudePendingPrompt }
@@ -53,6 +55,8 @@ export type ClaudeStructuredSessionEvent =
       fence?: number
       acquisitionGeneration?: string
       settlementRetryRequired?: boolean
+      /** Host clock when the end was observed. */
+      observedAt?: number
     }
 
 export type ClaudeStructuredSessionAdapterDeps = {

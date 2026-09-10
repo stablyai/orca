@@ -1,4 +1,8 @@
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  runningTurnLifecycleRevisions,
+  type StructuredAgentSessionTurnVerdict
+} from './structured-agent-session-stale-turn-verdict'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -47,6 +51,8 @@ export async function settleUnexpectedStructuredAgentSessionExit(
     return null
   }
   const unexpectedEvent = event as UnexpectedExitLifecycleEvent
+  // Receipt of the exit is the one end time the host may record for a running turn.
+  const observedAt = event.observedAt ?? context.now()
   return context.serialize(unexpectedEvent.sessionId, async () => {
     const session = context.sessions.get(unexpectedEvent.sessionId)
     if (
@@ -95,7 +101,8 @@ export async function settleUnexpectedStructuredAgentSessionExit(
           context,
           event: unexpectedEvent,
           session,
-          stableSettlementId
+          stableSettlementId,
+          verdict: { state: 'interrupted', completedAt: observedAt }
         })
         if (!retried) {
           settlementFailed = true
@@ -115,6 +122,7 @@ export async function settleUnexpectedStructuredAgentSessionExit(
           expectedAcquisitionGeneration: unexpectedEvent.acquisitionGeneration,
           acquisitionGeneration: session.acquisitionGeneration,
           now: context.now(),
+          exitObservedAt: observedAt,
           ...(settlementFailed
             ? {
                 settlementRetry: {
@@ -177,6 +185,7 @@ export async function retryUnexpectedExitSettlement(input: {
   event: UnexpectedExitLifecycleEvent
   session: Pick<StructuredAgentSessionHostSession, 'journal' | 'fence'>
   stableSettlementId: string
+  verdict: StructuredAgentSessionTurnVerdict
 }): Promise<boolean> {
   try {
     await input.session.journal.markPendingSubmissionsUnknown(
@@ -186,7 +195,8 @@ export async function retryUnexpectedExitSettlement(input: {
     const mutations = unexpectedExitFallbackMutations(
       input.event,
       input.session,
-      input.stableSettlementId
+      input.stableSettlementId,
+      input.verdict
     )
     for (const chunk of partitionJournalLifecycleMutations(input.stableSettlementId, mutations)) {
       await input.session.journal.appendLifecycleBatch({
@@ -206,11 +216,12 @@ export async function retryUnexpectedExitSettlement(input: {
 function unexpectedExitFallbackMutations(
   event: UnexpectedExitLifecycleEvent,
   session: Pick<StructuredAgentSessionHostSession, 'journal'>,
-  stableSettlementId: string
+  stableSettlementId: string,
+  verdict: StructuredAgentSessionTurnVerdict
 ): JournalLifecycleMutationInput[] {
   const mutations: JournalLifecycleMutationInput[] = []
-  const tombstones: JournalLifecycleMutationInput[] = []
-  for (const item of session.journal.snapshot().items) {
+  const { items } = session.journal.snapshot()
+  for (const item of items) {
     const identity = parseAgentJournalItemKey(item.itemId)
     if (!identity) {
       continue
@@ -219,16 +230,14 @@ function unexpectedExitFallbackMutations(
     if (terminal) {
       mutations.push({ kind: 'item', identity, body: terminal })
     }
-    if (item.body.kind === 'status' && item.body.turnLifecycle?.state === 'running') {
-      tombstones.push({ kind: 'tombstone', identity })
-    }
   }
   mutations.push({
     kind: 'item',
     identity: { provider: 'orca', clientMessageId: stableSettlementId },
     body: { kind: 'status', text: boundJournalStatusText(`Provider exited: ${event.reason}`) }
   })
-  mutations.push(...tombstones)
+  // Lifecycle rows settle last, in place: the turn's endpoints outlive the child.
+  mutations.push(...runningTurnLifecycleRevisions(items, verdict))
   return mutations
 }
 

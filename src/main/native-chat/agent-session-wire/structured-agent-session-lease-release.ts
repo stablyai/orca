@@ -40,6 +40,7 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
   expectedAcquisitionGeneration: string
   acquisitionGeneration: string | null
   now: number
+  exitObservedAt?: number
   settlementRetry?: { settlementId: string; detail: string }
 }): Promise<AgentSessionRecord> {
   if (input.acquisitionGeneration !== input.expectedAcquisitionGeneration) {
@@ -57,6 +58,7 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,
     now: input.now,
+    exitObservedAt: input.exitObservedAt,
     ...(input.settlementRetry ? { settlementRetry: input.settlementRetry } : {})
   })
 }

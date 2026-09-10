@@ -11,6 +11,100 @@
   },
   "gates": [
     {
+      "id": "agent-session.completed-turn-duration",
+      "title": "Completed turn duration survives client recovery and history pagination",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-runtime",
+      "layer": "shared-and-renderer-unit",
+      "surfaces": ["native chat", "structured agent history", "structured agent subscriptions"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime", "mobile"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Deterministic provider, journal recovery, RPC projection and shared renderer tests run on macOS. Shared logic serves desktop and mobile; these tests do not prove native mobile or real SSH transport. Local/daemon PTY input, geometry and WSL process launch are unaffected.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/19695"],
+      "invariant": "An observed completed turn retains the same host-recorded duration and initiating user-message attribution through client reload, settlement retry and loading older history; older clients receive the compatible item carrier, and a host-recorded unknown duration suppresses local estimates.",
+      "oracle": "Render a host-settled duration without observing completion locally; preserve an exit at 2000 through failed settlement at 60000 and later retry; retain a seven-second older turn beyond 256 submitted turns; prune aliases with removed user items and preserve alias identity during item-only streaming; render no completed duration for an unverifiable turn both before and after client reload.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-chat-unverifiable-turn-status.test.ts src/main/codex/codex-requested-close-turn-timing.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts src/shared/structured-agent-session-turn-timing-retention.test.ts src/shared/structured-agent-session-turn-timing.test.ts src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx"
+      ],
+      "testFiles": [
+        "src/shared/native-chat-unverifiable-turn-status.test.ts",
+        "src/main/codex/codex-requested-close-turn-timing.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts",
+        "src/shared/structured-agent-session-turn-timing-retention.test.ts",
+        "src/shared/structured-agent-session-turn-timing.test.ts",
+        "src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts",
+        "src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts",
+        "src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/shared/native-chat-unverifiable-turn-status.test.ts",
+          "assertions": [
+            "does not convert a running turn to local Worked for after unverifiable recovery (start %s)"
+          ]
+        },
+        {
+          "file": "src/main/codex/codex-requested-close-turn-timing.test.ts",
+          "assertions": ["keeps the first exit receipt when retry requestedClose=%s"]
+        },
+        {
+          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts",
+          "assertions": ["keeps exit receipt %s on retry"]
+        },
+        {
+          "file": "src/shared/structured-agent-session-turn-timing-retention.test.ts",
+          "assertions": [
+            "keeps an older page duration after the recent submission budget fills",
+            "drops an old alias once rewind removes its user item"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx",
+          "assertions": ["renders a host-settled duration without ever clocking the turn locally"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/native-chat-unverifiable-turn-status.test.ts src/main/codex/codex-requested-close-turn-timing.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-unexpected-exit.test.ts src/shared/structured-agent-session-turn-timing-retention.test.ts src/shared/structured-agent-session-turn-timing.test.ts src/main/codex/codex-structured-journal-translation-turn-lifecycle.test.ts src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.test.ts src/renderer/src/components/native-chat/NativeChatMessageList.turn-timing.test.tsx",
+          "result": "passed",
+          "durationSeconds": 4.65,
+          "summary": "58 tests passed across eight files at source commit 5acb404bf244cdc0bd3643c4e79beb189ce9a0cd; the following manifest-only commit records this run without changing tested source."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Deterministic focused tests without an app launch; initial target budget pending CI soak."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "No CI soak history for this combined gate."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Before fixes, failed settlement stored 60000 instead of observed 2000 and older-page duration was undefined instead of seven seconds after 257 submissions. Mounted unverifiable recovery also displayed a local 59 seconds versus no duration after reload, including an older-host row without a start; the focused regressions pass after fixes."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No polling, process fanout or new timer. Alias retention follows loaded user items plus 256 recent records; lookup uses a Set, removal/reset prunes aliases, and item-only stream batches retain the submission array identity."
+      },
+      "knownGaps": [
+        "This deterministic gate does not launch Electron or prove a full app restart; exact-head manual screenshots are separate PR evidence.",
+        "Native mobile, live SSH/relay transport and Windows/Linux execution are not exercised by this command.",
+        "Accumulated-history wall-clock profiling and CI soak remain unmeasured."
+      ],
+      "promotionCriteria": [
+        "Complete CI soak without unexplained flakes and retain the value-based retry, pagination and rendering oracles."
+      ],
+      "demotionRule": "Keep experimental until soak and platform evidence support promotion; do not relax value or identity assertions to hide failures."
+    },
+
+    {
       "id": "agent-session.history-forward-read-budget",
       "title": "Journal catch-up reads only the next page and one lookahead row",
       "maturity": "experimental",

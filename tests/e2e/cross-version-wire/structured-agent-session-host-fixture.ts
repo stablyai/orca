@@ -1,4 +1,10 @@
 import { vi } from 'vitest'
+import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 
 /** The host every skew installs to drive the surface: enough of the real host's
  *  shape for each handler to run, and a spy per method so "which call reached the
@@ -46,5 +52,35 @@ export function structuredHostStub(
       return () => undefined
     }),
     unsubscribe: vi.fn()
+  }
+}
+
+const TURN = { turnId: 'turn-1', state: 'completed' as const, startedAt: 1, completedAt: 6 }
+const TURN_ROW = { itemId: 'legacy:codex:s:turn-1', revision: 1, sequence: 1, observedAt: 1 }
+
+/** One completed turn the host journals, and the two ways the current host publishes it.
+ *  The old client is derived from the baseline by removing the capability, so the downgrade
+ *  stays exercised after a release ships it. */
+export const turnItemSkew = {
+  /** Installs the stub host over a history page that carries the turn row. */
+  install(sessionId: string, workspaceId: string): void {
+    const host = structuredHostStub(sessionId, workspaceId)
+    const items = [{ ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
+    host.history.mockReturnValue({ ok: true, page: { items } })
+    setStructuredAgentSessionHost(host as unknown as StructuredAgentSessionHost)
+  },
+  /** Each skew's advertised list and the item it must be published. */
+  clients(
+    baseline: { capabilities: readonly string[] },
+    current: { capabilities: readonly string[] }
+  ) {
+    const old = baseline.capabilities.filter((c) => c !== AGENT_SESSION_TURN_ITEM_CAPABILITY)
+    return [
+      [
+        [...old, STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+        { ...TURN_ROW, body: { kind: 'status', turnLifecycle: TURN } }
+      ],
+      [[...current.capabilities], { ...TURN_ROW, body: { kind: 'turn', ...TURN } }]
+    ] as const
   }
 }

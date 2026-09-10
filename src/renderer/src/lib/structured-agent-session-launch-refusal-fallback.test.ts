@@ -24,7 +24,8 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
-  getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
+  getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }],
+  getAgentLabel: () => 'Codex'
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -38,7 +39,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => ({ unifiedTabsByWorktree: {} }),
+    getState: () => ({ unifiedTabsByWorktree: {}, clearNativeChatLaunchDraft: () => {} }),
     subscribe: () => () => {}
   }
 }))
