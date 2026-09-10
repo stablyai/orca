@@ -83,6 +83,15 @@ function packageScope(packageName: string): string | null {
  *
  * npm prints `undefined` for an unset key. That is not a refusal: it means npm
  * falls back to the default registry, which the first check already cleared.
+ *
+ * What this does NOT cover: the configured URL is checked, not the URL npm ends
+ * up at. `make-fetch-happen` keeps the `Authorization` header across a redirect
+ * that changes only the protocol ("Remove authorization if changing hostnames
+ * (but not if just changing ports or protocols)"), so an https registry that
+ * 302s to http on the same hostname still receives the token in cleartext.
+ * Nothing here can prevent that from outside the npm client. Workspace trust is
+ * the containment: this check is defence in depth against a plaintext registry
+ * being configured outright, not a guarantee about the transport npm settles on.
  */
 async function resolvesToHttpsRegistry(
   program: string,
