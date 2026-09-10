@@ -83,6 +83,61 @@ describe('#18211 LAN mode applies to already-paired devices', () => {
     expect(broker.closeNow).toHaveBeenCalledOnce()
   })
 
+  it('a policy change that failed transiently still skips the linger on its retry', async () => {
+    // Why: the policy reconcile can hit a transient context-read failure; its
+    // armed retry must carry skipLinger or the LAN pick lingers ten minutes.
+    vi.useFakeTimers()
+    let demanded = true
+    let failNextRead = false
+    const broker = liveBroker()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => {
+        if (failNextRead) {
+          failNextRead = false
+          throw new Error('transient session read failure')
+        }
+        return context
+      },
+      hasDemand: () => demanded,
+      openBroker: async () => broker,
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+    coordinator.reconcile()
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
+
+    demanded = false
+    failNextRead = true
+    coordinator.reconcile({ skipLinger: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(broker.closeNow).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(501)
+    expect(broker.closeNow).toHaveBeenCalledOnce()
+  })
+
+  it('a queued revoke still holds the relay open under LAN until it flushes', () => {
+    // Why: a revoke is server-side cleanup for a credential the user already
+    // withdrew, not a grant; dropping it on a LAN pick would leave that
+    // credential live on the relay until the user flipped back.
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-repro-18211-'))
+    const deviceRegistry = new DeviceRegistry(userDataPath)
+    const revokeOutbox = new RelayRevokeOutbox(userDataPath)
+    revokeOutbox.enqueue({ relayHostId, relayDeviceId: 'gone-phone', ownerIdentityKey })
+    const ledger = new RelayDemandLedger({
+      deviceRegistry,
+      revokeOutbox,
+      relayHostId,
+      isRelayAllowedForDevice: () => false
+    })
+
+    expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
+    for (const item of revokeOutbox.pendingFor(ownerIdentityKey, relayHostId)) {
+      revokeOutbox.remove(item.reqId)
+    }
+    expect(ledger.hasDemand(ownerIdentityKey)).toBe(false)
+  })
+
   it('pairing churn keeps the ten-minute linger', async () => {
     vi.useFakeTimers()
     let demanded = true
