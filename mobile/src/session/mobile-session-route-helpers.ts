@@ -28,6 +28,15 @@ export function getRepoIdFromMobileWorktreeId(id: string): string {
   return separatorIdx === -1 ? id : id.slice(0, separatorIdx)
 }
 
+/** The host-side path half of the same id; null for ids that carry no path. */
+export function getWorktreePathFromMobileWorktreeId(id: string): string | null {
+  const separatorIdx = id.indexOf('::')
+  if (separatorIdx === -1) {
+    return null
+  }
+  return id.slice(separatorIdx + 2) || null
+}
+
 export function isGestureMouseTrackingMode(
   mode: TerminalModes['mouseTrackingMode'] | undefined
 ): boolean {
