@@ -21,6 +21,8 @@ import {
 } from './tracking'
 import { clearWebSessionTabsTrackingForWorktree } from './tracking-lifecycle'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
+import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
+import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
 
 /** A frame's fate, paired with whether that fate is host evidence for the worktree. */
 export type WebSessionTabsSnapshotDecision = {
@@ -135,12 +137,21 @@ export function shouldBootstrapInitialWebRuntimeTerminal(args: {
   requestedInitialTerminal: boolean
   snapshotIsFresh: boolean
   localTerminalCount: number
+  hasPersistedTerminalState: boolean
 }): boolean {
   return (
     args.snapshotIsFresh &&
     args.event.type === 'snapshot' &&
+    // Why: a synthesized unpublished frame (`UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH` at version 0)
+    // is the runtime saying "ask me later", not a host with zero terminals. Seeding on it can
+    // duplicate a pane the host is about to republish after a restart — the same "ask me later"
+    // frame the tombstone write already refuses to treat as the user emptying the workspace.
+    hostSnapshotAffirmsWorktreeContents(args.event) &&
     args.event.tabs.length === 0 &&
-    args.localTerminalCount === 0 &&
+    // Why the shared predicate: the host owning the terminals does not change what an empty
+    // workspace means. A missing row is "never initialized", an explicit empty row is "the user
+    // closed the last terminal", and only the local seeder used to read the difference (STA-6173).
+    shouldAutoCreateInitialTerminal(args.localTerminalCount, args.hasPersistedTerminalState) &&
     !args.requestedInitialTerminal &&
     args.activeWorktreeId === args.event.worktree
   )
