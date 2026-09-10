@@ -1,5 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SessionSearchEngine } from './session-search-engine'
+import { afterEach, describe, expect, it } from 'vitest'
 import { SESSION_SEARCH_QUERY_MAX_LENGTH } from './session-search-engine-types'
 import type { SessionSearchRequest, SessionSearchResponse } from './session-search-engine-types'
 import {
@@ -270,68 +269,74 @@ describe('source presence comes from the files table, never a stat', () => {
   })
 })
 
-describe('an index that predates version 2 is answered from, not thrown at', () => {
-  async function version1(): Promise<SessionSearchHarness> {
-    const opened = await open('ss-engine-v1')
-    addSyntheticSession(opened.db, { id: 1, text: 'the coalesces path is slow' })
-    addSyntheticSession(opened.db, { id: 2, text: 'coalesces again here' })
-    // A real v1 file: neither table version 2 added exists in it.
-    opened.db.exec('DROP TABLE messages_vocab; DROP TABLE search_log')
-    return opened
-  }
-
-  it('still searches, and names the feature it cannot serve', async () => {
-    const { store } = await version1()
-    const engine = new SessionSearchEngine(store, { logQueries: true })
-    const result = engine.search({ query: 'coalesces' })
+describe('the engine carries its own schema and puts it back', () => {
+  it('installs the vocabulary and the log over an index a writer built alone', async () => {
+    // The store creates none of these: PR 3's indexer can fill a whole index
+    // before anything opens an engine over it.
+    const { db, engine } = await open('ss-engine-installs')
+    addSyntheticSession(db, { id: 1, text: 'the coalesces path is slow' })
+    addSyntheticSession(db, { id: 2, text: 'coalesces again here' })
+    const result = engine.search({ query: 'coalescs' })
+    expect(result.unavailable).toEqual([])
+    expect(result.planner.route).toBe('typo+or')
     expect(ids(result).sort()).toEqual(['1', '2'])
-    expect(result.unavailable).toEqual(['typo-repair', 'query-log'])
   })
 
-  it('skips the repair rung rather than reaching for a vocabulary that is gone', async () => {
-    const { store } = await version1()
-    const result = new SessionSearchEngine(store).search({ query: 'coalescs' })
-    expect(result.planner.route).toBe('or')
-    expect(result.planner.repairedTerms).toBeUndefined()
-    expect(result.hits).toEqual([])
-  })
-
-  it('re-probes when a table vanishes under a live engine, instead of throwing', async () => {
-    // A capability is a fact about the file, not about the engine: another
-    // handle can rebuild the index while this one is answering.
-    const { db, store } = await open('ss-engine-vocab-vanishes')
+  it('re-creates a vocabulary that vanished under a live engine', async () => {
+    const { db, engine } = await open('ss-engine-vocab-vanishes')
     addSyntheticSession(db, { id: 1, text: 'coalesces here now' })
     addSyntheticSession(db, { id: 2, text: 'coalesces again here' })
-    const engine = new SessionSearchEngine(store)
     expect(engine.search({ query: 'coalescs' }).planner.route).toBe('typo+or')
 
     db.exec('DROP TABLE messages_vocab')
-    const degraded = engine.search({ query: 'coalescs' })
-    expect(degraded.unavailable).toEqual(['typo-repair'])
-    expect(degraded.planner.route).toBe('or')
-    expect(degraded.hits).toEqual([])
+    const after = engine.search({ query: 'coalescs' })
+    expect(after.unavailable).toEqual([])
+    expect(after.planner.route).toBe('typo+or')
   })
 
-  it('picks the feature back up when the table comes back', async () => {
-    const { db, store } = await open('ss-engine-vocab-returns')
+  it('names the feature it cannot serve when the vocabulary has no source left', async () => {
+    // What an index being rebuilt by another handle looks like from here: the
+    // vocabulary can be created over a missing `messages_fts` and every query
+    // against it then fails, so the engine reads the source, not the view.
+    // The conversation scope has its own table and keeps answering.
+    const { db, engine } = await open('ss-engine-vocab-source-gone')
+    addSyntheticSession(db, { id: 1, text: 'coalesces here now', role: 'user' })
+    addSyntheticSession(db, { id: 2, text: 'coalesces again here', role: 'user' })
+    db.exec('DROP TABLE messages_vocab; DROP TABLE messages_fts')
+
+    const result = engine.search({ query: 'coalescs', scope: 'conversation' })
+    expect(result.unavailable).toEqual(['typo-repair'])
+    expect(result.planner.route).toBe('or')
+    expect(result.hits).toEqual([])
+    expect(ids(engine.search({ query: 'coalesces', scope: 'conversation' })).sort()).toEqual([
+      '1',
+      '2'
+    ])
+  })
+
+  it('picks the feature back up when the source comes back', async () => {
+    const { db, engine } = await open('ss-engine-vocab-returns')
     addSyntheticSession(db, { id: 1, text: 'coalesces here now' })
     addSyntheticSession(db, { id: 2, text: 'coalesces again here' })
-    const engine = new SessionSearchEngine(store)
-    db.exec('DROP TABLE messages_vocab')
-    expect(engine.search({ query: 'coalescs' }).unavailable).toEqual(['typo-repair'])
+    const fts = (
+      db.prepare("SELECT sql FROM sqlite_master WHERE name = 'messages_fts'").get() as {
+        sql: string
+      }
+    ).sql
+    db.exec('DROP TABLE messages_vocab; DROP TABLE messages_fts')
+    expect(engine.search({ query: 'coalescs', scope: 'conversation' }).unavailable).toEqual([
+      'typo-repair'
+    ])
 
-    db.exec("CREATE VIRTUAL TABLE messages_vocab USING fts5vocab(messages_fts, 'row')")
+    db.exec(fts)
+    // Two, because the vocabulary only offers a term at least two rows carry.
+    addSyntheticSession(db, { id: 3, text: 'coalesces one more time' })
+    addSyntheticSession(db, { id: 4, text: 'coalesces once again' })
     // Nothing throws on the way back up, so the recovery cannot come from the
     // error path; it comes from the probe running per search.
     const restored = engine.search({ query: 'coalescs' })
     expect(restored.unavailable).toEqual([])
     expect(restored.planner.route).toBe('typo+or')
-  })
-
-  it('claims nothing unavailable on a current index', async () => {
-    const { db, engine } = await open('ss-engine-v2')
-    addSyntheticSession(db, { id: 1 })
-    expect(engine.search({ query: 'needle' }).unavailable).toEqual([])
   })
 })
 
@@ -358,20 +363,6 @@ describe('a query the engine had to cut says so', () => {
     const { db, engine } = await open('ss-engine-no-cap')
     addSyntheticSession(db, { id: 1, text: 'needle' })
     expect(engine.search({ query: 'needle' }).truncated.query).toBe(false)
-  })
-})
-
-describe('the engine is the only thing that warms the index', () => {
-  it('warms on the first search and leans on the store to memoize the rest', async () => {
-    const { db, store, engine } = await open('ss-engine-warm')
-    addSyntheticSession(db, { id: 1 })
-    const warm = vi.spyOn(store, 'warm')
-    engine.search({ query: 'needle' })
-    engine.search({ query: 'needle' })
-    // PR 2 left the call site to whoever knows which pages a read touches. The
-    // store returns one memoized promise, so asking twice costs one warm-up.
-    expect(warm).toHaveBeenCalledTimes(2)
-    await store.warm()
   })
 })
 

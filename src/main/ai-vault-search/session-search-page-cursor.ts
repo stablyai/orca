@@ -32,7 +32,12 @@ export class SessionSearchCursorError extends Error {
 type CursorPayload = {
   /** Index generation. */
   g: number
-  /** Offset into the ranked list. */
+  /**
+   * Offset into the ranked list, not a session id. Ids are not in a cursor at
+   * all, so nothing here depends on `sessions.id` being unique over time —
+   * though it is, because PR 2 made the column AUTOINCREMENT so a purged
+   * session's id is never reissued to a live one.
+   */
   o: number
   /** Query identity; see `sessionSearchPageKey`. */
   k: string

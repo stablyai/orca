@@ -1,6 +1,5 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import { quoteFtsTerm } from './session-search-query-planner'
-import { VISIBLE_MESSAGES, VISIBLE_SESSIONS } from './session-search-schema'
 
 // Why: a query term with zero postings is usually a typo. The index's own
 // vocabulary (fts5vocab) is the dictionary, so repair needs no model and can
@@ -11,8 +10,8 @@ const LENGTH_SLACK = 2
 const MIN_DOC_FREQUENCY = 2
 const MIN_SIMILARITY = 0.82
 const MAX_CANDIDATES = 4000
-// Visibility probes walked per prefix before giving up on it. Each one is an
-// FTS MATCH and only runs mid-write, so this is the whole cost of the fall-through.
+// Candidates probed against live rows per prefix before giving up on it. Only
+// reached for a term the index has no posting for, which is the rare case.
 const MAX_VISIBILITY_PROBES = 8
 
 type VocabRow = { term: string; doc: number }
@@ -40,31 +39,24 @@ function similarity(a: string, b: string): number {
 }
 
 export class SessionSearchTypoRepair {
-  private readonly unpublished: ReturnType<SyncDatabase['prepare']>
-  private readonly visiblePostings: ReturnType<SyncDatabase['prepare']>
-  private readonly exactMatch: ReturnType<SyncDatabase['prepare']>
-  private readonly documentFrequency: ReturnType<SyncDatabase['prepare']>
+  private readonly livePosting: ReturnType<SyncDatabase['prepare']>
   private readonly candidatesByPrefix: ReturnType<SyncDatabase['prepare']>
 
   constructor(db: SyncDatabase) {
-    this.unpublished = db.prepare(
-      'SELECT 1 FROM search_write_batches UNION ALL SELECT 1 FROM search_pending_deletes LIMIT 1'
-    )
-    this.visiblePostings =
-      db.prepare(`SELECT m.id FROM messages_fts JOIN ${VISIBLE_MESSAGES} m ON m.id=messages_fts.rowid
-      JOIN ${VISIBLE_SESSIONS} s ON s.id=m.session_row_id WHERE messages_fts MATCH ?
-      LIMIT ${MIN_DOC_FREQUENCY}`)
-
-    // Joined even though `documentFrequency` already answered: `messages_vocab`
-    // is a view over the FTS b-tree, which still lists a staged or tombstoned
-    // term. Every read of an FTS table here subtracts the rows no reader may see.
-    this.exactMatch = db.prepare(
-      `SELECT m.id FROM messages_fts JOIN ${VISIBLE_MESSAGES} m ON m.id = messages_fts.rowid
+    // Joined to `sessions` rather than read off `messages_vocab`: the vocabulary
+    // is a view over the FTS b-tree, so it still lists terms whose only rows
+    // belong to a session a purge cut loose and the drain has not reclaimed.
+    // Repairing a term onto those spellings answers with nothing.
+    this.livePosting = db.prepare(
+      `SELECT m.id FROM messages_fts
+       JOIN messages m ON m.id = messages_fts.rowid
+       JOIN sessions s ON s.id = m.session_row_id
        WHERE messages_fts MATCH ? LIMIT 1`
     )
-    this.documentFrequency = db.prepare('SELECT doc FROM messages_vocab WHERE term = ?')
     // fts5vocab is ordered by term, so a prefix range plus a length band is a
     // bounded scan; the most frequent terms are kept when the band overflows.
+    // `doc` counts orphaned rows too, which only ever ranks a candidate the
+    // probe above then rejects.
     this.candidatesByPrefix = db.prepare(
       `SELECT term, doc FROM messages_vocab
        WHERE term >= ? AND term < ? AND length(term) BETWEEN ? AND ? AND doc >= ?
@@ -72,20 +64,9 @@ export class SessionSearchTypoRepair {
     )
   }
 
+  /** Whether a live row anywhere in the index holds this term. */
   hasPostings(term: string): boolean {
-    if (this.hasUnpublishedWrites()) {
-      return this.visiblePostings.all(quoteFtsTerm(term)).length > 0
-    }
-    const row = this.documentFrequency.get(term.toLowerCase()) as VocabRow | undefined
-    // unicode61 also folds Latin diacritics; raw vocabulary spelling alone can miss an exact hit.
-    return (
-      (row !== undefined && row.doc > 0) || this.exactMatch.get(quoteFtsTerm(term)) !== undefined
-    )
-  }
-
-  /** A staged write is uncommitted, so `messages_vocab` can list a term no visible row has yet. */
-  private hasUnpublishedWrites(): boolean {
-    return this.unpublished.get() !== undefined
+    return this.livePosting.get(quoteFtsTerm(term)) !== undefined
   }
 
   /** Returns the closest indexed term, or null when `term` exists or nothing is close enough. */
@@ -111,13 +92,13 @@ export class SessionSearchTypoRepair {
 
   /**
    * The best-scoring candidate at `prefix` that a reader can actually see.
-   * Ranking is pure CPU, so the walk is bounded rather than the probe: mid-write
-   * the top term can be staged, and abandoning the prefix there would lose a
-   * repair the published index can serve.
+   * Ranking is pure CPU, so the walk is bounded rather than the probe: the top
+   * term can be one whose rows a purge cut loose, and abandoning the prefix
+   * there would lose a repair the rest of the index can serve.
    */
   private bestVisible(lowered: string, prefix: string): string | null {
     const ranked = this.ranked(lowered, prefix).slice(0, MAX_VISIBILITY_PROBES)
-    return ranked.find((candidate) => this.isVisible(candidate.term))?.term ?? null
+    return ranked.find((candidate) => this.hasPostings(candidate.term))?.term ?? null
   }
 
   /** Candidates similar enough to be a repair, best first. */
@@ -126,13 +107,6 @@ export class SessionSearchTypoRepair {
       .map((row) => ({ term: row.term, score: similarity(lowered, row.term), doc: row.doc }))
       .filter((candidate) => candidate.score >= MIN_SIMILARITY)
       .sort((left, right) => right.score - left.score || right.doc - left.doc)
-  }
-
-  private isVisible(term: string): boolean {
-    return (
-      !this.hasUnpublishedWrites() ||
-      this.visiblePostings.all(quoteFtsTerm(term)).length >= MIN_DOC_FREQUENCY
-    )
   }
 
   private candidates(prefix: string, length: number): VocabRow[] {

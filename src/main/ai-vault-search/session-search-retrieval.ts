@@ -9,7 +9,6 @@ import {
   type SessionSearchQueryPlan
 } from './session-search-query-planner'
 import type { SessionRowFilter } from './session-search-row-filter'
-import { VISIBLE_MESSAGES, VISIBLE_SESSIONS } from './session-search-schema'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
 
 // The operator-only walk: rows per page, and how far past a full candidate set
@@ -105,7 +104,7 @@ export class SessionSearchRetrieval {
     const { conditions, values } = scope.filter
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     const page = this.db.prepare(
-      `SELECT * FROM ${VISIBLE_SESSIONS} ${where}
+      `SELECT * FROM sessions ${where}
        ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`
     )
     const ceiling = scope.candidateLimit * RECENT_SCAN_FACTOR
@@ -142,7 +141,7 @@ export class SessionSearchRetrieval {
     }
     const conditions = [`id IN (${ids.map(() => '?').join(',')})`, ...scope.filter.conditions]
     const rows = this.db
-      .prepare(`SELECT * FROM ${VISIBLE_SESSIONS} WHERE ${conditions.join(' AND ')}`)
+      .prepare(`SELECT * FROM sessions WHERE ${conditions.join(' AND ')}`)
       .all(...ids, ...scope.filter.values) as SessionRow[]
     return rows.filter((row) => scope.matchesOperators(row))
   }
@@ -192,14 +191,14 @@ export class SessionSearchRetrieval {
   private match(expression: string, scope: RetrievalScope): MessageRow[] {
     const { filter, sort, candidateLimit } = scope
     const eligible = filter.conditions.length
-      ? ` AND m.session_row_id IN (SELECT id FROM ${VISIBLE_SESSIONS} WHERE ${filter.conditions.join(' AND ')})`
+      ? ` AND m.session_row_id IN (SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')})`
       : ''
     const table = ftsTableFor(scope.scope)
     const weights = scope.scope === 'all' ? FULL_WEIGHTS : CONVERSATION_WEIGHTS
     const matched = `SELECT ${table}.rowid AS rowid, -bm25(${table}, ${weights}) AS score,
       m.session_row_id, m.role, m.ts, s.updated_at
-      FROM ${table} JOIN ${VISIBLE_MESSAGES} m ON m.id = ${table}.rowid
-      JOIN ${VISIBLE_SESSIONS} s ON s.id = m.session_row_id WHERE ${table} MATCH ?${eligible}`
+      FROM ${table} JOIN messages m ON m.id = ${table}.rowid
+      JOIN sessions s ON s.id = m.session_row_id WHERE ${table} MATCH ?${eligible}`
     // Why: collapse to one row per session BEFORE the candidate limit, on both
     // sort orders, so a single long session cannot occupy the whole page.
     // `max(score)` makes SQLite pick that session's best row for the bare columns.

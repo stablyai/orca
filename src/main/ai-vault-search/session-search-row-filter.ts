@@ -13,9 +13,10 @@ const CWD = 'cwd_key'
 
 /**
  * The narrowings SQL can express exactly, in one place, so retrieval, the
- * operator-only page and the session load cannot drift apart. Row visibility is
- * not here: it belongs to the `visible_sessions` / `visible_messages` views
- * these conditions run over.
+ * operator-only page and the session load cannot drift apart. These conditions
+ * run over `sessions` itself. Reachability is not here and is not a condition:
+ * it is the INNER JOIN to `sessions` that every retrieval carries, which is
+ * what makes a message row a purge has not reclaimed yet unreadable.
  *
  * `repo:` and `path:` are deliberately absent. What they mean is the predicate
  * the sessions panel applies (`matchesAiVaultQueryOperators`), and SQL cannot

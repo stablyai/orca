@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import type SyncDatabase from '../sqlite/sync-database'
 import { indexTokens } from './session-search-query-planner'
+import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { openSessionSearchDatabase } from './session-search-schema'
 
 // SQLite/FTS5 behaviours the query layer depends on. Each one cost a live
@@ -96,7 +97,7 @@ describe('a rowid constraint beside MATCH is honoured only as a subselect', () =
     db.close()
   })
 
-  it('honours `rowid IN (SELECT ?)` even with the visibility view joined on', async () => {
+  it('honours `rowid IN (SELECT ?)` even with the session join on', async () => {
     const db = await openDatabase()
     db.prepare(
       `INSERT INTO sessions(id,agent,session_id,file_path,title,resume_command)
@@ -108,12 +109,15 @@ describe('a rowid constraint beside MATCH is honoured only as a subselect', () =
     insertMessageRow(db, FIRST_ROWID, 'alpha marmoset one')
     insertMessageRow(db, SECOND_ROWID, 'alpha capybara two')
 
-    // The shape the snippet read uses: the join is what subtracts staged rows,
-    // and it must not cost the rowid constraint its effect.
+    // The shape the snippet read uses: the joins are what subtract a row whose
+    // session a purge cut loose, and they must not cost the rowid constraint
+    // its effect.
     const snippet = db
       .prepare(
         `SELECT snippet(messages_fts, -1, '[', ']', '…', 12) AS s
-         FROM messages_fts JOIN visible_messages m ON m.id = messages_fts.rowid
+         FROM messages_fts
+         JOIN messages m ON m.id = messages_fts.rowid
+         JOIN sessions s ON s.id = m.session_row_id
          WHERE messages_fts MATCH ? AND messages_fts.rowid IN (SELECT ?)`
       )
       .get('alpha', SECOND_ROWID) as { s: string } | undefined
@@ -153,6 +157,8 @@ describe('the planner tokenizer draws the same boundaries as unicode61', () => {
 
   it('produces exactly the terms fts5vocab reports for the same text', async () => {
     const db = await openDatabase()
+    // The vocabulary is the engine's own object, not the store's.
+    ensureSessionSearchQuerySchema(db)
     const corpus =
       'resolveTerminalPath src/main/foo-bar.ts a.b C++ #123 修复 café naïve MAX_TOKEN x'
     insertMessageRow(db, FIRST_ROWID, corpus)

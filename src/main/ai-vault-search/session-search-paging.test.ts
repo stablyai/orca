@@ -5,6 +5,7 @@ import {
   openSessionSearchHarness,
   type SessionSearchHarness
 } from './session-search-engine-test-fixture'
+import { readIndexGeneration } from './session-search-index-generation'
 import {
   decodeSessionSearchCursor,
   encodeSessionSearchCursor,
@@ -112,7 +113,7 @@ describe('a cursor is refused rather than reinterpreted', () => {
     // page one again, a bad cursor means something is wrong with the caller.
     const { engine, store } = await withSessions(25)
     const first = engine.search({ query: 'needle', limit: 10 })
-    const minted = first.generation
+    const minted = readIndexGeneration(harness!.db)
     // Any published read moves the generation, including one for a file this
     // page never mentioned. That is the fence working, not a defect.
     store.removeFile('/synthetic/9.jsonl')
@@ -124,7 +125,7 @@ describe('a cursor is refused rather than reinterpreted', () => {
       const rejected = error as SessionSearchCursorError
       expect(rejected.rejection).toBe('stale-generation')
       expect(rejected.expectedGeneration).toBe(minted)
-      expect(rejected.actualGeneration).toBe(store.generation)
+      expect(rejected.actualGeneration).toBe(readIndexGeneration(harness!.db))
       expect(rejected.actualGeneration).toBeGreaterThan(rejected.expectedGeneration!)
     }
   })
@@ -296,13 +297,13 @@ describe('the candidate limit is a tunable default, and says when it cut', () =>
 })
 
 describe('the response carries the snapshot it was built from', () => {
-  it('reports the store generation on every result', async () => {
-    const { engine, store } = await withSessions(3)
+  it('reports the index generation on every result', async () => {
+    const { db, engine, store } = await withSessions(3)
     const before = engine.search({ query: 'needle' }).generation
-    expect(before).toBe(store.generation)
+    expect(before).toBe(readIndexGeneration(db))
     store.removeFile('/synthetic/1.jsonl')
     const after = engine.search({ query: 'needle' }).generation
-    expect(after).toBe(store.generation)
+    expect(after).toBe(readIndexGeneration(db))
     expect(after).toBeGreaterThan(before)
   })
 })

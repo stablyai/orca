@@ -4,7 +4,6 @@ import {
   SESSION_SEARCH_SNIPPET_MARK_OPEN
 } from './session-search-engine-types'
 import { orExpression, type SessionSearchQueryPlan } from './session-search-query-planner'
-import { VISIBLE_MESSAGES } from './session-search-schema'
 
 const SNIPPET_TOKENS = 12
 // Why a ceiling on top of the token count: a transcript chunk can be 8000
@@ -45,10 +44,16 @@ export function sessionSearchSnippet(
   try {
     // Why the subselect: a bound `rowid = ?` or `rowid IN (?)` next to MATCH is
     // silently ignored by the FTS5 planner, which then returns the first match
-    // in the table. The join subtracts a row this read must never show.
+    // in the table. Why the join to `sessions`: retrieval proved this rowid
+    // belonged to a live session, but a purge can commit between that statement
+    // and this one, and a message row outlives its session row until the drain
+    // reaches it. INNER, never LEFT — this is the last read before content is
+    // returned to a caller.
     const row = db
       .prepare(
-        `SELECT ${select} FROM ${table} JOIN ${VISIBLE_MESSAGES} m ON m.id = ${table}.rowid
+        `SELECT ${select} FROM ${table}
+         JOIN messages m ON m.id = ${table}.rowid
+         JOIN sessions s ON s.id = m.session_row_id
          WHERE ${table} MATCH ? AND ${table}.rowid IN (SELECT ?)`
       )
       .get(orExpression(plan.terms), rowid) as Record<string, string> | undefined
