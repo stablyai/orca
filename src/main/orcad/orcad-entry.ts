@@ -13,6 +13,7 @@
  */
 import process from 'node:process'
 import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
@@ -30,6 +31,11 @@ import {
 } from './orcad-instance-lock'
 
 let runOrcadQuitHandlers = (): void => {}
+
+// Why module scope, like the quit handlers above: the server is started deep inside
+// `startOrcadRuntime`, and the launch failure path that must undo it runs in `startOrcad`,
+// which never imports it.
+let stopOrcadAgentHookServer = (): void => {}
 
 function createNodeAppEnvironment(): AppEnvironment {
   const quitHandlers: (() => void)[] = []
@@ -119,7 +125,20 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   try {
     return await startOrcadRuntime(options, browserProvider, instanceLock)
   } catch (error) {
-    await browserProvider?.stop()
+    stopOrcadAgentHookServer()
+    try {
+      await browserProvider?.stop()
+    } catch (stopError) {
+      // Why swallowed rather than rethrown: `error` is why the host failed to come up and is
+      // the one an operator can act on. Letting a teardown rejection replace it reports the
+      // symptom and discards the cause — and would skip the lock release below, so a launch
+      // that failed once would then refuse to be retried.
+      console.error(
+        `[orcad] browser provider teardown failed during launch cleanup: ${
+          stopError instanceof Error ? stopError.message : String(stopError)
+        }`
+      )
+    }
     setRuntimeBrowserCommandsFactory(null)
     runOrcadQuitHandlers()
     instanceLock.release()
@@ -144,6 +163,8 @@ async function startOrcadRuntime(
     await import('../orca-profiles/profile-index-store')
   const { initSshHostKeyStoreFile } = await import('../ssh/ssh-host-key-store')
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
+  const { agentHookServer } = await import('../agent-hooks/server')
+  const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
 
@@ -159,6 +180,42 @@ async function startOrcadRuntime(
   // Why: every SSH connect consults this sidecar. Left unbound it reports nothing trusted,
   // which is safe but silently discards accept records on every launch.
   initSshHostKeyStoreFile(profile.dataFile)
+
+  // Why before the daemon: `host-env/assembly.ts` folds `agentHookServer.buildPtyEnv()` into
+  // every PTY's environment from LIVE server state, and `buildPtyEnv()` returns {} while the
+  // port is 0. A terminal spawned before this — including one the daemon hands back on
+  // adoption — is frozen with no hook coordinates, so its agent never reports a session and
+  // the chat view has no transcript to render. The spawn path itself needs no change; it was
+  // already reading these.
+  //
+  // Why `userDataPath` is not optional: ORCA_AGENT_HOOK_ENDPOINT is set only when the endpoint
+  // file was written, and it is written only when start() received this path. The hook script
+  // returns at its first line on that exact variable, so omitting it yields four of the five
+  // vars and a hook that still does nothing — the same symptom, harder to find twice. The file
+  // matters more here than on the desktop: start() regenerates token and port every launch,
+  // while orcad's daemon deliberately outlives the runtime, so a surviving PTY carries stale
+  // coordinates that the hook repairs only by sourcing this file at invocation time.
+  //
+  // No endpointNamespace: that is for parallel dev worktrees, and namespacing would break the
+  // endpoint file's stability across exactly the restarts this host is built to survive.
+  //
+  // Fail open, matching `--serve`: hook callbacks are enrichment, so a loopback bind failure
+  // must not refuse a host whose terminals otherwise work.
+  if (isAgentStatusHooksEnabled(store.getSettings())) {
+    try {
+      await agentHookServer.start({ env: 'production', userDataPath: runtimeUserDataPath })
+      // Why arm it here and not on the way out: a later startup step throwing leaves the
+      // listener bound, and start() returns early while `this.server` is set — so the next
+      // attempt in the same process would silently reuse this one's token and endpoint file.
+      stopOrcadAgentHookServer = () => agentHookServer.stop()
+    } catch (error) {
+      console.error(
+        `[orcad] agent hook server failed to start; agent chat will not render: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
+  }
 
   // Why before the runtime and the PTY handlers: `setLocalPtyProvider` installs the daemon
   // adapter as THE local provider, and the registry's contract is that it lands before
@@ -180,7 +237,33 @@ async function startOrcadRuntime(
     // Why 'blocked': `'openable'` means a desktop window can be opened here, which is
     // what powers serve→desktop promotion. A Node host can never do that, and the
     // constructor's default would advertise it.
-    getDesktopWindowStatus: () => 'blocked'
+    getDesktopWindowStatus: () => 'blocked',
+    // Why these seven as well as start(): the server above is only the write path. Unwired,
+    // the rows it collects reach nothing — `getHookRowsForPane` answers [] for every pane so
+    // published tabs carry no `providerSession.transcriptPath` (the address native chat
+    // resolves a transcript by), and `hasProviderSessionObservationSource()` answers false so
+    // structured Claude resume refuses with "could not prove its fresh provider session".
+    // Same delegations the desktop host makes; ungated for the same reason it is — a server
+    // that never started answers empty, which is the same answer a second gate would give.
+    onTerminalAgentStatus: (event) => agentHookServer.ingestTerminalStatus(event),
+    // Why filtered: resume-identity rows are not running agents and must not read as live.
+    getAgentStatusSnapshot: () =>
+      agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    // Why unfiltered here: those same rows are what carries the provider session.
+    getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
+    getAgentProviderSessionRowsForPane: (paneKey) =>
+      agentHookServer.getStatusSnapshotForPane(paneKey),
+    attestAgentHookCompatibilityAuthority: (candidate) =>
+      agentHookServer.attestCompatibilityAuthority(candidate),
+    // Why paired with attest: a pane whose launch identity is torn down must stop attesting,
+    // or its evidence survives to vouch for a later claim on the same key.
+    retireAgentHookCompatibilityAuthority: (paneKey) =>
+      agentHookServer.retirePaneAuthority(paneKey),
+    reconcileAgentStatusForEndedProcess: (paneKeys) => {
+      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys)
+    }
+    // No buildAgentHookPtyEnv: `host-env/assembly.ts` reads the same singleton directly, so
+    // wiring it here would add a second source for the env this host already gets.
   })
 
   // Why the headless entry point rather than registerPtyHandlers directly: this is the
@@ -199,6 +282,16 @@ async function startOrcadRuntime(
 
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+
+  // Why: nothing publishes a renderer graph here, so `graphStatus` would stay 'unavailable'
+  // forever and every RPC gated on a ready graph would fail — `captureReadyGraphEpoch()` is
+  // the FIRST statement of runCreateMobileSessionTerminal, so terminal creation returns
+  // `runtime_unavailable` before it reaches any PTY code, and the tab inventory's
+  // `while (true)` waits on an epoch that can never be established and never returns at all.
+  // `--serve` publishes the same empty graph for the same reason (index.ts). Both gates open
+  // from this one call: it adopts the headless id as authoritative, marks the graph ready,
+  // and publishes the tab inventory.
+  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
 
   const bindHost = resolveOrcadBindHost(options.bind)
   const rpc = new OrcaRuntimeRpcServer({
@@ -265,14 +358,36 @@ async function startOrcadRuntime(
       try {
         await rpc.stop()
       } finally {
-        // Why disconnect and not shut down: the daemon must outlive this process, or an
-        // orcad restart goes back to killing every running terminal. See
-        // orcad-daemon-supervision.ts.
-        await stopOrcadDaemon()
-        await browserProvider?.stop()
-        setRuntimeBrowserCommandsFactory(null)
-        runOrcadQuitHandlers()
-        instanceLock.release()
+        // Why nested and not one flat sequence: every step here is independent teardown, and
+        // both awaits genuinely reject — `disconnectDaemon()` fans out over adapters with
+        // `Promise.all` and awaits a checkpoint write, and the browser provider's stop() ends
+        // in `rm()`, whose `force` forgives only ENOENT. Flat, the first rejection skips every
+        // later step, and the step furthest down is `instanceLock.release()`: a leaked lock
+        // file makes the NEXT launch refuse to start, so one bad shutdown costs the host until
+        // someone deletes it by hand.
+        //
+        // What nesting buys is that every step RUNS — not that the first failure is the one
+        // reported. A throw from a `finally` replaces the in-flight exception, so if the daemon
+        // and the browser provider both reject the caller sees the browser's. That is the right
+        // trade here: the lock is released either way, and a lost second error costs a log line
+        // where a skipped release costs the next launch.
+        try {
+          // Why disconnect and not shut down: the daemon must outlive this process, or an
+          // orcad restart goes back to killing every running terminal. See
+          // orcad-daemon-supervision.ts.
+          await stopOrcadDaemon()
+        } finally {
+          // Why no unlink of the endpoint file: stop() leaves it deliberately — a stale file
+          // matches the hook's fail-open behaviour and avoids a TOCTOU race with a concurrent Orca.
+          agentHookServer.stop()
+          try {
+            await browserProvider?.stop()
+          } finally {
+            setRuntimeBrowserCommandsFactory(null)
+            runOrcadQuitHandlers()
+            instanceLock.release()
+          }
+        }
       }
     }
   }
