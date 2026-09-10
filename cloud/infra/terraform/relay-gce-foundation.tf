@@ -42,6 +42,12 @@ resource "google_compute_router_nat" "relay_gce" {
   router                             = google_compute_router.relay_gce[0].name
   nat_ip_allocate_option             = "AUTO_ONLY"
   source_subnetwork_ip_ranges_to_nat = "LIST_OF_SUBNETWORKS"
+  # Cells reach Cloud SQL's public IP through this NAT. The static default of 64 ports per VM
+  # filled during the 2026-09-04 incident and every cell's proxy dial timed out at once.
+  enable_dynamic_port_allocation      = true
+  enable_endpoint_independent_mapping = false
+  min_ports_per_vm                    = 64
+  max_ports_per_vm                    = 4096
 
   subnetwork {
     name                    = google_compute_subnetwork.relay_gce[0].id
@@ -85,6 +91,12 @@ resource "google_compute_router_nat" "relay_gce_additional" {
   router                             = google_compute_router.relay_gce_additional[each.key].name
   nat_ip_allocate_option             = "AUTO_ONLY"
   source_subnetwork_ip_ranges_to_nat = "LIST_OF_SUBNETWORKS"
+  # Cells reach Cloud SQL's public IP through this NAT. The static default of 64 ports per VM
+  # filled during the 2026-09-04 incident and every cell's proxy dial timed out at once.
+  enable_dynamic_port_allocation      = true
+  enable_endpoint_independent_mapping = false
+  min_ports_per_vm                    = 64
+  max_ports_per_vm                    = 4096
 
   subnetwork {
     name                    = google_compute_subnetwork.relay_gce_additional[each.key].id

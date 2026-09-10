@@ -26,7 +26,7 @@ name: Hourly macOS Dev Build
 #   HOURLY_RELEASE_APP_ID           the App's numeric id
 #   HOURLY_RELEASE_APP_PRIVATE_KEY  the App's .pem private key
 #
-# Installation tokens live one hour, which is why this mints twice. Install and
+# Installation tokens live one hour, so the build job mints twice. Install and
 # build need no token at all, and notarization can hold the publish step for tens
 # of minutes; minting again once the build is done starts the clock at the first
 # call that actually uses it rather than burning a third of it on `pnpm install`.
@@ -60,33 +60,15 @@ env:
   HOURLY_RETAIN_COUNT: 72
 
 jobs:
-  build-hourly-mac:
+  # Avoid occupying the limited Mac pool when main has not moved.
+  preflight:
     if: github.repository == 'stablyai/orca'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
-      tag: ${{ steps.release.outputs.tag }}
-      version: ${{ steps.hourly.outputs.version }}
+      should_build: ${{ steps.freshness.outputs.should_build }}
       head_sha: ${{ steps.freshness.outputs.head_sha }}
-      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
-    runs-on: blacksmith-6vcpu-macos-15
-    # Why 150: it must exceed the worst case the retry budgets below can produce
-    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
-    # the job is killed mid-retry and no cleanup step runs at all. A typical run
-    # is far shorter — this is the notary queue's tail, not its median.
-    timeout-minutes: 150
-    env:
-      NODE_OPTIONS: --max-old-space-size=4096
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: main
-          fetch-depth: 0
-          # Why: this job only reads stablyai/orca and never pushes; every write
-          # goes to the hourly repo through a minted App token passed by env.
-          # Not persisting the checkout credential shrinks the blast radius if a
-          # build step is compromised (zizmor: artipacked).
-          persist-credentials: false
-
       - name: Mint hourly repo token
         id: app_token
         uses: actions/create-github-app-token@v2
@@ -95,18 +77,19 @@ jobs:
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
           repositories: orca-hourly
+          permission-contents: read
 
-      # Why: main is often idle overnight. Rebuilding an unchanged commit burns a
-      # runner hour and adds a redundant tag to the retention window.
       - name: Check whether main moved since the last hourly
         id: freshness
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          MAIN_REPO_TOKEN: ${{ github.token }}
           FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
         run: |
           set -euo pipefail
-          head_sha="$(git rev-parse HEAD)"
+          head_sha="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)"
+          [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Could not resolve main"; exit 1; }
           echo "head_sha=$head_sha" >>"$GITHUB_OUTPUT"
           if [[ "$FORCED" == "true" ]]; then
             echo "should_build=true" >>"$GITHUB_OUTPUT"
@@ -133,21 +116,55 @@ jobs:
             echo "main moved to $head_sha (last hourly built $last_sha); building."
           fi
 
+  build-hourly-mac:
+    needs: preflight
+    if: needs.preflight.outputs.should_build == 'true'
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.hourly.outputs.version }}
+      head_sha: ${{ needs.preflight.outputs.head_sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+    runs-on: blacksmith-6vcpu-macos-15
+    # Why 150: it must exceed the worst case the retry budgets below can produce
+    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
+    # the job is killed mid-retry and no cleanup step runs at all. A typical run
+    # is far shorter — this is the notary queue's tail, not its median.
+    timeout-minutes: 150
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.head_sha }}
+          fetch-depth: 0
+          # Why: this job only reads stablyai/orca and never pushes; every write
+          # goes to the hourly repo through a minted App token passed by env.
+          # Not persisting the checkout credential shrinks the blast radius if a
+          # build step is compromised (zizmor: artipacked).
+          persist-credentials: false
+
+      - name: Mint hourly repo token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-hourly
+
       - name: Setup pnpm
-        if: steps.freshness.outputs.should_build == 'true'
         uses: pnpm/setup@v2
         with:
           install: false
 
       - name: Setup Node.js
-        if: steps.freshness.outputs.should_build == 'true'
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
           cache: pnpm
 
       - name: Cache electron-builder downloads
-        if: steps.freshness.outputs.should_build == 'true'
         uses: actions/cache@v5
         with:
           path: |
@@ -158,7 +175,6 @@ jobs:
             electron-builder-mac-
 
       - name: Install dependencies
-        if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
@@ -169,7 +185,6 @@ jobs:
       # Why: signing is what makes an hourly installable over an existing Orca, so
       # a missing cert must fail here rather than after a 20-minute build.
       - name: Verify macOS signing environment
-        if: steps.freshness.outputs.should_build == 'true'
         run: node config/scripts/verify-macos-release-env.mjs
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
@@ -180,7 +195,6 @@ jobs:
 
       - name: Compute hourly version
         id: hourly
-        if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
@@ -211,7 +225,7 @@ jobs:
             node config/scripts/hourly-build-version.mjs \
             >"$RUNNER_TEMP/hourly-identity.txt"
           grep -E '^(version|build_number)=' "$RUNNER_TEMP/hourly-identity.txt"
-          # Why check rather than trust: the checkout above pins `ref: main`, but a
+          # Why check rather than trust: the checkout above pins the resolved main commit, but a
           # workflow_dispatch runs this file from whatever branch was dispatched. A
           # branch that edits this step while main still has the old script yields
           # an empty name and an untitled release — silent, and only visible once
@@ -223,7 +237,6 @@ jobs:
           cat "$RUNNER_TEMP/hourly-identity.txt" >>"$GITHUB_OUTPUT"
 
       - name: Build app
-        if: steps.freshness.outputs.should_build == 'true'
         run: pnpm build:release
         env:
           NODE_OPTIONS: --max-old-space-size=4096
@@ -239,7 +252,6 @@ jobs:
       # part the full budget.
       - name: Re-mint hourly repo token for publish
         id: app_token_publish
-        if: steps.freshness.outputs.should_build == 'true'
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
@@ -249,13 +261,12 @@ jobs:
 
       - name: Create hourly release
         id: release
-        if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
           TAG: v${{ steps.hourly.outputs.version }}
           NAME: ${{ steps.hourly.outputs.name }}
-          SHA: ${{ steps.freshness.outputs.head_sha }}
+          SHA: ${{ needs.preflight.outputs.head_sha }}
         run: |
           set -euo pipefail
           # Kept at 12 even though the title shows 7: the freshness check above
@@ -291,7 +302,6 @@ jobs:
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
 
       - name: Publish hourly macOS artifacts
-        if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
         with:
           # Why 45 like the release pipeline: an attempt is pack + notarize +
@@ -322,7 +332,6 @@ jobs:
       # release missing that manifest is a tag the picker offers and the download
       # 404s on, so fail loudly instead of leaving a broken entry.
       - name: Verify update manifest published
-        if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
@@ -352,7 +361,6 @@ jobs:
       # means the picker can never offer a release whose assets are incomplete.
       - name: Publish the verified release
         id: publish_live
-        if: steps.freshness.outputs.should_build == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}

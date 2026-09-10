@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   createRepoRowExecutionHostLookup,
-  resolveWorktreeExecutionHost
+  resolveWorktreeExecutionHost,
+  type ExecutionHostOwnerRow
 } from './worktree-execution-host-resolution'
 
 // Why (#11163, #17799): main's terminal launch scope and the renderer's owner index both answer
@@ -155,6 +156,40 @@ describe('resolveWorktreeExecutionHost', () => {
     it('reports an unknown owner distinctly from a conflicting one', () => {
       expect(resolve([], { repoId: 'r' })).toEqual({ kind: 'unresolved', reason: 'unknown' })
     })
+
+    // `unknown` is a verdict the launch path disposes of as a plain local folder, so a row that
+    // declared a host and named an unparseable one must not share the word — it has to fail closed.
+    it('reports a row naming an unparseable host distinctly from an unknown one', () => {
+      for (const executionHostId of ['ssh:', 'ssh:a|b', 'ssh:%zz', 'runtime:', 'quantum:box']) {
+        expect(resolve([{ id: 'r', executionHostId }], { repoId: 'r' })).toEqual({
+          kind: 'unresolved',
+          reason: 'malformed'
+        })
+      }
+    })
+
+    it('does not recover a host from the connectionId such a row overrode', () => {
+      expect(
+        resolve([{ id: 'r', executionHostId: 'ssh:a|b', connectionId: 'openclaw' }], {
+          repoId: 'r'
+        })
+      ).toEqual({ kind: 'unresolved', reason: 'malformed' })
+    })
+
+    it('still resolves every row that names a parseable host', () => {
+      expect(resolve([{ id: 'r', executionHostId: 'ssh:box' }], { repoId: 'r' })).toMatchObject({
+        kind: 'resolved',
+        hostId: 'ssh:box'
+      })
+      expect(resolve([{ id: 'r', connectionId: 'box' }], { repoId: 'r' })).toMatchObject({
+        kind: 'resolved',
+        hostId: 'ssh:box'
+      })
+      expect(resolve([{ id: 'r' }], { repoId: 'r' })).toMatchObject({
+        kind: 'resolved',
+        hostId: 'local'
+      })
+    })
   })
 
   it('ignores an unparseable host id rather than treating it as a host', () => {
@@ -163,5 +198,69 @@ describe('resolveWorktreeExecutionHost', () => {
       kind: 'resolved',
       connectionId: 'openclaw'
     })
+  })
+})
+
+describe('createRepoRowExecutionHostLookup', () => {
+  /** Rows whose `id` reads are counted, so a rescan of the repo list is observable. */
+  const countingRepos = (
+    rows: readonly ExecutionHostOwnerRow[]
+  ): { repos: ExecutionHostOwnerRow[]; idReads: () => number } => {
+    let idReads = 0
+    const repos = rows.map(({ id, ...rest }) => ({
+      ...rest,
+      get id(): string {
+        idReads += 1
+        return id
+      }
+    }))
+    return { repos, idReads: () => idReads }
+  }
+
+  it('scans the repo list once for the factory, never again per lookup', () => {
+    const { repos, idReads } = countingRepos([
+      { id: 'a' },
+      { id: 'b', connectionId: 'm4air' },
+      { id: 'c' }
+    ])
+    const lookup = createRepoRowExecutionHostLookup(repos)
+    // One grouping pass over the list — a Map get plus a set per row — and then never again.
+    const afterBuild = idReads()
+    expect(afterBuild).toBeLessThanOrEqual(repos.length * 2)
+
+    for (let i = 0; i < 50; i++) {
+      lookup.byId('a')
+      lookup.byId('missing')
+      lookup.byHost('b', 'ssh:m4air')
+    }
+    expect(idReads()).toBe(afterBuild)
+  })
+
+  it('answers missing, ambiguous and resolved exactly as a per-call scan would', () => {
+    expect(createRepoRowExecutionHostLookup([]).byId('r')).toEqual({ kind: 'missing' })
+
+    const openclaw = { id: 'r', connectionId: 'openclaw' }
+    const m4air = { id: 'r', connectionId: 'm4air' }
+    expect(createRepoRowExecutionHostLookup([openclaw, m4air]).byId('r')).toEqual({
+      kind: 'ambiguous'
+    })
+
+    // Two rows agreeing on one host still resolve to the first in repo-list order.
+    const first: ExecutionHostOwnerRow = { id: 'r', connectionId: 'm4air' }
+    const second: ExecutionHostOwnerRow = { id: 'r', executionHostId: 'ssh:m4air' }
+    expect(createRepoRowExecutionHostLookup([first, second]).byId('r')).toEqual({
+      kind: 'resolved',
+      owner: first
+    })
+  })
+
+  it('keeps byHost hits, misses and repo-list order', () => {
+    const openclaw = { id: 'r', connectionId: 'openclaw' }
+    const m4air = { id: 'r', connectionId: 'm4air' }
+    const lookup = createRepoRowExecutionHostLookup([openclaw, m4air])
+    expect(lookup.byHost('r', 'ssh:m4air')).toBe(m4air)
+    expect(lookup.byHost('r', 'ssh:openclaw')).toBe(openclaw)
+    expect(lookup.byHost('r', 'local')).toBeNull()
+    expect(lookup.byHost('other', 'local')).toBeNull()
   })
 })

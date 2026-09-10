@@ -45,9 +45,11 @@ export function resolveHistoryLimit(limit: number | undefined): number {
 
 export function readAgentSessionHistory(
   journal: AgentSessionJournal,
-  request: AgentSessionHistoryRequest
+  request: AgentSessionHistoryRequest,
+  /** Reduced state to read against. A synchronous multi-page catch-up passes one
+   *  snapshot for the whole run so each page costs its own rows, not the timeline. */
+  snapshot: AgentJournalSnapshot = journal.snapshot()
 ): AgentSessionHistoryResult {
-  const snapshot = journal.snapshot()
   if (journal.isReadOnly) {
     return historyReset(snapshot, 'schema_unreadable')
   }
@@ -87,6 +89,24 @@ export function readAgentSessionHistory(
         ? { epoch: snapshot.cursor.epoch, sequence: items[0].sequence }
         : undefined
     })
+  }
+}
+
+/**
+ * A catch-up run over one journal. Pages share one reduced timeline, so the run
+ * costs its own rows instead of re-reducing every item per page; the cursor
+ * check re-reduces if anything did advance the journal between pages.
+ */
+export function createAgentSessionCatchUpReader(
+  journal: AgentSessionJournal
+): (request: AgentSessionHistoryRequest) => AgentSessionHistoryResult {
+  let snapshot = journal.snapshot()
+  return (request) => {
+    const live = journal.cursor()
+    if (live.epoch !== snapshot.cursor.epoch || live.sequence !== snapshot.cursor.sequence) {
+      snapshot = journal.snapshot()
+    }
+    return readAgentSessionHistory(journal, request, snapshot)
   }
 }
 
@@ -145,7 +165,8 @@ function readForward(
     // a page it cannot place.
     return historyReset(snapshot, 'cursor_ahead')
   }
-  const since = journal.readSince(cursor)
+  // One lookahead preserves hasNewer without rereading the entire remaining journal per page.
+  const since = journal.readSince(cursor, limit + 1)
   if (!since.ok) {
     return historyReset(snapshot, since.reset)
   }

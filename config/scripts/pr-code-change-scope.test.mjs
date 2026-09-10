@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -316,6 +316,24 @@ describe('per-job path classification', () => {
     }
   })
 
+  // Why: static analysis lints changed mobile files with a type-aware pass, and
+  // mobile is a separate pnpm project. Without its node_modules every mobile type
+  // resolves to an `error` type and the changed-code gate fails on phantom
+  // findings, which is exactly how a react-test-renderer union broke a PR.
+  it('installs mobile dependencies exactly when mobile files change', () => {
+    expect(classifyPrJobs([]).mobile_dependencies).toBe(true)
+    expect(classifyPrJobs(['README.md']).mobile_dependencies).toBe(false)
+    expect(classifyPrJobs(['src/main/index.ts']).mobile_dependencies).toBe(false)
+    expect(
+      classifyPrJobs(['src/main/index.ts', 'mobile/src/session/a.test.ts']).mobile_dependencies
+    ).toBe(true)
+    // Why false: a mobile-only diff skips every desktop job, so the install step's own
+    // job never runs and claiming the install is needed contradicts should_run.
+    expect(classifyPrJobs(['mobile/package.json']).mobile_dependencies).toBe(false)
+    expect(classifyPrJobs(['mobile/package.json']).should_run).toBe(false)
+    expect(classifyPrJobs(['README.md', 'mobile/src/a.ts']).mobile_dependencies).toBe(false)
+  })
+
   it('keeps unit-test-only diffs out of packaging', () => {
     expectClassification(['src/main/git/git-status.test.ts'], {
       git_compatibility: true
@@ -335,6 +353,54 @@ describe('per-job path classification', () => {
     expect(result.stdout).toContain('package=false\n')
     expect(result.stdout).toContain('test=true\n')
   })
+
+  // A long-lived PR whose base.sha has gone stale diffs thousands of files, so the writer
+  // outruns one pipe buffer. A single fd-0 read then returns early, breaks the writer's pipe,
+  // and still exits 0 -- emitting no pairs at all, which silently skips every lane.
+  it('classifies a path that arrives after the first pipe buffer', async () => {
+    const filler = Array.from(
+      { length: 12_000 },
+      (_, index) => `docs/reference/generated-placeholder-${index}.md`
+    )
+    const input = `${[...filler, 'config/patches/xterm-upstream.json'].join('\n')}\n`
+    expect(input.length).toBeGreaterThan(64 * 1024)
+
+    const child = spawn(process.execPath, ['config/scripts/pr-code-change-scope.mjs'], {
+      cwd: projectDir,
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+    let stdout = ''
+    let stderr = ''
+    let brokePipe = false
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', (chunk) => (stdout += chunk))
+    child.stderr.on('data', (chunk) => (stderr += chunk))
+    child.stdin.on('error', (error) => {
+      brokePipe ||= error.code === 'EPIPE'
+    })
+
+    const exitCode = await new Promise((resolvePromise) => {
+      child.on('close', resolvePromise)
+      let offset = 0
+      const step = () => {
+        if (offset >= input.length) {
+          child.stdin.end()
+          return
+        }
+        child.stdin.write(input.slice(offset, offset + 64 * 1024))
+        offset += 64 * 1024
+        setTimeout(step, 20)
+      }
+      step()
+    })
+
+    expect(stderr).not.toContain('EAGAIN')
+    expect(brokePipe).toBe(false)
+    expect(exitCode, stderr).toBe(0)
+    expect(stdout).toContain('should_run=true\n')
+    expect(stdout).toContain('xterm_patch_sync=true\n')
+  })
 })
 
 describe('PR Checks skip wiring', () => {
@@ -352,6 +418,20 @@ describe('PR Checks skip wiring', () => {
         `\${{ steps.filter.outputs.${jobName} }}`
       )
     }
+  })
+
+  it('gives static analysis the mobile types its type-aware pass resolves', () => {
+    expect(prWorkflow.jobs.code_paths.outputs.mobile_dependencies).toBe(
+      '${{ steps.filter.outputs.mobile_dependencies }}'
+    )
+    const steps = prWorkflow.jobs.static_analysis.steps
+    const install = steps.findIndex((step) => step.name === 'Install mobile dependencies')
+    const gate = steps.findIndex((step) => step.name === 'Enforce changed-code quality')
+    expect(install).toBeGreaterThan(-1)
+    expect(install).toBeLessThan(gate)
+    expect(steps[install].if).toBe("needs.code_paths.outputs.mobile_dependencies == 'true'")
+    expect(steps[install]['working-directory']).toBe('mobile')
+    expect(steps[install].run).toContain('--frozen-lockfile')
   })
 
   it('keeps the cheap root-directory guard on docs-only PRs', () => {
@@ -382,10 +462,11 @@ describe('PR Checks skip wiring', () => {
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {
-    expect(prWorkflow.jobs['e2e-paths'].needs).toEqual(['code_paths'])
-    expect(prWorkflow.jobs['e2e-paths'].if).toBe(
-      "github.event.pull_request.draft != true && needs.code_paths.outputs.should_run == 'true'"
+    const filter = prWorkflow.jobs.code_paths.steps.find((step) => step.id === 'e2e_filter')
+    expect(filter.if).toBe(
+      "github.event.pull_request.draft != true && steps.filter.outputs.should_run == 'true'"
     )
+    expect(prWorkflow.jobs['e2e-paths']).toBeUndefined()
   })
 
   it('lets verify pass skipped jobs the classifier turned off', () => {

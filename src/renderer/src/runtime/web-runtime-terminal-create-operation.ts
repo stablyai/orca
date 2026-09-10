@@ -248,20 +248,26 @@ export async function createWebRuntimeSessionTerminalResult(
       // tab to THIS new terminal, instead of sticky-keeping the prior tab.
       recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId, createdLeafId)
     }
+    const placementTabId =
+      createdTabId && (args.targetGroupId || args.afterTabId) ? createdTabId : undefined
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
       expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
       // Why: the publication can beat the RPC response; replay it once after caller intent exists.
       acceptCurrentSnapshot:
-        Boolean(createdTabId) && (args.activate !== false || Boolean(args.targetGroupId)),
+        Boolean(createdTabId) && (args.activate !== false || Boolean(placementTabId)),
       // Why: a placement record needs a post-create list; a deduped in-flight one can predate it.
-      ...(args.targetGroupId && createdTabId ? { afterCurrentInFlight: true } : {})
+      ...(placementTabId ? { afterCurrentInFlight: true } : {})
     })
-    if (args.targetGroupId && createdTabId) {
+    if (placementTabId) {
       await settleWebRuntimeTerminalPlacement(
         environmentId,
         args.worktreeId,
-        webTerminalPlacementParentTabId(createdTabId),
-        { groupId: args.targetGroupId, activate: args.activate !== false }
+        webTerminalPlacementParentTabId(placementTabId),
+        {
+          groupId: args.targetGroupId,
+          afterTabId: args.afterTabId,
+          activate: args.activate !== false
+        }
       )
     }
     return {

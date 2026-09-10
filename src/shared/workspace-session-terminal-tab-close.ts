@@ -8,17 +8,28 @@ export type WorkspaceSessionTerminalTabCloseResult = {
   pinned: boolean
 }
 
-function pickNextActiveTab(group: TabGroup, closingIds: ReadonlySet<string>): string | null {
-  const remaining = group.tabOrder.filter((id) => !closingIds.has(id))
+function pickNextActiveTab(
+  group: TabGroup,
+  closingIds: ReadonlySet<string>,
+  remaining: readonly string[],
+  remainingIds: ReadonlySet<string>
+): string | null {
   for (let index = (group.recentTabIds?.length ?? 0) - 1; index >= 0; index -= 1) {
     const id = group.recentTabIds![index]
-    if (remaining.includes(id)) {
+    if (remainingIds.has(id)) {
       return id
     }
   }
+  const firstIndices = new Map<string, number>()
+  group.tabOrder.forEach((id, index) => {
+    if (!firstIndices.has(id)) {
+      firstIndices.set(id, index)
+    }
+  })
   const closingIndex = group.tabOrder.findIndex((id) => closingIds.has(id))
+  // -1 matches the pre-index `indexOf` miss, so an id outside `group.tabOrder` never wins.
   return (
-    remaining.find((id) => group.tabOrder.indexOf(id) > closingIndex) ?? remaining.at(-1) ?? null
+    remaining.find((id) => (firstIndices.get(id) ?? -1) > closingIndex) ?? remaining.at(-1) ?? null
   )
 }
 
@@ -186,16 +197,17 @@ export function closeTerminalTabInWorkspaceSession(
   const nextGroups = (session.tabGroups?.[worktreeId] ?? [])
     .map((group) => {
       const tabOrder = group.tabOrder.filter((id) => !closedVisibleIds.has(id))
+      const remainingIds = new Set(tabOrder)
       const activeTabId = closedVisibleIds.has(group.activeTabId ?? '')
-        ? pickNextActiveTab(group, closedVisibleIds)
-        : group.activeTabId && tabOrder.includes(group.activeTabId)
+        ? pickNextActiveTab(group, closedVisibleIds, tabOrder, remainingIds)
+        : group.activeTabId && remainingIds.has(group.activeTabId)
           ? group.activeTabId
           : (tabOrder[0] ?? null)
       return {
         ...group,
         tabOrder,
         activeTabId,
-        recentTabIds: group.recentTabIds?.filter((id) => tabOrder.includes(id))
+        recentTabIds: group.recentTabIds?.filter((id) => remainingIds.has(id))
       }
     })
     .filter((group) => group.tabOrder.length > 0)

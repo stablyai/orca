@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type {
   AgentSessionMutationEnvelope,
@@ -334,6 +335,11 @@ describe('an unexpected provider exit', () => {
       acquisitionGeneration: 'generation-1'
     })
 
+    const recoveredHistory = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(
+      recoveredHistory.ok &&
+        hasUnansweredStructuredAgentSessionDispatch(recoveredHistory.page.submissions)
+    ).toBe(false)
     expect(acquire).toHaveBeenCalledTimes(2)
     expect(dispatch).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({

@@ -92,6 +92,8 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
 }
 
 export type AgentStatusTiming = {
+  /** Ordered authoritative sources may correct a prior publication clock. */
+  allowOlderTimestamp?: boolean
   updatedAt?: number
   /** Observation clock for staleness; see `AgentStatusEntry.evidenceObservedAt`. */
   evidenceObservedAt?: number
@@ -106,6 +108,8 @@ export type AgentStatusRouting = {
 }
 
 export type AgentStatusMetadata = {
+  /** Structured status rows remain fresh while the host owns the session; cleared on feed loss. */
+  structuredHostOwned?: true
   providerSession?: AgentProviderSessionMetadata
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string

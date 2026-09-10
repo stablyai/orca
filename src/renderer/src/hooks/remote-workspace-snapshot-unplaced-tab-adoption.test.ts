@@ -199,16 +199,25 @@ async function applySnapshot(
   store: TestStore,
   snap: RemoteWorkspaceObservedSnapshot
 ): Promise<void> {
-  await applyDirectSshRemoteWorkspaceSnapshot({
-    store,
-    snapshot: snap,
-    token: token(snap.revision),
-    arrival: 1,
-    isArrivalCurrent: () => true,
-    isPreparationTokenCurrent: () => true,
-    waitForWorkspaceSessionReady: async () => true,
-    finalizeHydratedTerminals: () => 0
-  })
+  vi.useFakeTimers()
+  try {
+    const pending = applyDirectSshRemoteWorkspaceSnapshot({
+      store,
+      snapshot: snap,
+      token: token(snap.revision),
+      arrival: 1,
+      isArrivalCurrent: () => true,
+      isPreparationTokenCurrent: () => true,
+      waitForWorkspaceSessionReady: async () => true,
+      finalizeHydratedTerminals: () => 0
+    })
+    // Exercise the real placement deadline without spending ten wall-clock seconds per snapshot.
+    await vi.advanceTimersByTimeAsync(10_000)
+    await pending
+  } finally {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  }
 }
 
 function adoptedTabIds(store: TestStore): string[] {

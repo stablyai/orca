@@ -17,8 +17,14 @@ function encodedValue(value: string): string {
   return `Read-OrcaValue '${Buffer.from(value).toString('base64')}'`
 }
 
+/** Positional-independent so the argv shape can change without silently reading the wrong slot. */
+function decodedScript(args: string[]): string {
+  const payload = args[args.indexOf('-EncodedCommand') + 1] ?? ''
+  return Buffer.from(payload, 'base64').toString('utf16le')
+}
+
 function pidFilePathFromSpawnArgs(args: string[]): string {
-  const script = Buffer.from(args[11] ?? '', 'base64').toString('utf16le')
+  const script = decodedScript(args)
   const encodedPath = script.match(
     /WriteAllText\(\(Read-OrcaValue '([^']+)'\), \[string\]\$PID\)/
   )?.[1]
@@ -40,15 +46,15 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     expect(spawn.command).toBe(getCmdExePath())
     expect(spawn.args.slice(0, 5)).toEqual(['/d', '/c', 'start', '', '/wait'])
     expect(spawn.args[5]).toMatch(/WindowsPowerShell\\v1\.0\\powershell\.exe$/i)
-    expect(spawn.args.slice(6, 11)).toEqual([
-      '-NoLogo',
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-EncodedCommand'
-    ])
+    // Why: `-ExecutionPolicy Bypass` is a no-op next to `-EncodedCommand` (only `-File` is
+    // policy gated) and is a heavily EDR-flagged token, so it must not come back. The base64
+    // must stay — `start` re-parses this through cmd.exe, whose safe-token guard rejects the
+    // `&` and `"` in the raw relay script.
+    expect(spawn.args.slice(6, 9)).toEqual(['-NoLogo', '-NoProfile', '-EncodedCommand'])
+    expect(spawn.args).not.toContain('-ExecutionPolicy')
+    expect(spawn.args).not.toContain('Bypass')
 
-    const script = Buffer.from(spawn.args[11] ?? '', 'base64').toString('utf16le')
+    const script = decodedScript(spawn.args)
     expect(script).toContain('[string]$PID')
     expect(script).toContain(encodedValue(getCmdExePath()))
     expect(script).toContain(encodedValue('C:\\Tools\\claude.cmd'))
@@ -68,7 +74,7 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     const spawn = withWindows(() =>
       buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.exe', ['login'])
     )
-    const script = Buffer.from(spawn.args[11] ?? '', 'base64').toString('utf16le')
+    const script = decodedScript(spawn.args)
     expect(script).toContain(encodedValue('C:\\Tools\\codex.exe'))
     expect(script).toContain(encodedValue('login'))
     spawn.cleanup()

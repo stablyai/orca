@@ -14,9 +14,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   isSshPtyAbsentFromRelayError,
+  isSshPtyProvenExitedOnRelayError,
   SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR,
   SSH_SESSION_EXPIRED_ERROR
 } from './ssh-pty-errors'
+import { PTY_ATTACH_PROVEN_EXITED_MARKER } from '../../shared/pty-attach-absence-evidence'
 import { reattachSshPtySessionForSpawn } from './ssh-pty-session-reattach'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 
@@ -55,6 +57,20 @@ describe('an SSH reattach refusal says whether the host observed the PTY', () =>
 
     expect(error.message).toContain(SSH_SESSION_EXPIRED_ERROR)
     expect(isSshPtyAbsentFromRelayError(error)).toBe(true)
+    // ...but absence from the relay is a union. An unmarked answer is also what a restarted relay
+    // gives for every id the previous one minted, checked against nothing, so it may not certify a
+    // death (docs/reference/ssh-execution-boundary.md).
+    expect(isSshPtyProvenExitedOnRelayError(error)).toBe(false)
+  })
+
+  it('separates the refusal the relay backed with a pid probe', async () => {
+    const error = await refusalFrom(async () => {
+      throw new Error(`PTY "${SESSION}" not found (${PTY_ATTACH_PROVEN_EXITED_MARKER})`)
+    })
+
+    expect(error.message).toContain(SSH_SESSION_EXPIRED_ERROR)
+    expect(isSshPtyAbsentFromRelayError(error)).toBe(true)
+    expect(isSshPtyProvenExitedOnRelayError(error)).toBe(true)
   })
 
   it('gives a restoreRequired refusal its own token instead of the expiry text', async () => {
@@ -79,5 +95,6 @@ describe('an SSH reattach refusal says whether the host observed the PTY', () =>
 
     expect(error.message).toContain(SSH_SESSION_EXPIRED_ERROR)
     expect(isSshPtyAbsentFromRelayError(error)).toBe(false)
+    expect(isSshPtyProvenExitedOnRelayError(error)).toBe(false)
   })
 })

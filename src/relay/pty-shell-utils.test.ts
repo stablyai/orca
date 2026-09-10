@@ -14,10 +14,10 @@ vi.mock('child_process', () => ({
 import { resetWindowsProcessRowsSnapshotForTests } from '../main/providers/windows-foreground-process-rows'
 import { __setWindowsProcessTreeLoaderForTests } from '../main/windows/windows-process-table'
 import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot-reader'
+import { inspectPtyChildProcesses, processHasChildren } from './pty-child-process-inspection'
 import {
   getForegroundProcessName,
   isProcessAlive,
-  processHasChildren,
   resolveDefaultCwd,
   resolveWindowsDefaultShell
 } from './pty-shell-utils'
@@ -42,6 +42,14 @@ function mockExecFile(
  * Feed the native Windows snapshot. A real snapshot always contains the
  * querying process, and the reader rejects a table without it.
  */
+/** A native reader that answers, but with no snapshot -- an unreadable table, not an empty one. */
+function mockUnreadableWindowsProcessTable(): void {
+  __setWindowsProcessTreeLoaderForTests(() => ({
+    ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+    getAllProcesses: (cb: (value: undefined) => void) => cb(undefined)
+  }))
+}
+
 function mockWindowsProcessTable(
   rows: { pid: number; ppid: number; name: string; commandLine?: string }[]
 ): void {
@@ -594,19 +602,79 @@ describe('processHasChildren', () => {
     })
   })
 
-  it('reports no children when the process table is unreadable', async () => {
+  it('reports an unreadable POSIX table as unverifiable, and still spells it false on the wire', async () => {
     await withProcessPlatform('linux', async () => {
       mockExecFile(() => new Error('ps table unavailable'))
 
+      await expect(inspectPtyChildProcesses(100)).resolves.toBe('unverifiable')
       await expect(processHasChildren(100)).resolves.toBe(false)
     })
   })
+})
 
-  it('spawns nothing on Windows, where the answer was always false', async () => {
+describe('inspectPtyChildProcesses on Windows', () => {
+  // Why this describe exists: the relay used to `return false` here unconditionally, and a
+  // hardcoded negative is indistinguishable from a measurement. Every close guard reads it as
+  // "nothing is running here", so a Windows SSH pane running a build closed with no prompt.
+  it('walks the process table rather than answering from nothing', async () => {
     await withProcessPlatform('win32', async () => {
-      await expect(processHasChildren(100)).resolves.toBe(false)
+      mockWindowsProcessTable([
+        { pid: 100, ppid: 99, name: 'cmd.exe', commandLine: 'cmd.exe' },
+        { pid: 101, ppid: 100, name: 'PING.EXE', commandLine: 'ping -n 40 127.0.0.1' }
+      ])
 
-      expect(execFileMock).not.toHaveBeenCalled()
+      await expect(inspectPtyChildProcesses(100)).resolves.toBe('children')
+      await expect(processHasChildren(100)).resolves.toBe(true)
+    })
+  })
+
+  it('finds a grandchild the shell backgrounded, not just direct children', async () => {
+    await withProcessPlatform('win32', async () => {
+      mockWindowsProcessTable([
+        { pid: 100, ppid: 99, name: 'cmd.exe', commandLine: 'cmd.exe' },
+        { pid: 101, ppid: 100, name: 'node.exe', commandLine: 'node build.js' },
+        { pid: 102, ppid: 101, name: 'tsc.exe', commandLine: 'tsc --watch' }
+      ])
+
+      await expect(inspectPtyChildProcesses(102)).resolves.toBe('no-children')
+      await expect(inspectPtyChildProcesses(101)).resolves.toBe('children')
+    })
+  })
+
+  it('separates an observed-empty shell from a table it could not read', async () => {
+    await withProcessPlatform('win32', async () => {
+      mockWindowsProcessTable([{ pid: 100, ppid: 99, name: 'cmd.exe', commandLine: 'cmd.exe' }])
+      await expect(inspectPtyChildProcesses(100)).resolves.toBe('no-children')
+
+      resetWindowsProcessRowsSnapshotForTests()
+      mockUnreadableWindowsProcessTable()
+      const alive = vi.spyOn(process, 'kill').mockReturnValue(true as never)
+      try {
+        await expect(inspectPtyChildProcesses(100)).resolves.toBe('unverifiable')
+        // The compatibility boolean keeps spelling unverifiable `false`: it reaches clients that
+        // cannot read the verdict, and they read `true` as "an agent took the PTY, safe to type".
+        await expect(processHasChildren(100)).resolves.toBe(false)
+      } finally {
+        alive.mockRestore()
+      }
+    })
+  })
+
+  it('does not read a missing shell as unverifiable when the kernel says it is gone', async () => {
+    await withProcessPlatform('win32', async () => {
+      // The root is absent from the snapshot, which on its own cannot distinguish a filtered
+      // table from an exited shell. Only ESRCH settles it.
+      mockWindowsProcessTable([{ pid: 900, ppid: 1, name: 'explorer.exe' }])
+      const gone = vi.spyOn(process, 'kill').mockImplementation(() => {
+        const error = new Error('no such process') as NodeJS.ErrnoException
+        error.code = 'ESRCH'
+        throw error
+      })
+      try {
+        await expect(inspectPtyChildProcesses(100)).resolves.toBe('no-children')
+      } finally {
+        gone.mockRestore()
+      }
     })
   })
 })

@@ -1,3 +1,4 @@
+import type { RelayOpsRegion } from './environment-config.js'
 import {
   exactAdmissionSelector,
   type AdmissionSelector,
@@ -6,17 +7,46 @@ import {
 
 export const INCIDENT_MONITOR_THRESHOLDS = {
   activeProbeMaxAgeMs: 60_000,
-  cloudDataMaxAgeMs: 180_000,
+  // Why: Cloud Monitoring publishes on Google's clock, not ours. Per the metric
+  // list read 2026-09-05, Cloud Run instance_count / cpu / memory /
+  // max_request_concurrencies / request_count are "Sampled every 60 seconds.
+  // After sampling, data is not visible for up to 120 seconds" (60+120=180 s),
+  // and Cloud SQL cpu / memory / num_backends / backends_in_wait /
+  // deadlock_count say "up to 165 seconds" (60+165=225 s). Window-sum signals
+  // age differently: observedAt is the newest point in the 5-minute query
+  // window, so a label series that stops emitting reads as 300 s old while its
+  // summed value is still complete. 330 s clears the worst of the three (the
+  // 300 s query window) plus ~30 s of collect-to-evaluate latency. The old
+  // 180 s bar restarted healthy 15-minute windows at 181 s, 189 s and 255 s on
+  // 2026-09-04/05, once burning the whole 25-minute lineage with no verdict.
+  cloudDataMaxAgeMs: 330_000,
+  // Why: the director admin API answers live on our own request, so hold its
+  // freshness bar where it sat while it shared cloudDataMaxAgeMs.
+  directorAdminMaxAgeMs: 180_000,
+  // Why: how long a nonzero backends-in-wait point is carried before it reads as
+  // zero. Held at the pre-2026-09-05 cloud bar: carrying it for the full
+  // cloudDataMaxAgeMs would hand the evaluator a point older than its own
+  // freshness bar as soon as collection latency is added.
+  cloudLockWaitCarryMs: 180_000,
   relayLogMaxAgeMs: 180_000,
   heartbeatMaxAgeMs: 45_000,
   endpointLatencyMs: 2_000,
+  // Why: a cell's /ready fetches the auth JWKS and runs SELECT 1 against Cloud SQL,
+  // both in us-central1, so from the US runner asia-east2 cells measure p50 0.88 s /
+  // max 2.7 s against 0.08-0.5 s for us-central1. The flat 2 000 bar froze three
+  // healthy 15-minute gates on 2026-09-05 (c27 at 2568/2668/2685 ms); hard faults
+  // are still caught by the .health/.ready equal-1 checks and the 8 s fetch timeout.
+  cellEndpointLatencyMs: {
+    'us-central1': 2_000,
+    'asia-east2': 4_000
+  } as const satisfies Record<RelayOpsRegion, number>,
   cloudSqlCpuUtilization: 0.8,
   cloudSqlMemoryUtilization: 0.9,
   // Why: healthy latest-sum backends idle near 100 but spike to 216 in 1-minute
   // bursts (~10 min/day exceeded the old bar of 160 on 2026-08-26, freezing a
   // pre-drain gate on baseline noise). 250 clears measured healthy peaks while
-  // firing well before the verified 400-connection ceiling; pool-wait and
-  // exhausted-retry signals keep their strict thresholds.
+  // firing well before the verified 400-connection ceiling; the retry signals
+  // below discriminate incident-class contention.
   cloudSqlBackends: 250,
   // Bound the observed recovery load; deadlocks remain zero-tolerance.
   cloudSqlLockWaits: 20,
@@ -32,13 +62,35 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   relayPoolWaiting: 800,
   relayPoolWaitMs: 2_500,
   // Why: successful lock retries are the contention machinery working, not harm.
-  // Healthy 2026-08-26 baseline bursts to 234/5min (26% of windows crossed the old
-  // bar of 20, set unmeasured at the monitor's 2026-07-28 birth); the 2026-08-23
-  // incident ran ~2,200-3,000/5min. 300 clears healthy bursts with ~10x incident
-  // margin; relayPostgresRetryExhausted below stays at zero tolerance, so any
-  // transaction that terminally fails still freezes the gate.
-  relayPostgresRetries: 300,
-  relayPostgresRetryExhausted: 0,
+  // Recalibrated 2026-09-04 from 300, which was set 2026-08-26 when healthy bursts
+  // reached 234/5min. The global relay_cells FOR UPDATE lock has since become the
+  // fleet's steady state: measured fleet-wide (director + cells, summed per five
+  // minutes) 2026-09-03T05Z..2026-09-04T05Z p50 430 / p90 924 / p99 1320 / max
+  // 1504, with 55% of windows over 300 and only 22% of 15-minute gates clean, so
+  // the bar blocked the very cell roll that carries the 500 ms lock wait (#18521)
+  // and the beginProof crash guard to the cells. The 2026-08-23 lock incident on
+  // this same metric peaked at 1510 in one window and 646 in the next, so it is
+  // not separable from today's contention by retries alone; it is caught by
+  // relayPostgresRetryExhausted (467 at the peak vs a 300 bar), director
+  // concurrency, and the pool bars. 2000 passes every healthy 15-minute window
+  // measured in the last 24 h and still fences unbounded growth. Re-tighten once
+  // the fleet is on the 500 ms lock wait and the baseline is re-measured.
+  relayPostgresRetries: 2000,
+  // Why: 300 per five minutes, recalibrated 2026-09-04 from a bar of zero that no
+  // production window has cleared since #18521 shipped to the director. That
+  // change cut the request-path cell-inventory wait from the 1 s pool lock_timeout
+  // to 500 ms, so a contended waiter now fails fast (one /v1/assign 503 with
+  // Retry-After, which the client retries) instead of succeeding slowly, and the
+  // exhaustion count became a steady-state contention rate rather than an
+  // anomaly. Measured fleet-wide (director + cells) per five minutes over
+  // 2026-09-03T03Z..2026-09-04T02Z: every one of 236 windows was non-zero;
+  // quiet hours p50 2 / max 36; pre-#18521 daytime p50 10 / p90 25 / max 87;
+  // post-#18521 p50 42 / p90 147 / max 220. The 2026-08-23 lock incident peaked
+  // at 467. 300 clears every measured healthy window and still sits below the
+  // incident shape; retries above fence only unbounded growth.
+  // User-facing /v1/assign 503 share did not move with #18521 (13.9% old image
+  // vs 12.3% new, same evening), so exhaustion is not a proxy for user harm.
+  relayPostgresRetryExhausted: 300,
   // Why: public admission is a per-instance semaphore, so fleet assignment capacity is
   // concurrency x instances. A floor of 1 let the 2026-08-04 collapse from five instances
   // to two pass unnoticed, which is the exact failure this monitor exists to catch. Keep in
@@ -84,6 +136,7 @@ export type IncidentSource = {
 
 export type IncidentCellExpectation = {
   cellId: string
+  region: RelayOpsRegion
   runtimeKnown: boolean
   powered: boolean
   expectedAdmissionState: AdmissionState
@@ -153,6 +206,7 @@ export type IncidentMonitorState = {
   continuityEvents: {
     recordedAt: string
     windowSequence: number
+    tolerated: boolean
     failures: IncidentFailure[]
   }[]
   frozenAt: string | null
@@ -285,7 +339,7 @@ const SOURCE_MAX_AGE: Record<IncidentSourceName, number> = {
   'active-probe': INCIDENT_MONITOR_THRESHOLDS.activeProbeMaxAgeMs,
   'cloud-monitoring': INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs,
   'relay-logs': INCIDENT_MONITOR_THRESHOLDS.relayLogMaxAgeMs,
-  'director-admin': INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs
+  'director-admin': INCIDENT_MONITOR_THRESHOLDS.directorAdminMaxAgeMs
 }
 
 function ageMs(timestamp: string, nowMs: number): number {
@@ -362,7 +416,7 @@ function checkCell(
       'active-probe',
       probe,
       `cell.${cell.cellId}.latency_ms`,
-      INCIDENT_MONITOR_THRESHOLDS.endpointLatencyMs,
+      INCIDENT_MONITOR_THRESHOLDS.cellEndpointLatencyMs[cell.region],
       'max'
     ],
     [
@@ -586,13 +640,58 @@ function checkpointMinutes(durationMinutes: number): number[] {
   return INCIDENT_CHECKPOINT_MINUTES.filter((minute) => minute <= durationMinutes)
 }
 
-const CONTINUITY_FAILURE_CODES = new Set([
-  'collector_failed',
-  'monitor_gap',
+// Freshness-only failures: we could not read a signal this sample. Distinct from
+// collector_failed / monitor_gap, where the whole sample is absent.
+export const FRESHNESS_FAILURE_CODES = new Set([
+  'signal_missing',
   'signal_stale',
   'source_missing',
   'source_stale'
 ])
+
+const CONTINUITY_FAILURE_CODES = new Set([
+  'collector_failed',
+  'monitor_gap',
+  ...FRESHNESS_FAILURE_CODES
+])
+
+// Why: Cloud Monitoring overshoots its own publish bar, and one unread sample is
+// not evidence of an unhealthy fleet. Under the 25-minute lineage cap a restart
+// past minute 10 costs the entire verdict, so a healthy fleet produced none on
+// 2026-09-05. A signal may miss this many consecutive samples before the window
+// restarts; the sample is still evaluated against every threshold it can read,
+// and a threshold breach still freezes the run outright.
+export const INCIDENT_FRESHNESS_TOLERANCE_SAMPLES = 2
+
+function freshnessKey(failure: IncidentFailure): string {
+  return `${failure.source}/${failure.signal ?? '*'}`
+}
+
+// Rebuild the per-signal tolerated streak from the trailing continuity events so a
+// resumed monitor cannot hand a signal a fresh budget.
+function resumeFreshnessStreaks(
+  state: IncidentMonitorState
+): Map<string, number> {
+  const events = state.continuityEvents
+  const streaks = new Map<string, number>()
+  const last = events[events.length - 1]
+  if (!last?.tolerated) return streaks
+  for (const key of new Set(last.failures.map(freshnessKey))) {
+    let streak = 0
+    let laterAt: number | null = null
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index]!
+      const recordedAt = Date.parse(event.recordedAt)
+      if (!event.tolerated) break
+      if (laterAt !== null && laterAt - recordedAt > state.intervalMs * 1.5) break
+      if (!event.failures.some((failure) => freshnessKey(failure) === key)) break
+      streak++
+      laterAt = recordedAt
+    }
+    streaks.set(key, streak)
+  }
+  return streaks
+}
 
 function resetContinuousWindow(
   state: IncidentMonitorState,
@@ -609,6 +708,7 @@ function resetContinuousWindow(
   state.continuityEvents.push({
     recordedAt,
     windowSequence: state.windowSequence,
+    tolerated: false,
     failures
   })
 }
@@ -659,6 +759,7 @@ export async function runIncidentMonitor(
     await dependencies.persist(state)
     return state
   }
+  const freshnessStreaks = resumeFreshnessStreaks(state)
   while (state.completedAt === null) {
     if (dependencies.now() > lineageDeadlineMs) {
       completeContinuityDeadline(state, dependencies.now(), lineageStartMs)
@@ -693,9 +794,34 @@ export async function runIncidentMonitor(
     const thresholdFailures = evaluation.failures.filter((failure) =>
       !CONTINUITY_FAILURE_CODES.has(failure.code)
     )
-    if (continuityFailures.length > 0) {
+    const toleratedKeys = new Set(
+      state.windowStartedAt !== null &&
+        continuityFailures.length > 0 &&
+        continuityFailures.every((failure) => FRESHNESS_FAILURE_CODES.has(failure.code))
+        ? continuityFailures.map(freshnessKey)
+        : []
+    )
+    for (const key of [...freshnessStreaks.keys()]) {
+      if (!toleratedKeys.has(key)) freshnessStreaks.delete(key)
+    }
+    let tolerated = toleratedKeys.size > 0
+    for (const key of toleratedKeys) {
+      const streak = (freshnessStreaks.get(key) ?? 0) + 1
+      freshnessStreaks.set(key, streak)
+      if (streak > INCIDENT_FRESHNESS_TOLERANCE_SAMPLES) tolerated = false
+    }
+    if (continuityFailures.length > 0 && !tolerated) {
+      freshnessStreaks.clear()
       resetContinuousWindow(state, evaluation.evaluatedAt, continuityFailures)
     } else {
+      if (tolerated) {
+        state.continuityEvents.push({
+          recordedAt: evaluation.evaluatedAt,
+          windowSequence: state.windowSequence,
+          tolerated: true,
+          failures: continuityFailures
+        })
+      }
       if (state.windowStartedAt === null) {
         state.windowStartedAt = evaluation.evaluatedAt
       }

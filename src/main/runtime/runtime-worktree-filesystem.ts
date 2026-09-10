@@ -9,9 +9,12 @@ import {
   getLocalWorktreePathAccess,
   toLocalWorktreeRuntimePath
 } from '../local-worktree-filesystem'
-import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
+import {
+  ExecutionHostNotDispatchableError,
+  resolveFilesystemRouteForHost
+} from '../providers/execution-host-provider-dispatch'
 import { isWorktreePathMissing } from '../worktree-removal-safety'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import {
@@ -22,19 +25,26 @@ import {
 import type { RuntimeStore } from './runtime-store-contract'
 import { gitStatusErrorMeansNotRepository } from './runtime-worktree-selection'
 
+// Takes the resolved host rather than the repo: reading `repo.connectionId` answered "stat this on
+// the client" for a row that names its owner only as `executionHostId: 'ssh:<target>'`, which is
+// the evidence a forced removal prunes registrations on.
 export async function isRuntimeWorktreePathMissing(
-  repo: Repo,
+  hostId: ExecutionHostId,
   worktreePath: string,
   localWorktreeGitOptions: { wslDistro?: string } = {}
 ): Promise<boolean> {
-  if (!repo.connectionId) {
+  const route = resolveFilesystemRouteForHost(hostId)
+  if (route.kind === 'runtime') {
+    throw new ExecutionHostNotDispatchableError(route.hostId)
+  }
+  if (route.kind === 'local') {
     const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
     return isWorktreePathMissing(
       toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
       access.statPath
     )
   }
-  const fsProvider = getSshFilesystemProvider(repo.connectionId)
+  const fsProvider = route.provider
   return fsProvider ? isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path)) : false
 }
 

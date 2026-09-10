@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { validateCapacityPlan as validateCapacityPlanRaw } from './validate-relay-capacity-plan.mjs'
+import {
+  parseCapacityPlanArguments,
+  validateCapacityPlan as validateCapacityPlanRaw
+} from './validate-relay-capacity-plan.mjs'
 
 const config = {
   cellId: 'staging-gce-c3',
@@ -466,7 +469,8 @@ test('same-cap mode preserves 1000/60 while adding only the reviewed trust confi
     image,
     rollbackImage,
     rehomeDirectorServiceAccount: directorIdentity,
-    rehomeAudience: audience
+    rehomeAudience: audience,
+    regionalRehomeProtocol: '1'
   }
   assert.deepEqual(
     validateCapacityPlan({ resource_changes: [template, manager] }, sameCapConfig),
@@ -642,5 +646,136 @@ test('same-cap mode preserves 1000/60 while adding only the reviewed trust confi
       imageOnlyConfig
     ),
     { mode: 'same-cap-image', changes: 1, changeKind: 'manager-convergence' }
+  )
+})
+
+test('protocol-0 same-cap cells roll without rehome trust lines', () => {
+  const rollbackImage = `us-docker.pkg.dev/project/relay/image@sha256:${'d'.repeat(64)}`
+  const image = `us-docker.pkg.dev/project/relay/image@sha256:${'e'.repeat(64)}`
+  const directorIdentity = 'relay-director@project.iam.gserviceaccount.com'
+  const audience = 'https://relay.example.com/v1/admin/host-drain'
+  const startup = ({ selectedImage, trust = false }) => [
+    `  printf 'ORCA_RELAY_CELL_CONNECTION_HARD_CAP=%s\\n' '3000'`,
+    `  printf 'ORCA_RELAY_CELL_CONNECTION_UNOBSERVED_BOUND=%s\\n' '60'`,
+    `  printf 'ORCA_RELAY_CELL_REGION=%s\\n' 'asia-east2'`,
+    ...(trust ? [
+      `  printf 'ORCA_RELAY_REHOME_DIRECTOR_SERVICE_ACCOUNT=%s\\n' '${directorIdentity}'`,
+      `  printf 'ORCA_RELAY_REHOME_AUDIENCE=%s\\n' '${audience}'`
+    ] : []),
+    `printf 'ORCA_RELAY_IMAGE_DIGEST=%s\\n' '${selectedImage.split('@')[1]}'`,
+    `docker pull '${selectedImage}'`,
+    'docker run --detach \\',
+    '  --name orca-relay \\',
+    `  '${selectedImage}'`
+  ].join('\n')
+  const template = {
+    address: 'google_compute_instance_template.relay_gce_cell["production-gce-c27"]',
+    change: {
+      actions: ['create', 'delete'],
+      before: { metadata_startup_script: startup({ selectedImage: rollbackImage }) },
+      after: { metadata_startup_script: startup({ selectedImage: image }), self_link: null },
+      after_unknown: { self_link: true }
+    }
+  }
+  const manager = {
+    address: 'google_compute_instance_group_manager.relay_gce_cell["production-gce-c27"]',
+    change: {
+      actions: ['update'],
+      before: { target_size: 1, version: [{ instance_template: 'old' }] },
+      after: { target_size: 1, version: [{ instance_template: null }] },
+      after_unknown: { version: [{ instance_template: true }] }
+    }
+  }
+  const asiaConfig = {
+    cellId: 'production-gce-c27',
+    hardCap: 3_000,
+    unobservedBound: 60,
+    mode: 'same-cap-cell',
+    image,
+    rollbackImage,
+    rehomeDirectorServiceAccount: directorIdentity,
+    rehomeAudience: audience,
+    regionalRehomeProtocol: '0'
+  }
+  assert.deepEqual(
+    validateCapacityPlan({ resource_changes: [template, manager] }, asiaConfig),
+    { mode: 'same-cap-cell', changes: 2 }
+  )
+  const gainsTrust = structuredClone(template)
+  gainsTrust.change.after.metadata_startup_script = startup({
+    selectedImage: image,
+    trust: true
+  })
+  assert.throws(
+    () => validateCapacityPlan({ resource_changes: [gainsTrust, manager] }, asiaConfig),
+    /reviewed image and capacity/
+  )
+  // Under protocol 1 that same script is the reviewed roll: trust is added, not drift.
+  assert.deepEqual(
+    validateCapacityPlan(
+      { resource_changes: [gainsTrust, manager] },
+      { ...asiaConfig, regionalRehomeProtocol: '1' }
+    ),
+    { mode: 'same-cap-cell', changes: 2 }
+  )
+  // A protocol-1 cell whose script has no rehome lines is the pre-existing failure, unchanged.
+  assert.throws(
+    () => validateCapacityPlan(
+      { resource_changes: [template, manager] },
+      { ...asiaConfig, regionalRehomeProtocol: '1' }
+    ),
+    /reviewed image and capacity/
+  )
+  for (const protocol of [undefined, '', '2', 'yes']) {
+    assert.throws(
+      () => validateCapacityPlan(
+        { resource_changes: [template, manager] },
+        { ...asiaConfig, regionalRehomeProtocol: protocol }
+      ),
+      /invalid regional rehome protocol/
+    )
+  }
+})
+
+test('the rehome protocol argument is required by same-cap-cell mode alone', () => {
+  const image = `us-docker.pkg.dev/project/relay/image@sha256:${'e'.repeat(64)}`
+  const rollbackImage = `us-docker.pkg.dev/project/relay/image@sha256:${'d'.repeat(64)}`
+  const sameCapArguments = (...extra) => [
+    '--mode', 'same-cap-cell',
+    '--cell-id', 'production-gce-c27',
+    '--hard-cap', '3000',
+    '--unobserved-bound', '60',
+    '--image', image,
+    '--rollback-image', rollbackImage,
+    '--rehome-director-service-account', 'relay-director@project.iam.gserviceaccount.com',
+    '--rehome-audience', 'https://relay.onorca.dev/v1/admin/host-drain',
+    ...extra
+  ]
+  assert.equal(
+    parseCapacityPlanArguments(sameCapArguments('--regional-rehome-protocol', '0'))
+      .regionalRehomeProtocol,
+    '0'
+  )
+  assert.throws(
+    () => parseCapacityPlanArguments(sameCapArguments()),
+    /requires rollback image and rehome trust config/
+  )
+  for (const protocol of ['', '2', 'true']) {
+    assert.throws(
+      () => parseCapacityPlanArguments(sameCapArguments('--regional-rehome-protocol', protocol)),
+      /requires rollback image and rehome trust config/
+    )
+  }
+  assert.throws(
+    () => parseCapacityPlanArguments([
+      '--mode', 'bootstrap-cell',
+      '--cell-id', 'staging-gce-c3',
+      '--hard-cap', '1000',
+      '--unobserved-bound', '60',
+      '--image', image,
+      '--capacity-service-account', 'orca-cap@onorca-cloud.iam.gserviceaccount.com',
+      '--regional-rehome-protocol', '0'
+    ]),
+    /applies only to same-cap-cell validation/
   )
 })

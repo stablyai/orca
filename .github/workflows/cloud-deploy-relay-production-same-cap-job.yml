@@ -91,7 +91,11 @@ jobs:
           test -n "${CAPACITY_SERVICE_ACCOUNT}"
           test -n "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}"
 
+      # Full history: the monitor evidence this job verifies is sealed at an ancestor commit,
+      # and the provenance check fails closed on a commit a shallow clone left out.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with: { package_json_file: cloud/package.json }
@@ -177,11 +181,12 @@ jobs:
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
         run: |
-          RETRY_ARGS=()
-          if test "${WAVE_INDEX}" != 0; then RETRY_ARGS=(--retry-freshness); fi
+          # Freshness-only failures are publish lag, not health, on every wave
+          # including the first; the CLI still caps the retry at the wave's
+          # evidence-age budget, so this cannot mutate on aged evidence.
           pnpm incident:relay-preflight -- \
             --state-file "${OUTPUT_DIRECTORY}/relay-${MONITOR_RUN_ID}-dry-run.state.json" \
-            --wave-index "${WAVE_INDEX}" "${RETRY_ARGS[@]}"
+            --wave-index "${WAVE_INDEX}" --retry-freshness
 
       - name: Require durable rehome disabled and exact selector
         env:
@@ -271,10 +276,22 @@ jobs:
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.deploy-auth.outputs.id_token }}
         run: |
-          CURRENT_RUNTIME="$(curl --fail-with-body --max-time 30 \
-            --request POST "${CELL_ORIGIN}/v1/admin/runtime-status" \
-            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
-            --header 'Content-Type: application/json' --data '{"v":1}')"
+          # A single transient 5xx (LB warm-up behind a fresh instance) must not
+          # fail a canary; 4xx (auth, generation mismatch) still fails fast.
+          admin_post() {
+            local out="${RUNNER_TEMP}/$1.json"
+            if ! curl --fail-with-body --max-time 30 \
+              --retry 3 --retry-delay 2 --retry-connrefused --output "${out}" \
+              --request POST "$2" \
+              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+              --header 'Content-Type: application/json' --data "$3"; then
+              cat "${out}" >&2
+              return 1
+            fi
+            cat "${out}"
+          }
+          CURRENT_RUNTIME="$(admin_post current-runtime \
+            "${CELL_ORIGIN}/v1/admin/runtime-status" '{"v":1}')"
           # A rollback that failed between template apply and admission restore
           # leaves the cell already on the rollback image; resume from that
           # state instead of demanding the pre-rollback predecessor.
@@ -370,11 +387,9 @@ jobs:
             if .regionalRehomeProtocol == null then "regionalRehomeProtocol" else empty end
           ] | if length > 0 then "runtime predecessor normalized legacy fields=" + join(",") else empty end' \
             <<< "${CURRENT_RUNTIME}"
-          CURRENT_DIRECTOR_STATUS="$(curl --fail-with-body --max-time 30 \
-            --request POST "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
-            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
-            --header 'Content-Type: application/json' \
-            --data "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+          CURRENT_DIRECTOR_STATUS="$(admin_post current-cell-status \
+            "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
+            "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
           SOURCE_INCARNATION="$(jq -er '.status.runtime.cellIncarnation' \
             <<< "${CURRENT_DIRECTOR_STATUS}")"
           if test "${ROLLBACK_RESUME}" = true && ! jq -e \
@@ -418,13 +433,13 @@ jobs:
           # result's generation is authoritative either way.
           ISOLATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --mode isolate)"
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode isolate)"
           echo "${ISOLATE_RESULT}"
           ISOLATE_GENERATION="$(jq -er '.generation' <<< "${ISOLATE_RESULT}")"
           echo "SELECTOR_GENERATION_AFTER_ISOLATE=${ISOLATE_GENERATION}" >> "${GITHUB_ENV}"
           node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --mode drain
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode drain
           node dev/scripts/verify-relay-capacity-transition.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
@@ -486,6 +501,7 @@ jobs:
                 --rollback-image "${DESIRED_IMAGE}" \
                 --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
                 --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
+                --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" \
               | jq -e '.changes == 2' >/dev/null
           fi
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
@@ -511,7 +527,8 @@ jobs:
               --unobserved-bound "${EXPECTED_UNOBSERVED_BOUND}" --image "${DESIRED_IMAGE}" \
               --rollback-image "${IMAGE_REPOSITORY}@${CURRENT_IMAGE_DIGEST}" \
               --rehome-director-service-account "${DIRECTOR_RUNTIME_SERVICE_ACCOUNT}" \
-              --rehome-audience https://relay.onorca.dev/v1/admin/host-drain
+              --rehome-audience https://relay.onorca.dev/v1/admin/host-drain \
+              --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}"
           terraform -chdir=infra/terraform apply -auto-approve \
             "${RUNNER_TEMP}/relay-same-cap.tfplan"
           gcloud compute instance-groups managed wait-until "${MIG_NAME}" --stable \
@@ -532,6 +549,20 @@ jobs:
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
         run: |
+          # A single transient 5xx (LB warm-up behind a fresh instance) must not
+          # fail a canary; 4xx (auth, generation mismatch) still fails fast.
+          admin_post() {
+            local out="${RUNNER_TEMP}/$1.json"
+            if ! curl --fail-with-body --max-time 30 \
+              --retry 3 --retry-delay 2 --retry-connrefused --output "${out}" \
+              --request POST "$2" \
+              --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
+              --header 'Content-Type: application/json' --data "$3"; then
+              cat "${out}" >&2
+              return 1
+            fi
+            cat "${out}"
+          }
           node dev/scripts/verify-relay-capacity-transition.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
             --cell-id "${TARGET_CELL_ID}" --hard-cap "${EXPECTED_HARD_CAP}" \
@@ -539,19 +570,15 @@ jobs:
             --heartbeat fresh --admission migration-only --draining forbidden \
             --activity allowed --expected-image-digests "${DESIRED_IMAGE_DIGEST}" \
             --regional-rehome-protocol "${DESIRED_REHOME_PROTOCOL}" --timeout-ms 900000
-          TARGET_RUNTIME="$(curl --fail-with-body --max-time 30 \
-            --request POST "${CELL_ORIGIN}/v1/admin/runtime-status" \
-            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
-            --header 'Content-Type: application/json' --data '{"v":1}')"
+          TARGET_RUNTIME="$(admin_post target-runtime \
+            "${CELL_ORIGIN}/v1/admin/runtime-status" '{"v":1}')"
           jq -e --arg digest "${DESIRED_IMAGE_DIGEST}" \
             --argjson protocol "${DESIRED_REHOME_PROTOCOL}" \
             '.imageDigest == $digest and (.regionalRehomeProtocol // 0) == $protocol' \
             <<< "${TARGET_RUNTIME}" >/dev/null
-          TARGET_DIRECTOR_STATUS="$(curl --fail-with-body --max-time 30 \
-            --request POST "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
-            --header "Authorization: Bearer ${ORCA_RELAY_ADMIN_ID_TOKEN}" \
-            --header 'Content-Type: application/json' \
-            --data "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
+          TARGET_DIRECTOR_STATUS="$(admin_post target-cell-status \
+            "${DIRECTOR_ORIGIN}/v1/admin/cell-status" \
+            "$(jq -cn --arg cell "${TARGET_CELL_ID}" '{v:1,cellId:$cell}')")"
           TARGET_INCARNATION="$(jq -er '.status.runtime.cellIncarnation' \
             <<< "${TARGET_DIRECTOR_STATUS}")"
           if test "${ROLLBACK_RESUME}" = true; then
@@ -588,7 +615,7 @@ jobs:
           echo "MUTATION_STARTED=true" >> "${GITHUB_ENV}"
           ACTIVATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --mode activate)"
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode activate)"
           echo "${ACTIVATE_RESULT}"
           SELECTOR_GENERATION_AFTER_ACTIVATE="$(jq -er '.generation' \
             <<< "${ACTIVATE_RESULT}")"
@@ -627,7 +654,7 @@ jobs:
           test "${MUTATION_STARTED:-false}" = true || exit 0
           ISOLATE_RESULT="$(node dev/scripts/prepare-relay-production-capacity-canary.mjs \
             --director-origin "${DIRECTOR_ORIGIN}" --cell-origin "${CELL_ORIGIN}" \
-            --cell-id "${TARGET_CELL_ID}" --mode isolate)"
+            --cell-id "${TARGET_CELL_ID}" --approved-cells same-cap --mode isolate)"
           echo "${ISOLATE_RESULT}"
           # The isolate result carries the authoritative post-isolate generation;
           # fixed offsets are wrong whenever an earlier isolate was a no-op.

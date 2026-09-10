@@ -20,6 +20,12 @@ const STRUCTURED_TUI_PROCESS_POLL_MS = 50
 // window the added latency is bounded by one interval.
 const STRUCTURED_TUI_PROCESS_FAST_POLL_WINDOW_MS = 1_000
 const STRUCTURED_TUI_PROCESS_MAX_POLL_MS = 500
+// Why a floor and not just the deadline: the first capture races the spawn it is looking for,
+// so a null from it is absence of the child's arrival, not evidence the child is missing. The
+// budget above assumes a look is nearly free, but one whole-machine `ps` measured 6.2s on a
+// 2,085-process host under load -- long enough to spend the entire budget before the child
+// (observed landing at ~3.5s) could exist, and answer "no exact child" after a single look.
+const STRUCTURED_TUI_PROCESS_MIN_CAPTURES = 2
 
 function descendants(rows: ProcessRow[], rootPid: number): (ProcessRow & { depth: number })[] {
   const children = new Map<number, ProcessRow[]>()
@@ -175,6 +181,7 @@ export async function readStructuredTuiProcessIdentity(input: {
   const startedAtMs = now()
   const deadline = startedAtMs + (input.timeoutMs ?? STRUCTURED_TUI_PROCESS_WAIT_MS)
   let pollDelayMs = input.pollIntervalMs ?? STRUCTURED_TUI_PROCESS_POLL_MS
+  let captures = 0
 
   while (true) {
     const rows: ProcessRow[] =
@@ -186,6 +193,7 @@ export async function readStructuredTuiProcessIdentity(input: {
             foreground: false
           }))
         : posixRows(await (input.readPosixRows ?? getFreshProcessTableSnapshot)())
+    captures += 1
     let rootPresent = false
     for (const row of rows) {
       if (row.pid === input.rootPid) {
@@ -218,11 +226,11 @@ export async function readStructuredTuiProcessIdentity(input: {
       }
     }
     const remainingMs = deadline - now()
-    if (remainingMs <= 0) {
+    if (remainingMs <= 0 && captures >= STRUCTURED_TUI_PROCESS_MIN_CAPTURES) {
       const label = input.agent === 'codex' ? 'Codex' : 'Claude'
       throw new Error(`The resumed terminal did not expose one exact ${label} child process.`)
     }
-    await sleep(Math.min(pollDelayMs, remainingMs))
+    await sleep(Math.max(0, Math.min(pollDelayMs, remainingMs)))
     if (now() - startedAtMs >= STRUCTURED_TUI_PROCESS_FAST_POLL_WINDOW_MS) {
       // Never below the caller's interval, so an explicitly slow poll stays slow.
       pollDelayMs = Math.max(

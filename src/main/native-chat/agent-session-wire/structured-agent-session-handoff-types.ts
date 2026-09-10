@@ -81,6 +81,7 @@ export type StructuredAgentSessionHandoffDeps = {
     fence: number
     transcriptPath?: string
   }) => Promise<void>
+  retryPendingSettlement: (sessionId: string) => Promise<boolean>
   prepareTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<void>
   recoverTuiHistoryCatchup?: (sessionId: string, fence: number) => Promise<void>
   activateTuiHistoryCatchup?: (sessionId: string) => Promise<void>

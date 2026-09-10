@@ -606,8 +606,9 @@ export function createRelayApp(
       const source = await operations.assignments.cellDeploymentStatus(
         body.data.sourceCellId
       )
+      // Any cell that can be drained can be a rehome source, in either
+      // direction, so the probe is gated on the protocol and not on a region.
       if (
-        source.region !== RELAY_DEFAULT_REGION ||
         !source.runtime ||
         source.runtime.cellIncarnation !== body.data.sourceCellIncarnation ||
         !source.runtime.ready ||
@@ -1408,6 +1409,11 @@ const RegionalRehomeControlSchema = z.discriminatedUnion('action', [
     notBefore: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     ratePerMinute: z.number().int().min(1).max(120),
     preferenceMaxAgeMs: z
+      .number()
+      .int()
+      .min(60_000)
+      .max(30 * 24 * 60 * 60_000),
+    hostCooldownMs: z
       .number()
       .int()
       .min(60_000)

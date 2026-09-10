@@ -4,7 +4,7 @@ import {
   Ellipsis,
   Eye,
   FolderInput,
-  FolderPlus,
+  FolderTree,
   Plus,
   Shapes,
   SlidersHorizontal,
@@ -135,7 +135,8 @@ export function RepoHeaderProjectActionsMenu({
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(repo)}>
-          <FolderPlus className="size-3.5" />
+          {/* Not FolderPlus: that now means "Add project" in the sidebar header above. */}
+          <FolderTree className="size-3.5" />
           {translate('auto.components.sidebar.WorktreeList.cbfd565f83', 'New group from project')}
         </DropdownMenuItem>
         {projectGroups.length > 0 ? (

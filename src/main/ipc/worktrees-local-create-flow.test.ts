@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { computeWorkspaceRootAsync } from './worktree-logic'
+import type * as WorktreeLogic from './worktree-logic'
 import {
   listWorktreesMock,
   describeCreatedWorktreeMock,
@@ -78,11 +80,13 @@ vi.mock('../setup-hook-env-vars', async (importOriginal) =>
     (await importOriginal()) as Record<string, unknown>
   )
 )
-vi.mock('./worktree-logic', async (importOriginal) =>
-  (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
-    (await importOriginal()) as Record<string, unknown>
-  )
-)
+vi.mock('./worktree-logic', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreeLogic>()
+  return {
+    ...(await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(actual),
+    computeWorkspaceRootAsync: vi.fn(actual.computeWorkspaceRootAsync)
+  }
+})
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
@@ -409,15 +413,23 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
 
-    await handlers['worktrees:create'](null, {
+    const root = Promise.withResolvers<string>()
+    vi.mocked(computeWorkspaceRootAsync).mockReturnValueOnce(root.promise)
+    const create = handlers['worktrees:create'](null, {
       repoId: 'repo-1',
       name: 'feature'
     })
 
-    expect(computeWorktreePathMock).toHaveBeenCalledWith('feature', '/workspace/repo', {
-      nestWorkspaces: false,
-      workspaceDir: '../worktrees'
-    })
+    await vi.waitFor(() => expect(computeWorkspaceRootAsync).toHaveBeenCalled())
+    expect(addWorktreeMock).not.toHaveBeenCalled()
+    root.resolve('/workspace/worktrees')
+    await create
+    expect(computeWorktreePathMock).toHaveBeenCalledWith(
+      'feature',
+      '/workspace/repo',
+      { nestWorkspaces: false, workspaceDir: '../worktrees' },
+      '/workspace/worktrees'
+    )
     expect(addWorktreeMock).toHaveBeenCalledWith(
       '/workspace/repo',
       '../worktrees/feature',
@@ -689,6 +701,10 @@ describe('registerWorktreeHandlers', () => {
     expect(setupCommand).toBe('bash /workspace/repo/.git/orca/setup-runner.sh')
     expect(result.setup).toBeUndefined()
     expect(result.startupTerminal).toEqual({ spawned: true, surface: 'visible' })
+    expect(runtimeStub.invalidateWorktreeCatalog).toHaveBeenCalledWith('repo-1')
+    expect(runtimeStub.invalidateWorktreeCatalog.mock.invocationCallOrder[0]).toBeLessThan(
+      runtimeStub.createTerminal.mock.invocationCallOrder[0]
+    )
     expect(result.timing?.phases.map((phase) => phase.phase)).toEqual(
       expect.arrayContaining([
         'git_worktree_add',

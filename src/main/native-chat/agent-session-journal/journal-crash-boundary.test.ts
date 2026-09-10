@@ -15,13 +15,14 @@ import type {
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
 import { digestPayload } from './journal-payload-bounds'
 import {
   reconcileSubmissions,
   type ProviderHistoryItem,
   type ProviderHistoryWindow
 } from './journal-submission-reconciler'
-import { openAgentSessionJournal } from './journal-store-factory'
+import { createTrackedJournalOpener } from './journal-store-test-open'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -52,8 +53,10 @@ function userMessage(text: string): AgentJournalMessageItem {
   return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
 }
 
+const journals = createTrackedJournalOpener()
+
 async function open() {
-  return openAgentSessionJournal({
+  return journals.open({
     identity: IDENTITY,
     journalDir: root,
     now: tick,
@@ -89,6 +92,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -107,6 +111,8 @@ describe('crash between provider accept and journal commit', () => {
     expect(restarted.pendingSubmissions().map((entry) => entry.clientMessageId)).toEqual(['cm_1'])
     await restarted.markPendingSubmissionsUnknown(2)
     expect(restarted.submissions()[0]?.dispatchState).toBe('unknown')
+    // Marks the send as outlived by its writer, so no reader reports it as still working.
+    expect(restarted.submissions()[0]?.recovered).toBe(true)
 
     const [outcome] = reconcileSubmissions({
       submissions: restarted.submissions(),
@@ -134,6 +140,30 @@ describe('crash between provider accept and journal commit', () => {
     expect(items).toHaveLength(1)
     expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
     expect(restarted.receiptFor('cm_1')?.providerItemId).toBe(agentJournalItemKey(outcome.identity))
+  })
+
+  it('retires an ack timeout on restart without changing its delivery verdict', async () => {
+    const journal = await open()
+    await journal.appendSubmission({
+      clientMessageId: 'cm_timeout',
+      payloadFingerprint: digestPayload('slow'),
+      body: userMessage('slow'),
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'cm_timeout',
+      state: 'unknown',
+      reason: 'ack timeout',
+      fence: 1
+    })
+    expect(hasUnansweredStructuredAgentSessionDispatch(journal.submissions())).toBe(true)
+    const restarted = await open()
+    await restarted.markPendingSubmissionsUnknown(2)
+    expect(restarted.submissions()[0]?.dispatchState).toBe('unknown')
+    expect(hasUnansweredStructuredAgentSessionDispatch(restarted.submissions())).toBe(false)
+    const cursor = restarted.cursor()
+    await restarted.markPendingSubmissionsUnknown(2)
+    expect(restarted.cursor()).toEqual(cursor)
   })
 
   it('reports a rejected submission as never delivered, and never re-sends it', async () => {
@@ -195,14 +225,8 @@ describe('crash between provider accept and journal commit', () => {
     ).toEqual([])
   })
 
-  it('keeps the receipt after the row that minted it was compacted away', async () => {
-    const journal = await openAgentSessionJournal({
-      identity: IDENTITY,
-      journalDir: root,
-      now: tick,
-      mintEpoch: () => `epoch-${clock}`,
-      compaction: { minTailRows: 1, retainTailMs: 0 }
-    })
+  it('keeps the receipt across a reopen', async () => {
+    const journal = await open()
     await journal.appendSubmission({
       clientMessageId: 'cm_1',
       payloadFingerprint: digestPayload('kept'),
@@ -215,7 +239,7 @@ describe('crash between provider accept and journal commit', () => {
       providerIdentity: ACCEPTED_IDENTITY,
       fence: 1
     })
-    await journal.compact()
+    await journal.close()
 
     const reopened = await open()
     expect(reopened.receiptFor('cm_1')?.providerItemId).toBe(agentJournalItemKey(ACCEPTED_IDENTITY))

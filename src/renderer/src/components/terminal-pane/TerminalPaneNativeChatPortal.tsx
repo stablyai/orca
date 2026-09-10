@@ -17,7 +17,6 @@ export function TerminalPaneNativeChatPortal({
     chatPaneOwnsTabWideLaunchDraft,
     chatPanePtyId,
     chatPaneResolvedAgent,
-    chatPaneDispatchStatus,
     contextMenu,
     effectiveChatViewMode,
     expandedPaneId,
@@ -41,6 +40,31 @@ export function TerminalPaneNativeChatPortal({
     return null
   }
 
+  const contextMenuActions = {
+    onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
+    onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
+    canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
+    onEqualizePaneSizes: () => contextMenu.runForPane(chatPane.id, contextMenu.onEqualizePaneSizes),
+    canExpandPane: managedPanes.length > 1,
+    isPaneExpanded: expandedPaneId === chatPane.id,
+    onToggleExpand: () => contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
+    canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
+      resolveAgentForLeaf(chatPane.leafId)
+    ),
+    onContinueAgentSessionInNewSession: () =>
+      contextMenu.runForPane(chatPane.id, contextMenu.onContinueAgentSessionInNewSession),
+    onForkAgentSession: () =>
+      void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
+    onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
+    onCopyTerminalId: () => void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
+    onCopyPaneId: () => void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
+    canCopyAgentSessionId: chatPaneSessionId !== null,
+    onCopyAgentSessionId: () =>
+      void contextMenu.runForPane(chatPane.id, contextMenu.onCopyAgentSessionId),
+    canClosePane: managedPanes.length > 1,
+    onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
+  }
+
   return createPortal(
     <div className="native-chat-pane-shell absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
       {structuredSessionId && structuredChatAgent ? (
@@ -51,8 +75,7 @@ export function TerminalPaneNativeChatPortal({
           agent={structuredChatAgent}
           isVisible={isRendererVisible}
           target={structuredChatTarget}
-          allowFileUriLinks
-          orchestrationDispatchStatus={chatPaneDispatchStatus}
+          contextMenuActions={contextMenuActions}
         />
       ) : (
         <NativeChatView
@@ -65,33 +88,7 @@ export function TerminalPaneNativeChatPortal({
           ownsTabWideLaunchDraft={chatPaneOwnsTabWideLaunchDraft}
           onSwitchToTerminal={switchNativeChatToTerminal}
           readTerminalScreen={readNativeChatTerminalScreen}
-          contextMenuActions={{
-            onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
-            onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
-            canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
-            onEqualizePaneSizes: () =>
-              contextMenu.runForPane(chatPane.id, contextMenu.onEqualizePaneSizes),
-            canExpandPane: managedPanes.length > 1,
-            isPaneExpanded: expandedPaneId === chatPane.id,
-            onToggleExpand: () => contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
-            canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
-              resolveAgentForLeaf(chatPane.leafId)
-            ),
-            onContinueAgentSessionInNewSession: () =>
-              contextMenu.runForPane(chatPane.id, contextMenu.onContinueAgentSessionInNewSession),
-            onForkAgentSession: () =>
-              void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
-            onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
-            onCopyTerminalId: () =>
-              void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
-            onCopyPaneId: () => void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
-            canCopyAgentSessionId: chatPaneSessionId !== null,
-            onCopyAgentSessionId: () =>
-              void contextMenu.runForPane(chatPane.id, contextMenu.onCopyAgentSessionId),
-            canClosePane: managedPanes.length > 1,
-            onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
-          }}
-          orchestrationDispatchStatus={chatPaneDispatchStatus}
+          contextMenuActions={contextMenuActions}
         />
       )}
     </div>,

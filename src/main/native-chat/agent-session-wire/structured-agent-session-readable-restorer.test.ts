@@ -27,6 +27,7 @@ describe('StructuredAgentSessionReadableRestorer', () => {
       serialize: async (_sessionId, task) => task(),
       hasSession: () => false,
       onReadable: () => undefined,
+      retrySettlement: async () => true,
       restoreHandoff: async () => undefined
     })
 

@@ -1,3 +1,4 @@
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { useCallback } from 'react'
 import { Keyboard } from 'react-native'
 import { triggerError } from '../platform/haptics'
@@ -16,6 +17,7 @@ import {
 import { normalizeTerminalTextInput } from '../terminal/terminal-text-input-normalization'
 import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismissal'
 import type { MobileSessionTab } from './mobile-session-route-types'
+import { useMobileSessionTabActionSheetOpener } from './use-mobile-session-tab-action-targets'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
 
 export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminalWebviewModel) {
@@ -27,6 +29,7 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     setMarkdownActionTarget,
     setFileActionTarget,
     setBrowserActionTarget,
+    setAgentSessionActionTarget,
     keyboardHeight,
     deviceTokenRef,
     clientRef,
@@ -96,6 +99,9 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
         TERMINAL_INPUT_SEND_OPTIONS
       )
       const accepted = isTerminalSendRpcAccepted(response)
+      if (accepted) {
+        reportWorkerTerminalUserInput(client, activeHandle)
+      }
       if (!accepted) {
         restoreRejectedDraft()
       }
@@ -164,7 +170,16 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
           }),
           TERMINAL_INPUT_SEND_OPTIONS
         )
-        .then(isTerminalSendRpcAccepted, () => false)
+        .then(
+          (response) => {
+            const accepted = isTerminalSendRpcAccepted(response)
+            if (accepted) {
+              reportWorkerTerminalUserInput(rpc, handle)
+            }
+            return accepted
+          },
+          () => false
+        )
     },
     [showToast]
   )
@@ -175,24 +190,14 @@ export function useMobileSessionTerminalSendActions(scope: MobileSessionTerminal
     sessionTabActionSheetKeyboardHideSubRef.current = null
   }, [])
 
-  const openSessionTabActionSheet = useCallback((tab: MobileSessionTab) => {
-    if (tab.type === 'terminal') {
-      if (typeof tab.terminal !== 'string') {
-        return
-      }
-      setActionTarget({
-        handle: tab.terminal,
-        title: tab.title,
-        isActive: tab.terminal === activeHandleRef.current
-      })
-    } else if (tab.type === 'markdown') {
-      setMarkdownActionTarget(tab)
-    } else if (tab.type === 'file') {
-      setFileActionTarget(tab)
-    } else {
-      setBrowserActionTarget(tab)
-    }
-  }, [])
+  const openSessionTabActionSheet = useMobileSessionTabActionSheetOpener({
+    activeHandleRef,
+    setActionTarget,
+    setMarkdownActionTarget,
+    setFileActionTarget,
+    setBrowserActionTarget,
+    setAgentSessionActionTarget
+  })
 
   const openSessionTabActionSheetAfterKeyboardDismiss = useCallback(
     (tab: MobileSessionTab) => {

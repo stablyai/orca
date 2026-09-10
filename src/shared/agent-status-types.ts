@@ -3,6 +3,7 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
 import {
   normalizeInteractivePromptField,
@@ -80,6 +81,8 @@ export type AgentStatusOrchestrationContext = {
   parentPaneKey?: string
   coordinatorHandle?: string
   orchestrationRunId?: string
+  /** Durable orchestration categories combined with the current push-fed status observation. */
+  attention?: OrchestrationFleetAttention
 }
 
 export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle'
@@ -111,6 +114,8 @@ export type AgentStatusEntry = {
    *  which is the delivery/ordering clock a relay reconnect must restamp to stay monotonic.
    *  Absent for locally derived rows and old hosts; freshness falls back to `updatedAt`. */
   evidenceObservedAt?: number
+  /** True only while a host-held structured session is represented by its live status feed. */
+  structuredHostOwned?: true
   /** Timestamp (ms) when the current `state` was first reported.
    *  Why: separate from updatedAt so tool/prompt pings (which reset updatedAt) don't move it. */
   stateStartedAt: number

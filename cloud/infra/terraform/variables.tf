@@ -245,7 +245,7 @@ variable "relay_regional_placement_enabled" {
 
 variable "relay_region_rehome_source_cell_ids" {
   type        = set(string)
-  description = "Reviewed US Relay cells allowed to advertise and accept the regional rehome source protocol."
+  description = "Reviewed Relay cells, in any configured region, allowed to advertise and accept the regional rehome source protocol."
   default     = []
 }
 
@@ -466,6 +466,12 @@ variable "relay_gce_fenced_cells" {
   type        = set(string)
   description = "Reviewed relay GCE cell IDs whose Terraform-owned MIG target size is zero."
   default     = []
+}
+
+variable "relay_cloud_sql_private_ip" {
+  type        = bool
+  description = "Dial Cloud SQL over its private IP inside this VPC instead of its public IP through Cloud NAT. Requires the foundation root's private services access peering to be applied first; a cell that cannot reach the private IP never becomes ready."
+  default     = false
 }
 
 variable "relay_gce_cloud_sql_proxy_image" {

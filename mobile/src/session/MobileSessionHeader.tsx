@@ -168,6 +168,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                   {t.type === 'file' && (
                     <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
                   )}
+                  {t.type === 'agent-session' && <MobileAgentIcon agentId={t.agent} size={13} />}
                   {t.type === 'terminal' &&
                     (() => {
                       const agentId = resolveMobileTerminalTabAgentId(t)

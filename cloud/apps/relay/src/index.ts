@@ -10,12 +10,14 @@ import {
   roleOwnsAssignmentMaintenance
 } from './cell-admission-startup.js'
 import {
+  consumeRelayCellInventoryHold,
   consumeRelayDatabasePoolPressure,
   openRelayDatabase,
   readRelayDatabasePoolPressure
 } from './database.js'
 import { runAssignmentCleanup } from './assignment-cleanup-steps.js'
 import { runRelayBackgroundOperation } from './relay-background-operation.js'
+import { jitteredSweepIntervalMs } from './relay-sweep-schedule.js'
 import { observedRelayRequests } from './relay-observability.js'
 import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
 import { createRelayServer } from './relay-server.js'
@@ -54,7 +56,7 @@ const cleanupTimer = setInterval(
 const assignmentCleanupTimer = roleOwnsAssignmentMaintenance(config.role)
   ? setInterval(() => {
       void runAssignmentCleanup(assignments)
-    }, 30_000)
+    }, jitteredSweepIntervalMs(30_000))
   : null
 const inventorySnapshotTimer = roleOwnsAssignmentMaintenance(config.role)
   ? setInterval(() => {
@@ -78,7 +80,8 @@ inventorySnapshotTimer?.unref()
 migrationInventoryTimer?.unref()
 observability.start(() => ({
   ...runtimeCounts(),
-  ...consumeRelayDatabasePoolPressure(database)
+  ...consumeRelayDatabasePoolPressure(database),
+  ...consumeRelayCellInventoryHold(database)
 }))
 const regionalRehomeWorker = startRegionalRehomeWorker(config, assignments, {
   safetySnapshot: () => ({

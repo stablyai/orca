@@ -1,7 +1,8 @@
+import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ActivateAndRevealResult } from '@/lib/worktree-activation'
-import { startStructuredCodexLaunch } from '@/lib/structured-agent-session-launch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-codex-session'
+import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
+import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import { activateStructuredAgentSessionById } from '@/lib/structured-agent-session-tab-activation'
 
 type Activation = ActivateAndRevealResult | false
@@ -20,11 +21,11 @@ export async function settleFullCreationStructuredLaunch(args: {
 }> {
   let activation = args.initialActivation
   let structuredLaunchAccepted = args.structuredLaunch
-  if (!args.structuredLaunch || args.agent !== 'codex') {
+  if (!args.structuredLaunch || !isAgentSessionHandleProvider(args.agent)) {
     return { structuredLaunchAccepted, visibilityUnknown: false, activation }
   }
 
-  const launch = startStructuredCodexLaunch(args.worktreeId, { prompt: args.prompt })
+  const launch = startStructuredAgentLaunch(args.worktreeId, args.agent, { prompt: args.prompt })
   const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {
     structuredLaunchAccepted = false
     activation = await args.onDefinitiveRefusal()

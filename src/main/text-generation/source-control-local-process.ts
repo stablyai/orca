@@ -22,22 +22,25 @@ import type {
   TextGenerationOperation
 } from './source-control-text-generation-types'
 
-export function killSourceControlAgentProcess(
+export async function killSourceControlAgentProcess(
   child: SpawnedSourceControlAgentProcess
 ): Promise<void> {
   const pid = child.pid
   if (!pid) {
-    return Promise.resolve()
+    return
   }
   if (process.platform === 'win32') {
-    return terminateWindowsProcessTree(pid, { site: 'source-control-text-generation' })
+    // taskkill owns the tree, but the own-Chromium gate can refuse the
+    // pid-addressed walk; the handle-addressed root kill below cannot reach the
+    // recycled pid it refused, and callers release the managed-home lock on this
+    // promise, so it must not resolve having killed nothing.
+    await terminateWindowsProcessTree(pid, { site: 'source-control-text-generation' })
   }
   try {
     child.kill('SIGKILL')
   } catch {
     // The process may exit between the PID check and kill.
   }
-  return Promise.resolve()
 }
 
 export function runLocalSourceControlPlan(input: {

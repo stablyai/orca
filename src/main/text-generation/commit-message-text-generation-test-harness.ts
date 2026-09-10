@@ -33,15 +33,17 @@ export function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
 // expectChildTerminated(child) with no extra argument.
 export function createChildTerminationExpectation(
   terminateWindowsProcessTreeMock: ReturnType<typeof vi.fn>
-): (child: { pid: number; kill: ReturnType<typeof vi.fn> }) => void {
-  return (child) => {
+): (child: { pid: number; kill: ReturnType<typeof vi.fn> }) => Promise<void> {
+  return async (child) => {
     if (process.platform === 'win32') {
       expect(terminateWindowsProcessTreeMock).toHaveBeenCalledWith(child.pid, {
         site: 'source-control-text-generation'
       })
-      expect(child.kill).not.toHaveBeenCalled()
-      return
     }
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    // Every platform kills the root by its own handle. On win32 that is not a
+    // duplicate of the tree walk: it is what keeps a refused walk from resolving
+    // having killed nothing while the caller releases the managed-home lock. It
+    // runs after the walk there, so it can be a tick behind the caller.
+    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
   }
 }

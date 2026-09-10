@@ -21,11 +21,21 @@ export function isCaseInsensitiveRuntimeRoot(rootPath: string): boolean {
 }
 
 export function normalizeRuntimePathSeparators(value: string): string {
-  const normalized = value.replace(/\\/g, '/').replace(/\/+/g, '/')
+  const normalized = collapseRuntimePathSlashes(
+    value.includes('\\') ? value.replace(/\\/g, '/') : value
+  )
   if (value.startsWith('\\\\') || value.startsWith('//')) {
     return `//${normalized.replace(/^\/+/, '')}`
   }
   return normalized
+}
+
+/**
+ * Why the probe: `/\/+/g` can only change a string that contains `//`, and the scan is the
+ * dominant cost of every comparison key on the FS-event storm path (`includes` is ~30x cheaper).
+ */
+function collapseRuntimePathSlashes(value: string): string {
+  return value.includes('//') ? value.replace(/\/+/g, '/') : value
 }
 
 /**
@@ -45,7 +55,7 @@ export function normalizeRuntimePathForComparison(rawValue: string): string {
   // Why: backslash is a valid POSIX filename character; fold it only when the
   // path itself proves Windows drive/UNC semantics.
   const normalized = trimRuntimePathTrailingSlash(
-    isWindowsPath ? normalizeRuntimePathSeparators(value) : value.replace(/\/+/g, '/')
+    isWindowsPath ? normalizeRuntimePathSeparators(value) : collapseRuntimePathSlashes(value)
   )
   const wslUnc = normalized.match(/^\/\/(?:wsl\.localhost|wsl\$)\/([^/]+)(\/[\s\S]*)?$/i)
   if (wslUnc) {
@@ -190,7 +200,7 @@ export function relativePathInsideRoot(rootPath: string, candidatePath: string):
   const normalizedCandidate = trimRuntimePathTrailingSlash(
     isWindowsAbsolutePathLike(candidatePath.normalize('NFC'))
       ? normalizeRuntimePathSeparators(candidatePath)
-      : candidatePath.replace(/\/+/g, '/')
+      : collapseRuntimePathSlashes(candidatePath)
   )
   const comparisonRoot = normalizeRuntimePathForComparison(rootPath)
   const comparisonCandidate = normalizeRuntimePathForComparison(candidatePath)
@@ -242,6 +252,10 @@ function sliceCandidatePastRootSegments(root: string, candidate: string): string
 }
 
 function trimRuntimePathTrailingSlash(value: string): string {
+  // Nothing to trim, and neither preserved-root case can match, unless the value ends in `/`.
+  if (!value.endsWith('/')) {
+    return value
+  }
   if (value === '/' || /^[A-Za-z]:\/$/.test(value)) {
     return value
   }

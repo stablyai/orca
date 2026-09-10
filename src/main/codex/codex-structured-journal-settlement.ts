@@ -20,6 +20,7 @@ import {
 } from './codex-structured-item-translation'
 import type { CodexStructuredItemStreams } from './codex-structured-item-streams'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
 
 export type CodexActiveJournalItem = {
   threadId: string
@@ -116,6 +117,9 @@ export function settleCodexJournalTurn(input: {
   const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
   for (const [key, active] of input.activeItems) {
     if (active.threadId !== input.threadId || active.turnId !== input.turnId) {
+      continue
+    }
+    if (codexCommandOutlivesTurn(active.item)) {
       continue
     }
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
@@ -243,14 +247,12 @@ function appendLifecycleMutations(
       for (const mutation of chunk) {
         if (mutation.kind === 'item') {
           if (sink.tryAppendItem) {
-            admission = sink.tryAppendItem(mutation.identity, mutation.body, [], {
-              lifecycle: true
-            })
+            admission = sink.tryAppendItem(mutation.identity, mutation.body, { lifecycle: true })
             if (!admission.accepted) {
               return admission
             }
           } else {
-            sink.appendItem(mutation.identity, mutation.body, [], { lifecycle: true })
+            sink.appendItem(mutation.identity, mutation.body, { lifecycle: true })
           }
         } else {
           if (sink.tryAppendTombstone) {

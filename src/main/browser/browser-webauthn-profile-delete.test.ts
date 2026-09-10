@@ -48,7 +48,8 @@ function mockSession(): MockSession {
     setDevicePermissionHandler: vi.fn(),
     setDisplayMediaRequestHandler: vi.fn(),
     setPermissionCheckHandler: vi.fn(),
-    setPermissionRequestHandler: vi.fn()
+    setPermissionRequestHandler: vi.fn(),
+    webRequest: { onBeforeSendHeaders: vi.fn() }
   }) as unknown as MockSession
 }
 

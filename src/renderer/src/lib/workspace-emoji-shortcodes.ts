@@ -1,7 +1,13 @@
+import emojiShortcodes from 'emojibase-data/en/shortcodes/emojibase.json'
 import {
   getStandardEmojiShortcodeEntries,
+  setEmojiShortcodeDatasetLoader,
   type StandardEmojiShortcodeEntry
 } from '../../../shared/emoji-shortcode-catalog'
+
+// Why eager here and lazy in main: a dynamic import made the shortcode transform return an
+// empty catalog until it settled, so a `:wink:` submitted in that window persisted literally.
+setEmojiShortcodeDatasetLoader(() => emojiShortcodes)
 
 export type WorkspaceEmojiSuggestion = StandardEmojiShortcodeEntry
 

@@ -12,7 +12,7 @@ import {
 import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
 
 // Why this guard exists: xterm auto-replies to query sequences (DA1/DECRQM/OSC 10-11/CPR) via onData → shell stdin, so replaying recorded PTY bytes leaks stray replies onto the new shell's prompt.
-// No wasUserInput flag distinguishes replay replies from real keystrokes, so a per-pane in-flight counter gates onData; bounded by xterm's parse completion (not a timer), only auto-replies from replayed bytes are dropped.
+// The per-pane counter suppresses synthetic onData during replay parsing; xterm's user-input signal keeps real keystrokes flowing.
 
 export type ReplayingPanesRef = React.RefObject<Map<number, number>>
 
