@@ -78,14 +78,22 @@ export class SessionSearchIndexWriter {
     this.records = new SessionSearchFileRecords(db)
   }
 
-  /** This index's own cursor, or null when the file is unknown, changed, or half written. */
+  /**
+   * What the index holds for this file, or null when it holds nothing usable:
+   * an unknown path, or one whose recorded identity no longer matches.
+   *
+   * A file a chunked read left half written is reported, with a null cursor.
+   * Reporting nothing for it would read as "never indexed", so the caller would
+   * ask for whatever read the parse cache offers, the reader would pick append,
+   * and the decline would be the only thing that ever forced the whole read.
+   */
   indexedFile(path: string, identity: SessionSearchFileIdentity): SessionSearchIndexedFile | null {
     const row = this.db
       .prepare(
         'SELECT dev, ino, byte_offset, mtime_ms, size_bytes, session_row_id FROM files WHERE path = ?'
       )
       .get(path) as FileRow | undefined
-    if (!row || row.byte_offset === PARTIAL_FILE_CURSOR) {
+    if (!row) {
       return null
     }
     // A recorded identity that no longer matches is a different file at the same
@@ -103,7 +111,7 @@ export class SessionSearchIndexWriter {
       }
     }
     return {
-      byteOffset: row.byte_offset,
+      byteOffset: row.byte_offset === PARTIAL_FILE_CURSOR ? null : row.byte_offset,
       mtimeMs: row.mtime_ms,
       sizeBytes: row.size_bytes
     }
@@ -121,8 +129,15 @@ export class SessionSearchIndexWriter {
   ): SessionSearchFileWrite | null {
     const path = candidate.file.path
     const cursor = this.cursor(path)
-    if (mode === 'append' && cursor?.byte_offset !== previousByteOffset) {
-      return null
+    if (mode === 'append') {
+      // The partial sentinel is not a byte offset, so nothing continues it —
+      // including a caller that reads it back off the row and passes it in.
+      if (cursor === undefined || cursor.byte_offset === PARTIAL_FILE_CURSOR) {
+        return null
+      }
+      if (cursor.byte_offset !== previousByteOffset) {
+        return null
+      }
     }
     // A file the index read through and decoded no session from still has a
     // cursor worth continuing: it has no session row to hang new rows off, so

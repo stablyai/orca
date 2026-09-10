@@ -46,7 +46,8 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
       const cursor = this.store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
       if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
         // This index never saw the span before `previousByteOffset`; appending
-        // here would leave a hole no later read can fill.
+        // here would leave a hole no later read can fill. A null cursor is the
+        // file a chunked read left half written, which no offset continues.
         this.store.markStale(candidate)
         return null
       }

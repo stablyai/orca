@@ -37,7 +37,7 @@ function indexedMessages(): number {
   ).n
 }
 
-function cursor(): number | undefined {
+function cursor(): number | null | undefined {
   return store.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset
 }
 

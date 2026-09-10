@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
 import SyncDatabase from '../sqlite/sync-database'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
+import { requiresWholeRead } from './session-search-file-cursor'
 import { SessionSearchIndexWriter } from './session-search-index-writer'
 import {
   openSessionSearchIndexFile,
@@ -214,7 +215,7 @@ it('leaves the session consistent after every chunk of a file too large for one 
     if (rows > 0) {
       // The cursor a chunk leaves refuses every append rather than inventing an
       // offset the reader never gave it.
-      expect(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null)).toBeNull()
+      expect(requiresWholeRead(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null))).toBe(true)
       expect(writer.beginWrite(syntheticCandidate(), 'append', 0)).toBeNull()
     }
   }
@@ -235,6 +236,33 @@ it('leaves the session consistent after every chunk of a file too large for one 
   expect(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset).toBe(4096)
 })
 
+it('reports a chunk-partial file as held, and as one that must be read whole', () => {
+  const writer = new SessionSearchIndexWriter(index.db, 400)
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
+  for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
+    write.add(message)
+  }
+
+  // Held, with no cursor to continue. Reporting nothing here reads as "never
+  // indexed", so a caller asks for whatever read the parse cache offers, the
+  // reader picks append, and only a decline heals it a cycle later.
+  const held = writer.indexedFile(SYNTHETIC_TRANSCRIPT, null)
+  expect(held).not.toBeNull()
+  expect(held?.byteOffset).toBeNull()
+  expect(requiresWholeRead(held)).toBe(true)
+  expect(held?.mtimeMs).toBe(syntheticCandidate().file.mtimeMs)
+
+  // A file this index has never seen is still the other answer, so the two
+  // states a caller has to tell apart are distinguishable.
+  expect(writer.indexedFile('/never-seen.jsonl', null)).toBeNull()
+  expect(requiresWholeRead(null)).toBe(false)
+
+  // And no offset continues it, including the one the chunk recorded.
+  for (const offset of [0, -1, 400, 1000]) {
+    expect(writer.beginWrite(syntheticCandidate(), 'append', offset)).toBeNull()
+  }
+})
+
 it('re-reads a chunked file whole when its writer died between chunks', () => {
   const writer = new SessionSearchIndexWriter(index.db, 400)
   const abandoned = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
@@ -245,7 +273,7 @@ it('re-reads a chunked file whole when its writer died between chunks', () => {
 
   // Nothing can continue that prefix, so the only way forward is a whole re-read,
   // and that replaces every row the dead writer left.
-  expect(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null)).toBeNull()
+  expect(requiresWholeRead(writer.indexedFile(SYNTHETIC_TRANSCRIPT, null))).toBe(true)
   const replacement = writer.beginWrite(syntheticCandidate(), 'replace', 0)!
   replacement.add(userMessages('wholereread', 1)[0]!)
   expect(
