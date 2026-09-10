@@ -44,6 +44,10 @@ export default function VoiceSettingsScreen({
       return false
     }
     const epoch = requestEpoch.current
+    // Own the spinner from the read that clears it, so a retry after a failed load shows
+    // the spinner again instead of the stale error card. Reads are serialised by
+    // DictationSetupPollController, so no in-flight read can clear another's flag.
+    setLoading(true)
     try {
       const next = await operations.load()
       if (epoch !== requestEpoch.current) {

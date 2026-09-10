@@ -70,6 +70,36 @@ describe('voice settings poller integration', () => {
     )
   })
 
+  it('re-shows the spinner when a refocus retries a failed load', async () => {
+    const operations = {
+      load: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('Desktop unavailable'))
+        .mockImplementationOnce(() => new Promise(() => {})),
+      configure: vi.fn(),
+      download: vi.fn(),
+      delete: vi.fn()
+    } as VoiceSettingsOperations
+    const onBack = vi.fn()
+    await act(async () => {
+      renderer = create(createElement(VoiceSettingsScreen, { operations, focused: true, onBack }))
+    })
+    // The failed read leaves the error card up, exactly as base did.
+    expect(JSON.stringify(renderer.toJSON())).toContain('Desktop unavailable')
+    expect(renderer.root.findAllByType('ActivityIndicator')).toHaveLength(0)
+
+    await act(async () => {
+      renderer.update(createElement(VoiceSettingsScreen, { operations, focused: false, onBack }))
+    })
+    await act(async () => {
+      renderer.update(createElement(VoiceSettingsScreen, { operations, focused: true, onBack }))
+    })
+    expect((operations.load as ReturnType<typeof vi.fn>).mock.calls.length).toBe(2)
+    // Base re-showed the spinner on re-entry; the stale error must not sit there during the retry.
+    expect(renderer.root.findAllByType('ActivityIndicator')).toHaveLength(1)
+    expect(JSON.stringify(renderer.toJSON())).not.toContain('Desktop unavailable')
+  })
+
   it('drops the recovery read once the screen is no longer focused', async () => {
     let rejectConfigure: (error: Error) => void = () => {}
     const operations = {
