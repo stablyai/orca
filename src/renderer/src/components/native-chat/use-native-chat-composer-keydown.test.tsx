@@ -9,6 +9,7 @@ const COMMAND = {
   kind: 'command' as const,
   id: 'command:clear',
   name: 'clear',
+  token: '/clear',
   description: 'Clear history',
   skillCollision: false
 }
@@ -20,6 +21,7 @@ function picker(items = [COMMAND]): Extract<ComposerAutocomplete, { mode: 'slash
     items,
     triggerKey: '/:0',
     prefix: '/',
+    dispatchable: true,
     grouped: false,
     commandsEnabled: true,
     skillsEnabled: false,
