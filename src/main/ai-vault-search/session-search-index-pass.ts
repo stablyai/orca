@@ -14,6 +14,16 @@ export type SessionSearchIndexPassOptions = {
   signal?: AbortSignal
   /** Cycle allowance; work that does not fit comes back as `deferred`. */
   allowance?: SessionSearchCycleAllowance
+  /**
+   * True when the pass has run out of wall time and must hand the rest back.
+   *
+   * Why a second bound at all: the allowance counts files and bytes, and the
+   * pacer sleeps for up to 15 s a batch when the host is loaded, so a pass that
+   * never exceeds its byte budget can still hold the loop for a quarter of an
+   * hour. Checked before the allowance is spent, so nothing is charged for work
+   * this pass will not do.
+   */
+  overdue?: () => boolean
   /** Paths whose stored cursor must not be trusted, so the read is forced whole. */
   forced?: ReadonlySet<string>
   /** Sleeps between batches so an unasked backfill never owns the CPU. */
@@ -66,7 +76,7 @@ export async function runSessionSearchIndexPass(
     // cycle's writers appended, and re-statting every file to close it would
     // cost more than the number is worth.
     const bytes = forced ? (candidate.file.sizeBytes ?? 0) : unreadBytes(store, candidate)
-    if (options.allowance && !options.allowance.spend(bytes)) {
+    if (options.overdue?.() === true || (options.allowance && !options.allowance.spend(bytes))) {
       deferred.push(...candidates.slice(index))
       break
     }

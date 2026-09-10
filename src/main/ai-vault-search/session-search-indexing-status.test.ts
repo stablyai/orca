@@ -1,8 +1,37 @@
 import { expect, it } from 'vitest'
 import { SessionSearchIndexingStatus } from './session-search-indexing-status'
 
-it('walks discovering to indexing to current, and reports degraded roots once settled', () => {
+/** Every phase below `idle` describes work, and work begins at `start()`. */
+function startedStatus(): SessionSearchIndexingStatus {
   const status = new SessionSearchIndexingStatus()
+  status.setStarted()
+  return status
+}
+
+it('reports idle until it is started, rather than describing work nobody asked for', () => {
+  const status = new SessionSearchIndexingStatus()
+  expect(status.snapshot().phase).toBe('idle')
+  // Not `current` either: an index nobody built is not up to date.
+  status.setFilesIndexed(0)
+  expect(status.snapshot()).toMatchObject({ phase: 'idle', filesIndexed: 0 })
+
+  status.setStarted()
+  expect(status.snapshot().phase).toBe('indexing')
+})
+
+// `clear()` throws the index away, so the sweep that covered it no longer
+// covers anything; without this the emptied index reports itself current.
+it('stops calling itself swept once the index it swept has been cleared', () => {
+  const status = startedStatus()
+  status.sweepFinished(true)
+  expect(status.snapshot().phase).toBe('current')
+
+  status.forgetSweep()
+  expect(status.snapshot().phase).toBe('indexing')
+})
+
+it('walks discovering to indexing to current, and reports degraded roots once settled', () => {
+  const status = startedStatus()
   status.beginSweep()
   expect(status.snapshot()).toMatchObject({ phase: 'discovering', filesTotal: null })
 
@@ -24,7 +53,7 @@ it('walks discovering to indexing to current, and reports degraded roots once se
 })
 
 it('refuses to call itself current with work queued, or before a sweep finished', () => {
-  const status = new SessionSearchIndexingStatus()
+  const status = startedStatus()
   status.finishWork(1)
   // No sweep has ever completed, so nothing is known about the long tail.
   expect(status.snapshot().phase).toBe('indexing')
@@ -39,7 +68,7 @@ it('refuses to call itself current with work queued, or before a sweep finished'
 })
 
 it('does not let an aborted sweep count as a finished one', () => {
-  const status = new SessionSearchIndexingStatus()
+  const status = startedStatus()
   status.sweepFinished(false)
   status.finishWork(1)
   // The outcome is the argument, so reporting an aborted sweep cannot latch it.
@@ -53,7 +82,7 @@ it('does not let an aborted sweep count as a finished one', () => {
 })
 
 it('reports closed over every other phase', () => {
-  const status = new SessionSearchIndexingStatus()
+  const status = startedStatus()
   status.sweepFinished(true)
   status.finishWork(1)
   expect(status.snapshot().phase).toBe('current')
@@ -62,7 +91,7 @@ it('reports closed over every other phase', () => {
 })
 
 it('reports paused over everything, and keeps the counters it had', () => {
-  const status = new SessionSearchIndexingStatus()
+  const status = startedStatus()
   status.beginSweep()
   status.planned(3, 1)
   status.indexed(10)
@@ -80,7 +109,7 @@ it('reports paused over everything, and keeps the counters it had', () => {
 })
 
 it('starts a new sweep from zero but keeps what only an open can know', () => {
-  const status = new SessionSearchIndexingStatus()
+  const status = startedStatus()
   status.setRecoveredRows(7)
   status.beginSweep()
   status.planned(1, 0)

@@ -1,8 +1,8 @@
 import { basename, dirname } from 'node:path'
-import { splitOpenCodeSqliteCandidate } from '../ai-vault/session-scanner-opencode-sqlite-paths'
 import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
 import type { SessionSearchDirectoryReader } from './session-search-directory-listings'
 import { isUnderScanRoot } from './session-search-scan-roots'
+import { splitSyntheticSessionSource } from './session-search-synthetic-sources'
 import type { SessionSearchStore } from './session-search-store'
 
 /*
@@ -22,6 +22,10 @@ import type { SessionSearchStore } from './session-search-store'
  *     above it.
  * I4. A file, or a project directory, the user really deleted retires on the
  *     first pass that proves it. There is no waiting period and no census.
+ * I8. A row whose path names an entry inside a container rather than a file of
+ *     its own is proven the same way, one level up: the container must be
+ *     present, and the pass must have enumerated it in full and successfully.
+ *     A listing is a listing whether it comes from readdir or from a database.
  *
  * What I3 costs, stated rather than hidden: a volume mounted at exactly a
  * configured root, unmounted so that the mountpoint stays present and lists
@@ -56,6 +60,12 @@ export type SessionSearchRetirementArgs = {
   roots: readonly string[]
   /** Roots that listed transcripts on the previous pass and none on this one. */
   emptiedRoots?: ReadonlySet<string>
+  /**
+   * Containers this pass enumerated in full, with the ids each holds. Only a
+   * census builds it; see session-search-synthetic-sources.ts for the bar a
+   * container has to meet before it appears here.
+   */
+  enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>>
   /** One readdir per directory per pass, shared with the rest of the pass. */
   listings: SessionSearchDirectoryReader
   /** Directories walked before the pass moves on; the rest stay watched. */
@@ -100,15 +110,19 @@ export async function retireDeletedSessionSearchSources(
       retirement.unchecked.push(...paths.slice(index))
       break
     }
-    // A synthetic OpenCode row names the database it came from, never a file of
-    // its own; walking the candidate path would report every one of them gone.
-    const filePath = splitOpenCodeSqliteCandidate(path)?.dbPath ?? path
+    // A synthetic row names a container and an entry inside it, never a file of
+    // its own; walking the row's own path would report every one of them gone.
+    const synthetic = splitSyntheticSessionSource(path)
+    const filePath = synthetic?.container ?? path
     const root = configuredRootFor(filePath, args.roots)
-    const proof = await proveSource(filePath, root ?? dirname(filePath), {
+    const containerProof = await proveSource(filePath, root ?? dirname(filePath), {
       listings: args.listings,
       emptiedRoots,
       signal
     })
+    const proof = synthetic
+      ? proveSyntheticSource(synthetic, containerProof, args.enumeratedContainers)
+      : containerProof
     if (proof.verdict === 'gone') {
       store.removeFile(path)
       retirement.retired.push(path)
@@ -177,6 +191,39 @@ async function proveSource(
     return { verdict: 'gone' }
   }
   return { verdict: 'unverifiable', reason: `${root} could not be listed.` }
+}
+
+/**
+ * A synthetic row is proven by its container's own enumeration, one level above
+ * where the filesystem walk stops.
+ *
+ * The container has to be present first: a database on a volume that is not
+ * there proves nothing about the sessions inside it, and a database that is
+ * gone takes its sessions with it. Only then does the enumeration decide, and
+ * only when this pass made one that was exhaustive and successful -- a cycle
+ * asks for the newest N per agent, so an id it did not return may just be the
+ * one after them.
+ */
+function proveSyntheticSource(
+  synthetic: { container: string; id: string },
+  containerProof: SessionSearchSourceVerdict,
+  enumerated?: ReadonlyMap<string, ReadonlySet<string>>
+): SessionSearchSourceVerdict {
+  if (containerProof.verdict !== 'present') {
+    return containerProof
+  }
+  const ids = enumerated?.get(synthetic.container)
+  // An enumeration that returned nothing at all is not evidence that the
+  // container holds nothing: a source whose schema this scanner no longer
+  // recognises reads as empty with no error to see, and believing it would
+  // retire every entry in one pass.
+  if (!ids || ids.size === 0) {
+    return {
+      verdict: 'unverifiable',
+      reason: `${synthetic.container} was not enumerated in full this pass.`
+    }
+  }
+  return ids.has(synthetic.id) ? { verdict: 'present' } : { verdict: 'gone' }
 }
 
 /** Longest configured root containing the path, or null for a row under none. */

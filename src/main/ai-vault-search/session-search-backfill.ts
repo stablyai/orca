@@ -26,6 +26,7 @@ import {
   type SessionSearchScanRoots
 } from './session-search-scan-roots'
 import type { SessionSearchStore } from './session-search-store'
+import { sessionSearchEnumeratedContainers } from './session-search-synthetic-sources'
 
 // One walk each, for paths the sweep did not discover. Normally near zero; the
 // cap is there for the case that is not normal, an unmounted tree, where the
@@ -42,6 +43,8 @@ export type SessionSearchBackfillArgs = {
   previousRootsWithFiles?: ReadonlySet<string>
   /** This pass's reading allowance; what does not fit comes back as `deferred`. */
   allowance?: SessionSearchCycleAllowance
+  /** True once the pass is out of wall time; the rest comes back as `deferred`. */
+  overdue?: () => boolean
   listings: SessionSearchDirectoryReader
   pace?: (signal?: AbortSignal) => Promise<void>
   signal?: AbortSignal
@@ -102,6 +105,7 @@ export async function runSessionSearchBackfill(
         signal,
         pace: args.pace,
         allowance: args.allowance,
+        overdue: args.overdue,
         onIndexed: (_candidate, bytes) => status.indexed(bytes),
         onFailed: () => status.failed()
       })
@@ -149,6 +153,9 @@ export async function runSessionSearchBackfill(
           store,
           paths: undiscovered,
           roots,
+          // Only a sweep enumerates without a per-agent limit, so only a sweep
+          // may prove a synthetic row's container holds it no longer.
+          enumeratedContainers: sessionSearchEnumeratedContainers(swept.candidates, issues),
           emptiedRoots: previousRootsWithFiles
             ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
             : new Set(),

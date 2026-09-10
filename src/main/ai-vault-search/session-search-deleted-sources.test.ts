@@ -1,6 +1,7 @@
 import { chmod, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { parserPublishesMessages } from '../ai-vault/session-scanner-agent-parser'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
 import { retireDeletedSessionSearchSources } from './session-search-deleted-sources'
 import {
@@ -54,6 +55,7 @@ function retire(
   options: {
     roots?: readonly string[]
     emptiedRoots?: ReadonlySet<string>
+    enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>>
     listings?: SessionSearchDirectoryReader
     limit?: number
   } = {}
@@ -63,6 +65,7 @@ function retire(
     paths,
     roots: options.roots ?? [harness.roots.claudeProjectsDir ?? ''],
     emptiedRoots: options.emptiedRoots,
+    enumeratedContainers: options.enumeratedContainers,
     listings: options.listings ?? new SessionSearchDirectoryListings(),
     limit: options.limit
   })
@@ -226,14 +229,71 @@ it('judges a row under no configured root by its own directory', async () => {
   expect(result.degradedRoots).toEqual([])
 })
 
-it('stats the database behind a synthetic OpenCode row, not the row itself', async () => {
+// I8. A synthetic row names a container and an entry inside it. Walking the
+// row's own path would report every one of them gone, and walking only the
+// container proves nothing about the entry: a session deleted inside a database
+// that is still there would never be retired at all.
+it('proves a synthetic row against its container, not against its own path', async () => {
   const db = join(harness.root, 'opencode.db')
   await writeFile(db, '')
-  const alive = `${db}#session-1`
-  await expect(retire([alive], { roots: [] })).resolves.toMatchObject({ retired: [] })
+  const kept = `${db}#session-1`
+  const deleted = `${db}#session-2`
+  const enumeratedContainers = new Map([[db, new Set(['session-1'])]])
+
+  const result = await retire([kept, deleted], { roots: [], enumeratedContainers })
+  expect(result.retired).toEqual([deleted])
+  expect(result.unverifiable).toEqual([])
+})
+
+it('keeps a synthetic row when this pass did not enumerate its container', async () => {
+  const db = join(harness.root, 'opencode.db')
+  await writeFile(db, '')
+  const row = `${db}#session-1`
+
+  // A cycle asks for the newest N per agent, so a row it did not return may be
+  // the one after them. It enumerates nothing and therefore proves nothing.
+  await expect(retire([row], { roots: [] })).resolves.toMatchObject({
+    retired: [],
+    unverifiable: [row]
+  })
+
+  // An enumeration that returned nothing at all is not evidence either: a
+  // database whose schema this scanner no longer recognises reads as empty
+  // with no error, and believing it would retire every session in one pass.
+  await expect(
+    retire([row], { roots: [], enumeratedContainers: new Map([[db, new Set<string>()]]) })
+  ).resolves.toMatchObject({ retired: [], unverifiable: [row] })
+})
+
+it('retires a synthetic row when the container it came from is gone', async () => {
+  const db = join(harness.root, 'opencode.db')
+  await writeFile(db, '')
+  const row = `${db}#session-1`
+  const enumeratedContainers = new Map([[db, new Set(['session-1'])]])
+  await expect(retire([row], { roots: [], enumeratedContainers })).resolves.toMatchObject({
+    retired: []
+  })
 
   await rm(db)
-  await expect(retire([alive], { roots: [] })).resolves.toMatchObject({ retired: [alive] })
+  await expect(retire([row], { roots: [], enumeratedContainers })).resolves.toMatchObject({
+    retired: [row]
+  })
+})
+
+// Nothing in this PR can hold a synthetic row: the index pass refuses a source
+// whose parser decodes its messages where the message channel cannot reach
+// them, and OpenCode's SQLite sessions are read on a worker thread. The rule
+// above is the guard for the day that changes -- without it the walk would read
+// `<db>#<id>` as a filename and retire every such row the moment it appeared.
+it('does not index a source whose messages the channel cannot reach', () => {
+  const db = join(harness.root, 'opencode.db')
+  expect(
+    parserPublishesMessages({
+      agent: 'opencode',
+      codexHome: null,
+      file: { path: `${db}#session-1`, mtimeMs: 1, modifiedAt: '', sizeBytes: 0 }
+    })
+  ).toBe(false)
 })
 
 it('caps the walks one pass spends and leaves the rest to be checked again', async () => {

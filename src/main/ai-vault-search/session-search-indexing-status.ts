@@ -6,8 +6,13 @@ import type { SessionSearchDegradedRoot } from './session-search-degraded-roots'
  * `current` is the honest ceiling: the reconciler promises the newest N per
  * agent within one interval, not every transcript on the machine, so nothing
  * here ever claims the whole index is up to date.
+ *
+ * `idle` is the other end of it: an indexer nobody has started is not behind on
+ * anything, because it never promised to index. Reporting that as `indexing`
+ * described work that no timer was going to do.
  */
 export type SessionSearchIndexPhase =
+  | 'idle'
   | 'discovering'
   | 'indexing'
   | 'current'
@@ -46,6 +51,7 @@ export type SessionSearchIndexStatus = {
 /** Observes the backfill and the reconciler; owns no work and no timers. */
 export class SessionSearchIndexingStatus {
   private working: 'discovering' | 'indexing' | null = null
+  private started = false
   private paused = false
   private closed = false
   private sweptClean = false
@@ -91,6 +97,11 @@ export class SessionSearchIndexingStatus {
     if (this.closed) {
       return 'closed'
     }
+    if (!this.started) {
+      // Before `start()` nothing runs and nothing is owed; `reconcile()` is
+      // refused here too, so there is no work in flight to describe.
+      return 'idle'
+    }
     if (this.paused) {
       return 'paused'
     }
@@ -127,6 +138,11 @@ export class SessionSearchIndexingStatus {
   /** Files the index holds, counted in the store rather than tallied per attempt. */
   setFilesIndexed(files: number): void {
     this.filesIndexed = files
+  }
+
+  /** `start()` was called; from here the phases describe work. */
+  setStarted(): void {
+    this.started = true
   }
 
   setPaused(paused: boolean): void {

@@ -49,6 +49,11 @@ export class SessionSearchBackfillRemainder {
    * at a time. Rolling the remainder over rather than re-discovering keeps a
    * first run off the 33 s cold discovery every pass.
    *
+   * This runs inside the reconcile cycle, so `overdue` is what keeps the
+   * recent-N-per-interval promise: without it the pacer's load back-off can
+   * hold one pass for far longer than the interval and every recency check
+   * queues behind it.
+   *
    * Returns true once a plan too large for the queue has been read through:
    * discovery still owes the files the queue could not hold, and one sweep
    * settles that debt.
@@ -58,7 +63,8 @@ export class SessionSearchBackfillRemainder {
     allowance: SessionSearchCycleAllowance,
     status: SessionSearchIndexingStatus,
     pace: (signal?: AbortSignal) => Promise<void>,
-    signal: AbortSignal
+    signal: AbortSignal,
+    overdue?: () => boolean
   ): Promise<boolean> {
     if (this.entries.size === 0) {
       return false
@@ -71,6 +77,7 @@ export class SessionSearchBackfillRemainder {
         signal,
         pace,
         allowance,
+        overdue,
         onIndexed: (_candidate, bytes) => status.indexed(bytes),
         onFailed: () => status.failed()
       })

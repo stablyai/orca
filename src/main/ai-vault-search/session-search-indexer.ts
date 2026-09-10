@@ -23,13 +23,8 @@ import {
   SessionSearchCycleAllowance
 } from './session-search-reconcile-budget'
 import { runSessionSearchReconcileCycle } from './session-search-reconciler'
-import {
-  narrowsSessionSearchHistory,
-  sessionSearchHistoryCutoffMs,
-  widensSessionSearchHistory
-} from './session-search-retention-policy'
+import { SessionSearchRetentionWindow } from './session-search-retention-policy'
 import { SessionSearchRootRecovery } from './session-search-root-recovery'
-import { removeSessionSearchDatabase } from './session-search-schema'
 import { SessionSearchRegisteredStore } from './session-search-registered-store'
 import type { SessionSearchStore } from './session-search-store'
 import { SessionSearchWorkLoop } from './session-search-work-loop'
@@ -62,11 +57,11 @@ export class SessionSearchIndexer {
   private readonly pace: (signal?: AbortSignal) => Promise<void>
 
   private readonly loop: SessionSearchWorkLoop
-  private readonly registered = new SessionSearchRegisteredStore()
+  private readonly registered: SessionSearchRegisteredStore
   private previousRecent = new Set<string>()
   private readonly rootRecovery = new SessionSearchRootRecovery()
   private readonly backfillRemainder = new SessionSearchBackfillRemainder()
-  private historyDays: number | null
+  private readonly retention: SessionSearchRetentionWindow
   private started = false
   private paused = false
   private purgeDue = false
@@ -88,7 +83,8 @@ export class SessionSearchIndexer {
     )
     this.onError = options.onError ?? ((error) => console.warn('[ai-vault-search]', error))
     this.pace = options.pace ?? pauseBackfill
-    this.historyDays = options.historyDays
+    this.registered = new SessionSearchRegisteredStore(options.databasePath, this.onError)
+    this.retention = new SessionSearchRetentionWindow(options.historyDays)
     this.loop = new SessionSearchWorkLoop({
       clock: this.clock,
       intervalMs: this.intervalMs,
@@ -108,6 +104,7 @@ export class SessionSearchIndexer {
     }
     this.started = true
     this.fullSweepDue = true
+    this.indexingStatus.setStarted()
     // Started while paused: `resume()` is what arms the timer. Queueing a pass
     // that returns immediately would resolve this call as though one had run.
     return this.paused ? this.loop.settled : this.tick()
@@ -149,9 +146,12 @@ export class SessionSearchIndexer {
     }
     this.loop.disarm()
     this.loop.abort()
+    // Recorded before it is queued: `close()` performs whatever is still owed,
+    // because a caller who asked for the index to be thrown away and got a
+    // resolved promise back must not be left with the database on disk.
+    this.registered.requestRemoval()
     this.loop.queue(async () => {
       this.registered.close()
-      removeSessionSearchDatabase(this.options.databasePath)
       this.pending.clear()
       this.previousRecent = new Set()
       this.rootRecovery.reset()
@@ -163,9 +163,16 @@ export class SessionSearchIndexer {
     return this.started && !this.paused ? this.tick() : this.loop.settled
   }
 
-  /** Runs one pass now, off the timer. A full pass sweeps every root. */
+  /**
+   * Runs one pass now, off the timer. A full pass sweeps every root.
+   *
+   * Refused before `start()`. A pass run against an indexer nobody started
+   * writes the index once and then leaves it to go stale, because there is no
+   * timer to arm and nothing to notice the next change; a caller that wants one
+   * pass wants `start()`.
+   */
   reconcile(options: { full?: boolean } = {}): Promise<void> {
-    if (this.closed) {
+    if (this.closed || !this.started) {
       return this.loop.settled
     }
     this.fullSweepDue ||= options.full === true
@@ -196,11 +203,10 @@ export class SessionSearchIndexer {
     if (this.closed) {
       return this.loop.settled
     }
-    const previous = this.historyDays
-    this.historyDays = historyDays
+    const change = this.retention.moveTo(historyDays)
     const cutoffMs = this.cutoffMs()
     this.store?.setRetentionCutoffMs(cutoffMs)
-    if (narrowsSessionSearchHistory(previous, historyDays)) {
+    if (change === 'purge') {
       if (this.paused) {
         this.purgeDue = true
         return this.loop.settled
@@ -209,7 +215,7 @@ export class SessionSearchIndexer {
         await this.store?.purgeOlderThan(cutoffMs, signal)
       })
     }
-    if (!widensSessionSearchHistory(previous, historyDays)) {
+    if (change !== 'resweep') {
       return this.loop.settled
     }
     this.fullSweepDue = true
@@ -235,6 +241,8 @@ export class SessionSearchIndexer {
     // otherwise still run, and `clear()`'s task reopens the store. Closing the
     // loop makes every queued task a no-op, so nothing can register a consumer
     // or open a database against an indexer the caller has finished with.
+    // The store, its registration, and a removal a queued `clear()` will now
+    // never perform, because closing the loop is what stops that task running.
     this.loop.close()
     this.registered.close()
   }
@@ -266,22 +274,33 @@ export class SessionSearchIndexer {
     this.purgeDue = false
     // One readdir per directory for the whole pass, shared by everything in it.
     const listings = new SessionSearchDirectoryListings()
+    // A pass may hold the loop for one interval and no longer. The allowance
+    // bounds bytes; this bounds wall time, which is what the pacer's load
+    // back-off spends without spending a single byte of budget.
+    const startedAt = this.clock.now()
+    const overdue = (): boolean => this.clock.now() - startedAt >= this.intervalMs
     if (this.fullSweepDue) {
+      // Cleared before the sweep runs, not after: a widening or an explicit
+      // `reconcile({ full: true })` raised while this one is in flight sets the
+      // flag again, and clearing it on the way out would erase that request
+      // along with this pass's own. An unfinished sweep sets it back itself.
+      this.fullSweepDue = false
       // A sweep opens with a purge of its own; running one here first would
       // compact the database twice for the same narrowing.
-      await this.sweep(store, cutoffMs, listings, signal)
+      await this.sweep(store, cutoffMs, listings, overdue, signal)
       return
     }
     if (purgeDue) {
       await store.purgeOlderThan(cutoffMs, signal)
     }
-    await this.cycle(store, listings, signal)
+    await this.cycle(store, listings, overdue, signal)
   }
 
   private async sweep(
     store: SessionSearchStore,
     cutoffMs: number | null,
     listings: SessionSearchDirectoryListings,
+    overdue: () => boolean,
     signal: AbortSignal
   ): Promise<void> {
     const sweep = await runSessionSearchBackfill({
@@ -292,11 +311,13 @@ export class SessionSearchIndexer {
       previousRootsWithFiles: this.rootRecovery.previousRootsWithFiles,
       allowance: this.backfillAllowance,
       listings,
+      overdue,
       pace: this.pace,
       signal
     })
     this.indexingStatus.sweepFinished(sweep.completed)
     if (!sweep.completed) {
+      this.fullSweepDue = true
       // An aborted sweep saw part of the machine, so it learned nothing about
       // root health or orphans. Publishing its empty findings would clear a
       // live alarm.
@@ -306,7 +327,6 @@ export class SessionSearchIndexer {
       // transcripts until something else happened to ask for a full sweep.
       return
     }
-    this.fullSweepDue = false
     // Only what this sweep could not settle. A file it discovered and proved
     // present needs no watching: the recency window covers the ones that
     // change, and an old file deleted later is the next sweep's to find.
@@ -320,6 +340,7 @@ export class SessionSearchIndexer {
   private async cycle(
     store: SessionSearchStore,
     listings: SessionSearchDirectoryListings,
+    overdue: () => boolean,
     signal: AbortSignal
   ): Promise<void> {
     this.allowance.reset()
@@ -351,13 +372,14 @@ export class SessionSearchIndexer {
       this.backfillAllowance,
       this.indexingStatus,
       this.pace,
-      signal
+      signal,
+      overdue
     )
     this.indexingStatus.finishWork(this.clock.now())
   }
 
   private cutoffMs(): number | null {
-    return sessionSearchHistoryCutoffMs(this.historyDays, this.clock.now())
+    return this.retention.cutoffMs(this.clock.now())
   }
 
   private publishPending(): void {
@@ -374,12 +396,7 @@ export class SessionSearchIndexer {
   }
 
   private openStore(): void {
-    const store = this.registered.open({
-      databasePath: this.options.databasePath,
-      onError: this.onError,
-      cutoffMs: this.cutoffMs(),
-      acceptingWrites: !this.paused
-    })
+    const store = this.registered.open(this.cutoffMs(), !this.paused)
     this.indexingStatus.setRecoveredRows(store.recoveredWrites)
   }
 }

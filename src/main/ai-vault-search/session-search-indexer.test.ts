@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { appendFile, chmod, mkdir, rename, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -21,6 +22,7 @@ const INTERVAL_MS = 20_000
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
 const SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const OTHER_SESSION_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
+const SETTLED_SESSION_ID = 'dddddddd-cccc-4ddd-8eee-ffffffffffff'
 
 let harness: SessionSearchIndexerHarness
 let clock: FakeSessionSearchClock
@@ -95,6 +97,23 @@ function indexedCursor(path: string): { mtime_ms: number; size_bytes: number } |
 
 function transcriptPath(name = SESSION_ID): string {
   return join(harness.claudeProjectDir, `${name}.jsonl`)
+}
+
+/**
+ * Starts the indexer over a root that already holds one indexed transcript, so
+ * the opening sweep is behind us and `reconcile()` runs a cycle. It is dated
+ * ahead of everything the caller writes afterwards, so it stays inside any
+ * recency window and is skipped rather than read.
+ */
+async function startAfterASweep(
+  overrides: Partial<ConstructorParameters<typeof SessionSearchIndexer>[0]> = {}
+): Promise<void> {
+  const settled = transcriptPath(SETTLED_SESSION_ID)
+  await writeClaudeTranscript(settled, ['a conversation from before'], SETTLED_SESSION_ID)
+  // Wall time, not the fake clock: recency is decided by real file mtimes.
+  const ahead = new Date(Date.now() + 3_600_000)
+  await utimes(settled, ahead, ahead)
+  await newIndexer(overrides).start()
 }
 
 /** Advances one reconcile interval and waits for the cycle it fires. */
@@ -285,6 +304,9 @@ it.skipIf(!CAN_DENY_READ)(
 )
 
 it('spends a cycle budget and rolls the rest into the next cycle', async () => {
+  // The sweep is behind us, so this is the reconciler having to fit four files
+  // into a two-file allowance.
+  await startAfterASweep({ budget: { files: 2, bytes: 64 * 1024 } })
   for (let index = 0; index < 4; index++) {
     await writeClaudeTranscript(
       transcriptPath(`0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`),
@@ -292,11 +314,8 @@ it('spends a cycle budget and rolls the rest into the next cycle', async () => {
       `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
     )
   }
-  // Start with the index off so the first pass through the reconciler is the
-  // one that has to fit four files into a two-file allowance.
-  newIndexer({ budget: { files: 2, bytes: 64 * 1024 } })
   await indexer?.reconcile()
-  expect(indexer?.status().filesIndexed).toBe(2)
+  expect(indexer?.status().filesIndexed).toBe(3)
   expect(indexer?.status().filesPending).toBe(2)
 
   await indexer?.reconcile()
@@ -308,13 +327,13 @@ it('spends a cycle budget and rolls the rest into the next cycle', async () => {
 // session list has been scanning since launch, so every transcript already has
 // a cursor sitting at its current stat and the index has nothing at all.
 it('fills an empty index over a warm session-list cache on the first reconcile', async () => {
+  await startAfterASweep()
   const path = transcriptPath()
   await writeClaudeTranscript(path, ['scanned before the index existed'], SESSION_ID)
   // An ordinary parse now reuses its cached fold and opens no file, so no
   // consumer is asked and there is nothing for a decline to record.
   await parseTranscript(path)
 
-  newIndexer()
   await indexer?.reconcile()
 
   expect(sessionsMatching('scanned')).toEqual([SESSION_ID])
@@ -403,6 +422,8 @@ it('moves the retention window with the clock instead of freezing it at construc
 // Finding 3: an invalidated path outside the recency window was resolved only
 // through rows the index already held, so anything else was dropped unread.
 it('reads an invalidated transcript from outside the recency window', async () => {
+  // Newest-one per root, and the index has never seen either file below.
+  await startAfterASweep({ recentPerAgent: 1 })
   const older = transcriptPath(OTHER_SESSION_ID)
   await writeClaudeTranscript(older, ['the older conversation'], OTHER_SESSION_ID)
   await writeClaudeTranscript(transcriptPath(), ['the newer conversation'], SESSION_ID)
@@ -410,8 +431,6 @@ it('reads an invalidated transcript from outside the recency window', async () =
   const ahead = new Date(newer.mtimeMs + 60_000)
   await utimes(transcriptPath(), ahead, ahead)
 
-  // Newest-one per root, and the index has never seen either file.
-  newIndexer({ recentPerAgent: 1 })
   indexer?.invalidate([older])
   await indexer?.reconcile()
 
@@ -444,14 +463,14 @@ it('reports closed once it is closed, whatever it was doing before', async () =>
 // that stat writes a cursor describing a file that no longer looks like this,
 // so the next cycle distrusts it and re-reads it, forever.
 it('reads a queued file at its current stat, not the one it was queued with', async () => {
+  // One file per cycle, so the older one is deferred carrying this stat.
+  await startAfterASweep({ budget: { files: 1, bytes: 64 * 1024 } })
   const older = transcriptPath(OTHER_SESSION_ID)
   await writeClaudeTranscript(older, ['the deferred conversation'], OTHER_SESSION_ID)
   await writeClaudeTranscript(transcriptPath(), ['the newer conversation'], SESSION_ID)
   const ahead = new Date((await stat(transcriptPath())).mtimeMs + 60_000)
   await utimes(transcriptPath(), ahead, ahead)
 
-  // One file per cycle, so the older one is deferred carrying this stat.
-  newIndexer({ budget: { files: 1, bytes: 64 * 1024 } })
   await indexer?.reconcile()
   expect(indexer?.status().filesPending).toBe(1)
 
@@ -727,23 +746,27 @@ it('counts a file queued in both places once', async () => {
 // queue running. A `clear()` queued a moment earlier would then delete the
 // database, open a new one and register a consumer against it, all behind an
 // indexer whose caller had finished with it.
-it('lets nothing queued before close reopen the store', async () => {
+//
+// F2 is the other half of the same seam: the queued task never running is what
+// `close()` is for, but `clear()` had already resolved, so a caller who asked
+// for the index to be thrown away was left with it on disk. The close finishes
+// the removal itself rather than reopening anything.
+it('finishes a clear that was still queued when it was closed', async () => {
   await writeClaudeTranscript(transcriptPath(), ['indexed before the close'], SESSION_ID)
   await newIndexer().start()
+  expect(existsSync(harness.databasePath)).toBe(true)
 
   // `clear()` queues the work that removes the database and opens a new one.
   const clearing = indexer?.clear()
   indexer?.close()
   await clearing
 
-  expect(sessionsMatching('before')).toEqual([SESSION_ID])
-
-  // And nothing is registered as a consumer any more, so a transcript written
-  // after the close gets no row however many times it is parsed.
+  // Removed, and not reopened: a close leaves no store and no consumer behind.
+  expect(existsSync(harness.databasePath)).toBe(false)
   const after = transcriptPath(OTHER_SESSION_ID)
   await writeClaudeTranscript(after, ['written after the close'], OTHER_SESSION_ID)
   await parseTranscript(after)
-  expect(sessionsMatching('after')).toEqual([])
+  expect(existsSync(harness.databasePath)).toBe(false)
 })
 
 // I7: the backfill reads transcript bytes, so it is budgeted like every other
@@ -903,4 +926,82 @@ it('never reports more files indexed than the total behind them', async () => {
   // A cycle measures the recency window, not a population, so it reports none.
   await nextCycle()
   expect(indexer?.status().filesTotal).toBeNull()
+})
+
+// F1: `fullSweepDue` stayed set across the sweep's await and was cleared on the
+// way out, so a request raised while a sweep was running was erased by the
+// sweep it arrived during. The pass takes the flag on entry now, and an
+// unfinished sweep is what puts it back.
+it('indexes a transcript the history window widened in during a sweep', async () => {
+  for (let index = 0; index < 20; index++) {
+    const session = `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
+    await writeClaudeTranscript(transcriptPath(session), [`recent session ${index}`], session)
+  }
+  const old = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(old, ['an ancient conversation'], OTHER_SESSION_ID)
+  const longAgo = new Date(Date.now() - 120 * 86_400_000)
+  await utimes(old, longAgo, longAgo)
+
+  let paced = 0
+  newIndexer({
+    historyDays: 30,
+    // Widen part way through the sweep, which is when a user flips the setting.
+    pace: async () => {
+      if (paced++ === 0) {
+        void indexer?.setHistoryDays(null)
+      }
+    }
+  })
+  await indexer?.start()
+  await indexer?.settled()
+
+  expect(sessionsMatching('ancient')).toEqual([OTHER_SESSION_ID])
+})
+
+it('runs another sweep when one is asked for during a sweep', async () => {
+  for (let index = 0; index < 20; index++) {
+    const session = `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
+    await writeClaudeTranscript(transcriptPath(session), [`recent session ${index}`], session)
+  }
+  const late = transcriptPath(OTHER_SESSION_ID)
+
+  let paced = 0
+  // Newest-one per root, so nothing but a second sweep can reach the file that
+  // appears after this sweep's discovery has already run.
+  newIndexer({
+    recentPerAgent: 1,
+    pace: async () => {
+      if (paced++ > 0) {
+        return
+      }
+      await writeClaudeTranscript(late, ['a late conversation'], OTHER_SESSION_ID)
+      const backdated = new Date(Date.now() - 86_400_000)
+      await utimes(late, backdated, backdated)
+      void indexer?.reconcile({ full: true })
+    }
+  })
+  await indexer?.start()
+  await indexer?.settled()
+
+  expect(sessionsMatching('late')).toEqual([OTHER_SESSION_ID])
+})
+
+// F4: the allowance counts files and bytes, and the pacer sleeps for up to 15 s
+// a batch on a loaded host, so a pass that never came near its byte budget
+// could hold the loop for a quarter of an hour. Since the backfill drains
+// inside the reconcile cycle, that is the recency promise gone.
+it('hands the rest of a pass back when it runs out of wall time', async () => {
+  for (let index = 0; index < 20; index++) {
+    const session = `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
+    await writeClaudeTranscript(transcriptPath(session), [`paced session ${index}`], session)
+  }
+  // Half an interval per pacing point, which is what a loaded host's back-off
+  // costs. Eight files a batch, so the third batch is over the line.
+  await newIndexer({ pace: async () => clock.advance(INTERVAL_MS / 2) }).start()
+
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 16, filesPending: 4 })
+
+  // And the pass after it picks up exactly what was handed back.
+  await nextCycle()
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 20, filesPending: 0 })
 })

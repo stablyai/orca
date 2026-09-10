@@ -37,3 +37,35 @@ export function widensSessionSearchHistory(previous: number | null, next: number
   const to = normalizeSessionSearchHistoryDays(next)
   return from !== null && (to === null || to > from)
 }
+
+/** What a change to the window asks of whoever owns the index. */
+export type SessionSearchRetentionChange = 'purge' | 'resweep' | 'nothing'
+
+/**
+ * The retention window an indexer is currently keeping, and what moving it
+ * costs. The arithmetic and the decision live together because the two have to
+ * agree: a purge that uses one cutoff while the accept check holds another
+ * deletes rows the very next candidate re-indexes.
+ */
+export class SessionSearchRetentionWindow {
+  constructor(private historyDays: number | null) {}
+
+  /** The oldest transcript mtime worth indexing right now, or null for all history. */
+  cutoffMs(nowMs: number): number | null {
+    return sessionSearchHistoryCutoffMs(this.historyDays, nowMs)
+  }
+
+  /**
+   * Moves the window and says what it asks for: narrowing purges the rows now
+   * outside it, widening needs a sweep because the files beyond the old bound
+   * were never read at all.
+   */
+  moveTo(historyDays: number | null): SessionSearchRetentionChange {
+    const previous = this.historyDays
+    this.historyDays = historyDays
+    if (narrowsSessionSearchHistory(previous, historyDays)) {
+      return 'purge'
+    }
+    return widensSessionSearchHistory(previous, historyDays) ? 'resweep' : 'nothing'
+  }
+}
