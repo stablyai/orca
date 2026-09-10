@@ -210,7 +210,8 @@ export default function EpubViewer({
             aria-label={translate('epub.viewer.previousPage', 'Previous page')}
             className="absolute left-2 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-full p-1.5 text-muted-foreground/60 hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-0"
           >
-            <ChevronLeft size={20} />
+            {/* Why: a chevron reads as weighted toward its point; nudge it back to look optically centered. */}
+            <ChevronLeft size={20} className="translate-x-[1px]" />
           </button>
           <button
             type="button"
@@ -219,7 +220,7 @@ export default function EpubViewer({
             aria-label={translate('epub.viewer.nextPage', 'Next page')}
             className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center justify-center rounded-full p-1.5 text-muted-foreground/60 hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-0"
           >
-            <ChevronRight size={20} />
+            <ChevronRight size={20} className="translate-x-[-1px]" />
           </button>
         </div>
       </div>
