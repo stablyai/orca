@@ -140,6 +140,22 @@ CI does not set `RPC_FOUNDATION_REFERENCE_ROOT`. These three checks remain opt-i
 in-memory mutant checks run in CI. No archived-tree checks are registered for other
 families because no reference states are defined for them.
 
+## Known-open holes
+
+Two behavioural mutations are not caught by any golden. Both were confirmed by mutating product
+source and re-deriving the whole suite; neither is reachable through the adapters as they stand,
+so closing them needs new adapter capability rather than another scenario. Anyone migrating these
+call sites should not assume the recordings will notice a change here:
+
+- **`use-host-repo-metadata.ts` cross-module cache write.** Deleting `setCachedRepos(...)` survives.
+  No adapter mounts `useNewWorkspaceRepositories`, which is the consumer that reads that cache to
+  open workspace creation without waiting, so the write has no observer. Closing it needs a
+  cache-consumer mount after the metadata fetch.
+- **`use-pr-bot-author-overrides.ts` client-identity guard.** Forcing
+  `sourceClientRef.current !== client` to `false` survives. The adapter closes over one client
+  object: `reset` changes only the refresh key, `cutover` migrates the same stable logical client,
+  and remounting discards the old hook state. Closing it needs a same-mount client replacement.
+
 The original settings slice coverage maps nine host-RPC callers in
 `settings-recording-coverage.json`; device-preference entries are excluded by coordinator
 instruction. Later manifest additions require new scenarios and remain uncovered until
