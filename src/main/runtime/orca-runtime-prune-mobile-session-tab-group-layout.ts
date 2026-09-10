@@ -94,11 +94,12 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getLiveBrowserTabs: (worktreeId) => this.getLiveBrowserTabsByPageId(worktreeId),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
+      getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),
-      getRetainedStatus: (paneKey, pty, tab) =>
-        this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab),
+      getRetainedStatus: (paneKey, pty, tab, getRows) =>
+        this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab, getRows),
       getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
       issuePtyHandle: (pty) => this.issuePtyHandle(pty),
       recordPty: (ptyId, worktreeId, state) => this.recordPtyWorktree(ptyId, worktreeId, state),
@@ -129,13 +130,14 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
   protected getFreshRetainedAgentStatusForMobileTab(
     paneKey: string,
     pty: RuntimePtyWorktreeRecord | null,
-    tab: RuntimeMobileSessionTerminalTab
+    _tab: RuntimeMobileSessionTerminalTab,
+    getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null {
-    const handlePty = pty ?? (tab.ptyId ? (this.ptysById.get(tab.ptyId) ?? null) : null)
+    const terminalHandle = pty ? this.issuePtyHandle(pty) : null
     return selectFreshAgentRowForMobileTab({
       paneKey,
-      terminalHandle: handlePty ? this.issuePtyHandle(handlePty) : null,
-      hookRows: this.getAgentStatusSnapshotFn?.() ?? []
+      terminalHandle,
+      hookRows: getRows(paneKey, terminalHandle)
     })
   }
 

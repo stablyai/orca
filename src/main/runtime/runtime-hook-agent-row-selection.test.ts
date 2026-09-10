@@ -47,15 +47,29 @@ describe('selectFreshExplicitAgentStatus', () => {
     ).toBeNull()
   })
 
-  it('refuses restored and stale rows', () => {
+  it('refuses restored, identity-only and stale evidence rows', () => {
     const args = { handle: HANDLE, paneKey: PANE_KEY }
     expect(
       selectFreshExplicitAgentStatus({ ...args, hookRows: [row({ restoredUnconfirmed: true })] })
     ).toBeNull()
     expect(
+      selectFreshExplicitAgentStatus({ ...args, hookRows: [row({ providerSessionOnly: true })] })
+    ).toBeNull()
+    expect(
       selectFreshExplicitAgentStatus({
         ...args,
         hookRows: [row({ receivedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1 })]
+      })
+    ).toBeNull()
+    expect(
+      selectFreshExplicitAgentStatus({
+        ...args,
+        hookRows: [
+          row({
+            receivedAt: Date.now(),
+            evidenceObservedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
+          })
+        ]
       })
     ).toBeNull()
   })
@@ -118,6 +132,17 @@ describe('selectFreshAgentRowForMobileTab', () => {
       selectFreshAgentRowForMobileTab({
         ...args,
         hookRows: [row({ receivedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1 })]
+      })
+    ).toBeNull()
+    expect(
+      selectFreshAgentRowForMobileTab({
+        ...args,
+        hookRows: [
+          row({
+            receivedAt: Date.now(),
+            evidenceObservedAt: Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
+          })
+        ]
       })
     ).toBeNull()
   })

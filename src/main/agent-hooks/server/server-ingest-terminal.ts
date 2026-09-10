@@ -1,6 +1,6 @@
 import { track } from '../../telemetry/client'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -8,6 +8,7 @@ import { AgentHookServerIngestNormalization } from './server-ingest-normalizatio
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
   ingestTerminalStatus(event: {
+    ptyId?: string
     paneKey: string
     tabId?: string
     worktreeId?: string
@@ -18,23 +19,29 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     const physicalPaneKey = event.paneKey.trim()
     const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
+    const legacyPaneKey = parseLegacyNumericPaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
       return
     }
-    if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
-      return
-    }
     const reportedTabId =
       event.tabId !== undefined && event.tabId.trim().length > 0 ? event.tabId.trim() : undefined
-    if (
-      paneKey === physicalPaneKey &&
-      reportedTabId !== undefined &&
-      reportedTabId !== parsedPaneKey.tabId
-    ) {
+    const runtimeOwnedLegacyPane = Boolean(
+      legacyPaneKey &&
+      event.ptyId?.trim() &&
+      event.terminalHandle?.trim() &&
+      reportedTabId === legacyPaneKey.tabId
+    )
+    // Legacy rows are accepted only from the in-process PTY ingress with both runtime identities;
+    // HTTP and relay paths still require a stable pane key or a registered alias.
+    if (paneKey.length > MAX_PANE_KEY_LEN || (!parsedPaneKey && !runtimeOwnedLegacyPane)) {
       return
     }
-    const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
+    const paneTabId = parsedPaneKey?.tabId ?? legacyPaneKey?.tabId
+    if (paneKey === physicalPaneKey && reportedTabId !== undefined && reportedTabId !== paneTabId) {
+      return
+    }
+    const tabId = paneKey !== physicalPaneKey ? parsedPaneKey?.tabId : reportedTabId
     if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
       return
     }

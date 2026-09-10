@@ -7,9 +7,11 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   dropStatusEntriesByTabPrefix(tabId: string): void {
     this.markTabClosedForAgentStatus(tabId)
     const paneKeysToClear = new Set<string>()
+    const statusPaneKeysToClear = new Set<string>()
     for (const key of this.state.lastStatusByPaneKey.keys()) {
       if (paneCacheKeyMatchesTab(key, tabId)) {
         paneKeysToClear.add(key)
+        statusPaneKeysToClear.add(key)
       }
     }
     for (const key of this.state.lastPromptByPaneKey.keys()) {
@@ -72,6 +74,7 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       this.currentAuthorityObservations.delete(paneKey)
       this.promptSentDedupeByPaneKey.delete(paneKey)
       this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKey)
+      this.evidenceObservedAtByPaneKey.delete(paneKey)
     }
     if (aliasChanged) {
       this.notifyPaneKeyAliasPersistenceListener()
@@ -79,6 +82,10 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     if (statusChanged || authorityChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+    }
+    // Why: tab teardown must retire status subscribers' pane-scoped memo state too.
+    for (const paneKey of statusPaneKeysToClear) {
+      this.emitPaneStatusCleared({ paneKey })
     }
   }
 

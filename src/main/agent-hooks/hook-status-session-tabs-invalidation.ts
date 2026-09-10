@@ -5,6 +5,7 @@ type KnownStatus = {
   connectionId: string | null
   payload: ParsedAgentStatusPayload
   restoredUnconfirmed: boolean
+  terminalHandle: string | null
 }
 
 /** Reports whether a hook status event changed anything the `session.tabs`
@@ -29,7 +30,8 @@ export function createHookStatusSessionTabsInvalidator(): {
     known.set(event.paneKey, {
       connectionId: event.connectionId,
       payload: next,
-      restoredUnconfirmed
+      restoredUnconfirmed,
+      terminalHandle: event.terminalHandle ?? null
     })
     return (
       !previous ||
@@ -42,7 +44,8 @@ export function createHookStatusSessionTabsInvalidator(): {
       (previous.payload.interrupted ?? false) !== (next.interrupted ?? false) ||
       (previous.payload.turnCompletedAt ?? null) !== (next.turnCompletedAt ?? null) ||
       (previous.payload.lastAssistantMessage ?? null) !== (next.lastAssistantMessage ?? null) ||
-      previous.restoredUnconfirmed !== restoredUnconfirmed
+      previous.restoredUnconfirmed !== restoredUnconfirmed ||
+      previous.terminalHandle !== (event.terminalHandle ?? null)
     )
   }
   // Why: a cleared pane must re-arm, else the memo swallows the first event of the
@@ -50,8 +53,8 @@ export function createHookStatusSessionTabsInvalidator(): {
   invalidator.forgetPane = (paneKey: string): void => {
     known.delete(paneKey)
   }
-  // Why: an SSH disconnect clears a whole host's rows at once and names no pane, so
-  // the caller needs the pane list back to republish each affected workspace.
+  // Why: an explicit connection clear names no pane, so the caller needs the pane list
+  // back to republish each affected workspace.
   invalidator.forgetConnection = (connectionId: string): string[] => {
     const forgotten: string[] = []
     for (const [paneKey, status] of known) {

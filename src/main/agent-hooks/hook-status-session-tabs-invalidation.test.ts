@@ -36,6 +36,14 @@ describe('createHookStatusSessionTabsInvalidator', () => {
     expect(changed(working())).toBe(true)
   })
 
+  it('invalidates when a row acquires a terminal handle', () => {
+    const changed = createHookStatusSessionTabsInvalidator()
+    changed(working())
+
+    expect(changed(working({ terminalHandle: 'term_rejoined' }))).toBe(true)
+    expect(changed(working({ terminalHandle: 'term_rejoined' }))).toBe(false)
+  })
+
   it.each([
     ['state', { state: 'waiting' as const }],
     ['workingMode', { workingMode: 'monitoring' as const }],

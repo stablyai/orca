@@ -28,8 +28,8 @@ export function installHookStatusSessionTabsRepublish(
       getRuntime()?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
     }
   })
-  // Teardown: agent exit, pane close, and the SSH transient-disconnect batch all land here.
-  // Without it the live state published above becomes a zombie question card.
+  // Teardown: certified agent exit, pane close, and explicit connection clears land here.
+  // Transport loss alone keeps the last remote observation as unverifiable evidence.
   const unsubscribeClear = statusStore.subscribePaneStatusClear((clear) => {
     const clearedPaneKeys =
       'paneKey' in clear ? [clear.paneKey] : changedSessionTabs.forgetConnection(clear.connectionId)

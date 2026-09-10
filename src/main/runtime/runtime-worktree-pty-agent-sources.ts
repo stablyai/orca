@@ -27,7 +27,7 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
     RuntimeWorktreeAgentSource & { payload: ParsedAgentStatusPayload }
   >()
   for (const entry of args.hookSnapshots) {
-    if (entry.restoredUnconfirmed === true) {
+    if (entry.restoredUnconfirmed === true || entry.providerSessionOnly === true) {
       continue
     }
     const hookPayload = pickParsedAgentStatusPayload(entry)
@@ -49,10 +49,8 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       toolInput: entry.toolInput ?? null,
       interrupted: entry.interrupted ?? false,
       stateStartedAt: entry.stateStartedAt,
-      // A structured row's clock is its journal, so a restart's republish does not read as new.
-      updatedAt: entry.structuredHost
-        ? (entry.evidenceObservedAt ?? entry.receivedAt)
-        : entry.receivedAt,
+      // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
+      updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
       ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
     })
   }

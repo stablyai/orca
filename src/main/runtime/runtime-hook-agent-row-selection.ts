@@ -17,6 +17,7 @@ export type RuntimeAgentRowSnapshot = {
   payload: ParsedAgentStatusPayload
   stateStartedAt: number
   updatedAt: number
+  evidenceObservedAt?: number
 }
 
 function isLiveObservation(row: AgentStatusIpcPayload): boolean {
@@ -42,13 +43,15 @@ export function selectFreshExplicitAgentStatus(args: {
   const consider = (
     state: AgentStatusEntry['state'] | undefined,
     updatedAt: number | null | undefined,
+    evidenceObservedAt: number | null | undefined,
     restoredUnconfirmed = false,
+    providerSessionOnly = false,
     stateStartedAt?: number | null
   ): void => {
-    if (!state || restoredUnconfirmed || typeof updatedAt !== 'number') {
+    if (!state || restoredUnconfirmed || providerSessionOnly || typeof updatedAt !== 'number') {
       return
     }
-    if (now - updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
+    if (now - (evidenceObservedAt ?? updatedAt) > AGENT_STATUS_STALE_AFTER_MS) {
       return
     }
     const status = mapExplicitAgentStateToRuntimeTerminalStatus(state)
@@ -62,7 +65,14 @@ export function selectFreshExplicitAgentStatus(args: {
     if (row.terminalHandle !== args.handle && (!args.paneKey || row.paneKey !== args.paneKey)) {
       continue
     }
-    consider(row.state, row.receivedAt, row.restoredUnconfirmed, row.stateStartedAt)
+    consider(
+      row.state,
+      row.receivedAt,
+      row.evidenceObservedAt,
+      row.restoredUnconfirmed,
+      row.providerSessionOnly,
+      row.stateStartedAt
+    )
   }
   return bestStatus
     ? {
@@ -81,8 +91,12 @@ export function selectFreshAgentRowForMobileTab(args: {
   hookRows: readonly AgentStatusIpcPayload[]
 }): RuntimeAgentRowSnapshot | null {
   let match: AgentStatusIpcPayload | null = null
+  const now = Date.now()
   for (const row of args.hookRows) {
-    if (!isLiveObservation(row)) {
+    if (
+      !isLiveObservation(row) ||
+      now - (row.evidenceObservedAt ?? row.receivedAt) > AGENT_STATUS_STALE_AFTER_MS
+    ) {
       continue
     }
     if (row.paneKey === args.paneKey) {
@@ -100,7 +114,7 @@ export function selectFreshAgentRowForMobileTab(args: {
       match = row
     }
   }
-  if (!match || Date.now() - match.receivedAt > AGENT_STATUS_STALE_AFTER_MS) {
+  if (!match) {
     return null
   }
   return {
@@ -110,6 +124,9 @@ export function selectFreshAgentRowForMobileTab(args: {
     ...(match.tabId ? { tabId: match.tabId } : {}),
     payload: pickParsedAgentStatusPayload(match),
     stateStartedAt: match.stateStartedAt ?? match.receivedAt,
-    updatedAt: match.receivedAt
+    updatedAt: match.receivedAt,
+    ...(match.evidenceObservedAt !== undefined
+      ? { evidenceObservedAt: match.evidenceObservedAt }
+      : {})
   }
 }

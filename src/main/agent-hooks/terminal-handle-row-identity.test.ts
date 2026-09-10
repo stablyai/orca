@@ -38,6 +38,27 @@ describe('the terminal handle a status row is stamped with', () => {
     })
   })
 
+  it('does not cross a connection ownership change on a colliding pane key', () => {
+    const server = new AgentHookServer()
+    ingest(server, { connectionId: 'ssh-a' })
+
+    server.ingestRemote(
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-handle',
+        worktreeId: 'other-worktree',
+        payload: { state: 'done', prompt: 'other host', agentType: 'codex' }
+      },
+      'ssh-b'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      connectionId: 'ssh-b',
+      worktreeId: 'other-worktree'
+    })
+    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('terminalHandle')
+  })
+
   it('is never persisted, because it belongs to the runtime that issued it', () => {
     const server = new AgentHookServer()
     ingest(server)

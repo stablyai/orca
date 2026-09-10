@@ -189,7 +189,7 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   /** Non-minting: a listing must not issue handles, only recognise the ones already bound. */
-  getTerminalHandleForPty: (ptyId: string) => string | null
+  getTerminalHandlesForPty: (ptyId: string) => readonly string[]
   getSummary: SummaryLookup
 }): {
   mirroredWorktreeIdByTabId: Map<string, string>
@@ -262,8 +262,7 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
     if (pty.paneKey) {
       connectedPtyEvidence.paneKeys.add(pty.paneKey)
     }
-    const terminalHandle = args.getTerminalHandleForPty(pty.ptyId)
-    if (terminalHandle) {
+    for (const terminalHandle of args.getTerminalHandlesForPty(pty.ptyId)) {
       connectedPtyEvidence.ptyIdByTerminalHandle.set(terminalHandle, pty.ptyId)
     }
   }

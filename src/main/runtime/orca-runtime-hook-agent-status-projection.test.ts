@@ -67,9 +67,17 @@ async function createRuntimeWithHookRows(
     ? (): AgentStatusIpcPayload[] => [...rows, ...statusWiring.deps.getAgentStatusSnapshot()]
     : (): AgentStatusIpcPayload[] => rows
   const runtime = new OrcaRuntimeService(null, undefined, {
-    ...(statusWiring ? { onTerminalAgentStatus: statusWiring.deps.onTerminalAgentStatus } : {}),
+    ...(statusWiring
+      ? {
+          onTerminalAgentStatus: statusWiring.deps.onTerminalAgentStatus,
+          reconcileAgentStatusForEndedProcess:
+            statusWiring.deps.reconcileAgentStatusForEndedProcess,
+          getAgentProviderSessionSnapshot: statusWiring.deps.getAgentProviderSessionSnapshot,
+          getAgentProviderSessionRowsForPane: statusWiring.deps.getAgentProviderSessionRowsForPane
+        }
+      : {}),
     getAgentStatusSnapshot: readRows,
-    getAgentProviderSessionRowsForPane: readRows
+    ...(statusWiring ? {} : { getAgentProviderSessionRowsForPane: readRows })
   })
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
@@ -325,6 +333,100 @@ describe('headless hook agent-status projection (#11761)', () => {
     const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     const tab = result.tabs[0]
     expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('interactivePrompt')
+  })
+
+  it('evicts the predecessor row at a certified provider generation reset', async () => {
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = await createRuntimeWithHookRows([], statusWiring)
+    runtime.onPtyData(
+      PTY_ID,
+      '\x1b]9999;{"state":"working","prompt":"predecessor","agentType":"claude"}\x07',
+      1
+    )
+    expect(statusWiring.statusStore.getStatusSnapshot()).toHaveLength(1)
+
+    const internals = runtime as unknown as {
+      resetTrackedTerminalStateForProviderGeneration: (ptyId: string) => void
+    }
+    internals.resetTrackedTerminalStateForProviderGeneration(PTY_ID)
+
+    expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])
+    statusWiring.statusStore.stop()
+  })
+
+  it('evicts a row joined only through the terminal handle on certified PTY exit', async () => {
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = await createRuntimeWithHookRows([], statusWiring)
+    const terminal = (await runtime.listTerminals()).terminals[0]
+    if (!terminal) {
+      throw new Error('expected a live terminal')
+    }
+    const priorPaneKey = makePaneKey('prior-tab', UNKNOWN_LEAF_ID)
+    statusWiring.statusStore.ingestTerminalStatus({
+      paneKey: priorPaneKey,
+      tabId: 'prior-tab',
+      terminalHandle: terminal.handle,
+      payload: { state: 'working', prompt: 'prior pane', agentType: 'claude' }
+    })
+    expect(statusWiring.statusStore.getStatusSnapshot()).toHaveLength(1)
+
+    runtime.onPtyExit(PTY_ID, 0)
+
+    expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])
+    statusWiring.statusStore.stop()
+  })
+
+  it('evicts the central status row when a disconnected PTY record is pruned', async () => {
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = await createRuntimeWithHookRows([], statusWiring)
+    runtime.onPtyData(
+      PTY_ID,
+      '\x1b]9999;{"state":"working","prompt":"before prune","agentType":"claude"}\x07',
+      1
+    )
+    expect(statusWiring.statusStore.getStatusSnapshot()).toHaveLength(1)
+
+    const internals = runtime as unknown as {
+      dropDisconnectedPtyRecord: (ptyId: string) => void
+    }
+    internals.dropDisconnectedPtyRecord(PTY_ID)
+
+    expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])
+    statusWiring.statusStore.stop()
+  })
+
+  it('evicts a dismissed handle-joined remnant on certified PTY exit', async () => {
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = await createRuntimeWithHookRows([], statusWiring)
+    const terminal = (await runtime.listTerminals()).terminals[0]
+    if (!terminal) {
+      throw new Error('expected a live terminal')
+    }
+    const priorPaneKey = makePaneKey('prior-tab', UNKNOWN_LEAF_ID)
+    statusWiring.statusStore.ingestTerminalStatus({
+      paneKey: priorPaneKey,
+      tabId: 'prior-tab',
+      terminalHandle: terminal.handle,
+      payload: { state: 'working', prompt: 'dismissed pane', agentType: 'claude' }
+    })
+    statusWiring.statusStore.ingestRemote(
+      {
+        paneKey: priorPaneKey,
+        tabId: 'prior-tab',
+        providerSession: PROVIDER_SESSION,
+        payload: { state: 'working', prompt: 'dismissed pane', agentType: 'claude' }
+      },
+      null
+    )
+    statusWiring.statusStore.dropStatusEntry(priorPaneKey)
+    expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ paneKey: priorPaneKey, providerSessionOnly: true })
+    ])
+
+    runtime.onPtyExit(PTY_ID, 0)
+
+    expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])
+    statusWiring.statusStore.stop()
   })
 
   it('does not carry a hook question across an identity-only owner title', async () => {

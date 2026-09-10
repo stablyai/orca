@@ -179,10 +179,13 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    // Why carried forward: the handle is pane identity, not turn state. Only main's OSC parse
-    // resolves one, so a hook post for the same pane would otherwise erase the row's only join
-    // back to its terminal — and the worktree listing rescues a cleared pane binding with it.
-    const terminalHandle = boundaryAwarePayload.terminalHandle ?? previous?.terminalHandle
+    // Why carried forward only within one host: main's OSC parse resolves the handle, so a later
+    // hook must not erase its terminal join; a connection change must not inherit another host's.
+    const terminalHandle =
+      boundaryAwarePayload.terminalHandle ??
+      (boundaryAwarePayload.connectionId === previous?.connectionId
+        ? previous?.terminalHandle
+        : undefined)
     const enriched = {
       ...this.attachStatusTiming(boundaryAwarePayload, now, observedAt),
       ...(terminalHandle ? { terminalHandle } : {}),

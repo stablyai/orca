@@ -16,18 +16,15 @@ import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environ
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
-import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
+import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
 import {
   describeOrcadBindExposure,
   OrcadBindAddressError,
   resolveOrcadBindHost
 } from './orcad-bind-address'
-import {
-  acquireOrcadInstanceLock,
-  OrcadInstanceLockError,
-  type OrcadInstanceLock
-} from './orcad-instance-lock'
+import { acquireOrcadInstanceLock, OrcadInstanceLockError } from './orcad-instance-lock'
+import { startOrcadWithLifecycle } from './orcad-lifecycle'
 
 let runOrcadQuitHandlers = (): void => {}
 
@@ -116,22 +113,24 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
     headless: browserProvider !== null,
     ...(browserProvider ? { isAvailable: () => browserProvider.isAvailable() } : {})
   })
-  try {
-    return await startOrcadRuntime(options, browserProvider, instanceLock)
-  } catch (error) {
-    await browserProvider?.stop()
-    setRuntimeBrowserCommandsFactory(null)
-    runOrcadQuitHandlers()
-    instanceLock.release()
-    throw error
-  }
+  return startOrcadWithLifecycle(
+    (registerCleanup) => startOrcadRuntime(options, registerCleanup),
+    async () => {
+      try {
+        await browserProvider?.stop()
+      } finally {
+        setRuntimeBrowserCommandsFactory(null)
+        runOrcadQuitHandlers()
+        instanceLock.release()
+      }
+    }
+  )
 }
 
 async function startOrcadRuntime(
   options: OrcadOptions,
-  browserProvider: OrcadBrowserProvider | null,
-  instanceLock: OrcadInstanceLock
-): Promise<OrcadHandle> {
+  registerCleanup: (cleanup: () => Promise<void>) => void
+): Promise<Pick<OrcadHandle, 'readiness'>> {
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const { OrcaRuntimeRpcServer } = await import('../runtime/runtime-rpc')
   const { registerHeadlessPtyRuntime, getLocalPtyProvider, getSshPtyProvider } =
@@ -152,6 +151,25 @@ async function startOrcadRuntime(
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
 
+  let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
+  let uninstallHookStatusRepublish = (): void => {}
+  let daemonStarted = false
+  registerCleanup(async () => {
+    try {
+      await rpc?.stop()
+    } finally {
+      try {
+        // Why disconnect and not shut down: the daemon must outlive this process, or an
+        // orcad restart goes back to killing every running terminal.
+        if (daemonStarted) {
+          await stopOrcadDaemon()
+        }
+      } finally {
+        uninstallHookStatusRepublish()
+      }
+    }
+  })
+
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
   const profile = ensureActiveOrcaProfile(runtimeUserDataPath)
@@ -169,6 +187,7 @@ async function startOrcadRuntime(
   // adapter as THE local provider, and the registry's contract is that it lands before
   // registerPtyHandlers so the IPC layer routes through the daemon from the first call.
   await startOrcadDaemon()
+  daemonStarted = true
 
   const runtime = new OrcaRuntimeService(store, undefined, {
     // Why lazy: a daemon swap replaces the provider after construction, so an eager
@@ -194,15 +213,20 @@ async function startOrcadRuntime(
     // so without these a headless host publishes its structured chats nowhere and lists no agents.
     getAgentStatusSnapshot: () =>
       agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
+    getAgentProviderSessionRowsForPane: (paneKey) =>
+      agentHookServer.getStatusSnapshotForPane(paneKey),
     structuredAgentStatusSink: {
       publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
       forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
-    }
+    },
+    reconcileAgentStatusForEndedProcess: (paneKeys) =>
+      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys)
   })
 
   // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a
   // pane's status row changes, and orcad's whole job is serving paired clients.
-  const uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
+  uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
     agentHookServer,
     () => runtime
   )
@@ -225,7 +249,7 @@ async function startOrcadRuntime(
   await runtime.reconcileLegacyWorkerTerminals()
 
   const bindHost = resolveOrcadBindHost(options.bind)
-  const rpc = new OrcaRuntimeRpcServer({
+  rpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: runtimeUserDataPath,
     enableWebSocket: true,
@@ -283,24 +307,7 @@ async function startOrcadRuntime(
     mode: options.json ? 'json' : 'human'
   })
 
-  return {
-    readiness,
-    stop: async () => {
-      try {
-        await rpc.stop()
-      } finally {
-        // Why disconnect and not shut down: the daemon must outlive this process, or an
-        // orcad restart goes back to killing every running terminal. See
-        // orcad-daemon-supervision.ts.
-        await stopOrcadDaemon()
-        await browserProvider?.stop()
-        setRuntimeBrowserCommandsFactory(null)
-        uninstallHookStatusRepublish()
-        runOrcadQuitHandlers()
-        instanceLock.release()
-      }
-    }
-  }
+  return { readiness }
 }
 
 export function parseArgs(argv: string[]): OrcadOptions {

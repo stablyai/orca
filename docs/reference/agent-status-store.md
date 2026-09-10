@@ -24,11 +24,11 @@ the structured-session mapping and nothing else.
 An audit on 2026-09-09 found six producers and three consumers, and three
 separate copies of the same row inside the main process alone:
 
-| Main-process copy                      | Keyed by  | Owned by                                                   | Persisted           | Evicted                       |
-| -------------------------------------- | --------- | ---------------------------------------------------------- | ------------------- | ----------------------------- |
-| hook server `lastStatusByPaneKey`      | paneKey   | `src/main/agent-hooks/server.ts`                           | `last-status.json`  | tab close, pty exit, hydrate  |
-| runtime `RuntimeAgentRowStore`         | paneKey   | `runtime-agent-row-store.ts` (deleted in PR 1b)            | no                  | pty exit only                 |
-| structured feed `published`            | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no  | never (a broadcast cache)     |
+| Main-process copy                 | Keyed by  | Owned by                                                                          | Persisted          | Evicted                      |
+| --------------------------------- | --------- | --------------------------------------------------------------------------------- | ------------------ | ---------------------------- |
+| hook server `lastStatusByPaneKey` | paneKey   | `src/main/agent-hooks/server.ts`                                                  | `last-status.json` | tab close, pty exit, hydrate |
+| runtime `RuntimeAgentRowStore`    | paneKey   | `runtime-agent-row-store.ts` (deleted in PR 1b)                                   | no                 | pty exit only                |
+| structured feed `published`       | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no                 | never (a broadcast cache)    |
 
 The second copy is a duplicate write: the OSC status parsed in main is
 forwarded to the hook server _and_ retained in the runtime store from the same
@@ -92,14 +92,14 @@ The structured feed keeps its job of projecting a session's journal into a
 summary and streaming it to subscribers. On every publish it additionally
 ingests the summary into the hook server as a status row:
 
-| Row field         | From                                                          |
-| ----------------- | ------------------------------------------------------------- |
-| `paneKey`         | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it |
-| `tabId`           | `structuredAgentSessionTabId(sessionId)`                      |
-| `worktreeId`      | `summary.workspaceId` (a folder workspace id is a valid value) |
-| `state`           | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared |
-| `structuredHost`  | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it |
-| prompt, tool, last message, model, provider session | the summary's fields    |
+| Row field                                           | From                                                                                                                                            |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paneKey`                                           | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it |
+| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                        |
+| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                  |
+| `state`                                             | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared                                                                  |
+| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it          |
+| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                            |
 
 Sessions with no persisted turn (`status === null`) produce no row, matching
 what the chat shows. When the host revokes live ownership the row is re-set
@@ -192,13 +192,13 @@ store is now the only main-process copy of a PTY agent's row.
 
 ### The five call sites
 
-| Call site | Before | After |
-| --- | --- | --- |
+| Call site                                                                      | Before                                                          | After                                                                                              |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | `orca-runtime-create-terminal-side-effect-command-code-detector.ts` `retain()` | second write of the OSC payload already sent to the hook server | deleted; the event now carries the pane's `terminalHandle` and the hook ingest keeps the only copy |
-| `...command-code-detector.ts` `clearPty()` | drops rows on pty exit | deleted; pane teardown already clears the hook row |
-| `orca-runtime-get-worktree-ps.ts` `values()` | fed `retainedSnapshots` | deleted; the reader keeps only `hookSnapshots` |
-| `orca-runtime-serialize-agent-prompt-submission.ts` `getFreshExplicit()` | retained row first, hook rows second | `selectFreshExplicitAgentStatus`, hook rows only |
-| `orca-runtime-prune-mobile-session-tab-group-layout.ts` `getFreshForMobile()` | pane key, then pty id | `selectFreshAgentRowForMobileTab`: pane key, then `terminalHandle` |
+| `...command-code-detector.ts` `clearPty()`                                     | drops rows on pty exit                                          | deleted; pane teardown already clears the hook row                                                 |
+| `orca-runtime-get-worktree-ps.ts` `values()`                                   | fed `retainedSnapshots`                                         | deleted; the reader keeps only `hookSnapshots`                                                     |
+| `orca-runtime-serialize-agent-prompt-submission.ts` `getFreshExplicit()`       | retained row first, hook rows second                            | `selectFreshExplicitAgentStatus`, hook rows only                                                   |
+| `orca-runtime-prune-mobile-session-tab-group-layout.ts` `getFreshForMobile()`  | pane key, then pty id                                           | `selectFreshAgentRowForMobileTab`: pane key, then `terminalHandle`                                 |
 
 Both readers moved into `runtime-hook-agent-row-selection.ts`, which also owns
 `RuntimeAgentRowSnapshot` now that nothing retains one.
@@ -235,8 +235,9 @@ for a row whose pane binding was nulled by a controller incarnation change.
 `retain()` was not only a store: its boolean return was the signal that
 republished `session.tabs` for a status-only transition, which no title change
 covers (#7970). `hook-status-session-tabs-invalidation.ts` already mirrors that
-exact change set plus hook restore provenance, so the replacement was to route
-the signal off the store rather than build a second comparator.
+projection change set, including restore provenance and terminal-handle joins,
+so the replacement was to route the signal off the store rather than build a
+second comparator.
 `installHookStatusSessionTabsRepublish` now owns all three arms — enriched
 status, pane clear, and the status-drop tap a dismissal emits — and both hosts
 install it.
@@ -254,14 +255,11 @@ republish signal, alongside the snapshot and structured sink it already had.
 A row the user dismisses on the desktop leaves `worktree ps` and the phone at
 once, instead of lingering until the pty exits. One store means one dismissal.
 
-### The one consequence that was not intended
-
-A legacy numeric pane key (`<tabId>:<paneRuntimeId>`, minted for a
-pre-stable-id `pane:N` leaf) fails `parsePaneKey`, so `ingestTerminalStatus`
-refuses it. Such a pane already produced no hook row and therefore no sidebar
-row; the retained store was the last thing still listing it in `worktree ps`
-and on mobile. Those rows are now absent everywhere rather than present in two
-surfaces out of four.
+Legacy numeric pane keys remain a bounded compatibility case. Persisted layouts
+register aliases to their stable leaf owners; an in-process OSC observation may
+also retain a numeric key only when the runtime supplies the matching tab, PTY,
+and terminal handle. HTTP and relay ingress still require a stable key or a
+registered alias, and numeric rows are never persisted.
 
 ## PR 2: the renderer subscribes
 
@@ -271,14 +269,14 @@ unmount cleanup becomes a tab-close signal to the host. The IPC applicator is
 the single writer for observed status. The 2026-09-09 audit sorted the other
 writers:
 
-| Writer                                                          | Disposition                                        |
-| --------------------------------------------------------------- | -------------------------------------------------- |
-| Command Code output seeds, parked-pane seeds, pty-exit removal  | delete; main already emits the same facts          |
-| structured bridge status writes                                 | delete; main now publishes the row                 |
-| launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later |
-| dismissal, acknowledgement, unmount                             | keep; user facts and component lifecycle           |
-| remote-runtime OSC parse (bytes never transit local main)       | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |
-| web-session mirror receipt clock                                | keep; the decay rule needs both clocks from one machine |
+| Writer                                                            | Disposition                                                                                              |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Command Code output seeds, parked-pane seeds, pty-exit removal    | delete; main already emits the same facts                                                                |
+| structured bridge status writes                                   | delete; main now publishes the row                                                                       |
+| launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later                                            |
+| dismissal, acknowledgement, unmount                               | keep; user facts and component lifecycle                                                                 |
+| remote-runtime OSC parse (bytes never transit local main)         | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |
+| web-session mirror receipt clock                                  | keep; the decay rule needs both clocks from one machine                                                  |
 
 The Command Code done-settle window is renderer policy with no main
 equivalent. PR 2 either moves it into main's detector or leaves it, and says
@@ -301,6 +299,44 @@ call it.
   clears nothing; the SSH exemptions in the admission gate stay.
 - Hydration honesty: a restored non-done row is `restoredUnconfirmed` and is
   never fresh.
+
+## PR 1b reliability contract
+
+- **Invariant (`agent-session.status-host-ownership`):** each execution host has
+  one agent-status store; OSC, hooks, and structured sessions write it, while
+  desktop, `worktree ps`, and mobile only project it. Dismissal, certified PTY
+  exit, and provider-generation replacement remove the same row everywhere;
+  transport loss alone removes nothing.
+- **Failure source:** the deleted runtime row store duplicated OSC observations,
+  keyed them by a different terminal identity, and outlived a dismissal from the
+  hook store. Relay replay could also make old evidence look fresh when readers
+  used its new delivery timestamp.
+- **Oracle:** one OSC observation appears through the hook snapshot in
+  `worktree ps` and mobile, and one store dismissal removes it from both without
+  stopping the PTY. Focused tests also require leaf/incarnation-handle rejoin,
+  legacy numeric-pane compatibility, certified-exit and provider-generation
+  cleanup, evidence-age freshness, and exactly-once startup/stop teardown.
+- **Gate:** `terminal-performance.osc-status-scan-budget` covers the unchanged
+  bounded OSC parser and the runtime projection. There is not yet a dedicated
+  blocking multi-surface status-store gate; the focused suites below are the
+  accepted gap until they accumulate reliability-gate soak evidence.
+- **Provider/platform coverage:** local and daemon-backed PTYs are covered by
+  runtime tests, and SSH relay loss/replay semantics by relay integration tests.
+  The projection is shared by git worktrees and folder workspaces. WSL uses the
+  same store and admission code but has no live run here; Linux and Windows
+  runtime execution, native mobile clients, and mixed-version paired clients
+  remain validation gaps.
+- **Performance budget:** publication stays event-driven with no new polling or
+  subprocesses. One mobile projection clones the status snapshot once, builds
+  pane/handle indexes once, and has a deterministic call-count test; lifecycle
+  cleanup is bounded by the existing status and handle inventories, and orcad
+  tests prove listeners clean up once on failed startup and repeated stop.
+- **Diagnostics:** existing hook-listener errors name the pane and PTY, while
+  status-store tests pin delivery versus evidence clocks. No new telemetry or
+  raw terminal data is emitted.
+- **Residual gaps:** rendered Electron/mobile behavior, live SSH reconnect, and
+  Linux/Windows/WSL execution require the platform QA pass. The current
+  cross-version gate does not cover `session.tabs` content.
 
 ## Verification
 

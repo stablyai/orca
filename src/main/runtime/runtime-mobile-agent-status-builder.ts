@@ -33,13 +33,13 @@ export function buildRuntimeMobileAgentStatus(
   host: RuntimeMobileAgentStatusHost
 ): { agentStatus: AgentStatusEntry } | Record<string, never> {
   const paneKey = host.getPaneKey(tab)
-  // Why: neither the OSC-retained row nor a title-derived status can carry a
-  // provider session — only the hook payload does, and headless serve has no
+  // Why: neither the live-status projection nor a title-derived status carries a
+  // provider session — only the full hook payload does, and headless serve has no
   // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
   // transcript to address and sits on the empty state forever.
   const hookRow = selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
   // Why: the hook row is evidence in its own right. Returning early on a missing
-  // PTY status/retained row put this check ahead of the only headless carrier, so
+  // PTY status/projected row put this check ahead of the only headless carrier, so
   // an agent that reported its session but never emitted a recognized title got no
   // `agentStatus` at all — exactly the hook-only case the fallback exists for.
   if (!pty?.lastAgentStatus && !retained && !hookRow.agentType && !hookRow.providerSession) {
@@ -101,6 +101,9 @@ export function buildRuntimeMobileAgentStatus(
         ...liveRow.payload,
         paneKey,
         updatedAt: liveRow.updatedAt,
+        ...(liveRow.evidenceObservedAt !== undefined
+          ? { evidenceObservedAt: liveRow.evidenceObservedAt }
+          : {}),
         stateStartedAt: liveRow.stateStartedAt,
         stateHistory: [],
         ...(terminalHandle ? { terminalHandle } : {}),

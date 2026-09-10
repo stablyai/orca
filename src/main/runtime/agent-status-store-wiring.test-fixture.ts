@@ -18,6 +18,13 @@ export function makeAgentStatusStoreWiring(): {
   deps: {
     onTerminalAgentStatus: (event: Parameters<AgentHookServer['ingestTerminalStatus']>[0]) => void
     getAgentStatusSnapshot: () => ReturnType<AgentHookServer['getStatusSnapshot']>
+    getAgentProviderSessionSnapshot: () => ReturnType<AgentHookServer['getStatusSnapshot']>
+    getAgentProviderSessionRowsForPane: (
+      paneKey: string
+    ) => ReturnType<AgentHookServer['getStatusSnapshotForPane']>
+    reconcileAgentStatusForEndedProcess: (
+      paneKeys: Parameters<AgentHookServer['reconcileEndedProcessForPaneKeys']>[0]
+    ) => void
   }
   /** Call once the runtime exists; returns the republish teardown. */
   attach: (runtime: WiredRuntime) => () => void
@@ -28,7 +35,13 @@ export function makeAgentStatusStoreWiring(): {
     deps: {
       onTerminalAgentStatus: (event) => statusStore.ingestTerminalStatus(event),
       getAgentStatusSnapshot: () =>
-        statusStore.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true)
+        statusStore.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+      getAgentProviderSessionSnapshot: () => statusStore.getStatusSnapshot(),
+      getAgentProviderSessionRowsForPane: (paneKey) =>
+        statusStore.getStatusSnapshotForPane(paneKey),
+      reconcileAgentStatusForEndedProcess: (paneKeys) => {
+        statusStore.reconcileEndedProcessForPaneKeys(paneKeys)
+      }
     },
     attach: (runtime) => installHookStatusSessionTabsRepublish(statusStore, () => runtime)
   }

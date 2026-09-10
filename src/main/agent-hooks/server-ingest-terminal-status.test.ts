@@ -294,6 +294,49 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     }
   })
 
+  it('accepts a runtime-owned legacy pane without opening legacy relay ingress', () => {
+    const server = new AgentHookServer()
+    const event = {
+      paneKey: 'legacy-tab:7',
+      tabId: 'legacy-tab',
+      ptyId: 'legacy-pty',
+      terminalHandle: 'term_legacy',
+      worktreeId: 'wt-1',
+      payload: { state: 'working' as const, prompt: 'legacy task', agentType: 'codex' as const }
+    }
+
+    server.ingestTerminalStatus(event)
+
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: 'legacy-tab:7',
+        tabId: 'legacy-tab',
+        terminalHandle: 'term_legacy',
+        prompt: 'legacy task'
+      })
+    ])
+    server.stop()
+  })
+
+  it.each([
+    ['PTY id', { ptyId: undefined }],
+    ['terminal handle', { terminalHandle: undefined }],
+    ['matching tab', { tabId: 'other-tab' }]
+  ])('rejects a legacy terminal row without its runtime-owned %s', (_label, overrides) => {
+    const server = new AgentHookServer()
+    server.ingestTerminalStatus({
+      paneKey: 'legacy-tab:7',
+      tabId: 'legacy-tab',
+      ptyId: 'legacy-pty',
+      terminalHandle: 'term_legacy',
+      payload: { state: 'working', prompt: 'legacy task', agentType: 'codex' },
+      ...overrides
+    })
+
+    expect(server.getStatusSnapshot()).toEqual([])
+    server.stop()
+  })
+
   it('suppresses exact duplicate runtime terminal status observations', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

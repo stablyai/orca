@@ -65,7 +65,7 @@ describe('worktree agent source admission', () => {
     expect(collectRuntimeWorktreeAgentSources(base).size).toBe(0)
   })
 
-  it('carries the row own working mode and drops restored rows', () => {
+  it('carries the row own working mode and drops non-live rows', () => {
     const monitoring = collectRuntimeWorktreeAgentSources({
       ...connected,
       hookSnapshots: [{ ...hookRow, workingMode: 'monitoring' as const }]
@@ -77,5 +77,11 @@ describe('worktree agent source admission', () => {
       hookSnapshots: [{ ...hookRow, restoredUnconfirmed: true as const }]
     })
     expect(restored.size).toBe(0)
+
+    const providerSessionOnly = collectRuntimeWorktreeAgentSources({
+      ...connected,
+      hookSnapshots: [{ ...hookRow, providerSessionOnly: true }]
+    })
+    expect(providerSessionOnly.size).toBe(0)
   })
 })

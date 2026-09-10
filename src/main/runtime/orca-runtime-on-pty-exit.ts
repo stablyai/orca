@@ -47,7 +47,7 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
       options.hostExitConfirmed !== true
     // Why: collect before retirePtyAgentLaunchAuthority, which deletes the restored-authority
     // receipt a receipt-only pane's key comes from.
-    const exitPaneKeys = this.collectPaneKeysForPty(ptyId)
+    const exitPaneKeys = this.collectAgentStatusPaneKeysForPty(ptyId)
     if (preservesAbnormalSshSurface) {
       const prior = this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict
       this.rememberPtyLivenessVerdict(ptyId, {
