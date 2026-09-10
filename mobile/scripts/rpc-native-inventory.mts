@@ -26,7 +26,7 @@ const entries = sources.map((file) => {
     rpcCandidates
   }
 })
-emit('native-rpc-inventory', {
+await emit('native-rpc-inventory', {
   schemaVersion: 1,
   scope: ['mobile/packages', 'mobile/plugins'],
   extensions: ['swift', 'kt', 'm', 'mm', 'h', 'java'],

@@ -1,9 +1,6 @@
 {
   "schemaVersion": 2,
-  "scope": [
-    "mobile/src",
-    "mobile/app"
-  ],
+  "scope": ["mobile/src", "mobile/app"],
   "summary": {
     "callSites": 431,
     "literalMethod": 387,

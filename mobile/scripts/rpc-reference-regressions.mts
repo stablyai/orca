@@ -119,7 +119,7 @@ results.push({
 for (const result of results) {
   assert.equal(result.killed, true, `${result.id}: reference no longer exhibits the known defect`)
 }
-emit('reference-regressions', {
+await emit('reference-regressions', {
   revision,
   sources,
   supportingFunctions: ['rankSuggestions', 'buildGithubPrParams', 'githubPrRepoSlugParam'],

@@ -78,7 +78,7 @@ calls.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column
 const rows = calls.map(
   (call) => `${call.file}:${call.line}:${call.column} ${call.kind} ${call.method}`
 )
-emit('access-inventory', {
+await emit('access-inventory', {
   schemaVersion: 2,
   scope: ['mobile/src', 'mobile/app'],
   summary: {

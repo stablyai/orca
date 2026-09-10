@@ -26,16 +26,25 @@ export async function git(...args: string[]): Promise<string> {
   }
   return result.stdout.trimEnd()
 }
-export function emit(name: string, value: unknown): void {
+export async function emit(name: string, value: unknown): Promise<void> {
   const path = resolve(root, option('output', `mobile/rpc-foundation/${name}.json`))
   if (process.argv.includes('--check')) {
     if (!isDeepStrictEqual(JSON.parse(readFileSync(path, 'utf8')), value)) {
       throw new Error(`Stale artifact: ${path}`)
     }
     console.log(`${name}: current`)
-  } else {
-    mkdirSync(dirname(path), { recursive: true })
-    writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
-    console.log(`${name}: ${path}`)
+    return
   }
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
+  // Committed artifacts are checked by `format:check`; format here so regeneration cannot leave CI red.
+  const formatted = await runProcess({
+    program: resolve(root, 'node_modules/.bin/oxfmt'),
+    args: ['--write', path],
+    cwd: root
+  })
+  if (formatted.code !== 0) {
+    throw new Error(`oxfmt --write ${path}: ${formatted.stderr}`)
+  }
+  console.log(`${name}: ${path}`)
 }
