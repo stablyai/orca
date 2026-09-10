@@ -1,3 +1,4 @@
+import { principalFromPaneKey } from '../../../../../shared/orchestration-principal'
 import type { RunRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
@@ -109,6 +110,7 @@ export function bindRun(
         }
       )
     }
+    const incomingPrincipal = principalFromPaneKey(params.coordinatorPaneKey)
     this.unbindOtherRunsForPane(params.coordinatorPaneKey, params.runId)
     for (const handle of new Set(
       [run.coordinator_handle, params.coordinatorHandle].filter((value): value is string =>
@@ -136,12 +138,12 @@ export function bindRun(
       this.db
         .prepare(
           `UPDATE runs
-           SET coordinator_handle = ?, coordinator_pane_key = ?,
+           SET coordinator_handle = ?, coordinator_pane_key = ?, coordinator_principal = ?,
                consumer_generation = consumer_generation + 1,
                updated_at = datetime('now')
            WHERE id = ?`
         )
-        .run(params.coordinatorHandle, params.coordinatorPaneKey, params.runId)
+        .run(params.coordinatorHandle, params.coordinatorPaneKey, incomingPrincipal, params.runId)
       this.fenceOutstandingDelivery(params.runId)
       if (params.takeoverLegacy || replacesLegacyCoordinator) {
         this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)

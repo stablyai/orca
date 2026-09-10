@@ -1,3 +1,4 @@
+import { principalFromPaneKey } from '../../../../../shared/orchestration-principal'
 import type { RunRow } from '../../types'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -13,17 +14,24 @@ export function createRun(
   }
 ): RunRow {
   const id = generateId('run')
+  const coordinatorPrincipal = principalFromPaneKey(params.coordinatorPaneKey)
   this.db.exec('BEGIN IMMEDIATE')
   try {
     this.unbindOtherRunsForPane(params.coordinatorPaneKey)
     this.db
       .prepare(
         `INSERT INTO runs (
-           id, objective, coordinator_handle, coordinator_pane_key,
+           id, objective, coordinator_handle, coordinator_pane_key, coordinator_principal,
            consumer_generation, legacy
-         ) VALUES (?, ?, ?, ?, 1, 0)`
+         ) VALUES (?, ?, ?, ?, ?, 1, 0)`
       )
-      .run(id, params.objective, params.coordinatorHandle, params.coordinatorPaneKey)
+      .run(
+        id,
+        params.objective,
+        params.coordinatorHandle,
+        params.coordinatorPaneKey,
+        coordinatorPrincipal
+      )
     this.rememberRunCoordinatorHandle(id, params.coordinatorHandle)
     this.db.exec('COMMIT')
   } catch (error) {
