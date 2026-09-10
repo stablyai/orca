@@ -28,4 +28,14 @@ describe('packaged Windows CLI launcher asset', () => {
     expect(source).toContain('child.WaitForExit();')
     expect(source).toContain('return child.ExitCode;')
   })
+
+  it('clears inherited CHROME_CRASHPAD_PIPE_NAME before launching Electron-as-Node', () => {
+    const sourcePath = join(process.cwd(), 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs')
+    const source = readFileSync(sourcePath, 'utf8')
+
+    // Why: the packaged CLI is often spawned from an Orca terminal that already set this pipe.
+    expect(source).toContain(
+      'Environment.SetEnvironmentVariable("CHROME_CRASHPAD_PIPE_NAME", null);'
+    )
+  })
 })
