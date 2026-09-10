@@ -232,6 +232,7 @@ function resolveCurrentSendTargetEligibility(
   return { status: 'disabled', disabledReason: 'Terminal is no longer available' }
 }
 
+/** Renders one send-target row, headlining the tab's custom title over its agent type when the user renamed it. */
 function AgentTargetMenuItem({
   target,
   agent,

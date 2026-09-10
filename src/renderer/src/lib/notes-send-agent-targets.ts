@@ -114,6 +114,7 @@ function resolveNotesTargetAgentType(
   return launchAgent ?? entryAgentType
 }
 
+/** Builds a pre-hook target candidate for a tab from its live pane title, or null if there's no such evidence. */
 function deriveTitleHintAgentTarget(
   state: NotesSendAgentTargetState,
   tab: TerminalTab
@@ -164,6 +165,7 @@ function mergeManualAgentTitleTarget(
   targets.push(target)
 }
 
+/** Merges a title-hint target for a launch-agent tab, promoting a stale status row on the same pane when the hint is fresher. */
 function mergeLaunchAgentTitleTarget(
   targets: NotesSendAgentTarget[],
   target: NotesSendAgentTarget
