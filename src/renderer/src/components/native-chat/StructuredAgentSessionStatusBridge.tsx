@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
@@ -10,8 +10,8 @@ import type { Tab } from '../../../../shared/tab-types'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { useAppStore } from '@/store'
-import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { useStructuredAgentSessionStatusSummary } from './use-structured-agent-session-status-summary'
 
 type StructuredTab = Tab & { contentType: 'agent-session' }
 
@@ -43,20 +43,6 @@ export function getStructuredAgentSessionTabs(
   }
   structuredTabsByUnifiedTabsSnapshot.set(unifiedTabsByWorktree, tabs)
   return tabs
-}
-
-/** The host's projected status for one session, live while the caller is mounted. */
-function useStructuredAgentSessionStatusSummary(
-  sessionId: string,
-  target: RuntimeClientTarget
-): AgentSessionStatusSummary | null {
-  const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
-  useEffect(() => feed.activate(), [feed])
-  return useSyncExternalStore(
-    feed.subscribe,
-    () => feed.getSnapshot().get(sessionId) ?? null,
-    () => null
-  )
 }
 
 function projectStatus(tab: StructuredTab, summary: AgentSessionStatusSummary | null): void {

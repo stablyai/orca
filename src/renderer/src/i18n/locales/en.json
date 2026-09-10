@@ -17251,7 +17251,27 @@
       "conversationCommand": {
         "pendingWork": "Wait for pending work and messages to finish before using this command.",
         "unconfirmed": "Conversation operation was not confirmed."
-      }
+      },
+      "rewind": {
+        "unsupported": "This session does not support rewinding conversation history.",
+        "historyNotPaginated": "This older Codex conversation does not support rewinding. Start a new conversation to use rewind.",
+        "busy": "Wait for the current turn, pending messages, approvals, and background work to finish before rewinding.",
+        "staleEpoch": "The conversation changed. Review the latest messages before rewinding.",
+        "invalidTarget": "This message is no longer a valid rewind point. Review the latest conversation.",
+        "historyLimit": "This conversation is too large to rewind safely. Nothing was changed.",
+        "providerRefused": "The agent refused to rewind this conversation.",
+        "proofMismatch": "Orca could not verify the conversation boundary. Reload the session before trying again.",
+        "outcomeUnknown": "The rewind may have completed, but Orca could not confirm it. Sending is blocked until the outcome is resolved.",
+        "refused": "Orca could not rewind this conversation. Reload the session to check its current state.",
+        "unavailable": "Reconnect to a writable chat session before rewinding.",
+        "pending": "Rewind is in progress. Wait for the conversation to reload.",
+        "title": "Revert to here?",
+        "confirmation": "Discard this message and every later message ({{count}} in total)? This cannot be undone. Your composer draft and attachments will be cleared. File changes on disk will be kept.",
+        "confirm": "Discard messages",
+        "cancel": "Cancel",
+        "action": "Revert to here"
+      },
+      "requestNotSent": "Request was not sent"
     },
     "tab": {
       "bar": {

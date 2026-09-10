@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,10 +10,16 @@ const mocks = vi.hoisted(() => ({
   enqueueSettingsWrite: vi.fn()
 }))
 let fence = 3
+let rewindItems: AgentJournalRenderItem[] = []
+let epoch = 'epoch-1'
 let sessionCommands: { name: string; kind: 'command' | 'skill' }[] | undefined
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
+}))
+
+vi.mock('./use-structured-agent-session-status-summary', () => ({
+  useStructuredAgentSessionStatusSummary: () => null
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -23,8 +30,10 @@ vi.mock('./use-structured-agent-session-read', () => ({
   useStructuredAgentSessionRead: () => ({
     state: {
       fence,
+      epoch,
+      cursor: { epoch, sequence: 2 },
       commands: sessionCommands,
-      items: [],
+      items: rewindItems,
       submissions: [],
       status: 'ready',
       error: null,
@@ -521,5 +530,109 @@ describe('session command catalog stream', () => {
     expect(
       mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.commands')
     ).toHaveLength(0)
+  })
+})
+
+describe('useStructuredAgentSession rewind RPC', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fence = 3
+    epoch = 'epoch-1'
+    rewindItems = [
+      {
+        itemId: 'user-1',
+        sequence: 1,
+        revision: 1,
+        observedAt: 1,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Prompt' }] }
+      }
+    ]
+    mocks.operationId.mockReset().mockReturnValue('rewind-operation')
+    mocks.call.mockImplementation((_target, method) =>
+      Promise.resolve(
+        method === 'agentSession.options'
+          ? { ...OPTIONS, rewind: { supported: true } }
+          : { ok: true, value: { itemId: 'user-1', epoch: 'epoch-2' } }
+      )
+    )
+  })
+
+  it('sends the agreed verb and fingerprint to the execution host and blocks the composer until reset', async () => {
+    const target = { kind: 'environment' as const, environmentId: 'ssh-host' }
+    const view = renderHook(() =>
+      useStructuredAgentSession({ sessionId: 'session-1', target, agent: 'codex', isVisible: true })
+    )
+    await waitFor(() => expect(view.result.current.rewind.disabledReason).toBeNull())
+    await act(() => view.result.current.rewind.request('user-1', async () => true))
+    const { structuredAgentSessionPayloadFingerprint } =
+      await import('../../../../shared/structured-agent-session-mutation')
+    expect(mocks.call).toHaveBeenCalledWith(target, 'agentSession.rewind', {
+      envelope: {
+        sessionId: 'session-1',
+        clientOperationId: 'rewind-operation',
+        expectedRuntimeFence: 3,
+        payloadFingerprint: structuredAgentSessionPayloadFingerprint({
+          method: 'agentSession.rewind',
+          sessionId: 'session-1',
+          fields: { itemId: 'user-1', expectedEpoch: 'epoch-1' }
+        })
+      },
+      itemId: 'user-1',
+      expectedEpoch: 'epoch-1'
+    })
+    expect(view.result.current.send('stale composer text', [])).toBe(false)
+    epoch = 'epoch-2'
+    rewindItems = []
+    view.rerender()
+    expect(view.result.current.messages).toEqual([])
+    expect(view.result.current.rewind.pending).toBe(false)
+  })
+
+  it('renders reason-only host refusals without relying on host English', async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      Promise.resolve(
+        method === 'agentSession.options'
+          ? OPTIONS
+          : {
+              ok: false,
+              refusal: {
+                code: 'agent_session_conflict',
+                message: '',
+                rewindReason: 'proof-mismatch'
+              }
+            }
+      )
+    )
+    const view = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'claude',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(view.result.current.rewind.disabledReason).toBeNull())
+    await act(() => view.result.current.rewind.request('user-1', async () => true))
+    expect(view.result.current.error).toContain('could not verify the conversation boundary')
+  })
+
+  it('explains an older host missing the RPC without claiming an uncertain rewind occurred', async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.rewind'
+        ? Promise.reject({ code: 'method_not_found' })
+        : Promise.resolve(OPTIONS)
+    )
+    const view = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(view.result.current.rewind.disabledReason).toBeNull())
+    await act(() => view.result.current.rewind.request('user-1', async () => true))
+    expect(view.result.current.error).toContain('does not support rewinding')
+    expect(view.result.current.rewind.pending).toBe(false)
   })
 })

@@ -1,25 +1,34 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
+import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 
 afterEach(cleanup)
 
-function renderMessage(role: NativeChatMessage['role'], timestamp: number | null = 0) {
+function renderMessage(
+  role: NativeChatMessage['role'],
+  timestamp: number | null = 0,
+  rewind?: NativeChatRewindSurface
+) {
   return render(
-    <MessageRow
-      message={{
-        id: 'message',
-        role,
-        timestamp,
-        source: 'transcript',
-        blocks: [{ type: 'text', text: 'Message text' }]
-      }}
-      expandSignal={false}
-      onScrollMessageToTop={vi.fn()}
-    />
+    <TooltipProvider>
+      <MessageRow
+        message={{
+          id: 'message',
+          role,
+          timestamp,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: 'Message text' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+        rewind={rewind}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -48,7 +57,7 @@ describe('MessageRow control visibility', () => {
     renderMessage('user')
     const time = screen.getByRole('time')
     expect(screen.queryByRole('button')).toBeNull()
-    expect(time).toHaveClass(
+    expect(time.parentElement).toHaveClass(
       'can-hover:opacity-0',
       'can-hover:pointer-events-none',
       'group-hover:opacity-100',
@@ -56,10 +65,29 @@ describe('MessageRow control visibility', () => {
       'group-hover:pointer-events-auto',
       'group-has-[:focus-visible]:pointer-events-auto'
     )
-    expect(time).not.toHaveClass('opacity-0', 'pointer-events-none')
-    expect(time.parentElement).toHaveClass('group')
+    expect(time.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
+    expect(time.parentElement?.parentElement).toHaveClass('group')
     time.focus()
     expect(time).toHaveFocus()
+  })
+
+  it('composes the user timestamp and revert action in one hover/focus strip', () => {
+    const request = vi.fn()
+    renderMessage('user', 0, { disabledReason: null, request })
+    const time = screen.getByRole('time')
+    const revert = screen.getByRole('button', { name: 'Revert to here' })
+    expect(Array.from(time.parentElement!.children)).toEqual([time, revert])
+    expect(time.parentElement).toHaveClass(
+      'can-hover:opacity-0',
+      'group-hover:opacity-100',
+      'group-has-[:focus-visible]:opacity-100'
+    )
+    time.focus()
+    expect(time).toHaveFocus()
+    revert.focus()
+    expect(revert).toHaveFocus()
+    fireEvent.click(revert)
+    expect(request).toHaveBeenCalledWith('message')
   })
 
   it.each(['assistant', 'user'] as const)('omits unknown timestamps on %s rows', (role) => {

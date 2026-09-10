@@ -1,3 +1,4 @@
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { useMemo, useRef, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
@@ -38,6 +39,32 @@ export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
+  return (
+    <NativeChatStructuredSessionContent
+      key={controller.epoch ?? 'loading'}
+      {...props}
+      controller={controller}
+    />
+  )
+}
+
+function NativeChatStructuredSessionContent({
+  controller,
+  ...props
+}: Omit<NativeChatStructuredViewProps, 'mode'> & {
+  controller: ReturnType<typeof useStructuredAgentSession>
+}): React.JSX.Element {
+  const confirm = useConfirmationDialog()
+  const { disabledReason, request } = controller.rewind
+  const rewind = useMemo(
+    () => ({
+      disabledReason,
+      request: (itemId: string) => {
+        void request(itemId, confirm)
+      }
+    }),
+    [disabledReason, request, confirm]
+  )
   const [composerError, setComposerError] = useState<string | null>(null)
   const [stoppingBackgroundTasks, setStoppingBackgroundTasks] =
     useState<StoppingBackgroundTasks | null>(null)
@@ -46,8 +73,12 @@ export function NativeChatStructuredSession(
     sequence: number
   } | null>(null)
   const paneKey = useMemo(
-    () => structuredAgentSessionPaneKey(props.tabId, props.sessionId),
-    [props.sessionId, props.tabId]
+    () =>
+      JSON.stringify([
+        structuredAgentSessionPaneKey(props.tabId, props.sessionId),
+        controller.epoch
+      ]),
+    [props.sessionId, props.tabId, controller.epoch]
   )
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
@@ -191,6 +222,8 @@ export function NativeChatStructuredSession(
           <NativeChatEmptyState kind="empty" agent={props.agent} />
         ) : (
           <NativeChatMessageList
+            key={paneKey}
+            rewind={rewind}
             session={session}
             journalItems={controller.journalItems}
             isWorking={controller.isWorking}
@@ -289,6 +322,7 @@ export function NativeChatStructuredSession(
             type="button"
             variant="ghost"
             size="xs"
+            disabled={controller.rewind.pending}
             onClick={() => controller.retry(retryableOutboxEntry.clientMessageId)}
           >
             <RotateCcw className="size-3" />
@@ -308,7 +342,7 @@ export function NativeChatStructuredSession(
         <NativeChatBackgroundTasksStatus
           tasks={controller.backgroundTasks}
           supportsTaskStop={controller.supportsBackgroundTaskStop}
-          supportsStopAll={controller.supportsBackgroundTaskStopAll}
+          supportsStopAll={controller.backgroundTasksView.supportsBackgroundTaskStopAll}
           stoppingTaskIds={activeStoppingBackgroundTasks?.taskIds ?? NO_STOPPING_TASKS}
           stoppingAll={activeStoppingBackgroundTasks?.all ?? false}
           onStop={(taskId) => {
@@ -344,14 +378,15 @@ export function NativeChatStructuredSession(
           }}
         />
       ) : null}
-      {prompt ? null : (
+      {prompt || !controller.epoch ? null : (
         <NativeChatComposer
+          key={paneKey}
           ref={composerRef}
           terminalTabId={props.tabId}
           paneKey={paneKey}
           targetPtyId={null}
           agent={props.agent}
-          canSend={!prompt}
+          canSend={!prompt && !controller.rewind.pending}
           isWorking={controller.isWorking}
           onStop={() => {
             if (controller.turnId) {

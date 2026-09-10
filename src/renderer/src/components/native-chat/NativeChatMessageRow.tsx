@@ -1,3 +1,5 @@
+import { NativeChatRewindAction } from './NativeChatRewindAction'
+import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { memo, useCallback, useMemo, useRef } from 'react'
 import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
@@ -44,7 +46,8 @@ export const MessageRow = memo(function MessageRow({
   deliveryFailed = false,
   activityExpandOverride,
   structuredActivityUi = true,
-  runtimeContext
+  runtimeContext,
+  rewind
 }: {
   message: NativeChatMessage
   previousTodoWrite?: NativeChatToolCallBlock
@@ -59,6 +62,7 @@ export const MessageRow = memo(function MessageRow({
   deliveryFailed?: boolean
   activityExpandOverride?: boolean
   structuredActivityUi?: boolean
+  rewind?: NativeChatRewindSurface
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
@@ -161,11 +165,10 @@ export const MessageRow = memo(function MessageRow({
             />
           )}
         </div>
-        <NativeChatMessageTimestamp
-          timestamp={message.timestamp}
-          focusable
-          className="select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100"
-        />
+        <div className="flex items-center gap-1 select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100">
+          <NativeChatMessageTimestamp timestamp={message.timestamp} focusable />
+          {rewind ? <NativeChatRewindAction itemId={message.id} rewind={rewind} /> : null}
+        </div>
         {deliveryFailed ? (
           <div className="max-w-[85%] text-[11px] text-destructive/80">
             {translate(

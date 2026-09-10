@@ -1,17 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import * as conversationCommands from './structured-conversation-command-send'
-import type {
-  AgentSessionOptionResult,
-  AgentSessionOptionsResult,
-  AgentSessionPromptResult
-} from '../../../../shared/agent-session-wire'
-import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+import { useStructuredAgentSessionStatusSummary } from './use-structured-agent-session-status-summary'
 import { useStructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
+import { useNativeChatRewind } from './use-native-chat-rewind'
+import type {
+  AgentSessionRewindResult,
+  AgentSessionRewindSupport
+} from '../../../../shared/agent-session-rewind'
+import * as conversationCommands from './structured-conversation-command-send'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
 } from '../../../../shared/agent-session-conversation-command'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type {
+  AgentSessionOptionResult,
+  AgentSessionOptionsResult,
+  AgentSessionPromptResult
+} from '../../../../shared/agent-session-wire'
 import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat-session-options'
 import {
@@ -25,13 +30,14 @@ import {
 import { activeStructuredAgentSessionTurnId } from '../../../../shared/structured-agent-session-projection'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
+import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import {
   pendingStructuredSessionPrompts,
   type StructuredPromptItem
 } from './structured-agent-session-message-projection'
-import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
 import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
@@ -45,6 +51,7 @@ export function useStructuredAgentSession(args: {
   isVisible: boolean
 }) {
   const { agent, isVisible, sessionId, target } = args
+  const summary = useStructuredAgentSessionStatusSummary(sessionId, target)
   // Declared first: the hold is what gives a restored session its provider child back, and the
   // read below is useless for sending until it lands.
   useStructuredAgentSessionHold({ sessionId, target, surface: 'desktop-chat', enabled: isVisible })
@@ -54,6 +61,8 @@ export function useStructuredAgentSession(args: {
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
+    rewind?: AgentSessionRewindSupport
+    fence: number | null
   } | null>(null)
   const commandPending = useRef(false)
   const [optionState, setOptionState] = useState(() =>
@@ -64,7 +73,7 @@ export function useStructuredAgentSession(args: {
   const outboxController = useStructuredAgentSessionOutbox({
     sessionId,
     target,
-    fence: state.fence,
+    fence: summary?.rewindBlockedReason ? null : state.fence,
     submissions: state.submissions
   })
 
@@ -85,6 +94,8 @@ export function useStructuredAgentSession(args: {
     [state.activity, state.items, turnId]
   )
   const backgroundTasksView = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
+  const isMonitoringBackgroundTasks =
+    turnId === null && state.backgroundTasks?.state === 'monitoring'
 
   useEffect(() => {
     if (!isVisible || !optionCatalog) {
@@ -96,7 +107,12 @@ export function useStructuredAgentSession(args: {
     })
       .then((result) => {
         if (!stale) {
-          setConversationSupport({ sessionId, commands: result.conversationCommands ?? [] })
+          setConversationSupport({
+            sessionId,
+            commands: result.conversationCommands ?? [],
+            rewind: result.rewind,
+            fence: state.fence
+          })
           setOptionState((current) =>
             current.record === activeOptionRecordRef.current
               ? applyStructuredAgentSessionOptions(current, optionCatalog, result)
@@ -175,9 +191,49 @@ export function useStructuredAgentSession(args: {
   )
 
   const prompts = pendingStructuredSessionPrompts(state.items)
+  const rewindSupportResolved =
+    conversationSupport?.sessionId === sessionId && conversationSupport.fence === state.fence
+  const rewindSupport = rewindSupportResolved ? conversationSupport.rewind : undefined
+  const rewindBlocked = Boolean(
+    turnId ||
+    prompts.length ||
+    isMonitoringBackgroundTasks ||
+    outboxController.outbox.length ||
+    commandPending.current
+  )
+  const rewindInput = useMemo<Parameters<typeof useNativeChatRewind>[0]>(
+    () => ({
+      sessionId,
+      hostBlockedReason: summary?.rewindBlockedReason,
+      state,
+      support: rewindSupport,
+      supportResolved: rewindSupportResolved,
+      blocked: rewindBlocked,
+      send: (fields, onFailure) =>
+        mutate<AgentSessionRewindResult>(
+          'agentSession.rewind',
+          'agentSession.rewind',
+          fields,
+          undefined,
+          onFailure
+        )
+    }),
+    [
+      sessionId,
+      summary?.rewindBlockedReason,
+      state,
+      rewindSupport,
+      rewindSupportResolved,
+      rewindBlocked,
+      mutate
+    ]
+  )
+  const rewind = useNativeChatRewind(rewindInput)
   const { outbox } = outboxController
   const messages = useStructuredAgentSessionMessages(state.items, outbox, state.submissions)
   return {
+    epoch: state.epoch,
+    rewind,
     conversationCommands:
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : [],
     runConversationCommand: (command: AgentSessionConversationCommand) =>
@@ -187,8 +243,9 @@ export function useStructuredAgentSession(args: {
         blocked: Boolean(
           turnId ||
           prompts.length ||
-          backgroundTasksView.isMonitoringBackgroundTasks ||
-          outbox.length
+          isMonitoringBackgroundTasks ||
+          outbox.length ||
+          rewind.blockedRef.current
         ),
         send: (command) =>
           mutate<AgentSessionConversationCommandResult>(
@@ -200,7 +257,7 @@ export function useStructuredAgentSession(args: {
     journalItems: state.items,
     messages,
     status: state.status,
-    error: state.error ?? writeError ?? outboxController.error,
+    error: rewind.error ?? state.error ?? writeError ?? outboxController.error,
     hasOlder: state.hasOlder,
     loadingOlder,
     loadOlder,
@@ -208,11 +265,18 @@ export function useStructuredAgentSession(args: {
     outbox,
     blockedClientMessageId: outboxController.blockedClientMessageId,
     send: (...input: Parameters<typeof outboxController.send>) =>
-      !commandPending.current && outboxController.send(...input),
-    retry: outboxController.retry,
+      !commandPending.current && !rewind.blockedRef.current && outboxController.send(...input),
+    retry: (clientMessageId: string) => {
+      if (!rewind.blockedRef.current) {
+        outboxController.retry(clientMessageId)
+      }
+    },
     isWorking: turnId !== null,
     turnActivity,
-    ...backgroundTasksView,
+    isMonitoringBackgroundTasks,
+    backgroundTasks: state.backgroundTasks?.tasks ?? [],
+    supportsBackgroundTaskStop: state.backgroundTasks?.supportsTaskStop === true,
+    backgroundTasksView,
     turnId,
     cancel: (turnId: string) => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
     stopBackgroundTask: (taskId?: string) =>

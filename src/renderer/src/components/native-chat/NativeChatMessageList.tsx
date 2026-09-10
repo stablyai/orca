@@ -1,3 +1,4 @@
+import type { NativeChatRewindSurface } from './use-native-chat-rewind'
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown } from 'lucide-react'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
@@ -48,7 +49,8 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds,
   showTurnStatus = true,
   turnActivity,
-  runtimeContext
+  runtimeContext,
+  rewind
 }: {
   session: NativeChatLiveSession
   journalItems?: readonly AgentJournalRenderItem[]
@@ -64,6 +66,7 @@ export function NativeChatMessageList({
   /** Turn timing and disclosure are available on structured agent sessions. */
   showTurnStatus?: boolean
   turnActivity?: NativeChatTurnActivity | null
+  rewind?: NativeChatRewindSurface
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
   const [revealedDiff, setRevealedDiff] = useState<NativeChatDiffReveal | null>(null)
@@ -282,6 +285,7 @@ export function NativeChatMessageList({
                   ) : (
                     <MessageRow
                       message={message}
+                      rewind={message.role === 'user' ? rewind : undefined}
                       previousTodoWrite={taskListPredecessors.get(message.id)?.todowrite}
                       previousUpdatePlan={taskListPredecessors.get(message.id)?.update_plan}
                       revealedDiff={

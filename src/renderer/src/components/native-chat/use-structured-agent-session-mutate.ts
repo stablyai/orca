@@ -7,7 +7,11 @@
 
 import { useCallback, useRef, useState } from 'react'
 import * as conversationCommands from './structured-conversation-command-send'
-import type { AgentSessionMutationResult } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionMutationResult,
+  AgentSessionWireRefusal
+} from '../../../../shared/agent-session-wire'
+import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
 import { agentSessionRefusalOperationState } from '../../../../shared/agent-session-refusal-retry'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
@@ -18,7 +22,8 @@ export type StructuredAgentSessionMutate = <T>(
   method: string,
   fingerprintMethod: string,
   fields: Record<string, unknown>,
-  operationIdOverride?: string | null
+  operationIdOverride?: string | null,
+  onFailure?: (refusal?: AgentSessionWireRefusal) => void
 ) => Promise<T | null>
 
 export function useStructuredAgentSessionMutate(args: {
@@ -37,7 +42,8 @@ export function useStructuredAgentSessionMutate(args: {
       method: string,
       fingerprintMethod: string,
       fields: Record<string, unknown>,
-      operationIdOverride?: string | null
+      operationIdOverride?: string | null,
+      onFailure?: (refusal?: AgentSessionWireRefusal) => void
     ): Promise<T | null> => {
       if (stateRef.current.fence === null) {
         return null
@@ -63,7 +69,17 @@ export function useStructuredAgentSessionMutate(args: {
           ...fields
         })
       } catch (error) {
-        if (stateRef.current.fence === targetFence) {
+        if (onFailure) {
+          onFailure(
+            hasRuntimeRpcErrorCode(error, 'method_not_found')
+              ? {
+                  code: 'structured_agent_session_unsupported',
+                  message: '',
+                  rewindReason: 'unsupported'
+                }
+              : undefined
+          )
+        } else if (stateRef.current.fence === targetFence) {
           setWriteError(error instanceof Error ? error.message : 'Request was not sent')
         }
         return null
@@ -75,12 +91,14 @@ export function useStructuredAgentSessionMutate(args: {
         ) {
           operationIds.current.delete(key)
         }
-        if (stateRef.current.fence === targetFence) {
+        if (onFailure) {
+          onFailure(result.refusal)
+        } else if (stateRef.current.fence === targetFence) {
           setWriteError(result.refusal.message)
         }
         return null
       }
-      if (stateRef.current.fence !== targetFence) {
+      if (stateRef.current.fence !== targetFence && fingerprintMethod !== 'agentSession.rewind') {
         return null
       }
       if (!conversationCommands.isUnconfirmedConversationCommand(fingerprintMethod, result.value)) {
