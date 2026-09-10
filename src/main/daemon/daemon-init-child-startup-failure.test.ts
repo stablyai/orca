@@ -60,6 +60,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     function basicClient() {
       return {
         ensureConnected: vi.fn(async () => {}),
+        ensureConnectedWithin: vi.fn(async () => {}),
         request: vi.fn(async () => ({ sessions: [] })),
         disconnect: vi.fn()
       }
@@ -142,6 +143,9 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       adoptionDisconnects.push(disconnect)
       return {
         ensureConnected: vi.fn(async () => {
+          throw new Error('adoption unavailable')
+        }),
+        ensureConnectedWithin: vi.fn(async () => {
           throw new Error('adoption unavailable')
         }),
         request: vi.fn(),

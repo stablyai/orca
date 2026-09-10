@@ -80,4 +80,37 @@ describe('AutomationListSearchField', () => {
     expect(escape.defaultPrevented).toBe(true)
     expect(onClear).toHaveBeenCalledTimes(1)
   })
+
+  it('routes Enter into onEnter and ignores modified or composing Enter', () => {
+    const onEnter = vi.fn()
+    act(() => {
+      root.render(
+        <AutomationListSearchField
+          query="nightly"
+          isTooLarge={false}
+          onQueryChange={() => undefined}
+          onClear={() => undefined}
+          onEnter={onEnter}
+        />
+      )
+    })
+
+    const input = container.querySelector('input')
+    expect(input).not.toBeNull()
+
+    const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    input?.dispatchEvent(enter)
+    expect(enter.defaultPrevented).toBe(true)
+    expect(onEnter).toHaveBeenCalledTimes(1)
+
+    const shiftEnter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    input?.dispatchEvent(shiftEnter)
+    expect(shiftEnter.defaultPrevented).toBe(false)
+    expect(onEnter).toHaveBeenCalledTimes(1)
+  })
 })

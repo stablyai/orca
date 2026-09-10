@@ -18,6 +18,7 @@ import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
@@ -61,6 +62,11 @@ export type NewWorkspaceComposerCardProps = {
   onNameValueChange: (value: string) => void
   branchNameOverride: string | undefined
   onBranchNameOverrideChange: (value: string | undefined) => void
+  parentWorktreeId?: string | null
+  onParentWorktreeIdChange?: (value: string | null) => void
+  selectedRepoExecutionHostId?: ExecutionHostId | null
+  selectedRepoProjectId?: string | null
+  activeFolderWorkspaceId?: string | null
   onSmartGitHubItemSelect: (item: GitHubWorkItem) => void
   onSmartGitLabItemSelect: (item: GitLabWorkItem) => void
   onSmartBranchSelect: (refName: string, localBranchName: string) => void

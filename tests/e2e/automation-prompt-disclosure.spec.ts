@@ -25,7 +25,7 @@ test('automation detail keeps short prompts readable and reveals a very long pro
       }
       const base = {
         agentId: 'codex' as const,
-        projectId: repo.id,
+        repo: `id:${repo.id}`,
         workspaceMode: 'new_per_run' as const,
         reuseSession: false,
         timezone: 'UTC',
@@ -34,12 +34,18 @@ test('automation detail keeps short prompts readable and reveals a very long pro
         enabled: false,
         missedRunGraceMinutes: 720
       }
-      await window.api.automations.create({
+      const createAutomation = async (params: typeof base & { name: string; prompt: string }) => {
+        const response = await window.api.runtime.call({ method: 'automation.create', params })
+        if (!response.ok) {
+          throw new Error(`${response.error.code}: ${response.error.message}`)
+        }
+      }
+      await createAutomation({
         ...base,
         name: shortName,
         prompt: 'Synthetic short prompt.'
       })
-      await window.api.automations.create({
+      await createAutomation({
         ...base,
         name: longName,
         prompt: [
@@ -56,7 +62,7 @@ test('automation detail keeps short prompts readable and reveals a very long pro
           endMarker
         ].join('\n')
       })
-      await window.api.automations.create({
+      await createAutomation({
         ...base,
         name: resizeName,
         prompt: resizePrompt

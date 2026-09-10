@@ -3,6 +3,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 import { getLargeDiffRenderLimit } from '../../src/shared/large-diff-render-limit'
+import { MAX_AUTOMATIC_DIFF_CHANGED_LINES } from '../../src/renderer/src/components/editor/combined-diff-on-demand-load'
 import {
   buildLargeTypeScriptFile,
   createIsolatedLargeDiffRepo,
@@ -70,6 +71,61 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
 test.describe('Large diff freeze repro', () => {
   test.describe.configure({ mode: 'serial' })
   test.use({ seedTestRepo: false })
+  test('defers a large combined diff until the user loads it', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = createIsolatedLargeDiffRepo()
+    // Why: Windows keeps the watched fixture repo locked until Electron exits.
+    registerPostElectronShutdownCleanup(async () => {
+      rmSync(fixture.repoPath, { recursive: true, force: true })
+    })
+
+    const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+    writeFileSync(
+      fixture.absolutePath,
+      buildLargeTypeScriptFile(MAX_AUTOMATIC_DIFF_CHANGED_LINES + 1)
+    )
+    await orcaPage.evaluate(
+      async ({ wId, repoPath, relativePath }) => {
+        const store = window.__store
+        if (!store) {
+          throw new Error('window.__store is not available')
+        }
+        let status = await window.api.git.status({ worktreePath: repoPath })
+        let entry = status.entries.find(
+          (candidate) => candidate.path === relativePath && candidate.area === 'unstaged'
+        )
+        // Why: the app may still be settling the just-added worktree's first status read.
+        const statusDeadline = performance.now() + 5_000
+        while (!entry && performance.now() < statusDeadline) {
+          await new Promise((resolve) => window.setTimeout(resolve, 100))
+          status = await window.api.git.status({ worktreePath: repoPath })
+          entry = status.entries.find(
+            (candidate) => candidate.path === relativePath && candidate.area === 'unstaged'
+          )
+        }
+        if (!entry) {
+          throw new Error(`large diff status entry not found: ${relativePath}`)
+        }
+        store.getState().setGitStatus(wId, status)
+        store.getState().openAllDiffs(wId, repoPath, undefined, 'unstaged', [entry])
+      },
+      { wId: worktreeId, repoPath: fixture.repoPath, relativePath: fixture.relativePath }
+    )
+
+    const prompt = orcaPage.getByTestId('large-diff-load-prompt')
+    await expect(prompt).toBeVisible()
+    await expect(prompt).toContainText('Large diffs are not rendered by default.')
+    await expect(orcaPage.locator('.monaco-diff-editor')).toHaveCount(0)
+
+    await prompt.getByRole('button', { name: 'Load diff' }).click()
+
+    await expect(prompt).toHaveCount(0)
+    await expect(orcaPage.locator('.monaco-diff-editor')).toHaveCount(1, { timeout: 30_000 })
+  })
+
   test('opening a large single-file diff keeps the renderer responsive', async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     const fixture = createIsolatedLargeDiffRepo()

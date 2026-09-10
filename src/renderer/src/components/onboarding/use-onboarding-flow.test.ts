@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import {
   prepareSkippedOnboardingPreferences,
   remapOpenOnboardingLastCompletedStep
-} from './use-onboarding-flow'
+} from './onboarding-flow-state'
 import { getDefaultOnboardingState } from '../../../../shared/constants'
 
 vi.mock('sonner', () => ({

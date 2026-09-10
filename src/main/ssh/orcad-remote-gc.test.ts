@@ -78,7 +78,9 @@ describe('orcad GC', () => {
       currentDirAbsPath: '/home/u/.orca-remote/orcad-0.2.0+bb',
       record: emptyOrcadActivationRecord()
     })
-    const listCommand = mockExec.mock.calls.map((call) => String(call[1])).find((c) => c.includes('find'))
+    const listCommand = mockExec.mock.calls
+      .map((call) => String(call[1]))
+      .find((c) => c.includes('find'))
     expect(listCommand).toContain("-name 'orcad-*'")
     expect(listCommand).not.toContain("-name 'relay-*'")
   })

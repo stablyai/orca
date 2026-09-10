@@ -522,5 +522,4 @@ describe('rich markdown Tab key handler', () => {
       editor.destroy()
     }
   })
-
 })

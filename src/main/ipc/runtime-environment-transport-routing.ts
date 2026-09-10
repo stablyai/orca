@@ -1,6 +1,8 @@
-import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
+import {
+  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+} from '../../shared/protocol-version'
 import { resolveEnvironment, markEnvironmentUsed } from '../../shared/runtime-environment-store'
 import { isOrchestrationMutation } from '../../shared/orchestration-rpc-contract'
 import type {
@@ -16,22 +18,32 @@ import {
 import { withRemoteRuntimeTailscaleHint } from '../../shared/remote-runtime-tailscale-hint'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
 import {
-  reconnectRemoteRuntimeSharedControlConnection,
-  subscribeRemoteRuntimeSharedControlRequest
+  ensureRemoteRuntimeSharedControlConnection,
+  pauseRemoteRuntimeSharedControlRetry,
+  reconnectRemoteRuntimeSharedControlConnection
 } from './runtime-environment-request-connections'
 import {
   sendRemoteRuntimeConnectionRequestAbortable,
-  sendRemoteRuntimeRequestAbortable,
-  sendRemoteRuntimeSharedControlRequestAbortable
+  sendRemoteRuntimeRequestAbortable
 } from './runtime-environment-abortable-requests'
 import { attachRemoteControlDiagnostics } from './runtime-environment-status-diagnostics'
+import {
+  applyRuntimeEnvironmentCapabilityVerdict,
+  captureRuntimeEnvironmentCapabilityEvidence
+} from './runtime-environment-capability-evidence'
+import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { runtimeEnvironmentRevisionFailure } from './runtime-environment-revision-guard'
 import { withTailscaleHintForResponse } from './runtime-environment-tailscale-response'
 import {
   clearSharedControlSupport,
-  resetSharedControlSupport,
-  supportsSharedControl
+  resetSharedControlSupport
 } from './runtime-environment-shared-control-support'
+import {
+  executeSupportRoutedCall,
+  shouldRouteCallBySupport,
+  shouldRouteSubscriptionBySupport,
+  subscribeSupportRoutedRuntimeEnvironment
+} from './runtime-environment-support-routing'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -40,10 +52,12 @@ export { clearSharedControlSupport, resetSharedControlSupport }
 export async function getRuntimeEnvironmentStatus(
   userDataPath: string,
   selector: string,
-  timeoutMs?: number
+  timeoutMs?: number,
+  options?: { observeOnly?: true }
 ): Promise<RuntimeRpcResponse<RuntimeStatus>> {
   const environment = resolveEnvironment(userDataPath, selector)
   const pairing = getPreferredPairingOffer(environment)
+  const evidence = captureRuntimeEnvironmentCapabilityEvidence(environment.id, pairing)
   let response: RuntimeRpcResponse<RuntimeStatus>
   try {
     response = await sendRemoteRuntimeRequest<RuntimeStatus>(
@@ -75,11 +89,27 @@ export async function getRuntimeEnvironmentStatus(
     )
   }
   if (response.ok === true) {
-    markEnvironmentUsed(userDataPath, environment.id, {
+    const verdict = response.result.capabilities?.includes(REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY)
+      ? 'capable'
+      : 'absent'
+    const accepted = applyRuntimeEnvironmentCapabilityVerdict({
+      evidence,
+      verdict,
       runtimeId: response._meta.runtimeId,
-      pairedDeviceId: response.result.pairedDeviceId
+      onCapable: () => {
+        if (!options?.observeOnly && !isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+          ensureRemoteRuntimeSharedControlConnection(environment.id, pairing)
+          reconnectRemoteRuntimeSharedControlConnection(environment.id)
+        }
+      },
+      onAbsent: () => pauseRemoteRuntimeSharedControlRetry(environment.id)
     })
-    reconnectRemoteRuntimeSharedControlConnection(environment.id)
+    if (accepted && !options?.observeOnly) {
+      markEnvironmentUsed(userDataPath, environment.id, {
+        runtimeId: response._meta.runtimeId,
+        pairedDeviceId: response.result.pairedDeviceId
+      })
+    }
   }
   return attachRemoteControlDiagnostics(
     withTailscaleHintForResponse(response, pairing.endpoint),
@@ -147,25 +177,17 @@ export async function callRuntimeEnvironment(
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
         }
-        if (
-          method !== 'status.get' &&
-          !shouldUseOneShotRequest(method) &&
-          (await waitForPromiseWithSignal(
-            supportsSharedControl(userDataPath, currentEnvironment, pairing, effectiveTimeoutMs),
-            options?.signal
-          ))
-        ) {
-          const response = await sendRemoteRuntimeSharedControlRequestAbortable(
-            currentEnvironment.id,
-            pairing,
+        if (shouldRouteCallBySupport(method)) {
+          return executeSupportRoutedCall({
+            userDataPath,
+            environment: currentEnvironment,
             method,
             params,
-            effectiveTimeoutMs,
-            sharedControlEnvelope,
-            options?.signal
-          )
-          markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
-          return response
+            timeoutMs: effectiveTimeoutMs,
+            expectedPairingRevision: expectedEnvironmentPairingRevision,
+            envelope: sharedControlEnvelope,
+            signal: options?.signal
+          })
         }
         // Why: startup/control-plane RPCs use the proven one-shot path so repo
         // hydration cannot be coupled to a stale terminal-control connection.
@@ -206,14 +228,15 @@ export async function subscribeRuntimeEnvironment(
         | { type: 'close' }
     ) => void
     onClose: () => void
-  }
+  },
+  isCurrent: () => boolean = () => true
 ): Promise<RemoteRuntimeSubscription> {
   const environment = resolveEnvironment(userDataPath, selector)
   const pairing = getPreferredPairingOffer(environment)
   const effectiveTimeoutMs = timeoutMs ?? DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS
   let markedUsed = false
   const markUsedOnce = (runtimeId: string): void => {
-    if (markedUsed) {
+    if (markedUsed || !isCurrent()) {
       return
     }
     markedUsed = true
@@ -242,19 +265,16 @@ export async function subscribeRuntimeEnvironment(
   // Why: an initial-connect failure rejects (mid-stream drops go through
   // onError above), so the hint is applied to the thrown error here too.
   try {
-    if (
-      shouldUseSharedControlSubscription(method) &&
-      !shouldKeepDedicatedSubscriptionSocket(method) &&
-      (await supportsSharedControl(userDataPath, environment, pairing, effectiveTimeoutMs))
-    ) {
-      return await subscribeRemoteRuntimeSharedControlRequest(
-        environment.id,
-        pairing,
+    if (shouldRouteSubscriptionBySupport(method)) {
+      return await subscribeSupportRoutedRuntimeEnvironment({
+        userDataPath,
+        environment,
         method,
         params,
-        effectiveTimeoutMs,
-        callbacksWithMarkUsed
-      )
+        timeoutMs: effectiveTimeoutMs,
+        callbacks,
+        isCurrent
+      })
     }
     return await subscribeRemoteRuntimeRequest(
       pairing,
@@ -294,24 +314,4 @@ function shouldUseSharedControlEnvelope(
   return envelope && method.startsWith('orchestration.') && !isOrchestrationMutation(method, params)
     ? envelope
     : undefined
-}
-
-function shouldUseOneShotRequest(method: string): boolean {
-  // Why: snapshot recovery must remain available while a retained shared-control stream is reconnecting after a HUB restart.
-  return method === 'session.tabs.list' || method === 'session.tabs.listAll'
-}
-
-function shouldKeepDedicatedSubscriptionSocket(method: string): boolean {
-  return method === 'browser.screencast' || method === 'terminal.multiplex'
-}
-
-function shouldUseSharedControlSubscription(method: string): boolean {
-  return (
-    method === 'runtime.clientEvents.subscribe' ||
-    method === 'session.tabs.subscribe' ||
-    method === 'session.tabs.subscribeAll' ||
-    method === 'accounts.subscribe' ||
-    method === 'notifications.subscribe' ||
-    method === 'files.watch'
-  )
 }

@@ -17,6 +17,7 @@ export {
   configureWindowsHostGitEnvironmentReadiness
 } from './command-runner/windows-host-git-environment'
 export { DEFAULT_GIT_MAX_BUFFER } from './command-runner/git-exec-options'
+export { GitCommandTimeoutError } from './command-runner/git-command-timeout'
 export {
   appendGitConfigEnv,
   gitOptionalLocksDisabledEnv,
@@ -32,7 +33,11 @@ export {
 } from './command-runner/git-exec-file'
 export { commandExecFileAsync } from './command-runner/command-exec-file'
 export { gitStreamStdout, type GitStreamResult } from './command-runner/git-stream-stdout'
-export { gitSpawn, gitSpawnAfterWindowsEnvironmentReady } from './command-runner/git-spawn'
+export {
+  gitSpawn,
+  gitSpawnAfterWindowsEnvironmentReady,
+  withGitAdmission
+} from './command-runner/git-spawn'
 export { isTransientGhError } from './command-runner/gh-retry-policy'
 export { applyGhHostToArgs } from './command-runner/gh-host-args'
 export { ghExecFileAsync } from './command-runner/gh-exec-file'

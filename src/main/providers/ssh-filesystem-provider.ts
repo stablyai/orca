@@ -1,6 +1,7 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
 import { uploadBuffer } from '../ssh/sftp-upload'
+import { requestGitStreamable } from '../ssh/ssh-git-response-stream-reader'
 import { lstatViaSftp } from './ssh-filesystem-provider-sftp'
 import {
   downloadFileViaSftp,
@@ -37,6 +38,7 @@ import {
   readSshTerminalArtifact,
   writeSshTerminalArtifact
 } from './ssh-filesystem-terminal-artifact'
+import { readSshDocPreviewFile } from './ssh-filesystem-doc-preview'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
@@ -118,6 +120,12 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       }
       throw err
     }
+  }
+
+  readDocPreviewFile(
+    request: Parameters<NonNullable<IFilesystemProvider['readDocPreviewFile']>>[0]
+  ): ReturnType<NonNullable<IFilesystemProvider['readDocPreviewFile']>> {
+    return readSshDocPreviewFile(this.mux, request)
   }
 
   readFileRange(
@@ -307,7 +315,11 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     // Why #7721: the signal lets a workspace switch send rpc.cancel so the
     // relay aborts the full-tree scan instead of stacking abandoned scans
     // that starve interactive fs.readDir/fs.stat on the shared SSH channel.
-    return (await this.mux.request('fs.listFiles', params, {
+    // Why streamable: a monorepo listing serializes past the relay's 1 MiB control lane, and the
+    // lane it demotes to is refused under unrelated producer load. Opting in moves it to the bulk
+    // lane in chunks; an old relay ignores the flag and answers plainly, which the reader detects
+    // by the sentinel marker being absent.
+    return (await requestGitStreamable(this.mux, 'fs.listFiles', params, {
       signal: options?.signal
     })) as string[]
   }

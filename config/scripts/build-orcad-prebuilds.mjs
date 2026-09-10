@@ -132,12 +132,16 @@ function compileNodePty(dir) {
     return built
   }
   console.log('[orcad-prebuilds] compiling node-pty from patched source ...')
-  const result = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['node-gyp', 'rebuild'], {
-    cwd: dir,
-    stdio: 'inherit',
-    env: process.env,
-    windowsHide: true
-  })
+  const result = spawnSync(
+    process.platform === 'win32' ? 'npx.cmd' : 'npx',
+    ['node-gyp', 'rebuild'],
+    {
+      cwd: dir,
+      stdio: 'inherit',
+      env: process.env,
+      windowsHide: true
+    }
+  )
   if (result.status !== 0) {
     throw new Error(`[orcad-prebuilds] node-gyp rebuild failed (status ${result.status})`)
   }
@@ -173,10 +177,11 @@ function build() {
   copyFileSync(builtBinary, join(slotDir, 'pty.node'))
   console.log(`[orcad-prebuilds] stored ${slot}/pty.node`)
 
-  // Why spawn-helper ships too: on Unix node-pty posix_spawns build/Release/spawn-helper,
+  // Why spawn-helper ships too: on macOS node-pty posix_spawns build/Release/spawn-helper,
   // so a slot without it installs cleanly and then fails ENOENT the first time a user
-  // opens a terminal. Windows has no spawn-helper.
-  if (process.platform !== 'win32') {
+  // opens a terminal. binding.gyp builds the helper only under OS=="mac"; every other
+  // platform forks directly, so demanding one there fails a healthy Linux slot build.
+  if (process.platform === 'darwin') {
     const helperSource = join(dirname(builtBinary), 'spawn-helper')
     if (!existsSync(helperSource)) {
       throw new Error(`[orcad-prebuilds] spawn-helper missing at ${helperSource}`)

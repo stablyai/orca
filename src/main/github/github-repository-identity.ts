@@ -14,6 +14,7 @@ import {
 } from './github-remote-identity-parsing'
 import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-resolution'
 import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 
 export type OwnerRepo = GitHubOwnerRepo
 
@@ -24,10 +25,12 @@ export type GitHubRepoContext = {
   repoPath: string
   connectionId?: string | null
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 export type LocalGitExecOptions = {
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 }
 
 export type GitHubRemoteIdentityProbeOptions = {
@@ -42,7 +45,8 @@ export function githubRepoContext(
   return {
     repoPath,
     connectionId: connectionId ?? null,
-    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+    ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
   }
 }
 
@@ -50,12 +54,14 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
   cwd?: string
   encoding?: BufferEncoding
   wslDistro?: string
+  admissionTier?: GitAdmissionTier
 } {
   return context.connectionId
     ? {}
     : {
         cwd: context.repoPath,
-        ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+        ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
+        ...(context.admissionTier ? { admissionTier: context.admissionTier } : {})
       }
 }
 

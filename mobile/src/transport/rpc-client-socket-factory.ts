@@ -1,7 +1,7 @@
 import { publicKeyFromBase64 } from './e2ee'
 import { RpcClientSocketSession } from './rpc-client-socket-session'
 import { redactSocketEndpoint } from './socket-event-debug'
-import type { ConnectionLogLevel, ConnectionState, RpcResponse } from './types'
+import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'
 
 type SocketFactoryOptions = {
   endpoint: string
@@ -12,7 +12,7 @@ type SocketFactoryOptions = {
   getReconnectAttempt: () => number
   getLastConnectedAt: () => number | null
   isIntentionallyClosed: () => boolean
-  emitLog: (level: ConnectionLogLevel, message: string, detail?: string) => void
+  emitLog: ConnectionLogEmitter
   onHandshakeStarted: () => void
   onAuthenticated: (session: RpcClientSocketSession) => void
   onAuthRejected: (reason: string) => void

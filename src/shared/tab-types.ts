@@ -1,4 +1,5 @@
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
+import type { AgentType } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 
 // ─── Tab Group Layout ───────────────────────────────────────────────
@@ -22,16 +23,27 @@ export type TabContentType =
   | 'diff'
   | 'conflict-review'
   | 'check-details'
+  | 'agent-session'
   | 'browser'
   | 'simulator'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
+export type WorkspaceVisibleTabType =
+  | 'terminal'
+  | 'editor'
+  | 'agent-session'
+  | 'browser'
+  | 'simulator'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 // Why: many-to-one — every editor-family kind collapses to 'editor'. Never invert it by equality;
 // resolve the concrete tab and project forward instead.
 export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
+  if (
+    contentType === 'agent-session' ||
+    contentType === 'browser' ||
+    contentType === 'terminal' ||
+    contentType === 'simulator'
+  ) {
     return contentType
   }
   return 'editor'
@@ -56,6 +68,10 @@ export type Tab = {
   createdAt: number
   isPreview?: boolean // preview tabs get replaced by next single-click open
   isPinned?: boolean // pinned tabs survive "close others"
+  /** Provider backing a structured agent-session tab. */
+  agentSessionAgent?: AgentType
+  /** Structured session adopted from this terminal's Codex TUI. */
+  structuredSessionId?: string
   /** Why: per-tab rendering mode for coding-agent terminals. `'chat'` shows the
    *  native chat view as an overlay while the live terminal stays mounted
    *  underneath; `'terminal'` (the default for legacy/missing) shows the raw

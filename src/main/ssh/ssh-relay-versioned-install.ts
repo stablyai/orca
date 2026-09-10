@@ -92,7 +92,11 @@ export function computeRemoteInstallDir(
     pathFlavor === 'windows'
       ? getRemoteHostPlatform('win32-x64')
       : getRemoteHostPlatform('linux-x64')
-  return joinRemotePath(host, remoteHome, ...remoteInstallDirSegments(model, fullVersion, pathFlavor))
+  return joinRemotePath(
+    host,
+    remoteHome,
+    ...remoteInstallDirSegments(model, fullVersion, pathFlavor)
+  )
 }
 
 /**

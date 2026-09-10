@@ -109,10 +109,12 @@ export function clearMissingProjectGroupMemberships(repos: Repo[], groups: Proje
   )
 }
 
-export function getProjectGroupSubtreeIds(
-  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
-  rootGroupId: string
-): Set<string> {
+export type ProjectGroupChildIndex = ReadonlyMap<string, string[]>
+
+/** Build once and reuse when collecting subtrees for more than one root. */
+export function buildProjectGroupChildIndex(
+  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[]
+): ProjectGroupChildIndex {
   const childGroupsByParentId = new Map<string, string[]>()
   for (const group of groups) {
     if (!group.parentGroupId) {
@@ -122,7 +124,20 @@ export function getProjectGroupSubtreeIds(
     children.push(group.id)
     childGroupsByParentId.set(group.parentGroupId, children)
   }
+  return childGroupsByParentId
+}
 
+export function getProjectGroupSubtreeIds(
+  groups: readonly Pick<ProjectGroup, 'id' | 'parentGroupId'>[],
+  rootGroupId: string
+): Set<string> {
+  return collectProjectGroupSubtreeIds(buildProjectGroupChildIndex(groups), rootGroupId)
+}
+
+export function collectProjectGroupSubtreeIds(
+  childGroupsByParentId: ProjectGroupChildIndex,
+  rootGroupId: string
+): Set<string> {
   const subtreeIds = new Set<string>()
   const pending = [rootGroupId]
   while (pending.length > 0) {

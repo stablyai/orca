@@ -15,11 +15,7 @@ import { getDefaultPersistedState } from '../../shared/constants'
 import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { PersistedState } from '../../shared/persisted-state-types'
-import {
-  applyAgentStatusHooksEnabled,
-  getManagedAgentHookStatuses,
-  prepareManagedCodexHomeBeforeShellLaunch
-} from '../../main/agent-hooks/managed-agent-hook-controls'
+import { prepareManagedCodexHomeBeforeShellLaunch } from '../../main/codex/managed-home-shell-preflight'
 
 type AgentHookCommandResult = {
   enabled: boolean
@@ -194,6 +190,8 @@ async function setAgentHooksEnabled(
   client: RuntimeClient,
   enabled: boolean
 ): Promise<AgentHookCommandResult> {
+  const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } =
+    await import('../../main/agent-hooks/managed-agent-hook-controls.js')
   const updatedRuntime = await updateRunningRuntime(client, enabled)
   const offlineUpdate = updatedRuntime ? null : updateEnabledOnDisk(enabled)
   const settingsPath = offlineUpdate?.settingsPath ?? getDataPath()
@@ -234,6 +232,8 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
     })
   },
   'agent hooks status': async ({ json }) => {
+    const { getManagedAgentHookStatuses } =
+      await import('../../main/agent-hooks/managed-agent-hook-controls.js')
     const result: AgentHookCommandResult = {
       enabled: readHookSettingsFromDisk().agentStatusHooksEnabled,
       settingsPath: getDataPath(),

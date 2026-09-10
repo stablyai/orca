@@ -1,24 +1,21 @@
 import { getPtyIpc } from '../../pty-host-bindings'
-import type { Store } from '../../../persistence'
-import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider } from '../../../providers/types'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import { inspectPtyProviderProcessForRenderer } from '../../../providers/pty-process-inspection'
+import { clientOnlyUnverifiableInspection } from '../../../../shared/terminal-process-inspection'
 import {
   PtyProcessListAdmission,
   visitPtyProcessListingsInBatches
 } from '../../../providers/pty-process-list-admission'
-import type { PtyListedSession } from '../../../../shared/pty-listed-session'
-import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/pty-liveness-verdict'
+import type { PtyListedSession, PtySessionListScope } from '../../../../shared/pty-listed-session'
 import { ptyOwnership } from '../provider/ownership-state'
 import {
   getProviderForPty,
+  getProvider,
   hasPtyProviderForInspection,
   registeredPtyProviders,
   sshProviders,
   tryGetProviderForPty
 } from '../provider/registry'
-import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
 import { ptySizes } from '../delivery/visibility-state'
 import { isValidPaneKey } from '../pane/key-state'
 import {
@@ -29,116 +26,73 @@ import {
 } from '../pane/serializer-state'
 
 export function installPtyInspectIpcHandlers(deps: {
-  store?: Store
-  runtime?: OrcaRuntimeService
   getLocalPtyProviderStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
-  shutdownProviderAndDetectExit: (
-    provider: IPtyProvider,
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ) => Promise<boolean>
-  rememberSyntheticKillExit: (id: string) => void
-  sendPtyExitToRenderer: (payload: { id: string; code: number; incarnationId?: string }) => void
 }): void {
   const ipcMain = getPtyIpc()
-  const {
-    store,
-    runtime,
-    getLocalPtyProviderStartupPromise,
-    shutdownProviderAndDetectExit,
-    rememberSyntheticKillExit,
-    sendPtyExitToRenderer
-  } = deps
+  const { getLocalPtyProviderStartupPromise } = deps
 
-  ipcMain.handle('pty:kill', async (_event, args: { id: string; keepHistory?: boolean }) => {
-    if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
-      // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
-      throw new Error('Invalid PTY provider id')
-    }
-    runtime?.markPtyStopRequested?.(args.id)
-    const ownedConnectionId = ptyOwnership.get(args.id)
-    const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
-    const connectionId = ownedConnectionId ?? parsedSshId?.connectionId
-    // Why: wait for daemon startup before selecting the local provider, else a fallback shutdown falsely succeeds and orphans a restored daemon PTY (#7742).
-    const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
-    if (startupPromise) {
-      await startupPromise
-    }
-    const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(args.id)
-    if (!provider && connectionId) {
-      // Why: detached SSH PTYs intentionally keep ownership after their
-      // provider is unregistered; hydrated app-scoped ids can also arrive
-      // before ownership is rebuilt. Tombstone instead of falling back local.
-      const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-      runtime?.markPtyLivenessUnverifiable?.(args.id, SSH_PROVIDER_UNREGISTERED_REASON)
-      runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({
-        id: args.id,
-        code: -1,
-        ...(incarnationId ? { incarnationId } : {})
-      })
-      return
-    }
-    const shutdownProvider = provider ?? getProviderForPty(args.id)
-    let providerExitObserved = false
-    try {
-      providerExitObserved = await shutdownProviderAndDetectExit(shutdownProvider, args.id, {
-        immediate: true,
-        keepHistory: args.keepHistory ?? false
-      })
-    } catch (err) {
-      if (!isPtyAlreadyGoneError(err)) {
-        // Why: a failed shutdown can leave the process alive (SSH relay grace window / local daemon); keep ownership/lease state so the user can retry.
-        throw err
-      }
-      /* session already dead — cleanup below handles the rest */
-    }
-    // Why: some shutdown paths do not emit onExit through the provider listener.
-    // Explicit cleanup is idempotent and covers already-dead PTYs.
-    const incarnationId = finishPtyShutdown(args.id, connectionId, store)
-    if (!providerExitObserved) {
-      runtime?.onPtyExit(args.id, -1, incarnationId)
-      rememberSyntheticKillExit(args.id)
-      sendPtyExitToRenderer({
-        id: args.id,
-        code: -1,
-        ...(incarnationId ? { incarnationId } : {})
-      })
-    }
-  })
+  // Why: wait for daemon startup before selecting the local provider for an id
+  // the swap may re-own (#7742); ids owned by an SSH connection never wait.
+  // renderer-kill.ts inlines this — pty:kill's listener teardown is
+  // ordering-sensitive and must not gain even a no-barrier microtask.
+  const awaitSwapWindow = async (id: string): Promise<void> => {
+    await getLocalPtyProviderStartupPromise(
+      ptyOwnership.get(id) ?? parseAppSshPtyId(id)?.connectionId
+    )
+  }
 
-  ipcMain.handle('pty:listSessions', async (): Promise<PtyListedSession[]> => {
-    const deduped = new Map<string, PtyListedSession>()
-    const admission = new PtyProcessListAdmission()
-    await visitPtyProcessListingsInBatches(
-      registeredPtyProviders(),
-      ({ provider, connectionId }) =>
-        connectionId === null ? provider.listProcesses() : provider.listProcesses().catch(() => []),
-      ({ provider, connectionId }, sessions) => {
-        for (const rawSession of sessions) {
-          const session = admission.admit(rawSession)
-          // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
-          ptyOwnership.set(session.id, connectionId)
-          deduped.set(session.id, {
-            id: session.id,
-            cwd: session.cwd,
-            title: session.title,
-            // Why: the renderer's binding map is empty during restore, so ownership is the only
-            // liveness evidence it has. Absence is authoritative only from a provider that
-            // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).
-            agentOwnership:
-              (session.agentSessionOwners?.length ?? 0) > 0
-                ? 'present'
-                : provider.providesAgentSessionOwnerListings?.(session.id) === true
-                  ? 'absent'
-                  : 'unknown'
-          })
+  ipcMain.handle(
+    'pty:listSessions',
+    async (_event, scope?: PtySessionListScope): Promise<PtyListedSession[]> => {
+      if (scope !== undefined) {
+        if (
+          !scope ||
+          (scope.connectionId !== null &&
+            (typeof scope.connectionId !== 'string' || !scope.connectionId.trim()))
+        ) {
+          throw new Error('invalid_pty_session_list_scope')
+        }
+        // Select the daemon only after startup has handed off ownership.
+        if (scope.connectionId === null) {
+          await getLocalPtyProviderStartupPromise()
         }
       }
-    )
-    return Array.from(deduped.values())
-  })
+      const deduped = new Map<string, PtyListedSession>()
+      const admission = new PtyProcessListAdmission()
+      await visitPtyProcessListingsInBatches(
+        scope === undefined
+          ? registeredPtyProviders()
+          : [{ provider: getProvider(scope.connectionId), connectionId: scope.connectionId }],
+        ({ provider, connectionId }) =>
+          connectionId === null || scope !== undefined
+            ? provider.listProcesses()
+            : provider.listProcesses().catch(() => []),
+        ({ provider, connectionId }, sessions) => {
+          for (const rawSession of sessions) {
+            const session = admission.admit(rawSession)
+            // Why: kill actions only send back the PTY id, so rebuild ownership while listing to keep reconnect-discovered remote sessions routed to their provider.
+            ptyOwnership.set(session.id, connectionId)
+            deduped.set(session.id, {
+              id: session.id,
+              cwd: session.cwd,
+              title: session.title,
+              ...(session.worktreeId !== undefined ? { worktreeId: session.worktreeId } : {}),
+              // Why: the renderer's binding map is empty during restore, so ownership is the only
+              // liveness evidence it has. Absence is authoritative only from a provider that
+              // serializes claims — otherwise it is 'unknown', never 'absent' (#8459).
+              agentOwnership:
+                (session.agentSessionOwners?.length ?? 0) > 0
+                  ? 'present'
+                  : provider.providesAgentSessionOwnerListings?.(session.id) === true
+                    ? 'absent'
+                    : 'unknown'
+            })
+          }
+        }
+      )
+      return Array.from(deduped.values())
+    }
+  )
 
   ipcMain.handle(
     'pty:getAuthoritativeBufferSnapshotCapabilities',
@@ -196,6 +150,10 @@ export function installPtyInspectIpcHandlers(deps: {
       // authoritative dead. That is a fabricated answer about another host's PTY.
       return null
     }
+    // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, and
+    // its "no PTY" is exactly the false the renderer reconciler is allowed to
+    // close panes on.
+    await awaitSwapWindow(args.id)
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const provider = parsedSshId
@@ -232,18 +190,40 @@ export function installPtyInspectIpcHandlers(deps: {
     }
   )
 
-  ipcMain.handle('pty:inspectProcess', async (_event, args: { id: string }) => {
-    // Why: same routing hazard as pty:hasPty — an unroutable id must read as unavailable, not as a local-provider answer or a raised IPC error.
-    if (
-      typeof args?.id !== 'string' ||
-      !args.id ||
-      args.id.startsWith('remote:') ||
-      !hasPtyProviderForInspection(args.id)
-    ) {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true as const }
+  ipcMain.handle(
+    'pty:inspectProcess',
+    async (
+      _event,
+      args: {
+        id: string
+        expectedIncarnationId?: string
+        scanChildProcesses?: boolean
+        steadyState?: boolean
+      }
+    ) => {
+      // Why: same routing hazard as pty:hasPty — an unroutable id must read as client-only unverifiable, not as a local-provider answer or a raised IPC error.
+      if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
+        return clientOnlyUnverifiableInspection('terminal_gone')
+      }
+      // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, so
+      // nothing it reports about one is an observation; the post-swap owner must
+      // answer completion-sensitive inspection.
+      await awaitSwapWindow(args.id)
+      if (!hasPtyProviderForInspection(args.id)) {
+        return clientOnlyUnverifiableInspection('terminal_gone')
+      }
+      const options = {
+        ...(args.expectedIncarnationId
+          ? { expectedIncarnationId: args.expectedIncarnationId }
+          : {}),
+        ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
+        ...(args.steadyState === true ? { steadyState: true } : {})
+      }
+      return Object.keys(options).length > 0
+        ? inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id, options)
+        : inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
     }
-    return inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
-  })
+  )
 
   ipcMain.handle(
     'pty:confirmForegroundProcess',

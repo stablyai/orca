@@ -1,4 +1,3 @@
-import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
 import { buildPaletteDocument, type PaletteDocument } from './palette-match/palette-document'
@@ -19,7 +18,11 @@ import {
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { resolvePaletteRepoForWorktree } from './palette-repo-resolution'
+import { isGitHubPRSuppressed } from '../../../shared/worktree/github-pr-suppression'
+import {
+  getPaletteWorktreeIdentity,
+  resolvePaletteRepoForWorktree
+} from './palette-repo-resolution'
 
 export const WORKTREE_PALETTE_NAME_FIELD_ID = 'name'
 export const WORKTREE_PALETTE_BRANCH_FIELD_ID = 'branch'
@@ -71,7 +74,11 @@ function resolveReviewSource(
     repo && sources.prCache && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
       ? sources.prCache[`${repo.path}::${branch}`]?.data
       : null
-  if (cached) {
+  if (
+    cached &&
+    (worktree.linkedPR === null || cached.number === worktree.linkedPR) &&
+    !isGitHubPRSuppressed(worktree, cached.number)
+  ) {
     return { provider: 'github', number: cached.number, title: cached.title }
   }
   if (worktree.linkedPR != null) {
@@ -142,17 +149,23 @@ export function buildWorktreePaletteDocument(
       {
         id: WORKTREE_PALETTE_NAME_FIELD_ID,
         profile: 'structured-label',
-        text: resolveWorktreeDisplayName(worktree)
+        text: resolveWorktreeDisplayName(worktree),
+        role: 'primary',
+        destinationEligible: true
       },
       {
         id: WORKTREE_PALETTE_BRANCH_FIELD_ID,
         profile: 'structured-label',
-        text: resolveWorktreeBranchLabel(worktree)
+        text: resolveWorktreeBranchLabel(worktree),
+        role: 'secondary',
+        destinationEligible: true
       },
       {
         id: WORKTREE_PALETTE_REPO_FIELD_ID,
         profile: 'structured-label',
-        text: repo?.displayName ?? ''
+        text: repo?.displayName ?? '',
+        role: 'secondary',
+        destinationEligible: false
       },
       {
         id: WORKTREE_PALETTE_HOST_FIELD_ID,
@@ -162,9 +175,11 @@ export function buildWorktreePaletteDocument(
         // Why both keys: the palette keys this map by host identity so two same-id
         // workspaces keep distinct chips, but a bare-id map is still a valid input.
         text:
-          sources.hostLabelByWorktreeId?.get(getWorktreeHostIdentity(worktree)) ??
+          sources.hostLabelByWorktreeId?.get(getPaletteWorktreeIdentity(worktree)) ??
           sources.hostLabelByWorktreeId?.get(worktree.id) ??
-          ''
+          '',
+        role: 'secondary',
+        destinationEligible: false
       }
     ],
     compositePairs: [
@@ -188,7 +203,7 @@ export function buildWorktreePaletteDocuments(
     // the bare id lets the second host overwrite the first and one workspace becomes
     // unsearchable by its own name.
     documents.set(
-      getWorktreeHostIdentity(worktree),
+      getPaletteWorktreeIdentity(worktree),
       buildWorktreePaletteDocument(worktree, sources)
     )
   }

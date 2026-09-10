@@ -91,6 +91,7 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   },
   activeTabTypeByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
   browserUrlHistory: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
+  workspaceDocHistory: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
   activeTabIdByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
   unifiedTabs: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByBespokeRule' },
   tabGroups: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByBespokeRule' },
@@ -121,6 +122,13 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   terminalSurfaceTombstonesByPaneKey: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
+  },
+  // Residue: keyed by tab id and pruned by neither path, like remoteSessionIdsByTabId. Bounded
+  // anyway -- every write and every pull merge runs it through the TTL and cap in
+  // shared/closed-terminal-tab-tombstones.ts, and a resolved host retires its own entries.
+  closedTerminalTabTombstonesByTabId: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred'
   }
 } as const satisfies Record<keyof WorkspaceSessionState, SessionFieldDisposition>
 

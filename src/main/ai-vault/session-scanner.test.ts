@@ -647,6 +647,26 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
+    const clineSessionId = 'cline-session'
+    const clineSessionDir = join(roots.clineSessionsDir, clineSessionId)
+    await mkdir(clineSessionDir, { recursive: true })
+    await writeFile(
+      join(clineSessionDir, `${clineSessionId}.json`),
+      JSON.stringify({
+        session_id: clineSessionId,
+        started_at: '2026-05-01T10:10:30.000Z',
+        model: 'cline-model',
+        cwd: '/tmp/cline'
+      })
+    )
+    await writeFile(
+      join(clineSessionDir, `${clineSessionId}.messages.json`),
+      JSON.stringify({
+        updated_at: '2026-05-01T10:10:31.000Z',
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Cline vault title' }] }]
+      })
+    )
+
     // Kimi: <sessions>/wd_*/session_*/state.json + sibling agents/main/wire.jsonl,
     // with the work dir resolved from the top-level session_index.jsonl.
     const kimiSessionDir = join(roots.kimiSessionsDir, 'wd_app_abc', 'session_kimi-session')
@@ -738,6 +758,7 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('prime-agent')).toBe(
       `cd '/tmp/prime-agent' && prime-agent --resume '${primeAgentSessionFile}'`
     )
+    expect(commandByAgent.get('cline')).toBe("cd '/tmp/cline' && cline --id 'cline-session'")
     expect(commandByAgent.get('devin')).toBe("cd '/tmp/devin' && devin --resume 'devin-session'")
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
     expect(commandByAgent.get('kimi')).toBe(

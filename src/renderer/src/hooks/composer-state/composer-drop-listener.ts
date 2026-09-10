@@ -10,7 +10,8 @@ export function useComposerDropListener(
   useEffect(() => {
     applyDropRef.current = applyDrop
   }, [applyDrop])
-  const instanceIdRef = useRef(Symbol('composer'))
+  const instanceIdRef = useRef<symbol>(undefined!)
+  instanceIdRef.current ??= Symbol('composer')
 
   useEffect(() => {
     const instanceId = instanceIdRef.current
@@ -18,6 +19,9 @@ export function useComposerDropListener(
     const unsubscribe = window.api.ui.onFileDrop((data) => {
       if (
         data.target !== 'composer' ||
+        // Why: a scoped payload belongs to the pane composer that published that
+        // scope key; this stack only owns drops from unscoped composers.
+        data.scopeKey !== undefined ||
         !isCurrentComposerDropOwner(composerDropStack, instanceId)
       ) {
         return

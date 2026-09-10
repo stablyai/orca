@@ -1,423 +1,185 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { OrcaRuntimeService } from './orca-runtime'
+import {
+  CANARY_INCARNATION_ID,
+  CANARY_LEAF_ID,
+  CANARY_PTY_ID,
+  CANARY_TAB_ID,
+  createHarness,
+  createPtyBackedPublishedSurfaceHarness,
+  createStaleTabCloseHarness,
+  INCARNATION_ID,
+  LEAF_ID,
+  OTHER_WORKTREE_ID,
+  PTY_ID,
+  RUNTIME_OWNED_PTY_ID,
+  SIBLING_INCARNATION_ID,
+  SIBLING_LEAF_ID,
+  SIBLING_PTY_ID,
+  STALE_TAB_ID,
+  TAB_ID,
+  WORKTREE_ID
+} from './__fixtures__/orca-runtime-terminal-close-continuity-fixtures'
 
-const REPO_ID = 'repo-close-continuity'
-const WORKTREE_PATH = '/tmp/terminal-close-continuity'
-const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
-const TAB_ID = 'tab-close-continuity'
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const SIBLING_LEAF_ID = '33333333-3333-4333-8333-333333333333'
-const CANARY_TAB_ID = 'tab-close-continuity-canary'
-const CANARY_LEAF_ID = '55555555-5555-4555-8555-555555555555'
-const PTY_ID = 'pty-close-continuity'
-const RUNTIME_OWNED_PTY_ID = 'serve-close-continuity'
-const SIBLING_PTY_ID = 'pty-close-continuity-sibling'
-const CANARY_PTY_ID = 'pty-close-continuity-canary'
-const INCARNATION_ID = '22222222-2222-4222-8222-222222222222'
-const SIBLING_INCARNATION_ID = '44444444-4444-4444-8444-444444444444'
-const CANARY_INCARNATION_ID = '66666666-6666-4666-8666-666666666666'
-const canarySessionTab = {
-  id: CANARY_TAB_ID,
-  ptyId: CANARY_PTY_ID,
-  worktreeId: WORKTREE_ID,
-  title: 'Canary shell',
-  customTitle: null,
-  color: null,
-  sortOrder: 1,
-  createdAt: 2
-}
-const canarySessionLayout = {
-  root: { type: 'leaf' as const, leafId: CANARY_LEAF_ID },
-  activeLeafId: CANARY_LEAF_ID,
-  expandedLeafId: null,
-  ptyIdsByLeafId: { [CANARY_LEAF_ID]: CANARY_PTY_ID }
-}
-const canarySyncedTab = {
-  tabId: CANARY_TAB_ID,
-  worktreeId: WORKTREE_ID,
-  title: 'Canary shell',
-  activeLeafId: CANARY_LEAF_ID,
-  layout: { type: 'leaf' as const, leafId: CANARY_LEAF_ID }
-}
-const canarySyncedLeaf = {
-  tabId: CANARY_TAB_ID,
-  worktreeId: WORKTREE_ID,
-  leafId: CANARY_LEAF_ID,
-  paneRuntimeId: 9,
-  ptyId: CANARY_PTY_ID
-}
-const canaryMobileTab = {
-  type: 'terminal' as const,
-  id: `${CANARY_TAB_ID}::${CANARY_LEAF_ID}`,
-  parentTabId: CANARY_TAB_ID,
-  leafId: CANARY_LEAF_ID,
-  ptyId: CANARY_PTY_ID,
-  title: 'Canary shell',
-  isActive: false
-}
-const canaryProcess = {
-  id: CANARY_PTY_ID,
-  incarnationId: CANARY_INCARNATION_ID,
-  cwd: WORKTREE_PATH,
-  title: 'Canary shell'
-}
+describe('terminal close and handle incarnation continuity', () => {
+  it('delegates a stale spawn-time tab through its current PTY-backed renderer surface', async () => {
+    const harness = await createStaleTabCloseHarness()
+    const { terminal } = harness
 
-function makeSession(ptyId = PTY_ID, includeCanary = false): WorkspaceSessionState {
-  return {
-    ...getDefaultWorkspaceSession(),
-    tabsByWorktree: {
-      [WORKTREE_ID]: [
-        {
-          id: TAB_ID,
-          ptyId,
-          worktreeId: WORKTREE_ID,
-          title: 'Fixture shell',
-          customTitle: null,
-          color: null,
-          sortOrder: 0,
-          createdAt: 1
-        },
-        ...(includeCanary ? [canarySessionTab] : [])
-      ]
-    },
-    terminalLayoutsByTabId: {
-      [TAB_ID]: {
-        root: { type: 'leaf', leafId: LEAF_ID },
-        activeLeafId: LEAF_ID,
-        expandedLeafId: null,
-        ptyIdsByLeafId: { [LEAF_ID]: ptyId }
-      },
-      ...(includeCanary ? { [CANARY_TAB_ID]: canarySessionLayout } : {})
-    },
-    terminalPtyIncarnationsByPaneKey: {
-      [makePaneKey(TAB_ID, LEAF_ID)]: INCARNATION_ID,
-      ...(includeCanary
-        ? { [makePaneKey(CANARY_TAB_ID, CANARY_LEAF_ID)]: CANARY_INCARNATION_ID }
-        : {})
-    }
-  }
-}
-
-function makeDeferred() {
-  let resolve!: () => void
-  const promise = new Promise<void>((settle) => {
-    resolve = settle
-  })
-  return { promise, resolve }
-}
-
-function createHarness(
-  options: {
-    ptyId?: string
-    publishMobileSurface?: boolean
-    registerPtyBacked?: boolean
-    includeCanary?: boolean
-  } = {}
-) {
-  const ptyId = options.ptyId ?? PTY_ID
-  let session = makeSession(ptyId, options.includeCanary)
-  let sessionAvailable = true
-  let incarnationId = INCARNATION_ID
-  let includeSiblingPty = false
-  let victimPtyListed = true
-  const repo = {
-    id: REPO_ID,
-    path: WORKTREE_PATH,
-    displayName: 'close-continuity',
-    badgeColor: '#000000',
-    addedAt: 1
-  }
-  const store = {
-    getRepos: () => [repo],
-    getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
-    getAllWorktreeMeta: () => ({}),
-    getWorktreeMeta: () => undefined,
-    getSettings: () => ({ workspaceDir: '/tmp/workspaces' }),
-    getProjects: () => [],
-    getWorkspaceSession: () => (sessionAvailable ? session : undefined),
-    setWorkspaceSession: (next: WorkspaceSessionState) => {
-      session = next
-    },
-    flushOrThrow: () => {}
-  }
-  const acknowledged = makeDeferred()
-  let closeTerminalTabError: Error | null = null
-  let closeTerminalTabAction: (() => void | Promise<void>) | null = null
-  const closeTerminal = vi.fn()
-  const closeTerminalTab = vi.fn(() => {
-    if (closeTerminalTabError) {
-      return Promise.reject(closeTerminalTabError)
-    }
-    return closeTerminalTabAction ? Promise.resolve(closeTerminalTabAction()) : acknowledged.promise
-  })
-  const kill = vi.fn(() => true)
-  let verifiedStopResult: boolean | Error = false
-  let stopAndWaitAction: ((stoppingPtyId: string) => void | Promise<void>) | null = null
-  const stopAndWait = vi.fn(async (stoppingPtyId: string) => {
-    await stopAndWaitAction?.(stoppingPtyId)
-    if (verifiedStopResult instanceof Error) {
-      throw verifiedStopResult
-    }
-    return verifiedStopResult
-  })
-  const listProcesses = vi.fn(async () => [
-    ...(victimPtyListed
-      ? [
-          {
-            id: ptyId,
-            incarnationId,
-            cwd: WORKTREE_PATH,
-            title: 'Fixture shell'
-          }
-        ]
-      : []),
-    ...(includeSiblingPty
-      ? [
-          {
-            id: SIBLING_PTY_ID,
-            incarnationId: SIBLING_INCARNATION_ID,
-            cwd: WORKTREE_PATH,
-            title: 'Fixture sibling shell'
-          }
-        ]
-      : []),
-    ...(options.includeCanary ? [canaryProcess] : [])
-  ])
-  const runtime = new OrcaRuntimeService(store as never)
-  runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
-  runtime.setPtyController({
-    write: () => true,
-    kill,
-    stopAndWait,
-    listProcesses,
-    getForegroundProcess: async () => null
-  })
-  runtime.attachWindow(1)
-
-  const syncFixtureGraph = () =>
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          title: 'Fixture shell',
-          activeLeafId: LEAF_ID,
-          layout: { type: 'leaf', leafId: LEAF_ID }
-        },
-        ...(options.includeCanary ? [canarySyncedTab] : [])
-      ],
-      leaves: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          leafId: LEAF_ID,
-          paneRuntimeId: 7,
-          ptyId
-        },
-        ...(options.includeCanary ? [canarySyncedLeaf] : [])
-      ],
-      ...(options.publishMobileSurface
-        ? {
-            mobileSessionTabs: [
-              {
-                worktree: WORKTREE_ID,
-                publicationEpoch: 'renderer:close-continuity',
-                snapshotVersion: 1,
-                activeGroupId: null,
-                activeTabId: `${TAB_ID}::${LEAF_ID}`,
-                activeTabType: 'terminal' as const,
-                tabs: [
-                  {
-                    type: 'terminal' as const,
-                    id: `${TAB_ID}::${LEAF_ID}`,
-                    parentTabId: TAB_ID,
-                    leafId: LEAF_ID,
-                    ptyId,
-                    title: 'Fixture shell',
-                    isActive: true
-                  },
-                  ...(options.includeCanary ? [canaryMobileTab] : [])
-                ]
-              }
-            ]
-          }
-        : {})
-    })
-  const syncCanaryGraph = () =>
-    runtime.syncWindowGraph(1, {
-      tabs: [canarySyncedTab],
-      leaves: [canarySyncedLeaf],
-      ...(options.publishMobileSurface
-        ? {
-            mobileSessionTabs: [
-              {
-                worktree: WORKTREE_ID,
-                publicationEpoch: 'renderer:close-continuity',
-                snapshotVersion: 2,
-                activeGroupId: null,
-                activeTabId: `${CANARY_TAB_ID}::${CANARY_LEAF_ID}`,
-                activeTabType: 'terminal' as const,
-                tabs: [{ ...canaryMobileTab, isActive: true }]
-              }
-            ]
-          }
-        : {})
-    })
-  const syncEmptyGraph = () => runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-  const syncFixtureTabWithoutLeaf = () =>
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          title: 'Fixture shell',
-          activeLeafId: LEAF_ID,
-          layout: { type: 'leaf', leafId: LEAF_ID }
-        },
-        ...(options.includeCanary ? [canarySyncedTab] : [])
-      ],
-      leaves: options.includeCanary ? [canarySyncedLeaf] : []
-    })
-  const syncSplitFixtureGraph = () => {
-    includeSiblingPty = true
-    session = {
-      ...session,
-      terminalLayoutsByTabId: {
-        [TAB_ID]: {
-          root: {
-            type: 'split',
-            direction: 'horizontal',
-            first: { type: 'leaf', leafId: LEAF_ID },
-            second: { type: 'leaf', leafId: SIBLING_LEAF_ID }
-          },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: {
-            [LEAF_ID]: ptyId,
-            [SIBLING_LEAF_ID]: SIBLING_PTY_ID
-          }
-        }
-      },
-      terminalPtyIncarnationsByPaneKey: {
-        ...session.terminalPtyIncarnationsByPaneKey,
-        [makePaneKey(TAB_ID, SIBLING_LEAF_ID)]: SIBLING_INCARNATION_ID
-      }
-    }
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          title: 'Fixture shell',
-          activeLeafId: LEAF_ID,
-          layout: session.terminalLayoutsByTabId[TAB_ID]!.root
-        }
-      ],
-      leaves: [
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          leafId: LEAF_ID,
-          paneRuntimeId: 7,
-          ptyId
-        },
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          leafId: SIBLING_LEAF_ID,
-          paneRuntimeId: 8,
-          ptyId: SIBLING_PTY_ID
-        }
-      ]
-    })
-  }
-
-  if (options.registerPtyBacked) {
-    runtime.registerPty(ptyId, WORKTREE_ID, null, {
+    await expect(harness.runtime.closeTerminalTab(terminal.handle)).resolves.toMatchObject({
+      handle: terminal.handle,
       tabId: TAB_ID,
+      closeMode: 'tab'
+    })
+
+    expect(harness.closeTerminalTab).toHaveBeenCalledWith(TAB_ID)
+  })
+
+  it('kills and removes a stale spawn-time tab through its current headless surface', async () => {
+    const harness = await createStaleTabCloseHarness({ headless: true })
+    const { terminal } = harness
+    const published = vi.fn()
+    const unsubscribe = harness.runtime.onMobileSessionTabsChanged(published)
+
+    await expect(harness.runtime.closeTerminalTab(terminal.handle)).resolves.toMatchObject({
+      handle: terminal.handle,
+      tabId: TAB_ID,
+      closeMode: 'tab'
+    })
+
+    expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.kill.mock.invocationCallOrder[0]!
+    )
+    expect(harness.flushOrThrow.mock.invocationCallOrder[0]).toBeLessThan(
+      published.mock.invocationCallOrder[0]!
+    )
+    await expect(harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).resolves.toMatchObject(
+      {
+        retiredTerminalSurfaces: [
+          {
+            parentTabId: TAB_ID,
+            leafId: LEAF_ID,
+            ptyId: RUNTIME_OWNED_PTY_ID,
+            terminal: terminal.handle,
+            incarnationId: INCARNATION_ID
+          }
+        ],
+        tabs: []
+      }
+    )
+    unsubscribe()
+  })
+
+  it('publishes no retirement or absence when the durable headless close fails', async () => {
+    const harness = await createStaleTabCloseHarness({ headless: true })
+    const published = vi.fn()
+    const unsubscribe = harness.runtime.onMobileSessionTabsChanged(published)
+    harness.rejectPersistenceFlush(new Error('disk-full'))
+
+    await expect(harness.runtime.closeTerminalTab(harness.terminal.handle)).rejects.toThrow(
+      'disk-full'
+    )
+
+    expect(harness.kill).not.toHaveBeenCalled()
+    expect(published).not.toHaveBeenCalled()
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
+    const snapshot = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    expect(snapshot).toMatchObject({
+      tabs: [expect.objectContaining({ parentTabId: TAB_ID, leafId: LEAF_ID })]
+    })
+    expect(snapshot.retiredTerminalSurfaces).toBeUndefined()
+    unsubscribe()
+  })
+
+  it('publishes each split leaf retirement with its own terminal handle', async () => {
+    const harness = createHarness({ publishMobileSurface: true, registerPtyBacked: true })
+    harness.syncSplitFixtureGraph()
+    const before = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const terminalsByLeafId = new Map(
+      before.tabs.flatMap((tab) =>
+        tab.type === 'terminal' && tab.terminal ? [[tab.leafId, tab.terminal] as const] : []
+      )
+    )
+    expect(terminalsByLeafId.size).toBe(2)
+    harness.syncEmptyGraph()
+
+    await expect(
+      harness.runtime.closeMobileSessionTab(`id:${WORKTREE_ID}`, TAB_ID, { reason: 'user' })
+    ).resolves.toMatchObject({ closed: true })
+
+    const after = await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    expect(after.tabs).toEqual([])
+    expect(after.retiredTerminalSurfaces).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          leafId: LEAF_ID,
+          ptyId: PTY_ID,
+          terminal: terminalsByLeafId.get(LEAF_ID),
+          incarnationId: INCARNATION_ID
+        }),
+        expect.objectContaining({
+          leafId: SIBLING_LEAF_ID,
+          ptyId: SIBLING_PTY_ID,
+          terminal: terminalsByLeafId.get(SIBLING_LEAF_ID),
+          incarnationId: SIBLING_INCARNATION_ID
+        })
+      ])
+    )
+  })
+
+  it.each(['pane', 'tab'] as const)(
+    'closes an exact hot-state %s whose failed reveal left no persisted row',
+    async (closeMode) => {
+      const harness = await createStaleTabCloseHarness({ headless: true })
+      harness.retirePersistedTab()
+
+      await expect(
+        closeMode === 'tab'
+          ? harness.runtime.closeTerminalTab(harness.terminal.handle)
+          : harness.runtime.closeTerminal(harness.terminal.handle)
+      ).resolves.toMatchObject({ handle: harness.terminal.handle, tabId: TAB_ID })
+
+      expect(harness.kill).toHaveBeenCalledWith(RUNTIME_OWNED_PTY_ID)
+      await expect(
+        harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      ).resolves.toMatchObject({ tabs: [] })
+    }
+  )
+
+  it('does not let a colliding PTY id close a different persisted incarnation', async () => {
+    const harness = await createStaleTabCloseHarness({ headless: true })
+    harness.replacePersistedIncarnation(SIBLING_INCARNATION_ID)
+    const { terminal } = harness
+
+    await expect(harness.runtime.closeTerminalTab(terminal.handle)).rejects.toThrow(
+      'terminal_handle_stale'
+    )
+
+    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
+  })
+
+  it('does not let a PTY handle cross its recorded worktree boundary', async () => {
+    const harness = await createStaleTabCloseHarness({ headless: true })
+    const { terminal } = harness
+    harness.runtime.registerPty(RUNTIME_OWNED_PTY_ID, OTHER_WORKTREE_ID, null, {
+      tabId: STALE_TAB_ID,
       leafId: LEAF_ID,
       incarnationId: INCARNATION_ID
     })
-    if (options.includeCanary) {
-      runtime.registerPty(CANARY_PTY_ID, WORKTREE_ID, null, {
-        tabId: CANARY_TAB_ID,
-        leafId: CANARY_LEAF_ID,
-        incarnationId: CANARY_INCARNATION_ID
-      })
-    }
-  }
-  syncFixtureGraph()
-  return {
-    runtime,
-    acknowledged,
-    closeTerminal,
-    closeTerminalTab,
-    kill,
-    stopAndWait,
-    syncCanaryGraph,
-    syncEmptyGraph,
-    syncFixtureGraph,
-    syncFixtureTabWithoutLeaf,
-    syncSplitFixtureGraph,
-    getSession: () => session,
-    makeSessionUnavailable: () => {
-      sessionAvailable = false
-    },
-    removeVictimFromInventory: () => {
-      victimPtyListed = false
-    },
-    retirePersistedTab: () => {
-      const victimPaneKey = makePaneKey(TAB_ID, LEAF_ID)
-      session = {
-        ...session,
-        tabsByWorktree: {
-          ...session.tabsByWorktree,
-          [WORKTREE_ID]: (session.tabsByWorktree[WORKTREE_ID] ?? []).filter(
-            (tab) => tab.id !== TAB_ID
-          )
-        },
-        terminalLayoutsByTabId: Object.fromEntries(
-          Object.entries(session.terminalLayoutsByTabId).filter(([tabId]) => tabId !== TAB_ID)
-        ),
-        terminalPtyIncarnationsByPaneKey: Object.fromEntries(
-          Object.entries(session.terminalPtyIncarnationsByPaneKey ?? {}).filter(
-            ([paneKey]) => paneKey !== victimPaneKey
-          )
-        )
-      }
-    },
-    setCloseTerminalTabAction: (action: () => void | Promise<void>) => {
-      closeTerminalTabAction = action
-    },
-    rejectTerminalTabClose: (error: Error) => {
-      closeTerminalTabError = error
-    },
-    setVerifiedStopResult: (result: boolean | Error) => {
-      verifiedStopResult = result
-    },
-    setStopAndWaitAction: (action: (stoppingPtyId: string) => void | Promise<void>) => {
-      stopAndWaitAction = action
-    },
-    replaceIncarnation: (next: string) => {
-      incarnationId = next
-    }
-  }
-}
 
-function createPtyBackedPublishedSurfaceHarness() {
-  const harness = createHarness({
-    ptyId: RUNTIME_OWNED_PTY_ID,
-    publishMobileSurface: true,
-    registerPtyBacked: true
+    await expect(harness.runtime.closeTerminalTab(terminal.handle)).rejects.toThrow(
+      'terminal_handle_stale'
+    )
+
+    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.closeTerminalTab).not.toHaveBeenCalled()
+    expect(harness.getSession().tabsByWorktree[WORKTREE_ID]).toHaveLength(1)
   })
-  harness.syncFixtureTabWithoutLeaf()
-  return harness
-}
 
-describe('terminal close and handle incarnation continuity', () => {
   it('does not acknowledge final-pane close before durable tab retirement', async () => {
     const harness = createHarness()
     const [{ handle }] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals

@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
+import { getOptionalJsonFlag, getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
 
@@ -11,7 +11,7 @@ export const ORCHESTRATION_GATE_HANDLERS: Record<string, CommandHandler> = {
     }>(client, flags, 'orchestration.gateCreate', {
       task: getRequiredStringFlag(flags, 'task'),
       question: getRequiredStringFlag(flags, 'question'),
-      options: getOptionalStringFlag(flags, 'options'),
+      options: getOptionalJsonFlag(flags, 'options'),
       // Why: gates are Run-scoped, so the coordinator handle is the authorized caller identity.
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client)
     })

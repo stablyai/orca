@@ -3,7 +3,9 @@ import type { BrowserSessionProfile } from '../../shared/browser-workspace-types
 
 const mocks = vi.hoisted(() => ({
   handleGuestWillDownload: vi.fn(),
-  noticeDocPreviewDownloadBlocked: vi.fn()
+  noticeDocPreviewDownloadBlocked: vi.fn(),
+  clearBrowserWebAuthnAccessHandlers: vi.fn(),
+  installBrowserWebAuthnAccessHandlers: vi.fn()
 }))
 
 type WillDownloadListener = (
@@ -80,21 +82,20 @@ vi.mock('./browser-media-access', () => ({
   requestSystemMediaAccess: async () => false
 }))
 vi.mock('./browser-session-ua', () => ({
-  cleanElectronUserAgent: (userAgent: string) => userAgent,
-  setupClientHintsOverride: vi.fn()
+  setupGoogleAuthUserAgentOverride: vi.fn()
 }))
 vi.mock('./browser-session-user-agent-mode', () => ({
   setBrowserSessionUserAgentMode: vi.fn()
 }))
 vi.mock('./browser-webauthn-access', () => ({
   allowsBrowserWebAuthnPermission: () => false,
-  clearBrowserWebAuthnAccessHandlers: vi.fn(),
-  installBrowserWebAuthnAccessHandlers: vi.fn()
+  clearBrowserWebAuthnAccessHandlers: mocks.clearBrowserWebAuthnAccessHandlers,
+  installBrowserWebAuthnAccessHandlers: mocks.installBrowserWebAuthnAccessHandlers
 }))
 
 type PartitionPolicyInstaller = (
   profile: BrowserSessionProfile,
-  options?: { downloads?: 'route' | 'deny' }
+  options?: { downloads?: 'route' | 'deny'; permissions?: 'browser' | 'deny' }
 ) => void
 
 // Why imported per test rather than at the top: the installer remembers which partitions it has
@@ -181,5 +182,53 @@ describe('partition download policy', () => {
     expect(fireWillDownload('orca-doc-preview').cancelled).toBe(true)
     expect(fireWillDownload('persist:browsing-1').cancelled).toBe(false)
     expect(mocks.handleGuestWillDownload).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('partition permission policy', () => {
+  it('keeps ordinary browser partitions on the browser permission policy', async () => {
+    const install = await loadInstaller()
+    install(profileFor('persist:browsing-1'))
+
+    expect(mocks.installBrowserWebAuthnAccessHandlers).toHaveBeenCalledWith(
+      sessionsByPartition.get('persist:browsing-1')
+    )
+    expect(mocks.clearBrowserWebAuthnAccessHandlers).not.toHaveBeenCalled()
+  })
+
+  it('denies every request and check on a strict partition without WebAuthn handlers', async () => {
+    const install = await loadInstaller()
+    install(profileFor('orca-doc-preview'), { permissions: 'deny' })
+    const sess = sessionsByPartition.get('orca-doc-preview')
+    if (!sess) {
+      throw new Error('Expected the preview session')
+    }
+    const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
+      webContents: Electron.WebContents,
+      permission: string,
+      callback: (allowed: boolean) => void
+    ) => void
+    const checkHandler = sess.setPermissionCheckHandler.mock.calls[0]?.[0] as (
+      webContents: Electron.WebContents,
+      permission: string
+    ) => boolean
+    const displayMediaHandler = sess.setDisplayMediaRequestHandler.mock.calls[0]?.[0] as (
+      request: Electron.DisplayMediaRequestHandlerHandlerRequest,
+      callback: (streams: { video?: Electron.WebFrameMain; audio?: 'loopback' }) => void
+    ) => void
+
+    for (const permission of ['media', 'clipboard-read', 'notifications', 'fullscreen']) {
+      let decision: boolean | null = null
+      requestHandler({} as Electron.WebContents, permission, (allowed) => (decision = allowed))
+      expect(decision).toBe(false)
+      expect(checkHandler({} as Electron.WebContents, permission)).toBe(false)
+    }
+    expect(mocks.installBrowserWebAuthnAccessHandlers).not.toHaveBeenCalled()
+    expect(mocks.clearBrowserWebAuthnAccessHandlers).toHaveBeenCalledWith(sess)
+    let displayMediaDecision: { video?: Electron.WebFrameMain; audio?: 'loopback' } | null = null
+    displayMediaHandler({} as Electron.DisplayMediaRequestHandlerHandlerRequest, (decision) => {
+      displayMediaDecision = decision
+    })
+    expect(displayMediaDecision).toEqual({ video: undefined, audio: undefined })
   })
 })

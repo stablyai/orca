@@ -200,6 +200,49 @@ describe('projectAutomationList', () => {
     expect(result.items[0]?.usageSummary?.knownRuns).toBe(2)
     expect(result.items[1]?.usageSummary).toBeNull()
   })
+
+  it('projects and scopes in one collection traversal', () => {
+    const collectionMethodReads: string[] = []
+    const repoLookups: string[] = []
+    const targetLookups: string[] = []
+    const source = new Proxy(records, {
+      get(target, property, receiver) {
+        if (property === 'map' || property === 'filter') {
+          collectionMethodReads.push(String(property))
+        }
+        return Reflect.get(target, property, receiver)
+      }
+    })
+    const usageIds: string[] = []
+    const result = projectAutomationList(
+      source,
+      {
+        ...context(),
+        repoConnectionId: (repoId) => {
+          repoLookups.push(repoId)
+          return repoId === 'repo-1' ? null : repoId === 'repo-ssh' ? 'ssh-1' : undefined
+        },
+        sshTargetGeneration: (targetId) => {
+          targetLookups.push(targetId)
+          return targetId === 'ssh-1' ? 7 : undefined
+        },
+        usageSummary: (id) => {
+          usageIds.push(id)
+          return null
+        }
+      },
+      { kind: 'self' }
+    )
+
+    expect(collectionMethodReads).toEqual([])
+    expect(result.automations.map((entry) => entry.id)).toEqual(['local-1'])
+    expect(result.items.map((item) => item.automationId)).toEqual(['local-1'])
+    expect(result.items[0]?.selector).toEqual({ kind: 'self' })
+    expect(result.orphanCount).toBe(1)
+    expect(repoLookups).toEqual(['repo-1'])
+    expect(targetLookups).toEqual(['ssh-1', 'ssh-gone'])
+    expect(usageIds).toEqual(['local-1'])
+  })
 })
 
 describe('automationChangePublications', () => {

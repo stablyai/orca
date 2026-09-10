@@ -141,15 +141,13 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
 
   const handleNativeChatFileTap = useCallback((pathText: string) => {
     const current = optionsRef.current
-    // The chat overlay rides on its backing terminal tab; that handle anchors
-    // the activation gate even though resolution ignores the terminal's cwd.
     const sourceTerminalHandle = current.activeHandleRef.current
-    if (!current.client || !sourceTerminalHandle) {
+    const nativeChatSessionId = current.nativeChatSessionId
+    const nativeChatTabId = current.getActiveSessionTabId()
+    if (!current.client || (!sourceTerminalHandle && !(nativeChatSessionId && nativeChatTabId))) {
       return
     }
     const activationSeq = ++activationSeqRef.current
-    const nativeChatSessionId = current.nativeChatSessionId
-    const nativeChatTabId = current.getActiveSessionTabId()
     openMobileNativeChatFileTap<T>({
       client: current.client,
       hostId: current.hostId,
@@ -172,6 +170,8 @@ export function useMobileFileTapHandlers<T extends FileTapSessionTab>(
         latestActivationSeq: activationSeqRef.current,
         sourceTerminalHandle,
         activeTerminalHandle: current.activeHandleRef.current,
+        sourceSessionTabId: nativeChatTabId,
+        activeSessionTabId: current.getActiveSessionTabId(),
         activeTabType: current.getActiveSessionTabType()
       }),
       switchSessionTab: current.switchSessionTab,

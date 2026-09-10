@@ -1,6 +1,7 @@
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
 import {
   SSH_SESSION_EXPIRED_ERROR,
+  isSshPtyAbsentFromRelayError,
   isSshPtyIdentityMismatchError
 } from '../../../providers/ssh-pty-errors'
 import { classifyError } from '../../../telemetry/classify-error'
@@ -144,6 +145,15 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
       Boolean(args.connectionId) &&
       (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
         rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
+    // The message alone cannot carry this decision. All three reattach refusals are minted with the
+    // same `SSH_SESSION_EXPIRED` text, and only one of them observed the process: `restoreRequired`
+    // means the PTY is LIVE and only its source stream needs rebuilding, which
+    // `ssh-pty-errors.ts` states outright. Expiring its lease and deleting its ownership erases
+    // this client's last record of a running remote process, and #9819's sweep reads a PTY it has
+    // no record of as one it may SIGKILL on the next connect. Only positive host-reported absence
+    // may reach that bookkeeping; being too strict here merely leaves a dead lease for the next
+    // reattach to retire on real host evidence.
+    const relayReportedSessionAbsent = isExpiredSshSession && isSshPtyAbsentFromRelayError(err)
     const exitedBeforeSpawnReply =
       ctx.rejectedRegistrationCandidate?.exitedBeforeSpawnReply === true
     if (ctx.effectiveSessionAppId !== undefined) {
@@ -157,7 +167,11 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
         ptySizes.delete(ctx.effectiveSessionAppId)
       }
     }
-    if (args.connectionId && ctx.effectiveSessionRelayId !== undefined && isExpiredSshSession) {
+    if (
+      args.connectionId &&
+      ctx.effectiveSessionRelayId !== undefined &&
+      relayReportedSessionAbsent
+    ) {
       // Why: expired remote reattach = relay already dropped the PTY; clear the lease so writes can't restore the stale binding.
       if (ctx.effectiveSessionAppId !== undefined && !isIdentityMismatch) {
         clearProviderPtyState(ctx.effectiveSessionAppId)

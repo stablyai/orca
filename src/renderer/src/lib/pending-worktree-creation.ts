@@ -13,6 +13,7 @@ import type {
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
+import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 
 /** Two-phase status reported by the main process while a worktree is created.
  *  `preparing` covers renderer-side preflight before `createWorktree` starts;
@@ -66,6 +67,7 @@ export type WorktreeCreationRequest = {
   /** True only when `name` came from the creature-name generator; gates host-side retirement. */
   nameWasGenerated?: boolean
   displayName?: string
+  displayNameKind?: 'generated' | 'user'
   baseBranch?: string
   compareBaseRef?: string
   setupDecision: SetupDecision
@@ -75,10 +77,14 @@ export type WorktreeCreationRequest = {
   linkedPR?: number
   pushTarget?: GitPushTarget
   agent: TuiAgent | null
+  /** Renderer-owned route decision captured at submit time and reused on retry. */
+  agentLaunchRoute?: AgentLaunchRoute
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
   branchNameOverride?: string
+  /** Parent picked in the composer's Advanced drawer. Sidebar nesting only, no git effect. */
+  parentWorktreeId?: string
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number
   linkedGitLabIssue?: number
@@ -129,6 +135,8 @@ export type PendingWorktreeCreation = {
   loaderVisible: boolean
   error?: string
   provisioningLog?: string
+  /** Existing worktree whose uncertain structured launch must be reconciled instead of recreated. */
+  structuredLaunchRecoveryWorktreeId?: string
   request: WorktreeCreationRequest
 }
 

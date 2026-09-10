@@ -1,4 +1,0 @@
-export const TASK_SEARCH_DEBOUNCE_MS = 300
-export const LINEAR_ITEM_LIMIT = 36
-export const JIRA_ITEM_LIMIT = 50
-export const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20

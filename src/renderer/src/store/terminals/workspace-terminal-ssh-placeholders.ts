@@ -12,7 +12,9 @@ export function addHydratedSshWorktreePlaceholders(
   tabsByWorktree: Record<string, TerminalTab[]>
 ): Record<string, Worktree[]> {
   const sshRepoIds = new Set(repos.filter((repo) => repo.connectionId).map((repo) => repo.id))
-  const worktreesByRepo = { ...sourceWorktreesByRepo }
+  // Why copy-on-write: hydration writes this map straight to the store; an unconditional copy
+  // rerendered every whole-map selector on every hydration with no data change.
+  let worktreesByRepo = sourceWorktreesByRepo
   for (const worktreeId of Object.keys(tabsByWorktree)) {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     if (!sshRepoIds.has(repoId)) {
@@ -44,6 +46,9 @@ export function addHydratedSshWorktreePlaceholders(
       branch: '',
       isBare: false,
       isMainWorktree: false
+    }
+    if (worktreesByRepo === sourceWorktreesByRepo) {
+      worktreesByRepo = { ...sourceWorktreesByRepo }
     }
     worktreesByRepo[repoId] = [...(worktreesByRepo[repoId] ?? []), placeholder]
   }

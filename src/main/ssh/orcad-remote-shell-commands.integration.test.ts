@@ -143,9 +143,9 @@ describe('liveness and stop commands, run for real', () => {
       const exited = new Promise<NodeJS.Signals | null>((resolve) =>
         child.once('exit', (_code, signal) => resolve(signal))
       )
-      expect(parseOrcadStopOutcome(sh(stopOrcadCommand(host, versionDir, { waitSeconds: 10 })))).toBe(
-        'stopped'
-      )
+      expect(
+        parseOrcadStopOutcome(sh(stopOrcadCommand(host, versionDir, { waitSeconds: 10 })))
+      ).toBe('stopped')
       expect(await exited).toBe('SIGTERM')
       expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('DEAD')
     } finally {
