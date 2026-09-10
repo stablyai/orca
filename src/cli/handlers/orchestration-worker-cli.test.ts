@@ -769,8 +769,8 @@ describe('orchestration worker-start CLI contract', () => {
       parseArgs(['orchestration', 'worker-list', '--include-remote']).flags.get('include-remote')
     ).toBe(true)
     expect(listSpec?.allowedFlags).toContain('include-remote')
-    expect(formatCommandHelp(listSpec!)).toContain(
-      '--include-remote      Include connected-server worker observations'
+    expect(formatCommandHelp(listSpec!)).toMatch(
+      /--include-remote[ \t]+Include connected-server worker observations/
     )
 
     callMock.mockResolvedValue({
