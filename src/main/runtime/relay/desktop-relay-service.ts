@@ -295,6 +295,15 @@ export class DesktopRelayService {
     this.refreshDemand()
     try {
       return await operation()
+    } catch (error) {
+      // Why re-ask instead of trusting the thrown code: a flip lands mid-operation, and
+      // `hasDemand` filters this ref's own demand through the live policy, so the coordinator
+      // reaches `standby` and clears the offline reason. The wait then ends with no cause at all
+      // — the generic `relay_control_not_active` — when the flip is exactly the cause.
+      if (!this.isRelayAllowedForDevice(deviceId)) {
+        throw new Error('relay_disabled_for_device')
+      }
+      throw error
     } finally {
       release()
       this.refreshDemand()
