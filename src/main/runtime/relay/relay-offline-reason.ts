@@ -3,15 +3,26 @@ import {
   type RelayHostCloseReason
 } from '../../../shared/relay-host-close-reason'
 
-// Why a broker-open failure earns 'broker_unavailable' rather than the wire
+// Why failures before a broker exists use their own words rather than the wire
 // vocabulary: RelayHostCloseReason is what the phone is told, not why the
-// desktop-side control has no broker to use.
-export type RelayOfflineReason = RelayHostCloseReason | 'not_entitled' | 'broker_unavailable'
+// desktop-side control has no broker to use. Three words because the fix
+// differs: auth_unavailable never reached the relay (the cloud session could
+// not be read or refreshed) and is being retried; broker_unavailable reached
+// the relay, was refused transiently and is being retried; broker_rejected
+// was refused for cause (4xx), arms no retry and wants a human.
+export type RelayOfflineReason =
+  | RelayHostCloseReason
+  | 'not_entitled'
+  | 'auth_unavailable'
+  | 'broker_unavailable'
+  | 'broker_rejected'
 
 const RELAY_OFFLINE_REASON_CODES: Record<RelayOfflineReason, string> = {
   [RELAY_HOST_CLOSE_REASON.SIGNED_OUT]: 'relay_signed_out',
   not_entitled: 'relay_not_entitled',
-  broker_unavailable: 'relay_broker_unavailable'
+  auth_unavailable: 'relay_auth_unavailable',
+  broker_unavailable: 'relay_broker_unavailable',
+  broker_rejected: 'relay_broker_rejected'
 }
 
 // Why a lookup table instead of a switch: exhaustive over RelayOfflineReason,

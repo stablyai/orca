@@ -1,4 +1,4 @@
-import { relayRetryDelayMs } from './relay-retry-delay'
+import { computeRetryDelayMs } from './relay-retry-backoff'
 
 export class RelayDrainRetrySchedule {
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -14,15 +14,11 @@ export class RelayDrainRetrySchedule {
     if (this.timer) {
       return
     }
-    const jitterMs = relayRetryDelayMs(this.attempt, this.random)
-    this.attempt++
-    this.timer = setTimeout(
-      () => {
-        this.timer = null
-        retry()
-      },
-      Math.max(jitterMs, retryAfterMs)
-    )
+    const delayMs = computeRetryDelayMs(this.attempt++, retryAfterMs, this.random)
+    this.timer = setTimeout(() => {
+      this.timer = null
+      retry()
+    }, delayMs)
   }
 
   reset(): void {
