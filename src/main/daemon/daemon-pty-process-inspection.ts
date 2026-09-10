@@ -11,6 +11,11 @@ import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { clientOnlyUnverifiableInspection } from '../../shared/terminal-process-inspection'
 
 export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshots {
+  async consumeExitReceipt(id: string, incarnationId: string): Promise<void> {
+    // Predecessors reject this distinct request; never fall back to shutdown.
+    await this.client.request('consumeExitReceipt', { sessionId: id, incarnationId })
+  }
+
   // Why: daemon-backed PTYs can host long-lived agents while detached; cleanup prompts must not treat them as idle shells.
   protected hasChildProcessesFromForeground(foregroundProcess: string | null): boolean {
     return foregroundProcess !== null && !isShellProcess(foregroundProcess)

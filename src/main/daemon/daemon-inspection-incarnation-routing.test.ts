@@ -29,6 +29,7 @@ function createAdapter(sessions: string[] = []): DaemonPtyAdapter {
   return {
     hasPty: vi.fn((id: string) => sessions.includes(id)),
     inspectProcess: vi.fn(async () => EXITED),
+    consumeExitReceipt: vi.fn(async () => {}),
     listProcesses: vi.fn(async () => sessions.map((id) => ({ id, cwd: '', title: 'daemon' }))),
     onData: vi.fn(() => () => {}),
     onExit: vi.fn(() => () => {}),
@@ -50,6 +51,17 @@ function createFallbackProvider(): IPtyProvider {
 }
 
 describe('DaemonPtyRouter incarnation-scoped inspection', () => {
+  it('routes receipt consumption like inspection without retiring its route', async () => {
+    const current = createAdapter()
+    const legacy = createAdapter(['pty-live'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.consumeExitReceipt('pty-away', INCARNATION)
+    expect(current.consumeExitReceipt).toHaveBeenCalledWith('pty-away', INCARNATION)
+    await router.consumeExitReceipt('pty-live', INCARNATION)
+    expect(legacy.consumeExitReceipt).toHaveBeenCalledWith('pty-live', INCARNATION)
+    await router.inspectProcess('pty-live', { expectedIncarnationId: INCARNATION })
+    expect(legacy.inspectProcess).toHaveBeenCalled()
+  })
   it('asks the current daemon about an unclaimed id when the caller names an incarnation', async () => {
     const current = createAdapter()
     const router = new DaemonPtyRouter({ current, legacy: [createAdapter()] })
@@ -75,6 +87,13 @@ describe('DaemonPtyRouter incarnation-scoped inspection', () => {
 })
 
 describe('DegradedDaemonPtyProvider incarnation-scoped inspection', () => {
+  it('consumes unclaimed daemon evidence without using fallback shutdown', async () => {
+    const current = createAdapter()
+    const fallback = createFallbackProvider()
+    const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
+    await provider.consumeExitReceipt('pty-away', INCARNATION)
+    expect(current.consumeExitReceipt).toHaveBeenCalledWith('pty-away', INCARNATION)
+  })
   it('asks the current daemon about an unclaimed id when the caller names an incarnation', async () => {
     const current = createAdapter()
     const provider = new DegradedDaemonPtyProvider({

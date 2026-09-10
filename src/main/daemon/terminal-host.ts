@@ -1,4 +1,5 @@
 import type { Session } from './session'
+import { consumeExitReceipt, reapSessionRecord } from './terminal-host-session-record'
 import { exitFromRecord, sessionFromRecord } from './terminal-host-session-record'
 import type { TerminalHostSessionRecord } from './terminal-host-session-record'
 import {
@@ -165,8 +166,7 @@ export class TerminalHost {
   ): Promise<void> {
     const record = this.sessions.get(sessionId)
     const session = sessionFromRecord(record)
-    // A caller naming an incarnation is acting on evidence about that process. The id may have
-    // gone to a newer shell since, and that one is not theirs to end.
+    // A stale close must not stop a replacement shell.
     if (
       record &&
       opts.expectedIncarnationId !== undefined &&
@@ -181,8 +181,6 @@ export class TerminalHost {
       )
     }
     if (record && !session?.isAlive) {
-      // The owner is done with a session that already ended on its own: its exit record has been
-      // acted on, so it leaves now. This is the consume half of the held-exit read.
       this.sessions.delete(sessionId)
       return Promise.resolve()
     }
@@ -192,23 +190,15 @@ export class TerminalHost {
     )
   }
 
+  consumeExitReceipt(sessionId: string, incarnationId: string): void {
+    consumeExitReceipt(this.sessions, sessionId, incarnationId)
+  }
+
   // Natural exits retain evidence, never the session's operational object graph.
   private reapSession(sessionId: string): void {
-    const session = this.getSession(sessionId)
-    if (!session || session.isAlive) {
-      return
+    if (reapSessionRecord(this.sessions, sessionId)) {
+      this.onSessionReaped?.(sessionId)
     }
-    const exitedSession = session.killRequested ? undefined : exitFromRecord(session)
-    session.dispose()
-    if (this.sessions.get(sessionId) !== session) {
-      return
-    }
-    if (exitedSession) {
-      this.sessions.set(sessionId, exitedSession)
-    } else {
-      this.sessions.delete(sessionId)
-    }
-    this.onSessionReaped?.(sessionId)
   }
 
   signal(sessionId: string, sig: string): void {

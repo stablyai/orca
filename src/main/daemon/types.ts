@@ -1,3 +1,5 @@
+import type { ConsumeExitReceiptRequest, KillRequest } from './daemon-session-control-protocol'
+export type { KillRequest } from './daemon-session-control-protocol'
 import type {
   ConfirmForegroundProcessRequest,
   ConfirmShellForegroundRequest,
@@ -161,17 +163,6 @@ export type SetSessionBackgroundRequest = {
   }
 }
 
-export type KillRequest = {
-  id: string
-  type: 'kill'
-  payload: {
-    sessionId: string
-    immediate?: boolean
-    /** Refuse unless the session on this id is still this incarnation. */
-    expectedIncarnationId?: string
-  }
-}
-
 export type SignalRequest = {
   id: string
   type: 'signal'
@@ -313,6 +304,7 @@ export type DaemonRequest =
   | ResumePtyRequest
   | SetSessionBackgroundRequest
   | KillRequest
+  | ConsumeExitReceiptRequest
   | SignalRequest
   | ListSessionsRequest
   | ShutdownIfIdleRequest

@@ -21,17 +21,16 @@ import {
 
 function daemonRouterOver(
   host: TerminalHost,
-  beforeShutdown: () => Promise<void> = async () => {}
+  beforeConsumption: () => Promise<void> = async () => {}
 ): DaemonPtyRouter {
   const adapter = {
     // Nothing in this process routes the id any more: the app restarted after the shell ended.
     hasPty: () => false,
     inspectProcess: (id: string, options?: { expectedIncarnationId?: string }) =>
       host.inspectProcess(id, options),
-    // The owner acting on a proven exit reaches the host as the same kill a closed pane sends.
-    shutdown: async (id: string, opts: { expectedIncarnationId?: string }) => {
-      await beforeShutdown()
-      await host.kill(id, opts)
+    consumeExitReceipt: async (id: string, incarnationId: string) => {
+      await beforeConsumption()
+      host.consumeExitReceipt(id, incarnationId)
     },
     listProcesses: async () => [],
     onData: () => () => {},

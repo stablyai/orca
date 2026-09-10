@@ -90,6 +90,11 @@ export class DaemonRequestRouter {
           request.payload.sessionId,
           request.payload.background === true
         )
+      case 'consumeExitReceipt': {
+        const { sessionId, incarnationId } = request.payload
+        this.options.host.consumeExitReceipt(sessionId, incarnationId)
+        return {}
+      }
       case 'kill':
         return this.kill(
           clientId,

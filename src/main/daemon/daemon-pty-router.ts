@@ -128,6 +128,10 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
   }
 
+  async consumeExitReceipt(id: string, incarnationId: string): Promise<void> {
+    await this.adapterForInspection(id, incarnationId).consumeExitReceipt(id, incarnationId)
+  }
+
   async sendSignal(id: string, signal: string): Promise<void> {
     await this.adapterFor(id).sendSignal(id, signal)
   }

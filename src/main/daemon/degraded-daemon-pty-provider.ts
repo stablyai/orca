@@ -186,6 +186,11 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     const routed = this.hasPty(id) ? this.providerFor(id) : null
     return inspectRoutedDaemonProcess(routed, this.current, id, options)
   }
+  async consumeExitReceipt(id: string, incarnationId: string): Promise<void> {
+    const owner = this.hasPty(id) ? this.providerFor(id) : this.current
+    await owner.consumeExitReceipt?.(id, incarnationId)
+  }
+
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).confirmForegroundProcess?.(id) ?? null
   }

@@ -137,10 +137,8 @@ export async function inspectExitedIncarnationFromRuntimeController(
 }
 
 /**
- * The owner has acted on a proven exit. The daemon drops its exited record on `kill`; the relay
- * already dropped its pending exit when delivery settled and answers a missing id silently. Both
- * refuse when the id now belongs to a newer incarnation, so this can never end a shell that took
- * the pane's id since the proof was read. A failure leaves the record for the next sweep.
+ * Best-effort acknowledgement after durable recovery. Unsupported providers/hosts retain their
+ * existing policy; failures leave evidence until host shutdown or id recreation, not a retry queue.
  */
 export async function releaseExitedIncarnationFromRuntimeController(
   ptyId: string,
@@ -150,12 +148,9 @@ export async function releaseExitedIncarnationFromRuntimeController(
     return
   }
   try {
-    await getProviderForPty(ptyId).shutdown(ptyId, {
-      immediate: true,
-      expectedIncarnationId: incarnationId
-    })
+    await getProviderForPty(ptyId).consumeExitReceipt?.(ptyId, incarnationId)
   } catch {
-    // The host keeps the record; the next sweep retries.
+    // Never substitute process shutdown for unsupported or failed evidence consumption.
   }
 }
 
