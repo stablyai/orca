@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
 import SyncDatabase from '../sqlite/sync-database'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
+import { cwdKey } from './session-search-file-records'
 import { requiresWholeRead } from './session-search-file-cursor'
 import { SessionSearchIndexWriter } from './session-search-index-writer'
 import {
@@ -267,6 +268,64 @@ it('holds the ceiling against a single message larger than it', () => {
     })
   ).toBe(true)
   expect(counts(index.db)).toMatchObject({ sessions: 1, messages: 3 })
+})
+
+const PROVISIONAL_IDENTITY = {
+  sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+  cwd: '/repo/app',
+  title: 'provisional title',
+  createdAt: '2026-05-01T10:00:00.000Z',
+  updatedAt: '2026-05-01T10:05:00.000Z'
+}
+
+it('names a session on its first chunk, not only when the read ends', () => {
+  const writer = new SessionSearchIndexWriter(index.db, 400)
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, () => PROVISIONAL_IDENTITY)!
+  for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
+    write.add(message)
+  }
+
+  // The chunks that landed already answer searches, so the session they hang
+  // off has to be nameable on another handle before the read ends. This is also
+  // the whole record a crash between chunks leaves behind.
+  expect(counts(index.db).messages).toBe(8)
+  expect(
+    index.db.prepare('SELECT session_id, cwd, cwd_key, title, created_at FROM sessions').get()
+  ).toEqual({
+    session_id: PROVISIONAL_IDENTITY.sessionId,
+    cwd: '/repo/app',
+    cwd_key: cwdKey('/repo/app'),
+    title: 'provisional title',
+    created_at: '2026-05-01T10:00:00.000Z'
+  })
+
+  // And the decoded session still wins at the end: the mid-read title is
+  // provisional, never a value the final commit has to defer to.
+  expect(
+    write.commit({
+      session: syntheticSession({ title: 'the settled title' }),
+      byteOffset: 4096,
+      incomplete: false
+    })
+  ).toBe(true)
+  expect(index.db.prepare('SELECT title FROM sessions').get()).toEqual({
+    title: 'the settled title'
+  })
+})
+
+it('leaves a chunked session unnamed only while the parser has no id yet', () => {
+  const writer = new SessionSearchIndexWriter(index.db, 400)
+  const write = writer.beginWrite(syntheticCandidate(), 'replace', 0, () => null)!
+  for (const message of userMessages(CHUNKED_MESSAGE, 10)) {
+    write.add(message)
+  }
+
+  // A parser with nothing decoded is not a reason to write a wrong id; the row
+  // is still created, and the next chunk fills it in.
+  expect(index.db.prepare('SELECT session_id, cwd FROM sessions').get()).toEqual({
+    session_id: '',
+    cwd: null
+  })
 })
 
 it('reports a chunk-partial file as held, and as one that must be read whole', () => {

@@ -2,7 +2,8 @@ import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type {
   TranscriptMessage,
-  TranscriptReadOutcome
+  TranscriptReadOutcome,
+  TranscriptSessionIdentity
 } from '../ai-vault/session-transcript-consumers'
 import { EMPTY_CONTENT_HASH, foldContentHash } from './session-search-content-hash'
 import type {
@@ -125,7 +126,8 @@ export class SessionSearchIndexWriter {
   beginWrite(
     candidate: SessionFileCandidate,
     mode: 'replace' | 'append',
-    previousByteOffset: number
+    previousByteOffset: number,
+    identity?: () => TranscriptSessionIdentity | null
   ): SessionSearchFileWrite | null {
     const path = candidate.file.path
     const cursor = this.cursor(path)
@@ -143,7 +145,7 @@ export class SessionSearchIndexWriter {
     // cursor worth continuing: it has no session row to hang new rows off, so
     // this read makes one. Declining instead would force a whole re-read of
     // that file on every pass for as long as it grows.
-    return this.buffered(candidate, cursor, mode === 'append')
+    return this.buffered(candidate, cursor, mode === 'append', identity)
   }
 
   /**
@@ -175,7 +177,8 @@ export class SessionSearchIndexWriter {
   private buffered(
     candidate: SessionFileCandidate,
     opened: FileCursor | undefined,
-    append: boolean
+    append: boolean,
+    identity?: () => TranscriptSessionIdentity | null
   ): SessionSearchFileWrite {
     const db = this.db
     const path = candidate.file.path
@@ -241,6 +244,11 @@ export class SessionSearchIndexWriter {
           }
           if (decoded) {
             this.records.updateSession(decoded, session, hash)
+          } else {
+            // A chunk's rows answer searches as soon as they land, so the
+            // session they hang off is written with whatever the parser has
+            // decoded rather than left empty until a read that may never end.
+            this.records.updateProvisionalSession(session, identity?.() ?? null)
           }
           this.records.upsertFile(
             candidate,

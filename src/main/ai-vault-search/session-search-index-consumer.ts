@@ -52,7 +52,12 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
         return null
       }
     }
-    const write = this.store.beginWrite(candidate, start.mode, start.previousByteOffset)
+    const write = this.store.beginWrite(
+      candidate,
+      start.mode,
+      start.previousByteOffset,
+      start.identity
+    )
     if (!write) {
       this.store.markStale(candidate)
       return null

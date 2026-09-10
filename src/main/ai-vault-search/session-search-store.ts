@@ -1,5 +1,6 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
 import type {
   SessionSearchFileIdentity,
   SessionSearchIndexedFile
@@ -76,13 +77,14 @@ export class SessionSearchStore {
   beginWrite(
     candidate: SessionFileCandidate,
     mode: 'replace' | 'append',
-    previousByteOffset: number
+    previousByteOffset: number,
+    identity?: () => TranscriptSessionIdentity | null
   ): SessionSearchFileWrite | null {
     if (!this.acceptsCandidate(candidate)) {
       return null
     }
     try {
-      return this.writer.beginWrite(candidate, mode, previousByteOffset)
+      return this.writer.beginWrite(candidate, mode, previousByteOffset, identity)
     } catch (error) {
       this.reportWriteFailure(error)
       return null

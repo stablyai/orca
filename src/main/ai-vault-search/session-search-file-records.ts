@@ -1,4 +1,5 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type SyncDatabase from '../sqlite/sync-database'
 import { EMPTY_CONTENT_HASH, type SessionContentHash } from './session-search-content-hash'
@@ -24,9 +25,9 @@ export class SessionSearchFileRecords {
   constructor(private readonly db: SyncDatabase) {}
   /**
    * The row a read hangs its messages off, before the parser has said what the
-   * session is. Never visible on its own: the same transaction that creates it
-   * either fills it in or, for a chunked read, leaves it holding that read's
-   * own rows and a cursor no append can continue from.
+   * session is. The same transaction fills it in: from the decoded session when
+   * the read finished, and from `updateProvisionalSession` when this is a chunk
+   * of one that has not.
    */
   createSessionRow(candidate: SessionFileCandidate): number {
     return Number(
@@ -37,6 +38,35 @@ export class SessionSearchFileRecords {
         )
         .run(candidate.agent, candidate.file.path).lastInsertRowid
     )
+  }
+
+  /**
+   * Writes what the parser knows so far onto a session a chunk is committing.
+   *
+   * Rows a chunk commits answer searches the moment they land, so the session
+   * they hang off has to be nameable before the read producing it ends — and it
+   * may never end, because a crash between chunks leaves exactly this row. The
+   * final commit overwrites all of it from the decoded session; until then the
+   * title in particular is provisional.
+   */
+  updateProvisionalSession(rowId: number, identity: TranscriptSessionIdentity | null): void {
+    if (!identity) {
+      return
+    }
+    this.db
+      .prepare(
+        `UPDATE sessions SET session_id = ?, title = ?, cwd = ?, cwd_key = ?,
+         created_at = ?, updated_at = ? WHERE id = ?`
+      )
+      .run(
+        identity.sessionId,
+        identity.title ?? '',
+        identity.cwd,
+        cwdKey(identity.cwd),
+        identity.createdAt,
+        identity.updatedAt,
+        rowId
+      )
   }
 
   contentHash(rowId: number): SessionContentHash {

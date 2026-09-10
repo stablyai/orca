@@ -141,6 +141,36 @@ it('declines a behind cursor in beginRead before it ever reaches the store', () 
   expect(attempted).toEqual([100])
 })
 
+it("hands the read's identity accessor to the store", () => {
+  const captured: unknown[] = []
+  const stub = {
+    acceptsCandidate: () => true,
+    indexedFile: () => null,
+    beginWrite: (
+      _candidate: unknown,
+      _mode: unknown,
+      _previousByteOffset: unknown,
+      identity: unknown
+    ) => {
+      captured.push(identity)
+      return { add: () => undefined, commit: () => true }
+    },
+    markStale: () => undefined
+  } as unknown as SessionSearchStore
+  const identity = (): null => null
+
+  new SessionSearchIndexConsumer(stub).beginRead({
+    candidate: syntheticCandidate(),
+    mode: 'replace',
+    previousByteOffset: 0,
+    identity
+  })
+
+  // Dropped here, a chunked read writes rows under a session with no id and no
+  // cwd for as long as the read lasts, and for ever if it crashes first.
+  expect(captured).toEqual([identity])
+})
+
 it('treats half a recorded identity as no identity at all', () => {
   // A host that could stat dev but not ino: `remote-session-file-stat` spreads
   // the two independently, and `upsertFile` preserves the half it was given.

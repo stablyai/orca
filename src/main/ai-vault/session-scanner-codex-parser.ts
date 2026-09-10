@@ -4,6 +4,7 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
+  accumulatorSessionIdentity,
   cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
@@ -153,19 +154,13 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
       accumulator.title = metadataTitle
       state.titleSource = 'meta'
     }
-    const cwd = extractString(payload.cwd)
-    if (cwd) {
-      accumulator.cwd = cwd
-    }
+    accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
     return
   }
 
   if (record.type === 'turn_context' && payload) {
-    const cwd = extractString(payload.cwd)
-    if (cwd) {
-      accumulator.cwd = cwd
-    }
+    accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     const model = extractModel(payload)
     if (model) {
       accumulator.model = model
@@ -293,6 +288,7 @@ function codexResumeStateFromParseState(
       }
     },
     shouldStop: () => state.rejectedWorkerSession,
+    identity: () => accumulatorSessionIdentity(state.accumulator),
     clone: () =>
       codexResumeStateFromParseState(cloneCodexParseState(state), codexHome, titleReader),
     touchFile: (file) => {

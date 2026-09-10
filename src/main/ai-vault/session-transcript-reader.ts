@@ -91,7 +91,10 @@ export async function readResumableTranscript(args: {
   channel.beginRead({
     candidate: args.candidate,
     mode: canResume ? 'append' : 'replace',
-    previousByteOffset: startOffset
+    previousByteOffset: startOffset,
+    // Read by a consumer during the read, not here: the fold has decoded
+    // nothing yet at this point of a whole-file read.
+    identity: () => state.identity?.() ?? null
   })
   try {
     const readResult = await consumeCompleteJsonlLines({
