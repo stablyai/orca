@@ -74,7 +74,7 @@ function getRestoredRuntimeHostId(
   return hostId && parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : null
 }
 
-function getFolderWorkspaceRuntimeHostId(
+function getFolderWorkspacePartitionHostId(
   state: HostPersistenceState,
   key: string
 ): ExecutionHostId {
@@ -88,6 +88,11 @@ function getFolderWorkspaceRuntimeHostId(
     : null
   const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
   if (parsed) {
+    // Why ssh still answers 'local' here while a repo-backed worktree does not: boot hydration
+    // discovers SSH partitions from the repo catalog, and a folder workspace can be the only thing
+    // an SSH target owns. Routing it to `ssh:<targetId>` would strand it behind a partition no
+    // reader enumerates. A stranded folder workspace is still adopted back out of that partition
+    // when a repo does name the host; converging its writes needs a partition census first.
     return parsed.kind === 'runtime' ? parsed.id : LOCAL_EXECUTION_HOST_ID
   }
   if (workspace && group) {
@@ -123,12 +128,12 @@ function buildRepoHostById(
 
 /** Map a worktree to the host partition it persists under, plus the host claims behind it.
  *
- *  Why: only `runtime:*` worktrees are partitioned out. SSH-owned worktrees stay
- *  in the 'local' partition because the SSH flow already persists them there (in
- *  the unified blob) and separately mirrors them to each target's remote
- *  snapshot — partitioning them too would double-own that data. The one exception is an id two
- *  hosts both publish: it gets a deterministic primary so the co-claimant's rows can be parked in
- *  the shadow instead of sharing one bucket with it. */
+ *  Why every non-local host and not just `runtime:*`: an SSH worktree's session is already
+ *  read-modify-written into `ssh:<targetId>` by the main-process runtime, so answering 'local'
+ *  here double-owned the data and left whichever half the readers skipped round-tripping as
+ *  absence (#12721, #12723). The one exception is an id two hosts both publish: it gets a
+ *  deterministic primary so the co-claimant's rows can be parked in the shadow instead of sharing
+ *  one bucket with it. */
 /** True only when the catalog positively says `hostId` no longer holds the workspace. An id the
  *  catalog cannot speak for yet keeps its restored partition — the same rule the shadow uses. */
 function catalogReattributedAwayFrom(
@@ -154,7 +159,7 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
   const hostIdByWorktreeId = (worktreeId: string): ExecutionHostId => {
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
-      return getFolderWorkspaceRuntimeHostId(state, worktreeId)
+      return getFolderWorkspacePartitionHostId(state, worktreeId)
     }
     const rawWorktreeId =
       workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
@@ -188,9 +193,7 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
     if (!repoHostId) {
       return LOCAL_EXECUTION_HOST_ID
     }
-    // Why: SSH-owned worktrees stay in the 'local' partition here while the runtime writes them to
-    // `ssh:<targetId>`; the shared owner map records that divergence (#12723).
-    return workspaceSessionPartitionHostId(repoHostId, 'local-partition')
+    return workspaceSessionPartitionHostId(repoHostId)
   }
   return { hostIdByWorktreeId, claims }
 }

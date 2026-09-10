@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 
 export type WorkspaceSessionRecord = Record<string, unknown>
 
@@ -22,6 +22,16 @@ export function buildWorktreeIdByTabId(state: WorkspaceSessionState): Map<string
     }
   }
   return byTab
+}
+
+/** The workspace a pane key belongs to. A pane key is `<tabId>:<leafId>`; both the split and the
+ *  stranded-partition adoption resolve it here so neither can parse it its own way. */
+export function worktreeIdForPaneKey(
+  worktreeIdByTabId: Map<string, string>,
+  paneKey: string
+): string | undefined {
+  const separator = paneKey.lastIndexOf(':')
+  return separator > 0 ? worktreeIdByTabId.get(paneKey.slice(0, separator)) : undefined
 }
 
 export function buildWorktreeIdByFileId(state: WorkspaceSessionState): Map<string, string> {

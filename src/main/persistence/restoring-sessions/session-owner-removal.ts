@@ -4,6 +4,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
 import { cloneWorkspaceSessionState, deleteOwnerKeyedSessionFields } from './session-owner-fields'
 
 // Scans the pane-key-keyed maps and the shutdown list once, removing every entry
@@ -54,11 +55,7 @@ export function workspaceSessionPartitionIdsForHost(
 }
 
 /** The partition the host actually owns; the others are only spill surfaces for it. */
-export function workspaceSessionOwnerPartitionForHost(
-  hostId: string | null | undefined
-): ExecutionHostId {
-  return parseExecutionHostId(hostId)?.id ?? LOCAL_EXECUTION_HOST_ID
-}
+export const workspaceSessionOwnerPartitionForHost = workspaceSessionPartitionHostId
 
 export function removeWorkspaceSessionOwner(
   session: WorkspaceSessionState | undefined,
