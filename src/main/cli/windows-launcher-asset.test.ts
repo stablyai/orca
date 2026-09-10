@@ -33,9 +33,13 @@ describe('packaged Windows CLI launcher asset', () => {
     const sourcePath = join(process.cwd(), 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs')
     const source = readFileSync(sourcePath, 'utf8')
 
-    // Why: the packaged CLI is often spawned from an Orca terminal that already set this pipe.
-    expect(source).toContain(
+    const cleanupIndex = source.indexOf(
       'Environment.SetEnvironmentVariable("CHROME_CRASHPAD_PIPE_NAME", null);'
     )
+    const processStartIndex = source.indexOf('using (Process child = Process.Start(startInfo))')
+
+    // Why: cleanup must run on the launcher process before the child inherits its env block.
+    expect(cleanupIndex).toBeGreaterThanOrEqual(0)
+    expect(processStartIndex).toBeGreaterThan(cleanupIndex)
   })
 })
