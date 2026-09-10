@@ -16,8 +16,9 @@ export const ORCHESTRATION_ASK_METHODS: RpcMethod[] = [
     ) => {
       // Why: group addresses have no unambiguous first-answer authority.
       if (params.to && isGroupAddress(params.to)) {
-        throw new Error(
-          'ask does not support group addresses; use send for non-blocking fan-out questions'
+        throw new OrchestrationError(
+          'invalid_argument',
+          'ask does not support group addresses; ask your owning run:<id>, or use send for a non-blocking fan-out within your Run.'
         )
       }
 

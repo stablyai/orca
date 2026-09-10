@@ -41,8 +41,13 @@ export type AgentHookEventPayload = {
   isReplay?: boolean
   /** Transport-only Claude background-work evidence used to reject false input-based interrupts. */
   claudeRunningNonAgentTask?: boolean
+  /** Row projected from a structured session the host holds: `owned` while its provider child
+   *  runs here, `held` once the child is gone but the session is still open. Never persisted. */
+  structuredHost?: StructuredHostStatus
   payload: ParsedAgentStatusPayload
 }
+
+export type StructuredHostStatus = 'held' | 'owned'
 export type ToolSnapshot = {
   toolName?: string
   toolInput?: string

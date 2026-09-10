@@ -36,6 +36,14 @@ type StatusFeedSession = {
   fence?: number
 }
 
+/** Where the host's projections land for readers that see every agent alike (`worktree ps`,
+ *  mobile, the hook store's own fanout). `forget` is the roster edge the broadcast cache
+ *  deliberately never has. */
+export type StructuredAgentSessionStatusSink = {
+  publish: (summary: AgentSessionStatusSummary) => void
+  forget: (sessionId: string) => void
+}
+
 export type StructuredAgentSessionStatusFeedDeps = {
   sessions: ReadonlyMap<string, StatusFeedSession>
   getRecord: (sessionId: string) => AgentSessionRecord | null
@@ -43,6 +51,9 @@ export type StructuredAgentSessionStatusFeedDeps = {
   /** Every projection change, whether or not anyone is subscribed. `replay` marks a re-projection
    *  of state the host already knew (restore, an arriving subscriber) rather than a journal edge. */
   onStatusChanged?: (summary: AgentSessionStatusSummary, options: { replay: boolean }) => void
+  /** Resolved on every call: the host builds this feed in a field initializer, before its own
+   *  deps are assigned. */
+  statusSink?: () => StructuredAgentSessionStatusSink | undefined
   /** Live provider-owned background tasks for the summary, so session lists can
    *  render subagent children. Optional: a provider without the hook projects none. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null | undefined
@@ -81,6 +92,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
       ) => AgentSessionBackgroundTaskState | null | undefined
     }
     onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
+    statusSink?: StructuredAgentSessionStatusSink
   }
 }): StructuredAgentSessionStatusFeed {
   return new StructuredAgentSessionStatusFeed({
@@ -88,7 +100,10 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
     getRecord: (sessionId) => args.deps().store.getRecord(sessionId),
     now: args.now,
     onStatusChanged: (summary, options) => args.deps().onSessionStatusChanged?.(summary, options),
-    readBackgroundTasks: (sessionId) => args.deps().adapter.backgroundTaskState?.(sessionId)
+    readBackgroundTasks: (sessionId) => args.deps().adapter.backgroundTaskState?.(sessionId),
+    // Resolved per call for the same reason the other deps are: the host builds this feed in a
+    // field initializer, before its constructor parameters are assigned.
+    statusSink: () => args.deps().statusSink
   })
 }
 
@@ -121,25 +136,20 @@ export class StructuredAgentSessionStatusFeed {
     return () => this.unsubscribe(subscriber.id)
   }
 
-  /**
-   * Summaries for the sessions this host still holds, for readers that poll instead of subscribing.
-   *
-   * `published` never retracts, so it is a broadcast cache and not a roster: enumerating it lists
-   * every session ever opened here. A caller asking what is running gets the live intersection,
-   * while the retained view a subscriber opens on stays whole.
-   *
-   * Deliberately does NOT re-project: a subscriber's snapshot is the live read, and re-running the
-   * journal reduction per caller would make an enumerating command pay for every session it lists.
-   */
-  liveSessionSummaries(): AgentSessionStatusSummary[] {
-    const summaries: AgentSessionStatusSummary[] = []
-    for (const [sessionId] of this.deps.sessions) {
-      const summary = this.published.get(sessionId)
-      if (summary) {
-        summaries.push(summary)
-      }
+  /** The host stopped holding the session: ownership leaves the retained projection, and the
+   *  row leaves the sink. `published` keeps the projection for reload history. */
+  close(sessionId: string): void {
+    this.revokeLive(sessionId)
+    this.forget(sessionId)
+  }
+
+  /** The sink lists what is running; a forgotten session must not be in it. */
+  forget(sessionId: string): void {
+    try {
+      this.deps.statusSink?.()?.forget(sessionId)
+    } catch (error) {
+      console.warn('[structured-session-status] status sink forget failed', error)
     }
-    return summaries
   }
 
   unsubscribe(id: string): void {
@@ -167,6 +177,7 @@ export class StructuredAgentSessionStatusFeed {
       type: 'status',
       session: retained
     })
+    this.sink(retained)
   }
 
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
@@ -182,6 +193,7 @@ export class StructuredAgentSessionStatusFeed {
     }
     this.published.set(sessionId, summary)
     this.broadcast({ type: 'status', session: summary })
+    this.sink(summary)
     try {
       this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
     } catch (error) {
@@ -246,6 +258,15 @@ export class StructuredAgentSessionStatusFeed {
       ...(backgroundTasks && backgroundTasks.length > 0 ? { backgroundTasks } : {}),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
+    }
+  }
+
+  /** A failing sink must never cost the subscribers their status event. */
+  private sink(summary: AgentSessionStatusSummary): void {
+    try {
+      this.deps.statusSink?.()?.publish(summary)
+    } catch (error) {
+      console.warn('[structured-session-status] status sink publish failed', error)
     }
   }
 

@@ -94,7 +94,11 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       toolInput: entry.toolInput ?? null,
       interrupted: entry.interrupted ?? false,
       stateStartedAt: entry.stateStartedAt,
-      updatedAt: entry.receivedAt
+      // A structured row's clock is its journal, so a restart's republish does not read as new.
+      updatedAt: entry.structuredHost
+        ? (entry.evidenceObservedAt ?? entry.receivedAt)
+        : entry.receivedAt,
+      ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
     })
   }
   const sources: RuntimeWorktreeAgentSource[] = []
@@ -104,7 +108,10 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       parsePaneKey(source.paneKey)?.tabId ??
       parseLegacyNumericPaneKey(source.paneKey)?.tabId
     const mirroredWorktreeId = tabId ? args.mirroredWorktreeIdByTabId.get(tabId) : undefined
+    // Why a structured row skips the connected-process gate: it has no PTY, and the host that
+    // holds the session drops the row itself on close, so its presence is the liveness evidence.
     if (
+      source.structuredHost === undefined &&
       tabId !== undefined &&
       mirroredWorktreeId === undefined &&
       (source.connectionId === null || isWslHookRelayConnectionId(source.connectionId)) &&

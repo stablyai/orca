@@ -146,6 +146,9 @@ async function startOrcadRuntime(
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
+  // Why importable here: the store is an in-memory singleton whose module tree never reaches
+  // Electron, and its file paths come from `start()`, which orcad never calls.
+  const { agentHookServer } = await import('../agent-hooks/server')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
@@ -180,7 +183,15 @@ async function startOrcadRuntime(
     // Why 'blocked': `'openable'` means a desktop window can be opened here, which is
     // what powers serve→desktop promotion. A Node host can never do that, and the
     // constructor's default would advertise it.
-    getDesktopWindowStatus: () => 'blocked'
+    getDesktopWindowStatus: () => 'blocked',
+    // Why here too and not only on the desktop: orcad serves `worktree.ps` and `agentSession.*`,
+    // so without these a headless host publishes its structured chats nowhere and lists no agents.
+    getAgentStatusSnapshot: () =>
+      agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    structuredAgentStatusSink: {
+      publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
+      forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
+    }
   })
 
   // Why the headless entry point rather than registerPtyHandlers directly: this is the

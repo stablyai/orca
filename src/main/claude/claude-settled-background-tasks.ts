@@ -17,6 +17,10 @@ const MAX_RETAINED_TASKS = 256
 
 export type TrackedClaudeBackgroundTask = {
   backgrounded: boolean
+  /** Foreground work is turn-scoped: the provider's `result` (or the next turn
+   *  starting) is its outcome, so it stays visible only until that frame.
+   *  Backgrounded work ignores this and is retired only by its own edge. */
+  liveInTurn: boolean
   kind: AgentSessionBackgroundTask['kind']
   description?: string
   name?: string
@@ -38,7 +42,9 @@ export function claudeBackgroundTaskDetail(
     ...(task.name ? { name: task.name } : {}),
     state: task.state ?? (task.kind === 'monitor' ? 'monitoring' : 'working'),
     startedAt: task.startedAt,
-    ...(task.totalTokens !== undefined ? { totalTokens: task.totalTokens } : {})
+    ...(task.totalTokens !== undefined ? { totalTokens: task.totalTokens } : {}),
+    // Only a backgrounded row has a stop the host can target; absent means yes.
+    ...(task.backgrounded ? {} : { stoppable: false })
   }
 }
 
@@ -103,7 +109,15 @@ export class ClaudeSettledBackgroundTasks {
     if (!source || source.startedAt === undefined) {
       return undefined
     }
-    return { ...source, backgrounded: true, state: undefined, startedAt: source.startedAt }
+    // Positive live evidence, so it re-enters live in this turn too; a resumed
+    // task is always backgrounded, which is what actually gates its visibility.
+    return {
+      ...source,
+      backgrounded: true,
+      liveInTurn: true,
+      state: undefined,
+      startedAt: source.startedAt
+    }
   }
 
   get hasSettled(): boolean {
