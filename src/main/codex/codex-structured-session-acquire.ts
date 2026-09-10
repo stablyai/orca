@@ -8,6 +8,8 @@ import {
   closeFailedCodexAcquisition,
   stopSupersededCodexAcquisition
 } from './codex-structured-acquisition-lifecycle'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
+import { CodexSubagentExecutions } from './codex-subagent-executions'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import { codexProcessIdentity, codexProviderHandleLink } from './codex-structured-owner-identity'
@@ -74,10 +76,12 @@ export async function acquireCodexStructuredSession(input: {
     acquireInput.identity.providerHandle.kind === 'codex'
       ? acquireInput.identity.providerHandle.threadId
       : null
+  const subagentExecutions = new CodexSubagentExecutions()
   const translator = acquireInput.events
     ? createCodexJournalTranslator({
         sink: acquireInput.events,
         primaryThreadId: () => primaryThreadId,
+        subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey) =>
           acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey)
       })
@@ -138,6 +142,7 @@ export async function acquireCodexStructuredSession(input: {
               connection: acquisition.connection,
               error,
               prompts: acquisition.prompts,
+              onBackgroundTasksChanged: deps.onBackgroundTasksChanged,
               ...(deps.onEvent ? { onEvent: deps.onEvent } : {})
             })
           } finally {
@@ -199,6 +204,7 @@ export async function acquireCodexStructuredSession(input: {
       reportedOptions: reportedCodexThreadOptions(opened),
       turnIdWaiters: [],
       translator,
+      backgroundTasks: new CodexBackgroundTaskTracker(opened.threadId, subagentExecutions),
       forceCloseUnexpected: (reason) =>
         input.forceCloseUnexpected(
           sessionId,

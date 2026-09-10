@@ -235,6 +235,7 @@ export function NativeChatToolRun({
     ? selectActiveToolCall(blocks, { activeTurnIsWorking })
     : null
   const isSettled = latestActiveCall == null
+  const hasRunningCall = blocks.some((block) => isToolCallBlock(block) && block.state === 'running')
   // The turn caret opens the activity group, while each child tool remains
   // collapsed. The global expand toolbar still opens child details together.
   const expandToolLines = expandOverride === undefined ? open : false
@@ -380,8 +381,8 @@ export function NativeChatToolRun({
               {fallbackLabel}
             </span>
           )}
-          {/* Completion reads as a trailing mark so the leading glyph can stay fixed. */}
-          {structuredActivityUi ? (
+          {/* A running item cannot inherit completion from its turn. */}
+          {structuredActivityUi && !hasRunningCall ? (
             <Check aria-hidden className="size-3 shrink-0 text-muted-foreground" />
           ) : null}
           {/* Chevron is revealed on hover when collapsed and points down when open. */}

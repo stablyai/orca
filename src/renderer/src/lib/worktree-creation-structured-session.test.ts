@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   cancelStructuredAgentLaunch: vi.fn(),
   closeStructuredAgentSession: vi.fn(),
   callRuntimeRpc: vi.fn(),
-  activateStructuredAgentSessionById: vi.fn()
+  activateStructuredAgentSessionById: vi.fn(),
+  activateAndRevealWorktree: vi.fn()
 }))
 
 vi.mock('@/store', () => ({
@@ -51,7 +52,7 @@ vi.mock('@/lib/worktree-initial-terminal-seeding', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
+  activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
 vi.mock('@/lib/agent-trust-preflight', () => ({
@@ -169,5 +170,42 @@ describe('launchStructuredWorktreeSession', () => {
     expect(mocks.activateStructuredAgentSessionById).not.toHaveBeenCalled()
     expect(releaseCallerAfterUnknownOutcome).toHaveBeenCalledOnce()
     expect(mocks.unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it('activates the workspace before selecting a chat when creation deferred activation', async () => {
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'session-1',
+      launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
+      claimDefinitiveRefusalFallback: vi.fn(() => Promise.resolve(false))
+    })
+    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: null })
+
+    const result = await launchStructuredWorktreeSession({
+      creationId: 'creation-1',
+      request: {
+        repoId: 'repo-1',
+        name: 'routing-recovery',
+        setupDecision: 'run',
+        agent: 'codex',
+        pendingFirstAgentMessageRename: false,
+        note: '',
+        startupPlan: null,
+        quickPrompt: 'Fix the route',
+        quickTelemetry: null
+      },
+      worktreeId: 'worktree-1',
+      shouldActivateOnCompletion: true,
+      fallbackStartupOpt: undefined,
+      activation: false,
+      primaryTabId: null
+    })
+
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1', {
+      providesInitialSurface: true
+    })
+    expect(mocks.activateAndRevealWorktree.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.activateStructuredAgentSessionById.mock.invocationCallOrder[0]
+    )
+    expect(result.activation).toEqual({ primaryTabId: null })
   })
 })

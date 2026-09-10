@@ -471,12 +471,11 @@ test.describe('New-user golden core flow', () => {
       .locator('[data-contextual-tour-target="workspace-create-control"]')
       .first()
     await expect(createControl).toBeVisible()
-    await expect(createControl).toHaveAttribute('aria-label', 'Create')
+    await expect(createControl).toHaveAttribute('aria-label', 'New workspace')
     const createControlBox = await createControl.boundingBox()
     expect(createControlBox?.width ?? 0).toBeGreaterThan(0)
     expect(createControlBox?.height ?? 0).toBeGreaterThan(0)
     await createControl.click()
-    await orcaPage.getByRole('menuitem', { name: /^New workspace/ }).click()
 
     const workspaceName = `golden-new-${Date.now()}`
     await completeWorkspaceCreationTour(orcaPage, workspaceName)

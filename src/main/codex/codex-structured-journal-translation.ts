@@ -19,7 +19,7 @@ import {
   settleCodexJournalSession,
   settleCodexJournalTurn
 } from './codex-structured-journal-settlement'
-import { settleCodexOversizedNotificationFrame } from './codex-structured-journal-translation-frames'
+import { createCodexOversizedNotificationSettler } from './codex-structured-journal-translation-frames'
 import { restoreCodexJournalThread } from './codex-structured-journal-translation-restore'
 import { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 import { publishCodexTurnLifecycle } from './codex-structured-journal-translation-turns'
@@ -58,13 +58,15 @@ export function createCodexJournalTranslator(
     (threadId) => activeTurns.current(threadId),
     (threadId, turnId) => genericFrames.suppress(threadId, turnId)
   )
+  const settleOversizedNotification = createCodexOversizedNotificationSettler(deps, items)
   const prompts = new CodexJournalPrompts(deps, (threadId, itemId) =>
     items.detailFor(threadId, itemId)
   )
   const subagents = new CodexSubagentRoster({
     sink: deps.sink,
     primaryThreadId: () => deps.primaryThreadId?.() ?? null,
-    activeTurn: (threadId) => activeTurns.current(threadId)
+    activeTurn: (threadId) => activeTurns.current(threadId),
+    ...(deps.subagentExecutions ? { executions: deps.subagentExecutions } : {})
   })
   const flushStreams = (): CodexJournalTranslationAdmission =>
     items.streams.flush() ? CODEX_JOURNAL_ADMITTED : { accepted: false, reason: 'backpressure' }
@@ -174,15 +176,16 @@ export function createCodexJournalTranslator(
         }
         return genericFrames.appendUnhandled(event.kind, event.payload, event.threadId)
       }
-      if (event.method === 'turn/started') {
-        return startTurn(event)
+      if (event.method === 'turn/started' || event.method === 'turn/completed') {
+        const childAdmission = subagents.handleTurnEvent(event)
+        if (!childAdmission.accepted) {
+          return childAdmission
+        }
+        return event.method === 'turn/started' ? startTurn(event) : completeTurn(event)
       }
       const compaction = compactions.handle(event)
       if (compaction) {
         return publishActivity(event, compaction)
-      }
-      if (event.method === 'turn/completed') {
-        return completeTurn(event)
       }
       if (event.method === CODEX_TOKEN_USAGE_METHOD) {
         // Classified `status-chrome`, so the generic-frame path swallows it
@@ -238,19 +241,6 @@ export function createCodexJournalTranslator(
       activeTurns.clear()
       compactions.clear()
     }
-  }
-
-  /** Settles the item a notification the transport refused to carry left
-   *  mid-flight; null when the frame is not one. */
-  function settleOversizedNotification(
-    event: Extract<CodexStructuredSessionEvent, { type: 'provider-frame' }>
-  ): CodexJournalTranslationAdmission | null {
-    return settleCodexOversizedNotificationFrame({
-      ...event,
-      sink: deps.sink,
-      streams: items.streams,
-      activeItems: items.activeItems
-    })
   }
 
   function startTurn(

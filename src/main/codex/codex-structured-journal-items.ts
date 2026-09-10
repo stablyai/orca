@@ -11,7 +11,8 @@ import {
   type CodexThreadItem
 } from './codex-structured-item-translation'
 import { createCodexStructuredItemStreams } from './codex-structured-item-streams'
-import { codexStructuredItemKey } from './codex-structured-item-stream-bounds'
+import { boundStreamItem, codexStructuredItemKey } from './codex-structured-item-stream-bounds'
+import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
 import type {
   CodexItemTranslation,
   CodexJournalTranslationAdmission,
@@ -40,7 +41,7 @@ export class CodexJournalItems {
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
       'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule'
-    >,
+    > & { maxMetadataBytes?: number },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void
   ) {
@@ -49,6 +50,7 @@ export class CodexJournalItems {
       coalesceMs: deps.coalesceMs,
       maxRetainedBytes: deps.maxRetainedBytes,
       schedule: deps.schedule,
+      maxMetadataBytes: deps.maxMetadataBytes,
       identityFor: (threadId, params, item) => {
         const turnId = readCodexTurnId(params) ?? this.activeTurn(threadId)
         return this.identityFor(threadId, turnId, item)
@@ -80,6 +82,12 @@ export class CodexJournalItems {
     }
     if (item.type === 'contextCompaction' && event.method === 'item/started') {
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
+    }
+    if (
+      event.method !== 'item/completed' &&
+      !this.streams.canTrack(event.threadId, item, identity)
+    ) {
+      return { handled: true, admission: { accepted: false, reason: 'failed' } }
     }
     const translated = codexJournalItem(item)
     const command = readCodexJournalString(item, 'command')
@@ -157,12 +165,15 @@ export class CodexJournalItems {
     item: CodexThreadItem,
     identity: AgentJournalItemIdentity
   ): void {
-    this.streams.track(threadId, item, identity)
+    const retainedItem = codexCommandOutlivesTurn(item)
+      ? (boundStreamItem(item) as CodexThreadItem)
+      : item
+    this.streams.track(threadId, retainedItem, identity)
     this.activeItems.set(codexStructuredItemKey(threadId, item.id), {
       threadId,
       turnId,
       identity,
-      item
+      item: retainedItem
     })
   }
 
@@ -194,8 +205,10 @@ export class CodexJournalItems {
   }
 
   private trimActiveState(): CodexJournalTranslationAdmission {
-    while (this.activeItems.size > MAX_CODEX_ACTIVE_ITEMS) {
-      const oldest = this.activeItems.keys().next().value
+    while (this.activeItems.size - this.streams.persistentCount > MAX_CODEX_ACTIVE_ITEMS) {
+      const oldest = [...this.activeItems].find(
+        ([, active]) => !codexCommandOutlivesTurn(active.item)
+      )?.[0]
       if (typeof oldest !== 'string') {
         break
       }

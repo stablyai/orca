@@ -486,18 +486,28 @@ describe('NativeChatToolRun', () => {
     expect(runHeader(container)).toHaveTextContent('shell git log -1')
   })
 
-  it('settles an orphaned running call when its turn lifecycle has ended', () => {
+  it('keeps a post-turn running call neutral until the item itself settles', () => {
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'shell', input: { command: 'sleep 1' }, state: 'running' }
     ]
 
-    const { container } = render(
+    const { container, rerender } = render(
       <NativeChatToolRun blocks={blocks} expandSignal={false} activeTurnIsWorking={false} />
     )
 
     expect(screen.queryByText('Running sleep 1')).toBeNull()
-    expect(container.querySelector('.lucide-check')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-check')).toBeNull()
     expect(container.querySelector('.lucide-circle-alert')).toBeNull()
+    rerender(
+      <NativeChatToolRun
+        blocks={[
+          { type: 'tool-call', name: 'shell', input: { command: 'sleep 1' }, state: 'completed' }
+        ]}
+        expandSignal={false}
+        activeTurnIsWorking={false}
+      />
+    )
+    expect(container.querySelector('.lucide-check')).toBeInTheDocument()
   })
 
   it('shows the category glyph beside the word a classified row is named by', () => {

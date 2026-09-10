@@ -16,11 +16,7 @@ import type { CodexJournalTranslationAdmission } from './codex-structured-journa
 import { answerCodexPrompt } from './codex-structured-prompt-replies'
 import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
 import { supportsCodexStructuredLocation } from './codex-structured-location-support'
-import {
-  closeAllCodexSessions,
-  closeCodexPublishedSession,
-  closeCodexSession
-} from './codex-structured-session-close'
+import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
   applyCodexStructuredSessionOption,
   readLiveCodexSessionOptions
@@ -54,12 +50,22 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   private readonly acquisitions = new CodexAcquisitionRegistry()
   private readonly turnCancellation: CodexStructuredTurnCancellation
   private readonly notificationRetries: ReturnType<typeof createCodexStructuredNotificationRetry>
+  private readonly teardown: CodexStructuredSessionTeardown
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
       translate: (sessionId, session, method, params) =>
         this.translateNotification(sessionId, session, method, params)
+    })
+    this.teardown = new CodexStructuredSessionTeardown({
+      sessions: this.sessions,
+      acquisitions: this.acquisitions,
+      ...(deps.onEvent ? { onEvent: deps.onEvent } : {}),
+      ...(deps.onBackgroundTasksChanged
+        ? { onBackgroundTasksChanged: deps.onBackgroundTasksChanged }
+        : {}),
+      forgetNotificationRetries: (sessionId) => this.notificationRetries.clear(sessionId, null)
     })
     this.turnCancellation = new CodexStructuredTurnCancellation({
       captureTurnProcesses: deps.captureTurnProcesses,
@@ -92,7 +98,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       handleUnhandledFrame: (sessionId, kind, payload) =>
         this.handleUnhandledFrame(sessionId, kind, payload),
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
-        this.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
+        this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
     })
 
   /** Buffers pre-publication events and drops events from superseded children. */
@@ -134,12 +140,20 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     session: CodexSession,
     event: CodexStructuredSessionEvent
   ): CodexJournalTranslationAdmission {
+    if (event.type === 'notification' && !session.backgroundTasks.canObserve(event)) {
+      return { accepted: false, reason: 'failed' }
+    }
     const admission = session.translator?.handle(event) ?? { accepted: true }
     if (!admission.accepted) {
       return admission
     }
     if (event.type === 'notification') {
       this.compactions.codex(event.sessionId, event.method, event.params)
+      // After the admission check, so a refused frame is observed by the strip
+      // only on the retry that also reaches the journal.
+      if (session.backgroundTasks.observe(event)) {
+        this.deps.onBackgroundTasksChanged?.(event.sessionId, session.backgroundTasks.state)
+      }
     }
     if (event.type === 'ended') {
       this.compactions.ended(event.sessionId)
@@ -166,6 +180,10 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       (session, event) => this.emit(session, event)
     )
   }
+
+  backgroundTaskState: NonNullable<StructuredAgentSessionAdapter['backgroundTaskState']> = (
+    sessionId
+  ) => this.sessions.get(sessionId)?.backgroundTasks.state
 
   bindPromptItemId = (sessionId: string, journalItemId: string, promptKey: string): void =>
     this.sessions
@@ -267,59 +285,12 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     identity: AgentSessionJournalIdentity
   }): Promise<string | null> => this.sessions.get(input.identity.sessionId)?.historyPath ?? null
 
-  closeSession = async (sessionId: string): Promise<boolean> => {
-    const closed = await closeCodexSession(
-      sessionId,
-      this.sessions,
-      this.acquisitions,
-      this.deps.onEvent
-    )
-    if (closed) {
-      this.notificationRetries.clear(sessionId, null)
-    }
-    return closed
-  }
-  forceCloseSession = async (sessionId: string): Promise<boolean> => {
-    const closed = await closeCodexPublishedSession(this.sessions, sessionId, this.deps.onEvent, {
-      allowFailedSettlement: true,
-      requestedClose: false
-    })
-    if (closed) {
-      this.notificationRetries.clear(sessionId, null)
-    }
-    return closed
-  }
-
-  private forceCloseUnexpected(
-    sessionId: string,
-    fence: number,
-    acquisitionGeneration: string,
-    reason: Error
-  ): Promise<boolean> {
-    const session = this.sessions.get(sessionId)
-    if (
-      !session ||
-      session.ended ||
-      session.fence !== fence ||
-      session.acquisitionGeneration !== acquisitionGeneration
-    ) {
-      return Promise.resolve(false)
-    }
-    return closeCodexPublishedSession(this.sessions, sessionId, this.deps.onEvent, {
-      allowFailedSettlement: true,
-      requestedClose: false,
-      expectedFence: fence,
-      expectedAcquisitionGeneration: acquisitionGeneration,
-      unexpectedReason: reason
-    })
-  }
-  disposeSession = (sessionId: string): Promise<boolean> => this.closeSession(sessionId)
-  closeAll = (): Promise<void> =>
-    closeAllCodexSessions(this.sessions, this.acquisitions, (sessionId) =>
-      this.disposeSession(sessionId)
-    )
+  closeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
+  forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
+  disposeSession = (sessionId: string): Promise<boolean> => this.teardown.close(sessionId)
+  closeAll = (): Promise<void> => this.teardown.closeAll()
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
-    this.closeSession(input.sessionId)
+    this.teardown.close(input.sessionId)
 
   private session(sessionId: string): CodexSession {
     return requireLiveCodexSession(this.sessions, sessionId)

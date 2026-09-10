@@ -256,10 +256,16 @@ function applyDispatch(
   if (submission.dispatchState === 'rejected' || submission.dispatchState === 'accepted') {
     return
   }
+  submission.fence = row.fence
   submission.dispatchState = row.state
   submission.providerItemId = row.providerItemId
   submission.reason = row.reason
   submission.resolvedAt = row.ts
+  if (row.recovered) {
+    submission.recovered = row.recovered
+  } else {
+    delete submission.recovered
+  }
   if (row.state !== 'accepted' || !row.providerItemId) {
     return
   }
