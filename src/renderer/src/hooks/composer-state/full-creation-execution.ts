@@ -132,6 +132,8 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         )
       }
 
+      // Resolved before the cancel gate so the gate stays adjacent to createWorktree below.
+      const hostCapabilities = await ensureLocalRuntimeCapabilities()
       if (isSubmissionCancelled()) {
         return
       }
@@ -140,7 +142,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         agent: tuiAgent,
         settings,
         executionHostId: selectedRepoExecutionHostId ?? 'local',
-        hostCapabilities: await ensureLocalRuntimeCapabilities(),
+        hostCapabilities,
         workspaceKind: selectedRepoIsGit ? 'git-worktree' : 'folder',
         promptDelivery: startupPlan?.draftPrompt ? 'draft' : 'auto-submit',
         launchText: startupPlan?.draftPrompt ?? submitStartupPrompt,

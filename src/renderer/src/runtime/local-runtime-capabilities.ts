@@ -16,10 +16,14 @@ export function readLocalRuntimeCapabilitiesOrUnknown(): readonly RuntimeCapabil
 }
 
 /** Like `readLocalRuntimeCapabilitiesOrUnknown`, but probes the local runtime when no answer
- *  has landed yet. Launch-route decisions taken before the hydration-gated refresh runs must
- *  wait for the probe instead of reading "not asked yet" as "unsupported": a pre-hydration
- *  create otherwise silently degrades structured native chat to the legacy route (#19154).
- *  Still `null` after an actually failed probe. */
+ *  has landed yet, so a caller that can wait never reads "not asked yet" as "unsupported"
+ *  (#19154: that reads a structured-native-chat create as a bare terminal).
+ *
+ *  The renderer boot chain calls this once, ungated, so the answer is normally already cached
+ *  by the time any launch route is resolved — including for the readers that are synchronous
+ *  and cannot await. Awaiting it at a route decision is the backstop for the residual window
+ *  and for re-probing after a failed one. Still `null` after an actually failed probe, and
+ *  never rejects. */
 export async function ensureLocalRuntimeCapabilities(): Promise<
   readonly RuntimeCapability[] | null
 > {
@@ -30,8 +34,8 @@ export async function ensureLocalRuntimeCapabilities(): Promise<
   return localRuntimeCapabilities
 }
 
-/** Calls the bridge SYNCHRONOUSLY — callers overlap this probe with their own RPC and rely on it
- *  being in flight on return — while turning a broken bridge into a rejection rather than a throw. */
+/** `refreshLocalRuntimeCapabilities` is not `async`, so a missing or broken preload bridge would
+ *  throw synchronously out of it instead of settling into the unknown state its catch owns. */
 function startLocalRuntimeCapabilityProbe(): ReturnType<typeof window.api.runtime.getStatus> {
   try {
     return window.api.runtime.getStatus()
