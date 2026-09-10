@@ -143,8 +143,9 @@ export function createNativeChatPtySessionOptions(
    *  the seed's guess, so only an id the session actually tracks is evidence of
    *  anything; after one, an authoritative list that omits the id proves it retired —
    *  adopting either would emit an `-m` that is fatal on an account without it.
-   *  Both branches sit behind one precondition: some real list must carry the id. An id
-   *  only a raw launch flag or a typed `/model` ever named names no known model. */
+   *  Both branches sit behind one precondition: some real list must carry the id.
+   *  A raw launch flag and an agent report both enter the record verbatim, so an id
+   *  neither list knows names nothing, whatever put it there. */
   const modelIsAdoptableAsLaunchDefault = (modelId: string): boolean => {
     const listedIn = (list: readonly CatalogModel[]): boolean =>
       list.some((model) => model.id === modelId)
