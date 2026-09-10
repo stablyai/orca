@@ -92,6 +92,22 @@ export function isAgentSessionPreSpawnError(error: unknown): error is AgentSessi
   return error instanceof Error && error.name === 'AgentSessionPreSpawnError'
 }
 
+/**
+ * Whether a failure leaves the provider's fate UNSETTLED once acquisition cleanup has run.
+ *
+ * Both markers say the same thing from different distances: something may still be running that
+ * nobody proved dead. A caller may only settle an attempt terminally when this is false — for a
+ * fork that means the difference between retiring the attempt and risking a second child for a
+ * turn that already has one.
+ */
+export function isAgentSessionAcquisitionExitAmbiguous(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === 'AgentSessionAcquisitionExitUnprovenError' ||
+      error.name === 'AgentSessionAcquisitionRootExitObservedError')
+  )
+}
+
 export type AgentSessionDispatchOutcome =
   /** The provider owns the turn now, under this identity. */
   | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }

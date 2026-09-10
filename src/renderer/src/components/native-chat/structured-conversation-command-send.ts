@@ -46,26 +46,3 @@ export function isUnconfirmedConversationCommand(method: string, value: unknown)
     (value as AgentSessionConversationCommandResult).state === 'unknown'
   )
 }
-
-export function structuredConversationCommandRunner(
-  pending: { current: boolean },
-  blocked: boolean,
-  mutate: <T>(
-    method: string,
-    fingerprintMethod: string,
-    fields: Record<string, unknown>
-  ) => Promise<T | null>
-) {
-  return (command: AgentSessionConversationCommand) =>
-    sendStructuredConversationCommand({
-      command,
-      pending,
-      blocked,
-      send: (command) =>
-        mutate<AgentSessionConversationCommandResult>(
-          'agentSession.conversationCommand',
-          'agentSession.conversationCommand',
-          { command }
-        )
-    })
-}

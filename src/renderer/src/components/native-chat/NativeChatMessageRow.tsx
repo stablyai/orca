@@ -4,16 +4,11 @@ import CommentMarkdown, {
 } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import {
-  isSubagentGroupFallbackText,
-  subagentGroupBlocks
-} from '../../../../shared/native-chat-subagent-summary'
-import {
-  isSubagentGroupBlock,
-  type NativeChatMessage,
-  type NativeChatToolCallBlock
+import { nativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import type {
+  NativeChatMessage,
+  NativeChatToolCallBlock
 } from '../../../../shared/native-chat-types'
-import { splitNativeChatBlocks } from './native-chat-tool-fold'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
@@ -72,27 +67,11 @@ export const MessageRow = memo(function MessageRow({
   // One pass per block set: a streaming turn re-renders this row on every frame, and these
   // derivations used to re-run each time even though `message.blocks` had not changed.
   const { hasImages, markdown, prose, subagentGroups, tools } = useMemo(() => {
-    const split = splitNativeChatBlocks(message.blocks)
-    const groups = subagentGroupBlocks(split.prose)
-    // A spawn-group row carries a plain-text twin so a client without the block
-    // type still reads the roster. This one draws the block, so the twin is
-    // dropped rather than printed beside it — only the twin, never the prose
-    // beside it: the block is provider-agnostic, so a lane that folds a roster
-    // into a message with real text must not lose that text here.
-    const prose =
-      groups.length === 0
-        ? split.prose
-        : split.prose.filter(
-            (block) =>
-              !isSubagentGroupBlock(block) &&
-              !(block.type === 'text' && isSubagentGroupFallbackText(block.text))
-          )
+    const content = nativeChatRowContent(message.blocks)
     return {
-      tools: split.tools,
-      prose,
-      subagentGroups: groups,
-      markdown: nativeChatProseToMarkdown(prose),
-      hasImages: prose.some((block) => block.type === 'image-ref')
+      ...content,
+      markdown: nativeChatProseToMarkdown(content.prose),
+      hasImages: content.prose.some((block) => block.type === 'image-ref')
     }
   }, [message.blocks])
   const isUser = message.role === 'user'

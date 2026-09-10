@@ -10,8 +10,11 @@ import type {
 import type { AgentSessionProviderHandle } from './agent-session-provider-handle'
 import type { AgentSessionRewindReason, AgentSessionRewindRecord } from './agent-session-rewind'
 import { agentSessionPrefixWithinBounds } from './agent-session-prefix-bounds'
-import { activeStructuredAgentSessionTurnId } from './structured-agent-session-projection'
-import { isToolOnlyBlockSet } from './native-chat-tool-fold'
+import {
+  activeStructuredAgentSessionTurnId,
+  projectStructuredItemToNativeChat
+} from './structured-agent-session-projection'
+import { nativeChatMessageDrawsAgentControls } from './native-chat-row-content'
 
 type PrefixSelection =
   | { ok: false; reason: AgentSessionRewindReason }
@@ -59,15 +62,8 @@ export function selectAgentSessionPrefix(
     if (key.threadId !== head.threadId) {
       return { ok: false, reason: 'invalid-target' }
     }
-    boundary = snapshot.items.findIndex((item) => {
-      const identity = parseAgentJournalItemKey(providerKey(item.itemId))
-      return (
-        (identity?.provider === 'codex' &&
-          identity.threadId === key.threadId &&
-          identity.turnId === key.turnId) ||
-        (item.body.kind === 'status' && item.body.turnLifecycle?.turnId === key.turnId)
-      )
-    })
+    // Only a `before` boundary keeps this: `through` overwrites it below, and the scan is O(n).
+    boundary = input.boundary === 'before' ? turnStart(snapshot.items, key, providerKey) : boundary
   } else if (key.provider === 'claude' && head.provider === 'claude') {
     if (key.sessionId !== head.sessionId) {
       return { ok: false, reason: 'invalid-target' }
@@ -131,6 +127,23 @@ export function selectAgentSessionPrefix(
   }
 }
 
+/** First row of the Codex turn `key` names, including the lifecycle row the turn opened with. */
+function turnStart(
+  items: readonly AgentJournalRenderItem[],
+  key: AgentJournalItemIdentity & { provider: 'codex' },
+  providerKey: (id: string) => string
+): number {
+  return items.findIndex((item) => {
+    const identity = parseAgentJournalItemKey(providerKey(item.itemId))
+    return (
+      (identity?.provider === 'codex' &&
+        identity.threadId === key.threadId &&
+        identity.turnId === key.turnId) ||
+      (item.body.kind === 'status' && item.body.turnLifecycle?.turnId === key.turnId)
+    )
+  })
+}
+
 /** End of the turn containing `selected`, or null while that turn is still live.
  *
  *  Settlement TOMBSTONES a turn's lifecycle row rather than rewriting it to `completed`, so a
@@ -172,8 +185,10 @@ function liveTurn(
  *  is named — so per-row targets let two clicks on one turn mint two identical children. Mapping
  *  the siblings onto a shared anchor makes that impossible rather than merely unlikely.
  *
- *  The anchor is the turn's last assistant row that the transcript still DRAWS: a trailing
- *  tool-only row is folded into the row above it and renders nothing, so it can carry no control. */
+ *  The anchor is the turn's last row the transcript DRAWS A CONTROL CLUSTER ON, decided by the
+ *  renderer's own predicate rather than an approximation of it. A row folded into the one above,
+ *  or one carrying only images, draws no cluster and so can carry no fork action; a turn with no
+ *  such row gets NO anchor, because a phantom one costs that turn its only affordance in silence. */
 export function structuredForkTurnAnchors(
   items: readonly AgentJournalRenderItem[]
 ): Map<string, string> {
@@ -184,7 +199,7 @@ export function structuredForkTurnAnchors(
   const anchors = new Map<string, string>()
   let turn: { itemId: string; index: number; drawn: boolean }[] = []
   const settle = (): void => {
-    const anchor = turn.findLast((row) => row.drawn) ?? turn.at(-1)
+    const anchor = turn.findLast((row) => row.drawn)
     // Parsing every key is wasted work on the idle journal a fork is actually taken from.
     if (
       anchor &&
@@ -203,8 +218,12 @@ export function structuredForkTurnAnchors(
     }
     if (item.body.role === 'user') {
       settle()
-    } else if (item.body.role === 'assistant') {
-      turn.push({ itemId: item.itemId, index, drawn: !isToolOnlyBlockSet(item.body.blocks) })
+    } else {
+      turn.push({
+        itemId: item.itemId,
+        index,
+        drawn: nativeChatMessageDrawsAgentControls(projectStructuredItemToNativeChat(item))
+      })
     }
   })
   settle()
@@ -212,6 +231,6 @@ export function structuredForkTurnAnchors(
 }
 
 /** The rows that show a fork action: one per settled turn, derived from the anchors. */
-export function structuredForkEligibleItems(items: readonly AgentJournalRenderItem[]): Set<string> {
-  return new Set(structuredForkTurnAnchors(items).values())
+export function structuredForkEligibleItems(anchors: ReadonlyMap<string, string>): Set<string> {
+  return new Set(anchors.values())
 }

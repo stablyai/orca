@@ -17253,8 +17253,10 @@
         "unconfirmed": "Conversation operation was not confirmed."
       },
       "forkServerUpdateRequired": "Forking requires a newer Orca server. Update the server and try again.",
+      "rewindServerUpdateRequired": "Rewinding requires a newer Orca server. Update the server and try again.",
       "forkFromTurn": "Fork from this turn",
       "forkFailed": "Could not fork this turn.",
+      "forkRefused": "Could not fork this turn: {{reason}}",
       "forkBusy": "Wait for this conversation to finish, then fork the turn.",
       "forkUnsupported": "This conversation cannot be forked.",
       "forkHistoryLimit": "This turn carries too much history to fork.",

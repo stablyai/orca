@@ -1,6 +1,9 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { structuredForkTurnAnchors } from '../../../../shared/agent-session-prefix'
+import {
+  structuredForkEligibleItems,
+  structuredForkTurnAnchors
+} from '../../../../shared/agent-session-prefix'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import type { useStructuredAgentSession } from './use-structured-agent-session'
 import { forkStructuredSessionFromTurn } from './structured-agent-session-fork-command'
@@ -18,20 +21,25 @@ export function useStructuredForkAction(
 ) {
   const [pending, setPending] = useState(false)
   const agent = props.agent === 'claude' ? 'claude' : props.agent === 'codex' ? 'codex' : undefined
-  const enabled = Boolean(
-    controller.forkSupported &&
-    controller.forkSource &&
-    worktreeId &&
-    !controller.isWorking &&
-    agent
-  )
-  // Hooks cannot be skipped, so the unavailable case is gated inside the memo instead: a live turn
-  // emits a journal delta per frame and every one of them would rescan for a discarded result.
+  // Deliberately NOT gated on `controller.isWorking`. The host is per-turn — it refuses only the
+  // LIVE turn as `busy` and serves every settled one — so gating the whole hook on session-level
+  // work stripped the action off every turn in the chat the moment any turn started streaming,
+  // which is exactly when branching off an earlier answer is most useful. `structuredForkTurnAnchors`
+  // already withholds the running turn.
+  const enabled = Boolean(controller.forkSupported && controller.forkSource && worktreeId && agent)
+  // Hooks cannot be skipped, so the unavailable case is gated inside the memo instead.
   const anchors = useMemo(
     () => (enabled ? structuredForkTurnAnchors(controller.journalItems ?? []) : NO_ANCHORS),
     [enabled, controller.journalItems]
   )
-  const eligibleIds = useMemo(() => new Set(anchors.values()), [anchors])
+  const eligibleIds = useMemo(() => structuredForkEligibleItems(anchors), [anchors])
+  // A live turn republishes the journal every frame, so the anchor map is a new object every frame.
+  // Reading it through a ref keeps `onFork` stable, or each frame would hand every anchor row a new
+  // handler and re-render it — the cost the row memo exists to avoid.
+  const anchorsRef = useRef(anchors)
+  useEffect(() => {
+    anchorsRef.current = anchors
+  }, [anchors])
   // Read through the fields, not the object: `forkSource` is rebuilt every render, and depending on
   // it would hand every eligible row a new handler and defeat the row memo.
   const sourceSessionId = controller.forkSource?.sessionId
@@ -42,7 +50,7 @@ export function useStructuredForkAction(
     (itemId: string) => {
       // The clicked row resolves to its TURN's anchor, so the command's replay key names the turn:
       // two rows of one turn join a single attempt instead of minting two identical children.
-      const anchor = anchors.get(itemId)
+      const anchor = anchorsRef.current.get(itemId)
       if (
         !anchor ||
         !worktreeId ||
@@ -78,16 +86,7 @@ export function useStructuredForkAction(
         .catch((error: unknown) => onError(error instanceof Error ? error.message : String(error)))
         .finally(() => setPending(false))
     },
-    [
-      agent,
-      anchors,
-      expectedEpoch,
-      expectedRuntimeFence,
-      onError,
-      sourceSessionId,
-      target,
-      worktreeId
-    ]
+    [agent, expectedEpoch, expectedRuntimeFence, onError, sourceSessionId, target, worktreeId]
   )
   if (!enabled || !controller.forkSource || !worktreeId || !agent) {
     return undefined

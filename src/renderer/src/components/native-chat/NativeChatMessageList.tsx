@@ -279,8 +279,8 @@ export function NativeChatMessageList({
                     ? turnStatuses.completedByTurn[turnKey]
                     : undefined
               const receipt = receipts.get(message.id)
-              // Only the eligible row gets the handler: handing it to every row would make the
-              // whole transcript re-render whenever the fork action is rebuilt.
+              // Only the eligible row gets the handler AND the pending flag: handing either to every
+              // row would re-render the whole (unwindowed) transcript on every fork click.
               const forkEligible = forkAction?.eligibleIds.has(message.id) === true
               const turnDiff =
                 turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined
@@ -313,7 +313,7 @@ export function NativeChatMessageList({
                       activityExpandOverride={turnKey ? expandedTurnIds.has(turnKey) : undefined}
                       runtimeContext={runtimeContext}
                       forkEligible={forkEligible}
-                      forkPending={forkAction?.pending}
+                      forkPending={forkEligible ? forkAction?.pending : undefined}
                       onFork={forkEligible ? forkAction?.onFork : undefined}
                     />
                   )}

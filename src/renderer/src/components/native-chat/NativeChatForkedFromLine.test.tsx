@@ -18,6 +18,7 @@ vi.mock('@/store', () => ({
 }))
 
 import { NativeChatForkedFromLine } from './NativeChatForkedFromLine'
+import { structuredSessionForkState } from './structured-agent-session-fork-state'
 
 afterEach(cleanup)
 
@@ -33,6 +34,43 @@ function parentTab(overrides: Partial<Tab> = {}): Partial<Tab> {
 }
 
 describe('forked-from lineage line', () => {
+  it('renders the parent the CONTROLLER derived, not one handed straight to the prop', () => {
+    // Closes the last hop of the lineage chain: wire field -> controller field -> this component.
+    // Rendering with a literal prop proves the component, and nothing that feeds it.
+    tabs.current = [parentTab()]
+    const state = { items: [], fence: 1, cursor: { epoch: 'epoch' } } as unknown as Parameters<
+      typeof structuredSessionForkState
+    >[0]
+    const derived = structuredSessionForkState(state, 'child-session', {
+      sessionId: 'child-session',
+      commands: [],
+      forkSupported: true,
+      forkedFromSessionId: 'parent-session'
+    })
+    render(
+      <NativeChatForkedFromLine
+        worktreeId="worktree"
+        parentSessionId={derived.forkedFromSessionId}
+      />
+    )
+    expect(screen.getByRole('button', { name: 'Rewrite the parser' })).toBeInTheDocument()
+    // A host that predates the field sends nothing, and the line must simply not appear.
+    cleanup()
+    render(
+      <NativeChatForkedFromLine
+        worktreeId="worktree"
+        parentSessionId={
+          structuredSessionForkState(state, 'child-session', {
+            sessionId: 'child-session',
+            commands: [],
+            forkSupported: true
+          }).forkedFromSessionId
+        }
+      />
+    )
+    expect(screen.queryByText('Forked from')).not.toBeInTheDocument()
+  })
+
   it('names the parent chat and opens its tab', () => {
     activate.mockReset()
     tabs.current = [parentTab()]

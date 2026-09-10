@@ -33,7 +33,10 @@ export async function callStructuredAgentSession<TResult>(
     ))
   ) {
     throw new StructuredAgentSessionCapabilityError(
-      'Rewinding requires a newer Orca server. Update the server and try again.'
+      translate(
+        'components.native-chat.rewindServerUpdateRequired',
+        'Rewinding requires a newer Orca server. Update the server and try again.'
+      )
     )
   }
   if (

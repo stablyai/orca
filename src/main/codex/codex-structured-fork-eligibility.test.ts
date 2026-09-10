@@ -7,7 +7,8 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import {
   selectAgentSessionPrefix,
-  structuredForkEligibleItems
+  structuredForkEligibleItems,
+  structuredForkTurnAnchors
 } from '../../shared/agent-session-prefix'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
@@ -95,7 +96,7 @@ describe('forking a turn the real Codex producer settled', () => {
   it('offers the settled turn as forkable and retains it inclusively', () => {
     const items = journalAfterTurn(true)
     const itemId = assistantId(items)
-    expect(structuredForkEligibleItems(items).has(itemId)).toBe(true)
+    expect(structuredForkEligibleItems(structuredForkTurnAnchors(items)).has(itemId)).toBe(true)
     const selected = selectAgentSessionPrefix({
       items,
       itemId,
@@ -116,7 +117,7 @@ describe('forking a turn the real Codex producer settled', () => {
         (item) => item.body.kind === 'status' && item.body.turnLifecycle?.state === 'running'
       )
     ).toBe(true)
-    expect(structuredForkEligibleItems(items).has(itemId)).toBe(false)
+    expect(structuredForkEligibleItems(structuredForkTurnAnchors(items)).has(itemId)).toBe(false)
     expect(
       selectAgentSessionPrefix({ items, itemId, handle: HANDLE, boundary: 'through' })
     ).toMatchObject({ ok: false, reason: 'busy' })
@@ -125,6 +126,8 @@ describe('forking a turn the real Codex producer settled', () => {
   it('keeps a settled earlier turn forkable while a later turn runs', () => {
     const settled = journalAfterTurn(true)
     const items = [...settled, ...journalAfterTurn(false, 'turn-2')]
-    expect(structuredForkEligibleItems(items)).toEqual(new Set([assistantId(settled)]))
+    expect(structuredForkEligibleItems(structuredForkTurnAnchors(items))).toEqual(
+      new Set([assistantId(settled)])
+    )
   })
 })

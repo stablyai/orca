@@ -20,6 +20,7 @@ import {
   attachFingerprintFields,
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
+import { structuredSessionForkState } from '../../../renderer/src/components/native-chat/structured-agent-session-fork-state'
 import {
   HOST_TEST_NOW as NOW,
   hostTestAttachParams,
@@ -106,11 +107,17 @@ async function setup(provider: 'claude' | 'codex' = 'codex') {
     })
     return { state: 'accepted', providerIdentity: identity('turn-3', 0) }
   })
+  // Whether acquisition cleanup can PROVE the provider child is gone is the whole question for a
+  // failed fork, so it is a knob here rather than a constant.
+  const release = vi.fn<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>>(
+    async () => true
+  )
   const adapter: StructuredAgentSessionAdapter = {
     acquire,
     forkSupport: () => ({ supported: true }),
     dispatch,
-    releaseAcquisition: async () => true,
+    releaseAcquisition: release,
+    readOptions: async () => ({ models: [], current: { model: 'model' } }),
     closeSession: async () => true,
     cancelTurn: async () => ({ cancelled: false }),
     answerPrompt: async () => {},
@@ -152,7 +159,7 @@ async function setup(provider: 'claude' | 'codex' = 'codex') {
     sessionId: 'child-session',
     fields: attachFingerprintFields(child)
   })
-  return { host, store, params, child, source, acquire, inputs, identity }
+  return { host, store, params, child, source, acquire, release, inputs, identity }
 }
 
 describe('fork from a structured turn', () => {
@@ -263,8 +270,15 @@ describe('fork from a structured turn', () => {
     const { host, store, child, source, inputs, acquire, identity } = await setup()
     inputs
       .get(source.sessionId)!
+      // The namespace the real translator keys a lifecycle row in; no consumer reads it today, but
+      // a fixture that models a row nothing emits is how this feature shipped inert once already.
       .events!.appendItem(
-        { provider: 'orca', clientMessageId: 'running' },
+        {
+          provider: 'legacy',
+          agent: 'codex',
+          sessionId: source.sessionId,
+          recordId: 'turn-lifecycle:turn-2'
+        },
         { kind: 'status', text: 'Working', turnLifecycle: { turnId: 'turn-2', state: 'running' } }
       )
     const result = await host.fork(caller, child, {
@@ -288,17 +302,48 @@ describe('fork from a structured turn', () => {
   })
 
   it('does not publish a visible empty session when the fork outcome is unknown', async () => {
-    const { host, store, child, source, acquire } = await setup()
+    const { host, store, child, source, acquire, release } = await setup()
     acquire.mockImplementationOnce(async () => {
       throw new Error('provider response lost')
     })
-    await expect(host.fork(caller, child, source)).rejects.toThrow('provider response lost')
+    // Cleanup could NOT prove the child is gone, which is what makes this outcome ambiguous.
+    release.mockResolvedValueOnce(false)
+    await expect(host.fork(caller, child, source)).rejects.toThrow()
     expect(store.getRecord('child-session')?.fork?.phase).toBe('attempted')
     expect(store.getVisibleSessionTabIndex().sessionIds).not.toContain('child-session')
     expect(host.hasSession('child-session')).toBe(false)
     // The ambiguity guard: the provider may hold a child, so the retry must never make a second.
     expect(await host.fork(caller, child, source)).toMatchObject({ ok: false })
     expect(acquire).toHaveBeenCalledTimes(2)
+    expect(acquire.mock.calls.filter(([input]) => input.fork)).toHaveLength(1)
+  })
+
+  it('recovers a fork that died PAST the spawn once cleanup proved the child was released', async () => {
+    const { host, store, child, source, acquire, release } = await setup()
+    // A Codex fork reaches this after `thread/fork` succeeds: a forked-history verification timeout,
+    // or a restore refusal on a thread longer than the bounded restore queue. On a plain resume the
+    // same failures are simply retryable; stranding them here made the TURN unforkable until reload.
+    acquire.mockImplementationOnce(async () => {
+      throw new Error('codex app-server timed out verifying forked history')
+    })
+    await expect(host.fork(caller, child, source)).rejects.toThrow()
+    expect(release).toHaveBeenCalled()
+    expect(store.getRecord('child-session')?.fork).toMatchObject({ phase: 'refused', retained: [] })
+    expect(await host.fork(caller, child, source)).toMatchObject({ ok: true })
+    expect(host.journalSnapshot('child-session').items).not.toHaveLength(0)
+    expect(acquire.mock.calls.filter(([input]) => input.fork)).toHaveLength(2)
+  })
+
+  it('keeps refusing when cleanup itself could not settle, however it failed', async () => {
+    const { host, store, child, source, acquire, release } = await setup()
+    acquire.mockImplementationOnce(async () => {
+      throw new Error('codex app-server timed out verifying forked history')
+    })
+    release.mockRejectedValueOnce(new Error('provider child could not be reaped'))
+    await expect(host.fork(caller, child, source)).rejects.toThrow()
+    expect(store.getRecord('child-session')?.fork?.phase).toBe('attempted')
+    expect(await host.fork(caller, child, source)).toMatchObject({ ok: false })
+    expect(acquire.mock.calls.filter(([input]) => input.fork)).toHaveLength(1)
   })
 
   it('recovers a fork whose launch failed before any provider session existed', async () => {
@@ -316,6 +361,46 @@ describe('fork from a structured turn', () => {
     expect(await host.fork(caller, child, source)).toMatchObject({ ok: true })
     expect(host.journalSnapshot('child-session').items).not.toHaveLength(0)
     expect(acquire.mock.calls.filter(([input]) => input.fork)).toHaveLength(2)
+  })
+
+  it('carries fork lineage from the proven phase through the wire to the controller field', async () => {
+    const { host, store, child, source, params } = await setup()
+    expect(await host.fork(caller, child, source)).toMatchObject({ ok: true })
+    // Host gate -> wire field. Lineage is claimed only once a provider child is proven; an
+    // `attempted` fork has proven nothing, so a parent link there would name a chat that may
+    // never exist. The key is OMITTED rather than nulled, which is what keeps every ordinary
+    // session's payload fingerprint unmoved.
+    const forked = await host.readOptions('child-session')
+    expect(forked.forkedFrom).toEqual({ sessionId: source.sessionId })
+    const parent = await host.readOptions(params.envelope.sessionId)
+    expect(parent).not.toHaveProperty('forkedFrom')
+    // The same live session, pinned back to a phase that has proven nothing: the durable record
+    // still names a source, and the gate is the only thing that stops it being published.
+    await store.transitionHandoff('child-session', (current) => ({
+      ...current,
+      fork: { ...current.fork!, phase: 'attempted' as const }
+    }))
+    expect(await host.readOptions('child-session')).not.toHaveProperty('forkedFrom')
+    // Wire field -> controller field, the hop the renderer half actually reads.
+    const state = { items: [], fence: 1, cursor: { epoch: 'epoch' } } as unknown as Parameters<
+      typeof structuredSessionForkState
+    >[0]
+    expect(
+      structuredSessionForkState(state, 'child-session', {
+        sessionId: 'child-session',
+        commands: [],
+        forkSupported: true,
+        forkedFromSessionId: forked.forkedFrom?.sessionId
+      }).forkedFromSessionId
+    ).toBe(source.sessionId)
+    expect(
+      structuredSessionForkState(state, params.envelope.sessionId, {
+        sessionId: params.envelope.sessionId,
+        commands: [],
+        forkSupported: true,
+        forkedFromSessionId: parent.forkedFrom?.sessionId
+      }).forkedFromSessionId
+    ).toBeUndefined()
   })
 
   it('resumes the proved child when journal publication fails instead of forking again', async () => {

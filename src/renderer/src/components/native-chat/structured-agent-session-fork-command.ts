@@ -6,7 +6,8 @@ import {
 import type { AgentSessionForkSource } from '../../../../shared/agent-session-fork'
 import type {
   AgentSessionAttachResult,
-  AgentSessionMutationResult
+  AgentSessionMutationResult,
+  AgentSessionWireRefusal
 } from '../../../../shared/agent-session-wire'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import {
@@ -15,7 +16,12 @@ import {
 } from '@/runtime/structured-agent-session-client'
 import { translate } from '@/i18n/i18n'
 
-type ForkAttempt = { params: StructuredAgentSessionCreateParams; running?: Promise<string> }
+type ForkAttempt = {
+  params: StructuredAgentSessionCreateParams
+  running?: Promise<string>
+  /** The last outcome left this child's fate unknown, so its ids are the only way to adjudicate it. */
+  unconfirmed?: boolean
+}
 
 const attempts = new Map<string, ForkAttempt>()
 const MAX_TRACKED_ATTEMPTS = 128
@@ -41,7 +47,12 @@ export function forkStructuredSessionFromTurn(input: {
   if (attempt?.running) {
     return attempt.running
   }
-  if (!attempt) {
+  if (attempt) {
+    // Re-insert: the map's insertion order IS the eviction order, so reuse has to refresh recency
+    // or the turn a user keeps retrying is evicted before one they touched once and abandoned.
+    attempts.delete(key)
+    attempts.set(key, attempt)
+  } else {
     attempt = {
       params: structuredAgentSessionCreateParams({
         sessionId: createStructuredAgentSessionId(input.agent, () => crypto.randomUUID()),
@@ -60,7 +71,7 @@ export function forkStructuredSessionFromTurn(input: {
     .then(
       (result) => {
         if (!result.ok) {
-          throw refusalError(key, result.refusal.forkReason)
+          throw refusalError(current, key, result.refusal)
         }
         attempts.delete(key)
         return result.value.sessionId
@@ -72,6 +83,7 @@ export function forkStructuredSessionFromTurn(input: {
           attempts.delete(key)
           throw error
         }
+        current.unconfirmed = true
         throw new Error(unconfirmed())
       }
     )
@@ -81,29 +93,54 @@ export function forkStructuredSessionFromTurn(input: {
   return current.running
 }
 
-/** Bound the table by EVICTING the oldest idle entry. Refusing at the cap instead wedged forking
- *  app-wide — every session, tab and worktree — until a restart, reported as an unconfirmed fork. */
+/** Bound the table by EVICTING the least recently used entry with nothing left to adjudicate.
+ *  Refusing at the cap instead wedged forking app-wide — every session, tab and worktree — until a
+ *  restart, reported as an unconfirmed fork.
+ *
+ *  An UNCONFIRMED entry is idle but is retained precisely so a retry can adjudicate the child that
+ *  may already exist, so it is evicted only once nothing else can be: dropping it makes the next
+ *  fork of that turn mint a SECOND provider session, the one thing this ledger exists to prevent. */
 function track(key: string, attempt: ForkAttempt): void {
   while (attempts.size >= MAX_TRACKED_ATTEMPTS) {
-    let evicted = false
-    for (const [candidate, entry] of attempts) {
-      if (!entry.running) {
-        attempts.delete(candidate)
-        evicted = true
-        break
-      }
-    }
-    if (!evicted) {
+    if (
+      !evictOldest((entry) => !entry.running && !entry.unconfirmed) &&
+      !evictOldest((entry) => !entry.running)
+    ) {
       break
     }
   }
   attempts.set(key, attempt)
 }
 
+function evictOldest(admissible: (entry: ForkAttempt) => boolean): boolean {
+  for (const [candidate, entry] of attempts) {
+    if (admissible(entry)) {
+      attempts.delete(candidate)
+      return true
+    }
+  }
+  return false
+}
+
 /** A settled refusal proves the host minted no provider session, so the child id is retired and a
  *  retry starts clean. An unknown or mismatched outcome must reuse it to adjudicate the original. */
-function refusalError(key: string, reason: string | undefined): Error {
-  if (reason === undefined || reason === 'outcome-unknown' || reason === 'proof-mismatch') {
+function refusalError(attempt: ForkAttempt, key: string, refusal: AgentSessionWireRefusal): Error {
+  const reason = refusal.forkReason
+  if (reason === undefined) {
+    // No `forkReason` means the host refused somewhere with no fork vocabulary at all — a provider
+    // that never finished starting, a stale checkpoint, an unsupported workspace. Every refusal
+    // carries a `code` and a `message`; reporting them all as "could not be confirmed" threw away
+    // the only diagnostic anyone had. The attempt is still RETAINED, because a refusal raised after
+    // acquisition began may have left a child behind.
+    attempt.unconfirmed = true
+    return new Error(
+      translate('components.native-chat.forkRefused', 'Could not fork this turn: {{reason}}', {
+        reason: refusal.message
+      })
+    )
+  }
+  if (reason === 'outcome-unknown' || reason === 'proof-mismatch') {
+    attempt.unconfirmed = true
     return new Error(unconfirmed())
   }
   attempts.delete(key)
