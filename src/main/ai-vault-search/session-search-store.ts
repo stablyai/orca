@@ -1,13 +1,12 @@
 import type SyncDatabase from '../sqlite/sync-database'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import { compactSessionSearchIndex } from './session-search-index-compaction'
 import type {
   SessionSearchFileIdentity,
   SessionSearchIndexedFile
 } from './session-search-file-cursor'
 import {
   SessionSearchIndexWriter,
-  type SessionSearchStagedWrite
+  type SessionSearchFileWrite
 } from './session-search-index-writer'
 import { deleteExpiredSearchFiles } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
@@ -16,11 +15,6 @@ import { openSessionSearchDatabase } from './session-search-schema'
 // Above it the oldest record goes and the drop is counted, because a re-read set
 // that silently forgets is worse than one that says it is incomplete.
 export const STALE_PATH_LIMIT = 20_000
-
-export type SessionSearchStoreOptions = {
-  /** The WAL backlog a staging write refuses to grow past. Only tests narrow it. */
-  walBudgetBytes?: number
-}
 
 /**
  * Owns the index database. PR 2 scope: the write half only — the transcript
@@ -33,10 +27,6 @@ export class SessionSearchStore {
   private closed = false
   private acceptingWrites = true
   private retentionCutoffMs: number | null = null
-  private cleanupRequested = false
-  private cleanup: Promise<void> | null = null
-  private lastIndexedAt: string | null = null
-  private writeFailures = 0
   // Files this index knows it is behind on. Filled by a declined or abandoned
   // read; PR 3's indexer drains it. Nothing here schedules the re-read.
   private readonly stale = new Map<string, SessionFileCandidate>()
@@ -48,15 +38,10 @@ export class SessionSearchStore {
       console.warn(
         '[ai-vault-search] index write failed:',
         error instanceof Error ? error.name : 'IndexError'
-      ),
-    options: SessionSearchStoreOptions = {}
+      )
   ) {
     this.db = openSessionSearchDatabase(path)
-    this.writer = new SessionSearchIndexWriter(this.db, options.walBudgetBytes)
-    // Opening tombstones whatever a dead writer left staged. Nothing else will
-    // schedule that drain: a store that is only ever read from, or one whose
-    // next read declines, would carry those rows for the life of the index.
-    this.scheduleCleanup()
+    this.writer = new SessionSearchIndexWriter(this.db)
   }
 
   setAcceptingWrites(accept: boolean): void {
@@ -92,7 +77,7 @@ export class SessionSearchStore {
     candidate: SessionFileCandidate,
     mode: 'replace' | 'append',
     previousByteOffset: number
-  ): SessionSearchStagedWrite | null {
+  ): SessionSearchFileWrite | null {
     if (!this.acceptsCandidate(candidate)) {
       return null
     }
@@ -104,27 +89,13 @@ export class SessionSearchStore {
     }
   }
 
-  writePublished(candidate: SessionFileCandidate): void {
+  writeCommitted(candidate: SessionFileCandidate): void {
     // Why: a list scan queues every file the backfill has not reached yet; once
     // one lands, a later pass must not re-read the whole queue.
     this.stale.delete(candidate.file.path)
-    this.lastIndexedAt = new Date().toISOString()
-    this.scheduleCleanup()
-  }
-
-  /**
-   * A read that staged rows and then could not publish them. The tombstone its
-   * discard wrote needs the same drain a publish gets, or the staged rows sit in
-   * `messages` and both FTS tables until some unrelated write happens to
-   * schedule a pass — which for the last read before a shutdown is never.
-   */
-  writeAbandoned(candidate: SessionFileCandidate): void {
-    this.markStale(candidate)
-    this.scheduleCleanup()
   }
 
   reportWriteFailure(error: unknown): void {
-    this.writeFailures += 1
     this.onError(error)
   }
 
@@ -180,14 +151,6 @@ export class SessionSearchStore {
     return this.stale.size
   }
 
-  get lastWriteAt(): string | null {
-    return this.lastIndexedAt
-  }
-
-  get failures(): number {
-    return this.writeFailures
-  }
-
   /**
    * Drops a source's rows. Only a proven deletion may call this: an unreadable
    * source is `unverifiable`, not `missing`, and keeps its rows
@@ -197,24 +160,19 @@ export class SessionSearchStore {
     this.stale.delete(path)
     try {
       this.writer.removeFile(path)
-      this.scheduleCleanup()
     } catch (error) {
       this.onError(error)
     }
   }
 
-  /** Hides expired sessions immediately, then removes their rows in resumable batches. */
+  /** Cuts expired sessions loose at once, then reclaims their rows in resumable batches. */
   async purgeOlderThan(cutoffMs: number | null, signal?: AbortSignal): Promise<void> {
     try {
       await deleteExpiredSearchFiles(
         this.db,
         cutoffMs,
-        () => this.closed || signal?.aborted === true,
-        () => undefined
+        () => this.closed || signal?.aborted === true
       )
-      if (!this.closed && !signal?.aborted) {
-        await compactSessionSearchIndex(this.db, () => this.closed || signal?.aborted === true)
-      }
     } catch (error) {
       if (!this.closed) {
         this.onError(error)
@@ -230,46 +188,5 @@ export class SessionSearchStore {
     }
     this.closed = true
     this.db.close()
-  }
-
-  /** Drains tombstones left by a publish or a removal, one file at a time. */
-  scheduleCleanup(): void {
-    if (this.closed) {
-      return
-    }
-    if (this.cleanup) {
-      this.cleanupRequested = true
-      return
-    }
-    this.cleanupRequested = false
-    this.cleanup = deleteExpiredSearchFiles(
-      this.db,
-      null,
-      () => this.closed,
-      () => undefined
-    )
-      .catch((error) => {
-        if (!this.closed) {
-          this.onError(error)
-        }
-      })
-      .finally(() => {
-        this.cleanup = null
-        if (this.cleanupRequested) {
-          this.scheduleCleanup()
-        }
-      })
-  }
-
-  /**
-   * Tests only: the cleanup lane is fire-and-forget everywhere else. Loops
-   * because a pass requested while one was running is scheduled from the
-   * finished pass's own continuation, so awaiting a single promise would return
-   * with work still queued.
-   */
-  async settled(): Promise<void> {
-    while (this.cleanup) {
-      await this.cleanup
-    }
   }
 }

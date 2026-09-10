@@ -36,20 +36,19 @@ export function* searchMessageRows(
 
 /**
  * Writes one row into `messages` and both FTS tables in the caller's
- * transaction, so a published message is never present in one table and absent
- * from the other. `tool` rows stay out of `conversation_fts`: that table is the
+ * transaction, so a message is never present in one table and absent from the
+ * other. `tool` rows stay out of `conversation_fts`: that table is the
  * conversation-only half of the split.
  */
 export function insertSearchMessage(
   db: SyncDatabase,
   sessionId: number,
-  batchId: number,
   message: TranscriptMessage
 ): void {
   const text = message.text
   const id = db
-    .prepare('INSERT INTO messages(session_row_id, batch_id, role, ts) VALUES (?, ?, ?, ?)')
-    .run(sessionId, batchId, message.role, message.timestamp).lastInsertRowid
+    .prepare('INSERT INTO messages(session_row_id, role, ts) VALUES (?, ?, ?)')
+    .run(sessionId, message.role, message.timestamp).lastInsertRowid
   const user = message.role === 'user' ? text : ''
   const assistant = message.role === 'assistant' ? text : ''
   const tool = message.role === 'tool' ? text : ''
@@ -65,6 +64,24 @@ export function insertSearchMessage(
   }
 }
 
-export function chunkMessageText(text: string): string[] {
-  return [...textChunks(text)]
+/**
+ * Deletes up to `limit` of a session's rows from `messages` and both FTS
+ * tables, in the caller's transaction, and reports how many went. Bounded
+ * because a retention sweep must not hold one transaction over a whole
+ * session; a replace passes no limit, since its rows and their replacements
+ * have to land together.
+ */
+export function deleteSearchMessages(db: SyncDatabase, sessionId: number, limit = -1): number {
+  const ids = db
+    .prepare('SELECT id FROM messages WHERE session_row_id = ? LIMIT ?')
+    .all(sessionId, limit) as { id: number }[]
+  const full = db.prepare('DELETE FROM messages_fts WHERE rowid = ?')
+  const conversation = db.prepare('DELETE FROM conversation_fts WHERE rowid = ?')
+  const message = db.prepare('DELETE FROM messages WHERE id = ?')
+  for (const { id } of ids) {
+    full.run(id)
+    conversation.run(id)
+    message.run(id)
+  }
+  return ids.length
 }

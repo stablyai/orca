@@ -10,20 +10,36 @@ import type {
   SessionSearchIndexedFile
 } from './session-search-file-cursor'
 import { SessionSearchFileRecords } from './session-search-file-records'
-import { insertSearchMessage, searchMessageRows } from './session-search-message-rows'
-import { discardSearchBatch, retireSearchSession } from './session-search-pending-deletes'
-import { assertSearchWalBudget, SEARCH_WAL_PENDING_BYTES } from './session-search-wal-budget'
+import {
+  deleteSearchMessages,
+  insertSearchMessage,
+  searchMessageRows
+} from './session-search-message-rows'
 
-// Why bounded rather than streamed: the transcript reader pushes messages
-// synchronously, so a staged write cannot make the producer wait. Rows are
-// buffered to one of these two ceilings and then written in a single
-// transaction, which caps both the retained bytes and the length of one stall.
-export const SEARCH_WRITE_ROWS_PER_STEP = 128
-export const SEARCH_WRITE_CHARS_PER_STEP = 256 * 1024
-// Why sampled: the checkpoint costs more than the step it guards, and the backlog only grows
-// while a second connection pins a snapshot — a killed scanner child whose handle outlives the
-// replacement fork, not two processes the app runs on purpose.
-const WAL_BUDGET_EVERY_STEPS = 16
+/**
+ * How much decoded text one transaction may carry.
+ *
+ * A file's rows are buffered in memory and written in one transaction, so the
+ * whole read is either in the index or not. The ceiling is what keeps that
+ * promise affordable: at the measured 26 MB of transcript per second it caps a
+ * single commit near a second and the WAL it produces near 64 MB, and it is far
+ * above the largest real transcript (the 40-session benchmark corpus is 10.5 MB
+ * in total), so an ordinary file never reaches it. Above the ceiling the read is
+ * cut into chunks that each leave the index consistent — see `chunked`.
+ */
+export const SESSION_SEARCH_COMMIT_CHARS = 32 * 1024 * 1024
+
+/**
+ * The cursor of a file whose rows are a prefix, written by a chunk of a read
+ * that has not reached the end of the file.
+ *
+ * The reader hands out byte offsets only when a read finishes, so a chunk has
+ * no honest offset to record. This one is unusable on purpose: `indexedFile`
+ * reports no cursor for it, so an append is declined and the file is re-read
+ * whole. The rows are still a coherent prefix of that session and answer
+ * searches until the re-read replaces them.
+ */
+const PARTIAL_FILE_CURSOR = -1
 
 type FileRow = {
   dev: number | null
@@ -34,51 +50,38 @@ type FileRow = {
   session_row_id: number | null
 }
 
-type ExistingFile = Pick<FileRow, 'session_row_id' | 'byte_offset'>
+type FileCursor = Pick<FileRow, 'session_row_id' | 'byte_offset'>
 
-export type SessionSearchStagedWrite = {
-  /** Buffers one message, flushing a full batch into the staging area. */
+export type SessionSearchFileWrite = {
+  /** Buffers one message, committing a chunk when the buffer reaches the ceiling. */
   add(message: TranscriptMessage): void
   /**
-   * Makes every staged row visible in one transaction, or drops the file's rows
-   * when the read decoded no session. False when the file was invalidated or
-   * its published cursor moved while this write was staging.
+   * Writes this file's rows, its session and its cursor in one transaction.
+   * False when the file's record changed under this read — it was removed, or
+   * another writer moved the cursor these rows continue from. A read that never
+   * calls this leaves the index exactly as it found it, unless it chunked.
    */
-  publish(outcome: TranscriptReadOutcome): boolean
-  /** Tombstones whatever is still staged; safe after `publish` and after a failure. */
-  discard(): void
+  commit(outcome: TranscriptReadOutcome): boolean
 }
 
 export class SessionSearchIndexWriter {
   private readonly records: SessionSearchFileRecords
-  // One open stage per path. Reads of one transcript are serialized by the parse
-  // file lane, so this only ever tracks the read in flight; `removeFile` can
-  // therefore invalidate the open stage by path. If the lane is ever bypassed,
-  // the later stage takes the slot and the earlier one loses its invalidation
-  // hook, but it still cannot publish: `publishable` re-reads the cursor and
-  // refuses. Both halves are pinned in session-search-index-writer.test.ts.
-  private readonly staging = new Map<string, { invalidated: boolean }>()
 
   constructor(
     private readonly db: SyncDatabase,
-    private readonly walBudgetBytes: number = SEARCH_WAL_PENDING_BYTES
+    private readonly commitChars: number = SESSION_SEARCH_COMMIT_CHARS
   ) {
     this.records = new SessionSearchFileRecords(db)
   }
 
-  /** Tests only: an entry surviving a finished read leaks for the store's life. */
-  get openStageCount(): number {
-    return this.staging.size
-  }
-
-  /** This index's own cursor, or null when the file is unknown or its identity changed. */
+  /** This index's own cursor, or null when the file is unknown, changed, or half written. */
   indexedFile(path: string, identity: SessionSearchFileIdentity): SessionSearchIndexedFile | null {
     const row = this.db
       .prepare(
         'SELECT dev, ino, byte_offset, mtime_ms, size_bytes, session_row_id FROM files WHERE path = ?'
       )
       .get(path) as FileRow | undefined
-    if (!row) {
+    if (!row || row.byte_offset === PARTIAL_FILE_CURSOR) {
       return null
     }
     // A recorded identity that no longer matches is a different file at the same
@@ -95,47 +98,46 @@ export class SessionSearchIndexWriter {
         return null
       }
     }
-    return { byteOffset: row.byte_offset, mtimeMs: row.mtime_ms, sizeBytes: row.size_bytes }
+    return {
+      byteOffset: row.byte_offset,
+      mtimeMs: row.mtime_ms,
+      sizeBytes: row.size_bytes
+    }
   }
 
   /**
-   * Opens a staging batch for one read, or returns null when the read cannot
-   * extend what is published: an `append` whose predecessor byte offset is not
-   * this index's own cursor covers a span the index never saw.
+   * Opens a buffered write for one read, or returns null when the read cannot
+   * extend what the index holds: an `append` whose predecessor byte offset is
+   * not this index's own cursor covers a span the index never saw.
    */
   beginWrite(
     candidate: SessionFileCandidate,
     mode: 'replace' | 'append',
     previousByteOffset: number
-  ): SessionSearchStagedWrite | null {
+  ): SessionSearchFileWrite | null {
     const path = candidate.file.path
-    const existing = this.file(path)
-    if (mode === 'append' && existing?.byte_offset !== previousByteOffset) {
+    const cursor = this.cursor(path)
+    if (mode === 'append' && cursor?.byte_offset !== previousByteOffset) {
       return null
     }
     // A file the index read through and decoded no session from still has a
     // cursor worth continuing: it has no session row to hang new rows off, so
     // this read makes one. Declining instead would force a whole re-read of
     // that file on every pass for as long as it grows.
-    return this.stage(
-      candidate,
-      existing,
-      mode === 'append' ? (existing?.session_row_id ?? null) : null
-    )
+    return this.buffered(candidate, cursor, mode === 'append')
   }
 
-  /** Invalidation hides the generation immediately; cleanup does the expensive deletes later. */
+  /**
+   * Drops a source: its session, its rows and its file record, in one
+   * transaction. Unbounded on purpose — the caller has proven this one file is
+   * gone and expects it out of results when the call returns, and a read of it
+   * that is still in flight is fenced by the cursor its commit re-reads.
+   */
   removeFile(path: string): void {
-    const open = this.staging.get(path)
-    if (open) {
-      open.invalidated = true
-    }
-    const existing = this.file(path)
+    const cursor = this.cursor(path)
     this.db.exec('BEGIN IMMEDIATE')
     try {
-      if (existing?.session_row_id != null) {
-        retireSearchSession(this.db, existing.session_row_id)
-      }
+      this.dropSession(cursor?.session_row_id ?? null)
       this.db.prepare('DELETE FROM files WHERE path = ?').run(path)
       this.db.exec('COMMIT')
     } catch (error) {
@@ -144,144 +146,112 @@ export class SessionSearchIndexWriter {
     }
   }
 
-  private file(path: string): ExistingFile | undefined {
+  private cursor(path: string): FileCursor | undefined {
     return this.db
       .prepare('SELECT session_row_id,byte_offset FROM files WHERE path = ?')
-      .get(path) as ExistingFile | undefined
+      .get(path) as FileCursor | undefined
   }
 
-  /** `resumed` is the session row this read continues, or null when it starts one. */
-  private stage(
+  private buffered(
     candidate: SessionFileCandidate,
-    existing: ExistingFile | undefined,
-    resumed: number | null
-  ): SessionSearchStagedWrite {
+    opened: FileCursor | undefined,
+    append: boolean
+  ): SessionSearchFileWrite {
     const db = this.db
     const path = candidate.file.path
-    let hash = resumed === null ? EMPTY_CONTENT_HASH : this.records.contentHash(resumed)
-    let sessionId: number
-    let batchId: number
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      sessionId = resumed ?? this.records.createStagingSession(candidate)
-      batchId = Number(
-        db.prepare('INSERT INTO search_write_batches(session_row_id) VALUES (?)').run(sessionId)
-          .lastInsertRowid
-      )
-      db.exec('COMMIT')
-    } catch (error) {
-      db.exec('ROLLBACK')
-      throw error
-    }
-
-    const open = { invalidated: false }
-    this.staging.set(path, open)
     const buffer: TranscriptMessage[] = []
     let bufferedChars = 0
-    let steps = 0
+    // What this write believes the file record holds. Re-read inside every
+    // transaction: a `removeFile` or another writer between two chunks means
+    // these rows no longer continue anything, and committing on top of that
+    // would resurrect a deleted source or duplicate a span.
+    let expected = opened
+    // The session row is reused across re-reads of one file, so a `replace`
+    // swaps a session's rows rather than minting a second generation of it.
+    let session = opened?.session_row_id ?? null
+    let hash = append && session !== null ? this.records.contentHash(session) : EMPTY_CONTENT_HASH
+    // A replace owns the session's whole row set, so the old generation goes in
+    // the same transaction as the first of the new one. Chunk two onwards must
+    // not repeat it.
+    let replaced = append
 
-    // A writer that published its own batch for this path moved the cursor these
-    // staged rows continue from; publishing on top would duplicate or skip a span.
-    const publishable = (): boolean => {
-      if (open.invalidated) {
-        return false
-      }
-      const current = this.file(path)
+    const current = (): boolean => {
+      const row = this.cursor(path)
       return (
-        current?.session_row_id === existing?.session_row_id &&
-        current?.byte_offset === existing?.byte_offset
+        row?.session_row_id === expected?.session_row_id &&
+        row?.byte_offset === expected?.byte_offset
       )
     }
 
-    const flush = (): void => {
-      if (buffer.length === 0) {
-        return
-      }
-      if (steps++ % WAL_BUDGET_EVERY_STEPS === 0) {
-        assertSearchWalBudget(db, this.walBudgetBytes)
-      }
+    /** `outcome` is null for a chunk of a read that has not reached the file's end. */
+    const write = (outcome: TranscriptReadOutcome | null): boolean => {
+      const decoded = outcome?.session ?? null
       db.exec('BEGIN IMMEDIATE')
       try {
-        for (const row of buffer) {
-          insertSearchMessage(db, sessionId, batchId, row)
+        if (!current()) {
+          db.exec('ROLLBACK')
+          return false
+        }
+        if (outcome && !decoded) {
+          // Read through, but nothing to search: the cursor advances so the file
+          // is not re-read whole on every pass, and whatever generation was here
+          // — including this read's own committed chunks — goes with it.
+          this.dropSession(session)
+          session = null
+          this.records.upsertFile(candidate, outcome.byteOffset, null)
+        } else {
+          session ??= this.records.createSessionRow(candidate)
+          if (!replaced) {
+            deleteSearchMessages(db, session)
+            replaced = true
+          }
+          for (const row of buffer) {
+            insertSearchMessage(db, session, row)
+          }
+          if (decoded) {
+            this.records.updateSession(decoded, session, hash)
+          }
+          this.records.upsertFile(
+            candidate,
+            outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR,
+            session
+          )
         }
         db.exec('COMMIT')
       } catch (error) {
         db.exec('ROLLBACK')
         throw error
       }
+      expected = {
+        session_row_id: session,
+        byte_offset: outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR
+      }
       buffer.length = 0
       bufferedChars = 0
-    }
-
-    const close = (): void => {
-      if (this.staging.get(path) === open) {
-        this.staging.delete(path)
-      }
+      return true
     }
 
     return {
       add: (message) => {
-        if (open.invalidated) {
-          return
-        }
         hash = foldContentHash(hash, [message])
         for (const row of searchMessageRows([message])) {
           buffer.push(row)
           bufferedChars += row.text.length
-          if (
-            buffer.length >= SEARCH_WRITE_ROWS_PER_STEP ||
-            bufferedChars >= SEARCH_WRITE_CHARS_PER_STEP
-          ) {
-            flush()
-          }
+        }
+        if (bufferedChars >= this.commitChars) {
+          write(null)
         }
       },
-      publish: (outcome) => {
-        if (!publishable()) {
-          return false
-        }
-        flush()
-        db.exec('BEGIN IMMEDIATE')
-        try {
-          if (outcome.session) {
-            this.records.updateSession(outcome.session, sessionId, hash)
-            if (resumed === null && existing?.session_row_id != null) {
-              retireSearchSession(db, existing.session_row_id)
-            }
-            db.prepare('UPDATE sessions SET index_ready=1 WHERE id=?').run(sessionId)
-            // Clearing the pointer before dropping the batch is what makes a recycled
-            // rowid harmless: no published row can name a later in-flight batch.
-            db.prepare('UPDATE messages SET batch_id=NULL WHERE batch_id=?').run(batchId)
-            db.prepare('DELETE FROM search_write_batches WHERE id=?').run(batchId)
-            this.records.upsertFile(candidate, outcome.byteOffset, sessionId)
-          } else {
-            // No session: the file is read through but holds nothing to search,
-            // so the cursor advances and the old generation's rows are retired.
-            // `discard` then tombstones this write's own staging rows.
-            if (existing?.session_row_id != null) {
-              retireSearchSession(db, existing.session_row_id)
-            }
-            this.records.upsertFile(candidate, outcome.byteOffset, null)
-          }
-          db.exec('COMMIT')
-        } catch (error) {
-          db.exec('ROLLBACK')
-          throw error
-        }
-        return true
-      },
-      discard: () => {
-        buffer.length = 0
-        close()
-        // A surviving batch row means publish never made these rows visible,
-        // whatever ended the stage.
-        if (db.prepare('SELECT 1 FROM search_write_batches WHERE id=?').get(batchId)) {
-          // Owning the session means this read created it, so retiring it takes
-          // the whole staging generation with it.
-          discardSearchBatch(db, sessionId, batchId, resumed === null)
-        }
-      }
+      commit: (outcome) => write(outcome)
     }
+  }
+
+  /** Caller's transaction: drops a session and every row that hangs off it. */
+  private dropSession(sessionRowId: number | null): void {
+    if (sessionRowId === null) {
+      return
+    }
+    deleteSearchMessages(this.db, sessionRowId)
+    this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionRowId)
   }
 }

@@ -12,9 +12,7 @@ import SyncDatabase from '../sqlite/sync-database'
 import {
   SESSION_SEARCH_SCHEMA_VERSION,
   openSessionSearchDatabase,
-  removeSessionSearchDatabase,
-  VISIBLE_MESSAGES,
-  VISIBLE_SESSIONS
+  removeSessionSearchDatabase
 } from './session-search-schema'
 
 const recordedRmSync = vi.hoisted(() => vi.fn())
@@ -59,7 +57,9 @@ describe('openSessionSearchDatabase', () => {
 
     const second = openSessionSearchDatabase(path)
     expect(schemaVersion(second)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(second.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({ c: 1 })
+    expect(second.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
+      c: 1
+    })
     second.close()
   })
 
@@ -77,27 +77,14 @@ describe('openSessionSearchDatabase', () => {
 
     const fresh = openSessionSearchDatabase(path)
     expect(schemaVersion(fresh)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(fresh.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({ c: 0 })
+    expect(fresh.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
+      c: 0
+    })
     fresh.close()
     // Why not inode: ext4 hands a freed inode straight back to the next create.
     // The planted sidecar is gone (a fresh WAL is checkpointed away on close).
     await expect(stat(`${path}-wal`)).rejects.toMatchObject({ code: 'ENOENT' })
     expect((await stat(path)).mtimeMs).toBeGreaterThanOrEqual(before.mtimeMs)
-  })
-
-  it('indexes only in-flight batch pointers, not every published message', async () => {
-    const db = openSessionSearchDatabase(await tempDatabasePath())
-    try {
-      const sql = (
-        db
-          .prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='messages_batch'")
-          .get() as { sql: string }
-      ).sql
-      // Publish nulls batch_id, so a full index would carry one dead entry per message.
-      expect(sql).toContain('WHERE batch_id IS NOT NULL')
-    } finally {
-      db.close()
-    }
   })
 
   it('removes the database with every sidecar', async () => {
@@ -106,7 +93,9 @@ describe('openSessionSearchDatabase', () => {
     await writeFile(`${path}-shm`, '')
     removeSessionSearchDatabase(path)
     for (const suffix of ['', '-wal', '-shm']) {
-      await expect(stat(`${path}${suffix}`)).rejects.toMatchObject({ code: 'ENOENT' })
+      await expect(stat(`${path}${suffix}`)).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
     }
   })
 })
@@ -124,7 +113,9 @@ it('rebuilds a file too corrupt to open instead of refusing forever', async () =
   const rebuilt = openSessionSearchDatabase(path)
   try {
     expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({ c: 0 })
+    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
+      c: 0
+    })
   } finally {
     rebuilt.close()
   }
@@ -147,7 +138,9 @@ it('gives up rather than looping when a fresh file still cannot be opened', asyn
   await writeFile(path, 'not a SQLite database')
   // Every open of this path fails, so the one permitted retry is exhausted.
   const open = vi.spyOn(SyncDatabase.prototype, 'pragma').mockImplementation(() => {
-    throw Object.assign(new Error('database disk image is malformed'), { code: 'SQLITE_CORRUPT' })
+    throw Object.assign(new Error('database disk image is malformed'), {
+      code: 'SQLITE_CORRUPT'
+    })
   })
   try {
     expect(() => openSessionSearchDatabase(path)).toThrow(/malformed/)
@@ -165,7 +158,9 @@ it('surfaces the unlink failure itself when a stale index cannot be removed', as
   stale.close()
   recordedRmSync.mockReset()
   recordedRmSync.mockImplementation(() => {
-    throw Object.assign(new Error('EPERM: operation not permitted, unlink'), { code: 'EPERM' })
+    throw Object.assign(new Error('EPERM: operation not permitted, unlink'), {
+      code: 'EPERM'
+    })
   })
   try {
     // The stale handle is closed before the unlink, so the failure path must not
@@ -204,7 +199,9 @@ it('rebuilds a newer index rather than reading a schema it does not know', async
   const rebuilt = openSessionSearchDatabase(path)
   try {
     expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({ c: 0 })
+    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
+      c: 0
+    })
   } finally {
     rebuilt.close()
   }
@@ -222,7 +219,9 @@ it('rebuilds when meta exists but its version row is gone', async () => {
   const rebuilt = openSessionSearchDatabase(path)
   try {
     expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
-    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({ c: 0 })
+    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
+      c: 0
+    })
   } finally {
     rebuilt.close()
   }
@@ -245,90 +244,40 @@ it('opens with the pragmas the write path depends on', async () => {
   }
 })
 
-it('retires an unfinished batch as part of opening, not of using', async () => {
-  const path = await tempDatabasePath()
-  const crashed = openSessionSearchDatabase(path)
-  crashed.exec(`INSERT INTO sessions(id,index_ready,agent,session_id,file_path,title,resume_command)
-    VALUES (1,0,'claude','a','a','staging','');
-    INSERT INTO search_write_batches(id,session_row_id) VALUES (7,1)`)
-  crashed.close()
-
-  const reopened = openSessionSearchDatabase(path)
+it("walks a session's rows through an index rather than scanning the table", async () => {
+  const db = openSessionSearchDatabase(await tempDatabasePath())
   try {
-    // One tombstone, not two: the session-keyed one already covers every row the
-    // batch holds, and a per-reopen duplicate would replay the same deletes.
-    expect(reopened.prepare('SELECT path FROM search_pending_deletes').all()).toEqual([
-      { path: '\u0000session:1' }
-    ])
+    // The replace delete and the orphan drain both take this path, once per file.
+    const plan = (
+      db
+        .prepare('EXPLAIN QUERY PLAN SELECT id FROM messages WHERE session_row_id = ? LIMIT ?')
+        .all(1, 1) as { detail: string }[]
+    )
+      .map((row) => row.detail)
+      .join(' ')
+    expect(plan).toContain('messages_session')
   } finally {
-    reopened.close()
+    db.close()
   }
 })
 
-it('retires a batch whose session survived it', async () => {
-  const path = await tempDatabasePath()
-  const crashed = openSessionSearchDatabase(path)
-  crashed.exec(`INSERT INTO sessions(id,index_ready,agent,session_id,file_path,title,resume_command)
-    VALUES (1,1,'claude','a','a','published','');
-    INSERT INTO search_write_batches(id,session_row_id) VALUES (7,1)`)
-  crashed.close()
-
-  const reopened = openSessionSearchDatabase(path)
+it('keeps only the session indexes a retrieval query can seek', async () => {
+  const db = openSessionSearchDatabase(await tempDatabasePath())
   try {
-    expect(reopened.prepare('SELECT path,batch_id FROM search_pending_deletes').all()).toEqual([
-      { path: '\u0000batch:7', batch_id: 7 }
-    ])
+    const names = (
+      db
+        .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='sessions'")
+        .all() as { name: string }[]
+    )
+      .map((row) => row.name)
+      .sort()
+    // One per shape PR 4's retrieval seeks: the agent filter, the newest-first
+    // order and date window, and the folder-prefix range scan. Fork folding reads
+    // `content_hash` off rows it already holds, so that column is not indexed.
+    expect(names).toEqual(['sessions_agent', 'sessions_cwd_key', 'sessions_updated_at'])
   } finally {
-    reopened.close()
+    db.close()
   }
-})
-
-describe('visibility views', () => {
-  it('hides a staging session, a tombstoned session and an in-flight batch', async () => {
-    const db = openSessionSearchDatabase(await tempDatabasePath())
-    try {
-      db.exec(`INSERT INTO sessions(id,index_ready,agent,session_id,file_path,title,resume_command)
-        VALUES (1,1,'claude','a','a','published',''),(2,0,'claude','b','b','staging',''),
-               (3,1,'claude','c','c','tombstoned','');
-        INSERT INTO search_pending_deletes(path,session_row_id) VALUES ('c',3);
-        INSERT INTO search_write_batches(id,session_row_id) VALUES (7,1);
-        INSERT INTO messages(id,session_row_id,batch_id,role) VALUES (1,1,NULL,'user'),(2,1,7,'user'),
-               (3,3,NULL,'user')`)
-      expect(db.prepare(`SELECT title FROM ${VISIBLE_SESSIONS} ORDER BY id`).all()).toEqual([
-        { title: 'published' }
-      ])
-      // Row 3 is the one a batch-pointer filter alone would return: its batch is
-      // long gone and only the session-keyed tombstone retires it.
-      expect(db.prepare(`SELECT id FROM ${VISIBLE_MESSAGES} ORDER BY id`).all()).toEqual([
-        { id: 1 }
-      ])
-      // Publish clears the pointer, so visibility never depends on the batch row surviving.
-      db.exec(
-        'UPDATE messages SET batch_id=NULL WHERE batch_id=7; DELETE FROM search_write_batches'
-      )
-      expect(db.prepare(`SELECT count(*) AS n FROM ${VISIBLE_MESSAGES}`).get()).toEqual({ n: 2 })
-    } finally {
-      db.close()
-    }
-  })
-
-  it('subtracts the tombstones through an index rather than scanning them', async () => {
-    const db = openSessionSearchDatabase(await tempDatabasePath())
-    try {
-      for (const view of [VISIBLE_MESSAGES, VISIBLE_SESSIONS]) {
-        const plan = (
-          db.prepare(`EXPLAIN QUERY PLAN SELECT id FROM ${view}`).all() as { detail: string }[]
-        )
-          .map((row) => row.detail)
-          .join(' ')
-        // Without the partial index this reads "SCAN search_pending_deletes",
-        // once per statement, on every read either view serves.
-        expect(plan).toContain('search_pending_deletes_session')
-      }
-    } finally {
-      db.close()
-    }
-  })
 })
 
 it("retries a Windows lock that outlives rmSync's own retries", async () => {
@@ -336,7 +285,9 @@ it("retries a Windows lock that outlives rmSync's own retries", async () => {
   openSessionSearchDatabase(path).close()
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   recordedRmSync.mockReset()
-  const locked = Object.assign(new Error('EPERM: operation not permitted'), { code: 'EPERM' })
+  const locked = Object.assign(new Error('EPERM: operation not permitted'), {
+    code: 'EPERM'
+  })
   recordedRmSync.mockImplementationOnce(() => {
     throw locked
   })

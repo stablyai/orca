@@ -22,11 +22,19 @@ export function cwdKey(cwd: string | null): string | null {
 
 export class SessionSearchFileRecords {
   constructor(private readonly db: SyncDatabase) {}
-  createStagingSession(candidate: SessionFileCandidate): number {
+  /**
+   * The row a read hangs its messages off, before the parser has said what the
+   * session is. Never visible on its own: the same transaction that creates it
+   * either fills it in or, for a chunked read, leaves it holding that read's
+   * own rows and a cursor no append can continue from.
+   */
+  createSessionRow(candidate: SessionFileCandidate): number {
     return Number(
       this.db
-        .prepare(`INSERT INTO sessions(index_ready,agent,session_id,file_path,title,resume_command)
-      VALUES (0,?,'',?,'','')`)
+        .prepare(
+          `INSERT INTO sessions(agent,session_id,file_path,title,resume_command)
+      VALUES (?,'',?,'','')`
+        )
         .run(candidate.agent, candidate.file.path).lastInsertRowid
     )
   }
@@ -56,9 +64,11 @@ export class SessionSearchFileRecords {
       contentHash.count
     ]
     this.db
-      .prepare(`UPDATE sessions SET agent = ?, session_id = ?, file_path = ?, codex_home = ?, title = ?,
+      .prepare(
+        `UPDATE sessions SET agent = ?, session_id = ?, file_path = ?, codex_home = ?, title = ?,
         cwd = ?, cwd_key = ?, branch = ?, created_at = ?, updated_at = ?, message_count = ?, resume_command = ?,
-        content_hash = ?, content_hash_count = ? WHERE id = ?`)
+        content_hash = ?, content_hash_count = ? WHERE id = ?`
+      )
       .run(...values, rowId)
   }
 

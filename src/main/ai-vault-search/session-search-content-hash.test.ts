@@ -5,7 +5,7 @@ import {
   foldContentHash,
   isCollapsibleContentHash
 } from './session-search-content-hash'
-import { userMessages } from './session-search-staged-write-test-fixture'
+import { userMessages } from './session-search-index-test-fixture'
 
 it('reaches the same digest whether the prefix arrives whole or in two appends', () => {
   const messages = userMessages('turn', 5)

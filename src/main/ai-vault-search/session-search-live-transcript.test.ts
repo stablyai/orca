@@ -47,14 +47,14 @@ async function makeTempDir(): Promise<string> {
   return root
 }
 
-/** Sessions a query over the published views would return for one FTS term. */
+/** Sessions a query would return for one FTS term, read on a second handle. */
 function sessionsMatching(term: string, table = 'messages_fts'): string[] {
   return (
     reader
       .prepare(
         `SELECT DISTINCT s.session_id AS id FROM ${table}
-         JOIN visible_messages m ON m.id = ${table}.rowid
-         JOIN visible_sessions s ON s.id = m.session_row_id
+         JOIN messages m ON m.id = ${table}.rowid
+         JOIN sessions s ON s.id = m.session_row_id
          WHERE ${table} MATCH ? ORDER BY s.session_id`
       )
       .all(term) as { id: string }[]
@@ -84,7 +84,9 @@ it('indexes a Claude transcript through the reader and resumes on append', async
   expect(errors).toEqual([])
   expect(sessionsMatching('zygomorphic')).toEqual([SESSION_ID])
   // An append extends one session rather than creating a second.
-  expect(reader.prepare('SELECT count(*) AS n FROM visible_sessions').get()).toEqual({ n: 1 })
+  expect(reader.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
+    n: 1
+  })
 })
 
 it('keeps a tool result searchable but out of the conversation half', async () => {

@@ -9,7 +9,7 @@ import {
   SYNTHETIC_TRANSCRIPT,
   userMessages,
   type SessionSearchIndexFile
-} from './session-search-staged-write-test-fixture'
+} from './session-search-index-test-fixture'
 import { SessionSearchStore, STALE_PATH_LIMIT } from './session-search-store'
 
 let index: SessionSearchIndexFile
@@ -29,8 +29,12 @@ afterEach(async () => {
   await index.close()
 })
 
-function visibleMessages(): number {
-  return (index.db.prepare('SELECT count(*) AS n FROM visible_messages').get() as { n: number }).n
+function indexedMessages(): number {
+  return (
+    index.db.prepare('SELECT count(*) AS n FROM messages').get() as {
+      n: number
+    }
+  ).n
 }
 
 function cursor(): number | undefined {
@@ -38,10 +42,12 @@ function cursor(): number | undefined {
 }
 
 it('appends onto its own cursor and carries the content hash forward', async () => {
-  replayTranscriptRead({ messages: userMessages('first half', 3), outcome: { byteOffset: 100 } })
-  await store.settled()
+  replayTranscriptRead({
+    messages: userMessages('first half', 3),
+    outcome: { byteOffset: 100 }
+  })
   const first = index.db
-    .prepare('SELECT content_hash AS hash, content_hash_count AS count FROM visible_sessions')
+    .prepare('SELECT content_hash AS hash, content_hash_count AS count FROM sessions')
     .get() as { hash: string; count: number }
 
   replayTranscriptRead({
@@ -50,12 +56,11 @@ it('appends onto its own cursor and carries the content hash forward', async () 
     messages: userMessages('second half', 2),
     outcome: { byteOffset: 220 }
   })
-  await store.settled()
 
-  expect(visibleMessages()).toBe(5)
+  expect(indexedMessages()).toBe(5)
   expect(cursor()).toBe(220)
   const second = index.db
-    .prepare('SELECT content_hash AS hash, content_hash_count AS count FROM visible_sessions')
+    .prepare('SELECT content_hash AS hash, content_hash_count AS count FROM sessions')
     .get() as { hash: string; count: number }
   expect(second.count).toBe(first.count + 2)
   expect(second.hash).not.toBe(first.hash)
@@ -70,7 +75,6 @@ it('appends onto a file it read through and decoded no session from', async () =
     messages: userMessages('excluded span', 3),
     outcome: { session: null, byteOffset: 100 }
   })
-  await store.settled()
   expect(cursor()).toBe(100)
   expect(store.takeStale()).toEqual([])
 
@@ -80,16 +84,17 @@ it('appends onto a file it read through and decoded no session from', async () =
     messages: userMessages('decoded at last', 2),
     outcome: { byteOffset: 220 }
   })
-  await store.settled()
 
-  expect(visibleMessages()).toBe(2)
+  expect(indexedMessages()).toBe(2)
   expect(cursor()).toBe(220)
   expect(store.takeStale()).toEqual([])
 })
 
 it('declines an append that starts past its own cursor and records the file', async () => {
-  replayTranscriptRead({ messages: userMessages('indexed span', 3), outcome: { byteOffset: 100 } })
-  await store.settled()
+  replayTranscriptRead({
+    messages: userMessages('indexed span', 3),
+    outcome: { byteOffset: 100 }
+  })
 
   // The session list read further than this index did, so the appended span
   // continues from bytes the index never saw.
@@ -99,9 +104,8 @@ it('declines an append that starts past its own cursor and records the file', as
     messages: userMessages('unseen span', 4),
     outcome: { byteOffset: 1200 }
   })
-  await store.settled()
 
-  expect(visibleMessages()).toBe(3)
+  expect(indexedMessages()).toBe(3)
   expect(cursor()).toBe(100)
   expect(store.takeStale().map((candidate) => candidate.file.path)).toEqual([SYNTHETIC_TRANSCRIPT])
 })
@@ -113,7 +117,6 @@ it('declines a file whose identity changed under the same path', async () => {
     messages: userMessages('original file', 2),
     outcome: { byteOffset: 100 }
   })
-  await store.settled()
 
   replayTranscriptRead({
     candidate: syntheticCandidate({ dev: 1, ino: 77 }),
@@ -122,15 +125,16 @@ it('declines a file whose identity changed under the same path', async () => {
     messages: userMessages('replacement file', 2),
     outcome: { byteOffset: 200 }
   })
-  await store.settled()
 
-  expect(visibleMessages()).toBe(2)
+  expect(indexedMessages()).toBe(2)
   expect(store.takeStale()).toHaveLength(1)
 })
 
 it('never advances the cursor for an incomplete read', async () => {
-  replayTranscriptRead({ messages: userMessages('complete span', 3), outcome: { byteOffset: 100 } })
-  await store.settled()
+  replayTranscriptRead({
+    messages: userMessages('complete span', 3),
+    outcome: { byteOffset: 100 }
+  })
 
   replayTranscriptRead({
     mode: 'append',
@@ -138,12 +142,16 @@ it('never advances the cursor for an incomplete read', async () => {
     messages: userMessages('partial span', 5),
     outcome: { byteOffset: 400, incomplete: true }
   })
-  await store.settled()
-  await store.purgeOlderThan(null)
 
-  expect(visibleMessages()).toBe(3)
+  expect(indexedMessages()).toBe(3)
   expect(cursor()).toBe(100)
-  expect((index.db.prepare('SELECT count(*) AS n FROM messages').get() as { n: number }).n).toBe(3)
+  expect(
+    (
+      index.db.prepare('SELECT count(*) AS n FROM messages').get() as {
+        n: number
+      }
+    ).n
+  ).toBe(3)
   expect(store.takeStale()).toHaveLength(1)
 })
 
@@ -152,34 +160,40 @@ it('indexes nothing at all from a read that was incomplete from the start', asyn
     messages: userMessages('unreachable', 4),
     outcome: { byteOffset: 0, incomplete: true }
   })
-  await store.settled()
-  await store.purgeOlderThan(null)
 
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
-  expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 0 })
+  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
+    n: 0
+  })
+  expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({
+    n: 0
+  })
   expect(cursor()).toBeUndefined()
 })
 
 it('drops a file whose parser returned no session', async () => {
-  replayTranscriptRead({ messages: userMessages('was indexed', 3), outcome: { byteOffset: 100 } })
-  await store.settled()
+  replayTranscriptRead({
+    messages: userMessages('was indexed', 3),
+    outcome: { byteOffset: 100 }
+  })
 
   replayTranscriptRead({
     messages: userMessages('now rejected', 2),
     outcome: { session: null, byteOffset: 300 }
   })
-  await store.settled()
-  await store.purgeOlderThan(null)
 
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
-  expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 0 })
+  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
+    n: 0
+  })
+  expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({
+    n: 0
+  })
   // The file is still read through, so a later scan does not re-read it.
   expect(cursor()).toBe(300)
 })
 
-it('stages nothing for a source whose parser cannot reach the channel', async () => {
+it('writes nothing for a source whose parser cannot reach the channel', async () => {
   // An OpenCode SQLite candidate decodes in a worker, so every read of it is
-  // incomplete; opening a batch per scan would tombstone rows forever.
+  // incomplete, and no re-read would help.
   const candidate = {
     ...syntheticCandidate({ path: '/opencode/opencode.db#session-1' }),
     agent: 'opencode' as const
@@ -189,10 +203,8 @@ it('stages nothing for a source whose parser cannot reach the channel', async ()
     messages: [],
     outcome: { byteOffset: 0, incomplete: true }
   })
-  await store.settled()
 
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
-  expect(index.db.prepare('SELECT count(*) AS n FROM search_pending_deletes').get()).toEqual({
+  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
     n: 0
   })
   expect(store.takeStale()).toEqual([])
@@ -201,18 +213,20 @@ it('stages nothing for a source whose parser cannot reach the channel', async ()
 it('ignores a candidate older than the retention cutoff', async () => {
   store.setRetentionCutoffMs(Date.now())
   replayTranscriptRead({ messages: userMessages('too old', 3) })
-  await store.settled()
 
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
+  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
+    n: 0
+  })
   expect(store.takeStale()).toEqual([])
 })
 
 it('stops writing while the store refuses writes, but remembers what it skipped', async () => {
   store.setAcceptingWrites(false)
   replayTranscriptRead({ messages: userMessages('paused', 3) })
-  await store.settled()
 
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
+  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
+    n: 0
+  })
   expect(errors).toEqual([])
   // A pause is exactly the window in which every read is declined. Forgetting
   // them would leave the whole paused span unindexed with nothing to replay it.
@@ -222,7 +236,6 @@ it('stops writing while the store refuses writes, but remembers what it skipped'
 it('keeps the paused re-read set when the retention window is reconfigured', async () => {
   store.setAcceptingWrites(false)
   replayTranscriptRead({ messages: userMessages('paused', 2) })
-  await store.settled()
   expect(store.pendingFileCount).toBe(1)
 
   // The set records what still has to be read, not what is worth keeping. A
@@ -234,8 +247,9 @@ it('keeps the paused re-read set when the retention window is reconfigured', asy
   store.setAcceptingWrites(true)
   expect(store.takeStale()).toHaveLength(1)
   replayTranscriptRead({ messages: userMessages('outside the window now', 2) })
-  await store.settled()
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
+  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
+    n: 0
+  })
   expect(store.pendingFileCount).toBe(0)
 })
 
@@ -253,8 +267,10 @@ it('drops the oldest record rather than growing without a bound, and says so', (
 })
 
 it('keeps the session list running when the index write fails', async () => {
-  replayTranscriptRead({ messages: userMessages('healthy', 2), outcome: { byteOffset: 100 } })
-  await store.settled()
+  replayTranscriptRead({
+    messages: userMessages('healthy', 2),
+    outcome: { byteOffset: 100 }
+  })
   index.db.exec('DROP TABLE messages_fts')
 
   expect(() =>
@@ -265,30 +281,36 @@ it('keeps the session list running when the index write fails', async () => {
       outcome: { byteOffset: 500 }
     })
   ).not.toThrow()
-  expect(store.failures).toBeGreaterThan(0)
+  expect(errors.length).toBeGreaterThan(0)
   expect(store.takeStale()).toHaveLength(1)
 })
 
 it('unregisters cleanly, leaving later reads unindexed', async () => {
   resetTranscriptConsumersForTests()
   replayTranscriptRead({ messages: userMessages('after unregister', 3) })
-  await store.settled()
 
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
+  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
+    n: 0
+  })
 })
 
 it('drops a removed source and keeps its cursor gone', async () => {
-  replayTranscriptRead({ messages: userMessages('present', 3), outcome: { byteOffset: 100 } })
-  await store.settled()
+  replayTranscriptRead({
+    messages: userMessages('present', 3),
+    outcome: { byteOffset: 100 }
+  })
   store.removeFile(SYNTHETIC_TRANSCRIPT)
-  await store.purgeOlderThan(null)
 
   expect(cursor()).toBeUndefined()
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
-  expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 0 })
+  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
+    n: 0
+  })
+  expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({
+    n: 0
+  })
 })
 
-it('publishes the session metadata the read decoded', async () => {
+it('writes the session metadata the read decoded', async () => {
   replayTranscriptRead({
     messages: userMessages('metadata', 1),
     outcome: {
@@ -303,13 +325,10 @@ it('publishes the session metadata the read decoded', async () => {
       byteOffset: 42
     }
   })
-  await store.settled()
 
   expect(
     index.db
-      .prepare(
-        'SELECT session_id, title, cwd, cwd_key, branch, resume_command FROM visible_sessions'
-      )
+      .prepare('SELECT session_id, title, cwd, cwd_key, branch, resume_command FROM sessions')
       .get()
   ).toEqual({
     session_id: 'abc-123',
@@ -328,7 +347,6 @@ it('keeps a proven file identity when a later read cannot stat it', async () => 
     messages: userMessages('first', 2),
     outcome: { byteOffset: 100 }
   })
-  await store.settled()
 
   // A host that cannot prove identity re-reads the same file.
   replayTranscriptRead({
@@ -338,8 +356,7 @@ it('keeps a proven file identity when a later read cannot stat it', async () => 
     messages: userMessages('second', 2),
     outcome: { byteOffset: 200 }
   })
-  await store.settled()
-  expect(visibleMessages()).toBe(4)
+  expect(indexedMessages()).toBe(4)
 
   // The stored identity survived, so a rename-replace is still detectable.
   replayTranscriptRead({
@@ -349,29 +366,8 @@ it('keeps a proven file identity when a later read cannot stat it', async () => 
     messages: userMessages('replacement', 2),
     outcome: { byteOffset: 300 }
   })
-  await store.settled()
 
-  expect(visibleMessages()).toBe(4)
+  expect(indexedMessages()).toBe(4)
   expect(cursor()).toBe(200)
   expect(store.takeStale()).toHaveLength(1)
-})
-
-it('leaves no batch on disk when a rejected read is the last one before shutdown', async () => {
-  replayTranscriptRead({ messages: userMessages('indexed', 3), outcome: { byteOffset: 100 } })
-  await store.settled()
-
-  // The parser rejects the file, so this read publishes a cursor and tombstones
-  // its own staged rows. Nothing writes after it.
-  replayTranscriptRead({
-    messages: userMessages('rejected', 4),
-    outcome: { session: null, byteOffset: 300 }
-  })
-  await store.settled()
-
-  expect(index.db.prepare('SELECT count(*) AS n FROM search_write_batches').get()).toEqual({ n: 0 })
-  expect(index.db.prepare('SELECT count(*) AS n FROM search_pending_deletes').get()).toEqual({
-    n: 0
-  })
-  expect(index.db.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({ n: 0 })
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({ n: 0 })
 })

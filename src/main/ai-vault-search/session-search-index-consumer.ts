@@ -8,7 +8,7 @@ import {
   type TranscriptReadStart
 } from '../ai-vault/session-transcript-consumers'
 import { fileIdentity } from './session-search-file-cursor'
-import type { SessionSearchStagedWrite } from './session-search-index-writer'
+import type { SessionSearchFileWrite } from './session-search-index-writer'
 import type { SessionSearchStore } from './session-search-store'
 
 /**
@@ -21,8 +21,8 @@ import type { SessionSearchStore } from './session-search-store'
  *
  * - `beginRead` returns null when this index's cursor is behind the offset an
  *   `append` continues from, or when the file's identity changed.
- * - a staging failure stops the read's rows without failing the session list.
- * - an `incomplete` outcome never publishes; those rows are not the whole span.
+ * - a buffering failure stops the read's rows without failing the session list.
+ * - an `incomplete` outcome never commits; those rows are not the whole span.
  */
 export class SessionSearchIndexConsumer implements TranscriptConsumer {
   constructor(private readonly store: SessionSearchStore) {}
@@ -51,12 +51,12 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
         return null
       }
     }
-    const staged = this.store.beginWrite(candidate, start.mode, start.previousByteOffset)
-    if (!staged) {
+    const write = this.store.beginWrite(candidate, start.mode, start.previousByteOffset)
+    if (!write) {
       this.store.markStale(candidate)
       return null
     }
-    return new SessionSearchReadConsumer(this.store, start, staged)
+    return new SessionSearchReadConsumer(this.store, start, write)
   }
 }
 
@@ -66,7 +66,7 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
   constructor(
     private readonly store: SessionSearchStore,
     private readonly start: TranscriptReadStart,
-    private readonly staged: SessionSearchStagedWrite
+    private readonly write: SessionSearchFileWrite
   ) {}
 
   message(message: TranscriptMessage): void {
@@ -74,11 +74,12 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       return
     }
     try {
-      this.staged.add(message)
+      this.write.add(message)
     } catch (error) {
       // Never throws back into the reader: the channel would drop this consumer
-      // for the rest of the read and `finish` would never run, stranding the
-      // staged batch. Failing here keeps the cleanup on one path.
+      // for the rest of the read and `finish` would never run. Failing here
+      // keeps the whole read on one path — the buffer is dropped and the file is
+      // re-read.
       this.failed = true
       this.store.reportWriteFailure(error)
     }
@@ -86,27 +87,19 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
 
   finish(outcome: TranscriptReadOutcome): void {
     const { candidate } = this.start
-    let published = false
+    let committed = false
     try {
       // An incomplete read's rows are not the whole span, so the cursor must not
       // move past them; the file is re-read whole instead.
-      published = !this.failed && !outcome.incomplete && this.staged.publish(outcome)
+      committed = !this.failed && !outcome.incomplete && this.write.commit(outcome)
     } catch (error) {
       this.store.reportWriteFailure(error)
-    } finally {
-      // Before the store is told anything. `discard` is what tombstones the
-      // staged rows of a read that decoded no session, and the store's cleanup
-      // lane reads the tombstone table the moment it is scheduled — telling the
-      // store first left that batch on disk until some later write happened to
-      // schedule another pass, which for the last read before a shutdown is
-      // never.
-      this.staged.discard()
     }
-    if (published) {
-      this.store.writePublished(candidate)
+    if (committed) {
+      this.store.writeCommitted(candidate)
       return
     }
-    this.store.writeAbandoned(candidate)
+    this.store.markStale(candidate)
   }
 }
 

@@ -2,7 +2,6 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import SyncDatabase from '../sqlite/sync-database'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import { recoverSearchWrites } from './session-search-pending-deletes'
 
 // The index stores transcript content as written, with no redaction. A secret in
 // a transcript is already plaintext under the user's home directory and is
@@ -11,7 +10,7 @@ import { recoverSearchWrites } from './session-search-pending-deletes'
 // policy, decided where the wire is.
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 1
+export const SESSION_SEARCH_SCHEMA_VERSION = 2
 
 // unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
 // the `identifiers` column carries the split form (see session-search-identifier-split).
@@ -19,15 +18,10 @@ export const SESSION_SEARCH_SCHEMA_VERSION = 1
 // left out so `#123` still answers a search for `123`.
 const TOKENIZER = `tokenize="unicode61 tokenchars '_.-/+'"`
 
-/** Sessions and messages a read may return: published, not tombstoned. */
-export const VISIBLE_SESSIONS = 'visible_sessions'
-export const VISIBLE_MESSAGES = 'visible_messages'
-
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(
   id INTEGER PRIMARY KEY,
-  index_ready INTEGER NOT NULL DEFAULT 1,
   agent TEXT NOT NULL,
   session_id TEXT NOT NULL,
   -- The transcript this session was decoded from. Not unique: OpenCode's SQLite
@@ -48,7 +42,6 @@ CREATE TABLE IF NOT EXISTS sessions(
   content_hash_count INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS sessions_agent ON sessions(agent);
-CREATE INDEX IF NOT EXISTS sessions_content_hash ON sessions(content_hash);
 CREATE INDEX IF NOT EXISTS sessions_updated_at ON sessions(updated_at);
 CREATE INDEX IF NOT EXISTS sessions_cwd_key ON sessions(cwd_key);
 CREATE TABLE IF NOT EXISTS files(
@@ -62,50 +55,20 @@ CREATE TABLE IF NOT EXISTS files(
 );
 -- Retention walks the expiring end of this column; without it that is a full scan and a sort.
 CREATE INDEX IF NOT EXISTS files_mtime ON files(mtime_ms);
-CREATE TABLE IF NOT EXISTS search_pending_deletes(
-  path TEXT PRIMARY KEY,
-  session_row_id INTEGER NOT NULL,
-  batch_id INTEGER
-);
--- Both views subtract this set on every read; without it each one scans the table.
--- Partial because a batch-keyed tombstone names a session that is still visible.
-CREATE INDEX IF NOT EXISTS search_pending_deletes_session
-  ON search_pending_deletes(session_row_id) WHERE batch_id IS NULL;
--- A row exists only while its batch is in flight; publish clears its messages and deletes it.
-CREATE TABLE IF NOT EXISTS search_write_batches(
-  id INTEGER PRIMARY KEY,
-  session_row_id INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS search_write_batches_session ON search_write_batches(session_row_id);
 CREATE TABLE IF NOT EXISTS messages(
   id INTEGER PRIMARY KEY,
   session_row_id INTEGER NOT NULL,
-  batch_id INTEGER,
   role TEXT NOT NULL,
   ts TEXT
 );
+-- Both the replace delete and the orphan drain walk a session's rows through this.
 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_row_id);
--- Partial: publish nulls batch_id, so all but the in-flight rows would be dead entries.
-CREATE INDEX IF NOT EXISTS messages_batch ON messages(batch_id) WHERE batch_id IS NOT NULL;
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
   user_text, assistant_text, tool_text, identifiers, ${TOKENIZER}, detail=full
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS conversation_fts USING fts5(
   user_text, assistant_text, ${TOKENIZER}, detail=full
 );
--- Why: staged rows must never reach a result. One definition per half, so a new
--- read site cannot forget one; SQLite flattens both into the caller's plan.
--- Both halves subtract the same session-keyed tombstones. A message outlives its
--- session row until the cleanup lane reaches it, so filtering messages on the
--- batch pointer alone would show a replaced generation beside its successor and
--- would keep answering for a file that was already removed.
-CREATE VIEW IF NOT EXISTS ${VISIBLE_SESSIONS} AS SELECT * FROM sessions
-  WHERE index_ready = 1
-    AND id NOT IN (SELECT session_row_id FROM search_pending_deletes WHERE batch_id IS NULL);
-CREATE VIEW IF NOT EXISTS ${VISIBLE_MESSAGES} AS SELECT * FROM messages
-  WHERE batch_id IS NULL
-    AND session_row_id NOT IN
-      (SELECT session_row_id FROM search_pending_deletes WHERE batch_id IS NULL);
 `
 
 /**
@@ -154,9 +117,6 @@ function openExisting(path: string): SyncDatabase {
       'schema_version',
       String(SESSION_SEARCH_SCHEMA_VERSION)
     )
-    // Part of opening, not of using: a batch or staging session that outlived its
-    // writer has to be tombstoned before anything can read or write past it.
-    recoverSearchWrites(db)
     return db
   } catch (error) {
     db?.close()
@@ -186,6 +146,9 @@ function openWithPragmas(path: string): SyncDatabase {
     // Why: only takes effect on an empty file; it is what lets a purge hand pages
     // back in bounded steps instead of a full VACUUM. Set before any table exists.
     db.pragma('auto_vacuum = INCREMENTAL')
+    // The whole consistency model: a file's rows and its cursor land in one
+    // transaction, and a reader on another handle sees the last committed state
+    // of the index rather than a session half way through being rewritten.
     db.pragma('journal_mode = WAL')
     db.pragma('synchronous = NORMAL')
     db.pragma('journal_size_limit = 8388608')
