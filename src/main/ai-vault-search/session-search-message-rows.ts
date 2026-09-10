@@ -86,10 +86,10 @@ export function* searchMessageRows(
 }
 
 /**
- * Writes one row into `messages` and both FTS tables in the caller's
- * transaction, so a message is never present in one table and absent from the
- * other. `tool` rows stay out of `conversation_fts`: that table is the
- * conversation-only half of the split.
+ * Writes one row into `messages` and `messages_fts` in the caller's
+ * transaction, so a message is never present in one and absent from the other.
+ * A conversation-scoped query filters the columns rather than reading a second
+ * table (see the schema).
  */
 export function insertSearchMessage(
   db: SyncDatabase,
@@ -106,18 +106,11 @@ export function insertSearchMessage(
   db.prepare(
     'INSERT INTO messages_fts(rowid,user_text,assistant_text,tool_text,identifiers) VALUES (?,?,?,?,?)'
   ).run(id, user, assistant, tool, identifierShadowText(text))
-  if (message.role !== 'tool') {
-    db.prepare('INSERT INTO conversation_fts(rowid,user_text,assistant_text) VALUES (?,?,?)').run(
-      id,
-      user,
-      assistant
-    )
-  }
 }
 
 /**
- * Deletes up to `limit` of a session's rows from `messages` and both FTS
- * tables, in the caller's transaction, and reports how many went. Bounded
+ * Deletes up to `limit` of a session's rows from `messages` and `messages_fts`,
+ * in the caller's transaction, and reports how many went. Bounded
  * because a retention sweep must not hold one transaction over a whole
  * session; a replace passes no limit, since its rows and their replacements
  * have to land together.
@@ -127,11 +120,9 @@ export function deleteSearchMessages(db: SyncDatabase, sessionId: number, limit 
     .prepare('SELECT id FROM messages WHERE session_row_id = ? LIMIT ?')
     .all(sessionId, limit) as { id: number }[]
   const full = db.prepare('DELETE FROM messages_fts WHERE rowid = ?')
-  const conversation = db.prepare('DELETE FROM conversation_fts WHERE rowid = ?')
   const message = db.prepare('DELETE FROM messages WHERE id = ?')
   for (const { id } of ids) {
     full.run(id)
-    conversation.run(id)
     message.run(id)
   }
   return ids.length

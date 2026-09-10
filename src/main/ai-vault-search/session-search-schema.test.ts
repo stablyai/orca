@@ -63,6 +63,36 @@ describe('openSessionSearchDatabase', () => {
     second.close()
   })
 
+  it('carries one FTS table and throws away an index that carries two', async () => {
+    const path = await tempDatabasePath()
+    const fresh = openSessionSearchDatabase(path)
+    const tables = (): string[] =>
+      (
+        fresh
+          .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_fts'")
+          .all() as { name: string }[]
+      ).map((row) => row.name)
+    expect(tables()).toEqual(['messages_fts'])
+
+    // What an index written before this bump looks like: the second table, and
+    // rows in it. `CREATE TABLE IF NOT EXISTS` would leave both in place, so
+    // only the version bump makes that file go.
+    fresh.exec('CREATE VIRTUAL TABLE conversation_fts USING fts5(user_text, assistant_text)')
+    fresh.prepare("INSERT INTO files(path,byte_offset,mtime_ms) VALUES ('a',1,1)").run()
+    fresh.prepare("UPDATE meta SET value = '3' WHERE key = 'schema_version'").run()
+    fresh.close()
+
+    const rebuilt = openSessionSearchDatabase(path)
+    expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
+    expect(
+      rebuilt
+        .prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'conversation_fts'")
+        .get()
+    ).toEqual({ n: 0 })
+    expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({ c: 0 })
+    rebuilt.close()
+  })
+
   it('replaces the file on a version mismatch instead of dropping tables in place', async () => {
     const path = await tempDatabasePath()
     const stale = openSessionSearchDatabase(path)

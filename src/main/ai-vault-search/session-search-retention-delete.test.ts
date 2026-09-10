@@ -23,10 +23,6 @@ function seed(db: SyncDatabase, id: number, rows: number, mtime: number): void {
       .prepare("INSERT INTO messages(session_row_id,role) VALUES (?,'user')")
       .run(id).lastInsertRowid
     db.prepare('INSERT INTO messages_fts(rowid,user_text) VALUES (?,?)').run(row, 'retentionneedle')
-    db.prepare('INSERT INTO conversation_fts(rowid,user_text) VALUES (?,?)').run(
-      row,
-      'retentionneedle'
-    )
   }
   db.exec('COMMIT')
 }
@@ -95,7 +91,6 @@ it('hides an expiring session at once, then reclaims its rows in bounded steps',
     // The file transaction, then one bounded batch per step until the rows are gone.
     expect(steps).toEqual([0, RETENTION_DELETE_ROWS_PER_STEP, 256, 256, 256, 1])
     expect(count(index.db, 'messages_fts')).toBe(1)
-    expect(count(index.db, 'conversation_fts')).toBe(1)
     expect(count(index.db, 'sessions')).toBe(1)
   } finally {
     await index.close()
@@ -133,7 +128,6 @@ it('finishes an interrupted deletion after reopening', async () => {
     await store.purgeOlderThan(null)
     expect(count(index.db, 'messages')).toBe(0)
     expect(count(index.db, 'messages_fts')).toBe(0)
-    expect(count(index.db, 'conversation_fts')).toBe(0)
   } finally {
     if (!closed) {
       store.close()

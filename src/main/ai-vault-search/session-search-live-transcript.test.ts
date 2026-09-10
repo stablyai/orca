@@ -53,14 +53,14 @@ async function makeTempDir(): Promise<string> {
 }
 
 /** Sessions a query would return for one FTS term, read on a second handle. */
-function sessionsMatching(term: string, table = 'messages_fts'): string[] {
+function sessionsMatching(term: string): string[] {
   return (
     reader
       .prepare(
-        `SELECT DISTINCT s.session_id AS id FROM ${table}
-         JOIN messages m ON m.id = ${table}.rowid
+        `SELECT DISTINCT s.session_id AS id FROM messages_fts
+         JOIN messages m ON m.id = messages_fts.rowid
          JOIN sessions s ON s.id = m.session_row_id
-         WHERE ${table} MATCH ? ORDER BY s.session_id`
+         WHERE messages_fts MATCH ? ORDER BY s.session_id`
       )
       .all(term) as { id: string }[]
   ).map((row) => row.id)
@@ -110,9 +110,10 @@ it('keeps a tool result searchable but out of the conversation half', async () =
   expect(errors).toEqual([])
 
   expect(sessionsMatching('pericardium')).toHaveLength(1)
-  // The prompt is conversation; the command output is not.
-  expect(sessionsMatching('pericardium', 'conversation_fts')).toHaveLength(1)
-  expect(sessionsMatching('rg', 'conversation_fts')).toHaveLength(0)
+  // The prompt is conversation; the command output is not, and the column
+  // filter is what tells them apart.
+  expect(sessionsMatching('{user_text assistant_text}: pericardium')).toHaveLength(1)
+  expect(sessionsMatching('{user_text assistant_text}: rg')).toHaveLength(0)
 })
 
 /** What `start.identity()` returns at each message of one read. */

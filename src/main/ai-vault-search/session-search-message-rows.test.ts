@@ -6,7 +6,7 @@ import {
   type SessionSearchIndexFile
 } from './session-search-index-test-fixture'
 
-/** Every column of both FTS tables, so an assertion cannot miss the shadow terms. */
+/** Every column of the FTS table, so an assertion cannot miss the shadow terms. */
 async function indexedColumns(
   index: SessionSearchIndexFile,
   message: TranscriptMessage
@@ -17,10 +17,7 @@ async function indexedColumns(
   const full = index.db
     .prepare('SELECT user_text, assistant_text, tool_text, identifiers FROM messages_fts')
     .all() as Record<string, string>[]
-  const conversation = index.db
-    .prepare('SELECT user_text, assistant_text FROM conversation_fts')
-    .all() as Record<string, string>[]
-  return [...full, ...conversation].flatMap((row) => Object.values(row))
+  return full.flatMap((row) => Object.values(row))
 }
 
 it('splits an oversized message on a line boundary and keeps every character', () => {
@@ -121,7 +118,7 @@ it('caps a tool row at its head and never caps the conversation', async () => {
   }
 })
 
-it('keeps a tool row out of the conversation half', async () => {
+it('files a tool row under the tool column alone', async () => {
   const index = await openSessionSearchIndexFile('ss-message-rows-tool')
   try {
     for (const row of searchMessageRows([
@@ -130,7 +127,18 @@ it('keeps a tool row out of the conversation half', async () => {
       insertSearchMessage(index.db, 1, row)
     }
     expect(index.db.prepare('SELECT count(*) AS n FROM messages_fts').get()).toEqual({ n: 1 })
-    expect(index.db.prepare('SELECT count(*) AS n FROM conversation_fts').get()).toEqual({ n: 0 })
+    // What makes a conversation-scoped search exclude it: the column filter, not
+    // a second table.
+    expect(
+      index.db
+        .prepare('SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH ?')
+        .get('{user_text assistant_text}: pericardium')
+    ).toEqual({ n: 0 })
+    expect(
+      index.db
+        .prepare('SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH ?')
+        .get('{tool_text}: pericardium')
+    ).toEqual({ n: 1 })
   } finally {
     await index.close()
   }

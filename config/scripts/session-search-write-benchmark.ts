@@ -66,7 +66,6 @@ function tableBytes(db: SyncDatabase): Record<string, number> {
       .reduce((sum, row) => sum + row.bytes, 0)
   return {
     messagesFts: group('messages_fts'),
-    conversationFts: group('conversation_fts'),
     messages: group('messages') - group('messages_fts'),
     sessions: group('sessions'),
     total: rows.reduce((sum, row) => sum + row.bytes, 0)
@@ -137,7 +136,6 @@ try {
               Math.round((corpus.transcriptBytes / (1024 * 1024) / (rebuildMs / 1000)) * 100) / 100,
             bytesPerTranscriptMb: {
               messagesFts: perMb(bytes.messagesFts),
-              conversationFts: perMb(bytes.conversationFts),
               messages: perMb(bytes.messages),
               sessions: perMb(bytes.sessions),
               total: perMb(bytes.total)

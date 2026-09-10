@@ -71,8 +71,7 @@ function counts(db: SyncDatabase): Record<string, number> {
     sessions: one('SELECT count(*) AS n FROM sessions'),
     messages: one('SELECT count(*) AS n FROM messages'),
     files: one('SELECT count(*) AS n FROM files'),
-    full: one('SELECT count(*) AS n FROM messages_fts'),
-    conversation: one('SELECT count(*) AS n FROM conversation_fts')
+    full: one('SELECT count(*) AS n FROM messages_fts')
   }
 }
 
@@ -86,7 +85,7 @@ it('writes a whole read in one transaction', () => {
   expect(errors).toEqual([])
 })
 
-it('writes both FTS tables for every conversational row', () => {
+it('files every row in one FTS table, under the column its role owns', () => {
   replayTranscriptRead({
     messages: [
       { role: 'user', text: 'alpha question', timestamp: null },
@@ -95,12 +94,12 @@ it('writes both FTS tables for every conversational row', () => {
     ]
   })
 
-  // messages_fts carries every row; conversation_fts is the tool-free half.
+  // One table carries all three; the conversation scope is a column filter over
+  // it, which is what the second table used to be.
   expect(counts(index.db).full).toBe(3)
-  expect(counts(index.db).conversation).toBe(2)
   expect(matches(index.db, 'messages_fts', 'gamma')).toBe(1)
-  expect(matches(index.db, 'conversation_fts', 'gamma')).toBe(0)
-  expect(matches(index.db, 'conversation_fts', 'beta')).toBe(1)
+  expect(matches(index.db, 'messages_fts', '{user_text assistant_text}: gamma')).toBe(0)
+  expect(matches(index.db, 'messages_fts', '{user_text assistant_text}: beta')).toBe(1)
 })
 
 it('leaves the index exactly as it found it when a read never finishes', () => {

@@ -83,7 +83,6 @@ try {
           }[]
           for (const { id } of ids) {
             raw.prepare('DELETE FROM messages_fts WHERE rowid=?').run(id)
-            raw.prepare('DELETE FROM conversation_fts WHERE rowid=?').run(id)
           }
           raw.exec('DELETE FROM messages; DELETE FROM sessions; DELETE FROM files; COMMIT')
         } finally {
@@ -111,7 +110,7 @@ try {
       reader = null
       const after = new SyncDatabase(path, { readonly: true })
       try {
-        for (const table of ['messages_fts', 'conversation_fts']) {
+        for (const table of ['messages_fts']) {
           assert.equal(
             (
               after.prepare(`SELECT count(*) AS n FROM ${table}`).get() as {
