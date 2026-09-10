@@ -16,6 +16,7 @@
 export const AGENT_NAMES = [
   'claude',
   'openclaude',
+  'openzoo',
   'codex',
   'copilot',
   'cursor',

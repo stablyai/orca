@@ -44,6 +44,8 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     expect(resolveExplicitTerminalTitleAgentType('✦ Gemini CLI')).toBe('gemini')
     expect(resolveExplicitTerminalTitleAgentType('MiMo Code')).toBe('mimo-code')
     expect(resolveExplicitTerminalTitleAgentType('⠋ OpenClaude')).toBe('openclaude')
+    // Why: the shell titles the pane with the launch line until Claude Code takes over.
+    expect(resolveExplicitTerminalTitleAgentType('openzoo claude')).toBe('openzoo')
     expect(resolveExplicitTerminalTitleAgentType('OMP')).toBe('omp')
   })
 
