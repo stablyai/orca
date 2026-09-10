@@ -5,8 +5,8 @@ import {
   isAgentSessionOptionRejectedError
 } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
 import {
+  claudeCatalogAdmitsModel,
   readClaudeCurrentModel,
-  readClaudeListedModelIds,
   readClaudeModelEffortLevels,
   readClaudeSettingsEffort
 } from './claude-structured-session-options'
@@ -71,11 +71,8 @@ export async function setClaudeStructuredOption(
   // fails every turn with zero tokens, so the acceptance proves nothing and only
   // the catalog does. Restore replays a pick the provider may since have retired,
   // which reaches here with no user error at all.
-  if (input.key === 'model') {
-    const listed = await readClaudeListedModelIds(session, timeoutMs)
-    if (listed && !listed.has(input.value)) {
-      throw new AgentSessionOptionRejectedError(`claude does not offer model ${input.value}`)
-    }
+  if (input.key === 'model' && !(await claudeCatalogAdmitsModel(session, input.value, timeoutMs))) {
+    throw new AgentSessionOptionRejectedError(`claude does not list a model named ${input.value}`)
   }
   const modelWasConfirmed = readClaudeCurrentModel(session).confirmed
   const mutationSequence = ++session.optionMutationSequence
