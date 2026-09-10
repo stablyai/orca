@@ -21,14 +21,32 @@ const CHUNK_TARGET_CHARS = 8000
 const TOOL_ROW_CHARS = 3072
 
 /**
- * Index just past the last whitespace in `[floor, end)`, or -1 when the window
- * holds none. Any Unicode whitespace, not only a newline: a wrapped paragraph, a
- * CJK transcript separated by ideographic spaces and a minified log all chunk on
- * a boundary a tokenizer would have picked anyway.
+ * A character no FTS token can contain, so a cut just past it tears nothing.
+ *
+ * Whitespace alone is not enough. Minified JSON, a base64 blob and a one-line
+ * log all run past 8,000 characters without a space, so a whitespace-only
+ * backoff finds nothing and the cut lands inside whatever word straddles the
+ * target — `pericardium` becomes `perica` in one row and `rdium` in the next,
+ * and the term the user types matches neither.
+ *
+ * Surrogates are excluded so a cut never lands between the two halves of one
+ * astral character. A few of the tokenizer's `tokenchars` (`. - / +`) are
+ * treated as boundaries here even though unicode61 keeps them inside a token:
+ * cutting at one costs the joined form of a path, which is a far smaller loss
+ * than the torn word this exists to prevent, and only in a window that holds no
+ * whitespace at all.
  */
-function lastWhitespaceEnd(text: string, floor: number, end: number): number {
+const TOKEN_BOUNDARY = /[^\p{L}\p{N}_\uD800-\uDFFF]/u
+
+/**
+ * Index just past the last token boundary in `[floor, end)`, or -1 when the
+ * window holds none. Not only a newline: a wrapped paragraph, a CJK transcript
+ * separated by ideographic spaces and a minified log all chunk on a boundary a
+ * tokenizer would have picked anyway.
+ */
+function lastTokenBoundaryEnd(text: string, floor: number, end: number): number {
   for (let at = end - 1; at >= floor; at--) {
-    if (/\s/.test(text[at]!)) {
+    if (TOKEN_BOUNDARY.test(text[at]!)) {
       return at + 1
     }
   }
@@ -37,9 +55,9 @@ function lastWhitespaceEnd(text: string, floor: number, end: number): number {
 
 /**
  * Splits an oversized message into rows of at most `CHUNK_TARGET_CHARS`, cutting
- * at whitespace so no token is torn in half and every word stays searchable.
- * A phrase that straddles two chunks is not matched: chunks are separate FTS
- * rows and FTS5 cannot span them.
+ * on a token boundary so no token is torn in half and every word stays
+ * searchable. A phrase that straddles two chunks is not matched: chunks are
+ * separate FTS rows and FTS5 cannot span them.
  */
 function* textChunks(text: string): Generator<string> {
   if (text.length <= CHUNK_TARGET_CHARS) {
@@ -51,9 +69,9 @@ function* textChunks(text: string): Generator<string> {
     let end = Math.min(text.length, start + CHUNK_TARGET_CHARS)
     if (end < text.length) {
       // Only the second half of the window: backing up further would trade a
-      // torn token for chunks half the size. No whitespace at all in 4,000
+      // torn token for chunks half the size. No boundary at all in 4,000
       // characters is not a word, so the target itself is the honest cut.
-      const split = lastWhitespaceEnd(text, start + CHUNK_TARGET_CHARS / 2, end)
+      const split = lastTokenBoundaryEnd(text, start + CHUNK_TARGET_CHARS / 2, end)
       if (split > start) {
         end = split
       }

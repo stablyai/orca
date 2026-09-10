@@ -70,6 +70,48 @@ it('backs up to any whitespace, not only a newline', () => {
   expect(chunks.join('')).toBe(text)
 })
 
+it('cuts at punctuation when the window holds no whitespace at all', async () => {
+  const index = await openSessionSearchIndexFile('ss-rows-minified')
+  try {
+    // Valid minified JSON, the shape a tool result carries: 8,000 characters
+    // without a single space. The 8,000th lands inside `pericardium`, and a
+    // whitespace-only backoff has nothing in the window to back up to, so it
+    // files `perica` under one row and `rdium` under the next.
+    const text = `{"pad":"${'x'.repeat(7976)}","note":"pericardium"}`
+    expect(JSON.parse(text)).toEqual({ pad: 'x'.repeat(7976), note: 'pericardium' })
+    expect(text.slice(7994, 8005)).toBe('pericardium')
+    expect(/\s/.test(text)).toBe(false)
+
+    const chunks = [...searchMessageRows([{ role: 'user', text, timestamp: null }])]
+    expect(chunks.map((row) => row.text).join('')).toBe(text)
+    for (const row of chunks) {
+      insertSearchMessage(index.db, 1, row)
+    }
+
+    expect(
+      index.db
+        .prepare('SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH ?')
+        .get('pericardium')
+    ).toEqual({ n: 1 })
+  } finally {
+    await index.close()
+  }
+})
+
+it('keeps a 9,000-character identifier whole rather than cutting at its underscores', () => {
+  // `_` sits inside a token for this tokenizer, so it is not a boundary. A
+  // snake_case name that long holds none at all, and the target itself is the
+  // honest cut — backing up to every `_` would file the name in pieces.
+  const text = 'ab_'.repeat(3000)
+  expect(text.length).toBe(9000)
+  const chunks = [...searchMessageRows([{ role: 'user', text, timestamp: null }])].map(
+    (row) => row.text
+  )
+
+  expect(chunks.map((chunk) => chunk.length)).toEqual([8000, 1000])
+  expect(chunks.join('')).toBe(text)
+})
+
 it('still chunks a message that holds no whitespace at all', () => {
   // A 20,000-character token is not a word, so the target itself is the cut and
   // the message is still bounded.
