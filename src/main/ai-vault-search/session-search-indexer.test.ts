@@ -950,22 +950,32 @@ it('sweeps on its cadence without anyone asking', async () => {
 // recent enough to be in the slice, and the rest are the next sweep's to reach.
 it('proves deletions for the newest rows it holds, and leaves the tail to a sweep', async () => {
   const total = 530
-  const paths: string[] = []
-  for (let index = 0; index < total; index++) {
+  const oldest = transcriptPath('00000000-bbbb-4ccc-8ddd-eeeeeeeeeeee')
+  await writeClaudeTranscript(
+    oldest,
+    ['the oldest session'],
+    '00000000-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+  )
+  const longAgo = new Date(Date.now() - total * 60_000)
+  await utimes(oldest, longAgo, longAgo)
+  // Indexed on its own first, so it is the earliest row in the table as well as
+  // the oldest file. A slice that trusted the table's own order rather than the
+  // mtime would take it, and take it first.
+  await newIndexer().start()
+
+  for (let index = 1; index < total; index++) {
     const session = `0000${String(index).padStart(4, '0')}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
     const path = transcriptPath(session)
     await writeClaudeTranscript(path, [`capped session ${index}`], session)
-    // Oldest first, so the file deleted below is at the far end of the slice.
     const at = new Date(Date.now() - (total - index) * 60_000)
     await utimes(path, at, at)
-    paths.push(path)
   }
-  await newIndexer().start()
+  await indexer?.reconcile({ full: true })
   expect(indexedSessionCount()).toBe(total)
 
   // Older than the cap reaches: 530 rows, twelve of them rediscovered by the
   // cycle, leaves 518 undiscovered against a cap of 512.
-  await rm(paths[0] ?? '')
+  await rm(oldest)
   await nextCycle()
   expect(indexedSessionCount()).toBe(total)
 
