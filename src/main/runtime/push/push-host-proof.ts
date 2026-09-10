@@ -1,7 +1,7 @@
 // Why: the push gateway authenticates this host the same way the relay does —
 // a sealed box the host can only open with its X25519 E2EE secret key — but with
 // its own domain strings and a transcript that names the host by fingerprint
-// instead of by account. See docs/reference/mobile-push-contract.md.
+// instead of by account. See cloud/packages/push-contract/src.
 import {
   encodeText,
   equalBytes,

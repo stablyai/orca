@@ -74,6 +74,11 @@ it('preserves legacy workspace cooldown while letting current phones filter befo
       emittedAt: 10250
     }
   ]
-  expect(events.filter(createNotificationStreamFilter())).toEqual([events[0]])
-  expect(events.filter(createNotificationStreamFilter(true))).toEqual(events)
+  const controller = new RuntimeMobileNotificationController()
+  events.forEach((event) => controller.dispatch(event))
+  const recorded = controller.getMissedSince(0)
+  expect(recorded.filter(createNotificationStreamFilter())).toEqual([
+    expect.objectContaining(events[0])
+  ])
+  expect(recorded.filter(createNotificationStreamFilter(true))).toHaveLength(2)
 })

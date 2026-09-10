@@ -1,6 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { writeSecureJsonFile, hardenExistingSecureFile } from '../../shared/secure-file'
+import {
+  writeSecureJsonFile,
+  hardenExistingSecureFile,
+  isUnreadableError
+} from '../../shared/secure-file'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
 
 export type DeliveredNotificationIdentity = {
@@ -15,18 +19,17 @@ const RETENTION_MS = 7 * 86400_000
 export class MobileNotificationDismissalStore {
   private readonly path: string
   private entries: RecordEntry[] = []
+  private unreadable = false
   constructor(userDataPath: string) {
     this.path = join(userDataPath, 'mobile-notification-dismissals.json')
-    if (!existsSync(this.path)) {
-      return
-    }
     try {
       hardenExistingSecureFile(this.path)
       const value: unknown = JSON.parse(readFileSync(this.path, 'utf8'))
       if (Array.isArray(value)) {
         this.entries = value.filter(isEntry).slice(-LIMIT)
       }
-    } catch {
+    } catch (error) {
+      this.unreadable = isUnreadableError(error)
       // Missing history cannot establish that a delivered alert was dismissed.
     }
   }
@@ -71,7 +74,9 @@ export class MobileNotificationDismissalStore {
       })
     }
     next = next.slice(-LIMIT)
-    writeSecureJsonFile(this.path, next)
+    if (!this.unreadable) {
+      writeSecureJsonFile(this.path, next)
+    }
     this.entries = next
   }
 

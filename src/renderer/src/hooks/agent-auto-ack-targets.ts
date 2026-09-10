@@ -19,16 +19,19 @@ export function resolveAutoAckTabTargets(
   options: { floatingPanelVisible: boolean }
 ): AutoAckTabTarget[] {
   const targets: AutoAckTabTarget[] = []
-  if (state.activeView === 'terminal' && state.activeTabId) {
-    targets.push({ tabId: state.activeTabId, worktreeId: state.activeWorktreeId })
-  }
   if (options.floatingPanelVisible) {
     const floatingTabId = state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
-    // Why first-wins on a tab-id collision: tab ids can be claimed by two worktrees
-    // (see active-tab-owner-worktree), and acking under the wrong one strands its unread dot.
-    if (floatingTabId && !targets.some((target) => target.tabId === floatingTabId)) {
+    // The floating pane is on top when two worktrees claim the same tab ID.
+    if (floatingTabId) {
       targets.push({ tabId: floatingTabId, worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
     }
+  }
+  if (
+    state.activeView === 'terminal' &&
+    state.activeTabId &&
+    !targets.some((target) => target.tabId === state.activeTabId)
+  ) {
+    targets.push({ tabId: state.activeTabId, worktreeId: state.activeWorktreeId })
   }
   return targets
 }

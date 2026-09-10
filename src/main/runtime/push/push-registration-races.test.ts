@@ -277,3 +277,18 @@ it('finishes the current snapshot on stop and leaves later work durable for rest
   expect(h.outbox.pending()).toEqual([])
   h.service.stop()
 })
+
+it('reports shutdown as retryable and allows registration after restart', async () => {
+  const h = harness()
+  h.service.stop()
+  expect(await h.service.register({ ...input, deviceId: h.deviceId })).toEqual({
+    registered: false,
+    reason: 'gateway_unreachable'
+  })
+  expect(h.client.registerDevice).not.toHaveBeenCalled()
+  h.service.start()
+  expect(await h.service.register({ ...input, deviceId: h.deviceId })).toMatchObject({
+    registered: true
+  })
+  h.service.stop()
+})

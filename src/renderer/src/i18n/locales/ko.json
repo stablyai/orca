@@ -8647,6 +8647,12 @@
           }
         },
         "notifications": {
+          "agentStatus": {
+            "needsInput": "입력 필요",
+            "working": "작업 중",
+            "stopped": "중지됨",
+            "finished": "완료됨"
+          },
           "search": {
             "aa288005c3": "테스트",
             "ca8faa40d7": "알림",

@@ -1,3 +1,4 @@
+import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type {
   MobilePushRegisterInput,
@@ -13,6 +14,7 @@ import {
 
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
+  legacySocketAllowed?: boolean
   desktopAllowed?: boolean
   desktopAway?: boolean
   emittedAt?: number
@@ -47,6 +49,7 @@ export type MobilePushRegistrar = {
 
 export class RuntimeMobileNotificationController {
   private readonly listeners = new Set<(event: MobileNotificationEvent) => void>()
+  private readonly legacyCooldown = new Map<string, number>()
   private readonly replay = new MobileNotificationReplayBuffer()
   private pushRegistrar: MobilePushRegistrar | null = null
   private dismissalStore: MobileNotificationDismissalStore | null = null
@@ -89,7 +92,20 @@ export class RuntimeMobileNotificationController {
 
   dispatch(event: MobileNotificationEvent): void {
     if (event.type === 'notification') {
-      event = { ...event, desktopAway: getRuntimeDesktopSurface().isAwayForMobileNotifications?.() }
+      // Decide once before recording so reconnect and buffer eviction cannot reset cooldown.
+      const legacySocketAllowed =
+        event.desktopAllowed !== false &&
+        (event.emittedAt === undefined ||
+          reserveNotificationCooldown(
+            this.legacyCooldown,
+            event.worktreeId ?? 'global',
+            event.emittedAt
+          ))
+      event = {
+        ...event,
+        legacySocketAllowed,
+        desktopAway: getRuntimeDesktopSurface().isAwayForMobileNotifications?.()
+      }
     }
     const seq = this.replay.record(event)
     try {

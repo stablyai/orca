@@ -132,8 +132,11 @@ export class DesktopPushService {
         return { registered: false, reason: 'gateway_unreachable' }
       }
     }
-    if (this.registry.getDevice(input.deviceId)?.scope !== 'mobile' || this.stopped) {
+    if (this.registry.getDevice(input.deviceId)?.scope !== 'mobile') {
       return { registered: false, reason: 'not_mobile' }
+    }
+    if (this.stopped) {
+      return { registered: false, reason: 'gateway_unreachable' }
     }
     const result = await this.client.registerDevice(input)
     if (!result.ok) {

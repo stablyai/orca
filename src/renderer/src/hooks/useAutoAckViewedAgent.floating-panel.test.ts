@@ -110,3 +110,22 @@ describe('useAutoAckViewedAgent — floating workspace panel visibility', () => 
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
   })
 })
+
+it('does not acknowledge the regular workspace for a colliding floating tab', () => {
+  vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  seedFloatingCompletion()
+  useAppStore.setState({
+    activeView: 'terminal',
+    activeTabId: FLOATING_TAB_ID,
+    activeWorktreeId: 'regular',
+    unreadAgentCompletionPanes: { [FLOATING_PANE_KEY]: true }
+  })
+  const cleared = vi.spyOn(useAppStore.getState(), 'clearWorktreeUnread')
+  try {
+    renderHook(() => useAutoAckViewedAgent(true))
+    expect(cleared).not.toHaveBeenCalledWith('regular')
+  } finally {
+    cleanup()
+    vi.restoreAllMocks()
+  }
+})

@@ -8679,6 +8679,12 @@
           }
         },
         "notifications": {
+          "agentStatus": {
+            "needsInput": "入力待ち",
+            "working": "処理中",
+            "stopped": "停止",
+            "finished": "完了"
+          },
           "search": {
             "aa288005c3": "テスト",
             "ca8faa40d7": "通知",

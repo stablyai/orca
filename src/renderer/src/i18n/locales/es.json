@@ -8657,6 +8657,12 @@
           }
         },
         "notifications": {
+          "agentStatus": {
+            "needsInput": "necesita información",
+            "working": "trabajando",
+            "stopped": "detenido",
+            "finished": "finalizado"
+          },
           "search": {
             "aa288005c3": "prueba",
             "ca8faa40d7": "notificaciones",

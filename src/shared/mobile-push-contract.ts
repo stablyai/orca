@@ -1,5 +1,5 @@
 // Why: the desktop host, the push gateway, and the phone must agree on these
-// exact strings. See docs/reference/mobile-push-contract.md.
+// exact strings. See cloud/packages/push-contract/src.
 
 export const MOBILE_PUSH_SOURCES = ['agent-task-complete', 'terminal-bell', 'plugin'] as const
 export type MobilePushSource = (typeof MOBILE_PUSH_SOURCES)[number]
@@ -53,6 +53,12 @@ function parseFilter(value: unknown): MobilePushFilter | null {
     return null
   }
   const filter = value as Partial<MobilePushFilter>
+  if (
+    (filter.onlyWhenDesktopAway !== undefined && typeof filter.onlyWhenDesktopAway !== 'boolean') ||
+    (filter.sound !== undefined && typeof filter.sound !== 'boolean')
+  ) {
+    return null
+  }
   return {
     ...(typeof filter.onlyWhenDesktopAway === 'boolean'
       ? { onlyWhenDesktopAway: filter.onlyWhenDesktopAway }
