@@ -39,8 +39,6 @@ export function useHostStatusGates(args: {
   const retryStatus = useCallback(() => setRetry((value) => value + 1), [])
   // Mirrors `loaded` for the effect, which must read it without re-running on every answer.
   const loadedRef = useRef<LoadedHostStatusGates | null>(null)
-  // The client that has produced a readable verdict at least once, across generations.
-  const everVerifiedRef = useRef<RpcClient | null>(null)
   const applyLoaded = useCallback((next: LoadedHostStatusGates) => {
     loadedRef.current = next
     setLoaded(next)
@@ -74,12 +72,10 @@ export function useHostStatusGates(args: {
         previous.hostId === hostId &&
         previous.client === client &&
         previous.generation === generation
-      // Why: a host that already answered once keeps waiting through its bounded retries, so a
-      // single post-cutover hiccup does not bury a live screen under a card it cannot dismiss.
-      // A host that never answered, or one out of retries, settles now and offers Retry.
-      setUnverified(
-        !provenThisGeneration && everVerifiedRef.current === client && delay !== undefined
-      )
+      // Why: a probe with retries left is still pending, so a single hiccup shows the spinner
+      // rather than a card the user cannot dismiss. Only an exhausted ladder settles and offers
+      // Retry. Restores the memory main had in the gate's resolved-host latch.
+      setUnverified(!provenThisGeneration && delay !== undefined)
       if (!provenThisGeneration) {
         applyLoaded({
           hostId,
@@ -120,7 +116,6 @@ export function useHostStatusGates(args: {
         if (hostId && desktopAppVersion) {
           void recordHostAppVersion(hostId, desktopAppVersion)
         }
-        everVerifiedRef.current = client
         applyLoaded({
           hostId,
           client,

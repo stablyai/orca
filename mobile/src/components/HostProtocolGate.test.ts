@@ -77,6 +77,15 @@ function renderedText(renderer: ReactTestRenderer): string {
   return JSON.stringify(renderer.toJSON())
 }
 
+// The recovery card is withheld until the ladder is out, so a card assertion has to run it down.
+async function exhaustStatusRetries(): Promise<void> {
+  for (const delay of [1_000, 2_000, 4_000]) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(delay)
+    })
+  }
+}
+
 describe('HostProtocolGate', () => {
   let renderer: ReactTestRenderer | null = null
 
@@ -255,6 +264,7 @@ describe('HostProtocolGate', () => {
   })
 
   it('offers recovery without mounting routes when a connected host cannot answer the status probe', async () => {
+    vi.useFakeTimers()
     hostClient.current = {
       client: {
         sendRequest: vi.fn().mockResolvedValue({ ok: false, error: { message: 'unavailable' } })
@@ -262,6 +272,7 @@ describe('HostProtocolGate', () => {
       state: 'connected'
     }
     renderer = await renderGate()
+    await exhaustStatusRetries()
     expect(renderedText(renderer)).not.toContain('HostContent')
     expect(renderedText(renderer)).toContain('Unable to verify this host')
     expect(renderedText(renderer)).toContain('Retry')
@@ -393,6 +404,7 @@ describe('HostProtocolGate', () => {
     { protocolVersion: '3', minCompatibleMobileVersion: 3 },
     { protocolVersion: 3, minCompatibleMobileVersion: -1 }
   ])('keeps malformed status %j unknown', async (result) => {
+    vi.useFakeTimers()
     hostClient.current = {
       client: {
         sendRequest: vi.fn().mockResolvedValue({ ok: true, result })
@@ -400,6 +412,7 @@ describe('HostProtocolGate', () => {
       state: 'connected'
     }
     renderer = await renderGate()
+    await exhaustStatusRetries()
     expect(renderedText(renderer)).toContain('Unable to verify this host')
     expect(renderedText(renderer)).not.toContain('Update Orca')
     expect(renderedText(renderer)).not.toContain('HostContent')
@@ -419,6 +432,39 @@ describe('HostProtocolGate', () => {
       expect(renderedText(renderer)).not.toContain('HostContent')
     }
   )
+
+  // Why: a cold start whose first probe fails must not flash the recovery card. main latched
+  // resolved hosts so the overlay never returned; this keeps the spinner until the ladder is out.
+  it('shows the spinner, not the card, while a cold start retries its first failure', async () => {
+    vi.useFakeTimers()
+    const session = new FakeSession('connected')
+    session.sendRequest.mockRejectedValueOnce(new Error('timeout')).mockResolvedValue({
+      id: '1',
+      ok: true,
+      result: { protocolVersion: 3, minCompatibleMobileVersion: 3 }
+    })
+    const client = createStableLogicalRpcClient(session, 'lan')
+    hostClient.current = { client, state: 'connected' }
+    renderer = await renderGate()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    const afterFailure = renderedText(renderer)
+    expect(afterFailure).toContain('Checking host compatibility')
+    expect(afterFailure).not.toContain('Unable to verify this host')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    expect(renderedText(renderer)).not.toContain('Unable to verify this host')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(600)
+    })
+    expect(renderedText(renderer)).toContain('HostContent')
+    expect(session.sendRequest).toHaveBeenCalledTimes(2)
+    client.close()
+  })
 
   // Why (F3): one failed probe must not bury a live terminal under a modal it cannot
   // dismiss; the routes stay mounted and the bounded retries run behind a spinner.
@@ -494,6 +540,7 @@ describe('HostProtocolGate', () => {
     client.close()
   })
   it('ignores an old-generation success after cutover to a refusing session', async () => {
+    vi.useFakeTimers()
     const first = new FakeSession('connected')
     let resolveOld!: (value: Awaited<ReturnType<RpcClient['sendRequest']>>) => void
     first.sendRequest.mockReturnValue(
@@ -520,9 +567,16 @@ describe('HostProtocolGate', () => {
         result: { protocolVersion: 3, minCompatibleMobileVersion: 3 }
       })
     })
+    await exhaustStatusRetries()
     expect(renderedText(renderer)).toContain('Unable to verify this host')
     expect(renderedText(renderer)).not.toContain('HostContent')
-    expect(replacement.sendRequest.mock.calls.map(([method]) => method)).toEqual(['status.get'])
+    // Only the bounded ladder reached the replacement; the late old-generation success did not.
+    expect(replacement.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'status.get',
+      'status.get',
+      'status.get',
+      'status.get'
+    ])
     client.close()
   })
 })
