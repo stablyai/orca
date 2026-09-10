@@ -68,8 +68,17 @@ export type SessionSearchRetirementArgs = {
   enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>>
   /** One readdir per directory per pass, shared with the rest of the pass. */
   listings: SessionSearchDirectoryReader
-  /** Directories walked before the pass moves on; the rest stay watched. */
-  limit?: number
+  /**
+   * Directories this walk may read before the pass moves on.
+   *
+   * Directories, not rows. A row whose walk finds its directory already read is
+   * answered from the pass's cache and costs nothing, so counting rows made an
+   * unreadable directory able to starve the whole walk: five hundred rows under
+   * one EACCES directory are one readdir and five hundred identical
+   * unverifiable verdicts, and a row for a file the user really deleted, sorted
+   * behind them, was never reached on any pass.
+   */
+  directoryLimit?: number
   signal?: AbortSignal
 }
 
@@ -94,7 +103,17 @@ export async function retireDeletedSessionSearchSources(
 ): Promise<SessionSearchRetirement> {
   const { store, paths, signal } = args
   const emptiedRoots = args.emptiedRoots ?? new Set<string>()
-  const limit = args.limit ?? Number.POSITIVE_INFINITY
+  const directoryLimit = args.directoryLimit ?? Number.POSITIVE_INFINITY
+  // Every directory this walk asked for, whether the pass had already read it
+  // or not. What it bounds is real work: a repeat of one already in here is a
+  // map lookup, and only a name that is new to it can cost a readdir.
+  const asked = new Set<string>()
+  const listings: SessionSearchDirectoryReader = {
+    namesIn: (directory, signal) => {
+      asked.add(directory)
+      return args.listings.namesIn(directory, signal)
+    }
+  }
   const retirement: SessionSearchRetirement = {
     retired: [],
     unverifiable: [],
@@ -103,20 +122,26 @@ export async function retireDeletedSessionSearchSources(
   }
   const degraded = new Map<string, string>()
   for (const [index, path] of paths.entries()) {
-    // Why capped: the sweep hands over every path it holds and did not
-    // discover, and under an unmount that is the whole index. What is left
-    // keeps being watched, so the check finishes over the next few passes.
-    if (signal?.aborted || index >= limit) {
-      retirement.unchecked.push(...paths.slice(index))
-      break
-    }
     // A synthetic row names a container and an entry inside it, never a file of
     // its own; walking the row's own path would report every one of them gone.
     const synthetic = splitSyntheticSessionSource(path)
     const filePath = synthetic?.container ?? path
+    // Why capped at all: the sweep hands over every path it holds and did not
+    // discover, and under an unmount that is the whole index. What is left is
+    // simply still undiscovered next pass, so the walk finishes over the ones
+    // that follow rather than holding this one.
+    //
+    // Spent past the bound only by a row that starts somewhere new. One this
+    // walk has already read is answered from the map, so refusing it would buy
+    // nothing and would leave the budget hostage to whichever directory the
+    // rows happened to be sorted by.
+    if (signal?.aborted || (asked.size >= directoryLimit && !asked.has(dirname(filePath)))) {
+      retirement.unchecked.push(...paths.slice(index))
+      break
+    }
     const root = configuredRootFor(filePath, args.roots)
     const containerProof = await proveSource(filePath, root ?? dirname(filePath), {
-      listings: args.listings,
+      listings,
       emptiedRoots,
       signal
     })

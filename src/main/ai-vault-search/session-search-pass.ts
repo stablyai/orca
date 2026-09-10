@@ -33,10 +33,17 @@ import { sessionSearchEnumeratedContainers } from './session-search-synthetic-so
  * recent enough for the window to cover is recent enough to be in this slice,
  * so its deletion is proven on the very next cycle whenever it happened.
  */
-const RETIREMENT_CHECKS_PER_CYCLE = 512
+const RETIREMENT_ROWS_PER_CYCLE = 512
 
-/** One walk each for every row a sweep did not rediscover; see the cycle's note. */
-const RETIREMENT_CHECKS_PER_SWEEP = 512
+/**
+ * Directories either pass may read proving deletions.
+ *
+ * The bound on the walk is readdirs, not rows: rows sharing a directory are one
+ * read and then map lookups, and a directory that answers an error answers it
+ * once for every row under it. Counting rows instead let one unreadable
+ * directory hold the whole walk for as long as it stayed unreadable.
+ */
+const RETIREMENT_DIRECTORIES_PER_PASS = 512
 
 export type SessionSearchPassArgs = {
   store: SessionSearchStore
@@ -145,7 +152,7 @@ export async function runSessionSearchPass(
             ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
             : new Set(),
           listings: args.listings,
-          limit: args.full ? RETIREMENT_CHECKS_PER_SWEEP : RETIREMENT_CHECKS_PER_CYCLE,
+          directoryLimit: RETIREMENT_DIRECTORIES_PER_PASS,
           signal
         })
       : { retired: [], unverifiable: [], unchecked: [], degradedRoots: [] }
@@ -204,6 +211,6 @@ function retirementCandidates(
   return undiscovered
     .filter((row) => roots.some((root) => isUnderScanRoot(row.path, root)))
     .sort((left, right) => right.mtimeMs - left.mtimeMs)
-    .slice(0, RETIREMENT_CHECKS_PER_CYCLE)
+    .slice(0, RETIREMENT_ROWS_PER_CYCLE)
     .map((row) => row.path)
 }

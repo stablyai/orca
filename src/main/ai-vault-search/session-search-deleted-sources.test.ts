@@ -57,7 +57,7 @@ function retire(
     emptiedRoots?: ReadonlySet<string>
     enumeratedContainers?: ReadonlyMap<string, ReadonlySet<string>>
     listings?: SessionSearchDirectoryReader
-    limit?: number
+    directoryLimit?: number
   } = {}
 ) {
   return retireDeletedSessionSearchSources({
@@ -67,7 +67,7 @@ function retire(
     emptiedRoots: options.emptiedRoots,
     enumeratedContainers: options.enumeratedContainers,
     listings: options.listings ?? new SessionSearchDirectoryListings(),
-    limit: options.limit
+    directoryLimit: options.directoryLimit
   })
 }
 
@@ -296,13 +296,52 @@ it('does not index a source whose messages the channel cannot reach', () => {
   ).toBe(false)
 })
 
-it('caps the walks one pass spends and leaves the rest to be checked again', async () => {
-  const paths = ['a', 'b', 'c', 'd'].map((name) => join(harness.claudeProjectDir, name))
-  await mkdir(harness.claudeProjectDir, { recursive: true })
-  const result = await retire(paths, { limit: 2 })
-  expect(result.retired).toEqual(paths.slice(0, 2))
-  expect(result.unchecked).toEqual(paths.slice(2))
+// Round 12, F1. The cap counts directories because that is what costs: rows
+// sharing one are a single read and then map lookups.
+it('caps the directories one pass reads, not the rows it answers', async () => {
+  const roots = [harness.claudeProjectDir]
+  const inside = (folder: string, name: string): string =>
+    join(harness.claudeProjectDir, folder, name)
+  for (const folder of ['one', 'two', 'three']) {
+    await mkdir(join(harness.claudeProjectDir, folder), { recursive: true })
+  }
+  // Four rows in each of three directories: three reads, twelve answers.
+  const paths = ['one', 'two', 'three'].flatMap((folder) =>
+    ['a', 'b', 'c', 'd'].map((name) => inside(folder, name))
+  )
+
+  const result = await retire(paths, { roots, directoryLimit: 2 })
+
+  // Two directories' worth answered, all eight of their rows, and the third
+  // directory's four left for the pass after this one.
+  expect(result.retired).toEqual(paths.slice(0, 8))
+  expect(result.unchecked).toEqual(paths.slice(8))
 })
+
+// The starvation this replaced: an unreadable directory answers `unverifiable`
+// for every row under it and never becomes readable, so a cap on rows let one
+// such directory hold the walk for as long as the permission stayed wrong.
+it.skipIf(!CAN_DENY_READ)(
+  'is not starved by many rows under one unreadable directory',
+  async () => {
+    const locked = join(harness.claudeProjectDir, 'locked')
+    await mkdir(locked, { recursive: true })
+    const blocked = Array.from({ length: 520 }, (_unused, index) =>
+      join(locked, `locked-${index}.jsonl`)
+    )
+    const deleted = join(harness.claudeProjectDir, 'deleted.jsonl')
+    await chmod(locked, 0o000)
+    try {
+      const result = await retire([...blocked, deleted], { directoryLimit: 512 })
+
+      expect(result.retired).toEqual([deleted])
+      expect(result.unverifiable).toHaveLength(blocked.length)
+      expect(result.unchecked).toEqual([])
+    } finally {
+      await chmod(locked, 0o700)
+    }
+  }
+)
 
 it('reads each directory once however many files it is asked about', async () => {
   await mkdir(harness.claudeProjectDir, { recursive: true })

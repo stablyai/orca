@@ -960,6 +960,48 @@ it('sweeps on its cadence without anyone asking', async () => {
 // undiscovered and would be walked every twenty seconds. It proves the newest
 // slice of them instead, capped: a transcript recent enough for the window is
 // recent enough to be in the slice, and the rest are the next sweep's to reach.
+// Round 12, F1. A directory that cannot be listed answers `unverifiable` for
+// every row under it, on every pass, for as long as the permission stays wrong.
+// With the walk capped at rows rather than at directories, five hundred such
+// rows spent the whole budget on one readdir's worth of verdicts and a row for
+// a file the user really deleted, sorted behind them, was never reached: six
+// full sweeps and it was still held.
+it.skipIf(!CAN_DENY_READ)('retires a deleted file behind a block of unreadable rows', async () => {
+  // A healthy project directory, so the root never looks emptied.
+  await writeClaudeTranscript(transcriptPath(), ['a live conversation'], SESSION_ID)
+  const locked = join(harness.roots.claudeProjectsDir ?? '', 'locked')
+  await mkdir(locked, { recursive: true })
+  newIndexer()
+
+  // What an unreadable tree leaves behind: rows the walk can never settle,
+  // planted ahead of the deleted one in the order the table returns them.
+  harness.write((db: SyncDatabase) => {
+    const insert = db.prepare(
+      `INSERT INTO files(path, byte_offset, mtime_ms, size_bytes, state)
+       VALUES (?, 0, ?, 10, 'current')`
+    )
+    for (let index = 0; index < 520; index++) {
+      insert.run(join(locked, `locked-${index}.jsonl`), 1_700_000_000_000 + index)
+    }
+    return insert.run(join(harness.claudeProjectDir, 'deleted.jsonl'), 1_700_000_999_000)
+  })
+  const deleted = join(harness.claudeProjectDir, 'deleted.jsonl')
+  const holdsDeleted = (): boolean => rowFor(deleted) !== undefined
+
+  await chmod(locked, 0o000)
+  try {
+    await indexer?.start()
+
+    expect(holdsDeleted()).toBe(false)
+    // And the block itself is neither retired nor forgotten: unreadable is not
+    // deleted, and the root is named as degraded rather than emptied.
+    expect(indexer?.status().filesIndexed).toBe(521)
+    expect(indexer?.status().phase).toBe('degraded')
+  } finally {
+    await chmod(locked, 0o700)
+  }
+})
+
 it('proves deletions for the newest rows it holds, and leaves the tail to a sweep', async () => {
   const total = 530
   const oldest = transcriptPath('00000000-bbbb-4ccc-8ddd-eeeeeeeeeeee')
