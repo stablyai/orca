@@ -177,14 +177,14 @@ export function hasOutstandingMailboxDelivery(
   )
 }
 
-export function fenceOutstandingMailboxDelivery(
+export function fenceUnacknowledgedMailboxDeliveries(
   this: OrchestrationDb,
   mailboxHandle: string
 ): void {
   this.db
     .prepare(
       `UPDATE deliveries SET fenced = 1
-       WHERE id IN (SELECT id FROM outstanding_deliveries WHERE mailbox_handle = ?)`
+       WHERE mailbox_handle = ? AND acknowledged_at IS NULL AND fenced = 0`
     )
     .run(mailboxHandle)
 }
@@ -195,7 +195,7 @@ export type RoleMailboxDeliveryMethods = {
   getOrCreateMailboxDelivery: typeof getOrCreateMailboxDelivery
   acknowledgeMailboxDelivery: typeof acknowledgeMailboxDelivery
   hasOutstandingMailboxDelivery: typeof hasOutstandingMailboxDelivery
-  fenceOutstandingMailboxDelivery: typeof fenceOutstandingMailboxDelivery
+  fenceUnacknowledgedMailboxDeliveries: typeof fenceUnacknowledgedMailboxDeliveries
 }
 
 export function attachRoleMailboxDelivery(ctor: { prototype: object }): void {
@@ -205,6 +205,6 @@ export function attachRoleMailboxDelivery(ctor: { prototype: object }): void {
     getOrCreateMailboxDelivery,
     acknowledgeMailboxDelivery,
     hasOutstandingMailboxDelivery,
-    fenceOutstandingMailboxDelivery
+    fenceUnacknowledgedMailboxDeliveries
   })
 }

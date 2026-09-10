@@ -72,6 +72,9 @@ describe('derived delivery migration', () => {
       fenced: 0
     })
     expect(db.getDeliveryRaw('history_fence')).toMatchObject({ acknowledged_at: null, fenced: 1 })
+    expect(() => db.acknowledgeRunDelivery({ ...params, deliveryId: 'history_fence' })).toThrow(
+      expect.objectContaining({ code: 'consumer_fenced' })
+    )
     expect(db.getOrCreateRunDelivery(params)?.messages.map((message) => message.id)).toEqual([
       next.id
     ])
@@ -139,6 +142,10 @@ describe('derived delivery migration', () => {
       coordinatorHandle: 'replacement',
       coordinatorPaneKey: 'other:22222222-2222-4222-9222-222222222222'
     })!
+    expect(first.getDeliveryRaw(batch.delivery.id)).toMatchObject({
+      fenced: 1,
+      acknowledged_at: null
+    })
     first.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'next' })
     expect(() => first.getOrCreateRunDelivery(params)).toThrow(
       expect.objectContaining({ code: 'consumer_fenced' })
@@ -211,6 +218,10 @@ describe('derived delivery migration', () => {
           effects: []
         })
       }
+      expect(db.getDeliveryRaw(batch.delivery.id)).toMatchObject({
+        fenced: 1,
+        acknowledged_at: null
+      })
       peer.insertMessage({ runId: run.id, from: 'coord', to: mailboxHandle, subject: 'next' })
       expect(() => db.getOrCreateMailboxDelivery(params)).toThrow(
         expect.objectContaining({ code: 'consumer_fenced' })

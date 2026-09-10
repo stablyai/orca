@@ -1,6 +1,6 @@
 # Orchestration delivery storage
 
-A message records whether it still needs attention (`read`). A delivery records a stable batch ID, ordered message IDs, mailbox, consumer generation, and creation time. Acknowledgement time and fencing record actual events. There is no stored delivery status.
+A message records whether it still needs attention (`read`). A delivery records a stable batch ID, ordered message IDs, mailbox, consumer generation, and creation time. Acknowledgement time records receipt. Fencing permanently revokes an unacknowledged batch when its consumer is replaced or legacy ownership is adopted, independently of message reads. Historical adoption can revoke a batch without changing its generation, so generation validation alone cannot replace this fact. There is no stored delivery status.
 
 `outstanding_deliveries` is a SQLite view, not a table or cached projection. It selects batches that have not been acknowledged or fenced and still contain unread messages. Both consuming checks and notification eligibility query this view.
 
@@ -8,7 +8,7 @@ When completion makes an earlier heartbeat obsolete, only the message changes. I
 
 Acknowledgement marks the batch's messages read and records `acknowledged_at` in one transaction. A first explicit acknowledgement after lifecycle suppression records the actual event; subsequent acknowledgements are idempotent. Suppression never invents an acknowledgement timestamp. An acknowledgement cannot consume newer messages outside the batch.
 
-Creation and acknowledgement use `BEGIN IMMEDIATE` and validate the current consumer inside that transaction. Run coordinators use the Run generation. Workers use the generation on their local Dispatch or federated attachment, according to the caller's existing routing. Loopback federation can contain both records, so the source is explicit. The insertion constraint consults the same view to prevent two outstanding batches in a mailbox, while allowing historical batches.
+Creation and acknowledgement use `BEGIN IMMEDIATE` and validate the current consumer inside that transaction. Worker validation also checks lifecycle state under the same lock, so a settled worker cannot consume mail awaiting rerouting. Run coordinators use the Run generation. Workers use the generation on their local Dispatch or federated attachment, according to the caller's existing routing. Loopback federation can contain both records, so the source is explicit. The insertion constraint consults the same view to prevent two outstanding batches in a mailbox, while allowing historical batches.
 
 ## Migration and compatibility
 
