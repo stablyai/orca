@@ -9,7 +9,8 @@ const GENERATION_KEY = 'index_generation'
 export const SESSION_SEARCH_GENERATION_TRIGGERS = [
   'search_generation_file_insert',
   'search_generation_file_update',
-  'search_generation_file_delete'
+  'search_generation_file_delete',
+  'search_generation_orphan_reclaim'
 ] as const
 
 const BUMP = `INSERT INTO meta(key, value) VALUES ('${GENERATION_KEY}', '1')
@@ -18,17 +19,30 @@ const BUMP = `INSERT INTO meta(key, value) VALUES ('${GENERATION_KEY}', '1')
 /**
  * The fence, as three triggers on `files`.
  *
- * Why `files` and not `sessions` or `messages`. Every transaction the store
- * opens that can change what a search returns writes this table, and nothing
- * else does: a committed read upserts the file's cursor beside its rows, a
- * chunk of a long read upserts the partial sentinel beside its prefix,
- * `removeFile` deletes the row with the session, and retention deletes the
- * file row in the same transaction as the session row. The one write path that
- * does not touch `files` is retention's orphan drain, and that is exactly the
- * one that must not bump: those rows are already unreachable — their session
- * row is gone and every retrieval inner-joins `sessions` — so reclaiming them
- * changes no answer, while bumping would refuse every outstanding cursor once
- * per 256 rows.
+ * Why `files`. Every transaction the store opens that can change what a search
+ * returns writes this table: a committed read upserts the file's cursor beside
+ * its rows, a chunk of a long read upserts the partial sentinel beside its
+ * prefix, `removeFile` deletes the row with the session, and retention deletes
+ * the file row in the same transaction as the session row.
+ *
+ * And why `messages` as well, for orphans only. Retention's second half
+ * reclaims rows whose session row is already gone, and touches neither table
+ * above. It was left unfenced on the argument that those rows answer nothing,
+ * which is true of retrieval and was not true of the whole engine: the typo
+ * repair's dictionary is `messages_vocab`, a view over the FTS b-tree that
+ * lists a term whether or not a reader can reach the rows carrying it, and
+ * reclaiming them moved which word a query was repaired to. The repair now
+ * counts live rows instead, so the common case is fixed at its source; this
+ * trigger is what makes the fence true rather than nearly true, because the
+ * vocabulary still decides which candidates survive its scan limit.
+ *
+ * The `WHEN` clause is what keeps it free. A replace and a `removeFile` delete
+ * a session's rows while its `sessions` row still stands, so neither fires
+ * here, and both already bump through `files`. Only the drain deletes a row
+ * whose session is gone. The cost of the fence is real and worth naming: a
+ * cursor outstanding while a purge runs is refused once per batch, which
+ * `SessionSearchCursorError` reports as `stale-generation` so a caller
+ * re-issues page one rather than showing anyone an error.
  *
  * A trigger rather than a call the writer makes, for two reasons. PR 4 does not
  * own the writer, and more importantly the fence has to hold for writers this
@@ -50,6 +64,10 @@ CREATE TRIGGER IF NOT EXISTS search_generation_file_update AFTER UPDATE ON files
   ${BUMP}
 END;
 CREATE TRIGGER IF NOT EXISTS search_generation_file_delete AFTER DELETE ON files BEGIN
+  ${BUMP}
+END;
+CREATE TRIGGER IF NOT EXISTS search_generation_orphan_reclaim AFTER DELETE ON messages
+WHEN NOT EXISTS (SELECT 1 FROM sessions WHERE id = OLD.session_row_id) BEGIN
   ${BUMP}
 END;
 `

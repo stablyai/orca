@@ -146,10 +146,13 @@ it('moves the generation forward when retention cuts a session loose', async () 
   }
 })
 
-it('leaves the generation alone while a purge reclaims rows nothing can reach', async () => {
-  // The drain writes only `messages`, so it moves nothing. Bumping there would
-  // refuse every outstanding cursor once per batch, for rows whose session row
-  // is already gone and which therefore answer no search.
+it('moves the generation when a purge reclaims rows nothing can reach', async () => {
+  // The drain writes only `messages`, and for a while that was argued to change
+  // no answer. Retrieval never saw those rows; the typo repair's dictionary
+  // did, because `messages_vocab` is a view over the FTS b-tree and lists a
+  // term whether or not a reader can reach it. See
+  // `session-search-orphan-rows.test.ts` for the answer that moved. The price
+  // of fencing it is a cursor refused once per batch while a purge runs.
   const root = await tempRoot()
   const path = join(root, 'index.sqlite')
   const db = reader(path)
@@ -164,7 +167,30 @@ it('leaves the generation alone while a purge reclaims rows nothing can reach', 
     expect(db.prepare('SELECT COUNT(*) AS c FROM messages').get()).not.toEqual({ c: 0 })
     await store.purgeOlderThan(null)
     expect(db.prepare('SELECT COUNT(*) AS c FROM messages').get()).toEqual({ c: 0 })
-    expect(readIndexGeneration(db)).toBe(orphaned)
+    expect(readIndexGeneration(db)).toBeGreaterThan(orphaned)
+  } finally {
+    store.close()
+  }
+})
+
+it("leaves the generation alone when a replace swaps a session's own rows", async () => {
+  // The same trigger must not fire here, or every re-read of a large transcript
+  // would move the generation once per deleted row on top of the one bump its
+  // file record already makes. A replace deletes rows whose session row still
+  // stands, which is what the trigger's `WHEN` clause tests.
+  const root = await tempRoot()
+  const path = join(root, 'index.sqlite')
+  const db = reader(path)
+  const store = new SessionSearchStore(path, (error) => {
+    throw error
+  })
+  try {
+    await indexOneTranscript(root, store)
+    const rows = db.prepare('SELECT COUNT(*) AS c FROM messages').get() as { c: number }
+    const indexed = readIndexGeneration(db)
+    db.prepare('DELETE FROM messages WHERE session_row_id IN (SELECT id FROM sessions)').run()
+    expect(rows.c).toBeGreaterThan(0)
+    expect(readIndexGeneration(db)).toBe(indexed)
   } finally {
     store.close()
   }
