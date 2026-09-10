@@ -119,7 +119,14 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
 
   protected dropDisconnectedPtyRecord(ptyId: string): void {
     // Why: pruning can remove a PTY without the normal exit callback.
-    this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
+    const pty = this.ptysById.get(ptyId)
+    // Remote disconnect is unverifiable; its host-owned status survives until certified exit.
+    const processDeathCertified =
+      pty?.connectionId === null ||
+      this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'exited'
+    if (processDeathCertified) {
+      this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
+    }
     this.advancePtyLifecycleGeneration(ptyId)
     this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
     this.ptysById.delete(ptyId)

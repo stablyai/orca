@@ -395,6 +395,30 @@ describe('headless hook agent-status projection (#11761)', () => {
     statusWiring.statusStore.stop()
   })
 
+  it('keeps an unverifiable remote row when its disconnected PTY record is pruned', async () => {
+    const statusWiring = makeAgentStatusStoreWiring()
+    const runtime = await createRuntimeWithHookRows([], statusWiring)
+    const internals = runtime as unknown as {
+      ptysById: Map<string, { connected: boolean; connectionId: string | null }>
+      dropDisconnectedPtyRecord: (ptyId: string) => void
+    }
+    const pty = internals.ptysById.get(PTY_ID)!
+    pty.connectionId = 'ssh-target'
+    runtime.onPtyData(
+      PTY_ID,
+      '\x1b]9999;{"state":"working","prompt":"remote work","agentType":"claude"}\x07',
+      1
+    )
+    pty.connected = false
+
+    internals.dropDisconnectedPtyRecord(PTY_ID)
+
+    expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ connectionId: 'ssh-target', prompt: 'remote work' })
+    ])
+    statusWiring.statusStore.stop()
+  })
+
   it('evicts a dismissed handle-joined remnant on certified PTY exit', async () => {
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = await createRuntimeWithHookRows([], statusWiring)
