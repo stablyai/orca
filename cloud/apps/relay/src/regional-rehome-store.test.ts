@@ -1709,6 +1709,77 @@ describe('regional rehome assignment state', () => {
     expect(await context.store.claimRegionalRehome()).toBeNull()
     await context.database.close()
   })
+
+  it('clears a stale failure budget when the control is enabled again', async () => {
+    const context = await setup()
+    await activatePreferredSource(context, {
+      userId: 'user-1',
+      relayHostId: 'abcdefghijklmnop'
+    })
+    const attempt = await context.store.claimRegionalRehome()
+    for (let index = 0; index < 3; index++) {
+      await context.store.recordRegionalRehomeDispatchFailure(attempt!.attemptId)
+    }
+    expect(await workerState(context)).toMatchObject({ consecutiveFailures: 3 })
+    const latched = await context.store.inspectRegionalRehomeControl()
+    expect(latched).toMatchObject({ generation: 2, enabled: false })
+
+    await context.store.applyRegionalRehomeControl({
+      expectedGeneration: latched.generation,
+      enabled: true,
+      notBefore: context.now(),
+      ratePerMinute: 10,
+      preferenceMaxAgeMs: 24 * 60 * 60_000,
+      hostCooldownMs: 7 * 24 * 60 * 60_000,
+      drainGraceMs: 60 * 60_000
+    })
+
+    // A budget spent under the previous enable is not evidence about this one.
+    expect(await workerState(context)).toMatchObject({
+      consecutiveFailures: 0,
+      pausedUntil: 0
+    })
+    // One transient failure must not latch the fresh enable straight back off.
+    await context.store.recordRegionalRehomeDispatchFailure(attempt!.attemptId)
+    expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
+      generation: 3,
+      enabled: true
+    })
+    await context.database.close()
+  })
+
+  it('reports the durable disable when the failure budget latches the control off', async () => {
+    const context = await setup()
+    await activatePreferredSource(context, {
+      userId: 'user-1',
+      relayHostId: 'abcdefghijklmnop'
+    })
+    const attempt = await context.store.claimRegionalRehome()
+    const warnings = collectEventWarnings(
+      'orca_relay_regional_rehome_failure_budget_disabled'
+    )
+    try {
+      for (let index = 0; index < 5; index++) {
+        await context.store.recordRegionalRehomeDispatchFailure(attempt!.attemptId)
+      }
+    } finally {
+      warnings.restore()
+    }
+
+    // Only the transition is reported; later failures find the control already off.
+    expect(warnings.entries).toEqual([
+      expect.objectContaining({
+        event: 'orca_relay_regional_rehome_failure_budget_disabled',
+        controlGeneration: 2,
+        consecutiveFailures: 3
+      })
+    ])
+    expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({
+      generation: 2,
+      enabled: false
+    })
+    await context.database.close()
+  })
 })
 
 class TransactionCountingDatabase implements RelayDatabase {
@@ -2064,5 +2135,20 @@ class CellInventoryLockProbe {
       close: async () => undefined
     })
     return decorate(database)
+  }
+}
+
+async function workerState(
+  context: Context
+): Promise<{ consecutiveFailures: number; pausedUntil: number }> {
+  const row = (
+    await context.database.query(
+      `SELECT consecutive_failures, paused_until
+       FROM relay_region_rehome_worker_state WHERE worker_id = 'global'`
+    )
+  )[0]!
+  return {
+    consecutiveFailures: Number(row.consecutive_failures),
+    pausedUntil: Number(row.paused_until)
   }
 }
