@@ -1,4 +1,3 @@
-import { notifyNotificationConsentChanged } from '../notifications/notification-consent-events'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
@@ -29,7 +28,6 @@ export async function loadPushNotificationsEnabled(): Promise<boolean> {
 
 export async function savePushNotificationsEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(NOTIF_KEY, String(enabled))
-  notifyNotificationConsentChanged()
 }
 
 const REMOTE_PUSH_HOST_REGISTRATIONS_KEY = 'orca:remotePushHostRegistrations'

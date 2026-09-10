@@ -289,8 +289,9 @@ Secret Manager names (already exist in `onorca-cloud`): `orca-cloud-push-apns-ke
 - RPC `notifications.unregisterPush` params null → `{ unregistered: boolean }`. Removes the field and
   enqueues a gateway delete in a durable outbox (`src/main/runtime/push/push-unregister-outbox.ts`,
   modelled on `relay-revoke-outbox.ts`). Unpair/revoke (`revokeMobileDevice`) enqueues the same. The
-  drain re-reads the queue as it goes, so a delete queued mid-drain lands in the same pass, and a pass
-  that leaves retryable items schedules an unref'd backoff retry (30 s, doubling, capped at 10 min)
+  drain processes one queue snapshot per pass; every enqueue requests a flush, so the outer loop
+  takes another snapshot for work arriving during a pass. Retryable failures schedule an unref'd
+  backoff retry (30 s, doubling, capped at 10 min)
   instead of waiting for the next launch.
 - Both RPCs added to `runtime-rpc-mobile-method-allowlist.ts`.
 - Push client `src/main/runtime/push/push-gateway-client.ts`: challenge/proof/session with token cache,
@@ -326,7 +327,10 @@ Secret Manager names (already exist in `onorca-cloud`): `orca-cloud-push-apns-ke
   controls native push registration. Hint: “Get agent alerts even when the app is closed.
   Delivered through Orca’s push service and Apple or Google.” Desktop category controls are
   authoritative and are not duplicated as phone overrides. Phone sound and viewing controls remain
-  independent. Consent is stored only in `orca:pushNotificationsEnabled`; a missing preference
+  independent. Settings, onboarding and permission-based opt-in use one consent mutation function.
+  It persists consent and cleanup intent, then schedules reconciliation once without waiting for
+  network completion. A cleanup-intent write failure still schedules reconciliation and reaches the caller.
+  Consent is stored only in `orca:pushNotificationsEnabled`; a missing preference
   remains off, and obsolete test-build push keys do not grant consent. **Only when away from desktop**
   defaults on (180 seconds of OS input idle, or locked). Unknown/headless presence does not suppress; it is never inferred from remote CPU
   activity. The detailed payload disclosure remains in the notification documentation.

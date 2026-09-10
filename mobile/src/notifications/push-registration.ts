@@ -1,5 +1,4 @@
 import { ensureDesktopNotificationChannel } from './desktop-notification-channel'
-import { subscribeNotificationConsent } from './notification-consent-events'
 import { AppState } from 'react-native'
 import { startMobilePushLeaseRenewal } from './mobile-push-lease-renewal'
 import {
@@ -256,6 +255,7 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
   }
 }
 
+// Consent completion covers local persistence; host reconciliation runs in the background.
 export async function setRemotePushEnabled(enabled: boolean): Promise<void> {
   consentGeneration++
   await savePushNotificationsEnabled(enabled)
@@ -270,7 +270,7 @@ export async function setRemotePushEnabled(enabled: boolean): Promise<void> {
       current.pending.clear()
     })
   } finally {
-    await reconcileAllHosts()
+    void reconcileAllHosts()
   }
 }
 
@@ -306,16 +306,12 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
 
 /** A rolled token stops delivering, so re-register every connected host at once. */
 export function startPushTokenSync(): () => void {
-  const stopConsent = subscribeNotificationConsent(() => {
-    void reconcileAllHosts()
-  })
   const stopLease = startMobilePushLeaseRenewal(reconcileAllHosts)
   const stopToken = addPushTokenListener((token) => {
     tokenPromise = Promise.resolve(token)
     void reconcileAllHosts()
   })
   return () => {
-    stopConsent()
     stopLease()
     stopToken()
   }

@@ -116,6 +116,11 @@ it('does not register with stale consent after the user disables notifications d
   const disabled = setRemotePushEnabled(false)
   pending.resolve(token)
   await disabled
+  await vi.waitFor(() =>
+    expect(connection.sendRequest.mock.calls.map(([method]) => method)).toContain(
+      'notifications.unregisterPush'
+    )
+  )
   expect(connection.sendRequest.mock.calls.map(([method]) => method)).not.toContain(
     'notifications.registerPush'
   )
@@ -155,9 +160,12 @@ it('completes disable while native token acquisition remains unresolved, and rej
   attachPushRegistration('host', connection as never)
   await vi.advanceTimersByTimeAsync(0)
   expect(getDevicePushToken).toHaveBeenCalledOnce()
-  const disabled = setRemotePushEnabled(false)
+  await setRemotePushEnabled(false)
+  expect(records().pendingUnregisterHostIds).toEqual(['host'])
+  expect(connection.sendRequest.mock.calls.map(([method]) => method)).not.toContain(
+    'notifications.unregisterPush'
+  )
   await vi.advanceTimersByTimeAsync(2_000)
-  await disabled
   expect(storage.get('orca:pushNotificationsEnabled')).toBe('false')
   expect(records()).toEqual({ registeredHostIds: [], pendingUnregisterHostIds: [] })
   expect(connection.sendRequest.mock.calls.map(([method]) => method)).toContain(
@@ -191,6 +199,7 @@ it('restores registration without reconnect after metadata removal fails, retain
   detach()
   connection.sendRequest.mockClear()
   await setRemotePushEnabled(true)
+  await new Promise((resolve) => setTimeout(resolve, 0))
   expect(connection.sendRequest).not.toHaveBeenCalled()
 })
 
@@ -212,6 +221,7 @@ it('does not revive a connection detached while metadata removal was pending', a
   commit.resolve()
   await removal
   await setRemotePushEnabled(true)
+  await new Promise((resolve) => setTimeout(resolve, 0))
   expect(connection.sendRequest).not.toHaveBeenCalled()
 })
 

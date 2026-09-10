@@ -225,16 +225,9 @@ export class DesktopPushService {
 
   /** Returns true when the pass left behind an item the gateway may still accept. */
   private async drainPending(): Promise<boolean> {
-    const attempted = new Set<string>()
     let retryable = false
-    for (;;) {
-      // Re-read per item: a snapshot taken at loop entry misses anything queued
-      // while an await was in flight, and the outbox swaps arrays on every write.
-      const item = this.outbox.pending().find((candidate) => !attempted.has(candidate.reqId))
-      if (!item) {
-        return retryable
-      }
-      attempted.add(item.reqId)
+    // Every enqueue requests a flush; the outer loop owns work added during this pass.
+    for (const item of this.outbox.pending()) {
       try {
         const deleted = await runKeyedSerializedOperation(
           this.deviceOperations,
@@ -250,6 +243,7 @@ export class DesktopPushService {
         retryable = true
       }
     }
+    return retryable
   }
 
   private async deleteQueued(reqId: string, registrationId: string): Promise<boolean> {
