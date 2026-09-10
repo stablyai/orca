@@ -2,10 +2,16 @@ import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { getAgentSessionOptionCatalog } from '../../../../../../shared/agent-session-option-catalog'
+import {
+  discoveredModelsReplaceSeed,
+  getAgentSessionOptionCatalog
+} from '../../../../../../shared/agent-session-option-catalog'
 import type { FederationAttachStartInput } from '../federation/federation-start-schema'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
-import { resolveWorkerLaunchModelAuthority } from './worker-launch-model-authority'
+import {
+  resolveWorkerLaunchModelAuthority,
+  type WorkerLaunchModelDiscoveryTarget
+} from './worker-launch-model-authority'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createWorkerLaunchReceipt,
@@ -24,6 +30,21 @@ type WorkerStartAgentPlan = {
 
 const COORDINATOR_HOSTED_PLACEMENTS = new Set(['current', 'new-child', 'new-top-level'])
 
+function canResolveWorkerLaunchModelAuthority(
+  agent: string | undefined,
+  model: string | undefined
+): boolean {
+  if (!model || !agent || !isTuiAgent(agent)) {
+    return false
+  }
+  const catalog = getAgentSessionOptionCatalog(agent)
+  return Boolean(
+    catalog?.supportsWorkerLaunchPreferences &&
+    catalog.modelApply.launchArgs &&
+    discoveredModelsReplaceSeed(agent, catalog)
+  )
+}
+
 /**
  * The worktree whose host will run the worker, as a selector the model probe can resolve.
  * A worktree that does not exist yet inherits the coordinator's host, which is where it is made.
@@ -31,8 +52,11 @@ const COORDINATOR_HOSTED_PLACEMENTS = new Set(['current', 'new-child', 'new-top-
 async function resolveLocalLaunchHost(
   runtime: OrcaRuntimeService,
   params: WorkerStartInput
-): Promise<{ selector: string | null; callerWorktreeId?: string }> {
+): Promise<{ selector: WorkerLaunchModelDiscoveryTarget | null; callerWorktreeId?: string }> {
   const requested = params.worktree ?? 'current'
+  if ((requested === 'new-child' || requested === 'new-top-level') && params.repo) {
+    return { selector: { repoSelector: params.repo } }
+  }
   if (!COORDINATOR_HOSTED_PLACEMENTS.has(requested)) {
     return { selector: requested }
   }
@@ -109,7 +133,10 @@ export async function prepareLocalWorkerStart(args: {
       'Creation and setup options apply only to new-child or new-top-level worktrees.'
     )
   }
-  const host: { selector: string | null; callerWorktreeId?: string } = params.model
+  const host: {
+    selector: WorkerLaunchModelDiscoveryTarget | null
+    callerWorktreeId?: string
+  } = canResolveWorkerLaunchModelAuthority(params.agent, params.model)
     ? await resolveLocalLaunchHost(runtime, params)
     : { selector: null }
   const plan = await resolveWorkerStartAgent({
@@ -164,8 +191,7 @@ export async function prepareFederationAttachmentWorkerStart(args: {
     agent: params.agent,
     model: params.model,
     effort: params.effort,
-    // A remote new-top-level worktree has no host to probe until the remote makes it.
-    worktreeSelector: createsWorktree ? null : params.worktree,
+    worktreeSelector: createsWorktree ? { repoSelector: params.repo as string } : params.worktree,
     missingAgentMessage:
       'A configured --agent is required when federated worker-start creates a terminal.'
   })
@@ -177,7 +203,7 @@ async function resolveWorkerStartAgent(args: {
   agent?: string
   model?: string
   effort?: string
-  worktreeSelector: string | null
+  worktreeSelector: WorkerLaunchModelDiscoveryTarget | null
   missingAgentMessage: string
 }): Promise<WorkerStartAgentPlan> {
   if (!args.terminal && (!args.agent || !isTuiAgent(args.agent))) {
@@ -187,22 +213,26 @@ async function resolveWorkerStartAgent(args: {
   if (agent) {
     args.runtime.validateOrchestrationAgentLauncher(agent)
     const catalog = args.model ? getAgentSessionOptionCatalog(agent) : null
+    const launch = resolveWorkerLaunchPreferences({
+      agent,
+      model: args.model,
+      effort: args.effort
+    })
+    if (!catalog || !discoveredModelsReplaceSeed(agent, catalog)) {
+      return { agent, launch }
+    }
     return {
       agent,
       launch: resolveWorkerLaunchPreferences({
         agent,
         model: args.model,
         effort: args.effort,
-        ...(catalog
-          ? {
-              authority: await resolveWorkerLaunchModelAuthority({
-                catalog,
-                agent,
-                runtime: args.runtime,
-                worktreeSelector: args.worktreeSelector
-              })
-            }
-          : {})
+        authority: await resolveWorkerLaunchModelAuthority({
+          catalog,
+          agent,
+          runtime: args.runtime,
+          worktreeSelector: args.worktreeSelector
+        })
       })
     }
   }

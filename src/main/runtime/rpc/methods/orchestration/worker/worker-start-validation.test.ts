@@ -15,17 +15,19 @@ import type { WorkerStartInput } from './worker-start-schema'
  */
 function validationRuntime(): {
   runtime: OrcaRuntimeService
+  discover: ReturnType<typeof vi.fn>
   resolveHostKey: ReturnType<typeof vi.fn>
 } {
   const resolveHostKey = vi.fn(async () => 'local')
+  const discover = vi.fn(async () => ({ success: false, error: 'no CLI' }))
   const runtime = {
     validateOrchestrationAgentLauncher: vi.fn(),
     showTerminal: vi.fn(async () => ({ worktreeId: 'wt_coordinator' })),
     getOrchestrationDispatchAuthority: vi.fn(() => null),
     resolveRuntimeCommitMessageDiscoveryHostKey: resolveHostKey,
-    discoverRuntimeCommitMessageModels: vi.fn(async () => ({ success: false, error: 'no CLI' }))
+    discoverRuntimeCommitMessageModels: discover
   } as unknown as OrcaRuntimeService
-  return { runtime, resolveHostKey }
+  return { runtime, discover, resolveHostKey }
 }
 
 function localParams(overrides: Partial<WorkerStartInput>): WorkerStartInput {
@@ -78,6 +80,22 @@ describe('worker start placement to probe selector', () => {
     }
   )
 
+  it.each(['new-child', 'new-top-level'])(
+    'probes an explicit destination repo for placement %s',
+    async (worktree) => {
+      const { runtime, resolveHostKey } = validationRuntime()
+
+      await prepareLocalWorkerStart({
+        params: localParams({ worktree, name: 'child', repo: 'id:repo_remote' }),
+        createsWorktree: true,
+        runtime
+      })
+
+      expect(resolveHostKey).toHaveBeenCalledWith({ repoSelector: 'id:repo_remote' })
+      expect(runtime.showTerminal).not.toHaveBeenCalled()
+    }
+  )
+
   it('probes the named worktree itself when the placement names one', async () => {
     const { runtime, resolveHostKey } = validationRuntime()
 
@@ -117,6 +135,37 @@ describe('worker start placement to probe selector', () => {
     expect(runtime.showTerminal).not.toHaveBeenCalled()
   })
 
+  it('rejects an unsupported model option before resolving or probing a host', async () => {
+    const { runtime, discover, resolveHostKey } = validationRuntime()
+
+    await expect(
+      prepareLocalWorkerStart({
+        params: localParams({ agent: 'grok', model: 'grok-code-fast-1' }),
+        createsWorktree: false,
+        runtime
+      })
+    ).rejects.toThrow('Agent grok does not support launch-time model selection.')
+
+    expect(runtime.showTerminal).not.toHaveBeenCalled()
+    expect(resolveHostKey).not.toHaveBeenCalled()
+    expect(discover).not.toHaveBeenCalled()
+  })
+
+  it('does not resolve or probe a host for a pass-through model catalog', async () => {
+    const { runtime, discover, resolveHostKey } = validationRuntime()
+
+    const plan = await prepareLocalWorkerStart({
+      params: localParams({ agent: 'codex', model: 'account-only-model' }),
+      createsWorktree: false,
+      runtime
+    })
+
+    expect(plan.launch.preferences).toEqual({ model: 'account-only-model' })
+    expect(runtime.showTerminal).not.toHaveBeenCalled()
+    expect(resolveHostKey).not.toHaveBeenCalled()
+    expect(discover).not.toHaveBeenCalled()
+  })
+
   it('probes the remote worktree a federated attachment names', async () => {
     const { runtime, resolveHostKey } = validationRuntime()
 
@@ -129,7 +178,7 @@ describe('worker start placement to probe selector', () => {
     expect(resolveHostKey).toHaveBeenCalledWith('remote-worktree')
   })
 
-  it('probes nothing for a federated new-top-level, which has no host until the remote makes it', async () => {
+  it('probes the destination repo for a federated new-top-level', async () => {
     const { runtime, resolveHostKey } = validationRuntime()
 
     await prepareFederationAttachmentWorkerStart({
@@ -138,6 +187,6 @@ describe('worker start placement to probe selector', () => {
       runtime
     })
 
-    expect(resolveHostKey).not.toHaveBeenCalled()
+    expect(resolveHostKey).toHaveBeenCalledWith({ repoSelector: 'repo_1' })
   })
 })

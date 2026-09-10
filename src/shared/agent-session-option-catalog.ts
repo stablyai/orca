@@ -96,7 +96,8 @@ export function mergeDiscoveredAuthoritativeModels(
  * Its scope is CLI-probe membership only — what `listModels` stdout claims. A probe that merely
  * extends is, by construction, not a complete list — the Codex catalog says so of itself — so
  * nothing may be refused against it. Both the picker's merge below and `worker-start`'s reject
- * gate read this, so what is offered and what is accepted cannot drift apart.
+ * gate read this to decide whether a negative membership answer is possible. Stable CLI aliases
+ * can remain accepted even when an authoritative picker list does not display them.
  *
  * A live session's own model list is a DIFFERENT authority, outside this function's scope: Codex's
  * app-server `model/list` and Claude's SDK `supportedModels()` each speak for one connected

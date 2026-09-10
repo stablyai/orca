@@ -52,8 +52,8 @@ export function createPendingWorkerLaunchReceipt(args: {
   }
 }
 
-/** `authority` names the ids the executing host's CLI lists. Only a `live` one may refuse a
- *  model: a seed fallback (or no authority at all) means the host was never listed. */
+/** `authority` names the ids the executing host accepts from its live list and known aliases.
+ *  Only a `live` one may refuse; a seed fallback means the host was never listed. */
 export function resolveWorkerLaunchPreferences(args: {
   agent: TuiAgent
   model?: string

@@ -104,6 +104,7 @@ export const GitCommit = WorktreeSelector.extend({
 
 const CommitMessageModelCapability = z.object({
   id: z.string(),
+  resolvedModel: z.string().optional(),
   label: z.string(),
   thinkingLevels: z.array(z.object({ id: z.string(), label: z.string() })).optional(),
   defaultThinkingLevel: z.string().optional()

@@ -138,12 +138,14 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       id: 'fable',
       label: 'Fable',
       description: 'Most capable for the hardest, longest-running tasks',
+      isCliAlias: true,
       options: [claudeEffort(true)]
     },
     {
       id: 'opus',
       label: 'Opus',
       description: 'Best for everyday, complex tasks',
+      isCliAlias: true,
       options: [claudeEffort(true), CLAUDE_FAST_MODE]
     },
     {
@@ -151,12 +153,14 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       label: 'Sonnet',
       description: 'Efficient for routine tasks',
       isDefault: true,
+      isCliAlias: true,
       options: [claudeEffort(true)]
     },
     {
       id: 'haiku',
       label: 'Haiku',
       description: 'Fastest for quick answers',
+      isCliAlias: true,
       options: []
     }
   ],

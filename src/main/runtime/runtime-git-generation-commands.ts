@@ -27,8 +27,10 @@ import { getPullRequestDraftContext } from '../text-generation/pull-request-cont
 import {
   localGitOptionsForTarget,
   runtimeGitRouteForTarget,
-  type RuntimeGitCommandHost
+  type RuntimeGitCommandHost,
+  type RuntimeModelDiscoverySelector
 } from './runtime-git-command-target'
+import { resolveRuntimeModelDiscoveryTarget } from './runtime-model-discovery-target'
 import {
   getRuntimeGitGenerationSettings,
   linkedIssueForTarget,
@@ -254,10 +256,12 @@ export class RuntimeGitGenerationCommands {
   /**
    * Which host a discovery for `worktreeSelector` would run its agent CLI on, in the same
    * `local` / `wsl:<distro>` / `ssh:<id>` vocabulary the renderer caches this fact under. Every
-   * worktree on one host answers the same key, so a caller can cache one probe per host.
+   * workspace or destination repo on one host answers the same key, so callers cache one probe.
    */
-  async resolveRuntimeCommitMessageDiscoveryHostKey(worktreeSelector: string): Promise<string> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+  async resolveRuntimeCommitMessageDiscoveryHostKey(
+    selector: RuntimeModelDiscoverySelector
+  ): Promise<string> {
+    const target = await resolveRuntimeModelDiscoveryTarget(this.host, selector)
     const route = runtimeGitRouteForTarget(target)
     return route.kind === 'ssh'
       ? getCommitMessageModelDiscoveryHostKey(route.connectionId)
@@ -267,11 +271,11 @@ export class RuntimeGitGenerationCommands {
   }
 
   async discoverRuntimeCommitMessageModels(
-    worktreeSelector: string,
+    selector: RuntimeModelDiscoverySelector,
     agentId: string,
     settingsOverride?: Pick<RuntimeCommitMessageSettingsOverride, 'agentCmdOverrides'>
   ): Promise<DiscoverCommitMessageModelsResult> {
-    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const target = await resolveRuntimeModelDiscoveryTarget(this.host, selector)
     const typedAgentId = agentId as TuiAgent
     const agentCommandOverride =
       settingsOverride?.agentCmdOverrides?.[typedAgentId] ??
@@ -284,7 +288,7 @@ export class RuntimeGitGenerationCommands {
       }
       return discoverCommitMessageModelsRemote(
         typedAgentId,
-        target.worktree.path,
+        target.cwd,
         (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
         agentCommandOverride
       )
@@ -300,7 +304,7 @@ export class RuntimeGitGenerationCommands {
     const localOptions = localGitOptionsForTarget(target)
     return localOptions.wslDistro
       ? discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, {
-          cwd: target.worktree.path,
+          cwd: target.cwd,
           wslDistro: localOptions.wslDistro
         })
       : discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)

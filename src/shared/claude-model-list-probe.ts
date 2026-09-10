@@ -24,6 +24,8 @@ export const CLAUDE_MODEL_LIST_ARGS = [
 export type ClaudeListedModel = {
   /** Value the CLI accepts for `--model` and `/model` (e.g. `opus[1m]`). */
   id: string
+  /** Full model id the alias resolves to on this host, also accepted by `--model`. */
+  resolvedModel?: string
   /** The CLI's own picker label (e.g. `Opus (1M context)`). */
   label: string
   /** Names what the value resolves to on this host (e.g. `Opus 5 with 1M context …`). */
@@ -48,6 +50,7 @@ type RawControlResponse = {
 
 type RawListedModel = {
   value?: unknown
+  resolvedModel?: unknown
   displayName?: unknown
   description?: unknown
   supportsEffort?: unknown
@@ -69,6 +72,10 @@ function toListedModel(value: unknown): ClaudeListedModel | null {
     return null
   }
   const label = typeof raw.displayName === 'string' && raw.displayName.trim() ? raw.displayName : id
+  const resolvedModel =
+    typeof raw.resolvedModel === 'string' && raw.resolvedModel.trim()
+      ? raw.resolvedModel.trim()
+      : undefined
   const description =
     typeof raw.description === 'string' && raw.description.trim() ? raw.description : undefined
   const effortLevels =
@@ -77,6 +84,7 @@ function toListedModel(value: unknown): ClaudeListedModel | null {
       : []
   return {
     id,
+    ...(resolvedModel ? { resolvedModel } : {}),
     label,
     ...(description ? { description } : {}),
     effortLevels,

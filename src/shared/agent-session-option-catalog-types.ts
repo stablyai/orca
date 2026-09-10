@@ -50,6 +50,8 @@ export type CatalogModel = {
   label: string
   description?: string
   isDefault?: boolean
+  /** A stable CLI alias accepted when discovery lists it or a bracket-qualified variant. */
+  isCliAlias?: true
   options: CatalogOption[]
 }
 

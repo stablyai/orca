@@ -167,6 +167,27 @@ describe('orchestration worker workspace resolution', () => {
     })
   })
 
+  it('resolves model-discovery hosts from destination repos before a worktree exists', async () => {
+    const remoteRepo = {
+      id: 'repo-remote',
+      path: '/srv/repo',
+      displayName: 'Remote app',
+      badgeColor: 'blue',
+      addedAt: 1,
+      connectionId: 'ssh-1'
+    } satisfies Repo
+    const runtime = new OrcaRuntimeService(
+      makeStore({ repos: [makeStore().getRepos()[0], remoteRepo] }) as never
+    )
+
+    await expect(
+      runtime.resolveRuntimeCommitMessageDiscoveryHostKey({ repoSelector: `id:${REPO_ID}` })
+    ).resolves.toBe('local')
+    await expect(
+      runtime.resolveRuntimeCommitMessageDiscoveryHostKey({ repoSelector: 'id:repo-remote' })
+    ).resolves.toBe('ssh:ssh-1')
+  })
+
   it('does not fall back from the floating terminal sentinel to another workspace', async () => {
     const runtime = new OrcaRuntimeService(makeStore() as never)
 
@@ -272,6 +293,12 @@ describe('orchestration worker workspace resolution', () => {
       await expect(
         runtime.showManagedTerminalWorkspace('id:folder:remote-folder')
       ).resolves.toMatchObject({ id: 'folder:remote-folder', hostId: 'ssh:ssh-folder' })
+      await expect(
+        runtime.resolveRuntimeCommitMessageDiscoveryHostKey('folder:local-folder')
+      ).resolves.toBe('local')
+      await expect(
+        runtime.resolveRuntimeCommitMessageDiscoveryHostKey('id:folder:remote-folder')
+      ).resolves.toBe('ssh:ssh-folder')
     } finally {
       unregisterSshFilesystemProvider('ssh-folder')
     }

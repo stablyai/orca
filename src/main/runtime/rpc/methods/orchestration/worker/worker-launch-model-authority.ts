@@ -4,8 +4,8 @@
  * The agent CLI on the host that will run the worker is the only authority for which ids exist
  * there, so this reuses the same probe the native chat model picker uses
  * (`runtime.discoverRuntimeCommitMessageModels`), which already routes local / WSL / SSH from the
- * worktree selector, and the same catalog policy that decides what the picker offers — so the set
- * `worker-start` accepts is the set the picker lists.
+ * worktree selector. Dynamic membership is combined with stable CLI aliases: a picker need not
+ * display an alias such as `opus`, but the launch flag still accepts it.
  *
  * Two things answer `seed`, which claims no membership at all and so refuses nothing.
  *
@@ -32,7 +32,7 @@ export type WorkerLaunchModelSource = 'live' | 'seed'
 
 export type WorkerLaunchModelAuthority = {
   source: WorkerLaunchModelSource
-  /** The host's whole membership. Empty and meaningless unless `source` is `live`. */
+  /** The host's listed ids plus known CLI aliases. Empty unless `source` is `live`. */
   modelIds: readonly string[]
 }
 
@@ -40,10 +40,12 @@ export type WorkerLaunchModelDiscoveryRuntime = Pick<
   OrcaRuntimeService,
   'discoverRuntimeCommitMessageModels' | 'resolveRuntimeCommitMessageDiscoveryHostKey'
 >
+export type WorkerLaunchModelDiscoveryTarget = string | { repoSelector: string }
 
 const DISCOVERY_TTL_MS = 3 * 60_000
 /** A dispatch may not wait out the probe's own 60s budget; the seed answers past this. */
 const DISCOVERY_BUDGET_MS = 10_000
+const DISCOVERY_BUDGET_EXPIRED = Symbol('worker-launch-model-discovery-budget-expired')
 
 export const SEED_WORKER_LAUNCH_MODEL_AUTHORITY: WorkerLaunchModelAuthority = {
   source: 'seed',
@@ -72,21 +74,34 @@ function liveWorkerLaunchModelAuthority(args: {
   models: readonly CommitMessageModelCapability[]
 }): WorkerLaunchModelAuthority {
   const discovered = args.models.map(discoveredCatalogModel)
+  const listedIds = resolveDiscoveredCatalogModels(args.agent, args.catalog, discovered).map(
+    ({ id }) => id
+  )
+  const listedAliases = args.catalog.models
+    .filter(
+      (model) =>
+        model.isCliAlias && listedIds.some((id) => id === model.id || id.startsWith(`${model.id}[`))
+    )
+    .map(({ id }) => id)
   return {
     source: 'live',
-    modelIds: resolveDiscoveredCatalogModels(args.agent, args.catalog, discovered).map(
-      ({ id }) => id
-    )
+    modelIds: [
+      ...new Set([
+        ...listedIds,
+        ...args.models.flatMap(({ resolvedModel }) => (resolvedModel ? [resolvedModel] : [])),
+        ...listedAliases
+      ])
+    ]
   }
 }
 
 async function probeHostModels(
   runtime: WorkerLaunchModelDiscoveryRuntime,
   agent: TuiAgent,
-  worktreeSelector: string
+  target: WorkerLaunchModelDiscoveryTarget
 ): Promise<readonly CommitMessageModelCapability[] | null> {
   try {
-    const result = await runtime.discoverRuntimeCommitMessageModels(worktreeSelector, agent)
+    const result = await runtime.discoverRuntimeCommitMessageModels(target, agent)
     // `catalogOrigin: 'spec'` is the probe falling back to Orca's own list, not a CLI answer.
     return result.success && result.catalogOrigin === 'probe' && result.models.length > 0
       ? result.models
@@ -96,20 +111,24 @@ async function probeHostModels(
   }
 }
 
-function withDiscoveryBudget(
-  pending: Promise<readonly CommitMessageModelCapability[] | null>
-): Promise<readonly CommitMessageModelCapability[] | null> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(null), DISCOVERY_BUDGET_MS)
+function withDiscoveryDeadline<T>(
+  pending: Promise<T>,
+  deadlineAt: number
+): Promise<T | typeof DISCOVERY_BUDGET_EXPIRED> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => resolve(DISCOVERY_BUDGET_EXPIRED),
+      Math.max(0, deadlineAt - Date.now())
+    )
     timer.unref?.()
     void pending.then(
       (value) => {
         clearTimeout(timer)
         resolve(value)
       },
-      () => {
+      (error) => {
         clearTimeout(timer)
-        resolve(null)
+        reject(error)
       }
     )
   })
@@ -126,29 +145,37 @@ function readCachedModels(scope: string): readonly CommitMessageModelCapability[
 }
 
 /**
- * `worktreeSelector` names the worktree whose host will run the worker; pass null when no
- * worktree exists yet on that host, which leaves the seed as the only honest answer.
+ * `worktreeSelector` names the existing workspace or destination repo whose host will run the
+ * worker. The historical name is retained because workspace callers pass string selectors.
  */
 export async function resolveWorkerLaunchModelAuthority(args: {
   catalog: AgentSessionOptionCatalog
   agent: TuiAgent
   runtime: WorkerLaunchModelDiscoveryRuntime | null
-  worktreeSelector: string | null
+  worktreeSelector: WorkerLaunchModelDiscoveryTarget | null
 }): Promise<WorkerLaunchModelAuthority> {
-  const { catalog, agent, runtime, worktreeSelector } = args
+  const { catalog, agent, runtime, worktreeSelector: target } = args
   // Why: for an agent whose probe only EXTENDS the seed, the host's list is known not to be
   // exhaustive, so it can refuse nothing — and there is correspondingly nothing to ask it.
   if (!discoveredModelsReplaceSeed(agent, catalog)) {
     return SEED_WORKER_LAUNCH_MODEL_AUTHORITY
   }
-  if (!runtime || !worktreeSelector) {
+  if (!runtime || !target) {
     return SEED_WORKER_LAUNCH_MODEL_AUTHORITY
   }
-  // A selector this host cannot resolve (an unknown worktree, a folder workspace) has no host to
-  // ask; the probe would fail the same way, so skip it rather than spend the budget.
+  const deadlineAt = Date.now() + DISCOVERY_BUDGET_MS
+  // A selector this host cannot resolve has no host to ask; the probe would fail the same way, so
+  // skip it rather than spend the budget.
   let hostKey: string
   try {
-    hostKey = await runtime.resolveRuntimeCommitMessageDiscoveryHostKey(worktreeSelector)
+    const resolvedHostKey = await withDiscoveryDeadline(
+      runtime.resolveRuntimeCommitMessageDiscoveryHostKey(target),
+      deadlineAt
+    )
+    if (resolvedHostKey === DISCOVERY_BUDGET_EXPIRED) {
+      return SEED_WORKER_LAUNCH_MODEL_AUTHORITY
+    }
+    hostKey = resolvedHostKey
   } catch (error) {
     // An unresolvable selector and a runtime that no longer carries this method both land here,
     // and only the second makes `--model` validation a permanent no-op. A missing method is the
@@ -166,7 +193,7 @@ export async function resolveWorkerLaunchModelAuthority(args: {
   let pending = inFlightByHost.get(scope)
   if (!pending) {
     // Failures are never cached, so the next dispatch retries rather than inheriting a miss.
-    pending = probeHostModels(runtime, agent, worktreeSelector).then((models) => {
+    pending = probeHostModels(runtime, agent, target).then((models) => {
       inFlightByHost.delete(scope)
       if (models) {
         cachedByHost.set(scope, { expiresAt: Date.now() + DISCOVERY_TTL_MS, models })
@@ -176,8 +203,8 @@ export async function resolveWorkerLaunchModelAuthority(args: {
     inFlightByHost.set(scope, pending)
   }
   // A dispatch that gives up on the budget still leaves the probe running for the next one.
-  const models = await withDiscoveryBudget(pending)
-  return models
+  const models = await withDiscoveryDeadline(pending, deadlineAt)
+  return models && models !== DISCOVERY_BUDGET_EXPIRED
     ? liveWorkerLaunchModelAuthority({ catalog, agent, models })
     : SEED_WORKER_LAUNCH_MODEL_AUTHORITY
 }
@@ -188,7 +215,7 @@ export function describeWorkerLaunchModelRejection(args: {
   authority: WorkerLaunchModelAuthority
 }): string {
   const ids = [...args.authority.modelIds].sort()
-  return `Agent ${args.agent} does not accept model ${args.model}. Accepted ids (listed by the ${args.agent} CLI on the executing host): ${ids.join(', ')}.`
+  return `Agent ${args.agent} does not accept model ${args.model}. Accepted ids for the ${args.agent} CLI on the executing host: ${ids.join(', ')}.`
 }
 
 export function clearWorkerLaunchModelAuthorityCacheForTests(): void {

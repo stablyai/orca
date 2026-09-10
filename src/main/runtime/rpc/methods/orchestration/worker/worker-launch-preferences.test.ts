@@ -30,8 +30,11 @@ describe('orchestration worker launch preferences', () => {
     })
   })
 
-  it('accepts an id only the live CLI list carries, and refuses one it has dropped', () => {
-    const authority = { source: 'live' as const, modelIds: ['opus[1m]'] }
+  it('accepts a listed id and a stable alias, but refuses an unknown id', () => {
+    const authority = {
+      source: 'live' as const,
+      modelIds: ['opus[1m]', 'fable', 'opus', 'sonnet', 'haiku']
+    }
 
     expect(
       resolveWorkerLaunchPreferences({
@@ -41,11 +44,13 @@ describe('orchestration worker launch preferences', () => {
         authority
       }).preferences
     ).toEqual({ model: 'opus[1m]', effort: 'max' })
-    // The live list is the whole membership: a seed id the CLI no longer lists is gone.
+    expect(
+      resolveWorkerLaunchPreferences({ agent: 'claude', model: 'opus', authority }).preferences
+    ).toEqual({ model: 'opus' })
     expect(() =>
-      resolveWorkerLaunchPreferences({ agent: 'claude', model: 'sonnet', authority })
+      resolveWorkerLaunchPreferences({ agent: 'claude', model: 'claude-opus-5', authority })
     ).toThrow(
-      'Agent claude does not accept model sonnet. Accepted ids (listed by the claude CLI on the executing host): opus[1m].'
+      'Agent claude does not accept model claude-opus-5. Accepted ids for the claude CLI on the executing host: fable, haiku, opus, opus[1m], sonnet.'
     )
   })
 
@@ -62,27 +67,25 @@ describe('orchestration worker launch preferences', () => {
     ).toEqual({ model: 'opus[1m]', effort: 'max' })
   })
 
-  it('keeps a seeded model’s own effort menu when the probe advertises fewer levels', () => {
-    // The Codex probe reports one generic level list for every model; narrowing to it would
-    // refuse `ultra` on a warm cache and accept it on a cold one.
-    const authority = { source: 'live' as const, modelIds: ['gpt-5.6-sol'] }
+  it('keeps a seeded alias’s effort menu when live membership accepts it', () => {
+    const authority = { source: 'live' as const, modelIds: ['opus'] }
 
     expect(
       resolveWorkerLaunchPreferences({
-        agent: 'codex',
-        model: 'gpt-5.6-sol',
-        effort: 'ultra',
+        agent: 'claude',
+        model: 'opus',
+        effort: 'max',
         authority
       }).preferences
-    ).toEqual({ model: 'gpt-5.6-sol', effort: 'ultra' })
+    ).toEqual({ model: 'opus', effort: 'max' })
     expect(() =>
       resolveWorkerLaunchPreferences({
-        agent: 'codex',
-        model: 'gpt-5.6-sol',
+        agent: 'claude',
+        model: 'opus',
         effort: 'not-a-level',
         authority
       })
-    ).toThrow('Agent codex model gpt-5.6-sol does not support effort not-a-level.')
+    ).toThrow('Agent claude model opus does not support effort not-a-level.')
   })
 
   it('accepts a seed id when the host could not be listed', () => {
@@ -132,22 +135,6 @@ describe('orchestration worker launch preferences', () => {
       ).toThrow(`does not support effort ${effortValue}`)
     }
   })
-
-  it.each(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex-spark', 'future-codex-model'])(
-    'refuses an unlisted Codex id only once the host has answered: %s',
-    (model) => {
-      expect(resolveWorkerLaunchPreferences({ agent: 'codex', model }).preferences).toEqual({
-        model
-      })
-      expect(() =>
-        resolveWorkerLaunchPreferences({
-          agent: 'codex',
-          model,
-          authority: { source: 'live', modelIds: ['gpt-5.6-sol'] }
-        })
-      ).toThrow(`Agent codex does not accept model ${model}.`)
-    }
-  )
 
   it('rejects effort without a model', () => {
     expect(() => resolveWorkerLaunchPreferences({ agent: 'codex', effort: 'high' })).toThrow(
