@@ -1,3 +1,4 @@
+import { clearDatabaseTabPassword } from '@/components/database/database-tab-credentials'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { collapseGroupLayout } from './tabs-layout'
 import {
@@ -35,6 +36,9 @@ export function createTabsCloseActions(
         return { closedTabId: tabId, wasLastTab, worktreeId }
       }
 
+      if (tab.contentType === 'database') {
+        clearDatabaseTabPassword(tab.id)
+      }
       const dedupedGroupOrder = dedupeTabOrder(group.tabOrder)
       const remainingOrder = dedupeTabOrder(dedupedGroupOrder.filter((id) => id !== tabId))
       const wasLastTab = remainingOrder.length === 0

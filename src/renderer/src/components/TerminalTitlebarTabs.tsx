@@ -3,6 +3,8 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '../store'
 import TabBar from './tab-bar/TabBar'
 import type { TerminalController } from './use-terminal-controller'
+import { focusDatabaseTab } from './database/database-tab-actions'
+import { createWorkspaceTabCloseCommands } from './tab-group/workspace-tab-close-commands'
 
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 
@@ -91,10 +93,19 @@ export function TerminalTitlebarTabs({
           : null
       }
       activeTabType={activeTabType}
+      activeDatabaseTabId={
+        activeTabType === 'database'
+          ? useAppStore.getState().getActiveTab(renderedActiveWorktreeId)?.id
+          : null
+      }
       onActivateFile={(fileId) => {
         const unifiedTabs =
           useAppStore.getState().unifiedTabsByWorktree[renderedActiveWorktreeId ?? ''] ?? []
         const unifiedTab = unifiedTabs.find((tab) => tab.id === fileId)
+        if (unifiedTab?.contentType === 'database') {
+          focusDatabaseTab(fileId)
+          return
+        }
         if (unifiedTab?.contentType === 'simulator') {
           setActiveTab(fileId)
           setActiveTabType('simulator')
@@ -103,7 +114,18 @@ export function TerminalTitlebarTabs({
         setActiveFile(fileId)
         setActiveTabType('editor')
       }}
-      onCloseFile={handleCloseFile}
+      onCloseFile={(id) => {
+        const groupTabs =
+          useAppStore.getState().unifiedTabsByWorktree[renderedActiveWorktreeId] ?? []
+        if (groupTabs.some((tab) => tab.id === id && tab.contentType === 'database')) {
+          createWorkspaceTabCloseCommands({
+            worktreeId: renderedActiveWorktreeId,
+            groupTabs
+          }).closeItem(id)
+        } else {
+          handleCloseFile(id)
+        }
+      }}
       onActivateBrowserTab={handleActivateBrowserTab}
       onCloseBrowserTab={handleCloseBrowserTab}
       onDuplicateBrowserTab={handleDuplicateBrowserTab}

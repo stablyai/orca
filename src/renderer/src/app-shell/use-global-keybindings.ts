@@ -188,6 +188,10 @@ export function useGlobalKeybindings(args: {
       }
 
       // Skip editable surfaces so TipTap's Cmd+B bold works; this renderer-side fallback covers the blur→press IPC race (docs/markdown-cmd-b-bold-design.md).
+      const handlers = createAppCommandHandlers(state, input, context)
+      if (matchShortcut('workspace.openDatabase') && handlers.get('workspace.openDatabase')?.()) {
+        return
+      }
       if (isEditableTarget(input.target)) {
         return
       }
@@ -235,7 +239,6 @@ export function useGlobalKeybindings(args: {
         }
       }
 
-      const handlers = createAppCommandHandlers(state, input, context)
       if (matchShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
         return
       }

@@ -24,6 +24,7 @@ export function createTabsSecondaryActions(
         customLabel: init?.customLabel ?? tab.customLabel,
         color: init?.color ?? tab.color,
         isPinned: init?.isPinned ?? tab.isPinned,
+        database: init?.database ?? tab.database,
         id: init?.id,
         targetGroupId
       })

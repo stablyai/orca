@@ -1,6 +1,7 @@
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
 import type { AgentType } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
+import type { DatabaseTabState } from './database-types'
 
 // ─── Tab Group Layout ───────────────────────────────────────────────
 export type TabGroupSplitDirection = 'horizontal' | 'vertical'
@@ -26,6 +27,7 @@ export type TabContentType =
   | 'agent-session'
   | 'browser'
   | 'simulator'
+  | 'database'
 
 export type WorkspaceVisibleTabType =
   | 'terminal'
@@ -33,6 +35,7 @@ export type WorkspaceVisibleTabType =
   | 'agent-session'
   | 'browser'
   | 'simulator'
+  | 'database'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 // Why: many-to-one — every editor-family kind collapses to 'editor'. Never invert it by equality;
@@ -42,7 +45,8 @@ export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleT
     contentType === 'agent-session' ||
     contentType === 'browser' ||
     contentType === 'terminal' ||
-    contentType === 'simulator'
+    contentType === 'simulator' ||
+    contentType === 'database'
   ) {
     return contentType
   }
@@ -68,6 +72,8 @@ export type Tab = {
   createdAt: number
   isPreview?: boolean // preview tabs get replaced by next single-click open
   isPinned?: boolean // pinned tabs survive "close others"
+  /** Connection metadata and query draft; credentials stay outside session state. */
+  database?: DatabaseTabState
   /** Provider backing a structured agent-session tab. */
   agentSessionAgent?: AgentType
   /** Structured session adopted from this terminal's Codex TUI. */

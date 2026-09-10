@@ -1,5 +1,8 @@
+import type { TabBarCreateMenuController } from './tab-bar-create-menu-controller-types'
+export type { TabBarCreateMenuController } from './tab-bar-create-menu-controller-types'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { openDatabaseTab } from '../database/database-tab-actions'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -12,10 +15,7 @@ import { useAppStore } from '../../store'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
-import {
-  buildWindowsShellMenuEntries,
-  type WindowsShellMenuEntry
-} from './tab-bar-windows-shell-options'
+import { buildWindowsShellMenuEntries } from './tab-bar-windows-shell-options'
 import type {
   getProjectRuntimeShellMenuMode,
   resolveWindowsPowerShellImplementationSetting
@@ -23,22 +23,6 @@ import type {
 
 const NEW_TAB_MENU_TERMINAL_FOCUS_RETRY_MS = 50
 const NEW_TAB_MENU_TERMINAL_FOCUS_TIMEOUT_MS = 5000
-
-export type TabBarCreateMenuController = {
-  newTabMenuOpen: boolean
-  setNewTabMenuOpen: (open: boolean) => void
-  setCreateMenuQuery: (query: string) => void
-  createMenuOptions: TabCreateMenuOption[]
-  windowsShellEntries: WindowsShellMenuEntry[] | undefined
-  handleSelectCreateMenuOption: (option: TabCreateMenuOption) => void
-  launchAgentFromNewTabEntry: (agent: TuiAgent) => void
-  runPendingNewTabMenuFocusAfterClose: () => void
-  clearPendingNewTabMenuFocusOnUnmount: (node: HTMLDivElement | null) => void
-  queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void
-  queueTerminalTabFocusAfterNewTabMenuClose: (tabId: string) => void
-  queueFocusAfterNewTabMenuClose: (focus: () => void) => void
-  showStaticCreateMenuItems: boolean
-}
 
 export function useTabBarCreateMenuController({
   worktreeId,
@@ -58,6 +42,7 @@ export function useTabBarCreateMenuController({
   onNewTerminalWithShell,
   onNewBrowserTab,
   onNewSimulatorTab,
+  onNewDatabaseTab,
   onNewFileTab,
   onOpenFileTab
 }: {
@@ -80,6 +65,7 @@ export function useTabBarCreateMenuController({
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
   onNewSimulatorTab?: () => void
+  onNewDatabaseTab?: () => void
   onNewFileTab?: () => void
   onOpenFileTab?: () => void
 }): TabBarCreateMenuController {
@@ -165,6 +151,7 @@ export function useTabBarCreateMenuController({
         terminalOnly,
         windowsShellEntries,
         hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
+        hasNewDatabase: !terminalOnly,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
         hasSimulator:
@@ -204,6 +191,13 @@ export function useTabBarCreateMenuController({
             windowsTerminalCapabilities.pwshAvailable
           )
         )
+        break
+      case 'new-database':
+        if (onNewDatabaseTab) {
+          onNewDatabaseTab()
+        } else {
+          openDatabaseTab(worktreeId, resolvedGroupId)
+        }
         break
       case 'new-browser':
         onNewBrowserTab()

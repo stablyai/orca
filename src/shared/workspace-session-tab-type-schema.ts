@@ -8,7 +8,8 @@ export const tabContentTypeSchema = z.enum([
   'check-details',
   'agent-session',
   'browser',
-  'simulator'
+  'simulator',
+  'database'
 ])
 
 export const workspaceVisibleTabTypeSchema = z.enum([
@@ -16,5 +17,6 @@ export const workspaceVisibleTabTypeSchema = z.enum([
   'editor',
   'agent-session',
   'browser',
-  'simulator'
+  'simulator',
+  'database'
 ])

@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  Database,
   FilePlus,
   FileText,
   GitCompare,
@@ -143,6 +144,9 @@ function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']
   if (contentType === 'browser') {
     return <BrowserFavicon faviconUrl={option.faviconUrl} className="size-3.5" />
   }
+  if (contentType === 'database') {
+    return <Database className="size-3.5 shrink-0" aria-hidden="true" />
+  }
   if (contentType === 'simulator') {
     return <Smartphone className="size-3.5 shrink-0" aria-hidden="true" />
   }
@@ -164,7 +168,9 @@ function getActionPresentation(
 } {
   if (option.kind === 'menu') {
     const icon =
-      option.option.kind === 'new-browser' ? (
+      option.option.kind === 'new-database' ? (
+        <Database className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'new-browser' ? (
         <Globe className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-markdown' ? (
         <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />

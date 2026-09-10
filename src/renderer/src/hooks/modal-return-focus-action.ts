@@ -18,6 +18,7 @@ export type ModalReturnFocusAction =
   | { kind: 'terminal'; tabId: string; leafId: string | null }
   | { kind: 'editor' }
   | { kind: 'simulator' }
+  | { kind: 'database' }
   | { kind: 'surface' }
   | { kind: 'none' }
 
@@ -41,6 +42,9 @@ export function resolveModalReturnFocusAction(
   }
   if (captured.tabType === 'simulator' && captured.worktreeId) {
     return { kind: 'simulator' }
+  }
+  if (captured.tabType === 'database' && captured.worktreeId) {
+    return { kind: 'database' }
   }
   if (captured.worktreeId) {
     return { kind: 'surface' }

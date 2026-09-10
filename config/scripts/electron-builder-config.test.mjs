@@ -14,6 +14,10 @@ const FpmTarget = require('app-builder-lib/out/targets/FpmTarget').default
 const electronBuilderNativeRebuild = require('./electron-builder-native-rebuild.cjs')
 
 describe('electron-builder config', () => {
+  it('includes PostgreSQL and its cursor dependency in the packaged runtime', () => {
+    const { PACKAGED_RUNTIME_PACKAGE_ROOTS } = require('../packaged-runtime-node-modules.cjs')
+    expect(PACKAGED_RUNTIME_PACKAGE_ROOTS).toEqual(expect.arrayContaining(['pg', 'pg-cursor']))
+  })
   it('keeps the packaged app identity aligned with local-build validation', () => {
     expect(electronBuilderConfig.appId).toBe(
       require('../../src/shared/local-build-compatibility-contract.json').appId

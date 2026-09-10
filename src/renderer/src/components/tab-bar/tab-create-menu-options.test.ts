@@ -15,6 +15,7 @@ describe('tab create menu options', () => {
   const defaultOptions = buildTabCreateMenuOptions({
     terminalOnly: false,
     hasNewBrowser: true,
+    hasNewDatabase: true,
     hasNewMarkdown: true,
     hasOpenMarkdown: true,
     hasSimulator: true,
@@ -51,6 +52,9 @@ describe('tab create menu options', () => {
     expect(
       findMatchingTabCreateMenuOptions('browser', defaultOptions).map((option) => option.kind)
     ).toEqual(['new-browser'])
+    expect(
+      findMatchingTabCreateMenuOptions('sql', defaultOptions).map((option) => option.kind)
+    ).toEqual(['new-database'])
   })
 
   it('keeps terminal and markdown results when client-impossible actions are omitted', () => {

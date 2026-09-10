@@ -16,6 +16,7 @@ export function createTabsLabelActions(
   TabsSlice,
   | 'reorderUnifiedTabs'
   | 'setTabLabel'
+  | 'setDatabaseTabState'
   | 'setTabViewMode'
   | 'toggleTabViewMode'
   | 'setTabCustomLabel'
@@ -59,6 +60,10 @@ export function createTabsLabelActions(
 
     setTabLabel: (tabId, label) => {
       set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
+    },
+
+    setDatabaseTabState: (tabId, database) => {
+      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { database }) ?? {})
     },
 
     setTabViewMode: (tabId, mode) => {

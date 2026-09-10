@@ -1,3 +1,4 @@
+import { focusDatabaseTab } from '@/components/database/database-tab-actions'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
@@ -49,6 +50,8 @@ export function useFloatingTerminalCreateActions({
       if (item.contentType === 'terminal') {
         setActiveTab(item.entityId)
         focusTerminalTabSurface(item.entityId)
+      } else if (item.contentType === 'database') {
+        focusDatabaseTab(item.id)
       } else if (item.contentType === 'browser') {
         const workspace = useAppStore
           .getState()

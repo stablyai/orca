@@ -41,6 +41,13 @@ export type TabBarItem =
       data: Tab
     }
   | {
+      type: 'database'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab
+    }
+  | {
       type: 'agent-session'
       id: string
       unifiedTabId: string
@@ -55,7 +62,7 @@ export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolea
   if (item.type === 'browser') {
     return getBrowserTabLabel(item.data)
   }
-  if (item.type === 'simulator' || item.type === 'agent-session') {
+  if (item.type === 'simulator' || item.type === 'agent-session' || item.type === 'database') {
     return item.data.label || 'Mobile Emulator'
   }
   return getEditorDisplayLabel(item.data)
@@ -107,6 +114,7 @@ export function buildOrderedTabItems({
   browserTabIds,
   simulatorTabIds,
   agentSessionTabIds,
+  databaseTabIds = [],
   terminalMap,
   editorMap,
   browserMap,
@@ -119,6 +127,7 @@ export function buildOrderedTabItems({
   browserTabIds: string[]
   simulatorTabIds: string[]
   agentSessionTabIds: string[]
+  databaseTabIds?: string[]
   terminalMap: Map<string, TerminalTab & { unifiedTabId?: string }>
   editorMap: Map<string, OpenFile & { tabId?: string }>
   browserMap: Map<string, BrowserTabState & { tabId?: string }>
@@ -131,7 +140,8 @@ export function buildOrderedTabItems({
     editorFileIds,
     browserTabIds,
     simulatorTabIds,
-    agentSessionTabIds
+    agentSessionTabIds,
+    databaseTabIds
   )
   const items: TabBarItem[] = []
   for (const id of ids) {
@@ -172,9 +182,9 @@ export function buildOrderedTabItems({
       continue
     }
     const simulatorTab = unifiedTabByVisibleId.get(id)
-    if (simulatorTab?.contentType === 'simulator') {
+    if (simulatorTab?.contentType === 'simulator' || simulatorTab?.contentType === 'database') {
       items.push({
-        type: 'simulator',
+        type: simulatorTab.contentType,
         id,
         unifiedTabId: simulatorTab.id,
         isPinned: simulatorTab.isPinned === true,
@@ -217,6 +227,7 @@ export function findActiveVisibleTabId(
     activeFileId?: string | null
     activeBrowserTabId?: string | null
     activeSimulatorTabId?: string | null
+    activeDatabaseTabId?: string | null
     activeTabType?: WorkspaceVisibleTabType
   }
 ): string | null {
@@ -229,6 +240,9 @@ export function findActiveVisibleTabId(
     }
     if (item.type === 'browser') {
       return active.activeTabType === 'browser' && item.id === active.activeBrowserTabId
+    }
+    if (item.type === 'database') {
+      return active.activeTabType === 'database' && item.id === active.activeDatabaseTabId
     }
     if (item.type === 'simulator') {
       return active.activeTabType === 'simulator' && item.id === active.activeSimulatorTabId

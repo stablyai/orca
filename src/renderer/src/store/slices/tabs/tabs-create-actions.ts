@@ -71,7 +71,8 @@ export function createTabsCreateActions(
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
           ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
           isPreview: init?.isPreview,
-          isPinned: init?.isPinned
+          isPinned: init?.isPinned,
+          ...(init?.database ? { database: init.database } : {})
         }
 
         nextOrder = dedupeTabOrder([...nextOrder, created.id])
@@ -152,7 +153,8 @@ export function createTabsCreateActions(
           // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
           ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
           isPreview: init?.isPreview,
-          isPinned: init?.isPinned
+          isPinned: init?.isPinned,
+          ...(init?.database ? { database: init.database } : {})
         }
         const newGroup: TabGroup = {
           id: newGroupId,

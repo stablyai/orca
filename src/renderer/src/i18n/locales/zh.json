@@ -3022,7 +3022,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "无法为 {{value0}} 构建启动命令。",
             "7a9b4af2af": "向左滚动标签页",
-            "232e075b07": "向右滚动标签页"
+            "232e075b07": "向右滚动标签页",
+            "newDatabase": "New Database Query"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "创建文件",
@@ -3105,7 +3106,13 @@
                   "1baeb07c17": "iOS 模拟器",
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
-                  "14965cc123": "移动端"
+                  "14965cc123": "移动端",
+                  "newDatabase": "New Database Query",
+                  "database": "database",
+                  "sql": "sql",
+                  "query": "query",
+                  "postgres": "postgres",
+                  "postgresql": "postgresql"
                 }
               }
             }
@@ -14605,6 +14612,65 @@
         "description": "在侧边栏中将此工作区嵌套到另一个工作树下。不会更改基础分支。",
         "searchPlaceholder": "搜索工作树...",
         "noMatches": "无匹配项。"
+      },
+      "database": {
+        "connection": {
+          "title": "PostgreSQL 连接",
+          "description": "配置和已保存的密码归此项目节点所有。密码保存在该节点的加密保险库中，不会返回给客户端。",
+          "host": "主机",
+          "port": "端口",
+          "database": "数据库",
+          "user": "用户",
+          "password": "密码",
+          "tls": "TLS",
+          "tlsDisabled": "禁用",
+          "tlsRequired": "必需",
+          "tlsVerify": "验证证书",
+          "connect": "测试并连接",
+          "savedProfile": "配置",
+          "newProfile": "新建配置",
+          "deleteProfile": "删除配置",
+          "profileName": "配置名称",
+          "passwordSaved": "已保存在节点保险库中",
+          "rememberPassword": "在此节点上保存密码，以便所有配对的客户端都能使用此配置。",
+          "saveAndConnect": "保存并连接"
+        },
+        "owner": {
+          "runtime": "运行时：{{value0}}",
+          "local": "本地桌面",
+          "runtimeSsh": "运行时：{{value0}} → SSH：{{value1}}",
+          "ssh": "SSH：{{value0}}"
+        },
+        "toolbar": {
+          "readOnly": "只读",
+          "editConnection": "编辑连接",
+          "cancel": "取消",
+          "run": "执行",
+          "shortcut": "{{value0}}Enter · 最多 {{value1}} 行",
+          "resultSummary": "{{value0}} 行{{value1}} · {{value2}} ms",
+          "allSchemas": "所有模式"
+        },
+        "editor": {
+          "label": "SQL 查询"
+        },
+        "results": {
+          "empty": "执行查询以查看结果。",
+          "summary": "{{value0}} · {{value1}} 行 · {{value2}} ms",
+          "complete": "查询完成",
+          "null": "NULL"
+        },
+        "schema": {
+          "connect": "连接以加载模式。",
+          "empty": "未找到用户表。"
+        },
+        "tab": {
+          "title": "数据库查询",
+          "closeLabel": "关闭数据库标签页",
+          "unpin": "取消固定标签页",
+          "pin": "固定标签页",
+          "close": "关闭",
+          "closeRight": "关闭右侧标签页"
+        }
       }
     },
     "i18n": {
@@ -15061,5 +15127,10 @@
       "action": "试用智能体",
       "hiddenToast": "智能体标签页已隐藏。可在设置 → 实验性功能中重新启用。"
     }
-  }
+  },
+  "auto.components.database.toolbar.refresh": "刷新结果",
+  "auto.components.database.toolbar.autoRefresh": "自动刷新",
+  "auto.components.database.toolbar.manualRefresh": "手动刷新",
+  "auto.components.database.toolbar.refreshEvery": "每 {{seconds}} 秒",
+  "auto.components.database.toolbar.refreshed": "{{rows}} 行{{more}} · {{duration}} ms · 更新于 {{time}}"
 }

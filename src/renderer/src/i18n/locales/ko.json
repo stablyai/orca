@@ -3012,7 +3012,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "{{value0}}에 대한 실행 명령을 작성할 수 없습니다.",
             "7a9b4af2af": "탭을 왼쪽으로 스크롤",
-            "232e075b07": "탭을 오른쪽으로 스크롤"
+            "232e075b07": "탭을 오른쪽으로 스크롤",
+            "newDatabase": "New Database Query"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "파일 생성",
@@ -3095,7 +3096,13 @@
                   "1baeb07c17": "iOS 시뮬레이터",
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
-                  "14965cc123": "모바일"
+                  "14965cc123": "모바일",
+                  "newDatabase": "New Database Query",
+                  "database": "database",
+                  "sql": "sql",
+                  "query": "query",
+                  "postgres": "postgres",
+                  "postgresql": "postgresql"
                 }
               }
             }
@@ -14605,6 +14612,65 @@
         "description": "이 워크스페이스를 사이드바의 다른 워크스페이스 아래에 중첩합니다. 기준 브랜치는 변경되지 않습니다.",
         "searchPlaceholder": "워크스페이스 검색...",
         "noMatches": "일치하는 항목이 없습니다."
+      },
+      "database": {
+        "connection": {
+          "title": "PostgreSQL 연결",
+          "description": "프로필과 저장된 비밀번호는 이 프로젝트 노드에 보관됩니다. 비밀번호는 노드의 암호화된 저장소에 유지되며 클라이언트로 반환되지 않습니다.",
+          "host": "호스트",
+          "port": "포트",
+          "database": "데이터베이스",
+          "user": "사용자",
+          "password": "비밀번호",
+          "tls": "TLS",
+          "tlsDisabled": "사용 안 함",
+          "tlsRequired": "필수",
+          "tlsVerify": "인증서 검증",
+          "connect": "연결 테스트 및 접속",
+          "savedProfile": "프로필",
+          "newProfile": "새 프로필",
+          "deleteProfile": "프로필 삭제",
+          "profileName": "프로필 이름",
+          "passwordSaved": "노드의 보안 저장소에 저장됨",
+          "rememberPassword": "이 노드에 비밀번호를 저장하여 페어링된 모든 클라이언트가 이 프로필을 사용할 수 있게 합니다.",
+          "saveAndConnect": "저장 및 연결"
+        },
+        "owner": {
+          "runtime": "런타임: {{value0}}",
+          "local": "로컬 데스크톱",
+          "runtimeSsh": "런타임: {{value0}} → SSH: {{value1}}",
+          "ssh": "SSH: {{value0}}"
+        },
+        "toolbar": {
+          "readOnly": "읽기 전용",
+          "editConnection": "연결 수정",
+          "cancel": "취소",
+          "run": "실행",
+          "shortcut": "{{value0}}Enter · 최대 {{value1}}행",
+          "resultSummary": "{{value0}}행{{value1}} · {{value2}} ms",
+          "allSchemas": "모든 스키마"
+        },
+        "editor": {
+          "label": "SQL 쿼리"
+        },
+        "results": {
+          "empty": "쿼리를 실행하면 결과가 표시됩니다.",
+          "summary": "{{value0}} · {{value1}}행 · {{value2}} ms",
+          "complete": "쿼리 완료",
+          "null": "NULL"
+        },
+        "schema": {
+          "connect": "연결하면 스키마를 불러옵니다.",
+          "empty": "사용자 테이블이 없습니다."
+        },
+        "tab": {
+          "title": "데이터베이스 쿼리",
+          "closeLabel": "데이터베이스 탭 닫기",
+          "unpin": "탭 고정 해제",
+          "pin": "탭 고정",
+          "close": "닫기",
+          "closeRight": "오른쪽 탭 닫기"
+        }
       }
     },
     "i18n": {
@@ -15096,5 +15162,10 @@
       "action": "에이전트 사용해 보기",
       "hiddenToast": "에이전트 탭이 숨겨졌습니다. 설정 → 실험 기능에서 다시 활성화하세요."
     }
-  }
+  },
+  "auto.components.database.toolbar.refresh": "결과 새로고침",
+  "auto.components.database.toolbar.autoRefresh": "자동 새로고침",
+  "auto.components.database.toolbar.manualRefresh": "수동 새로고침",
+  "auto.components.database.toolbar.refreshEvery": "{{seconds}}초마다",
+  "auto.components.database.toolbar.refreshed": "{{rows}}행{{more}} · {{duration}} ms · 갱신 {{time}}"
 }

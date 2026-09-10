@@ -45,6 +45,7 @@ export function useTabBarItemProjection({
     activeFileId,
     activeBrowserTabId,
     activeSimulatorTabId,
+    activeDatabaseTabId,
     activeTabType,
     expandedPaneByTabId
   } = props
@@ -74,6 +75,13 @@ export function useTabBarItemProjection({
         .map((tab) => tab.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const databaseTabIds = useMemo(
+    () =>
+      unifiedTabs
+        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'database')
+        .map((tab) => tab.id),
+    [unifiedTabs, resolvedGroupId]
+  )
   const agentSessionTabIds = useMemo(
     () => agentSessionTabs?.map((tab) => tab.id) ?? [],
     [agentSessionTabs]
@@ -87,6 +95,7 @@ export function useTabBarItemProjection({
         browserTabIds,
         simulatorTabIds,
         agentSessionTabIds,
+        databaseTabIds,
         terminalMap,
         editorMap,
         browserMap,
@@ -100,6 +109,7 @@ export function useTabBarItemProjection({
       browserTabIds,
       simulatorTabIds,
       agentSessionTabIds,
+      databaseTabIds,
       terminalMap,
       editorMap,
       browserMap,
@@ -121,12 +131,14 @@ export function useTabBarItemProjection({
         activeFileId,
         activeBrowserTabId,
         activeSimulatorTabId,
+        activeDatabaseTabId,
         activeTabType
       }),
     [
       activeBrowserTabId,
       activeFileId,
       activeSimulatorTabId,
+      activeDatabaseTabId,
       activeTabId,
       activeTabType,
       orderedItems

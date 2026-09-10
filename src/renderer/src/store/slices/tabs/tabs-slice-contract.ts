@@ -32,6 +32,7 @@ export type TabsSlice = {
         | 'color'
         | 'isPreview'
         | 'isPinned'
+        | 'database'
       > & {
         targetGroupId: string
         activate: boolean
@@ -59,6 +60,7 @@ export type TabsSlice = {
         | 'color'
         | 'isPreview'
         | 'isPinned'
+        | 'database'
       > & {
         activate: boolean
         recordInteraction: boolean
@@ -89,6 +91,7 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setTabLabel: (tabId: string, label: string) => void
+  setDatabaseTabState: (tabId: string, database: NonNullable<Tab['database']>) => void
   /** Set a tab's view mode (terminal vs native chat). Patches only that tab. */
   setTabViewMode: (tabId: string, mode: 'terminal' | 'chat') => void
   /** Flip a tab between terminal and native-chat renderings; the live TerminalPane stays mounted. */
@@ -140,6 +143,7 @@ export type TabsSlice = {
         | 'customLabel'
         | 'color'
         | 'isPinned'
+        | 'database'
       >
     >
   ) => Tab | null

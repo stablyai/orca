@@ -1,3 +1,4 @@
+import DatabaseTab from './DatabaseTab'
 import React from 'react'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -39,6 +40,7 @@ export function renderTabBarItems({
     activeFileId,
     activeBrowserTabId,
     activeSimulatorTabId,
+    activeDatabaseTabId,
     activeTabType,
     expandedPaneByTabId,
     onActivate,
@@ -186,6 +188,30 @@ export function renderTabBarItems({
         />
       )
     }
+    if (item.type === 'database') {
+      return (
+        <DatabaseTab
+          key={item.id}
+          tab={item.data}
+          isActive={
+            !clientHostedRowOwnsActiveState &&
+            activeTabType === 'database' &&
+            item.id === activeDatabaseTabId
+          }
+          isPinned={item.isPinned}
+          hasOtherTabs={items.length > 1}
+          hasTabsToRight={index < items.length - 1}
+          onActivate={() => activateRealTab(onActivateFile)(item.id)}
+          onClose={() => onCloseFile?.(item.id)}
+          onCloseOthers={() => onCloseOthers(item.id)}
+          onCloseToRight={() => onCloseToRight(item.id)}
+          onTogglePin={() => togglePinned(item)}
+          dragData={dragData}
+          dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+          includeTopTabBorder={includeTopTabBorder}
+        />
+      )
+    }
     if (item.type === 'simulator') {
       const simulatorLabel = item.data.label || 'Mobile Emulator'
       const simulatorFile: OpenFile & { tabId: string } = {
@@ -205,7 +231,7 @@ export function renderTabBarItems({
           file={simulatorFile}
           isActive={
             !clientHostedRowOwnsActiveState &&
-            activeTabType === 'simulator' &&
+            activeTabType === item.type &&
             item.id === activeSimulatorTabId
           }
           isPinned={item.isPinned}

@@ -1,3 +1,4 @@
+import { databaseTabStateSchema } from './database-session-schema'
 /* Why: the workspace session JSON is written to disk by older builds and read
  * back by newer ones. A field type flip (e.g. ptyId going from string to an
  * object) or a truncated write could poison Zustand state and crash the
@@ -150,6 +151,7 @@ const tabSchema = z.object({
   lastFocusedAt: z.number().finite().nonnegative().optional().catch(undefined),
   isPreview: z.boolean().optional(),
   isPinned: z.boolean().optional(),
+  database: databaseTabStateSchema,
   // Why: persist the per-tab native-chat view mode so 'chat' survives reload /
   // session restore. `.catch('terminal')` tolerates unknown future values (a
   // newer build that wrote an unrecognized mode) by degrading to the safe

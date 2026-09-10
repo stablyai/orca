@@ -35,6 +35,7 @@ export type KeybindingActionId =
   | 'workspace.rename'
   | 'workspace.delete'
   | 'workspace.openBoard'
+  | 'workspace.openDatabase'
   | 'workspace.selectByIndex'
   | 'voice.dictation'
   | 'view.tasks'

@@ -1,3 +1,4 @@
+import { toVisibleTabType } from '../../../../shared/tab-types'
 import { useMemo } from 'react'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import { useTerminalTabColdParking } from '@/components/terminal-pane/use-terminal-tab-cold-parking'
@@ -51,14 +52,16 @@ export function useFloatingTerminalPanelItems({
     activeTab &&
     activeTab.contentType !== 'terminal' &&
     activeTab.contentType !== 'browser' &&
-    activeTab.contentType !== 'simulator'
+    activeTab.contentType !== 'simulator' &&
+    activeTab.contentType !== 'database'
       ? activeTab.id
       : null
   const activeEditorFileId =
     activeTab &&
     activeTab.contentType !== 'terminal' &&
     activeTab.contentType !== 'browser' &&
-    activeTab.contentType !== 'simulator'
+    activeTab.contentType !== 'simulator' &&
+    activeTab.contentType !== 'database'
       ? activeTab.entityId
       : null
   const terminalTabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
@@ -133,7 +136,8 @@ export function useFloatingTerminalPanelItems({
           (tab) =>
             tab.contentType !== 'terminal' &&
             tab.contentType !== 'browser' &&
-            tab.contentType !== 'simulator'
+            tab.contentType !== 'simulator' &&
+            tab.contentType !== 'database'
         )
         .map((tab) => {
           const file = floatingFiles.find((candidate) => candidate.id === tab.entityId)
@@ -146,13 +150,22 @@ export function useFloatingTerminalPanelItems({
     () => groupTabs.filter((tab) => tab.contentType === 'simulator'),
     [groupTabs]
   )
+  const databaseItems = useMemo(
+    () => groupTabs.filter((tab) => tab.contentType === 'database'),
+    [groupTabs]
+  )
   const hasVisibleFloatingTabs =
     terminalItems.length > 0 ||
     browserItems.length > 0 ||
     editorItems.length > 0 ||
-    simulatorItems.length > 0
+    simulatorItems.length > 0 ||
+    databaseItems.length > 0
   const visibleFloatingItemCount =
-    terminalItems.length + browserItems.length + editorItems.length + simulatorItems.length
+    terminalItems.length +
+    browserItems.length +
+    editorItems.length +
+    simulatorItems.length +
+    databaseItems.length
   const activeClosableTab = hasVisibleFloatingTabs ? activeTab : null
   const tabBarOrder = useMemo(
     () =>
@@ -177,12 +190,23 @@ export function useFloatingTerminalPanelItems({
         if (tab.contentType === 'browser') {
           return browserItems.some((item) => item.tabId === tab.id)
         }
+        if (tab.contentType === 'database') {
+          return databaseItems.some((item) => item.id === tab.id)
+        }
         if (tab.contentType === 'simulator') {
           return simulatorItems.some((item) => item.id === tab.id)
         }
         return editorItems.some((item) => item.tabId === tab.id)
       }),
-    [browserItems, editorItems, groupTabs, simulatorItems, tabBarOrder, terminalItems]
+    [
+      browserItems,
+      databaseItems,
+      editorItems,
+      groupTabs,
+      simulatorItems,
+      tabBarOrder,
+      terminalItems
+    ]
   )
   const activeBrowserTab = activeBrowserId
     ? (browserTabs.find((tab) => tab.id === activeBrowserId) ?? null)
@@ -190,14 +214,7 @@ export function useFloatingTerminalPanelItems({
   const activeEditorFile = activeEditorFileId
     ? (floatingFiles.find((file) => file.id === activeEditorFileId) ?? null)
     : null
-  const activeTabType: 'browser' | 'terminal' | 'simulator' | 'editor' =
-    activeTab?.contentType === 'browser'
-      ? 'browser'
-      : activeTab?.contentType === 'terminal'
-        ? 'terminal'
-        : activeTab?.contentType === 'simulator'
-          ? 'simulator'
-          : 'editor'
+  const activeTabType = activeTab ? toVisibleTabType(activeTab.contentType) : 'editor'
 
   return {
     activeGroup,
@@ -211,6 +228,7 @@ export function useFloatingTerminalPanelItems({
     browserItems,
     editorItems,
     simulatorItems,
+    databaseItems,
     hasVisibleFloatingTabs,
     visibleFloatingItemCount,
     activeClosableTab,

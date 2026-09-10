@@ -11,6 +11,7 @@ import {
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/hovered-workspace-delete'
 import { useAppStore } from '../store'
+import { openOrFocusDatabaseTab } from '../components/database/database-tab-actions'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
@@ -228,6 +229,15 @@ export function createAppCommandHandlers(
         return claim('workspace.delete', () => {
           deleteHoveredWorkspaceImmediately(store, target)
         })
+      }
+    ],
+    [
+      'workspace.openDatabase',
+      () => {
+        if (!workspaceChromeActive || floatingWorkspaceFocused || !activeWorktreeId) {
+          return false
+        }
+        return claim('workspace.openDatabase', () => openOrFocusDatabaseTab(activeWorktreeId))
       }
     ],
     [

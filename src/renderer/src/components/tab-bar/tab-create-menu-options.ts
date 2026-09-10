@@ -6,6 +6,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
   | 'new-browser'
+  | 'new-database'
   | 'new-markdown'
   | 'new-simulator'
   | 'new-terminal'
@@ -22,6 +23,7 @@ export type TabCreateMenuOption = {
 
 export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
+  hasNewDatabase?: boolean
   hasNewMarkdown: boolean
   hasOpenMarkdown: boolean
   hasSimulator: boolean
@@ -110,6 +112,25 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a', 'new browser'),
         translate('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
         translate('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
+      ]
+    })
+  }
+
+  if (context.hasNewDatabase) {
+    const label = translate(
+      'auto.components.tab.bar.tab.create.menu.options.newDatabase',
+      'New Database Query'
+    )
+    options.push({
+      id: 'new-database',
+      kind: 'new-database',
+      label,
+      keywords: [
+        translate('auto.components.tab.bar.tab.create.menu.options.database', 'database'),
+        translate('auto.components.tab.bar.tab.create.menu.options.sql', 'sql'),
+        translate('auto.components.tab.bar.tab.create.menu.options.query', 'query'),
+        translate('auto.components.tab.bar.tab.create.menu.options.postgres', 'postgres'),
+        translate('auto.components.tab.bar.tab.create.menu.options.postgresql', 'postgresql')
       ]
     })
   }

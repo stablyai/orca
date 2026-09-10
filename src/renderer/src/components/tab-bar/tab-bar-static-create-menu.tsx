@@ -1,5 +1,6 @@
 import React from 'react'
-import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import { Database, FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
+import { openDatabaseTab } from '../database/database-tab-actions'
 import { translate } from '@/i18n/i18n'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -144,6 +145,22 @@ export function renderTabBarStaticCreateMenu({
         </DropdownMenuItem>
       )
     ) : null
+  const newDatabaseMenuItem = !terminalOnly ? (
+    <DropdownMenuItem
+      onSelect={() =>
+        props.onNewDatabaseTab
+          ? props.onNewDatabaseTab()
+          : openDatabaseTab(props.worktreeId, props.groupId)
+      }
+      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+    >
+      <Database className="size-4 text-muted-foreground" />
+      {translate(
+        'auto.components.tab.bar.tab.create.menu.options.newDatabase',
+        'New Database Query'
+      )}
+    </DropdownMenuItem>
+  ) : null
   const newMarkdownMenuItem =
     !terminalOnly && onNewFileTab ? (
       <DropdownMenuItem
@@ -184,6 +201,7 @@ export function renderTabBarStaticCreateMenu({
       {openMarkdownMenuItem}
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
+      {newDatabaseMenuItem}
       {newSimulatorMenuItem}
       {mobileEmulatorIntroMenuBlock}
     </>
@@ -191,6 +209,7 @@ export function renderTabBarStaticCreateMenu({
     <>
       {defaultTerminalMenuItems}
       {newBrowserMenuItem}
+      {newDatabaseMenuItem}
       {newMarkdownMenuItem}
       {openMarkdownMenuItem}
       {newSimulatorMenuItem}

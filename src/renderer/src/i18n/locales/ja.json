@@ -3007,7 +3007,8 @@
             "2148f65e04": "PowerShell",
             "ab589350e5": "{{value0}} の起動コマンドを作成できませんでした。",
             "7a9b4af2af": "タブを左にスクロール",
-            "232e075b07": "タブを右にスクロール"
+            "232e075b07": "タブを右にスクロール",
+            "newDatabase": "New Database Query"
           },
           "TabBarCreateEntry": {
             "d62d63b807": "ファイルの作成",
@@ -3090,7 +3091,13 @@
                   "1baeb07c17": "iOS シミュレータ",
                   "8a580f88cf": "iPhone",
                   "7ecdc5ef08": "iPad",
-                  "14965cc123": "モバイル"
+                  "14965cc123": "モバイル",
+                  "newDatabase": "New Database Query",
+                  "database": "database",
+                  "sql": "sql",
+                  "query": "query",
+                  "postgres": "postgres",
+                  "postgresql": "postgresql"
                 }
               }
             }
@@ -14527,6 +14534,65 @@
         "description": "このワークスペースをサイドバー内の別のワークスペースの配下にネストします。ベースブランチは変更されません。",
         "searchPlaceholder": "ワークスペースを検索...",
         "noMatches": "一致する項目がありません。"
+      },
+      "database": {
+        "connection": {
+          "title": "PostgreSQL 接続",
+          "description": "プロファイルと保存済みパスワードは、このプロジェクトのノードに保存されます。パスワードはノードの暗号化された保管庫に保持され、クライアントには返されません。",
+          "host": "ホスト",
+          "port": "ポート",
+          "database": "データベース",
+          "user": "ユーザー",
+          "password": "パスワード",
+          "tls": "TLS",
+          "tlsDisabled": "無効",
+          "tlsRequired": "必須",
+          "tlsVerify": "証明書を検証",
+          "connect": "接続をテストして接続",
+          "savedProfile": "プロファイル",
+          "newProfile": "新しいプロファイル",
+          "deleteProfile": "プロファイルを削除",
+          "profileName": "プロファイル名",
+          "passwordSaved": "ノードの保管庫に保存済み",
+          "rememberPassword": "このノードにパスワードを保存し、ペアリングされたすべてのクライアントからこのプロファイルを使えるようにします。",
+          "saveAndConnect": "保存して接続"
+        },
+        "owner": {
+          "runtime": "ランタイム: {{value0}}",
+          "local": "ローカルデスクトップ",
+          "runtimeSsh": "ランタイム: {{value0}} → SSH: {{value1}}",
+          "ssh": "SSH: {{value0}}"
+        },
+        "toolbar": {
+          "readOnly": "読み取り専用",
+          "editConnection": "接続を編集",
+          "cancel": "キャンセル",
+          "run": "実行",
+          "shortcut": "{{value0}}Enter · 最大 {{value1}} 行",
+          "resultSummary": "{{value0}} 行{{value1}} · {{value2}} ms",
+          "allSchemas": "すべてのスキーマ"
+        },
+        "editor": {
+          "label": "SQL クエリ"
+        },
+        "results": {
+          "empty": "クエリを実行すると結果が表示されます。",
+          "summary": "{{value0}} · {{value1}} 行 · {{value2}} ms",
+          "complete": "クエリ完了",
+          "null": "NULL"
+        },
+        "schema": {
+          "connect": "接続してスキーマを読み込みます。",
+          "empty": "ユーザーテーブルが見つかりません。"
+        },
+        "tab": {
+          "title": "データベースクエリ",
+          "closeLabel": "データベースタブを閉じる",
+          "unpin": "タブの固定を解除",
+          "pin": "タブを固定",
+          "close": "閉じる",
+          "closeRight": "右側のタブを閉じる"
+        }
       }
     },
     "i18n": {
@@ -14957,5 +15023,10 @@
       "action": "Agent を試す",
       "hiddenToast": "Agent タブを非表示にしました。設定 → 実験的機能で再度有効にできます。"
     }
-  }
+  },
+  "auto.components.database.toolbar.refresh": "結果を更新",
+  "auto.components.database.toolbar.autoRefresh": "自動更新",
+  "auto.components.database.toolbar.manualRefresh": "手動更新",
+  "auto.components.database.toolbar.refreshEvery": "{{seconds}}秒ごと",
+  "auto.components.database.toolbar.refreshed": "{{rows}}行{{more}} · {{duration}} ms · 更新 {{time}}"
 }

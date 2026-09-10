@@ -1,4 +1,5 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusDatabaseTab } from '@/components/database/database-tab-actions'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   activateWebRuntimeSessionTab,
@@ -80,7 +81,7 @@ function validateTarget(
   if (tabs.length !== 1 || !tab) {
     return 'missing-tab'
   }
-  if (result.contentType !== 'terminal') {
+  if (result.contentType !== 'terminal' && result.contentType !== 'database') {
     const files = state.openFiles.filter((file) => file.id === result.entityId)
     if (files.length !== 1 || files[0].worktreeId !== result.worktreeId) {
       return 'missing-file'
@@ -135,6 +136,11 @@ export function activateWorkspaceTabPaletteResult(
     state.setActiveTab(result.entityId)
     state.setActiveTabType('terminal')
     focusTerminalTabSurface(result.entityId)
+    return { status: 'activated' }
+  }
+
+  if (result.contentType === 'database') {
+    focusDatabaseTab(result.tabId)
     return { status: 'activated' }
   }
 

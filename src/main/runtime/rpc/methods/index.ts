@@ -97,5 +97,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...CLIENT_UI_METHODS,
   ...EMULATOR_METHODS,
   ...PAIRING_METHODS,
-  ...UPDATER_METHODS
+  ...UPDATER_METHODS,
+  ...DATABASE_METHODS
 ]
+import { DATABASE_METHODS } from './database'

@@ -19,6 +19,8 @@ import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
+import { toVisibleTabType } from '../../../../shared/tab-types'
+import DatabasePane from '../database/DatabasePane'
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
@@ -146,6 +148,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewDatabaseTab={commands.newDatabaseTab}
       onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
@@ -161,23 +164,15 @@ export default function TabGroupPanel({
         activeTab?.contentType === 'terminal' ||
         activeTab?.contentType === 'agent-session' ||
         activeTab?.contentType === 'browser' ||
-        activeTab?.contentType === 'simulator'
+        activeTab?.contentType === 'simulator' ||
+        activeTab?.contentType === 'database'
           ? null
           : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
       activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
-      activeTabType={
-        activeTab?.contentType === 'terminal'
-          ? 'terminal'
-          : activeTab?.contentType === 'agent-session'
-            ? 'agent-session'
-            : activeTab?.contentType === 'browser'
-              ? 'browser'
-              : activeTab?.contentType === 'simulator'
-                ? 'simulator'
-                : 'editor'
-      }
+      activeDatabaseTabId={activeTab?.contentType === 'database' ? activeTab.id : null}
+      activeTabType={activeTab ? toVisibleTabType(activeTab.contentType) : 'terminal'}
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
       onActivateBrowserTab={commands.activateBrowser}
@@ -351,7 +346,8 @@ export default function TabGroupPanel({
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'agent-session' &&
           activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
+          activeTab.contentType !== 'simulator' &&
+          activeTab.contentType !== 'database' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
               <Suspense
@@ -374,6 +370,13 @@ export default function TabGroupPanel({
             </div>
           )}
 
+        {model.groupTabs
+          .filter((item) => item.contentType === 'database')
+          .map((item) => (
+            <div key={item.id} className="absolute inset-0" hidden={activeTab?.id !== item.id}>
+              <DatabasePane tab={item} isActive={isVisible && activeTab?.id === item.id} />
+            </div>
+          ))}
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>
     </div>

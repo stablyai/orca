@@ -43,6 +43,9 @@ export function resolveZoomTarget(args: {
   if (activeTabType === 'browser') {
     return 'ui'
   }
+  if (activeTabType === 'database') {
+    return 'ui'
+  }
   if (activeTabType === 'editor' || editorFocused) {
     return 'editor'
   }

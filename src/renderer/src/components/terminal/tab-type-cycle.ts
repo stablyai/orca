@@ -46,6 +46,9 @@ export function getActiveEntityIdForTabType(
   if (activeTabType === 'simulator') {
     return activeTabId
   }
+  if (activeTabType === 'database') {
+    return activeTabId
+  }
   return activeTabId
 }
 

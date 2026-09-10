@@ -1,3 +1,4 @@
+import DatabasePane from '@/components/database/DatabasePane'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
@@ -75,6 +76,7 @@ export function renderFloatingTerminalPanelSurface({
   terminalPaneRegistry,
   activeBrowserTab,
   simulatorItems,
+  databaseItems,
   activeEditorFile,
   focusPanelForShortcuts,
   newTerminalShortcut,
@@ -171,6 +173,7 @@ export function renderFloatingTerminalPanelSurface({
               browserTabs={browserItems}
               activeFileId={activeEditorUnifiedId}
               activeBrowserTabId={activeBrowserId}
+              activeDatabaseTabId={activeTab?.contentType === 'database' ? activeTab.id : null}
               activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
               activeTabType={activeTabType}
               onActivateFile={activateFloatingItem}
@@ -267,6 +270,11 @@ export function renderFloatingTerminalPanelSurface({
               </div>
             )
           })}
+          {databaseItems.map((tab) => (
+            <div key={tab.id} className="absolute inset-0" hidden={tab.id !== activeTab?.id}>
+              <DatabasePane tab={tab} isActive={open && tab.id === activeTab?.id} />
+            </div>
+          ))}
           {simulatorItems.map((tab) => {
             const isActive = tab.id === activeTab?.id
             return (

@@ -352,6 +352,15 @@
           "92a7017987": "sending"
         }
       },
+      "database": {
+        "connection": {
+          "connect": "Test and connect"
+        },
+        "toolbar": {
+          "resultSummary": "{{value0}} rows{{value1}} · {{value2}} ms",
+          "shortcut": "{{value0}}Enter · {{value1}} row limit"
+        }
+      },
       "editor": {
         "CombinedDiffFileTree": {
           "d5ac717d65": "uncommitted"
@@ -2285,6 +2294,9 @@
             "21132389e9": "Split Right",
             "591f9b12c1": "Split Up",
             "af80ed83c1": "Split Down"
+          },
+          "TabBar": {
+            "newDatabase": "New Database Query"
           },
           "TabBarQuickCommandsButton": {
             "c781f992e4": "destructive"

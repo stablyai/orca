@@ -8,6 +8,8 @@ import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
   findIndexedRepoOwner as findRepoRecord,
   findIndexedWorktreeOwner as findWorktreeRecord,
+  findIndexedRepoOwnerForHost,
+  findIndexedProjectGroupOwner,
   hasIndexedDetectedWorktree,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
@@ -15,6 +17,7 @@ import {
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
 import {
   getExecutionHostIdForFolderWorkspace,
+  findFolderWorkspaceOwner,
   getExplicitRuntimeEnvironmentIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
@@ -105,6 +108,45 @@ export function getRuntimeEnvironmentIdForWorktree(
   }
   const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
   return resolution.kind === 'resolved' ? resolution.route.runtimeEnvironmentId : null
+}
+
+export function getSshConnectionIdForWorktree(
+  state: WorktreeRuntimeOwnerState,
+  worktreeId: string | null | undefined
+): string | null {
+  if (!worktreeId || worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return null
+  }
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  const resolution = activeRoute
+    ? { kind: 'resolved' as const, route: activeRoute }
+    : resolveWorktreeOperationRouteResult(state, worktreeId)
+  if (resolution.kind !== 'resolved') {
+    return null
+  }
+  const host = parseExecutionHostId(resolution.route.executionHostId)
+  if (host?.kind === 'ssh') {
+    return host.targetId
+  }
+  if (host?.kind !== 'runtime') {
+    return null
+  }
+  const scope = parseWorkspaceKey(worktreeId)
+  if (scope?.type === 'folder') {
+    const explicitFolder = findFolderWorkspaceOwner(state, scope.folderWorkspaceId, host.id)
+    const legacyFolder = explicitFolder
+      ? null
+      : findFolderWorkspaceOwner(state, scope.folderWorkspaceId)
+    const folder = explicitFolder ?? (legacyFolder?.executionHostId ? null : legacyFolder)
+    if (!folder) {
+      return null
+    }
+    const group = findIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId, host.id)
+    return folder.connectionId?.trim() || group?.connectionId?.trim() || null
+  }
+  const owner = findWorktreeRecord(state.worktreesByRepo, worktreeId)
+  const repoId = owner?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+  return findIndexedRepoOwnerForHost(state.repos, repoId, host.id)?.connectionId?.trim() || null
 }
 
 export function getExplicitRuntimeEnvironmentIdForWorktree(

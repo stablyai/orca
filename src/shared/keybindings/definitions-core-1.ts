@@ -100,6 +100,15 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
     allowInTerminal: true
   },
   {
+    id: 'workspace.openDatabase',
+    title: 'Open or Focus Project Database',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['database', 'sql', 'postgres', 'project', 'query'],
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
     id: 'workspace.openBoard',
     title: 'Toggle Workspace Board',
     group: 'Global',
