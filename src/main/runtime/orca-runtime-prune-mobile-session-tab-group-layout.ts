@@ -133,12 +133,27 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
     _tab: RuntimeMobileSessionTerminalTab,
     getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null {
-    const terminalHandle = pty ? this.issuePtyHandle(pty) : null
-    return selectFreshAgentRowForMobileTab({
+    const paneMatch = selectFreshAgentRowForMobileTab({
       paneKey,
-      terminalHandle,
-      hookRows: getRows(paneKey, terminalHandle)
+      terminalHandle: null,
+      hookRows: getRows(paneKey, null)
     })
+    if (paneMatch || !pty) {
+      return paneMatch
+    }
+    // Why: the OSC producer can stamp a leaf or incarnation handle; use the same non-minting
+    // inventory as worktree.ps so a tab-id remint can rejoin the still-live central row.
+    for (const terminalHandle of this.getExistingTerminalHandlesForPtyId(pty.ptyId)) {
+      const handleMatch = selectFreshAgentRowForMobileTab({
+        paneKey,
+        terminalHandle,
+        hookRows: getRows(paneKey, terminalHandle)
+      })
+      if (handleMatch) {
+        return handleMatch
+      }
+    }
+    return null
   }
 
   protected findPtyForMobileTerminalTab(

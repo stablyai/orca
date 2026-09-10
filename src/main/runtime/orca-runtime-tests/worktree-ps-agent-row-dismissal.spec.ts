@@ -137,6 +137,62 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
     }
   )
 
+  it('rejoins mobile status through the incarnation handle after a tab id remint', async () => {
+    const { runtime, statusWiring } = wiredRuntime('incarnation-1')
+    emitWorkingStatus(runtime, 1)
+    const row = statusWiring.statusStore.getStatusSnapshot()[0]!
+    expect(row.terminalHandle).toMatch(/^term_/)
+
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-reminted',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-reminted',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: 'dismiss-pty'
+        }
+      ],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'reminted-epoch',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: `tab-reminted::${LEAF_ID}`,
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: `tab-reminted::${LEAF_ID}`,
+              parentTabId: 'tab-reminted',
+              leafId: LEAF_ID,
+              ptyId: 'dismiss-pty',
+              title: 'Codex',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+    expect(result.tabs[0]).toMatchObject({
+      type: 'terminal',
+      agentStatus: { state: 'working', prompt: 'ship it' }
+    })
+    statusWiring.statusStore.stop()
+  })
+
   it('keeps runtime-owned legacy OSC rows in worktree.ps and mobile projections', async () => {
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = new OrcaRuntimeService(store, undefined, statusWiring.deps)
