@@ -1,4 +1,4 @@
-import type { ConnectionState, RpcResponse } from './types'
+import type { ConnectionState } from './types'
 import type { RpcClient } from './rpc-client'
 import type { HostProtocolAdmission } from './host-protocol-admission'
 import {
@@ -6,29 +6,16 @@ import {
   type MigrationDialStateForwarder
 } from './migration-dial-state-forwarder'
 import { waitForAuthenticated } from './replacement-session-authentication'
-import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
 import { LogicalSubscriptionRegistry } from './logical-subscription-registry'
+import { LogicalRequestDispatcher } from './logical-request-dispatcher'
+
+export {
+  LogicalClientCutoverError,
+  isLogicalClientCutoverError
+} from './logical-client-cutover-error'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
-
-export class LogicalClientCutoverError extends Error {
-  constructor() {
-    super('RPC interrupted by connection migration')
-  }
-}
-
-// Why: instanceof can miss across bundle copies, so also match by message.
-export function isLogicalClientCutoverError(error: unknown): boolean {
-  return (
-    error instanceof LogicalClientCutoverError ||
-    (error instanceof Error && error.message === 'RPC interrupted by connection migration')
-  )
-}
-
-type PendingRequest = {
-  reject: (error: Error) => void
-}
 
 export type StableLogicalRpcClient = RpcClient & {
   migrateTo(
@@ -74,7 +61,14 @@ export function createStableLogicalRpcClient(
     activeSession: () => activeSession,
     generation: () => generation
   })
-  const pendingRequests = new Set<PendingRequest>()
+  const requests = new LogicalRequestDispatcher({
+    admission,
+    isClosed: () => closed,
+    isSuspended: () => suspended,
+    activeSession: () => activeSession,
+    generation: () => generation,
+    onAdmissionObserved: () => subscriptions.reconcileAdmission()
+  })
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
   const connectionPath = new LogicalClientConnectionPath(() => state === 'connected')
@@ -82,45 +76,7 @@ export function createStableLogicalRpcClient(
   bindActiveState(initialSession, generation)
 
   const logical: StableLogicalRpcClient = {
-    sendRequest(method, params, options) {
-      if (closed) {
-        return Promise.reject(new Error('Client closed'))
-      }
-      if (suspended) {
-        return Promise.reject(new Error('Client suspended'))
-      }
-      if (admission && !admission.allows(method)) {
-        return Promise.reject(new Error('Host compatibility has not been verified'))
-      }
-      const requestGeneration = generation
-      const session = activeSession
-      return new Promise<RpcResponse>((resolve, reject) => {
-        const pending = { reject }
-        pendingRequests.add(pending)
-        void session
-          .sendRequest(method, projectMobileRpcRequestParams(method, params), options)
-          .then(
-            (response) => {
-              pendingRequests.delete(pending)
-              if (closed) {
-                reject(new Error('Client closed'))
-              } else if (requestGeneration !== generation) {
-                reject(new LogicalClientCutoverError())
-              } else {
-                if (method === 'status.get' && admission) {
-                  admission.observe(response)
-                  subscriptions.reconcileAdmission()
-                }
-                resolve(response)
-              }
-            },
-            (error: unknown) => {
-              pendingRequests.delete(pending)
-              reject(error)
-            }
-          )
-      })
-    },
+    sendRequest: (method, params, options) => requests.send(method, params, options),
 
     subscribe(method, params, listener, options) {
       if (closed) {
@@ -153,6 +109,8 @@ export function createStableLogicalRpcClient(
       closed = true
       activeStateUnsubscribe?.()
       activeStateUnsubscribe = null
+      // Why: a caller parked on the probe must be released, not stranded on a dead client.
+      admission?.endProbe()
       subscriptions.disposeAll()
       // Why: let the physical close settle in-flight requests — it knows which
       // frames were written and marks those delivery-unknown; a blanket local
@@ -229,10 +187,7 @@ export function createStableLogicalRpcClient(
       suspended = false
       previousStateUnsubscribe?.()
       bindActiveState(nextSession, nextGeneration)
-      for (const pending of pendingRequests) {
-        pending.reject(new LogicalClientCutoverError())
-      }
-      pendingRequests.clear()
+      requests.rejectAllForCutover()
       state = nextSession.getState()
       connectionPath.clearAfterConnected()
       for (const listener of stateListeners) {

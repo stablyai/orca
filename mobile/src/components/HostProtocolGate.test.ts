@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HostProtocolAdmission } from '../transport/host-protocol-admission'
 import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
+import { attachHostProtocolVerification } from '../transport/host-protocol-verifier'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import { HostProtocolGate, useHostProtocolGates } from './HostProtocolGate'
@@ -39,8 +40,22 @@ vi.mock('../transport/client-context', () => ({
   useHostClient: () => hostClient.current
 }))
 
+// Verification belongs to the client, so every gate fixture is a real logical client.
+function verifiedClient(session: FakeSession): RpcClient {
+  return attachHostProtocolVerification(
+    createStableLogicalRpcClient(session, 'lan', new HostProtocolAdmission()),
+    'host-1'
+  )
+}
+
+function sessionWithStatus(result: unknown): FakeSession {
+  const session = new FakeSession('connected')
+  session.sendRequest.mockResolvedValue({ id: '1', ok: true, result })
+  return session
+}
+
 function clientWithStatus(result: Record<string, unknown>): RpcClient {
-  return { sendRequest: vi.fn().mockResolvedValue({ ok: true, result }) } as unknown as RpcClient
+  return verifiedClient(sessionWithStatus(result))
 }
 
 function GateConsumer() {
@@ -143,21 +158,18 @@ describe('HostProtocolGate', () => {
   })
 
   it('renders the host UI when the verdict is ok', async () => {
-    const client = clientWithStatus({
+    const session = sessionWithStatus({
       protocolVersion: 5,
       minCompatibleMobileVersion: 0,
       capabilities: ['browser.screencast.v1']
     })
-    hostClient.current = {
-      client,
-      state: 'connected'
-    }
+    hostClient.current = { client: verifiedClient(session), state: 'connected' }
     renderer = await renderGate()
     const output = renderedText(renderer)
     expect(output).toContain('HostContent')
     expect(output).toContain('browser.screencast.v1')
     expect(output).not.toContain('Update Orca')
-    expect(client.sendRequest).toHaveBeenCalledOnce()
+    expect(session.sendRequest).toHaveBeenCalledOnce()
   })
 
   it('renders the host UI while the host connection is still pending', async () => {
@@ -167,16 +179,15 @@ describe('HostProtocolGate', () => {
   })
 
   it('does not mount host routes before a connected host passes the compatibility probe', async () => {
-    const client = {
-      sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
-    } as unknown as RpcClient
-    hostClient.current = { client, state: 'connected' }
+    const session = new FakeSession('connected')
+    session.sendRequest.mockReturnValue(new Promise(() => {}))
+    hostClient.current = { client: verifiedClient(session), state: 'connected' }
     renderer = await renderGate()
     const output = renderedText(renderer)
     expect(output).toContain('Checking host compatibility')
     expect(output).not.toContain('HostContent')
     expect(probeMounts.count).toBe(0)
-    expect(client.sendRequest).toHaveBeenCalledOnce()
+    expect(session.sendRequest).toHaveBeenCalledOnce()
   })
 
   it('overlays the pending spinner instead of unmounting routes mounted while connecting', async () => {
@@ -185,11 +196,10 @@ describe('HostProtocolGate', () => {
     expect(renderedText(renderer)).toContain('HostContent')
     expect(probeMounts.count).toBe(1)
 
-    const client = {
-      sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
-    } as unknown as RpcClient
+    const session = new FakeSession('connected')
+    session.sendRequest.mockReturnValue(new Promise(() => {}))
     await act(async () => {
-      hostClient.current = { client, state: 'connected' }
+      hostClient.current = { client: verifiedClient(session), state: 'connected' }
       renderer?.update(gateElement())
       await Promise.resolve()
     })
@@ -226,23 +236,19 @@ describe('HostProtocolGate', () => {
   })
 
   it('keeps an already-validated host route mounted while reconnect status is pending', async () => {
-    const client = {
-      sendRequest: vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          result: { protocolVersion: 5, minCompatibleMobileVersion: 0 }
-        })
-        .mockReturnValueOnce(new Promise(() => {}))
-    } as unknown as RpcClient
+    const session = sessionWithStatus({ protocolVersion: 5, minCompatibleMobileVersion: 0 })
+    const client = verifiedClient(session)
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
 
+    session.sendRequest.mockReturnValue(new Promise(() => {}))
     await act(async () => {
+      session.publishState('disconnected')
       hostClient.current = { client, state: 'disconnected' }
       renderer?.update(gateElement())
     })
     await act(async () => {
+      session.publishState('connected')
       hostClient.current = { client, state: 'connected' }
       renderer?.update(gateElement())
       await Promise.resolve()
@@ -252,16 +258,18 @@ describe('HostProtocolGate', () => {
     expect(output).toContain('HostContent')
     // Why: the host already answered once, so a reconnect probe must not dim the UI it validated.
     expect(output).not.toContain('Checking host compatibility')
-    expect(client.sendRequest).toHaveBeenCalledTimes(2)
+    expect(session.sendRequest).toHaveBeenCalledTimes(2)
+    client.close()
   })
 
   it('offers recovery without mounting routes when a connected host cannot answer the status probe', async () => {
-    hostClient.current = {
-      client: {
-        sendRequest: vi.fn().mockResolvedValue({ ok: false, error: { message: 'unavailable' } })
-      } as unknown as RpcClient,
-      state: 'connected'
-    }
+    const session = new FakeSession('connected')
+    session.sendRequest.mockResolvedValue({
+      id: '1',
+      ok: false,
+      error: { code: 'unavailable', message: 'unavailable' }
+    })
+    hostClient.current = { client: verifiedClient(session), state: 'connected' }
     renderer = await renderGate()
     expect(renderedText(renderer)).not.toContain('HostContent')
     expect(renderedText(renderer)).toContain('Unable to verify this host')
@@ -274,9 +282,9 @@ describe('HostProtocolGate', () => {
   ])('blocks the published range %j at the gate and the sender', async (status, title) => {
     const physical = new FakeSession('connected')
     physical.sendRequest.mockResolvedValue({ id: '1', ok: true, result: status })
-    const client = createStableLogicalRpcClient(physical, 'lan', new HostProtocolAdmission())
-    hostClient.current = { client, state: 'connected' }
+    const client = verifiedClient(physical)
     await expect(client.sendRequest('worktree.ps')).rejects.toThrow('not been verified')
+    hostClient.current = { client, state: 'connected' }
     const unsubscribe = client.subscribe('worktree.subscribe', {}, () => {})
     renderer = await renderGate()
     expect(renderedText(renderer)).toContain(title)
@@ -298,7 +306,7 @@ describe('HostProtocolGate', () => {
         minCompatibleMobileVersion: 3
       }
     })
-    const client = createStableLogicalRpcClient(first, 'lan', new HostProtocolAdmission())
+    const client = verifiedClient(first)
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
     const unsubscribe = client.subscribe('worktree.subscribe', {}, () => {})
@@ -317,7 +325,18 @@ describe('HostProtocolGate', () => {
     expect(renderedText(renderer)).toContain('Checking host compatibility')
     expect(renderedText(renderer)).toContain('HostContent')
     expect(probeMounts.count).toBe(1)
-    await expect(client.sendRequest('worktree.ps')).rejects.toThrow('not been verified')
+    const outcome = vi.fn()
+    void client.sendRequest('worktree.ps').then(
+      () => outcome('sent'),
+      (error: Error) => outcome(error.message)
+    )
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // Why: nothing unverified may reach the replacement, but a screen's connect effect fires
+    // a round trip ahead of the probe, so the request is held rather than failed.
+    expect(outcome).not.toHaveBeenCalled()
+    expect(replacement.sendRequest.mock.calls.map(([method]) => method)).toEqual(['status.get'])
     expect(replacement.subscribe).not.toHaveBeenCalled()
     await act(async () => {
       resolveStatus({
@@ -325,16 +344,56 @@ describe('HostProtocolGate', () => {
         ok: true,
         result: { protocolVersion: 3, minCompatibleMobileVersion: 3 }
       })
+      await Promise.resolve()
     })
     expect(renderedText(renderer)).not.toContain('Checking host compatibility')
     expect(probeMounts.count).toBe(1)
     expect(replacement.subscribe).toHaveBeenCalledOnce()
-    await client.sendRequest('worktree.ps')
+    expect(outcome).toHaveBeenCalledWith('sent')
     expect(replacement.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'status.get',
       'worktree.ps'
     ])
     unsubscribe()
+    client.close()
+  })
+
+  it('holds a verified host under the spinner, not the error card, while retries run', async () => {
+    vi.useFakeTimers()
+    const first = sessionWithStatus({ protocolVersion: 3, minCompatibleMobileVersion: 3 })
+    const client = verifiedClient(first)
+    hostClient.current = { client, state: 'connected' }
+    renderer = await renderGate()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(renderedText(renderer)).toContain('HostContent')
+
+    const replacement = new FakeSession('connected')
+    replacement.sendRequest.mockRejectedValue(new Error('offline'))
+    await act(async () => {
+      await client.migrateTo(replacement, 'relay')
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    // Why (F3): one failed probe must not bury a live terminal under a modal it cannot
+    // dismiss; the routes stay mounted and the bounded retries run behind a spinner.
+    const covered = renderedText(renderer)
+    expect(covered).toContain('HostContent')
+    expect(covered).toContain('Checking host compatibility')
+    expect(covered).not.toContain('Unable to verify')
+    expect(probeMounts.count).toBe(1)
+
+    for (const delay of [1_000, 2_000, 4_000]) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(delay)
+      })
+    }
+    // Exhausted retries are a real failure, so the recovery card finally appears.
+    expect(renderedText(renderer)).toContain('Unable to verify this host')
+    expect(probeMounts.count).toBe(1)
     client.close()
   })
 
@@ -348,10 +407,11 @@ describe('HostProtocolGate', () => {
         minCompatibleMobileVersion: 3
       }
     })
-    const client = createStableLogicalRpcClient(physical, 'lan', new HostProtocolAdmission())
+    const client = verifiedClient(physical)
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
     await act(async () => {
+      physical.publishState('disconnected')
       hostClient.current = { client, state: 'disconnected' }
       renderer?.update(gateElement())
     })
@@ -361,6 +421,7 @@ describe('HostProtocolGate', () => {
       error: { code: 'unavailable', message: 'offline' }
     })
     await act(async () => {
+      physical.publishState('connected')
       hostClient.current = { client, state: 'connected' }
       renderer?.update(gateElement())
     })
@@ -374,8 +435,11 @@ describe('HostProtocolGate', () => {
 
   it('bounds automatic retries and recovers after the Retry action', async () => {
     vi.useFakeTimers()
-    const sendRequest = vi.fn().mockRejectedValue(new Error('offline'))
-    hostClient.current = { client: { sendRequest } as unknown as RpcClient, state: 'connected' }
+    const session = new FakeSession('connected')
+    const sendRequest = session.sendRequest
+    sendRequest.mockRejectedValue(new Error('offline'))
+    const client = verifiedClient(session)
+    hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
     for (const delay of [1000, 2000, 4000, 60000]) {
       await act(async () => {
@@ -397,20 +461,18 @@ describe('HostProtocolGate', () => {
     expect(sendRequest).toHaveBeenCalledTimes(5)
     expect(renderedText(renderer)).toContain('HostContent')
     expect(renderedText(renderer)).not.toContain('Unable to verify')
+    client.close()
   })
 
   it.each([
     null,
-    {},
     [],
     true,
     { protocolVersion: '3', minCompatibleMobileVersion: 3 },
-    { protocolVersion: 3, minCompatibleMobileVersion: null }
+    { protocolVersion: 3, minCompatibleMobileVersion: -1 }
   ])('keeps malformed status %j unknown', async (result) => {
     hostClient.current = {
-      client: {
-        sendRequest: vi.fn().mockResolvedValue({ ok: true, result })
-      } as unknown as RpcClient,
+      client: verifiedClient(sessionWithStatus(result)),
       state: 'connected'
     }
     renderer = await renderGate()
@@ -418,6 +480,24 @@ describe('HostProtocolGate', () => {
     expect(renderedText(renderer)).not.toContain('Update Orca')
     expect(renderedText(renderer)).not.toContain('HostContent')
   })
+
+  // Why (F7): a desktop old enough to omit the fields entirely is too old, not unreadable —
+  // it must get the actionable update screen, matching src/shared/protocol-compat.ts.
+  it.each([{}, { appVersion: '1.0.0' }])(
+    'reads a desktop that omits the protocol fields %j as too old',
+    async (result) => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      hostClient.current = {
+        client: verifiedClient(sessionWithStatus(result)),
+        state: 'connected'
+      }
+      renderer = await renderGate()
+      expect(renderedText(renderer)).toContain('Update Orca on your computer')
+      expect(renderedText(renderer)).toContain('Open GitHub Releases')
+      expect(renderedText(renderer)).not.toContain('Unable to verify')
+      expect(renderedText(renderer)).not.toContain('HostContent')
+    }
+  )
 
   it('fences connect effects under an already-mounted navigation tree', async () => {
     const physical = new FakeSession('connected')
@@ -427,12 +507,15 @@ describe('HostProtocolGate', () => {
         resolveStatus = resolve
       })
     )
-    const client = createStableLogicalRpcClient(physical, 'lan', new HostProtocolAdmission())
-    const refused = vi.fn()
+    const client = verifiedClient(physical)
+    const outcome = vi.fn()
     function NestedRoute({ connected }: { connected: boolean }) {
       useEffect(() => {
         if (connected) {
-          void client.sendRequest('worktree.ps').catch(refused)
+          void client.sendRequest('worktree.ps').then(
+            () => outcome('sent'),
+            (error: Error) => outcome(error.message)
+          )
         }
       }, [connected])
       return createElement(MountProbe)
@@ -451,7 +534,8 @@ describe('HostProtocolGate', () => {
       hostClient.current = { client, state: 'connected' }
       renderer?.update(element(true))
     })
-    expect(refused).toHaveBeenCalledOnce()
+    // The connect effect ran pre-verdict, so its request is withheld from the host.
+    expect(outcome).not.toHaveBeenCalled()
     expect(physical.sendRequest.mock.calls.map(([method]) => method)).toEqual(['status.get'])
     expect(probeMounts.count).toBe(1)
     await act(async () => {
@@ -460,16 +544,22 @@ describe('HostProtocolGate', () => {
         ok: true,
         result: { protocolVersion: 3, minCompatibleMobileVersion: 3 }
       })
+      await Promise.resolve()
     })
+    expect(outcome).toHaveBeenCalledWith('sent')
+    expect(physical.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'status.get',
+      'worktree.ps'
+    ])
     expect(probeMounts.count).toBe(1)
     client.close()
   })
 
-  it('cancels queued retries when the host or session changes', async () => {
+  it('cancels the queued retry when the session changes or the client closes', async () => {
     vi.useFakeTimers()
     const first = new FakeSession('connected')
     first.sendRequest.mockRejectedValue(new Error('offline'))
-    const client = createStableLogicalRpcClient(first, 'lan', new HostProtocolAdmission())
+    const client = verifiedClient(first)
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
     expect(first.sendRequest).toHaveBeenCalledOnce()
@@ -478,22 +568,25 @@ describe('HostProtocolGate', () => {
     await act(async () => {
       await client.migrateTo(replacement, 'relay')
     })
+    // The cutover drops the old generation's queued retry and starts the replacement's own.
     expect(replacement.sendRequest).toHaveBeenCalledOnce()
-    const other = clientWithStatus({ protocolVersion: 3, minCompatibleMobileVersion: 3 })
+    const otherSession = sessionWithStatus({ protocolVersion: 3, minCompatibleMobileVersion: 3 })
+    const other = verifiedClient(otherSession)
     await act(async () => {
       hostClient.current = { client: other, state: 'connected' }
       renderer?.update(
         createElement(HostProtocolGate, { hostId: 'host-2' }, createElement(MountProbe))
       )
     })
+    client.close()
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000)
     })
     expect(first.sendRequest).toHaveBeenCalledOnce()
     expect(replacement.sendRequest).toHaveBeenCalledOnce()
-    expect(other.sendRequest).toHaveBeenCalledOnce()
+    expect(otherSession.sendRequest).toHaveBeenCalledOnce()
     expect(renderedText(renderer)).not.toContain('Unable to verify')
-    client.close()
+    other.close()
   })
   it('ignores an old-generation success after cutover to a refusing session', async () => {
     const first = new FakeSession('connected')
@@ -503,7 +596,7 @@ describe('HostProtocolGate', () => {
         resolveOld = resolve
       })
     )
-    const client = createStableLogicalRpcClient(first, 'lan', new HostProtocolAdmission())
+    const client = verifiedClient(first)
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
     const replacement = new FakeSession('connected')

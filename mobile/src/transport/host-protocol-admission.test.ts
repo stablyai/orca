@@ -39,4 +39,29 @@ describe('host protocol admission', () => {
     admission.reset()
     expect(admission.allows('terminal.send')).toBe(false)
   })
+
+  it('offers a wait only while a probe is deciding the verdict', async () => {
+    const admission = new HostProtocolAdmission()
+    expect(admission.whenProbed()).toBeNull()
+
+    admission.beginProbe()
+    const answered = admission.whenProbed()
+    expect(answered).not.toBeNull()
+    // A second probe cannot orphan the callers already parked on the first.
+    admission.beginProbe()
+    expect(admission.whenProbed()).toBe(answered)
+
+    admission.endProbe()
+    await expect(answered).resolves.toBeUndefined()
+    expect(admission.whenProbed()).toBeNull()
+  })
+
+  it('releases the wait on reset so nobody parks on a retired generation', async () => {
+    const admission = new HostProtocolAdmission()
+    admission.beginProbe()
+    const answered = admission.whenProbed()
+    admission.reset()
+    await expect(answered).resolves.toBeUndefined()
+    expect(admission.whenProbed()).toBeNull()
+  })
 })

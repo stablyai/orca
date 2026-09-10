@@ -1,5 +1,5 @@
-// evaluateCompat mirrors the shared evaluator; the mobile status probe additionally
-// distinguishes unreadable status from a verified version mismatch.
+// evaluateCompat mirrors the shared evaluator, absent-field handling included; the mobile
+// status probe only adds a third outcome, for a status payload it cannot read at all.
 import { MIN_COMPATIBLE_DESKTOP_VERSION, MOBILE_PROTOCOL_VERSION } from './protocol-version'
 
 export type CompatVerdict =
@@ -39,21 +39,24 @@ export function evaluateCompat(input: {
   return { kind: 'ok' }
 }
 
+// Absent reads as 0, matching the shared evaluator: a desktop old enough to omit the field
+// is fenced by MIN_COMPATIBLE_DESKTOP_VERSION and told to update, which is actionable.
+// Only a field that is present and unreadable leaves the verdict unknown.
+function readProtocolField(value: unknown): number | null {
+  if (value === undefined || value === null) {
+    return 0
+  }
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
+}
+
 export function readHostProtocolVerdict(status: unknown): CompatVerdict {
   if (!status || typeof status !== 'object' || Array.isArray(status)) {
     return { kind: 'unknown' }
   }
   const fields = status as Record<string, unknown>
-  const version = fields.protocolVersion
-  const minimum = fields.minCompatibleMobileVersion
-  if (
-    typeof version !== 'number' ||
-    !Number.isSafeInteger(version) ||
-    version < 0 ||
-    typeof minimum !== 'number' ||
-    !Number.isSafeInteger(minimum) ||
-    minimum < 0
-  ) {
+  const version = readProtocolField(fields.protocolVersion)
+  const minimum = readProtocolField(fields.minCompatibleMobileVersion)
+  if (version === null || minimum === null) {
     return { kind: 'unknown' }
   }
   return evaluateCompat({

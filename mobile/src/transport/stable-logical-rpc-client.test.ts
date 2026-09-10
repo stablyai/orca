@@ -8,6 +8,7 @@ import {
   LogicalClientCutoverError,
   type MobileConnectionPath
 } from './stable-logical-rpc-client'
+import { HostProtocolAdmission } from './host-protocol-admission'
 
 class FakeSession implements RpcClient {
   readonly sendRequest =
@@ -68,6 +69,121 @@ function deferred<T>() {
 }
 
 describe('stable logical RPC client', () => {
+  describe('protocol admission', () => {
+    function deferredStatus(session: FakeSession) {
+      const status = deferred<RpcResponse>()
+      session.sendRequest.mockImplementation((method) =>
+        method === 'status.get' ? status.promise : Promise.resolve(success('sent'))
+      )
+      return status
+    }
+
+    // Why: a screen fires its connect RPCs in the same state-listener pass that writes the
+    // probe, so refusing them outright blanks the screen for a round trip with no retry.
+    it('holds a request written before the verdict, then sends it once the probe answers', async () => {
+      const session = new FakeSession('connected')
+      const status = deferredStatus(session)
+      const client = createStableLogicalRpcClient(session, 'lan', new HostProtocolAdmission())
+      const probe = client.sendRequest('status.get')
+
+      const outcome = vi.fn()
+      const held = client.sendRequest('worktree.ps').then(
+        () => outcome('sent'),
+        (error: Error) => outcome(error.message)
+      )
+      await Promise.resolve()
+      expect(outcome).not.toHaveBeenCalled()
+      expect(session.sendRequest.mock.calls.map(([method]) => method)).toEqual(['status.get'])
+
+      status.resolve(success({ protocolVersion: 3, minCompatibleMobileVersion: 3 }))
+      await probe
+      await held
+      expect(outcome).toHaveBeenCalledWith('sent')
+      expect(session.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+        'status.get',
+        'worktree.ps'
+      ])
+    })
+
+    it('refuses the held request when the probe answers incompatible', async () => {
+      const session = new FakeSession('connected')
+      const status = deferredStatus(session)
+      const client = createStableLogicalRpcClient(session, 'lan', new HostProtocolAdmission())
+      const probe = client.sendRequest('status.get')
+      const held = client.sendRequest('worktree.ps')
+
+      status.resolve(success({ protocolVersion: 2, minCompatibleMobileVersion: 2 }))
+      await probe
+      await expect(held).rejects.toThrow('Host compatibility has not been verified')
+      expect(session.sendRequest.mock.calls.map(([method]) => method)).toEqual(['status.get'])
+    })
+
+    it('refuses at once when no probe is deciding the verdict', async () => {
+      const session = new FakeSession('connected')
+      session.sendRequest.mockResolvedValue(success('sent'))
+      const client = createStableLogicalRpcClient(session, 'lan', new HostProtocolAdmission())
+
+      await expect(client.sendRequest('worktree.ps')).rejects.toThrow(
+        'Host compatibility has not been verified'
+      )
+      expect(session.sendRequest).not.toHaveBeenCalled()
+    })
+
+    it('releases a held request as a cutover when the session is replaced under it', async () => {
+      const session = new FakeSession('connected')
+      const status = deferredStatus(session)
+      const client = createStableLogicalRpcClient(session, 'lan', new HostProtocolAdmission())
+      void client.sendRequest('status.get').catch(() => {})
+      const held = client.sendRequest('worktree.ps')
+
+      const replacement = new FakeSession('connected')
+      replacement.sendRequest.mockResolvedValue(success('next'))
+      await client.migrateTo(replacement, 'relay')
+      status.resolve(success({ protocolVersion: 3, minCompatibleMobileVersion: 3 }))
+
+      await expect(held).rejects.toBeInstanceOf(LogicalClientCutoverError)
+      expect(replacement.sendRequest).not.toHaveBeenCalled()
+    })
+
+    it('releases a held request when the client closes under it', async () => {
+      const session = new FakeSession('connected')
+      deferredStatus(session)
+      const client = createStableLogicalRpcClient(session, 'lan', new HostProtocolAdmission())
+      void client.sendRequest('status.get').catch(() => {})
+      const held = client.sendRequest('worktree.ps')
+
+      client.close()
+      await expect(held).rejects.toThrow(/Client closed|not been verified/)
+    })
+  })
+
+  it('withholds terminal viewport updates until admission is verified', async () => {
+    const session = new FakeSession('connected')
+    session.sendRequest.mockResolvedValue(
+      success({ protocolVersion: 3, minCompatibleMobileVersion: 3 })
+    )
+    const client = createStableLogicalRpcClient(session, 'lan', new HostProtocolAdmission())
+    client.subscribe('terminal.subscribe', { terminal: 'term-1' }, vi.fn())
+
+    client.updateTerminalSubscriptionViewport('term-1', { cols: 80, rows: 24 })
+    // Why: a viewport update is a resize the unverified host must not be told about, and
+    // the subscription it would resize was never attached.
+    expect(session.updateTerminalSubscriptionViewport).not.toHaveBeenCalled()
+
+    await client.sendRequest('status.get')
+    client.updateTerminalSubscriptionViewport('term-1', { cols: 100, rows: 30 })
+    expect(session.updateTerminalSubscriptionViewport).toHaveBeenCalledExactlyOnceWith('term-1', {
+      cols: 100,
+      rows: 30
+    })
+    // The withheld update was still recorded, so the attach carries it rather than losing it.
+    expect(session.subscribe.mock.calls[0]?.[1]).toEqual({
+      terminal: 'term-1',
+      viewport: { cols: 80, rows: 24 }
+    })
+    client.close()
+  })
+
   it('advertises source-default support on worktree catalog requests', async () => {
     const session = new FakeSession('connected')
     session.sendRequest.mockResolvedValue(success([]))
