@@ -15,6 +15,10 @@ describe('getDefaultSettings', () => {
     )
   })
 
+  it('leaves GitLab unconfigured by default', () => {
+    expect(getDefaultSettings('/tmp').gitlabUrl).toBe('')
+  })
+
   it('enables gitignored file decorations by default', () => {
     expect(getDefaultSettings('/tmp').showGitIgnoredFiles).toBe(true)
   })
