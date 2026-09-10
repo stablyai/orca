@@ -3,7 +3,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
 } from '../../../../../shared/terminal-stream-protocol'
-import { iterateTerminalOutputFrameChunks } from '../../terminal-output-frame-chunks'
+import { iterateLegacyTerminalDisplayChunks } from './terminal-legacy-display-chunks'
 import {
   EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
   scanTerminalReplyQuerySequences,
@@ -107,7 +107,11 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
         meta.seq
       )
     }
-    for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
+    for (const chunk of iterateLegacyTerminalDisplayChunks(
+      data,
+      meta,
+      params.capabilities?.outputSpan === 1
+    )) {
       sendFrame(chunk.opcode ?? TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
     }
   })

@@ -143,6 +143,7 @@ export async function publishLegacyBinaryInitialSnapshot(
   emit({
     type: 'subscribed',
     streamId: state.streamId,
+    ...(params.capabilities?.outputSpan === 1 ? { capabilities: { outputSpan: 1 } } : {}),
     lines: read.tail,
     truncated: initialOutputOverflowed || (!sendBinary && isTerminalReadPayloadIncomplete(read)),
     cols: serialized?.cols ?? size?.cols,
