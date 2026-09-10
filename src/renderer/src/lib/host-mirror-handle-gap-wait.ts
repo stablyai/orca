@@ -52,6 +52,19 @@ export function hasHostMirrorHandleWaitExpired(environmentId: string, tabId: str
   )
 }
 
+function recordExpiredWait(environmentId: string, key: string): void {
+  const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
+  // Why: a verdict from a previous connection is dead weight; drop it so the map
+  // stays bounded by the panes parked on the current connection.
+  const prefix = `${environmentId}\0`
+  for (const [staleKey, staleGeneration] of expiredGenerationByPane) {
+    if (staleKey.startsWith(prefix) && staleGeneration !== generation) {
+      expiredGenerationByPane.delete(staleKey)
+    }
+  }
+  expiredGenerationByPane.set(key, generation)
+}
+
 function stopStoreSubscriptionIfIdle(): void {
   if (waitersByPane.size === 0 && unsubscribeStore) {
     unsubscribeStore()
@@ -129,7 +142,7 @@ export function parkUntilHostMirrorHandleLands(
     return
   }
   const deadline = setTimeout(() => {
-    expiredGenerationByPane.set(key, getRuntimeEnvironmentConnectionGeneration(environmentId))
+    recordExpiredWait(environmentId, key)
     releaseWaiter(key)
   }, HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
   waitersByPane.set(key, { worktreeId, tabId, deadline, run })
