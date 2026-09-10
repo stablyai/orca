@@ -1,11 +1,12 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React from 'react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
 import type { PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import type { MatchRange, PaletteSearchResult } from '@/lib/worktree-palette-search'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { Worktree } from '../../../shared/worktree/types'
-import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
+import { splitPathHeadForElision } from '@/lib/path-head-elision'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import { cn } from '@/lib/utils'
 
 const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []
 
@@ -67,14 +68,48 @@ export function HighlightedText({
   return <>{parts}</>
 }
 
+function PaletteOpenTabSecondaryText({
+  text,
+  ranges
+}: {
+  text: string
+  ranges: readonly MatchRange[]
+}): React.JSX.Element {
+  const split = splitPathHeadForElision(text, ranges)
+  const content = split ? (
+    <span
+      data-slot="palette-open-tab-secondary"
+      className="flex min-w-0 items-baseline overflow-hidden font-mono text-[11px] text-muted-foreground/80"
+    >
+      <span className="min-w-0 shrink-[999] truncate">{split.head}</span>
+      <span className="min-w-0 shrink truncate">
+        <HighlightedText text={split.tail} matchRanges={split.tailRanges} />
+      </span>
+    </span>
+  ) : (
+    <span
+      data-slot="palette-open-tab-secondary"
+      className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/80"
+    >
+      <HighlightedText text={text} matchRanges={ranges} />
+    </span>
+  )
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4} className="max-w-96 break-all">
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function PaletteOpenTabPrimaryLine({
   title,
   titleRanges,
   secondaryText,
   secondaryRanges,
   secondaryMatches = NO_SECONDARY_MATCHES,
-  worktreeName,
-  worktreeRanges,
   sessionAge,
   leadingBadges
 }: {
@@ -83,13 +118,10 @@ export function PaletteOpenTabPrimaryLine({
   secondaryText: string
   secondaryRanges: readonly MatchRange[]
   secondaryMatches?: readonly { text: string; ranges: readonly MatchRange[] }[]
-  worktreeName: string
-  worktreeRanges: readonly MatchRange[]
   sessionAge?: string
   leadingBadges?: React.ReactNode
 }): React.JSX.Element {
   const showSecondary = secondaryText.trim().length > 0
-  const showWorktree = worktreeName.trim().length > 0
   const additionalSecondaryMatches = secondaryMatches.filter(
     (match) => match.text && match.text !== secondaryText
   )
@@ -98,7 +130,10 @@ export function PaletteOpenTabPrimaryLine({
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
       <span
         data-slot="palette-open-tab-title"
-        className="min-w-0 flex-auto truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
+        className={cn(
+          'truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground',
+          showSecondary ? 'max-w-[62%] shrink-0' : 'min-w-0'
+        )}
       >
         <HighlightedText text={title} matchRanges={titleRanges} />
       </span>
@@ -116,12 +151,7 @@ export function PaletteOpenTabPrimaryLine({
       ) : null}
       {leadingBadges}
       {showSecondary ? (
-        <>
-          <span className="shrink-0 text-muted-foreground/45">·</span>
-          <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
-            <HighlightedText text={secondaryText} matchRanges={secondaryRanges} />
-          </span>
-        </>
+        <PaletteOpenTabSecondaryText text={secondaryText} ranges={secondaryRanges} />
       ) : null}
       {additionalSecondaryMatches.length ? (
         <>
@@ -154,85 +184,76 @@ export function PaletteOpenTabPrimaryLine({
           </Tooltip>
         </>
       ) : null}
-      {showWorktree ? (
-        <>
-          <span className="shrink-0 text-muted-foreground/45">·</span>
-          <span
-            data-slot="palette-open-tab-worktree"
-            className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92"
-          >
-            <HighlightedText text={worktreeName} matchRanges={worktreeRanges} />
-          </span>
-        </>
-      ) : null}
     </div>
   )
 }
 
-function resolveOpenTabWorktreeRailTooltip({
-  isBranch,
-  truncated,
-  name
+export function PaletteLocationChip({
+  repoName,
+  repoRanges,
+  repoColor,
+  worktreeName,
+  worktreeRanges,
+  className
 }: {
-  isBranch: boolean
-  truncated: boolean
-  name: string
-}): string {
-  if (truncated) {
-    return name
-  }
-  return isBranch
-    ? translate('auto.components.WorktreeJumpPalette.paletteOpenTabBranch', 'Branch name')
-    : translate('auto.components.WorktreeJumpPalette.paletteOpenTabWorkspace', 'Workspace name')
-}
-
-export function PaletteOpenTabWorktreeRailLabel({
-  name,
-  matchRanges,
-  worktree,
-  className,
-  slot = 'palette-open-tab-worktree'
-}: {
-  name: string
-  matchRanges: readonly MatchRange[]
-  worktree?: Pick<Worktree, 'branch'> | null
+  repoName: string
+  repoRanges: readonly MatchRange[]
+  repoColor?: string
+  worktreeName: string
+  worktreeRanges: readonly MatchRange[]
   className?: string
-  slot?: string
 }): React.JSX.Element | null {
-  const [truncated, setTruncated] = useState(false)
-  const labelRef = useRef<HTMLSpanElement | null>(null)
-  useLayoutEffect(() => {
-    const node = labelRef.current
-    if (!node) {
-      setTruncated(false)
-      return
-    }
-    const updateTruncated = (): void => {
-      const next = node.scrollWidth > node.clientWidth
-      setTruncated((current) => (current === next ? current : next))
-    }
-    updateTruncated()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const observer = new ResizeObserver(updateTruncated)
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [name])
-  if (name.trim().length === 0) {
+  const showRepo = repoName.trim().length > 0
+  const repeatedName = showRepo && worktreeName === repoName
+  const showWorktree = worktreeName.trim().length > 0 && !repeatedName
+  if (!showRepo && !showWorktree) {
     return null
   }
-  const isBranch = worktree != null && name === resolveWorktreeBranchLabel(worktree)
-  const tooltip = resolveOpenTabWorktreeRailTooltip({ isBranch, truncated, name })
+  const repoMatchRanges = repeatedName
+    ? [...repoRanges, ...worktreeRanges].sort((left, right) => left.start - right.start)
+    : repoRanges
+  const label = [showRepo ? repoName : '', showWorktree ? worktreeName : '']
+    .filter(Boolean)
+    .join(' · ')
+  const chip = (
+    <span
+      data-slot="palette-location-chip"
+      className={cn(
+        'inline-flex min-w-0 max-w-[260px] items-center gap-1.5 overflow-hidden rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground',
+        className
+      )}
+    >
+      {showRepo ? (
+        <>
+          <RepoBadgeMark color={repoColor} />
+          <span
+            className={cn('min-w-0 truncate', showWorktree && 'min-w-[3ch] max-w-[55%]')}
+            data-slot="palette-location-repo"
+          >
+            <HighlightedText text={repoName} matchRanges={repoMatchRanges} />
+          </span>
+        </>
+      ) : null}
+      {showRepo && showWorktree ? (
+        <span aria-hidden className="shrink-0 text-muted-foreground/50">
+          ·
+        </span>
+      ) : null}
+      {showWorktree ? (
+        <span
+          data-slot="palette-open-tab-worktree"
+          className="min-w-[3ch] truncate font-medium text-muted-foreground"
+        >
+          <HighlightedText text={worktreeName} matchRanges={worktreeRanges} />
+        </span>
+      ) : null}
+    </span>
+  )
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <span ref={labelRef} data-slot={slot} tabIndex={-1} className={className}>
-          <HighlightedText text={name} matchRanges={matchRanges} />
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={6} className="max-w-80 break-all">
-        {tooltip}
+      <TooltipTrigger asChild>{chip}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4} className="max-w-96 break-all">
+        {label}
       </TooltipContent>
     </Tooltip>
   )

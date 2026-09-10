@@ -1,15 +1,14 @@
 import type React from 'react'
 import { Smartphone } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { BrowserPaletteItem, SimulatorPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import {
-  HighlightedText,
   PaletteHostBadgeChip,
+  PaletteLocationChip,
   PaletteOpenTabPrimaryLine,
   PaletteRowShortcutBadge
 } from './worktree-jump-palette-primitives'
@@ -67,8 +66,6 @@ export function WorktreeJumpPaletteSimulatorRow({
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
               secondaryMatches={result.secondaryMatches}
-              worktreeName={result.worktreeName}
-              worktreeRanges={result.worktreeRanges}
               sessionAge={simulatorSessionAge}
               leadingBadges={
                 <>
@@ -94,16 +91,15 @@ export function WorktreeJumpPaletteSimulatorRow({
               </span>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex min-w-0 max-w-[40%] items-center justify-end gap-1.5">
             <PaletteHostBadgeChip badge={simulatorHostBadge} />
-            {simulatorRepoName && (
-              <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                <RepoBadgeMark color={simulatorRepo?.badgeColor} />
-                <span className="truncate">
-                  <HighlightedText text={simulatorRepoName} matchRanges={result.repoRanges} />
-                </span>
-              </span>
-            )}
+            <PaletteLocationChip
+              repoName={simulatorRepoName}
+              repoRanges={result.repoRanges}
+              repoColor={simulatorRepo?.badgeColor}
+              worktreeName={result.worktreeName}
+              worktreeRanges={result.worktreeRanges}
+            />
             <PaletteRowShortcutBadge
               index={controller.recentTabShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}
@@ -165,8 +161,6 @@ export function WorktreeJumpPaletteBrowserRow({
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
               secondaryMatches={result.secondaryMatches}
-              worktreeName={result.worktreeName}
-              worktreeRanges={result.worktreeRanges}
               sessionAge={browserSessionAge}
               leadingBadges={
                 <>
@@ -187,16 +181,15 @@ export function WorktreeJumpPaletteBrowserRow({
               }
             />
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex min-w-0 max-w-[40%] items-center justify-end gap-1.5">
             <PaletteHostBadgeChip badge={browserHostBadge} />
-            {browserRepoName && (
-              <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                <RepoBadgeMark color={browserRepo?.badgeColor} />
-                <span className="truncate">
-                  <HighlightedText text={browserRepoName} matchRanges={result.repoRanges} />
-                </span>
-              </span>
-            )}
+            <PaletteLocationChip
+              repoName={browserRepoName}
+              repoRanges={result.repoRanges}
+              repoColor={browserRepo?.badgeColor}
+              worktreeName={result.worktreeName}
+              worktreeRanges={result.worktreeRanges}
+            />
             <PaletteRowShortcutBadge
               index={controller.recentTabShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}

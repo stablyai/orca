@@ -448,8 +448,13 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const title = row?.querySelector('[data-slot="palette-open-tab-title"]')
     const worktree = row?.querySelector('[data-slot="palette-open-tab-worktree"]')
     expect(title?.textContent).toBe(longTitle)
-    expect(title?.classList.contains('flex-auto')).toBe(true)
+    expect(title?.classList.contains('min-w-0')).toBe(true)
+    expect(title?.classList.contains('shrink-0')).toBe(false)
     expect(worktree?.textContent).toBe('user-support')
+    const locationChip = worktree?.closest('[data-slot="palette-location-chip"]')
+    expect(locationChip).not.toBeNull()
+    expect(locationChip?.parentElement?.classList.contains('max-w-[40%]')).toBe(true)
+    expect(locationChip?.parentElement?.classList.contains('min-w-0')).toBe(true)
     expect(worktree?.compareDocumentPosition(title ?? document.createElement('span'))).toBe(
       Node.DOCUMENT_POSITION_PRECEDING
     )
