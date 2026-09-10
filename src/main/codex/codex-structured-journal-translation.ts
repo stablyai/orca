@@ -157,7 +157,12 @@ export function createCodexJournalTranslator(
           primaryThreadId: deps.primaryThreadId?.() ?? null,
           ordinals: items.ordinals,
           settledTurnLifecycle: (threadId, turnId) =>
-            turnBoundaries.settled(threadId, turnId, 'interrupted', deps.now?.() ?? Date.now())
+            turnBoundaries.settled(
+              threadId,
+              turnId,
+              'interrupted',
+              event.observedAt ?? deps.now?.() ?? Date.now()
+            )
         })
         if (!admission.accepted) {
           return admission

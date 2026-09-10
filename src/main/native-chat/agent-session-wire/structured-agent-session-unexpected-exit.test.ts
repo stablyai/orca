@@ -60,8 +60,8 @@ function lifecycleItem(
 }
 
 describe('provider-exit recovery tickets', () => {
-  it('retains the exit receipt through failed settlement and a later loaded retry', async () => {
-    let now = 2_000
+  it.each([undefined, 2_000])('keeps exit receipt %s on retry', async (observedAt) => {
+    let now = observedAt === undefined ? 2_000 : 30_000
     let record = {
       lease: {
         handoffStage: null,
@@ -115,7 +115,8 @@ describe('provider-exit recovery tickets', () => {
         reason: 'provider exited',
         cause: 'unexpected-exit',
         fence: 7,
-        acquisitionGeneration: GENERATION
+        acquisitionGeneration: GENERATION,
+        observedAt
       }
     )
     expect(record.lease.settlementRetryRequired).toBe(true)

@@ -182,7 +182,8 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       reason: 'codex app-server connection ended',
       cause: 'unexpected-exit',
       fence: 7,
-      acquisitionGeneration: 'generation-1'
+      acquisitionGeneration: 'generation-1',
+      observedAt: expect.any(Number)
     })
     await expect(
       adapter.dispatch({

@@ -52,7 +52,7 @@ export async function settleUnexpectedStructuredAgentSessionExit(
   }
   const unexpectedEvent = event as UnexpectedExitLifecycleEvent
   // Receipt of the exit is the one end time the host may record for a running turn.
-  const observedAt = context.now()
+  const observedAt = event.observedAt ?? context.now()
   return context.serialize(unexpectedEvent.sessionId, async () => {
     const session = context.sessions.get(unexpectedEvent.sessionId)
     if (

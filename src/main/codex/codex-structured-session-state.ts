@@ -45,7 +45,7 @@ export type CodexStructuredSessionEvent =
     }
   | StructuredAgentSessionLifecycleEvent
   /** Translator-only compatibility for callers that do not participate in host recovery. */
-  | { type: 'ended'; sessionId: string; reason: string }
+  | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {
@@ -74,6 +74,8 @@ export type CodexStructuredSessionAdapterDeps = {
 export type CodexSession = {
   connection: CodexAppServerConnection
   ended: boolean
+  /** First observed child exit survives rejected settlement admission. */
+  exitObservedAt?: number
   requestedClose: boolean
   fence: number
   acquisitionGeneration: string
