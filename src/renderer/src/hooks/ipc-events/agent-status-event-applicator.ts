@@ -4,7 +4,6 @@ import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
-import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { shouldSuppressCodexAutoApprovalStatus } from '@/components/terminal-pane/codex-auto-approval-notification-suppression'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
@@ -14,12 +13,11 @@ import type { AgentStatusBatchUpdate, AgentStatusUpdate } from '@/store/slices/a
 import { observeAgentHookCompletionForNotification } from '../agent-hook-completion-notifications'
 import { useAppStore } from '../../store'
 import {
-  applyResolvedAgentTerminalTitleToTab,
   hasRuntimeBackedWorktreeAttribution,
   isAgentStatusForRecentlyClosedTab,
-  resolveHookPayloadAgentType,
-  shouldApplyResolvedAgentTerminalTitleToTab
+  resolveHookPayloadAgentType
 } from './agent-status-routing'
+import { commitAgentStatusUpdate } from './agent-status-apply-commit'
 import {
   createAgentStatusPaneRoutingIndex,
   resolvePaneKeyFromRoutingIndex,
@@ -31,6 +29,10 @@ import type {
   PendingAgentStatusEvent
 } from './agent-status-bridge-types'
 import { normalizeAgentStatusEvent } from './normalize-agent-status-event'
+import {
+  resolveStructuredAgentSessionRowRouting,
+  structuredAgentSessionRowMetadata
+} from './structured-agent-session-row-routing'
 
 export function createAgentStatusEventApplicator(args: {
   pendingAgentStatusEvents: PendingAgentStatusEvent[]
@@ -81,6 +83,22 @@ export function createAgentStatusEventApplicator(args: {
       identityTitle = projectedTitles.identityTitle
     }
     tabTitle = options?.batch?.tabTitlesByTabId.get(ownerTabId ?? '') ?? tabTitle
+    const structuredRouting = data.structuredHost
+      ? resolveStructuredAgentSessionRowRouting(store, ownerTabId)
+      : undefined
+    if (structuredRouting) {
+      // The host owns this row outright: no pane and no connection to arbitrate. `tabTitle` is
+      // set to the same value so the tab-title write-back below is a no-op — a structured
+      // session has no terminal tab record to write into.
+      exists = true
+      owningWorktreeId = structuredRouting.worktreeId
+      repoConnectionId = null
+      repoConnectionResolved = true
+      title = structuredRouting.title
+      identityTitle = structuredRouting.title
+      titleUsesTabTitle = false
+      tabTitle = structuredRouting.title
+    }
     if (!exists && data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
       const fallbackOwnership = resolveWorktreeConnectionFromRoutingIndex(
         routingIndex,
@@ -220,6 +238,7 @@ export function createAgentStatusEventApplicator(args: {
     ) {
       return 'dropped'
     }
+    const structuredMetadata = structuredAgentSessionRowMetadata(data)
     const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)
     const statusWorktreeId = data.worktreeId ?? owningWorktreeId
     const update: AgentStatusUpdate = {
@@ -240,8 +259,9 @@ export function createAgentStatusEventApplicator(args: {
         ...(ownershipConnectionId !== undefined ? { connectionId: ownershipConnectionId } : {})
       },
       metadata:
-        data.providerSession || data.launchToken
+        data.providerSession || data.launchToken || structuredMetadata
           ? {
+              ...structuredMetadata,
               ...(data.providerSession ? { providerSession: data.providerSession } : {}),
               ...(data.launchToken ? { launchToken: data.launchToken } : {})
             }
@@ -261,39 +281,21 @@ export function createAgentStatusEventApplicator(args: {
         })
       }
     }
-    if (options?.batch) {
-      if (!options.batch.transaction.apply(update)) {
-        return 'dropped'
+    return commitAgentStatusUpdate({
+      store,
+      update,
+      batch: options?.batch,
+      notify: applyPostCommitNotification,
+      titleWrite: {
+        paneKey,
+        ownerTabId,
+        tabTitle,
+        terminalTitle,
+        title,
+        identityTitle,
+        titleUsesTabTitle
       }
-      options.batch.notificationEffects.push(applyPostCommitNotification)
-      if (
-        terminalTitle &&
-        shouldApplyResolvedAgentTerminalTitleToTab(store, paneKey, tabTitle, terminalTitle)
-      ) {
-        if (ownerTabId) {
-          options.batch.tabTitlesByTabId.set(ownerTabId, terminalTitle)
-          if (titleUsesTabTitle) {
-            const titleChanges = !title || !isDecorativeAgentTitleFrameChange(title, terminalTitle)
-            options.batch.projectedTitlesByTabId.set(ownerTabId, {
-              title: titleChanges ? terminalTitle : title,
-              identityTitle: titleChanges ? terminalTitle : identityTitle
-            })
-          }
-        }
-      }
-    } else {
-      store.setAgentStatus(
-        update.paneKey,
-        update.payload,
-        update.terminalTitle,
-        update.timing,
-        update.routing,
-        update.metadata
-      )
-      applyResolvedAgentTerminalTitleToTab(useAppStore.getState(), paneKey, tabTitle, terminalTitle)
-      applyPostCommitNotification()
-    }
-    return 'applied'
+    })
   }
 
   return applyAgentStatus

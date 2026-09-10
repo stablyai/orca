@@ -12,7 +12,7 @@ this order, each independently shippable:
 3. shared: one worktree-status rollup and one freshness rule for every reader.
 
 The PR that carries this document is PR 1a. Sections below are grouped under
-the step that delivers them; PR 1a, PR 1b and PR 2a have landed.
+the step that delivers them; PR 1a, PR 1b, PR 2a and PR 2b have landed.
 
 ## The problem this solves
 
@@ -92,14 +92,14 @@ The structured feed keeps its job of projecting a session's journal into a
 summary and streaming it to subscribers. On every publish it additionally
 ingests the summary into the hook server as a status row:
 
-| Row field         | From                                                          |
-| ----------------- | ------------------------------------------------------------- |
-| `paneKey`         | `structuredAgentSessionPaneKey(sessionId)`, the key the renderer also derives (PR 2a made it take the session id alone); its leaf is UUID-shaped so pane-key validation accepts it |
-| `tabId`           | `structuredAgentSessionTabId(sessionId)`                      |
-| `worktreeId`      | `summary.workspaceId` (a folder workspace id is a valid value) |
-| `state`           | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared |
-| `structuredHost`  | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it |
-| prompt, tool, last message, model, provider session | the summary's fields    |
+| Row field                                           | From                                                                                                                                                                               |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paneKey`                                           | `structuredAgentSessionPaneKey(sessionId)`, the key the renderer also derives (PR 2a made it take the session id alone); its leaf is UUID-shaped so pane-key validation accepts it |
+| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                                                           |
+| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                                                     |
+| `state`                                             | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared                                                                                                     |
+| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it                                             |
+| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                                                               |
 
 Sessions with no persisted turn (`status === null`) produce no row, matching
 what the chat shows. When the host revokes live ownership the row is re-set
@@ -179,10 +179,10 @@ path, and the hand-rolled check in `runtime-worktree-agent-rows.ts` goes.
 an old client ignores them. `worktree ps` rows keep their shape and vocabulary,
 so the mobile app sees no change.
 
-Until PR 2 the main process does not forward structured rows to the renderer
-over `agentStatus:set` or `agentStatus:getSnapshot`. The renderer's feed
-bridge still writes those rows itself, and forwarding them too would give one
-pane key two writers. Removing that filter is the first step of PR 2.
+PR 1a did not forward structured rows to the renderer over `agentStatus:set` or
+`agentStatus:getSnapshot`: the renderer's feed bridge still wrote those rows
+itself, and forwarding them too would have given one pane key two writers.
+PR 2b removed both filters.
 
 ## PR 1b: the runtime's retained row store is deleted
 
@@ -426,50 +426,172 @@ moving now sorts by when it finished rather than by its latest journal write.
 
 ## PR 2b: the renderer subscribes
 
-With structured rows arriving over `agentStatus:set`, the renderer's
-`StructuredAgentSessionStatusBridge` no longer needs to write status; its
-unmount cleanup becomes a tab-close signal to the host. The IPC applicator is
-the single writer for observed status. The 2026-09-09 audit sorted the other
-writers:
+Landed. Both filters are gone, the IPC applicator applies the host's structured
+rows, and `StructuredAgentSessionStatusBridge` no longer projects status for a
+locally hosted session.
+
+### The two filters this step removed
+
+- `main/startup/main-window-agent-status.ts` — the `if (structuredHost) return`
+  guard above the `agentStatus:set` sends. It sat above BOTH the main window and
+  `getDashboardPopoutWindow()`, so removing it is also what first gives the
+  dashboard popout structured sessions.
+- `main/ipc/agent-hooks.ts` — the `.filter((entry) => entry.structuredHost === undefined)`
+  on `agentStatus:getSnapshot`, which is the pull a renderer does after
+  hydration. Without it a native chat had no row until its next journal edge, and
+  a settled one never came back at all.
+
+Two things the window listener now skips for a row carrying `structuredHost`,
+neither of which the plan anticipated:
+
+- `maybeAutoRenameBranchOnFirstWork`. First-work branch rename is a PTY-agent
+  feature whose structured-session gap is tracked on its own; publishing the row
+  must not switch it on half-covered as a side effect.
+- `driveSyntheticTitleFromHook`. It injects a title into a pane's title slot, and
+  a structured session has no pane.
+
+### Removing the filters was not enough on its own
+
+The plan treated this step as a switch flip. It is not: a structured pane key
+resolves to no entry in the renderer's terminal-tab routing index, because an
+`agent-session` tab lives in `unifiedTabsByWorktree`, not `tabsByWorktree`. The
+applicator's `exists` gate therefore held every published structured row as
+`pending` forever — main would have published rows the renderer dropped on the
+floor, with every test still green.
+
+`ipc-events/structured-agent-session-row-routing.ts` is what closes that. It
+resolves a structured row against the `agent-session` tab, matching either the
+tab's own id or the id derived from its `entityId`, so a `:history-N` mirrored
+surface still matches.
+
+That tab is REQUIRED — deliberately narrower than the admission rule
+`worktree ps` uses, which lists a session the host holds whether or not a surface
+is open. Two reasons:
+
+- it is what the renderer already showed. The bridge this replaces only wrote a
+  row for a mounted `agent-session` tab, so requiring one keeps sidebar
+  visibility unchanged rather than adding rows as a side effect of the flip;
+- a terminal tab in chat view mode is backed by a structured session too
+  (`TerminalPaneNativeChatPortal`), and its own pane already has a row.
+  Admitting the host's row for that session as well would put two rows in the
+  sidebar for one tab. `worktree ps` has carried that pair since PR 1a; the
+  sidebar must not inherit it here.
+
+It also resolves the row's title from that tab. The wire deliberately carries no
+title — naming a structured session is a separate lane — but the sidebar
+synthesizes a tab for a paneless row (`worktree-agent-row-fallback-tab.ts`) and
+names it `'Agent'` when the entry has none. The plan's reading that
+`worktree-agent-row-type.ts` would fall back to `tab?.title` was about
+AGENT-TYPE resolution, not the row's name, and it does not apply here: a
+structured session has no `TerminalTab` at all. Reading the label in the renderer
+keeps today's behavior without teaching main a name or putting one on the wire.
+
+### The four fields the bridge wrote that main's ingest does not
+
+- `terminalTitle` — resolved renderer-side from the session tab, as above.
+- `structuredHostOwned` — the wire spells it `structuredHost: 'owned' | 'held'`,
+  and the applicator maps it back. It is the freshness bypass in
+  `shared/agent-status-freshness.ts`; without the mapping every native chat that
+  works for over half an hour decays to idle in the sidebar.
+- `terminalResumeEligible: false` — kept, derived from `structuredHost` being
+  present at all. `agent-status-sleeping-records.ts` reads it: a structured row
+  carries a `providerSession`, so without this Orca mints a sleeping record and
+  offers to relaunch a native chat as a TUI.
+- `allowOlderTimestamp` — dropped. The bridge needed it because it stamped the
+  journal clock as `updatedAt`, which a legacy publication can move backwards.
+  Main stamps `receivedAt = Math.max(Date.now(), watermark + 1)`
+  (`server-status-update.ts`), so the applicator's `data.receivedAt <
+existingStatus.updatedAt` ordering check can never see a host row go backwards.
+  The journal clock still reaches the row, as `evidenceObservedAt`.
+
+### The unmount cleanup stays, and the plan's reason it could go is wrong
+
+The plan said the bridge's unmount cleanup becomes a tab-close signal to the
+host. That signal already exists — `tab-group/workspace-tab-close-commands.ts`
+calls `agentSession.close`, which reaches `forgetStructuredAgentSession` — but
+sending it is not enough. The host drops its row through `dropStatusEntry`, which
+notifies `subscribeStatusDrop` subscribers inside main and emits NO renderer
+clear (only `clearPaneState` does, and the renderer's clear handler skips a row
+already reading `done`, which is how a settled session ends). Deleting the
+unmount write would therefore have left a ghost row in the sidebar for every
+closed chat until the next reload.
+
+So the removal stays, for the local lane as much as the remote one. It is the
+"unmount" row of the disposition table, not a status write. A projection unmounts
+when its tab leaves the tab map — a close or a host retraction — not on a
+worktree switch: the bridge maps over every structured tab in every worktree.
+
+### The bridge is retired for local sessions only
+
+One store per execution host. A session on a REMOTE runtime is projected into
+that host's store, and nothing mirrors structured rows down — the web-session
+mirror carries terminal surfaces and their `agentStatus`, and an `agent-session`
+surface in that snapshot has no status field. Deleting the bridge outright would
+have left every remote native chat with no sidebar row.
+
+So the bridge's STATUS WRITES are fenced on `target.kind === 'local'`: for a
+local session it opens no feed and projects nothing, and for a remote one it
+stays that session's writer, exactly as the disposition table already says for
+the remote-runtime OSC parse. That is rule 3 of
+[`remote-wire-compatibility.md`](./remote-wire-compatibility.md) — the fence
+comes off when a remote store's rows are mirrored down, which is separate work.
+
+### The disposition table, corrected
 
 | Writer                                                            | Disposition                                                                                              |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Command Code output seeds, parked-pane seeds, pty-exit removal    | delete; main already emits the same facts                                                                |
-| structured bridge status writes                                   | delete; main now publishes the row                                                                       |
+| structured bridge status writes, local sessions                   | deleted; main publishes the row                                                                          |
+| structured bridge status writes, remote sessions                  | kept; nothing mirrors a remote host's structured rows down                                               |
+| structured bridge unmount removal                                 | kept for both lanes; `dropStatusEntry` emits no renderer clear                                           |
+| Command Code output seeds, parked-pane seeds                      | NOT deleted — see below                                                                                  |
+| pty-exit removal                                                  | NOT deleted — see below                                                                                  |
 | launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later                                            |
 | dismissal, acknowledgement, unmount                               | keep; user facts and component lifecycle                                                                 |
 | remote-runtime OSC parse (bytes never transit local main)         | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |
 | web-session mirror receipt clock                                  | keep; the decay rule needs both clocks from one machine                                                  |
 
-The Command Code done-settle window is renderer policy with no main
-equivalent. PR 2b either moves it into main's detector or leaves it, and says
-which.
+The audit's "main already emits the same facts" was true of the word FACTS and
+false of the store:
 
-### The two filters this step removes
+- **Command Code output seeds and parked-pane seeds.** Main's detector
+  (`orca-runtime-create-terminal-side-effect-command-code-detector.ts`) calls
+  `recordTerminalSideEffectFact(ptyId, { kind: 'command-code-working' | 'command-code-done' })`.
+  That fact travels to the RENDERER, where
+  `terminal-side-effect-facts-handler.ts` turns it into the store write. Nothing
+  in main puts it in the hook server, and the write is gated on
+  `canCommandCodeOutputOwnPane`, which reads `paneForegroundAgentByPaneKey`,
+  `retainedAgentsByPaneKey` and `agentLaunchConfigByPaneKey` — renderer state
+  main does not have. Command Code has hooks for PreToolUse/PostToolUse/Stop but
+  no prompt-submit hook, which is why the scrape exists at all. Deleting these
+  seeds without first building a main-side ingest would leave Command Code with
+  no working row. That ingest is a producer-routing change, PR-1 shaped, not part
+  of "the renderer subscribes".
+- **pty-exit removal** (`pty-connection/pty-exit-hibernate.ts`). Every
+  attributable exit reaches `clearProviderPtyState` -> `clearPaneState`, which
+  does emit a renderer clear. But `server-cleanup.ts` documents the case that
+  resolution misses: a restored or reattached PTY may never rebuild the
+  spawn-time `ptyPaneKey` mapping, and those panes "keep a `working` row and its
+  latches for good". The renderer's own removal is the last thing retiring them.
 
-Both were added by PR 1a and are the only thing keeping main out of the
-renderer's lane. Each is pinned by a test, so removing them should turn those
-tests red first, deliberately:
+### The Command Code done-settle window stays in the renderer
 
-- `main/startup/main-window-agent-status.ts` — the `if (structuredHost) return`
-  guard above the `agentStatus:set` sends. It sits above BOTH the main window
-  and `getDashboardPopoutWindow()`, so removing it is also what first gives the
-  dashboard popout structured sessions.
-- `main/ipc/agent-hooks.ts` — the `.filter((entry) => entry.structuredHost === undefined)`
-  on `agentStatus:getSnapshot`.
+It is left where it is. Moving it into main's detector only makes sense together
+with a main-side Command Code status ingest — the window exists to decide when a
+row completes, and main writes no such row today. Moving the timer without the
+row would put the deadline on one side of the process boundary and the write on
+the other. It is the same deferral as the item above, and belongs with it.
 
 ### What "one writer" actually means after this
 
-Not zero renderer writers. The IPC applicator becomes the single writer for
-OBSERVED status; the table above keeps four categories on purpose. Of those,
-only the launch placeholder seeds are a deferral rather than a principle —
-main holds the launch config and could seed them, and that is the next thing
-to remove after this step, not part of it.
+Not zero renderer writers. The IPC applicator is the single writer for OBSERVED
+status on a locally hosted structured session; the table above keeps the rest on
+purpose. Of those, only the launch placeholder seeds are a deferral rather than a
+principle — main holds the launch config and could seed them.
 
 ### Ordering
 
-Depends on PR 2a. Removing these filters before the two derivations converge
-renders one session twice and shifts the chat's elapsed clock.
+Depended on PR 2a: with the two derivations disagreeing, removing these filters
+rendered one session twice and shifted the chat's elapsed clock.
 
 ## PR 3: one rollup, one clock
 

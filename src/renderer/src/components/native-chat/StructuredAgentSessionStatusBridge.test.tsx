@@ -124,7 +124,10 @@ describe('StructuredAgentSessionStatusBridge', () => {
     mocks.supportsCapability.mockResolvedValue(true)
     mocks.store?.setState({
       agentStatusByPaneKey: {},
-      testRuntimeOwner: null,
+      // PR 2b: the LOCAL host publishes its own sessions over `agentStatus:set`, so the bridge
+      // no longer writes for them. What it still owns is a session on a remote runtime, whose
+      // store nothing mirrors down — that is the lane these cases drive.
+      testRuntimeOwner: 'env-1',
       unifiedTabsByWorktree: { 'wt-1': [structuredTab] }
     })
   })
@@ -165,7 +168,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
   it('projects the host status feed without opening a transcript reader', async () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-    expect(feed().target).toEqual({ kind: 'local' })
+    expect(feed().target).toEqual({ kind: 'environment', environmentId: 'env-1' })
     expect(mocks.subscribeTranscript).not.toHaveBeenCalled()
 
     act(() => feed().emit({ type: 'snapshot', sessions: [summary()] }))
@@ -604,6 +607,39 @@ describe('StructuredAgentSessionStatusBridge', () => {
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
 
     expect(feed().target).toEqual({ kind: 'environment', environmentId: 'env-1' })
+  })
+
+  // PR 2b: main publishes the row for a locally hosted session and the IPC applicator applies it.
+  // A second writer here would race the applicator on one pane key.
+  it('writes nothing and opens no feed for a locally hosted session', async () => {
+    mocks.store?.setState({ testRuntimeOwner: null })
+    render(<StructuredAgentSessionStatusBridge />)
+    await act(() => Promise.resolve())
+
+    expect(mocks.subscribeStatus).not.toHaveBeenCalled()
+    expect(mocks.setAgentStatus).not.toHaveBeenCalled()
+    expect(statuses()).toEqual([])
+  })
+
+  // The host drops its own row on `agentSession.close`, but that goes through `dropStatusEntry`,
+  // which emits no renderer clear — so the last surface to leave is still what takes this copy
+  // out of the store, for a locally hosted session as much as a remote one.
+  it('still clears a locally hosted row when its last surface leaves', async () => {
+    mocks.store?.setState({
+      testRuntimeOwner: null,
+      agentStatusByPaneKey: {
+        [structuredAgentSessionPaneKey('session-1')]: {
+          paneKey: structuredAgentSessionPaneKey('session-1')
+        } as AgentStatusEntry
+      }
+    })
+    render(<StructuredAgentSessionStatusBridge />)
+    await act(() => Promise.resolve())
+
+    act(() => mocks.store?.setState({ unifiedTabsByWorktree: { 'wt-1': [] } }))
+
+    expect(mocks.removeAgentStatus).toHaveBeenCalledWith(structuredAgentSessionPaneKey('session-1'))
+    expect(statuses()).toEqual([])
   })
 
   it('does not project an unknown provider as Codex', async () => {
