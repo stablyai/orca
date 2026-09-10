@@ -10,7 +10,7 @@ import {
   userMessages,
   type SessionSearchIndexFile
 } from './session-search-index-test-fixture'
-import { SessionSearchStore, STALE_PATH_LIMIT } from './session-search-store'
+import { SessionSearchStore } from './session-search-store'
 
 let index: SessionSearchIndexFile
 let store: SessionSearchStore
@@ -41,6 +41,13 @@ function cursor(): number | null | undefined {
   return store.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset
 }
 
+/** What the row itself says it still owes, which is the only record there is. */
+function owed(): { state: string; fail_count: number } | undefined {
+  return index.db
+    .prepare('SELECT state, fail_count FROM files WHERE path = ?')
+    .get(SYNTHETIC_TRANSCRIPT) as { state: string; fail_count: number } | undefined
+}
+
 it('appends onto its own cursor and carries the content hash forward', async () => {
   replayTranscriptRead({
     messages: userMessages('first half', 3),
@@ -64,7 +71,7 @@ it('appends onto its own cursor and carries the content hash forward', async () 
     .get() as { hash: string; count: number }
   expect(second.count).toBe(first.count + 2)
   expect(second.hash).not.toBe(first.hash)
-  expect(store.takeStale()).toEqual([])
+  expect(owed()).toMatchObject({ state: 'current', fail_count: 0 })
 })
 
 it('appends onto a file it read through and decoded no session from', async () => {
@@ -76,7 +83,7 @@ it('appends onto a file it read through and decoded no session from', async () =
     outcome: { session: null, byteOffset: 100 }
   })
   expect(cursor()).toBe(100)
-  expect(store.takeStale()).toEqual([])
+  expect(owed()).toMatchObject({ state: 'current', fail_count: 0 })
 
   replayTranscriptRead({
     mode: 'append',
@@ -87,7 +94,7 @@ it('appends onto a file it read through and decoded no session from', async () =
 
   expect(indexedMessages()).toBe(2)
   expect(cursor()).toBe(220)
-  expect(store.takeStale()).toEqual([])
+  expect(owed()).toMatchObject({ state: 'current', fail_count: 0 })
 })
 
 it('declines an append that starts past its own cursor and records the file', async () => {
@@ -107,7 +114,7 @@ it('declines an append that starts past its own cursor and records the file', as
 
   expect(indexedMessages()).toBe(3)
   expect(cursor()).toBe(100)
-  expect(store.takeStale().map((candidate) => candidate.file.path)).toEqual([SYNTHETIC_TRANSCRIPT])
+  expect(owed()).toMatchObject({ state: 'due' })
 })
 
 it('declines a file whose identity changed under the same path', async () => {
@@ -127,7 +134,7 @@ it('declines a file whose identity changed under the same path', async () => {
   })
 
   expect(indexedMessages()).toBe(2)
-  expect(store.takeStale()).toHaveLength(1)
+  expect(owed()?.state).not.toBe('current')
 })
 
 it('never advances the cursor for an incomplete read', async () => {
@@ -152,7 +159,7 @@ it('never advances the cursor for an incomplete read', async () => {
       }
     ).n
   ).toBe(3)
-  expect(store.takeStale()).toHaveLength(1)
+  expect(owed()?.state).not.toBe('current')
 })
 
 it('indexes nothing at all from a read that was incomplete from the start', async () => {
@@ -207,7 +214,9 @@ it('writes nothing for a source whose parser cannot reach the channel', async ()
   expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
     n: 0
   })
-  expect(store.takeStale()).toEqual([])
+  // No row at all, which is the record: the next pass reads a path the
+  // file table does not name.
+  expect(owed()).toBeUndefined()
 })
 
 it('ignores a candidate older than the retention cutoff', async () => {
@@ -217,59 +226,9 @@ it('ignores a candidate older than the retention cutoff', async () => {
   expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
     n: 0
   })
-  expect(store.takeStale()).toEqual([])
-})
-
-it('stops writing while the store refuses writes, but remembers what it skipped', async () => {
-  store.setAcceptingWrites(false)
-  replayTranscriptRead({ messages: userMessages('paused', 3) })
-
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
-    n: 0
-  })
-  expect(errors).toEqual([])
-  // A pause is exactly the window in which every read is declined. Forgetting
-  // them would leave the whole paused span unindexed with nothing to replay it.
-  expect(store.takeStale().map((candidate) => candidate.file.path)).toEqual([SYNTHETIC_TRANSCRIPT])
-})
-
-it('keeps the paused re-read set when the retention window is reconfigured', async () => {
-  store.setAcceptingWrites(false)
-  replayTranscriptRead({ messages: userMessages('paused', 2) })
-  expect(store.pendingFileCount).toBe(1)
-
-  // The set records what still has to be read, not what is worth keeping. A
-  // window that now excludes this file is enforced where the re-read is
-  // dispatched, so nothing is written and the file leaves the set there.
-  store.setRetentionCutoffMs(Date.now())
-  expect(store.pendingFileCount).toBe(1)
-
-  store.setAcceptingWrites(true)
-  expect(store.takeStale()).toHaveLength(1)
-  replayTranscriptRead({ messages: userMessages('outside the window now', 2) })
-  expect(index.db.prepare('SELECT count(*) AS n FROM sessions').get()).toEqual({
-    n: 0
-  })
-  expect(store.pendingFileCount).toBe(0)
-})
-
-it('drops the oldest record rather than growing without a bound, and says so', () => {
-  store.setAcceptingWrites(false)
-  for (let index = 0; index < STALE_PATH_LIMIT + 5; index++) {
-    store.markStale(syntheticCandidate({ path: `/transcript-${index}.jsonl` }))
-  }
-
-  expect(store.pendingFileCount).toBe(STALE_PATH_LIMIT)
-  expect(store.droppedPendingFileCount).toBe(5)
-  const kept = store.takeStale().map((candidate) => candidate.file.path)
-  expect(kept).not.toContain('/transcript-0.jsonl')
-  expect(kept).toContain(`/transcript-${STALE_PATH_LIMIT + 4}.jsonl`)
-
-  // A drop says the queue is missing something. A completed full sweep
-  // re-enumerates every root, so it is what makes that stop being true; the
-  // count is a report on the current queue, not a lifetime tally.
-  store.forgetDroppedPending()
-  expect(store.droppedPendingFileCount).toBe(0)
+  // No row at all, which is the record: the next pass reads a path the
+  // file table does not name.
+  expect(owed()).toBeUndefined()
 })
 
 it('keeps the session list running when the index write fails', async () => {
@@ -288,7 +247,7 @@ it('keeps the session list running when the index write fails', async () => {
     })
   ).not.toThrow()
   expect(errors.length).toBeGreaterThan(0)
-  expect(store.takeStale()).toHaveLength(1)
+  expect(owed()?.state).not.toBe('current')
 })
 
 it('unregisters cleanly, leaving later reads unindexed', async () => {
@@ -375,5 +334,5 @@ it('keeps a proven file identity when a later read cannot stat it', async () => 
 
   expect(indexedMessages()).toBe(4)
   expect(cursor()).toBe(200)
-  expect(store.takeStale()).toHaveLength(1)
+  expect(owed()?.state).not.toBe('current')
 })

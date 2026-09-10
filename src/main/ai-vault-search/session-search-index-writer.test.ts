@@ -112,13 +112,12 @@ it('refuses to commit a write whose file was removed mid-read', () => {
 it('declines a behind cursor in beginRead before it ever reaches the store', () => {
   const attempted: number[] = []
   const stub = {
-    acceptsCandidate: () => true,
     indexedFile: () => ({ byteOffset: 100, mtimeMs: 1, sizeBytes: 1 }),
     beginWrite: (_candidate: unknown, _mode: unknown, previousByteOffset: number) => {
       attempted.push(previousByteOffset)
       return { add: () => undefined, commit: () => true }
     },
-    markStale: () => undefined
+    setFileState: () => undefined
   } as unknown as SessionSearchStore
   const consumer = new SessionSearchIndexConsumer(stub)
 

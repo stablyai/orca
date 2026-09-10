@@ -16,29 +16,23 @@ import type { SessionSearchStore } from './session-search-store'
  *
  * It keeps its own cursor in the `files` table and never consults the parse
  * cache: the two answer different questions and diverge the moment either
- * declines a read. Three refusals, each of which leaves the cursor where it
- * was and records the file for a later whole re-read:
+ * declines a read.
  *
- * - `beginRead` returns null when this index's cursor is behind the offset an
- *   `append` continues from, or when the file's identity changed.
- * - a buffering failure stops the read's rows without failing the session list.
- * - an `incomplete` outcome never commits; those rows are not the whole span.
+ * Every refusal leaves the cursor where it was and writes what the next pass
+ * needs on the row itself, because the row is the only thing that outlives this
+ * read. A declined append is `due`: the index is behind on a span no append
+ * reaches, so the file has to be read whole. A read that started and did not
+ * commit is `failed`, counted, and stamped with the stat it failed at, which is
+ * what stops an unreadable transcript being retried on every pass for ever.
  */
 export class SessionSearchIndexConsumer implements TranscriptConsumer {
   constructor(private readonly store: SessionSearchStore) {}
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
-    if (!this.store.acceptsCandidate(candidate)) {
-      // A pause is a reason not to write now, not a reason to forget the read.
-      // `markStale` applies the retention rule itself, so a candidate that is
-      // out of scope rather than merely paused is still dropped here.
-      this.store.markStale(candidate)
-      return null
-    }
     // A parser that decodes where the channel cannot reach it reports every read
     // as incomplete. Declining here is not the same as being behind: no re-read
-    // would help, so the file is not recorded either.
+    // would help, so the row is left alone.
     if (!parserPublishesMessages(candidate)) {
       return null
     }
@@ -48,7 +42,8 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
         // This index never saw the span before `previousByteOffset`; appending
         // here would leave a hole no later read can fill. A null cursor is the
         // file a chunked read left half written, which no offset continues.
-        this.store.markStale(candidate)
+        // Either way the next pass has to read this file from the start.
+        this.store.setFileState(candidate.file.path, 'due')
         return null
       }
     }
@@ -59,7 +54,9 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
       start.identity
     )
     if (!write) {
-      this.store.markStale(candidate)
+      // A closed store, a candidate outside the retention window, or a row that
+      // moved under this read. Only a row that exists has anything to record.
+      this.store.setFileState(candidate.file.path, 'due')
       return null
     }
     return new SessionSearchReadConsumer(this.store, start, write)
@@ -105,7 +102,10 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       this.store.writeCommitted(candidate)
       return
     }
-    this.store.markStale(candidate)
+    // Counted against the stat it failed at, not merely recorded: a transcript
+    // the reader cannot open fails identically on every pass, and only a change
+    // to this stat can mean the file itself changed.
+    this.store.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
   }
 }
 
