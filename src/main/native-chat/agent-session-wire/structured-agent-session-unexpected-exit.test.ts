@@ -49,7 +49,12 @@ describe('provider-exit recovery tickets', () => {
       hasProviderChild: true,
       fence: 7,
       acquisitionGeneration: GENERATION,
-      journal: { snapshot: () => ({ items: [] }), appendLifecycleBatch }
+      journal: {
+        snapshot: () => ({ items: [] }),
+        appendLifecycleBatch,
+        pendingSubmissions: () => [],
+        resolveDispatch: vi.fn()
+      }
     } as unknown as StructuredAgentSessionHostSession
     const store = {
       getRecord: () => ({
@@ -92,6 +97,62 @@ describe('provider-exit recovery tickets', () => {
     expect(session.hasProviderChild).toBe(false)
   })
 
+  it('settles a submission the dead child never acknowledged', async () => {
+    const resolveDispatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 2 }))
+    const session = {
+      hasProviderChild: true,
+      fence: 7,
+      acquisitionGeneration: GENERATION,
+      journal: {
+        snapshot: () => ({ items: [] }),
+        appendLifecycleBatch: vi.fn(async () => ({ epoch: 'epoch-1', sequence: 1 })),
+        pendingSubmissions: () => [{ clientMessageId: 'client-1' }],
+        resolveDispatch
+      }
+    } as unknown as StructuredAgentSessionHostSession
+
+    await settleUnexpectedStructuredAgentSessionExit(
+      {
+        store: {
+          getRecord: () => ({
+            lease: {
+              handoffStage: null,
+              runtimeFence: 7,
+              runtimeKind: 'native',
+              claimStatus: 'live',
+              ownerProcess: 'provider',
+              reservedSpawnToken: null,
+              processlessAt: null
+            }
+          }),
+          transitionHandoff: async () => ({ lease: { runtimeFence: 8 } })
+        },
+        sessions: new Map([[SESSION, session]]),
+        flushLifecycle: async () => ({ ok: true }),
+        publishFence: vi.fn(),
+        hasResumeCapableHolder: () => true,
+        serialize: async (_sessionId, task: () => Promise<unknown>) => task(),
+        now: () => 1
+      } as never,
+      {
+        type: 'ended',
+        sessionId: SESSION,
+        reason: 'provider exited',
+        cause: 'unexpected-exit',
+        fence: 7,
+        acquisitionGeneration: GENERATION
+      }
+    )
+
+    expect(resolveDispatch).toHaveBeenCalledWith({
+      clientMessageId: 'client-1',
+      state: 'unknown',
+      reason: 'provider_exited_before_acknowledgement',
+      fence: 7,
+      recovered: true
+    })
+  })
+
   it('does not release or reacquire while terminal settlement retry is still failing', async () => {
     const session = {
       hasProviderChild: true,
@@ -101,7 +162,9 @@ describe('provider-exit recovery tickets', () => {
         snapshot: () => ({ items: [] }),
         appendLifecycleBatch: vi.fn(async () => {
           throw new Error('journal still unavailable')
-        })
+        }),
+        pendingSubmissions: () => [],
+        resolveDispatch: vi.fn()
       }
     } as unknown as StructuredAgentSessionHostSession
     const release = vi.fn()

@@ -15,10 +15,13 @@ import {
   claudeDispatchInvokesSlashCommand,
   claudeDispatchMessageContent
 } from './claude-structured-dispatch-content'
+import { dispatchWriteFailureReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
 
-/** A dispatch whose ack window expired, proven delivered by this replay. */
+/** The provider replay that proves a dispatch was delivered, and under which
+ *  identity. Dispatch returns before this arrives, so this is the ONLY channel
+ *  that settles a submission as accepted. */
 export type ClaudeLateDispatchSettlement = (input: {
   clientMessageId: string
   providerIdentity: AgentJournalItemIdentity
@@ -55,7 +58,7 @@ export function resolveClaudeReplayWaiter(
       (candidate) => candidate.sentUuid === userMessageUuid
     )
     if (exact) {
-      settleWaiter(session, exact, uuid)
+      settleWaiter(session, exact, uuid, onSettledLate)
       return isUserReplay && exact.dispatchSequence === session.dispatchSequence
     }
     const retired = session.retiredDispatchWaiters.find(
@@ -70,7 +73,7 @@ export function resolveClaudeReplayWaiter(
 
   const exact = session.dispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
   if (exact) {
-    settleWaiter(session, exact, uuid)
+    settleWaiter(session, exact, uuid, onSettledLate)
     return isUserReplay && exact.dispatchSequence === session.dispatchSequence
   }
   const retired = session.retiredDispatchWaiters.find((candidate) => candidate.sentUuid === uuid)
@@ -90,7 +93,7 @@ export function resolveClaudeReplayWaiter(
         (candidate) => candidate.replayContentKey === replayContentKey
       )
       if (compatible.length === 1) {
-        settleWaiter(session, compatible[0]!, uuid)
+        settleWaiter(session, compatible[0]!, uuid, onSettledLate)
         return compatible[0]!.dispatchSequence === session.dispatchSequence
       }
     } else if (!session.replayContentFallbackBlocked && session.dispatchWaiters.length === 0) {
@@ -120,22 +123,35 @@ export function resolveClaudeReplayWaiter(
   }
   const waiter = uuid ? session.dispatchWaiters.shift() : undefined
   if (waiter && uuid) {
-    clearTimeout(waiter.timer)
-    waiter.settledUuid = uuid
-    waiter.resolve(uuid)
+    settleWaiter(session, waiter, uuid, onSettledLate)
     return isUserReplay
   }
   return false
 }
 
-function settleWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter, uuid: string): void {
+function settleWaiter(
+  session: ClaudeSession,
+  waiter: ClaudeDispatchWaiter,
+  uuid: string,
+  onSettledLate?: ClaudeLateDispatchSettlement
+): void {
   const index = session.dispatchWaiters.indexOf(waiter)
   if (index !== -1) {
     session.dispatchWaiters.splice(index, 1)
   }
-  clearTimeout(waiter.timer)
   waiter.settledUuid = uuid
   waiter.resolve(uuid)
+  // Dispatch returned on admission, so this replay is what settles the journal
+  // submission and the turn identity. Unfenced settlement, fenced identity:
+  // see `recoverLateIdentity`.
+  onSettledLate?.({
+    clientMessageId: waiter.clientMessageId,
+    providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
+  })
+  if (waiter.dispatchSequence === session.dispatchSequence) {
+    session.activeTurnId = uuid
+    session.activeTurnSequence = waiter.dispatchSequence
+  }
 }
 
 function forgetRetiredWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
@@ -169,9 +185,15 @@ function recoverLateIdentity(
   return isUserReplay && waiter.dispatchSequence === session.dispatchSequence
 }
 
+/**
+ * A waiter with no deadline. The echo Claude sends is emitted when the provider
+ * STARTS the turn, so a message queued behind a running turn cannot be echoed
+ * until that turn ends — an interval bounded only by the previous turn. Elapsed
+ * time is therefore not evidence about delivery, and nothing here expires.
+ * Waiters are retired by process facts instead: a failed write, or child exit.
+ */
 function waitForReplay(
   session: ClaudeSession,
-  timeoutMs: number,
   acceptsResult: boolean,
   sentUuid: string,
   replayContentKey: string,
@@ -185,17 +207,8 @@ function waitForReplay(
       sentUuid,
       dispatchSequence: session.dispatchSequence,
       replayContentKey,
-      resolve,
-      timer: setTimeout(() => {
-        const index = session.dispatchWaiters.indexOf(waiter)
-        if (index !== -1) {
-          session.dispatchWaiters.splice(index, 1)
-        }
-        retireWaiter(session, waiter)
-        resolve(null)
-      }, timeoutMs)
+      resolve
     }
-    waiter.timer.unref?.()
     session.dispatchWaiters.push(waiter)
   })
   return { waiter, promise }
@@ -206,7 +219,6 @@ function retireWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): voi
   if (index !== -1) {
     session.dispatchWaiters.splice(index, 1)
   }
-  clearTimeout(waiter.timer)
   if (!waiter.retired) {
     waiter.retired = true
     session.retiredDispatchWaiters.push(waiter)
@@ -220,10 +232,19 @@ function retireWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): voi
   }
 }
 
+/** Nothing expires a waiter, so the child's death is what ends every live one.
+ *  Retired rather than dropped: their identities stay joinable, bounded by
+ *  `MAX_RETIRED_DISPATCH_WAITERS`. */
+export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
+  for (const waiter of session.dispatchWaiters.splice(0)) {
+    retireWaiter(session, waiter)
+    waiter.resolve(null)
+  }
+}
+
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
-  input: { clientMessageId: string; body: AgentJournalMessageItem },
-  timeoutMs: number
+  input: { clientMessageId: string; body: AgentJournalMessageItem }
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
   try {
@@ -238,7 +259,6 @@ export async function dispatchClaudeTurn(
   const sentUuid = randomUUID()
   const replay = waitForReplay(
     session,
-    timeoutMs,
     acceptsResult,
     sentUuid,
     claudeDispatchContentKey(content),
@@ -270,17 +290,10 @@ export async function dispatchClaudeTurn(
       retireWaiter(session, waiter)
       waiter.resolve(null)
     }
-    return { state: 'unknown', reason: (error as Error).message }
+    return { state: 'unknown', reason: dispatchWriteFailureReason(error) }
   }
-  const uuid = await replayed
-  if (uuid) {
-    session.activeTurnId = uuid
-    session.activeTurnSequence = dispatchSequence
-  }
-  return uuid
-    ? {
-        state: 'accepted',
-        providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
-      }
-    : { state: 'unknown', reason: 'claude accepted a message but did not replay its uuid in time' }
+  // The write is the admission signal. Awaiting the echo here would block on the
+  // turn already running, which is why the deadline this replaces kept declaring
+  // doubt about messages that were delivered. `settleWaiter` finishes the job.
+  return { state: 'admitted' }
 }

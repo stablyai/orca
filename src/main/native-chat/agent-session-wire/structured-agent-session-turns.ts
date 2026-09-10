@@ -6,12 +6,19 @@
 // row the next attach settles as `unknown`, whereas the reverse would lose a
 // turn the provider already accepted.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionCancelResult,
   AgentSessionSendResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
+import {
+  DISPATCH_DOUBT_PERSISTENCE_FAILED,
+  dispatchDoubtProvesUndelivered
+} from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   AgentSessionDispatchOutcome,
@@ -73,6 +80,16 @@ async function appendStatus(
   ctx.publish()
 }
 
+/**
+ * Whether a user's Retry may put this message on the wire again: only where the
+ * recorded doubt proves the frame never reached a provider. Everything else
+ * replays the recorded outcome instead — one message reached the model five
+ * times through this path. Orca never re-sends on its own either way.
+ */
+function retryWouldRedeliver(existing: AgentJournalSubmission | undefined): boolean {
+  return existing?.dispatchState === 'unknown' && dispatchDoubtProvesUndelivered(existing.reason)
+}
+
 export async function performSend(
   ctx: AgentSessionTurnContext,
   input: {
@@ -88,18 +105,32 @@ export async function performSend(
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
     return invalid(`Message id ${input.clientMessageId} was already used for another send.`)
   }
-  if (existing && !(input.retryUnknown && existing.dispatchState === 'unknown')) {
+  const redeliver = input.retryUnknown === true && retryWouldRedeliver(existing)
+  if (existing && !redeliver) {
     return {
       ok: true,
       value: { clientMessageId: input.clientMessageId, submission: existing }
     }
   }
-  if (!(input.retryUnknown && existing?.dispatchState === 'unknown')) {
+  if (!redeliver) {
     await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
     ctx.publish()
   }
 
   const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+  // Admission writes no dispatch row: the submission stays `pending`, which
+  // already means written and awaiting, and the provider's echo settles it
+  // through the late-settlement channel whenever the turn ahead of it ends.
+  if (outcome.state === 'admitted') {
+    ctx.publish()
+    return {
+      ok: true,
+      value: {
+        clientMessageId: input.clientMessageId,
+        submission: requireSubmission(ctx, input.clientMessageId)
+      }
+    }
+  }
   try {
     await ctx.journal.resolveDispatch(
       outcome.state === 'accepted'
@@ -123,7 +154,7 @@ export async function performSend(
       await ctx.journal.resolveDispatch({
         clientMessageId: input.clientMessageId,
         state: 'unknown',
-        reason: 'dispatch_result_persistence_failed',
+        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
         fence: ctx.fence,
         recovered: true
       })
@@ -134,14 +165,26 @@ export async function performSend(
     throw error
   }
   ctx.publish()
+  return {
+    ok: true,
+    value: {
+      clientMessageId: input.clientMessageId,
+      submission: requireSubmission(ctx, input.clientMessageId)
+    }
+  }
+}
 
+function requireSubmission(
+  ctx: AgentSessionTurnContext,
+  clientMessageId: string
+): AgentJournalSubmission {
   const submission = ctx.journal
     .submissions()
-    .find((entry) => entry.clientMessageId === input.clientMessageId)
+    .find((entry) => entry.clientMessageId === clientMessageId)
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
-  return { ok: true, value: { clientMessageId: input.clientMessageId, submission } }
+  return submission
 }
 
 export async function performCancel(

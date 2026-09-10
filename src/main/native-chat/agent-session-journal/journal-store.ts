@@ -246,9 +246,10 @@ export class AgentSessionJournal {
   }
 
   /** On restart every `pending` submission becomes `unknown` before the session
-   *  accepts a writer. Orca never re-sends on the user's behalf. */
-  async markPendingSubmissionsUnknown(fence: number): Promise<string[]> {
-    return markJournalPendingSubmissionsUnknown(this, fence)
+   *  accepts a writer; `reason` names the process fact for callers settling a
+   *  different one. Orca never re-sends on the user's behalf. */
+  async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
+    return markJournalPendingSubmissionsUnknown(this, fence, reason)
   }
 
   /** The escape hatch for corruption, an unreconcilable prefix, a forked handle,

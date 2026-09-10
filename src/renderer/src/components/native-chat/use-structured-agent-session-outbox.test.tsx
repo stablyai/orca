@@ -93,6 +93,28 @@ function unknownResultFor(clientMessageId: string, submittedAt: number) {
   }
 }
 
+function pendingResultFor(clientMessageId: string, submittedAt: number) {
+  return {
+    ok: true,
+    replayed: false,
+    fence: 1,
+    cursor: { epoch: 'epoch-1', sequence: submittedAt },
+    value: {
+      clientMessageId,
+      submission: {
+        clientMessageId,
+        fence: 1,
+        payloadFingerprint: 'fingerprint',
+        dispatchState: 'pending' as const,
+        providerItemId: null,
+        reason: null,
+        submittedAt,
+        resolvedAt: null
+      }
+    }
+  }
+}
+
 function refusedResult(code: AgentSessionWireRefusalCode) {
   return { ok: false, refusal: { code, message: code } }
 }
@@ -168,6 +190,127 @@ describe('useStructuredAgentSessionOutbox', () => {
       ).toBe(retryId)
     }
   )
+
+  it('leaves an admitted send dispatching, never unconfirmed', async () => {
+    mocks.call.mockImplementationOnce(async (_target, _method, params) => {
+      const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
+        .clientOperationId
+      return pendingResultFor(clientMessageId, 10)
+    })
+    const { result, rerender } = renderHook(
+      ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence: 1,
+          submissions
+        }),
+      { initialProps: { submissions: [] as readonly AgentJournalSubmission[] } }
+    )
+
+    act(() => expect(result.current.send('queued behind a running turn')).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+    const id = result.current.outbox[0]!.clientMessageId
+    // Written and awaiting the provider's acknowledgement: no doubt, no banner.
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('dispatching'))
+    expect(result.current.error).toBeNull()
+
+    // A long-lived `pending` submission republished keeps it out of doubt.
+    rerender({
+      submissions: [pendingResultFor(id, 10).value.submission]
+    })
+    expect(result.current.outbox[0]?.state).toBe('dispatching')
+    expect(mocks.call).toHaveBeenCalledTimes(1)
+
+    // The provider's echo lands and settles it; the entry leaves the outbox.
+    rerender({
+      submissions: [
+        { ...pendingResultFor(id, 10).value.submission, dispatchState: 'accepted' as const }
+      ]
+    })
+    await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+  })
+
+  it('lets no transport error reopen a send the journal already settled', async () => {
+    // The RPC fails while the host has already accepted: the journal is the
+    // authority, so the entry leaves the outbox and no Retry is offered for it.
+    mocks.call.mockRejectedValue(new Error('socket closed'))
+    const { result, rerender } = renderHook(
+      ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence: 1,
+          submissions
+        }),
+      { initialProps: { submissions: [] as readonly AgentJournalSubmission[] } }
+    )
+
+    act(() => expect(result.current.send('settled for good')).toBe(true))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
+    const id = result.current.outbox[0]!.clientMessageId
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
+
+    rerender({
+      submissions: [
+        { ...pendingResultFor(id, 10).value.submission, dispatchState: 'accepted' as const }
+      ]
+    })
+    await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+  })
+
+  it('drains a head the host refuses to redeliver so the queue behind it advances', async () => {
+    // The guard refuses a retry it cannot prove is a first delivery. That must
+    // not leave a Retry that does nothing in front of a wedged queue: the entry
+    // leaves the outbox, the user is told Orca will not send it again, and the
+    // message queued behind it goes out.
+    // The second send never settles, so the refusal's error is still on screen
+    // when the queue behind it advances.
+    mocks.call.mockImplementation(async (_target, _method, params) => {
+      const request = params as {
+        envelope: { clientOperationId: string }
+        body: { blocks: { text?: string }[] }
+      }
+      if (request.body.blocks[0]?.text === 'second') {
+        return new Promise(() => {})
+      }
+      return unknownResultFor(request.envelope.clientOperationId, 10)
+    })
+    const { result, rerender } = renderHook(
+      ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
+        useStructuredAgentSessionOutbox({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          fence: 1,
+          submissions
+        }),
+      { initialProps: { submissions: [] as readonly AgentJournalSubmission[] } }
+    )
+
+    act(() => expect(result.current.send('first')).toBe(true))
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('unconfirmed'))
+    const firstId = result.current.outbox[0]!.clientMessageId
+    rerender({ submissions: [unknownResultFor(firstId, 10).value.submission] })
+
+    act(() => expect(result.current.send('second')).toBe(true))
+    expect(result.current.outbox).toHaveLength(2)
+
+    act(() => result.current.retry(firstId))
+    await waitFor(() =>
+      expect(result.current.outbox.some((entry) => entry.clientMessageId === firstId)).toBe(false)
+    )
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    })
+
+    const sent = mocks.call.mock.calls.map(
+      (call) => (call[2] as { body?: { blocks?: { text?: string }[] } })?.body?.blocks?.[0]?.text
+    )
+    expect(sent).toContain('second')
+    expect(result.current.error).toBe(
+      'Message delivery is unconfirmed and Orca will not send it again'
+    )
+  })
 
   it('retains a send operation after a pending-admission refusal', async () => {
     mocks.call
