@@ -10,6 +10,7 @@ const PortsPanel = lazy(() => import('./PortsPanel'))
 const AiVaultPanel = lazy(() => import('./AiVaultPanel'))
 const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
 const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
+const TaskPanel = lazy(() => import('./TaskPanel'))
 const PluginPanel = lazy(() => import('./PluginPanel'))
 
 type RightSidebarPanelContentProps = {
@@ -40,6 +41,7 @@ export function RightSidebarPanelContent({
             isVisible={rightSidebarOpen && effectiveTab === 'pr-checks'}
           />
         )}
+        {effectiveTab === 'task' && <TaskPanel />}
         {/* Plugin-contributed tabs route by key prefix; the panel itself
             handles plugins that have since been uninstalled or disabled.
             Why key: switching plugin tabs must remount the sandboxed iframe —

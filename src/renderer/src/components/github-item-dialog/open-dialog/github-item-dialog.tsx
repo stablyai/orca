@@ -23,6 +23,7 @@ export default function GitHubItemDialog({
   sourceContext,
   initialTab,
   backLabel = 'Back',
+  variant = 'page',
   projectOrigin,
   onUse,
   onReviewRequestsChange,
@@ -144,6 +145,7 @@ export default function GitHubItemDialog({
         <GitHubItemDialogIssueHeader
           workItem={workItem}
           backLabel={backLabel}
+          embedded={variant === 'panel'}
           onClose={onClose}
           linkCopied={linkCopied}
           setLinkCopyButtonRef={setLinkCopyButtonRef}

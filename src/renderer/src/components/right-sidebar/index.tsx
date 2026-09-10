@@ -10,9 +10,9 @@ import { ActivityBarButton } from './activity-bar-buttons'
 import { getActiveChecksStatus } from './active-checks-status'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
-  RIGHT_SIDEBAR_MIN_WIDTH,
   clampRightSidebarPanelWidth,
-  computeMaxRightSidebarPanelWidth
+  computeMaxRightSidebarPanelWidth,
+  getRightSidebarTabFloorWidth
 } from './right-sidebar-width'
 import { translate } from '@/i18n/i18n'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
@@ -62,15 +62,16 @@ function RightSidebarInner(): React.JSX.Element {
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
   const maxWidth = computeMaxRightSidebarPanelWidth(windowWidth, activityBarSideWidth)
+  const tabFloorWidth = getRightSidebarTabFloorWidth(effectiveTab)
   const renderedRightSidebarWidth = clampRightSidebarPanelWidth(
-    rightSidebarWidth,
+    Math.max(rightSidebarWidth, tabFloorWidth),
     windowWidth,
     activityBarSideWidth
   )
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,
     width: renderedRightSidebarWidth,
-    minWidth: RIGHT_SIDEBAR_MIN_WIDTH,
+    minWidth: tabFloorWidth,
     maxWidth,
     deltaSign: -1,
     renderedExtraWidth: activityBarSideWidth,

@@ -40,6 +40,7 @@ export default function PullRequestPage({
   sourceContext,
   initialTab,
   backLabel = 'Pull requests',
+  variant = 'page',
   projectOrigin,
   onUse,
   onReviewRequestsChange,
@@ -314,6 +315,7 @@ export default function PullRequestPage({
         workItem={workItem}
         displayWorkItem={displayWorkItem}
         backLabel={backLabel}
+        embedded={variant === 'panel'}
         onClose={onClose}
         linkCopied={linkCopied}
         setLinkCopyButtonRef={setLinkCopyButtonRef}

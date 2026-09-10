@@ -1,4 +1,15 @@
+import type { ActiveRightSidebarTab } from '../../../../shared/ui-chrome-types'
+
 export const RIGHT_SIDEBAR_MIN_WIDTH = 220
+/** Width the Task panel needs before the provider detail view stops squeezing:
+ *  below this the title column collapses next to the fixed-width workspace CTA. */
+export const RIGHT_SIDEBAR_TASK_TAB_MIN_WIDTH = 560
+
+/** Per-tab floor applied at render time only, so a tab that needs room gets it
+ *  without rewriting the width the user chose for every other tab. */
+export function getRightSidebarTabFloorWidth(tab: ActiveRightSidebarTab): number {
+  return tab === 'task' ? RIGHT_SIDEBAR_TASK_TAB_MIN_WIDTH : RIGHT_SIDEBAR_MIN_WIDTH
+}
 export const RIGHT_SIDEBAR_MIN_NON_SIDEBAR_AREA = 320
 export const RIGHT_SIDEBAR_ABSOLUTE_FALLBACK_MAX_WIDTH = 2000
 
