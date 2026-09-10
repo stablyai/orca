@@ -1,3 +1,4 @@
+import { compileFunction } from 'node:vm'
 import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -130,7 +131,7 @@ export function operationModuleLoader(root: string, mutation?: Mutation) {
     const exposed = file.endsWith('MobileAgentSessionHistoryPanel.tsx')
       ? '\nexports.loadMobileResumeMetadata = loadMobileResumeMetadata;'
       : ''
-    const evaluate = new Function('require', 'exports', output + exposed)
+    const evaluate = compileFunction(output + exposed, ['require', 'exports'], { filename: file })
     evaluate((name: string) => imported(file, name), exports)
     return exports
   }
