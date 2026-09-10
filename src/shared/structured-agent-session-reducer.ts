@@ -3,13 +3,14 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionSlashCommand,
-  AgentSessionHandoffStatus,
-  AgentSessionHistoryPage,
-  AgentSessionSubscribeEvent,
-  AgentSessionTurnActivity
+import {
+  agentSessionBackgroundTasksEqual,
+  type AgentSessionBackgroundTaskState,
+  type AgentSessionSlashCommand,
+  type AgentSessionHandoffStatus,
+  type AgentSessionHistoryPage,
+  type AgentSessionSubscribeEvent,
+  type AgentSessionTurnActivity
 } from './agent-session-wire'
 
 export type StructuredAgentSessionState = {
@@ -70,17 +71,9 @@ function backgroundTaskStatesEqual(
   ) {
     return false
   }
-  if (left.tasks === right.tasks) {
-    return true
-  }
-  if (!left.tasks || !right.tasks || left.tasks.length !== right.tasks.length) {
-    return false
-  }
-  return left.tasks.every(
-    (task, index) =>
-      task.id === right.tasks?.[index]?.id &&
-      task.kind === right.tasks[index]?.kind &&
-      task.description === right.tasks[index]?.description
+  return (
+    agentSessionBackgroundTasksEqual(left.tasks, right.tasks) &&
+    agentSessionBackgroundTasksEqual(left.settledTasks, right.settledTasks)
   )
 }
 

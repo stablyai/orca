@@ -14,9 +14,11 @@ import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
-import type {
-  AgentSessionStatusEvent,
-  AgentSessionStatusSummary
+import {
+  agentSessionBackgroundTasksEqual,
+  type AgentSessionBackgroundTaskState,
+  type AgentSessionStatusEvent,
+  type AgentSessionStatusSummary
 } from '../../../shared/agent-session-wire'
 import { projectStructuredAgentSessionStatusSummary } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -41,6 +43,9 @@ export type StructuredAgentSessionStatusFeedDeps = {
   /** Every projection change, whether or not anyone is subscribed. `replay` marks a re-projection
    *  of state the host already knew (restore, an arriving subscriber) rather than a journal edge. */
   onStatusChanged?: (summary: AgentSessionStatusSummary, options: { replay: boolean }) => void
+  /** Live provider-owned background tasks for the summary, so session lists can
+   *  render subagent children. Optional: a provider without the hook projects none. */
+  readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null | undefined
 }
 
 function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSummary): boolean {
@@ -57,13 +62,50 @@ function summariesEqual(a: AgentSessionStatusSummary, b: AgentSessionStatusSumma
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
+    agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)
   )
+}
+
+/** Wire the host's own deps into a feed; keeps the host at one call site.
+ *  `deps` is a thunk because the host builds the feed in a field initializer,
+ *  before its constructor parameters are assigned. */
+export function createStructuredAgentSessionHostStatusFeed(args: {
+  sessions: StructuredAgentSessionStatusFeedDeps['sessions']
+  now: () => number
+  deps: () => {
+    store: { getRecord: (sessionId: string) => AgentSessionRecord | null }
+    adapter: {
+      backgroundTaskState?: (
+        sessionId: string
+      ) => AgentSessionBackgroundTaskState | null | undefined
+    }
+    onSessionStatusChanged?: StructuredAgentSessionStatusFeedDeps['onStatusChanged']
+  }
+}): StructuredAgentSessionStatusFeed {
+  return new StructuredAgentSessionStatusFeed({
+    sessions: args.sessions,
+    getRecord: (sessionId) => args.deps().store.getRecord(sessionId),
+    now: args.now,
+    onStatusChanged: (summary, options) => args.deps().onSessionStatusChanged?.(summary, options),
+    readBackgroundTasks: (sessionId) => args.deps().adapter.backgroundTaskState?.(sessionId)
+  })
 }
 
 export class StructuredAgentSessionStatusFeed {
   private readonly subscribers = new Map<string, StructuredAgentSessionStatusSubscriber>()
   private readonly published = new Map<string, AgentSessionStatusSummary>()
+  // Task progress must not sort and scan an unchanged conversation. Journal identity owns cleanup.
+  private readonly journalProjections = new WeakMap<
+    AgentSessionJournal,
+    {
+      epoch: string
+      sequence: number
+      readOnly: boolean
+      fence: number | undefined
+      summary: ReturnType<typeof projectStructuredAgentSessionStatusSummary>
+    }
+  >()
 
   constructor(private readonly deps: StructuredAgentSessionStatusFeedDeps) {}
 
@@ -154,24 +196,54 @@ export class StructuredAgentSessionStatusFeed {
     journal: AgentSessionJournal
   ): AgentSessionStatusSummary {
     // An unreadable journal projects as "no turn": the chat itself shows the reset.
-    const snapshot = journal.isReadOnly ? null : journal.snapshot()
-    const items = snapshot?.items ?? []
-    const submissions = snapshot?.submissions ?? []
+    const cursor = journal.cursor()
+    const readOnly = journal.isReadOnly
+    const fence = session.fence
+    let projection = this.journalProjections.get(journal)
+    if (
+      !projection ||
+      projection.epoch !== cursor.epoch ||
+      projection.sequence !== cursor.sequence ||
+      projection.readOnly !== readOnly ||
+      projection.fence !== fence
+    ) {
+      // A journalled submission bumps `lastSequence`, so the send-time working
+      // signal reaches the cache; the lease fence does not, hence the extra key.
+      const snapshot = readOnly ? null : journal.snapshot()
+      projection = {
+        ...cursor,
+        readOnly,
+        fence,
+        summary: projectStructuredAgentSessionStatusSummary(
+          snapshot?.items ?? [],
+          snapshot?.submissions ?? [],
+          fence
+        )
+      }
+      this.journalProjections.set(journal, projection)
+    }
     const record = this.deps.getRecord(sessionId)
     const providerSession = structuredAgentSessionProviderSessionMetadata(record)
     // The journal has no model: the record's acknowledged options are where an owner
     // handoff or a mid-session switch lands, so the row follows whichever is in force.
     const model = normalizeOptionalField(record?.options?.model, AGENT_MODEL_MAX_LENGTH)
+    // Usage is dropped here on purpose: a `task_progress` tick would otherwise fail the
+    // equality check and re-broadcast a full summary to every remote subscriber for a
+    // number no session list renders. Tokens stay live on the background-task channel.
+    const backgroundTasks = this.deps
+      .readBackgroundTasks?.(sessionId)
+      ?.tasks?.map(({ totalTokens: _totalTokens, ...task }) => task)
     return {
       sessionId,
       workspaceId: session.params.location.workspaceId,
       agent: session.params.provider,
       ...(session.hasProviderChild ? { hostExecutionOwned: true as const } : {}),
-      ...projectStructuredAgentSessionStatusSummary(items, submissions, session.fence),
+      ...projection.summary,
       ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
         ? { rewindBlockedReason: 'outcome-unknown' as const }
         : {}),
       ...(model ? { model } : {}),
+      ...(backgroundTasks && backgroundTasks.length > 0 ? { backgroundTasks } : {}),
       ...(providerSession ? { providerSession } : {}),
       updatedAt: journal.lastActivityAt() || this.deps.now()
     }

@@ -38,9 +38,13 @@ export function createStructuredSessionMocks() {
     pasteFromClipboard: vi.fn() as StructuredSessionSpy,
     submissions: [] as unknown[],
     monitoringBackgroundTasks: false,
+    showBackgroundTasks: false,
+    isWorking: false,
+    turnId: null as string | null,
     supportsBackgroundTaskStop: false,
     supportsBackgroundTaskStopAll: true,
     backgroundTasks: [] as AgentSessionBackgroundTask[],
+    settledBackgroundTasks: [] as AgentSessionBackgroundTask[],
     stopBackgroundTask: vi.fn() as StructuredSessionSpy
   }
 
@@ -91,12 +95,16 @@ export function createStructuredSessionMocks() {
             blockedClientMessageId: outbox.blockedClientMessageId,
             send: outbox.send,
             retry: outbox.retry,
-            isWorking: false,
-            isMonitoringBackgroundTasks: mocks.monitoringBackgroundTasks,
-            supportsBackgroundTaskStop: mocks.supportsBackgroundTaskStop,
-            supportsBackgroundTaskStopAll: mocks.supportsBackgroundTaskStopAll,
-            backgroundTasks: mocks.backgroundTasks,
-            turnId: null,
+            isWorking: mocks.isWorking,
+            backgroundTasks: {
+              show: mocks.showBackgroundTasks || mocks.monitoringBackgroundTasks,
+              isMonitoring: mocks.monitoringBackgroundTasks,
+              tasks: mocks.backgroundTasks,
+              settledTasks: mocks.settledBackgroundTasks,
+              supportsStop: mocks.supportsBackgroundTaskStop,
+              supportsStopAll: mocks.supportsBackgroundTaskStopAll
+            },
+            turnId: mocks.turnId,
             cancel: vi.fn() as StructuredSessionSpy,
             stopBackgroundTask: (taskId?: string) =>
               mocks.stopBackgroundTask(props.sessionId, taskId),
@@ -181,10 +189,14 @@ export function createStructuredSessionMocks() {
     mocks.pasteFromClipboard.mockReset()
     mocks.submissions = []
     mocks.monitoringBackgroundTasks = false
+    mocks.showBackgroundTasks = false
+    mocks.isWorking = false
+    mocks.turnId = null
     mocks.supportsBackgroundTaskStop = false
     mocks.supportsBackgroundTaskStopAll = true
     mocks.stopBackgroundTask.mockReset()
     mocks.backgroundTasks = []
+    mocks.settledBackgroundTasks = []
   }
 
   return { mocks, moduleFactories, resetStructuredSessionMocks }
