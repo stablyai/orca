@@ -6,6 +6,7 @@ import {
   collectActivePluginCommands,
   collectActivePluginPanelsAt,
   collectEditablePluginCommands,
+  collectInstalledPluginTabKeys,
   usePluginPanelsStore
 } from './plugin-panels'
 
@@ -99,6 +100,27 @@ describe('plugin panel list loading', () => {
     ])
     expect(collectActivePluginPanelsAt([entry], 'workspace').map((p) => p.id)).toEqual(['board'])
     expect(collectActivePluginPanelsAt([{ ...entry, status: 'disabled' }], 'workspace')).toEqual([])
+  })
+
+  it('keeps workspace panels out of the sidebar route key set', () => {
+    const entry = {
+      ...plugin('orca-samples.current'),
+      panels: [
+        { id: 'legacy', title: 'Legacy', tabKey: 'plugin:orca-samples.current/legacy' as const },
+        {
+          id: 'board',
+          title: 'Board',
+          location: 'workspace' as const,
+          tabKey: 'plugin:orca-samples.current/board' as const
+        }
+      ]
+    }
+
+    // A panel that moved to the workspace surface must not keep a persisted
+    // sidebar route alive — the normalizer drops what this set omits.
+    expect(collectInstalledPluginTabKeys([entry])).toEqual(
+      new Set(['plugin:orca-samples.current/legacy'])
+    )
   })
 
   it('bounds watchdog errors to installed panels and clears them on recovery', () => {

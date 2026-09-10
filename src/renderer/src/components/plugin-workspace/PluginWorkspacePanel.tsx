@@ -24,7 +24,10 @@ export function PluginWorkspacePanel(): React.JSX.Element | null {
         </Button>
       </header>
       <div className="flex min-h-0 flex-1">
-        <PluginPanel tabKey={tabKey} expectedLocation="workspace" />
+        {/* Why key: same rule as the sidebar — switching views must remount the
+            sandboxed iframe so a reused frame cannot keep posting messages while
+            the bridge rebinds under the next panel's session. */}
+        <PluginPanel key={tabKey} tabKey={tabKey} expectedLocation="workspace" />
       </div>
     </section>
   )
