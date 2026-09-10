@@ -339,7 +339,13 @@ async function sweepStructuredSessions(
   // guess — it named every session, including the ones already closed, and reported zero closes.
   const progress = createStructuredSweepProgress(live)
   await settleBeforeDeadline(
-    sweeps.track(() => closeStructuredSessionsForWorktree(progress, deadline, deps.runtime)),
+    sweeps.track(() =>
+      closeStructuredSessionsForWorktree(progress, deadline, {
+        ...(deps.runtime ? { runtime: deps.runtime } : {}),
+        // The only shape of removal that can leave this workspace — and its chat tabs — in place.
+        mayRefuse: Boolean(deps.requirePhysicalStop) && !deps.allowUnverifiedStop
+      })
+    ),
     undefined,
     deadline
   )

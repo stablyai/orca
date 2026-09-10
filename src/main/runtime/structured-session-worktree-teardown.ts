@@ -209,15 +209,28 @@ export function unclosedStructuredSessions(
  * the outcome this whole sweep exists to prevent, and closing is how you prevent it. What stayed is
  * the only thing worth refusing over.
  *
- * Takes the list rather than re-deriving it, so the sessions reported as unclosed are exactly the
- * ones a close was attempted on — re-enumerating would run every liveness observation twice and
- * let the refusal name a session this call never touched.
+ * Takes the list rather than re-deriving it, so the refusal can only ever name a session out of
+ * the set this sweep was handed — re-enumerating would run every liveness observation twice and
+ * let it name one this call never touched. Not every one of them is a session a close was
+ * attempted on: the deadline check below can leave the tail of the list unasked, and
+ * `unclosedStructuredSessions` reports those as `unverifiable` precisely because nobody looked.
  */
 export async function closeStructuredSessionsForWorktree(
   progress: StructuredSweepProgress,
   deadline: number,
-  runtime?: StructuredWorktreeSweepRuntime
+  options: {
+    runtime?: StructuredWorktreeSweepRuntime
+    /**
+     * Whether this removal can still refuse over an unclosed session.
+     *
+     * It is the only case where the workspace — and therefore its chat tabs — survives, so it is
+     * the only case where an unproven close may put a tab back. Force and the folder-workspace
+     * paths discard the workspace whatever the sweep reports.
+     */
+    mayRefuse?: boolean
+  } = {}
 ): Promise<void> {
+  const { runtime, mayRefuse } = options
   // No `afterClose` for a dispatched worker: `host.close` drops the holds, so nothing keeps a
   // provider child un-evictable, but the dispatch's redrive subscription and registry entry do
   // survive until it settles by another verb. That is a bounded leak, not a hazard — and passing
@@ -231,10 +244,10 @@ export async function closeStructuredSessionsForWorktree(
     if (Date.now() >= deadline) {
       return
     }
-    const outcome = await closeStructuredAgentSessionChild(
-      session.sessionId,
-      runtime ? { runtime } : {}
-    )
+    const outcome = await closeStructuredAgentSessionChild(session.sessionId, {
+      ...(runtime ? { runtime } : {}),
+      restoreTabOnUnprovenClose: mayRefuse === true
+    })
     if (outcome.stopped) {
       progress.closed += 1
     } else {
@@ -246,6 +259,11 @@ export async function closeStructuredSessionsForWorktree(
         // observation, or the record's death evidence landed after it read. Refusing on a child
         // that is demonstrably gone is the defect this sweep exists to remove, so take the proof
         // and run the retirement `closeStructuredAgentSessionChild` skipped when it gave up.
+        //
+        // Including the hide it UNDID: its rollback ran against an observation taken one store
+        // write before this one, so a child that died in between left the tab republished for a
+        // session this sweep is about to count closed. Taking the proof has to take that back.
+        await dropDurableChatTabReference(session.sessionId)
         retireSettledStructuredWorkerTab(session.sessionId, runtime)
         progress.closed += 1
       } else {
@@ -255,5 +273,22 @@ export async function closeStructuredSessionsForWorktree(
     // Advanced only once an outcome is recorded, so a close still in flight when the deadline
     // lands stays reported as unclosed instead of falling out of both counts.
     progress.settled += 1
+  }
+}
+
+/**
+ * Drops a settled session's durable chat-tab reference, and cannot fail the settlement.
+ *
+ * The close's own hide is the ordinary path; this is only for the session whose exit this sweep
+ * proved after that close had already rolled the hide back.
+ */
+async function dropDurableChatTabReference(sessionId: string): Promise<void> {
+  try {
+    await getStructuredAgentSessionHost()?.setSessionTabVisibility?.(sessionId, false)
+  } catch (error) {
+    console.warn(
+      `[worktree-teardown] could not drop the chat tab reference for ${sessionId}`,
+      error
+    )
   }
 }

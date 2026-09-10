@@ -56,13 +56,40 @@ function installHost(options: {
   closeGate?: Promise<void>
   /** Blocks ONE session's close, so the serial loop can be caught part-way through. */
   closeGates?: Record<string, Promise<void>>
-}): { closed: string[] } {
+  /** Sessions in the persisted visible-tab index, so a rollback has something to put back. */
+  visible?: string[]
+  /**
+   * Sessions whose death evidence lands DURING the close's tab-restore write.
+   *
+   * `setSessionTabVisibility` is a store transaction — a real disk write — so the close's own
+   * observation and the sweep's re-read straddle it and can disagree about the same session.
+   */
+  exitsDuringTabRestore?: Set<string>
+}): { closed: string[]; visible: Set<string> } {
   const held = new Set(options.records.map((entry) => entry.sessionId))
   const closed: string[] = []
+  const visible = new Set(options.visible ?? [])
+  const recordExit = (sessionId: string): void => {
+    const entry = options.records.find((candidate) => candidate.sessionId === sessionId)
+    if (entry) {
+      entry.lease.claimStatus = 'released'
+      entry.lease.deathEvidence = { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
+    }
+  }
   hostRef.current = {
     deps: { store: { listRecords: () => options.records, getRecord: () => null } },
     hasSession: (sessionId: string) => held.has(sessionId),
-    setSessionTabVisibility: async () => {},
+    getPersistedVisibleSessionTabIndex: () => ({ present: true, sessionIds: [...visible] }),
+    setSessionTabVisibility: async (sessionId: string, isVisible: boolean) => {
+      if (!isVisible) {
+        visible.delete(sessionId)
+        return
+      }
+      if (options.exitsDuringTabRestore?.has(sessionId)) {
+        recordExit(sessionId)
+      }
+      visible.add(sessionId)
+    },
     close: async (sessionId: string) => {
       closed.push(sessionId)
       await options.closeGate
@@ -74,10 +101,8 @@ function installHost(options: {
       if (options.unverifiable?.has(sessionId)) {
         return
       }
-      const record = options.records.find((entry) => entry.sessionId === sessionId)
-      if (record) {
-        record.lease.claimStatus = 'released'
-        record.lease.deathEvidence = { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
+      if (!options.exitsDuringTabRestore?.has(sessionId)) {
+        recordExit(sessionId)
       }
       if (options.settledThenThrows?.has(sessionId)) {
         throw new Error('the event sink could not be flushed')
@@ -89,7 +114,7 @@ function installHost(options: {
     hostRef.current as { deps: { store: { getRecord: (id: string) => unknown } } }
   ).deps.store.getRecord = (sessionId: string) =>
     options.records.find((entry) => entry.sessionId === sessionId) ?? null
-  return { closed }
+  return { closed, visible }
 }
 
 const localProvider = {
@@ -146,6 +171,71 @@ describe('worktree teardown and structured agent sessions', () => {
     await expect(killAllProcessesForWorktree(WORKTREE, destructiveDeps())).rejects.toThrow(
       /still live: 1 agent session \(claude\)/
     )
+  })
+
+  it('puts the chat tab back when the removal refuses over the session', async () => {
+    // The workspace survives a refusal, so the tab has to survive it too: a destructive operation
+    // that refused and still took the user's chat tab away is the loss the rollback exists to undo.
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      stuck: new Set(['s1']),
+      visible: ['s1']
+    })
+    await expect(killAllProcessesForWorktree(WORKTREE, destructiveDeps())).rejects.toThrow(
+      /still live: 1 agent session \(claude\)/
+    )
+    expect([...host.visible]).toEqual(['s1'])
+  })
+
+  it('leaves the chat tab dropped when a forced removal deletes the workspace anyway', async () => {
+    // The other half of the same rollback. Force does not refuse — it warns and goes on to delete
+    // the checkout — so putting the tab back leaves a DURABLE reference to a workspace that is
+    // about to be gone, which republishes the chat at the next launch pointing at a deleted
+    // worktree: the exact outcome this whole sweep exists to remove.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      stuck: new Set(['s1']),
+      visible: ['s1']
+    })
+    await killAllProcessesForWorktree(WORKTREE, destructiveDeps({ allowUnverifiedStop: true }))
+    expect([...host.visible]).toEqual([])
+    warn.mockRestore()
+  })
+
+  it('leaves the chat tab dropped for a folder-workspace removal, which never refuses', async () => {
+    // Same reasoning without the force waiver: this caller cannot refuse at all, so the workspace
+    // is forgotten whatever the close reports.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      stuck: new Set(['s1']),
+      visible: ['s1']
+    })
+    await killAllProcessesForWorktree(WORKTREE, {
+      localProvider,
+      includeProviderInventory: false as const,
+      includeLocalRegistry: false as const,
+      closeStructuredSessions: true
+    })
+    expect([...host.visible]).toEqual([])
+    warn.mockRestore()
+  })
+
+  it('drops the chat tab for a session the sweep proves exited after the close gave up', async () => {
+    // `host.close` can return BEFORE the child's exit is recorded, so the close's own observation
+    // reads unverifiable and puts the tab back — and the sweep's re-read, one store write later,
+    // proves the exit and counts the session closed. The two observations straddle that write and
+    // can disagree; the tab must not survive the disagreement, because this removal proceeds.
+    const host = installHost({
+      records: [record('s1', WORKTREE)],
+      visible: ['s1'],
+      exitsDuringTabRestore: new Set(['s1'])
+    })
+    await expect(killAllProcessesForWorktree(WORKTREE, destructiveDeps())).resolves.toMatchObject({
+      structuredStopped: 1
+    })
+    expect([...host.visible]).toEqual([])
   })
 
   it('names the force escape hatch in the refusal, like the unstopped-PTY gate', async () => {

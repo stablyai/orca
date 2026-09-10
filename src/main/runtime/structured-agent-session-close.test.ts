@@ -163,6 +163,21 @@ describe('closeStructuredAgentSessionChild tab-visibility rollback', () => {
     expect(host.setSessionTabVisibility.mock.calls).toEqual([[SESSION, false]])
   })
 
+  it('does not put the tab back when the caller is discarding the workspace anyway', async () => {
+    // Worktree teardown passes this off for a removal that cannot refuse — force, and the
+    // folder-workspace paths. A tab put back there is a durable reference to a workspace that is
+    // about to be gone, so it republishes the chat at the next launch pointing at it.
+    const host = installHost({ stuck: true })
+
+    const outcome = await closeStructuredAgentSessionChild(SESSION, {
+      restoreTabOnUnprovenClose: false
+    })
+
+    expect(outcome.stopped).toBe(false)
+    expect(host.visible.has(SESSION)).toBe(false)
+    expect(host.setSessionTabVisibility.mock.calls).toEqual([[SESSION, false]])
+  })
+
   it('does not publish a tab for a session that was already hidden', async () => {
     const host = installHost({ closeThrows: new Error('provider round trip failed'), visible: [] })
 

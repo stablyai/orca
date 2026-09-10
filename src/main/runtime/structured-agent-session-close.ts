@@ -36,6 +36,15 @@ export type StructuredAgentSessionCloseOptions = {
    * keep the child un-evictable for the life of the app. Every settlement has to reach it.
    */
   afterClose?: () => void
+  /**
+   * Whether an unproven close may put the chat tab back in the durable restore index.
+   *
+   * On by default, which is the retryable case: a stop that refused and still took the user's tab
+   * away is the loss the rollback exists to undo. A caller that will discard the WORKSPACE
+   * whatever this close reports passes false — a tab put back there is a durable reference to a
+   * workspace about to be gone, and it republishes the chat at the next launch pointing at it.
+   */
+  restoreTabOnUnprovenClose?: boolean
 }
 
 export async function closeStructuredAgentSessionChild(
@@ -54,7 +63,8 @@ export async function closeStructuredAgentSessionChild(
   // Read BEFORE the hide, so a rollback puts the tab back exactly as it was. Restoring
   // unconditionally would publish a tab for a session that was already hidden — a worker started
   // without a chat tab, or one the user had closed — which is a new side effect, not an undo.
-  const tabWasVisible = readPersistedTabVisibility(host, sessionId)
+  const restoreTabIfCloseFails =
+    options.restoreTabOnUnprovenClose !== false && readPersistedTabVisibility(host, sessionId)
   // Set only once the close is actually issued: `setSessionTabVisibility` throwing first leaves a
   // running child, and a receipt that still said `closed_agent_terminal` for it would be the
   // close-that-never-happened this flag exists to rule out.
@@ -67,7 +77,7 @@ export async function closeStructuredAgentSessionChild(
     // Only `closeAttempted` proves the hide landed: the store transaction restores its own state on
     // failure, so a `setSessionTabVisibility` that threw hid nothing and has nothing to undo.
     if (closeAttempted) {
-      await restorePersistedTabVisibility(host, sessionId, tabWasVisible)
+      await restorePersistedTabVisibility(host, sessionId, restoreTabIfCloseFails)
     }
     return {
       stopped: false,
@@ -78,7 +88,7 @@ export async function closeStructuredAgentSessionChild(
   options.afterClose?.()
   const observation = observeStructuredWorker({ sessionId })
   if (observation.status !== 'exited') {
-    await restorePersistedTabVisibility(host, sessionId, tabWasVisible)
+    await restorePersistedTabVisibility(host, sessionId, restoreTabIfCloseFails)
     return {
       stopped: false,
       closeAttempted: true,
@@ -113,6 +123,11 @@ function readPersistedTabVisibility(host: StructuredAgentSessionHost, sessionId:
  * counting such a session closed and retiring its tab. Republishing there would resurrect a tab for
  * a session that is demonstrably gone, at the next launch, pointing at a deleted workspace.
  *
+ * That observation NARROWS the window; it does not close it. This one and the sweep's are taken a
+ * store write apart, so a child that dies in between is unverifiable here and exited there — which
+ * is why the sweep re-drops the tab reference when it takes that proof. Do not delete either half
+ * on the strength of the other.
+ *
  * Never throws: the caller's `reason` is what the user is asked to act on, and a rollback failure
  * must not replace it. `agent_session_identity_required` is the expected one — the record can be
  * gone by now, which is itself the exit this restore is declining to undo.
@@ -120,9 +135,9 @@ function readPersistedTabVisibility(host: StructuredAgentSessionHost, sessionId:
 async function restorePersistedTabVisibility(
   host: StructuredAgentSessionHost,
   sessionId: string,
-  tabWasVisible: boolean
+  restoreTab: boolean
 ): Promise<void> {
-  if (!tabWasVisible || observeStructuredWorker({ sessionId }).status === 'exited') {
+  if (!restoreTab || observeStructuredWorker({ sessionId }).status === 'exited') {
     return
   }
   try {
