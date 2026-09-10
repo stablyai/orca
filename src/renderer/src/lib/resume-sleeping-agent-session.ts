@@ -4,10 +4,12 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence,
-  recordPaneIsOwnedByPreservedPane
+  recordPaneIsOwnedByPreservedPane,
+  stablePaneHasLivePty
 } from './sleeping-agent-pane-ownership'
 import {
   launchSleepingAgentSession,
@@ -100,11 +102,25 @@ function activeOrQueuedResumeClaimsProviderSession(
     if (samePaneOwnsRecovery && entry.paneKey === record.paneKey) {
       continue
     }
+    const tabId = getAgentStatusTabId(entry)
+    const pane = parsePaneKey(entry.paneKey)
+    // A completed turn still owns its transcript while its exact PTY is live.
+    const completedPaneIsLive = Boolean(
+      entry.state === 'done' &&
+      pane &&
+      tabId === pane.tabId &&
+      stablePaneHasLivePty(
+        pane.tabId,
+        pane.leafId,
+        state.ptyIdsByTabId,
+        state.terminalLayoutsByTabId[pane.tabId]
+      )
+    )
     if (
-      worktreeTabIds.has(getAgentStatusTabId(entry) ?? '') &&
+      worktreeTabIds.has(tabId ?? '') &&
       entry.worktreeId === record.worktreeId &&
       entry.agentType === record.agent &&
-      entry.state !== 'done' &&
+      (entry.state !== 'done' || completedPaneIsLive) &&
       agentProviderSessionsEqual(record.agent, entry.providerSession, record.providerSession)
     ) {
       return true
