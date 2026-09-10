@@ -1,4 +1,4 @@
-import { appendFile, chmod, mkdir, rm, stat, utimes } from 'node:fs/promises'
+import { appendFile, chmod, mkdir, rename, rm, stat, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
@@ -763,3 +763,185 @@ it.skipIf(!CAN_DENY_READ)(
     expect(sessionsMatching('removable')).toEqual([SESSION_ID])
   }
 )
+
+// C1: `close()` disarmed the timer and aborted the task in flight, but left the
+// queue running. A `clear()` queued a moment earlier would then delete the
+// database, open a new one and register a consumer against it, all behind an
+// indexer whose caller had finished with it.
+it('lets nothing queued before close reopen the store', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['indexed before the close'], SESSION_ID)
+  await newIndexer().start()
+
+  // `clear()` queues the work that removes the database and opens a new one.
+  const clearing = indexer?.clear()
+  indexer?.close()
+  await clearing
+
+  expect(sessionsMatching('before')).toEqual([SESSION_ID])
+
+  // And nothing is registered as a consumer any more, so a transcript written
+  // after the close gets no row however many times it is parsed.
+  const after = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(after, ['written after the close'], OTHER_SESSION_ID)
+  await parseTranscript(after)
+  expect(sessionsMatching('after')).toEqual([])
+})
+
+// I7: the backfill reads transcript bytes, so it is budgeted like every other
+// pass. It plans the whole machine and hands back what its allowance had no
+// room for; the passes that follow drain the plan without re-discovering.
+it('budgets the backfill and drains the rest over the passes that follow', async () => {
+  for (let index = 0; index < 5; index++) {
+    const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
+    await writeClaudeTranscript(transcriptPath(session), [`backlogged session ${index}`], session)
+  }
+  // One per agent in the recency window, so the cycles cannot be what reads the
+  // other four: the backfill's own allowance has to.
+  await newIndexer({ recentPerAgent: 1, backfillBudget: { files: 2, bytes: 1e9 } }).start()
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 2, filesPending: 3 })
+
+  await nextCycle()
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 4, filesPending: 1 })
+
+  await nextCycle()
+  expect(sessionsMatching('backlogged')).toHaveLength(5)
+  expect(indexer?.status()).toMatchObject({ filesPending: 0, phase: 'current' })
+})
+
+// I6: a purge deletes rows and compacts the database, which is exactly the work
+// a pause is asking to stop. Narrowing while paused records that one is owed.
+it('defers a narrowing purge until the index may write again', async () => {
+  const old = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(transcriptPath(), ['a recent conversation'], SESSION_ID)
+  await writeClaudeTranscript(old, ['an ancient conversation'], OTHER_SESSION_ID)
+  const longAgo = new Date(clock.now() - 120 * 86_400_000)
+  await utimes(old, longAgo, longAgo)
+  await newIndexer().start()
+  expect(sessionsMatching('ancient')).toEqual([OTHER_SESSION_ID])
+
+  indexer?.pause()
+  await indexer?.setHistoryDays(30)
+  expect(sessionsMatching('ancient')).toEqual([OTHER_SESSION_ID])
+
+  await indexer?.resume()
+  expect(sessionsMatching('ancient')).toEqual([])
+  expect(sessionsMatching('recent')).toEqual([SESSION_ID])
+})
+
+// I6, the other half: `resume()` does not sweep on its own however long the
+// pause was. Every read declined while paused is in the store's re-read set,
+// which the next cycle drains alongside the recency window; a sweep is for
+// reaching files nothing has told us about, which is not what a pause produces.
+it('does not sweep on resume, however long the pause was', async () => {
+  await writeClaudeTranscript(transcriptPath(), ['the newest conversation'], SESSION_ID)
+  await newIndexer({ recentPerAgent: 1 }).start()
+
+  indexer?.pause()
+  const older = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(older, ['an older conversation'], OTHER_SESSION_ID)
+  const yesterday = new Date(clock.now() - 86_400_000)
+  await utimes(older, yesterday, yesterday)
+  clock.advance(10 * INTERVAL_MS)
+  await indexer?.resume()
+
+  expect(sessionsMatching('older')).toEqual([])
+  // A sweep, asked for, is what reaches outside the recency window.
+  await indexer?.reconcile({ full: true })
+  expect(sessionsMatching('older')).toEqual([OTHER_SESSION_ID])
+})
+
+it('arms on resume when it was started while paused', async () => {
+  const path = transcriptPath()
+  await writeClaudeTranscript(path, ['indexed after the resume'], SESSION_ID)
+  newIndexer()
+  indexer?.pause()
+  // Resolves without queueing a pass, rather than resolving as though one ran.
+  await indexer?.start()
+  expect(indexer?.status()).toMatchObject({ phase: 'paused', filesIndexed: 0 })
+
+  await indexer?.resume()
+  expect(sessionsMatching('resume')).toEqual([SESSION_ID])
+
+  // The timer is armed too, so the interval after it reconciles as usual.
+  await appendFile(path, `${claudeLines(['a later turn'], SESSION_ID, 10).join('\n')}\n`)
+  await nextCycle()
+  expect(sessionsMatching('later')).toEqual([SESSION_ID])
+})
+
+// C2: a root that comes back needs a sweep, because a cycle reads only the
+// newest N per agent. One that flaps needs one sweep, not one a flap.
+it('buys at most one sweep for a root that keeps flapping', async () => {
+  const parked = join(harness.root, 'parked')
+  const unmount = (): Promise<void> => rename(harness.claudeProjectDir, parked)
+  const remount = (): Promise<void> => rename(parked, harness.claudeProjectDir)
+  // A pass that swept planned a population; a cycle measures no population.
+  const sweptThisPass = (): number => (indexer?.status().filesTotal === null ? 0 : 1)
+
+  await writeClaudeTranscript(transcriptPath(), ['a session on a flapping mount'], SESSION_ID)
+  await newIndexer().start()
+
+  let sweeps = 0
+  for (let round = 0; round < 3; round++) {
+    await unmount()
+    await nextCycle()
+    sweeps += sweptThisPass()
+    await remount()
+    await nextCycle()
+    sweeps += sweptThisPass()
+  }
+  expect(sweeps).toBe(1)
+  // And nothing was retired on the way through: every empty pass had a
+  // non-empty one behind it.
+  expect(sessionsMatching('flapping')).toEqual([SESSION_ID])
+
+  // The latch releases on a pass that finds the root healthy where the pass
+  // before it did too, and the next recovery buys a sweep again.
+  await nextCycle()
+  await unmount()
+  await nextCycle()
+  await remount()
+  await nextCycle()
+  await nextCycle()
+  expect(sweptThisPass()).toBe(1)
+})
+
+// A sweep used to watch every path it discovered, which made the next cycle
+// walk the whole machine to learn that nothing had changed. What it could not
+// settle is the only thing worth carrying.
+it('watches what a sweep could not settle, not everything it discovered', async () => {
+  const older = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(older, ['an older conversation'], OTHER_SESSION_ID)
+  await writeClaudeTranscript(transcriptPath(), ['the newest conversation'], SESSION_ID)
+  await newIndexer({ recentPerAgent: 1 }).start()
+
+  await rm(older)
+  await nextCycle()
+  // Outside the recency window, so a cycle makes no promise about it.
+  expect(sessionsMatching('older')).toEqual([OTHER_SESSION_ID])
+
+  await indexer?.reconcile({ full: true })
+  expect(sessionsMatching('older')).toEqual([])
+})
+
+// A progress pair has to be measured against the same population on both
+// sides: the store holds rows a sweep's plan does not cover, so the unclamped
+// pair reported more files indexed than there were files to index.
+it('never reports more files indexed than the total behind them', async () => {
+  const moved = transcriptPath()
+  await writeClaudeTranscript(moved, ['a session in the old profile'], SESSION_ID)
+  await newIndexer().start()
+  indexer?.close()
+  resetTranscriptConsumersForTests()
+  resetSessionParseCacheForTests()
+
+  // The profile moves: the rows stay, and no root the sweep plans covers them.
+  newIndexer({ roots: { ...harness.roots, claudeProjectsDir: join(harness.root, 'moved') } })
+  await indexer?.start()
+  const swept = indexer?.status()
+  expect(swept?.filesIndexed).toBe(1)
+  expect(swept?.filesTotal).toBeGreaterThanOrEqual(swept?.filesIndexed ?? 0)
+
+  // A cycle measures the recency window, not a population, so it reports none.
+  await nextCycle()
+  expect(indexer?.status().filesTotal).toBeNull()
+})
