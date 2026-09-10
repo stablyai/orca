@@ -42,7 +42,7 @@ import {
   hasExplicitTuiLaunchCustomization,
   resolveAgentLaunchRoute
 } from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { settleFullCreationStructuredLaunch } from './full-creation-structured-launch'
 import { finalizeFullCreation } from './full-creation-finalization'
 import { buildFullCreationIssueCommand } from './full-creation-issue-command'
@@ -132,6 +132,8 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         )
       }
 
+      // Resolved before the cancel gate so the gate stays adjacent to createWorktree below.
+      const hostCapabilities = await ensureLocalRuntimeCapabilities()
       if (isSubmissionCancelled()) {
         return
       }
@@ -140,7 +142,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         agent: tuiAgent,
         settings,
         executionHostId: selectedRepoExecutionHostId ?? 'local',
-        hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
+        hostCapabilities,
         workspaceKind: selectedRepoIsGit ? 'git-worktree' : 'folder',
         promptDelivery: startupPlan?.draftPrompt ? 'draft' : 'auto-submit',
         launchText: startupPlan?.draftPrompt ?? submitStartupPrompt,

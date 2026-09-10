@@ -34,6 +34,14 @@ import {
   submitFolderWorkspaceCreate
 } from './folder-workspace-composer-submit'
 
+// `hostCapabilities` is required so a caller with a cancel gate cannot omit it. Only the launch
+// route reads it, and these cases are not about the route, so they hand in the unknown answer.
+function submitWithUnknownCapabilities(
+  params: Omit<Parameters<typeof submitFolderWorkspaceCreate>[0], 'hostCapabilities'>
+): Promise<boolean> {
+  return submitFolderWorkspaceCreate({ ...params, hostCapabilities: null })
+}
+
 function makeProjectGroup(): ProjectGroup {
   return {
     id: 'group-1',
@@ -95,7 +103,7 @@ describe('submitFolderWorkspaceCreate', () => {
       throw new Error('activation failed')
     })
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: 'hi',
       lastAutoName: '',
@@ -128,7 +136,7 @@ describe('submitFolderWorkspaceCreate', () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
     const onOpenChange = vi.fn()
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -175,7 +183,7 @@ describe('submitFolderWorkspaceCreate', () => {
   it('does not mark first-input rename when the folder workspace has an explicit name', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: 'Checkout polish',
       lastAutoName: '',
@@ -208,7 +216,7 @@ describe('submitFolderWorkspaceCreate', () => {
       repoId: 'repo-1'
     }
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -253,7 +261,7 @@ describe('submitFolderWorkspaceCreate', () => {
       }
     }
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -287,7 +295,7 @@ describe('submitFolderWorkspaceCreate', () => {
       repoId: 'repo-1'
     }
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -349,7 +357,7 @@ describe('submitFolderWorkspaceCreate', () => {
       parentPath: '/home/alice/platform'
     }
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup,
       name: '',
       lastAutoName: '',
@@ -382,7 +390,7 @@ describe('submitFolderWorkspaceCreate', () => {
   it('delivers non-linked follow-up prompts for agents that need stdin after launch', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: 'Aider followup',
       lastAutoName: '',
@@ -419,7 +427,7 @@ describe('submitFolderWorkspaceCreate', () => {
       repoId: 'repo-1'
     }
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -461,7 +469,7 @@ describe('submitFolderWorkspaceCreate', () => {
       }
     }
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -512,7 +520,7 @@ describe('submitFolderWorkspaceCreate', () => {
       repoId: 'repo-1'
     }
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -540,7 +548,7 @@ describe('submitFolderWorkspaceCreate', () => {
   it('does not mark first-input rename without submitted first input', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -571,7 +579,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
     expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('linux')
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup,
       name: 'WSL folder',
       lastAutoName: '',
@@ -604,7 +612,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
     expect(getFolderWorkspaceAgentLaunchPlatform(projectGroup)).toBe('win32')
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup,
       name: 'Remote Windows folder',
       lastAutoName: '',
@@ -636,7 +644,7 @@ describe('submitFolderWorkspaceCreate', () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace({ connectionId: 'ssh-1' }))
     const onOpenChange = vi.fn()
 
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup,
       name: 'SSH workspace',
       lastAutoName: '',
@@ -668,7 +676,7 @@ describe('submitFolderWorkspaceCreate', () => {
     const onOpenChange = vi.fn()
 
     await expect(
-      submitFolderWorkspaceCreate({
+      submitWithUnknownCapabilities({
         projectGroup: makeProjectGroup(),
         name: 'hi',
         lastAutoName: '',
@@ -719,7 +727,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
   })
 
   it('mirrors a startup-paste draft into the chat composer', async () => {
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -736,7 +744,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
   })
 
   it('mirrors an argv-prefill draft, which never lands in startupPlan.draftPrompt', async () => {
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -758,7 +766,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
   })
 
   it('mirrors a multi-line draft into chat', async () => {
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -782,7 +790,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
   })
 
   it('does not mirror an unlinked note, which is submitted rather than drafted', async () => {
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',
@@ -835,7 +843,7 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
     ['startup-paste', 'codex' as const, '', true],
     ['startup-paste multi-line', 'codex' as const, 'Reproduce on Windows first', true]
   ])('%s', async (_label, quickAgent, note, expectMirrored) => {
-    await submitFolderWorkspaceCreate({
+    await submitWithUnknownCapabilities({
       projectGroup: makeProjectGroup(),
       name: '',
       lastAutoName: '',

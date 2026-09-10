@@ -367,6 +367,24 @@ describe('renderer startup runtime routing', () => {
     )
   })
 
+  it('probes local runtime capabilities before any startup gate can hold the answer back', () => {
+    const source = readSource(STARTUP_HYDRATION_PATH)
+    const probeIndex = source.indexOf('void ensureLocalRuntimeCapabilities()')
+    const chainStart = source.indexOf('void (async () => {')
+    const effectStart = source.lastIndexOf('useEffect(() => {', probeIndex)
+
+    expect(probeIndex).toBeGreaterThanOrEqual(0)
+    // Why pinned here: the structured-session-tabs sync is the cache's only other writer and it
+    // waits for workspaceSessionReady + terminalStartupRestorationReady + the experimental flag.
+    // Every resolveAgentLaunchRoute reader — including the three that cannot await — reads an
+    // unanswered cache as "unsupported", so a create in that window degrades to a bare
+    // terminal (#19154). The probe must therefore start before the chain and outside its gates.
+    expect(probeIndex).toBeLessThan(chainStart)
+    expect(probeIndex).toBeLessThan(source.indexOf('await ', effectStart))
+    expect(source.slice(effectStart, probeIndex)).not.toContain('if (')
+    expect(source.slice(effectStart, probeIndex)).not.toContain('experimentalStructuredNativeChat')
+  })
+
   it('orders packaged restoration before adoption, projection, and default creation', () => {
     // Why this file: the startup sequence moved out of App.tsx into the hydration hook;
     // the ordering it asserts is unchanged, only the module that now spells it out.

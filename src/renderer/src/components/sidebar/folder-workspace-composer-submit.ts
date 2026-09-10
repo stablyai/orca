@@ -13,6 +13,7 @@ import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { RuntimeCapability } from '../../../../shared/protocol-version'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getLinkedItemDisplayName,
@@ -23,7 +24,6 @@ import {
   hasExplicitTuiAgentArgs,
   resolveAgentLaunchRoute
 } from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
@@ -69,6 +69,11 @@ type SubmitFolderWorkspaceCreateParams = {
   launchSource?: LaunchSource
   runtimeEnvironmentId?: string | null
   settings?: GlobalSettings | null
+  // Required, not optional: this runs straight through to `createFolderWorkspace` with no
+  // suspension, so a caller that gates on cancellation must resolve these above its gate —
+  // probing in here would reopen that window. `null` still means "probed, genuinely unknown"
+  // and degrades to the legacy route.
+  hostCapabilities: readonly RuntimeCapability[] | null
   createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
   onOpenChange: (open: boolean) => void
 }
@@ -90,6 +95,7 @@ export async function submitFolderWorkspaceCreate({
   launchSource = 'sidebar',
   runtimeEnvironmentId = null,
   settings,
+  hostCapabilities,
   createFolderWorkspace,
   onOpenChange
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
@@ -147,7 +153,7 @@ export async function submitFolderWorkspaceCreate({
         executionHostId: runtimeEnvironmentId
           ? `runtime:${encodeURIComponent(runtimeEnvironmentId)}`
           : (projectGroup.connectionId ?? 'local'),
-        hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
+        hostCapabilities,
         workspaceKind: 'folder',
         promptDelivery: launchDraftPrompt ? 'draft' : 'auto-submit',
         launchText: launchDraftPrompt ?? note,

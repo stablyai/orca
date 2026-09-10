@@ -1,6 +1,6 @@
 import type { ComposerModel } from './composer-model'
 
-type QuickCreationExecutionInput = Pick<
+export type QuickCreationExecutionInput = Pick<
   ComposerModel,
   | 'clearNewWorkspaceDraft'
   | 'createMultiple'
@@ -50,7 +50,7 @@ import {
   hasExplicitTuiLaunchCustomization,
   resolveAgentLaunchRoute
 } from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -205,7 +205,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
             executionHostId: ephemeralVmRecipe
               ? 'runtime:pending-ephemeral-vm'
               : (workspaceRunContext?.hostId ?? selectedRepoExecutionHostId ?? 'local'),
-            hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
+            hostCapabilities: await ensureLocalRuntimeCapabilities(),
             workspaceKind: selectedRepoIsGit ? 'git-worktree' : 'folder',
             promptDelivery: quickDraftPrompt ? 'draft' : 'auto-submit',
             launchText: quickDraftPrompt ?? quickPrompt,
