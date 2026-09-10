@@ -20,6 +20,7 @@ import {
 } from '../../../shared/remote-workspace-session-projection'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { mergeDirectSshRemoteWorkspaceSession } from '../hooks/remote-workspace-session-merge'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
 
@@ -527,6 +528,127 @@ describe('ssh host partition write/read round trip', () => {
     )
 
     expect(restored.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual(['tab-live'])
+  })
+})
+
+describe('ssh host partition and the closed-last-terminal tombstone', () => {
+  /** Two readings of one value meet here. The terminal layer writes an explicit empty
+   *  `tabsByWorktree` row to mean "the user closed the last terminal" and reserves an ABSENT row for
+   *  "never initialized" — a real tombstone, honoured by `shouldAutoCreateInitialTerminal`. This
+   *  adoption reads an empty row on the BASE side as a gap to fill. Opposite readings, same value,
+   *  so the boundary between them is asserted rather than reasoned about: a mature product ships
+   *  exactly this defect, with a correct write side and one reader that decides seeding on a count
+   *  and never consults the record. */
+  async function roundTripSession(payload: WorkspaceSessionState): Promise<{
+    restored: WorkspaceSessionState
+    partitions: Record<string, WorkspaceSessionState>
+  }> {
+    const { buildWorkspaceSessionHostSnapshots } =
+      await import('./workspace-session-host-persistence')
+    const snapshots = buildWorkspaceSessionHostSnapshots(payload, {
+      repos: [{ id: REPO_ID, connectionId: TARGET_ID, executionHostId: null }],
+      worktreesByRepo: {}
+    })
+    const partitions: Record<string, WorkspaceSessionState> = {}
+    for (const snapshot of snapshots) {
+      partitions[snapshot.hostId ?? 'local'] = snapshot.state
+    }
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(partitions as never),
+      repos
+    )
+    return { restored: read.session, partitions }
+  }
+
+  it('writes an SSH workspace emptied by this build into the partition that owns it', async () => {
+    // The precondition the whole non-recurrence claim rests on: the tombstone lands in
+    // `ssh:<targetId>` and `local` keeps no row, so the legacy shape cannot be regenerated.
+    const { partitions } = await roundTripSession(
+      session({ tabsByWorktree: { [WORKTREE_ID]: [] } })
+    )
+
+    expect(partitions[SSH_HOST_ID]?.tabsByWorktree?.[WORKTREE_ID]).toEqual([])
+    expect(Object.hasOwn(partitions.local?.tabsByWorktree ?? {}, WORKTREE_ID)).toBe(false)
+  })
+
+  it('restores that tombstone as an explicit empty row, not a deleted key', async () => {
+    // A deleted key reads back as "never initialized" and the workspace re-seeds on every launch,
+    // which is the defect the tombstone exists to prevent. Presence is the whole signal.
+    const { restored } = await roundTripSession(session({ tabsByWorktree: { [WORKTREE_ID]: [] } }))
+
+    expect(Object.hasOwn(restored.tabsByWorktree, WORKTREE_ID)).toBe(true)
+    expect(restored.tabsByWorktree[WORKTREE_ID]).toEqual([])
+  })
+
+  it('leaves the restored workspace un-seeded by the shared seeding predicate', async () => {
+    // Asserted through the real predicate rather than by inspecting the row, because the row being
+    // right is worth nothing if the reader that acts on it disagrees.
+    const { restored } = await roundTripSession(session({ tabsByWorktree: { [WORKTREE_ID]: [] } }))
+
+    expect(
+      shouldAutoCreateInitialTerminal(
+        restored.tabsByWorktree[WORKTREE_ID]?.length ?? 0,
+        Object.hasOwn(restored.tabsByWorktree, WORKTREE_ID)
+      )
+    ).toBe(false)
+  })
+
+  it('does not adopt a stale populated ssh row over a tombstone in the owning partition', async () => {
+    // The collision stated directly. The tombstone is in `ssh:<targetId>` — where this build writes
+    // it — and adoption must neither hand stale tabs back nor read the row as a gap.
+    const partitions = {
+      local: session({ tabsByWorktree: {} }),
+      [SSH_HOST_ID]: session({ tabsByWorktree: { [WORKTREE_ID]: [] } })
+    }
+    const read = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi(partitions as never),
+      repos
+    )
+
+    expect(read.session.tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(Object.hasOwn(read.session.tabsByWorktree, WORKTREE_ID)).toBe(true)
+  })
+
+  it('resurrects the legacy-transition shape exactly once and not again', async () => {
+    // The documented knownGap, and the claim that makes it acceptable. Boot 1 adopts the stranded
+    // tabs back over `local`'s empty row — non-destructive, and the repair working. The user then
+    // empties the workspace on THIS build, and boot 2 must hold the tombstone: the row now lives in
+    // the owning partition and `local` no longer names the workspace, so there is nothing left to
+    // resurrect from. A gap that recurred would be a permanent re-seed, not a one-shot.
+    const firstBoot = await fetchWorkspaceSessionWithRuntimeHostOwners(
+      partitionedApi({
+        local: session({ tabsByWorktree: { [WORKTREE_ID]: [] } }),
+        [SSH_HOST_ID]: session({ tabsByWorktree: { [WORKTREE_ID]: [tab('tab-stale')] } })
+      } as never),
+      repos
+    )
+    expect(firstBoot.session.tabsByWorktree[WORKTREE_ID]?.map((entry) => entry.id)).toEqual([
+      'tab-stale'
+    ])
+
+    const { restored: secondBoot } = await roundTripSession(
+      session({ ...firstBoot.session, tabsByWorktree: { [WORKTREE_ID]: [] } })
+    )
+
+    expect(secondBoot.tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(
+      shouldAutoCreateInitialTerminal(
+        secondBoot.tabsByWorktree[WORKTREE_ID]?.length ?? 0,
+        Object.hasOwn(secondBoot.tabsByWorktree, WORKTREE_ID)
+      )
+    ).toBe(false)
+  })
+
+  it('publishes the tombstone rather than a row the host can read as unknown', async () => {
+    // Rule 3, client-publishes -> other-client-reads. An emptied workspace must publish its empty
+    // list so a paired client sees the same state; the merge's `hostUnknown` defence covers tabs
+    // this client holds, and an empty row is exactly what it holds here.
+    const { restored } = await roundTripSession(session({ tabsByWorktree: { [WORKTREE_ID]: [] } }))
+    const published = exportRemoteWorkspaceSession(restored, {
+      isTargetWorktree: (worktreeId) => worktreeId === WORKTREE_ID
+    })
+
+    expect(published.tabsByWorktreePath[WORKTREE_PATH]).toEqual([])
   })
 })
 
