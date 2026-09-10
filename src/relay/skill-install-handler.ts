@@ -61,6 +61,7 @@ import {
 } from '../main/skills/skill-install-operation-error'
 import { recoverPendingSkillTransactions } from '../main/skills/skill-transaction-startup-recovery'
 import { resolveEnvironmentSkillProviderRoots } from '../main/skills/skill-provider-runtime-roots'
+import { isHostGitWorktreeRoot } from './skill-install-workspace-proof'
 
 const SSH_SKILL_ENVIRONMENT_ID = 'ssh-host'
 
@@ -198,12 +199,25 @@ export class SkillInstallHandler {
     })
   }
 
+  /**
+   * The destination authority for one relay request.
+   *
+   * Mixed-version note: old clients still send `workspace.path` and the schema
+   * still accepts it, but it is a hint, not authority — a worktree destination
+   * is only honoured once Git on this host confirms the directory is a checkout
+   * root (#18273). `resolveSkillInstallDestination` applies the structural
+   * rules (never the home tree, never a filesystem root) to both kinds.
+   */
   private authority(workspace?: SkillSshWorkspaceAuthority): SkillInstallDestinationAuthority {
     return {
       environmentId: SSH_SKILL_ENVIRONMENT_ID,
       homeDirectory: this.homeDirectory,
-      resolveWorktree: async (id) =>
-        workspace?.kind === 'worktree' && workspace.id === id ? workspace : null,
+      resolveWorktree: async (id) => {
+        if (workspace?.kind !== 'worktree' || workspace.id !== id) {
+          return null
+        }
+        return (await isHostGitWorktreeRoot(workspace.path)) ? workspace : null
+      },
       resolveFolderWorkspace: async (id) =>
         workspace?.kind === 'folder' && workspace.id === id ? workspace : null
     }

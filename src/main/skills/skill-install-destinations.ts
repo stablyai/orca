@@ -1,5 +1,5 @@
 import { lstat, realpath } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { isAbsolute, parse, relative, resolve, sep } from 'node:path'
 import type { SkillInstallRequest } from '../../shared/skill-install-contract'
 
 type WorkspaceIdentity = {
@@ -32,13 +32,31 @@ async function requireDirectory(path: string, category: string): Promise<string>
   return realpath(path)
 }
 
-function requireContained(root: string, path: string): void {
+/** Whether `path` is `root` or lies inside it. `sep` is this machine's, and
+ *  this module only ever runs on the machine that owns the filesystem. */
+function isContained(root: string, path: string): boolean {
   const child = relative(resolve(root), resolve(path))
-  if (
-    child === '..' ||
-    child.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) ||
-    isAbsolute(child)
-  ) {
+  return child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child)
+}
+
+/**
+ * A workspace destination has to be a workspace, not just any directory the
+ * caller named.
+ *
+ * The incumbent check was `requireContained(workspaceDirectory,
+ * workspaceDirectory)`, which is true by construction and so asserted nothing:
+ * whatever `path` the request carried became the install root on the execution
+ * host (#18273, threat model TM-04/TM-11). These rules are the ones that hold
+ * for every host without a workspace catalog to consult; the SSH relay adds a
+ * Git proof on top for worktrees.
+ */
+function requireWorkspaceDirectory(homeDirectory: string, workspaceDirectory: string): void {
+  const home = resolve(homeDirectory)
+  const workspace = resolve(workspaceDirectory)
+  // A filesystem root, the home tree itself, or anything containing the home
+  // tree is not a workspace — installing there scatters `.agents` across the
+  // user's whole account instead of one checkout.
+  if (workspace === parse(workspace).root || workspace === home || isContained(workspace, home)) {
     throw new Error('skill-install-destination-escape')
   }
 }
@@ -91,7 +109,7 @@ export async function resolveSkillInstallDestination(
     workspace.path,
     'skill-install-workspace-unavailable'
   )
-  requireContained(workspaceDirectory, workspaceDirectory)
+  requireWorkspaceDirectory(homeDirectory, workspaceDirectory)
   return {
     scope: 'workspace',
     homeDirectory,
