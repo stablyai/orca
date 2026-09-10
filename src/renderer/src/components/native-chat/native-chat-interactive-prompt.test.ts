@@ -238,6 +238,45 @@ describe('buildAskAnswerKeys', () => {
     ).toEqual([{ raw: '1' }, { raw: '3' }, { raw: '\x1b[C' }, { raw: '\r' }])
   })
 
+  it('multi-select plus a note: arrows to the free-text row, then walks out through Submit', () => {
+    // Case 2.2. A digit toggles the free-text row's checkbox without opening its
+    // editor, so the row is reached by arrowing down past every option from the
+    // initial highlight (digit toggles leave it on row 1). Enter opens the field;
+    // Enter inside it would uncheck the row and discard the note, so the exit is
+    // DOWN onto Submit, Enter, then Enter on the review page.
+    expect(
+      buildAskAnswerKeys(single(['Rust', 'Swift', 'TypeScript'], true), [
+        { indices: [0, 2], other: 'some note' }
+      ])
+    ).toEqual([
+      { raw: '1' },
+      { raw: '3' },
+      { raw: `${ESC}[B` },
+      { raw: `${ESC}[B` },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { text: 'some note' },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('multi-select plus a note: the arrow count follows the option count', () => {
+    expect(
+      buildAskAnswerKeys(single(['Rust', 'Swift'], true), [{ indices: [1], other: 'note' }])
+    ).toEqual([
+      { raw: '2' },
+      { raw: `${ESC}[B` },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { text: 'note' },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { raw: '\r' }
+    ])
+  })
+
   it('multi-question single-select: option numbers auto-advance, one final submit Enter', () => {
     const prompt: AskPrompt = {
       questions: [
@@ -291,16 +330,17 @@ describe('buildAskAnswerKeys', () => {
     ])
   })
 
-  it('preview selector option plus free text: selects the row, then annotates it', () => {
+  it('preview selector option plus free text: annotates the row, then escapes the field to commit', () => {
     // The preview layout has no "Type something" row (upstream
     // anthropics/claude-code#27348, closed "not planned"); `n` opens a note on
-    // the selected row, so the digit comes first and the answer delivers as that
-    // option carrying its annotation.
+    // the selected row. Enter inside that field submits the question as
+    // notes-only and loses the row, so ESC leaves the field with the note kept
+    // and the trailing Enter commits the selection and the note together.
     expect(
       buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [
         { indices: [1], other: 'but only in JS' }
       ])
-    ).toEqual([{ raw: '2' }, { raw: 'n' }, { text: 'but only in JS' }, { raw: '\r' }])
+    ).toEqual([{ raw: '2' }, { raw: 'n' }, { text: 'but only in JS' }, { raw: ESC }, { raw: '\r' }])
   })
 
   it('preview selector free text with no pick: emits nothing', () => {
@@ -349,10 +389,10 @@ describe('buildAskAnswerKeys', () => {
     ])
   })
 
-  it('multi-select with previews: keeps the plain checkbox sequence', () => {
-    // How the preview layout renders a multi-select — whether it keeps checkbox
-    // toggles and a "Type something" row at all — is unmeasured, so this pins
-    // current behavior rather than asserting a verified contract.
+  it('multi-select with previews: dispatches as the plain checkbox layout', () => {
+    // The selector renders the plain checkbox layout whenever multiSelect is
+    // true, even when every option carries a preview, and never displays the
+    // previews — so multiSelect is tested before the preview layout.
     const prompt: AskPrompt = {
       questions: [
         {
@@ -367,12 +407,63 @@ describe('buildAskAnswerKeys', () => {
     }
     expect(buildAskAnswerKeys(prompt, [{ indices: [0], other: 'Zebra' }])).toEqual([
       { raw: '1' },
-      { raw: '3' },
-      { text: 'Zebra' },
+      { raw: `${ESC}[B` },
+      { raw: `${ESC}[B` },
       { raw: '\r' },
+      { text: 'Zebra' },
+      { raw: `${ESC}[B` },
+      { raw: '\r' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('multi-select with previews and no note: plain checkbox toggles and the Submit tab', () => {
+    // Case 4.1.
+    const prompt: AskPrompt = {
+      questions: [
+        {
+          question: 'q',
+          multiSelect: true,
+          options: [
+            { label: 'A', hasPreview: true },
+            { label: 'B', hasPreview: true },
+            { label: 'C', hasPreview: true }
+          ]
+        }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [0, 1] }])).toEqual([
+      { raw: '1' },
+      { raw: '2' },
       { raw: '\x1b[C' },
       { raw: '\r' }
     ])
+  })
+
+  it('never emits a row digit the layout does not have', () => {
+    // An out-of-range digit is swallowed with no redraw, so a following Enter
+    // commits the untouched first option. The preview layout numbers only its
+    // options, so its free-text row does not exist at options.length + 1.
+    const previewKeys = buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [
+      { indices: [], other: 'Zebra' }
+    ])
+    expect(previewKeys).toEqual([])
+
+    const everyDigit = (groups: ReturnType<typeof buildAskAnswerKeys>): string[] =>
+      groups.flatMap((group) => ('raw' in group && /^\d$/.test(group.raw) ? [group.raw] : []))
+
+    // Plain single-select numbers its options plus the "Type something" row.
+    expect(
+      everyDigit(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }]))
+    ).toEqual(['3'])
+    // Plain multi-select reaches its free-text row by arrowing, never by digit.
+    expect(
+      everyDigit(
+        buildAskAnswerKeys(single(['Rust', 'Swift', 'TypeScript'], true), [
+          { indices: [0, 2], other: 'some note' }
+        ])
+      )
+    ).toEqual(['1', '3'])
   })
 })
 
