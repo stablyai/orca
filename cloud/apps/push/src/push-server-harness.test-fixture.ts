@@ -36,6 +36,7 @@ export function testPushConfig(): PushConfig {
     publicKeyEncoding: { type: 'spki', format: 'pem' }
   })
   return {
+    mode: 'active',
     port: 0,
     publicUrl: GATEWAY_ORIGIN,
     dataDir: './data/push-test',

@@ -274,7 +274,7 @@ Secret Manager names (already exist in `onorca-cloud`): `orca-cloud-push-apns-ke
   phone could otherwise loop it. The unregister RPC is not throttled, since with nothing registered it
   is a lookup and with something registered it can only run once per successful register. The params
   schema is strict, so a caller-supplied `deviceId` is an error, not a key silently dropped. Persists
-  `pushRegistration: { registrationId, platform, filter, expiresAt }` on `DeviceEntry` in
+  `pushRegistration: { registrationId, filter, expiresAt }` on `DeviceEntry` in
   `device-registry.ts` (new
   optional field, tolerated by old registries). Unreadable unregister history refuses new registration
   with `registration_storage_failed` until a readable restart can settle prior cleanup.

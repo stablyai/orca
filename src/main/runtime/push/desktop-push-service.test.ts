@@ -103,7 +103,6 @@ describe('DesktopPushService', () => {
     ).toEqual({ registered: true, registrationId: 'reg-1' })
     expect(harness.registry.getDevice(harness.deviceId)?.pushRegistration).toMatchObject({
       registrationId: 'reg-1',
-      platform: 'android',
       filter: REGISTER_INPUT.filter
     })
   })

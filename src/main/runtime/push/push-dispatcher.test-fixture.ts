@@ -9,7 +9,6 @@ export function registration(
 ): MobilePushRegistration {
   return {
     registrationId: 'reg-1',
-    platform: 'ios',
     filter: {},
     expiresAt: Date.now() + 7 * 86400_000,
     ...overrides

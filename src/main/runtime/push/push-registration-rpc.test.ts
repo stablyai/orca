@@ -130,7 +130,6 @@ describe('revokeMobileDevice', () => {
     const device = server['deviceRegistry']!.addDevice('phone', 'mobile')
     server['deviceRegistry']!.setPushRegistration(device.deviceId, {
       registrationId: 'reg-1',
-      platform: 'android',
       filter: {},
       expiresAt: Date.now() + 7 * 86400_000
     })

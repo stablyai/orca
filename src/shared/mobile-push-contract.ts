@@ -23,7 +23,6 @@ export type MobilePushFilter = {
 /** Persisted on the paired DeviceEntry so a host restart can push without the phone re-registering. */
 export type MobilePushRegistration = {
   registrationId: string
-  platform: MobilePushPlatform
   filter: MobilePushFilter
   expiresAt: number
 }
@@ -48,10 +47,6 @@ export type MobilePushRegisterResult =
         | 'registration_storage_failed'
         | 'throttled'
     }
-
-function isStringMember<T extends string>(value: unknown, members: readonly T[]): value is T {
-  return typeof value === 'string' && (members as readonly string[]).includes(value)
-}
 
 function parseFilter(value: unknown): MobilePushFilter | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -80,7 +75,6 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
   if (
     typeof registration.registrationId !== 'string' ||
     registration.registrationId.length === 0 ||
-    !isStringMember(registration.platform, MOBILE_PUSH_PLATFORMS) ||
     !filter ||
     typeof registration.expiresAt !== 'number' ||
     !Number.isFinite(registration.expiresAt)
@@ -89,7 +83,6 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
   }
   return {
     registrationId: registration.registrationId,
-    platform: registration.platform,
     filter,
     expiresAt: registration.expiresAt
   }

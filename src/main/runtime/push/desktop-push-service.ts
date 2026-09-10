@@ -210,7 +210,6 @@ export class DesktopPushService {
     try {
       const stored = this.registry.setPushRegistration(input.deviceId, {
         registrationId,
-        platform: input.platform,
         filter: input.filter,
         expiresAt: Date.now() + 7 * 24 * 60 * 60_000
       })

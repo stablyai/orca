@@ -8,7 +8,6 @@ import type { MobilePushRegistration } from '../../../shared/mobile-push-contrac
 
 const REGISTRATION: MobilePushRegistration = {
   registrationId: 'reg-1',
-  platform: 'ios',
   filter: {},
   expiresAt: Date.now() + 7 * 86400_000
 }
@@ -86,7 +85,6 @@ describe('DeviceRegistry push registrations', () => {
 
   it.each([
     ['a malformed registration', { registrationId: 'reg-1' }],
-    ['an unknown platform', { ...REGISTRATION, platform: 'windows-phone' }],
     ['a missing expiry', { ...REGISTRATION, expiresAt: undefined }],
     ['a non-finite expiry', { ...REGISTRATION, expiresAt: Infinity }],
     ['an array filter', { ...REGISTRATION, filter: [] }],

@@ -43,7 +43,7 @@ const EnvSchema = z.object({
 export type ApnsCredentials = { keyPem: string; keyId: string; teamId: string }
 
 export type PushConfig = {
-  mode?: 'active' | 'validation'
+  mode: 'active' | 'validation'
   port: number
   publicUrl: string
   databaseUrl?: string
