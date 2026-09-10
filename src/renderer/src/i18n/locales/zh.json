@@ -8712,12 +8712,6 @@
           }
         },
         "notifications": {
-          "agentStatus": {
-            "needsInput": "需要输入",
-            "working": "处理中",
-            "stopped": "已停止",
-            "finished": "已完成"
-          },
           "search": {
             "aa288005c3": "测试",
             "ca8faa40d7": "通知",
@@ -15066,6 +15060,14 @@
       "hide": "隐藏智能体",
       "action": "试用智能体",
       "hiddenToast": "智能体标签页已隐藏。可在设置 → 实验性功能中重新启用。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "需要输入",
+      "working": "处理中",
+      "stopped": "已停止",
+      "finished": "已完成"
     }
   }
 }

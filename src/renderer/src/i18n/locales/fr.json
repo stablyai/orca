@@ -9509,12 +9509,6 @@
           }
         },
         "notifications": {
-          "agentStatus": {
-            "needsInput": "attend une réponse",
-            "working": "en cours",
-            "stopped": "arrêté",
-            "finished": "terminé"
-          },
           "search": {
             "aa288005c3": "test",
             "ca8faa40d7": "notifications",
@@ -16597,5 +16591,13 @@
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats."
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "attend une réponse",
+      "working": "en cours",
+      "stopped": "arrêté",
+      "finished": "terminé"
+    }
   }
 }
