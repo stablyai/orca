@@ -5,6 +5,7 @@ import {
   RUN_PANE_KEY_MATCH_SUFFIX_SQL,
   paneKeyMatchSuffix
 } from '../pane-key-match'
+import { isEquivalentPrincipal } from '../principal-match'
 import { exposeRunTimestamps } from '../utc-timestamp'
 import { encodeRunListCursor, decodeRunListCursor } from '../run-list-cursor'
 import type { RunListPage } from '../run-list-page'
@@ -21,6 +22,11 @@ const RUN_BY_ID_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs WHERE id = ?`
 const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid`
+// Why: NO suffix pre-filter here — the after-first-':' shape would exclude reminted tab halves
+// for `pane:` principals. runs is small; the hoisted statement still hits the SyncDatabase cache.
+const RUNS_BOUND_TO_PRINCIPAL_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
+         WHERE coordinator_principal IS NOT NULL AND legacy = 0
          ORDER BY rowid`
 
 export function getRun(this: OrchestrationDb, id: string): RunRow | undefined {
@@ -118,16 +124,32 @@ export function runsBoundToPane(this: OrchestrationDb, paneKey: string): RunRow[
   )
 }
 
+export function getCurrentRunForPrincipal(
+  this: OrchestrationDb,
+  principalId: string
+): RunRow | undefined {
+  const run = this.runsBoundToPrincipal(principalId)[0]
+  return run ? exposeRunTimestamps(run) : undefined
+}
+
+export function runsBoundToPrincipal(this: OrchestrationDb, principalId: string): RunRow[] {
+  return (this.db.prepare(RUNS_BOUND_TO_PRINCIPAL_SQL).all() as RunRow[]).filter(
+    (run) =>
+      run.coordinator_principal !== null &&
+      isEquivalentPrincipal(run.coordinator_principal, principalId)
+  )
+}
+
 export function getRunRaw(this: OrchestrationDb, id: string): RunRow | undefined {
   return this.db.prepare(RUN_BY_ID_SQL).get(id) as RunRow | undefined
 }
 
-export function unbindOtherRunsForPane(
+export function unbindOtherRunsForPrincipal(
   this: OrchestrationDb,
-  paneKey: string,
+  principalId: string,
   exceptRunId?: string
 ): void {
-  for (const run of this.runsBoundToPane(paneKey)) {
+  for (const run of this.runsBoundToPrincipal(principalId)) {
     if (run.id !== exceptRunId) {
       if (run.coordinator_handle) {
         this.routeAllUnreadDirectMessagesToRunMailbox(run.id, run.coordinator_handle)
@@ -164,8 +186,10 @@ export type RunLookupMethods = {
   listRuns: typeof listRuns
   getCurrentRunForPane: typeof getCurrentRunForPane
   runsBoundToPane: typeof runsBoundToPane
+  getCurrentRunForPrincipal: typeof getCurrentRunForPrincipal
+  runsBoundToPrincipal: typeof runsBoundToPrincipal
   getRunRaw: typeof getRunRaw
-  unbindOtherRunsForPane: typeof unbindOtherRunsForPane
+  unbindOtherRunsForPrincipal: typeof unbindOtherRunsForPrincipal
   requireRun: typeof requireRun
   fenceOutstandingDelivery: typeof fenceOutstandingDelivery
 }
@@ -178,8 +202,10 @@ export function attachRunLookup(ctor: { prototype: object }): void {
     listRuns,
     getCurrentRunForPane,
     runsBoundToPane,
+    getCurrentRunForPrincipal,
+    runsBoundToPrincipal,
     getRunRaw,
-    unbindOtherRunsForPane,
+    unbindOtherRunsForPrincipal,
     requireRun,
     fenceOutstandingDelivery
   })

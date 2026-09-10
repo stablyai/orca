@@ -40,6 +40,13 @@ export type GateStatus = 'pending' | 'resolved' | 'timeout'
 
 export type CoordinatorStatus = 'idle' | 'running' | 'completed' | 'failed'
 
+/** Opaque coordinator identity carrier: DB writers persist all three fields; methods pass it through whole. */
+export type RunCoordinatorBinding = {
+  principalId: string
+  terminalHandle: string | null
+  paneKey: string | null
+}
+
 export type RunRow = {
   id: string
   objective: string
