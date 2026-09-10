@@ -14,6 +14,9 @@ import { SessionSearchTypoRepair } from './session-search-typo-repair'
 // The operator-only walk: rows per page, and how far past a full candidate set
 // it will read before giving up on finding more matches.
 const RECENT_PAGE_ROWS = 512
+// Ids per `loadSessions` statement, left well under the 999-parameter floor so
+// the filter's own bound values fit beside them.
+const SESSION_ID_BATCH = 500
 const RECENT_SCAN_FACTOR = 20
 
 // Measured: user 3 / assistant 2 / tool 1 / identifiers 1 (MRR 0.503 vs 0.475 flat).
@@ -160,14 +163,24 @@ export class SessionSearchRetrieval {
     return { sessions, incomplete: incomplete || sessions.length >= scope.candidateLimit }
   }
 
+  /**
+   * Read in batches, because the id list is as long as the candidate limit and
+   * every id is a bound parameter. SQLite's default `SQLITE_MAX_VARIABLE_NUMBER`
+   * is 999 on builds older than 3.32, and a caller may raise the candidate
+   * limit — the tuning doc says it may — so a single statement is one settings
+   * change away from `too many SQL variables` on somebody's host.
+   */
   loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
-    if (ids.length === 0) {
-      return []
+    const rows: SessionRow[] = []
+    for (let start = 0; start < ids.length; start += SESSION_ID_BATCH) {
+      const batch = ids.slice(start, start + SESSION_ID_BATCH)
+      const conditions = [`id IN (${batch.map(() => '?').join(',')})`, ...scope.filter.conditions]
+      rows.push(
+        ...(this.db
+          .prepare(`SELECT * FROM sessions WHERE ${conditions.join(' AND ')}`)
+          .all(...batch, ...scope.filter.values) as SessionRow[])
+      )
     }
-    const conditions = [`id IN (${ids.map(() => '?').join(',')})`, ...scope.filter.conditions]
-    const rows = this.db
-      .prepare(`SELECT * FROM sessions WHERE ${conditions.join(' AND ')}`)
-      .all(...ids, ...scope.filter.values) as SessionRow[]
     return rows.filter((row) => scope.matchesOperators(row))
   }
 
