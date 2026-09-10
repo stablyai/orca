@@ -237,6 +237,9 @@ export function NativeChatMessageList({
           <div
             ref={scrollRef}
             onScroll={onScroll}
+            // Named so measurement can find the scroll root without depending on
+            // which utility class happens to make it scroll.
+            data-native-chat-scroll
             className="scrollbar-sleek relative h-full overflow-y-auto [scrollbar-gutter:stable_both-edges]"
             // Why: `zoom` scales the chat transcript's text and layout together,
             // scoped to this pane so the rest of the app is untouched. It sits on

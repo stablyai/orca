@@ -33,6 +33,9 @@ export function NativeChatTranscriptItems({
   return (
     <div
       ref={window.sizerRef}
+      // Present only while windowing is engaged: the whole-transcript path has
+      // no spacer, so this is also how a test tells the two apart.
+      data-native-chat-window
       className="relative w-full"
       style={{ height: `${window.totalSize}px` }}
     >

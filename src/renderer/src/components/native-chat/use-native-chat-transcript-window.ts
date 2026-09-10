@@ -46,7 +46,10 @@ export type NativeChatTranscriptWindow = {
  *  is zoomed: rects are viewport pixels, `scrollTop` is not. Absolutely
  *  positioned windowed rows are placed with `top`, never a transform, so this
  *  stays true through the window as well. */
-export function nativeChatScrollOffsetWithin(element: HTMLElement, container: HTMLElement): number {
+export function nativeChatScrollOffsetWithin(
+  element: HTMLElement,
+  container: HTMLElement
+): number | null {
   let top = 0
   let node: HTMLElement | null = element
   while (node !== null && node !== container) {
@@ -57,12 +60,14 @@ export function nativeChatScrollOffsetWithin(element: HTMLElement, container: HT
     const parent = node.offsetParent as HTMLElement | null | undefined
     node = parent && typeof parent.offsetTop === 'number' ? parent : null
   }
-  if (node === container) {
-    return top
-  }
-  // No chain to walk — a positioned ancestor outside the scroller, or a DOM with
-  // no layout at all. Rects still describe the distance, in viewport pixels; the
-  // container's own measured zoom converts them back into scroll pixels.
+  return node === container ? top : null
+}
+
+/** Same distance read off rects, for the case where there is no `offsetParent`
+ *  chain to walk. Rects are viewport pixels, so the container's own measured
+ *  zoom converts them back; a container with no layout reports no zoom and no
+ *  distance, which leaves the offset where it already is. */
+function rectOffsetWithin(element: HTMLElement, container: HTMLElement): number {
   const containerRect = container.getBoundingClientRect()
   const zoom =
     container.offsetHeight > 0 && containerRect.height > 0
@@ -91,9 +96,6 @@ export function useNativeChatTranscriptWindow({
     () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex }),
     [slots.length, revealIndex]
   )
-  const pinnedRef = useRef(pinned)
-  pinnedRef.current = pinned
-
   // Stable identities: the virtualizer keys its measurement memo on these, so a
   // fresh closure per render would rebuild every row's offset on every frame.
   const estimateSize = useCallback(
@@ -104,10 +106,15 @@ export function useNativeChatTranscriptWindow({
     (index: number) => slotsRef.current[index]?.message.id ?? index,
     []
   )
+  // Identity tracks the pinned set on purpose. The virtualizer memoizes the
+  // mounted indexes on this function, so a stable one would keep serving the
+  // range from before a row was pinned — and a reveal would point at a row that
+  // never mounted. It is not a dependency of the measurement memo, so nothing
+  // expensive is rebuilt by changing it.
   const rangeExtractor = useCallback(
     (range: { startIndex: number; endIndex: number; overscan: number; count: number }) =>
-      nativeChatTranscriptRange(range, pinnedRef.current),
-    []
+      nativeChatTranscriptRange(range, pinned),
+    [pinned]
   )
 
   const virtualizer = useVirtualizer({
@@ -133,8 +140,13 @@ export function useNativeChatTranscriptWindow({
     if (!container || !sizer) {
       return
     }
+    // Only the offset chain, never the rect fallback: a container with no
+    // layout would report the scroll position itself as the margin, which would
+    // hold the window at the top of the transcript no matter where it scrolled.
     const offset = nativeChatScrollOffsetWithin(sizer, container)
-    setScrollMargin((current) => (current === offset ? current : offset))
+    if (offset !== null) {
+      setScrollMargin((current) => (current === offset ? current : offset))
+    }
   }, [scrollRef])
   useLayoutEffect(readScrollMargin)
 
@@ -173,7 +185,8 @@ export function useNativeChatTranscriptWindow({
       if (!container) {
         return
       }
-      const top = nativeChatScrollOffsetWithin(element, container)
+      const top =
+        nativeChatScrollOffsetWithin(element, container) ?? rectOffsetWithin(element, container)
       // Through the virtualizer so a scroll it is still reconciling — the jump
       // that mounted this row in the first place — is replaced rather than raced.
       if (virtualizer.scrollElement) {
