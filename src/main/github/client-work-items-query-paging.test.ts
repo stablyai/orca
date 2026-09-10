@@ -237,6 +237,47 @@ describe('listWorkItems query paging', () => {
     )
   })
 
+  // Why: the recent and queried lists are built by the same request builder, so pin both paths. The
+  // recent path already dropped the cache pair but had no coverage to stop it regressing (#19632).
+  it('drops the gh response cache on the recent list when a refresh is forced', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    // The recent list fetches both sides, so every gh call in this test returns an empty page.
+    ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
+
+    await listWorkItems('/repo-root', 10, undefined, 2, undefined, undefined, true)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'api',
+        `search/issues?q=${encodeURIComponent('repo:acme/widgets is:issue is:open')}&sort=created&order=desc&per_page=10&page=2`,
+        '--jq',
+        '.items'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
+  // Why: the Tasks refresh button forces a fetch with noCache. Without dropping the cache arg the
+  // queried list re-serves the same 120s-cached response, so "Refresh GitHub work" looks inert (#19632).
+  it('drops the gh response cache when a queried refresh is forced', async () => {
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+    await listWorkItems('/repo-root', 10, 'is:issue is:open', 2, undefined, undefined, true)
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'api',
+        `search/issues?q=${encodeURIComponent('repo:acme/widgets is:issue is:open')}&sort=created&order=desc&per_page=10&page=2`,
+        '--jq',
+        '.items'
+      ],
+      { cwd: '/repo-root' }
+    )
+  })
+
   it('fetches and slices stable PR results for the requested numbered page', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
