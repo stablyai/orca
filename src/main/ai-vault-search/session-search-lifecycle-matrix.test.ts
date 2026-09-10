@@ -5,6 +5,8 @@ import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-pars
 import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
 import type SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchIndexer } from './session-search-indexer'
+import type { SessionSearchIndexerOptions } from './session-search-indexer-options'
+import { removeSessionSearchDatabase } from './session-search-schema'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
@@ -17,9 +19,16 @@ import {
  * The lifecycle matrix: every operation a caller can perform, against every
  * shape an unreachable root takes, against both ways discovery reports a root.
  *
+ * The indexer is immutable, so "every operation" is a shorter list than it was:
+ * `pause`, `resume`, `clear`, `setHistoryDays` and `invalidate` are gone, and
+ * the two of them a caller still needs — a settings change and throwing the
+ * index away — are here as what replaced them, a new instance over the same
+ * path. In their place are the two passes the immutable design added: the
+ * periodic sweep, and a pass whose wall-clock deadline expires on its first file.
+ *
  * What each cell asserts:
- *   A. No row is retired for a file that still exists. A `clear()` is the one
- *      exception, and it is stated per operation rather than excused.
+ *   A. No row is retired for a file that still exists. Throwing the index away
+ *      is the one exception, and it is stated per operation rather than excused.
  *   B. The unreachable root is named in `degradedRoots`, by a real directory
  *      path — never the delimiter-joined label a merged discovery reports.
  *   C. The phase is never `current` while a root is degraded.
@@ -118,49 +127,23 @@ type Operation = {
   clearsIndex?: boolean
   /** Healthy-root sessions the operation deletes from disk. */
   deletes?: readonly string[]
+  /** Construction options for every indexer this cell opens. */
+  options?: Partial<SessionSearchIndexerOptions>
   run: (context: MatrixContext) => Promise<void>
 }
 
 const OPERATIONS: Operation[] = [
   { name: 'one cycle', run: (context) => context.cycle() },
   {
-    name: 'pause and resume',
+    name: 'two cycles',
     run: async (context) => {
-      context.indexer().pause()
-      await context.indexer().resume()
+      await context.cycle()
+      await context.cycle()
     }
   },
   {
     name: 'close and restart',
-    run: async (context) => {
-      await context.restart()
-    }
-  },
-  {
-    name: 'clear and rebuild',
-    clearsIndex: true,
-    run: (context) => context.indexer().clear()
-  },
-  {
-    name: 'history narrowed then widened',
-    run: async (context) => {
-      await context.indexer().setHistoryDays(30)
-      await context.indexer().setHistoryDays(null)
-    }
-  },
-  {
-    name: 'an indexed path invalidated',
-    run: async (context) => {
-      context.indexer().invalidate([context.detachedPaths[0] ?? ''])
-      await context.cycle()
-    }
-  },
-  {
-    name: 'a path the index never held invalidated',
-    run: async (context) => {
-      context.indexer().invalidate([join(context.detachedRoot, 'never-indexed.jsonl')])
-      await context.cycle()
-    }
+    run: (context) => context.reopen()
   },
   {
     name: 'two full reconciles',
@@ -185,17 +168,46 @@ const OPERATIONS: Operation[] = [
     }
   },
   {
-    name: 'two cycles',
+    // The cadence that replaced every re-arm-on-recovery rule: no caller asks
+    // for this sweep, so the cell drives it off the timer alone.
+    name: 'the periodic sweep comes round',
+    options: { fullSweepEveryCycles: 2 },
+    run: async (context) => {
+      await context.cycle()
+      await context.cycle()
+      await context.cycle()
+    }
+  },
+  {
+    // Every pass is out of wall time from its first file, so each one hands
+    // almost all of its work back. A pass that read almost nothing must still
+    // not conclude anything about what it did not reach.
+    name: 'every pass out of time at its first file',
+    options: { passDeadlineMs: 0 },
     run: async (context) => {
       await context.cycle()
       await context.cycle()
     }
+  },
+  {
+    // What replaced `setHistoryDays`: a new instance over the same database.
+    // Every transcript here was written just now, so a 30-day window holds all
+    // of them and no row may be purged.
+    name: 'reconstructed for a narrower history window',
+    run: (context) => context.reopen({ historyDays: 30 })
+  },
+  {
+    // What replaced `clear()`, exactly as the PR body documents it.
+    name: 'the index thrown away and rebuilt',
+    clearsIndex: true,
+    run: (context) => context.reopen({ removeDatabase: true })
   }
 ]
 
 type MatrixContext = {
   indexer: () => SessionSearchIndexer
-  restart: () => Promise<void>
+  /** Closes and constructs again over the same path: the immutable design's one edit. */
+  reopen: (args?: { historyDays?: number | null; removeDatabase?: boolean }) => Promise<void>
   cycle: () => Promise<void>
   detachedRoot: string
   detachedPaths: string[]
@@ -224,16 +236,33 @@ afterEach(async () => {
   await harness.cleanup()
 })
 
-function open(): SessionSearchIndexer {
+function open(overrides: Partial<SessionSearchIndexerOptions> = {}): SessionSearchIndexer {
   indexer = new SessionSearchIndexer({
     databasePath: harness.databasePath,
     roots: harness.roots,
     historyDays: null,
     clock,
     reconcileIntervalMs: INTERVAL_MS,
-    pace: async () => undefined
+    ...overrides
   })
   return indexer
+}
+
+/**
+ * Runs cycles until the index stops growing. Every operation but the
+ * out-of-time one settles on the first call; that one reads a transcript a pass.
+ */
+async function driveUntilIndexed(maxCycles: number): Promise<void> {
+  let held = indexedSessions().length
+  for (let cycle = 0; cycle < maxCycles; cycle++) {
+    clock.advance(INTERVAL_MS)
+    await indexer?.settled()
+    const now = indexedSessions().length
+    if (now === held) {
+      return
+    }
+    held = now
+  }
 }
 
 /** Session ids the index answers for, whichever agent wrote them. */
@@ -264,7 +293,10 @@ for (const roots of ROOT_SHAPES) {
             const transcriptDir = dirname(detachedPaths[0] ?? '')
             const parked = join(harness.root, 'parked-root')
 
-            await open().start()
+            await open(operation.options).start()
+            // A deadline that expires on the first file reads one transcript a
+            // pass, so the setup drives passes until the index has caught up.
+            await driveUntilIndexed(SESSIONS.length * 2)
             const detachedIds = detachedPaths.map((_path, index) =>
               roots === ROOT_SHAPES[0]
                 ? fullSessionId(SESSIONS[index] ?? '')
@@ -285,11 +317,19 @@ for (const roots of ROOT_SHAPES) {
               }
               await operation.run({
                 indexer: () => indexer as SessionSearchIndexer,
-                restart: async () => {
+                reopen: async (args = {}) => {
                   indexer?.close()
                   resetTranscriptConsumersForTests()
                   resetSessionParseCacheForTests()
-                  await open().start()
+                  if (args.removeDatabase === true) {
+                    removeSessionSearchDatabase(harness.databasePath)
+                  }
+                  const overrides = { ...operation.options }
+                  if ('historyDays' in args) {
+                    overrides.historyDays = args.historyDays
+                  }
+                  await open(overrides).start()
+                  await driveUntilIndexed(SESSIONS.length * 2)
                 },
                 cycle: async () => {
                   clock.advance(INTERVAL_MS)
@@ -323,6 +363,7 @@ for (const roots of ROOT_SHAPES) {
             // D: reachable again, a sweep reads the whole tree back.
             await mkdir(dirname(healthyPaths[0] ?? ''), { recursive: true })
             await indexer?.reconcile({ full: true })
+            await driveUntilIndexed(SESSIONS.length * 2)
             expect(indexedSessions()).toEqual(
               [
                 ...detachedIds,

@@ -19,26 +19,12 @@ it('reports idle until it is started, rather than describing work nobody asked f
   expect(status.snapshot().phase).toBe('indexing')
 })
 
-// `clear()` throws the index away, so the sweep that covered it no longer
-// covers anything; without this the emptied index reports itself current.
-it('stops calling itself swept once the index it swept has been cleared', () => {
-  const status = startedStatus()
-  status.sweepFinished(true)
-  expect(status.snapshot().phase).toBe('current')
-
-  status.forgetSweep()
-  expect(status.snapshot().phase).toBe('indexing')
-})
-
-it('walks discovering to indexing to current, and reports degraded roots once settled', () => {
+it('walks indexing to current, and reports degraded roots once settled', () => {
   const status = startedStatus()
   status.beginSweep()
-  expect(status.snapshot()).toMatchObject({ phase: 'discovering', filesTotal: null })
-
-  status.planned(2, 0)
   status.indexed(1_000)
   status.setFilesIndexed(1)
-  expect(status.snapshot()).toMatchObject({ phase: 'indexing', filesIndexed: 1, filesTotal: 2 })
+  expect(status.snapshot()).toMatchObject({ phase: 'indexing', filesIndexed: 1 })
 
   status.setDegradedRoots([{ root: '/blocked', reason: 'EACCES' }])
   // Work in flight is the more useful thing to show; the roots are in the
@@ -90,33 +76,19 @@ it('reports closed over every other phase', () => {
   expect(status.snapshot().phase).toBe('closed')
 })
 
-it('reports paused over everything, and keeps the counters it had', () => {
+it('starts a new sweep from zero, keeping what the store counts', () => {
   const status = startedStatus()
   status.beginSweep()
-  status.planned(3, 1)
-  status.indexed(10)
-  status.setFilesIndexed(1)
-  status.setPending(4, 2)
-  status.setPaused(true)
-  expect(status.snapshot()).toMatchObject({
-    phase: 'paused',
-    filesIndexed: 1,
-    filesTotal: 3,
-    failures: 1,
-    filesPending: 4,
-    droppedPending: 2
-  })
-})
-
-it('starts a new sweep from zero', () => {
-  const status = startedStatus()
-  status.beginSweep()
-  status.planned(1, 0)
   status.indexed(500)
   status.failed()
+  status.setFilesIndexed(2)
+  status.setPending(4, 2)
   status.beginSweep()
   expect(status.snapshot()).toMatchObject({
     bytesIndexed: 0,
-    failures: 0
+    failures: 0,
+    filesIndexed: 2,
+    filesPending: 4,
+    droppedPending: 2
   })
 })

@@ -1,4 +1,4 @@
-import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { AI_VAULT_AGENT_SOURCES } from '../ai-vault/session-scanner-agent-sources'
 import { normalizedWslHomeDirs } from '../ai-vault/session-scanner-roots'
 import { sessionCandidatesFromDiscoveries } from '../ai-vault/session-scanner-candidates'
@@ -48,31 +48,6 @@ export async function discoverSessionSearchCandidates(
   })
   const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
   return { candidates, discoveries, issues }
-}
-
-/**
- * Which agent owns a path, read off the same source table discovery walks.
- *
- * Why not a mapping of its own: `deletable` and `discoverable` already share
- * that table on purpose, and a second spelling of "this directory belongs to
- * Codex" would drift from it the first time a root moves. Longest root wins, so
- * a nested root is not shadowed by its parent.
- */
-export function sessionSearchAgentForPath(
-  roots: SessionSearchScanRoots,
-  path: string
-): AiVaultAgent | null {
-  const wslHomeDirs = normalizedWslHomeDirs(roots.wslHomeDirs)
-  let owner: { agent: AiVaultAgent; root: string } | null = null
-  for (const [agent, source] of Object.entries(AI_VAULT_AGENT_SOURCES)) {
-    for (const root of source?.rootDirs(roots, wslHomeDirs) ?? []) {
-      if (!isUnderScanRoot(path, root) || (owner && owner.root.length >= root.length)) {
-        continue
-      }
-      owner = { agent: agent as AiVaultAgent, root }
-    }
-  }
-  return owner?.agent ?? null
 }
 
 /**

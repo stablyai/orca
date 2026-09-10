@@ -87,8 +87,7 @@ it('indexes a native-chat conversation and its later turns with no panel and no 
     roots: harness.roots,
     historyDays: null,
     clock,
-    reconcileIntervalMs: INTERVAL_MS,
-    pace: async () => undefined
+    reconcileIntervalMs: INTERVAL_MS
   })
   await indexer.start()
 

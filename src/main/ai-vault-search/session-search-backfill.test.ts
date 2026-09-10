@@ -12,7 +12,6 @@ import {
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
 import { SessionSearchIndexingStatus } from './session-search-indexing-status'
-import { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
 import { SessionSearchStore } from './session-search-store'
 
 let harness: SessionSearchIndexerHarness
@@ -36,6 +35,12 @@ function transcriptPath(index: number): string {
   return join(harness.claudeProjectDir, `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl`)
 }
 
+/** A deadline that expires once the pass has read `reads` files. */
+function afterReads(reads: number): () => boolean {
+  let asked = 0
+  return () => ++asked >= reads
+}
+
 async function writeTranscripts(count: number): Promise<void> {
   for (let index = 0; index < count; index++) {
     const session = `0000000${index}-bbbb-4ccc-8ddd-eeeeeeeeeeee`
@@ -52,7 +57,6 @@ function sweep(
     status: new SessionSearchIndexingStatus(),
     cutoffMs: null,
     listings: new SessionSearchDirectoryListings(),
-    pace: async () => undefined,
     ...overrides
   })
 }
@@ -90,22 +94,19 @@ it('retires nothing and reports nothing when a sweep is aborted', async () => {
   )
 })
 
-// The sweep's reading is budgeted like a cycle's: it plans the whole machine
-// and hands back what its allowance had no room for, so a first run cannot own
-// the process for as long as the disk is large.
-it('reads what its allowance holds and hands back the rest', async () => {
+// The sweep reads under the same wall-clock deadline as every other pass: it
+// plans the whole machine and hands back what it ran out of time for, so a
+// first run cannot own the process for as long as the disk is large.
+it('reads until its deadline and hands back the rest', async () => {
   await writeTranscripts(4)
-  const first = await sweep({
-    allowance: new SessionSearchCycleAllowance({ files: 2, bytes: 1e9 })
-  })
+  const first = await sweep({ overdue: afterReads(2) })
 
   expect(store.indexedSources()).toHaveLength(2)
   expect(first.deferred).toHaveLength(2)
 
-  // A second sweep skips what the index already covers at its current stat.
-  const second = await sweep({
-    allowance: new SessionSearchCycleAllowance({ files: 2, bytes: 1e9 })
-  })
+  // A second sweep skips what the index already covers at its current stat, so
+  // the deadline is spent on the two it has not read.
+  const second = await sweep({ overdue: afterReads(2) })
   expect(store.indexedSources()).toHaveLength(4)
   expect(second.deferred).toEqual([])
 })

@@ -7,27 +7,20 @@ import {
 } from '../ai-vault/session-scanner-parse-cache'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity, isSessionSearchFileCurrent } from './session-search-file-cursor'
-import type { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
 import type { SessionSearchStore } from './session-search-store'
 
 export type SessionSearchIndexPassOptions = {
   signal?: AbortSignal
-  /** Cycle allowance; work that does not fit comes back as `deferred`. */
-  allowance?: SessionSearchCycleAllowance
   /**
-   * True when the pass has run out of wall time and must hand the rest back.
-   *
-   * Why a second bound at all: the allowance counts files and bytes, and the
-   * pacer sleeps for up to 15 s a batch when the host is loaded, so a pass that
-   * never exceeds its byte budget can still hold the loop for a quarter of an
-   * hour. Checked before the allowance is spent, so nothing is charged for work
-   * this pass will not do.
+   * True once the pass has spent its wall-clock deadline. The one bound on how
+   * long a pass reads for: files and bytes are proxies for time, and the thing
+   * worth capping is the share of the wall clock an unasked background index
+   * takes. Never applied before the pass has read anything, so an oversized
+   * transcript is read alone rather than deferred for ever.
    */
   overdue?: () => boolean
   /** Paths whose stored cursor must not be trusted, so the read is forced whole. */
   forced?: ReadonlySet<string>
-  /** Sleeps between batches so an unasked backfill never owns the CPU. */
-  pace?: (signal?: AbortSignal) => Promise<void>
   onIndexed?: (candidate: SessionFileCandidate, bytes: number) => void
   /** The index already covers this file, or can never index it; nothing is owed. */
   onSkipped?: (candidate: SessionFileCandidate) => void
@@ -36,11 +29,9 @@ export type SessionSearchIndexPassOptions = {
 
 export type SessionSearchIndexPassResult = {
   stats: SessionParseStats
-  /** Candidates the allowance had no room for, in the order they were queued. */
+  /** Candidates the deadline left unread, in the order they were queued. */
   deferred: SessionFileCandidate[]
 }
-
-const FILES_PER_PACE = 8
 
 /**
  * Reads a candidate list through the transcript reader so the registered index
@@ -55,12 +46,13 @@ export async function runSessionSearchIndexPass(
 ): Promise<SessionSearchIndexPassResult> {
   const stats = createSessionParseStats()
   const deferred: SessionFileCandidate[] = []
-  let sincePace = 0
-  for (const [index, candidate] of candidates.entries()) {
+  let read = 0
+  let outOfTime = false
+  for (const candidate of candidates) {
     throwIfAiVaultScanCancelled(options.signal)
     // Ask the store whether it wants this candidate at all before reading its
-    // cursor: a closed or paused store answers no, and every read after that
-    // would be against a handle it has already given up.
+    // cursor: a closed store answers no, and every read after that would be
+    // against a handle it has already given up.
     if (!wantsCandidate(store, candidate)) {
       options.onSkipped?.(candidate)
       continue
@@ -70,23 +62,26 @@ export async function runSessionSearchIndexPass(
       options.onSkipped?.(candidate)
       continue
     }
-    // Discovery's size, not the post-read one. A file that grew between the
-    // stat and the read is charged short, deliberately: the allowance paces a
-    // cycle rather than accounting for it, the error is bounded by what one
-    // cycle's writers appended, and re-statting every file to close it would
-    // cost more than the number is worth.
-    const bytes = forced ? (candidate.file.sizeBytes ?? 0) : unreadBytes(store, candidate)
-    if (options.overdue?.() === true || (options.allowance && !options.allowance.spend(bytes))) {
-      deferred.push(...candidates.slice(index))
-      break
+    // The skip checks above run for the whole list even once the deadline has
+    // gone, because they are one cursor lookup each and deferring a file the
+    // index already covers would buy it a whole re-read it does not need.
+    outOfTime ||= read > 0 && options.overdue?.() === true
+    if (outOfTime) {
+      deferred.push(candidate)
+      continue
     }
-    // `whole` for a path the store handed back from `takeStale` or a caller
-    // invalidated: the reader would otherwise pick `append` from the session
-    // list's resume point and the consumer would decline it again, every cycle,
-    // forever. `any` for the rest, because reaching here means the index is
-    // behind, and a list cursor already at this file's current stat would make
-    // the parse open nothing at all — the state every transcript is in the
-    // first time the index is switched on inside a running app.
+    read += 1
+    // Discovery's size, not the post-read one. A file that grew between the
+    // stat and the read is reported short, deliberately: re-statting every file
+    // to close the gap would cost more than the number is worth.
+    const bytes = forced ? (candidate.file.sizeBytes ?? 0) : unreadBytes(store, candidate)
+    // `whole` for a path the store handed back from `takeStale`: the reader
+    // would otherwise pick `append` from the session list's resume point and the
+    // consumer would decline it again, every cycle, forever. `any` for the rest,
+    // because reaching here means the index is behind, and a list cursor already
+    // at this file's current stat would make the parse open nothing at all --
+    // the state every transcript is in the first time the index is switched on
+    // inside a running app.
     try {
       await parseAgentSessionFileCached(
         candidate,
@@ -96,7 +91,7 @@ export async function runSessionSearchIndexPass(
       )
       // Took it, not moved: the test is whether the index now covers this file
       // at this stat, which is the same question the skip at the top asks. A
-      // cursor comparison looks equivalent and is not — a forced re-read of an
+      // cursor comparison looks equivalent and is not -- a forced re-read of an
       // unchanged file writes an identical cursor, so it would never settle and
       // the path would be re-read whole every interval for good.
       if (indexIsCurrent(store, candidate)) {
@@ -110,10 +105,6 @@ export async function runSessionSearchIndexPass(
         candidate.agent,
         error instanceof Error ? error.name : 'ParseError'
       )
-    }
-    if (++sincePace >= FILES_PER_PACE) {
-      sincePace = 0
-      await options.pace?.(options.signal)
     }
   }
   return { stats, deferred }

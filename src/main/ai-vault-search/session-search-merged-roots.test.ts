@@ -75,8 +75,7 @@ it.skipIf(!CAN_DENY_READ)('fences one merged root without taking its partner dow
     roots: harness.roots,
     historyDays: null,
     clock,
-    reconcileIntervalMs: INTERVAL_MS,
-    pace: async () => undefined
+    reconcileIntervalMs: INTERVAL_MS
   })
   await indexer.start()
   expect(sessionsMatching('conversation').sort()).toEqual(['local-session', 'mounted-session'])
@@ -117,8 +116,7 @@ it('retires from one merged root while its partner is healthy', async () => {
     roots: harness.roots,
     historyDays: null,
     clock,
-    reconcileIntervalMs: INTERVAL_MS,
-    pace: async () => undefined
+    reconcileIntervalMs: INTERVAL_MS
   })
   await indexer.start()
   expect(sessionsMatching('conversation').sort()).toEqual([

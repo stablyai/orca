@@ -9,15 +9,15 @@ import {
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
 import { SessionSearchIndexingStatus } from './session-search-indexing-status'
-import { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
 import { runSessionSearchReconcileCycle } from './session-search-reconciler'
 import { SessionSearchStore } from './session-search-store'
 
-// The store's re-read set holds ten times what the indexer's queue does, so an
-// abort that hands the store's overflow to the smaller queue silently discards
-// the difference. Whatever came from the store goes back to the store.
+// A cycle empties the one queue before it reads any of it, so an abort part way
+// through has the whole drained set in hand. Anything it did not settle has to
+// come back out as `deferred`, or the files it never reached stay missing from
+// the index until a sweep happens to rediscover them.
 
-const STALE_FILES = 3_000
+const QUEUED_FILES = 3_000
 const READS_BEFORE_ABORT = 10
 
 let harness: SessionSearchIndexerHarness
@@ -51,11 +51,11 @@ function staleCandidate(index: number): SessionFileCandidate {
   }
 }
 
-it('hands the store back its own overflow when a cycle is aborted', async () => {
-  for (let index = 0; index < STALE_FILES; index++) {
+it('hands back everything it drained when a cycle is aborted', async () => {
+  for (let index = 0; index < QUEUED_FILES; index++) {
     store.markStale(staleCandidate(index))
   }
-  expect(store.pendingFileCount).toBe(STALE_FILES)
+  expect(store.pendingFileCount).toBe(QUEUED_FILES)
 
   const controller = new AbortController()
   const status = new SessionSearchIndexingStatus()
@@ -72,16 +72,13 @@ it('hands the store back its own overflow when a cycle is aborted', async () => 
     roots: harness.roots,
     status,
     recentPerAgent: 12,
-    allowance: new SessionSearchCycleAllowance({ files: 10_000, bytes: 1_000_000_000 }),
-    pending: [],
     previousRecent: new Set(),
     listings: new SessionSearchDirectoryListings(),
     signal: controller.signal
   })
 
   expect(cycle.completed).toBe(false)
-  // Back where it came from, at its own bound, not truncated into a queue a
-  // tenth the size.
-  expect(store.pendingFileCount).toBe(STALE_FILES)
-  expect(cycle.deferred).toEqual([])
+  // Nothing settled, so nothing is dropped: the whole drained set comes back
+  // for the caller to put on the queue again.
+  expect(cycle.deferred).toHaveLength(QUEUED_FILES)
 })

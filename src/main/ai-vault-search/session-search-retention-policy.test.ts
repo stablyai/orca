@@ -1,9 +1,7 @@
 import { expect, it } from 'vitest'
 import {
-  narrowsSessionSearchHistory,
   normalizeSessionSearchHistoryDays,
-  sessionSearchHistoryCutoffMs,
-  widensSessionSearchHistory
+  sessionSearchHistoryCutoffMs
 } from './session-search-retention-policy'
 
 const NOW = 1_740_000_000_000
@@ -19,14 +17,12 @@ it('treats a fractional or non-positive day count as no bound at all', () => {
   expect(normalizeSessionSearchHistoryDays(999_999)).toBe(3_650)
 })
 
-it('separates a narrowing bound from a widening one, including to and from unbounded', () => {
-  expect(narrowsSessionSearchHistory(null, 30)).toBe(true)
-  expect(narrowsSessionSearchHistory(90, 30)).toBe(true)
-  expect(narrowsSessionSearchHistory(30, 90)).toBe(false)
-  expect(narrowsSessionSearchHistory(30, null)).toBe(false)
-
-  expect(widensSessionSearchHistory(30, 90)).toBe(true)
-  expect(widensSessionSearchHistory(30, null)).toBe(true)
-  expect(widensSessionSearchHistory(null, 30)).toBe(false)
-  expect(widensSessionSearchHistory(30, 30)).toBe(false)
+// The cutoff is read from the clock on every pass, not frozen at construction:
+// a purge and the accept check that follows it must not disagree about where
+// the window is, or the sweep deletes rows the next candidate re-indexes.
+it('moves the cutoff with the clock', () => {
+  const later = NOW + 86_400_000
+  expect(sessionSearchHistoryCutoffMs(30, later)).toBe(
+    (sessionSearchHistoryCutoffMs(30, NOW) ?? 0) + 86_400_000
+  )
 })

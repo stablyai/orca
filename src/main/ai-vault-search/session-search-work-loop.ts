@@ -5,18 +5,16 @@ export type SessionSearchWorkLoopOptions = {
   intervalMs: number
   /** A task that threw for a reason other than its own abort. */
   onFailure: (error: unknown) => void
-  /** Runs after every task, aborted or not, for bookkeeping the caller owns. */
-  afterTask: () => void
 }
 
 /**
- * Runs the indexer's passes one at a time, on an interval, cancellably.
+ * Runs the indexer's passes one at a time, on an interval, until it is closed.
  *
  * Separate from the indexer because it is the part with no opinion about
- * transcripts: a task queue that never overlaps itself, a timer that only ever
- * has one pending tick, and an abort that a pause or a close can pull. Keeping
- * the chain and the timer in one place is what makes `settled` mean "everything
- * queued so far has finished, including the re-arm".
+ * transcripts: a task chain that never overlaps itself, a timer that only ever
+ * has one pending tick, and a close that cancels both. Arming inside the chain
+ * rather than beside it is what makes `settled` mean "everything queued so far
+ * has finished, including the re-arm", which is what a fake-clock test needs.
  */
 export class SessionSearchWorkLoop {
   private timer: SessionSearchTimerHandle | null = null
@@ -31,51 +29,34 @@ export class SessionSearchWorkLoop {
     return this.chain
   }
 
-  /** Queues `work` behind whatever is already running. */
-  queue(work: (signal: AbortSignal) => Promise<void>): Promise<void> {
-    const chained = this.chain.then(
-      () => this.guard(work),
-      () => this.guard(work)
-    )
+  /** Queues `work` behind whatever is running, then re-arms the interval. */
+  queue(work: (signal: AbortSignal) => Promise<void>, tick: () => void): Promise<void> {
+    const chained = this.chain
+      .then(
+        () => this.run(work),
+        () => this.run(work)
+      )
+      .then(() => this.arm(tick))
     this.chain = chained
     return chained
   }
 
   /**
-   * Queues `work` and re-arms the interval once it settles. Arming inside the
-   * chain, not beside it, is what lets a test advance the clock straight after
-   * awaiting instead of racing the re-arm.
+   * Stops the timer, the task in flight and everything queued behind it. Nothing
+   * queued before this call may run afterwards: that is what lets the indexer
+   * close its store here and know no pass will reach for it.
    */
-  queueThenArm(
-    work: (signal: AbortSignal) => Promise<void>,
-    shouldArm: () => boolean,
-    tick: () => void
-  ): Promise<void> {
-    const chained = this.queue(work).then(() => this.arm(shouldArm, tick))
-    this.chain = chained
-    return chained
-  }
-
-  /** Stops the next tick without touching the task in flight. */
-  disarm(): void {
+  close(): void {
+    this.closed = true
     if (this.timer !== null) {
       this.options.clock.clearTimeout(this.timer)
       this.timer = null
     }
-  }
-
-  abort(): void {
     this.controller?.abort()
   }
 
-  close(): void {
-    this.closed = true
-    this.disarm()
-    this.abort()
-  }
-
-  private arm(shouldArm: () => boolean, tick: () => void): void {
-    if (this.closed || this.timer !== null || !shouldArm()) {
+  private arm(tick: () => void): void {
+    if (this.closed || this.timer !== null) {
       return
     }
     this.timer = this.options.clock.setTimeout(() => {
@@ -84,7 +65,7 @@ export class SessionSearchWorkLoop {
     }, this.options.intervalMs)
   }
 
-  private async guard(work: (signal: AbortSignal) => Promise<void>): Promise<void> {
+  private async run(work: (signal: AbortSignal) => Promise<void>): Promise<void> {
     if (this.closed) {
       return
     }
@@ -93,7 +74,7 @@ export class SessionSearchWorkLoop {
     try {
       await work(controller.signal)
     } catch (error) {
-      // An aborted task is a pause, a clear or a close, never a failure.
+      // An aborted task is a close, never a failure.
       if (!controller.signal.aborted) {
         this.options.onFailure(error)
       }
@@ -101,7 +82,6 @@ export class SessionSearchWorkLoop {
       if (this.controller === controller) {
         this.controller = null
       }
-      this.options.afterTask()
     }
   }
 }

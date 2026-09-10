@@ -12,7 +12,6 @@ import {
   writeClaudeTranscript,
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
-import { SessionSearchCycleAllowance } from './session-search-reconcile-budget'
 import { discoverSessionSearchCandidates } from './session-search-scan-roots'
 import { SessionSearchStore } from './session-search-store'
 
@@ -80,14 +79,26 @@ it('resumes into a grown transcript instead of re-reading it whole', async () =>
   expect(second.stats).toMatchObject({ incremental: 1, fullParses: 0 })
 })
 
-it('hands back everything the allowance had no room for, in order', async () => {
-  const allowance = new SessionSearchCycleAllowance({ files: 1, bytes: 1_000_000 })
+it('hands back everything it ran out of time for, in order', async () => {
   const all = await candidates()
-  const pass = await runSessionSearchIndexPass(store, all, { allowance })
+  const pass = await runSessionSearchIndexPass(store, all, { overdue: () => true })
 
   expect(pass.deferred.map((one) => one.file.path)).toEqual(
     all.slice(1).map((one) => one.file.path)
   )
+  expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
+    n: 1
+  })
+})
+
+// The deadline is never applied before the pass has read anything, so a single
+// transcript larger than one deadline is read alone rather than deferred for
+// ever behind a bound it can never fit inside.
+it('reads one file even when the deadline has already expired', async () => {
+  const only = (await candidates()).slice(0, 1)
+  const pass = await runSessionSearchIndexPass(store, only, { overdue: () => true })
+
+  expect(pass.deferred).toEqual([])
   expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
     n: 1
   })

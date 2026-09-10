@@ -13,10 +13,27 @@ const CLOCK_EPOCH_MS = 1_740_000_000_000
 export class FakeSessionSearchClock implements SessionSearchClock {
   private time = CLOCK_EPOCH_MS
   private nextId = 1
+  private nowCalls = 0
   private readonly timers = new Map<number, { at: number; callback: () => void }>()
 
+  /**
+   * What each `now()` reading costs. A pass reads the clock once per file it is
+   * about to read, so this is how a test spends a pass's deadline without
+   * waiting: it is the wall time the reads themselves take.
+   */
+  costPerNowMs = 0
+
+  /**
+   * Runs on every `now()`, with the call number. The only synchronous seam into
+   * a running pass: the deadline check is what a pass consults between files.
+   */
+  onNow: ((call: number) => void) | null = null
+
   now(): number {
-    return this.time
+    const at = this.time
+    this.time += this.costPerNowMs
+    this.onNow?.(++this.nowCalls)
+    return at
   }
 
   setTimeout(callback: () => void, ms: number): SessionSearchTimerHandle {
