@@ -1,3 +1,7 @@
+import type {
+  AgentSessionBackgroundTask,
+  AgentSessionBackgroundTaskState
+} from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 // ─── Structured agent-session wire contract ─────────────────────────────────
@@ -56,29 +60,12 @@ export type AgentSessionHandoffRequest = {
 
 export type AgentSessionHandoffResult = { status: AgentSessionHandoffStatus }
 
-export type AgentSessionBackgroundTask = {
-  id: string
-  kind: 'agent' | 'workflow' | 'command' | 'monitor' | 'unknown'
-  description?: string
-  /** Whether this row's own stop can act on it. Absent means yes: every host
-   *  that predates this field published only backgrounded, stoppable rows, and
-   *  a client that read absence as "not stoppable" would hide a working control
-   *  on those hosts. A row the host cannot target sends `false`. */
-  stoppable?: boolean
-}
-
-export type AgentSessionBackgroundTaskState = {
-  state: 'monitoring'
-  /** Optional so mixed-version clients can consume state-only hosts. */
-  tasks?: AgentSessionBackgroundTask[]
-  /** Optional so clients only send targeted stops to hosts that accept them. */
-  supportsTaskStop?: boolean
-  /** Whether an untargeted "stop everything" is available at all. Absent means
-   *  yes: every host that predates this field accepted one, and a client that
-   *  read absence as "no stop" would hide a working control on those hosts.
-   *  A host whose provider exposes no honest stop sends `false`. */
-  supportsStopAll?: boolean
-}
+export type {
+  AgentSessionBackgroundTask,
+  AgentSessionBackgroundTaskRunState,
+  AgentSessionBackgroundTaskState
+} from './agent-session-background-task-wire'
+export { agentSessionBackgroundTasksEqual } from './agent-session-background-task-wire'
 
 export type AgentSessionTurnActivity = {
   turnId: string
@@ -216,6 +203,10 @@ export type AgentSessionStatusSummary = {
   toolInput?: string
   /** Preview of the newest assistant prose, so a settled row says what the agent said. */
   lastAssistantMessage?: string
+  /** Live provider-owned background tasks, so session lists can render
+   *  subagent children without holding a journal reader open. Optional for
+   *  mixed-version hosts. */
+  backgroundTasks?: AgentSessionBackgroundTask[]
   providerSession?: AgentProviderSessionMetadata
   updatedAt: number
 }

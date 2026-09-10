@@ -55,6 +55,7 @@ const structuredQuestion = {
   allowOther: true,
   optionTokens: ['choice-a', 'choice-b']
 }
+const structuredActivity = { isWorking: false, turnId: null as string | null }
 const structuredSessionState = {
   messages: [] as unknown[],
   status: 'ready',
@@ -86,8 +87,7 @@ vi.mock('./use-mobile-native-chat-session', () => ({
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
     session: structuredSessionState,
-    isWorking: false,
-    turnId: null,
+    ...structuredActivity,
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
     permission: structuredPermission,
@@ -339,6 +339,37 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(structuredSendWithOutcome).toHaveBeenCalledWith('look')
     expect(sendWithOutcome).not.toHaveBeenCalled()
     expect(clientStub.sendRequest).not.toHaveBeenCalled()
+  })
+
+  it('separates structured working status from provider cancellation availability', async () => {
+    const props = {
+      tab: {
+        type: 'agent-session',
+        id: 'agent-tab-1',
+        title: 'Chat',
+        sessionId: 'session-structured',
+        agent: 'codex',
+        isActive: true
+      },
+      activeHandle: null,
+      inputLeaseReady: false
+    }
+    structuredActivity.isWorking = true
+    try {
+      await act(async () => {
+        renderer?.update(createElement(Harness, props))
+      })
+      expect(controller?.nativeChatAgentWorking).toBe(true)
+      expect(controller?.nativeChatCanStop).toBe(false)
+      structuredActivity.turnId = 'provider-turn'
+      await act(async () => {
+        renderer?.update(createElement(Harness, props))
+      })
+      expect(controller?.nativeChatCanStop).toBe(true)
+    } finally {
+      structuredActivity.isWorking = false
+      structuredActivity.turnId = null
+    }
   })
 
   it('exposes structured prompt cards and session options on structured tabs', async () => {

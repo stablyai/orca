@@ -53,6 +53,8 @@ function journalWith(prompt: string): AgentSessionJournal {
   return {
     isReadOnly: false,
     lastActivityAt: () => OBSERVED_AT,
+    // This journal never changes, so a real one would hold its cursor steady.
+    cursor: () => ({ epoch: 1, sequence: 1 }),
     snapshot: () => ({ items: runningTurn(prompt) })
   } as unknown as AgentSessionJournal
 }
