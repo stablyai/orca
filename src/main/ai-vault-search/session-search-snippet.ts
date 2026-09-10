@@ -3,8 +3,11 @@ import {
   SESSION_SEARCH_SNIPPET_MARK_CLOSE,
   SESSION_SEARCH_SNIPPET_MARK_OPEN
 } from './session-search-engine-types'
-import { orExpression, type SessionSearchQueryPlan } from './session-search-query-planner'
-import { scopedExpression } from './session-search-retrieval'
+import {
+  orExpression,
+  scopedExpression,
+  type SessionSearchQueryPlan
+} from './session-search-query-planner'
 import type { SessionSearchScope } from './session-search-engine-types'
 
 // What FTS5 wraps a match in before this module rewrites it to the public
