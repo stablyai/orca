@@ -12,7 +12,7 @@ import {
   type SessionSearchIndexerHarness
 } from './session-search-indexer-test-fixture'
 import { SessionSearchIndexingStatus } from './session-search-indexing-status'
-import { SessionSearchStore } from './session-search-store'
+import { STALE_PATH_LIMIT, SessionSearchStore } from './session-search-store'
 
 let harness: SessionSearchIndexerHarness
 let store: SessionSearchStore
@@ -116,4 +116,45 @@ it('reports the real roots it listed transcripts under', async () => {
   await writeTranscripts(1)
   const result = await sweep()
   expect([...result.rootsWithFiles]).toEqual([harness.roots.claudeProjectsDir])
+})
+
+// A drop means the queue is knowingly missing something. The sweep is what
+// makes that stop being true, because it re-enumerates every root; left as a
+// lifetime tally the count described an incompleteness that had been resolved
+// minutes earlier and never returned to zero for the life of the process.
+it('forgets the queue drops it just re-enumerated past', async () => {
+  await writeTranscripts(1)
+  for (let index = 0; index < STALE_PATH_LIMIT + 3; index++) {
+    store.markStale({
+      agent: 'claude',
+      codexHome: null,
+      file: {
+        path: join(harness.claudeProjectDir, `dropped-${index}.jsonl`),
+        mtimeMs: index,
+        modifiedAt: new Date(index).toISOString(),
+        sizeBytes: 1
+      }
+    })
+  }
+  expect(store.droppedPendingFileCount).toBe(3)
+
+  await sweep()
+
+  expect(store.droppedPendingFileCount).toBe(0)
+})
+
+// A sweep decides which rows nothing rediscovered by reading the whole file
+// table. A handle that cannot answer that must not be read as "nothing is
+// missing": an empty list is the one conclusion an unreadable handle cannot
+// earn, so the failure travels rather than being folded into a verdict.
+it('refuses to conclude anything from a sweep whose held-file read failed', async () => {
+  await writeTranscripts(2)
+  await sweep()
+  expect(store.indexedSources()).toHaveLength(2)
+
+  store.indexedSources = () => {
+    throw new Error('database is not open')
+  }
+
+  await expect(sweep()).rejects.toThrow('database is not open')
 })

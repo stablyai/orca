@@ -439,6 +439,40 @@ it('retires a transcript deleted between a sweep and the cycle after it', async 
   expect(sessionsMatching('surviving')).toEqual([OTHER_SESSION_ID])
 })
 
+// Round 10, M2. A sweep that throws part way learned nothing, and the flag that
+// says one is owed was taken on entry. Losing it there leaves nothing armed to
+// try again, so the machine outside the recency window goes unread until
+// something else happens to ask for a sweep.
+it('keeps a sweep due when the one that was running threw', async () => {
+  const older = transcriptPath(OTHER_SESSION_ID)
+  await writeClaudeTranscript(older, ['an older conversation'], OTHER_SESSION_ID)
+  const yesterday = new Date(Date.now() - 86_400_000)
+  await utimes(older, yesterday, yesterday)
+  await writeClaudeTranscript(transcriptPath(), ['the newest conversation'], SESSION_ID)
+
+  // Newest-one per root, so only a sweep can reach the older file. The clock is
+  // read inside the pass, which is where a failure part way through lands.
+  newIndexer({ recentPerAgent: 1 })
+  let thrown = false
+  clock.onNow = () => {
+    if (thrown || indexedSessionCount() === 0) {
+      return
+    }
+    thrown = true
+    throw new Error('the sweep fell over')
+  }
+  await indexer?.start()
+  await indexer?.settled()
+  clock.onNow = null
+
+  expect(errors.map((error) => (error as Error).message)).toEqual(['the sweep fell over'])
+  expect(sessionsMatching('older')).toEqual([])
+
+  // The pass after it is a sweep, not a cycle: a cycle reads one file per root.
+  await nextCycle()
+  expect(sessionsMatching('older')).toEqual([OTHER_SESSION_ID])
+})
+
 // Round 10, M1. A transcript the reader cannot open is recorded stale by the
 // consumer on every attempt, so it was re-read every cycle for ever: pending
 // stuck at one, a failure count climbing without bound, and a phase that never

@@ -243,12 +243,6 @@ export class SessionSearchIndexer {
       signal
     })
     this.indexingStatus.sweepFinished(sweep.completed)
-    if (sweep.completed) {
-      // Before the requeue, not after: this sweep re-enumerated every root, so
-      // a drop from before it no longer means anything is missing, while what
-      // this sweep hands back and the queue cannot hold does.
-      this.store.forgetDroppedPending()
-    }
     this.requeue(sweep.deferred)
     if (!sweep.completed) {
       // A sweep stays due until one finishes: an aborted one saw part of the

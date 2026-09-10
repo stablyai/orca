@@ -195,6 +195,12 @@ export async function runSessionSearchBackfill(
       // Only a sweep that finished publishes: an aborted one saw part of the
       // machine, and its empty findings would clear a live alarm.
       status.setDegradedRoots(degradedRoots)
+      // A drop says the queue is knowingly missing something. This pass just
+      // re-enumerated every root, so anything still owed is back on the queue
+      // and a drop from before it no longer describes the queue. What this
+      // sweep hands back, and the queue cannot hold, is counted again: the
+      // caller re-queues it after this returns.
+      store.forgetDroppedPending()
     }
 
     return {
