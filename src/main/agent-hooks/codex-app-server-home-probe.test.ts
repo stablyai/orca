@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { probeCodexHomeViaAppServer } from './codex-app-server-home-probe'
+import {
+  buildCodexProbeEnvironment,
+  probeCodexHomeViaAppServer
+} from './codex-app-server-home-probe'
 
 // The probe speaks to a real child over pipes; `/bin/sh` is the shell it uses
 // on every host that reaches this code (Windows remotes never install hooks).
@@ -120,5 +123,48 @@ sleep 30
 
     await expect(pending).resolves.toBeNull()
     expect(Date.now() - startedAt).toBeLessThan(5_000)
+  })
+})
+
+describe('buildCodexProbeEnvironment', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('drops the CODEX_HOME Orca injected for its own managed accounts', () => {
+    // Orca exports these for its managed Codex accounts. Reading one back would
+    // report Orca's own answer as if it were the host user's configuration.
+    vi.stubEnv('CODEX_HOME', '/orca/codex-accounts/abc/home')
+    vi.stubEnv('ORCA_CODEX_HOME', '/orca/codex-accounts/abc/home')
+
+    const env = buildCodexProbeEnvironment('/home/dev')
+
+    expect(env.CODEX_HOME).toBeUndefined()
+    expect(env.ORCA_CODEX_HOME).toBeUndefined()
+  })
+
+  it('pins HOME to the home the installer resolved', () => {
+    expect(buildCodexProbeEnvironment('/home/dev').HOME).toBe('/home/dev')
+  })
+
+  onPosix('asks Codex under the installer s home, not Orca s injected one', async () => {
+    vi.stubEnv('CODEX_HOME', '/orca/codex-accounts/abc/home')
+    const fake = await withFakeCodex(
+      `#!/bin/sh
+read -r _line
+home="\${CODEX_HOME:-$HOME/.codex}"
+printf '{"id":1,"result":{"codexHome":"%s"}}\\n' "$home"
+sleep 5
+`
+    )
+
+    await expect(
+      probeCodexHomeViaAppServer({
+        loginShell: '/bin/sh',
+        loginShellFlag: '-c',
+        env: { ...buildCodexProbeEnvironment('/home/dev'), PATH: fake.PATH },
+        timeoutMs: 10_000
+      })
+    ).resolves.toBe('/home/dev/.codex')
   })
 })

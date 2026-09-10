@@ -3,7 +3,10 @@ import { basename } from 'node:path'
 import { homedir, userInfo } from 'node:os'
 import { promisify } from 'node:util'
 import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
-import { probeCodexHomeViaAppServer } from './codex-app-server-home-probe'
+import {
+  buildCodexProbeEnvironment,
+  probeCodexHomeViaAppServer
+} from './codex-app-server-home-probe'
 import type { AgentHookTarget } from '../../shared/agent-hook-types'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 import { withManagedHookInstallLock } from './managed-hook-install-lock'
@@ -109,6 +112,7 @@ export async function resolveRelayRedirectedCodexHome(
   const reported = await probe({
     loginShell: shell,
     loginShellFlag: flag,
+    env: buildCodexProbeEnvironment(home),
     ...(signal ? { signal } : {})
   })
   const codexHome = reported === null ? null : normalizePosixAgentHome(reported.trim())

@@ -21,6 +21,23 @@ const MAX_STDOUT_BYTES = 64 * 1024
 const INITIALIZE_ID = 1
 
 /**
+ * The environment the probe hands the child.
+ *
+ * `HOME` is pinned to the home the installer resolved, so parent and child
+ * agree on which account is being configured. `CODEX_HOME`/`ORCA_CODEX_HOME`
+ * are dropped because Orca injects them for its own managed accounts — reading
+ * one back would report Orca's own answer as if it were the host user's. A
+ * value the user's profile or launcher wrapper sets is unaffected: the login
+ * shell re-exports it, which is the whole point of the probe.
+ */
+export function buildCodexProbeEnvironment(home: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, HOME: home }
+  delete env.CODEX_HOME
+  delete env.ORCA_CODEX_HOME
+  return env
+}
+
+/**
  * `codex app-server` exits without answering when stdin reaches EOF, so the
  * request is written and the pipe is left open until the reply lands.
  */
