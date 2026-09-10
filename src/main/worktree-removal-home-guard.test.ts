@@ -105,6 +105,24 @@ describe('whose home the guard consults', () => {
     expect(isHome('/srv/homes/alice', executionHostRemovalHome(null))).toBe(false)
   })
 
+  it('never lets an unknown execution-host home fall back to the client homedir', () => {
+    // The client's home coincides with the remote path here; `null` still means unknown.
+    homedirMock.mockReturnValue('/srv/homes/alice')
+    expect(isHome('/srv/homes/alice', executionHostRemovalHome(null))).toBe(false)
+    expect(homedirMock).not.toHaveBeenCalled()
+  })
+
+  it('honours a Windows execution-host home in the forward-slash form the relay reports', () => {
+    // `normalizeRemoteHome` folds a Windows host's `$HOME` to `C:/Users/bob`, not `C:\Users\bob`.
+    const hostHome = executionHostRemovalHome('C:/Users/bob/OneDrive')
+    expect(withProcessPlatform('darwin', () => isHome('C:\\Users\\bob\\OneDrive', hostHome))).toBe(
+      true
+    )
+    expect(
+      withProcessPlatform('darwin', () => isHome('C:\\Users\\bob\\OneDrive\\wt\\feature', hostHome))
+    ).toBe(false)
+  })
+
   it('keeps a linked worktree under the execution host home deletable', () => {
     expect(
       isHome('/srv/homes/alice/wt/feature', executionHostRemovalHome('/srv/homes/alice'))
@@ -114,6 +132,9 @@ describe('whose home the guard consults', () => {
   it('ignores an execution-host home written in the other platform s syntax', () => {
     expect(isHome('/srv/work', executionHostRemovalHome('C:\\Users\\bob'))).toBe(false)
     expect(isHome('C:\\work', executionHostRemovalHome('/home/alice'))).toBe(false)
+    // Resolving a Windows home with POSIX ops manufactures `<cwd>/C:/Users/bob`, which every
+    // ancestor of the cwd "contains" — a legitimate delete refused for a meaningless reason.
+    expect(isHome(process.cwd(), executionHostRemovalHome('C:/Users/bob'))).toBe(false)
   })
 
   it('honours a Windows execution-host home from a POSIX client', () => {

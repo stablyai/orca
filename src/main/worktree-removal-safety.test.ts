@@ -545,6 +545,7 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
   // client home is `homedir()` here — a macOS/Linux path that recognises none
   // of the Windows rows, and must not be what decides them either way.
   it.each([
+    ['/Users', '/opt/src', true],
     ['/Users/alice', '/opt/src', true],
     ['/home/alice', '/opt/src', true],
     ['/home/alice/wt/foo', '/opt/src', false],
