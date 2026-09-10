@@ -64,7 +64,7 @@ export async function deleteExpiredSearchFiles(
  * earlier drain leave behind, so the index needs no record of unfinished work
  * beyond the rows themselves.
  */
-export async function drainOrphanedMessages(
+async function drainOrphanedMessages(
   db: SyncDatabase,
   closed: () => boolean,
   yieldStep: () => Promise<void> = yieldToEventLoop

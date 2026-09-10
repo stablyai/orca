@@ -66,6 +66,10 @@ export type SessionSearchFileWrite = {
 
 export class SessionSearchIndexWriter {
   private readonly records: SessionSearchFileRecords
+  // Removals per path, so a write can prove its source was not dropped under it
+  // rather than infer it from the cursor. In memory is enough: one process owns
+  // the index, and a removal only has to fence writes this process opened.
+  private readonly removals = new Map<string, number>()
 
   constructor(
     private readonly db: SyncDatabase,
@@ -134,6 +138,7 @@ export class SessionSearchIndexWriter {
    * that is still in flight is fenced by the cursor its commit re-reads.
    */
   removeFile(path: string): void {
+    this.removals.set(path, (this.removals.get(path) ?? 0) + 1)
     const cursor = this.cursor(path)
     this.db.exec('BEGIN IMMEDIATE')
     try {
@@ -166,6 +171,7 @@ export class SessionSearchIndexWriter {
     // these rows no longer continue anything, and committing on top of that
     // would resurrect a deleted source or duplicate a span.
     let expected = opened
+    const removalsAtStart = this.removals.get(path) ?? 0
     // The session row is reused across re-reads of one file, so a `replace`
     // swaps a session's rows rather than minting a second generation of it.
     let session = opened?.session_row_id ?? null
@@ -179,7 +185,13 @@ export class SessionSearchIndexWriter {
     // transaction it already knows will roll back, once per remaining message.
     let fenced = false
 
+    // Why a counter and not the cursor alone: on a path this index never wrote,
+    // `expected` and the absent row are both undefined, so the cursor compare
+    // reads a removal as no change and the write recreates the source.
     const current = (): boolean => {
+      if ((this.removals.get(path) ?? 0) !== removalsAtStart) {
+        return false
+      }
       const row = this.cursor(path)
       return (
         row?.session_row_id === expected?.session_row_id &&

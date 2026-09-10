@@ -295,6 +295,23 @@ it('stops a chunked read whose file was removed between its chunks', () => {
   expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0, full: 0 })
 })
 
+it('fences a first-ever read whose file was removed before it committed', () => {
+  const candidate = syntheticCandidate({ path: '/never-indexed.jsonl' })
+  const write = store.beginWrite(candidate, 'replace', 0)!
+  for (const message of userMessages('removedbeforefirstcommit', 3)) {
+    write.add(message)
+  }
+  // The path was never indexed, so there is no cursor for the removal to move.
+  // PR 3's retirement sweep removes exactly these: paths the index deferred over
+  // budget and never wrote, while the registered consumer is fed concurrently.
+  store.removeFile('/never-indexed.jsonl')
+
+  expect(write.commit({ session: syntheticSession(), byteOffset: 300, incomplete: false })).toBe(
+    false
+  )
+  expect(counts(index.db)).toMatchObject({ sessions: 0, messages: 0, files: 0, full: 0 })
+})
+
 it('replaces the previous generation without ever showing both', () => {
   replayTranscriptRead({ messages: userMessages('firstgeneration', 10) })
   replayTranscriptRead({ messages: userMessages('secondgeneration', 10) })

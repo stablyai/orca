@@ -4,9 +4,9 @@ import type { TranscriptMessage } from '../ai-vault/session-transcript-consumers
 // Why: Claude `--resume` and Codex fork copy the parent transcript into a new
 // file under a new session id, so one conversation lands N times in results.
 // The shared opening prefix is what identifies the copy; the tail diverges.
-export const CONTENT_HASH_MESSAGE_LIMIT = 8
+const CONTENT_HASH_MESSAGE_LIMIT = 8
 // One shared opening prompt is not evidence of a fork; two turns is.
-export const CONTENT_HASH_MIN_MESSAGES = 2
+const CONTENT_HASH_MIN_MESSAGES = 2
 
 export type SessionContentHash = { hash: string | null; count: number }
 

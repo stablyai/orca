@@ -10,7 +10,7 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 // policy, decided where the wire is.
 
 // Bump to drop and rebuild: the index is a cache over the transcripts, never a source.
-export const SESSION_SEARCH_SCHEMA_VERSION = 2
+export const SESSION_SEARCH_SCHEMA_VERSION = 3
 
 // unicode61 keeps `_ . - /` inside tokens so paths and identifiers match exactly;
 // the `identifiers` column carries the split form (see session-search-identifier-split).
@@ -21,7 +21,13 @@ const TOKENIZER = `tokenize="unicode61 tokenchars '_.-/+'"`
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(
-  id INTEGER PRIMARY KEY,
+  -- AUTOINCREMENT, because this id names rows in the messages table for longer
+  -- than the row itself lives: retention cuts a session loose in one
+  -- transaction and reclaims its messages over many. A plain rowid is reissued
+  -- as max+1, so a session created inside that window would be handed a freed
+  -- id and adopt whatever of the purged conversation the drain had not reached,
+  -- behind a live session no later purge visits.
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   agent TEXT NOT NULL,
   session_id TEXT NOT NULL,
   -- The transcript this session was decoded from. Not unique: OpenCode's SQLite

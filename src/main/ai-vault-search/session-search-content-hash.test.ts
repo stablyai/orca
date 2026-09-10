@@ -1,6 +1,5 @@
 import { expect, it } from 'vitest'
 import {
-  CONTENT_HASH_MESSAGE_LIMIT,
   EMPTY_CONTENT_HASH,
   foldContentHash,
   isCollapsibleContentHash
@@ -20,10 +19,10 @@ it('reaches the same digest whether the prefix arrives whole or in two appends',
 })
 
 it('freezes once the prefix limit is reached so later appends cannot move it', () => {
-  const capped = foldContentHash(
-    EMPTY_CONTENT_HASH,
-    userMessages('turn', CONTENT_HASH_MESSAGE_LIMIT)
-  )
+  // Found rather than imported: the limit is the module's business, and a test
+  // that reads it off the export cannot notice the fold ignoring it.
+  const capped = foldContentHash(EMPTY_CONTENT_HASH, userMessages('turn', 64))
+  expect(capped.count).toBeLessThan(64)
   expect(foldContentHash(capped, userMessages('later', 20))).toEqual(capped)
 })
 
