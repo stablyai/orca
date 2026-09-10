@@ -36,11 +36,9 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
       )
     : undefined
   const workspaceTabRepoName = workspaceTabRepo?.displayName ?? result.repoName
-  const workspaceTabHostBadge = getPaletteHostBadge(
-    workspaceTabRepo,
-    controller.hostOptions,
-    controller.hostFilterActive
-  )
+  const workspaceTabHostBadge = getPaletteHostBadge(workspaceTabRepo, controller.hostOptions, {
+    force: controller.forceHostBadges
+  })
   const recentRow = controller.recentTabRowByItem.get(entry) ?? null
   const fallback =
     result.contentType === 'terminal' && result.occupantAgent ? (
@@ -100,7 +98,7 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
               </span>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex min-w-0 max-w-[40%] items-center justify-end gap-1.5">
             <PaletteHostBadgeChip badge={workspaceTabHostBadge} />
             <PaletteLocationChip
               repoName={workspaceTabRepoName}
@@ -108,7 +106,6 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
               repoColor={workspaceTabRepo?.badgeColor}
               worktreeName={result.worktreeName}
               worktreeRanges={result.worktreeRanges}
-              worktree={workspaceTabWorktree}
             />
             <PaletteRowShortcutBadge
               index={controller.recentTabShortcutIndexByItem.get(entry)}

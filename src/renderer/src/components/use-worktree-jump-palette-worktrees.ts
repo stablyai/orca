@@ -32,7 +32,7 @@ import type { PaletteSearchContext } from '@/lib/palette-match/palette-ranking'
 type WorktreeJumpPaletteWorktreesInput = WorktreeJumpPaletteStoreState &
   Pick<
     WorktreeJumpPaletteFilter,
-    'filterPredicate' | 'repoMap' | 'repoByHostIdentity' | 'hostOptions' | 'hostFilterActive'
+    'filterPredicate' | 'repoMap' | 'repoByHostIdentity' | 'hostOptions' | 'forceHostBadges'
   > &
   Pick<WorktreeJumpPaletteLocalState, 'paletteSearchQuery'> & {
     paletteSearchContext: PaletteSearchContext
@@ -68,7 +68,7 @@ export function useWorktreeJumpPaletteWorktrees({
   terminalLayoutsByTabId,
   repoByHostIdentity,
   hostOptions,
-  hostFilterActive,
+  forceHostBadges,
   prCache,
   hostedReviewCache,
   settings,
@@ -244,7 +244,7 @@ export function useWorktreeJumpPaletteWorktrees({
         repoMap,
         repoByHostIdentity,
         hostOptions,
-        hostFilterActive,
+        forceHostBadges,
         prCache,
         issueCache,
         workspacePortScan,
@@ -253,7 +253,7 @@ export function useWorktreeJumpPaletteWorktrees({
     [
       allWorktrees,
       checksReviewByWorktree,
-      hostFilterActive,
+      forceHostBadges,
       hostOptions,
       issueCache,
       prCache,

@@ -9,6 +9,7 @@ import {
   EMPTY_PALETTE_FILTER,
   getPaletteFilterSelectionCount,
   isPaletteFilterActive,
+  shouldForcePaletteHostBadges,
   togglePaletteFilterValue,
   type PaletteFilterState
 } from './palette-filter'
@@ -56,6 +57,12 @@ describe('palette filter state', () => {
     expect(getPaletteFilterSelectionCount(EMPTY_PALETTE_FILTER)).toBe(0)
     expect(isPaletteFilterActive(filterOf([], ['r1']))).toBe(true)
     expect(getPaletteFilterSelectionCount(filterOf(['local'], ['r1']))).toBe(2)
+  })
+
+  it('forces row host badges only when several hosts are selected', () => {
+    expect(shouldForcePaletteHostBadges(EMPTY_PALETTE_FILTER)).toBe(false)
+    expect(shouldForcePaletteHostBadges(filterOf(['local'], []))).toBe(false)
+    expect(shouldForcePaletteHostBadges(filterOf(['local', 'ssh:builder'], []))).toBe(true)
   })
 
   it('toggles values on and off, keeping each field sorted', () => {

@@ -35,11 +35,9 @@ export function WorktreeJumpPaletteSimulatorRow({
       )
     : undefined
   const simulatorRepoName = simulatorRepo?.displayName ?? result.repoName
-  const simulatorHostBadge = getPaletteHostBadge(
-    simulatorRepo,
-    controller.hostOptions,
-    controller.hostFilterActive
-  )
+  const simulatorHostBadge = getPaletteHostBadge(simulatorRepo, controller.hostOptions, {
+    force: controller.forceHostBadges
+  })
   const simulatorSessionAge = formatPaletteSessionAge(
     result.lastActiveAt ?? null,
     controller.paletteNowMs
@@ -91,7 +89,7 @@ export function WorktreeJumpPaletteSimulatorRow({
               </span>
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex min-w-0 max-w-[40%] items-center justify-end gap-1.5">
             <PaletteHostBadgeChip badge={simulatorHostBadge} />
             <PaletteLocationChip
               repoName={simulatorRepoName}
@@ -99,7 +97,6 @@ export function WorktreeJumpPaletteSimulatorRow({
               repoColor={simulatorRepo?.badgeColor}
               worktreeName={result.worktreeName}
               worktreeRanges={result.worktreeRanges}
-              worktree={simulatorWorktree}
             />
             <PaletteRowShortcutBadge
               index={controller.recentTabShortcutIndexByItem.get(entry)}
@@ -131,11 +128,9 @@ export function WorktreeJumpPaletteBrowserRow({
       )
     : undefined
   const browserRepoName = browserRepo?.displayName ?? result.repoName
-  const browserHostBadge = getPaletteHostBadge(
-    browserRepo,
-    controller.hostOptions,
-    controller.hostFilterActive
-  )
+  const browserHostBadge = getPaletteHostBadge(browserRepo, controller.hostOptions, {
+    force: controller.forceHostBadges
+  })
   const browserSessionAge = formatPaletteSessionAge(
     result.lastActiveAt ?? null,
     controller.paletteNowMs
@@ -182,7 +177,7 @@ export function WorktreeJumpPaletteBrowserRow({
               }
             />
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex min-w-0 max-w-[40%] items-center justify-end gap-1.5">
             <PaletteHostBadgeChip badge={browserHostBadge} />
             <PaletteLocationChip
               repoName={browserRepoName}
@@ -190,7 +185,6 @@ export function WorktreeJumpPaletteBrowserRow({
               repoColor={browserRepo?.badgeColor}
               worktreeName={result.worktreeName}
               worktreeRanges={result.worktreeRanges}
-              worktree={browserWorktree}
             />
             <PaletteRowShortcutBadge
               index={controller.recentTabShortcutIndexByItem.get(entry)}

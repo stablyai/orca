@@ -5,7 +5,7 @@ import { buildPaletteFilterModel } from '@/components/cmd-j/palette-filter-optio
 import {
   buildPaletteFilterPredicate,
   isPaletteFilterActive,
-  isPaletteHostFilterAmbiguous
+  shouldForcePaletteHostBadges
 } from '@/components/cmd-j/palette-filter'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
@@ -83,7 +83,7 @@ export function useWorktreeJumpPaletteFilter({
     [allWorktrees, defaultHostId, hostOptions, projectHostSetups, projects, repos]
   )
   const filterActive = isPaletteFilterActive(filter)
-  const hostFilterActive = isPaletteHostFilterAmbiguous(filter)
+  const forceHostBadges = shouldForcePaletteHostBadges(filter)
   const filterPredicate = useMemo(
     () => buildPaletteFilterPredicate(filter, filterModel),
     [filter, filterModel]
@@ -107,7 +107,7 @@ export function useWorktreeJumpPaletteFilter({
     defaultHostId,
     filterModel,
     filterActive,
-    hostFilterActive,
+    forceHostBadges,
     filterPredicate,
     groupHostIdByGroupId
   }

@@ -25,7 +25,9 @@ export function WorktreeJumpPaletteProjectRow({
   const result = entry.result
   const isProject = result.kind === 'project'
   const hostBadge = isProject
-    ? getPaletteHostBadge(result.repo, controller.hostOptions, controller.hostFilterActive)
+    ? getPaletteHostBadge(result.repo, controller.hostOptions, {
+        force: controller.forceHostBadges
+      })
     : null
   const badgeLabel = isProject
     ? translate('auto.components.WorktreeJumpPalette.projectBadge', 'Project')

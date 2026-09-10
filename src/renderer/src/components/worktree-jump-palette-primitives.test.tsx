@@ -61,8 +61,8 @@ it('elides a deep path from the head so the matched tail stays visible', () => {
   const secondary = container.querySelector('[data-slot="palette-open-tab-secondary"]')
   expect(secondary?.textContent).toBe(path)
   const [head, tail] = Array.from(secondary?.children ?? [])
-  expect(head?.textContent).toBe('/Users/me/projects/orca/')
-  expect(tail?.textContent).toBe('new-create-button-design/proposals/create-button.html')
+  expect(head?.textContent).toBe('/Users/me/projects/orca')
+  expect(tail?.textContent).toBe('/new-create-button-design/proposals/create-button.html')
   expect(tail?.querySelector('.font-semibold')?.textContent).toBe('create-butt')
 })
 
@@ -80,6 +80,16 @@ it('folds the worktree into the repo chip and drops it when it repeats the repo 
   expect(container.querySelector('[data-slot="palette-location-chip"]')?.textContent).toBe(
     'orca·new-create-button-design'
   )
+  const chip = container.querySelector('[data-slot="palette-location-chip"]')
+  const repo = container.querySelector('[data-slot="palette-location-repo"]')
+  const worktree = container.querySelector('[data-slot="palette-open-tab-worktree"]')
+  expect(chip?.className).toContain('overflow-hidden')
+  expect(chip?.className).toContain('min-w-0')
+  expect(repo?.className).toContain('max-w-[55%]')
+  expect(repo?.className).toContain('min-w-[3ch]')
+  expect(worktree?.className).toContain('min-w-[3ch]')
+  expect(worktree?.getAttribute('data-state')).toBeNull()
+  expect(worktree?.getAttribute('tabindex')).toBeNull()
 
   rerender(
     <TooltipProvider>
@@ -87,11 +97,14 @@ it('folds the worktree into the repo chip and drops it when it repeats the repo 
         repoName="orca"
         repoRanges={[]}
         worktreeName="orca"
-        worktreeRanges={[]}
+        worktreeRanges={[{ start: 0, end: 4 }]}
       />
     </TooltipProvider>
   )
   expect(container.querySelector('[data-slot="palette-location-chip"]')?.textContent).toBe('orca')
+  expect(
+    container.querySelector('[data-slot="palette-location-repo"] .font-semibold')?.textContent
+  ).toBe('orca')
 })
 
 it('keeps a short title at its natural width so the session age stays beside it', () => {
@@ -108,6 +121,14 @@ it('keeps a short title at its natural width so the session age stays beside it'
   )
 
   const title = container.querySelector('[data-slot="palette-open-tab-title"]')
-  expect(title?.className).not.toMatch(/min-w-/)
+  expect(title?.className).toContain('min-w-0')
+  expect(title?.className).not.toContain('shrink-0')
+})
+
+it('caps the title only when it shares the line with secondary text', () => {
+  const { container } = renderPrimaryLine([])
+
+  const title = container.querySelector('[data-slot="palette-open-tab-title"]')
+  expect(title?.className).toContain('max-w-[62%]')
   expect(title?.className).toContain('shrink-0')
 })

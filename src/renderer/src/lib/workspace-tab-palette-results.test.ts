@@ -56,8 +56,7 @@ function makeEntry({
   agentLastActivityAt,
   agentSnippet,
   title = id,
-  secondaryText = '',
-  secondarySearchTexts = secondaryText ? [secondaryText] : []
+  secondaryText = ''
 }: {
   id?: string
   contentType?: 'terminal' | 'editor'
@@ -67,8 +66,8 @@ function makeEntry({
   agentSnippet?: string
   title?: string
   secondaryText?: string
-  secondarySearchTexts?: string[]
 } = {}): SearchableWorkspaceTab {
+  const secondarySearchTexts = secondaryText ? [secondaryText] : []
   return {
     tab: makeTab(id, contentType, createdAt) as SearchableWorkspaceTab['tab'],
     worktree,
@@ -373,32 +372,5 @@ describe('searchWorkspaceTabs ranking', () => {
     expect(results).toHaveLength(2)
     expect(results[0].tabId).toBe('newer-tab')
     expect(results[1].tabId).toBe('older-tab')
-  })
-})
-
-describe('searchWorkspaceTabs secondary display text', () => {
-  const relativePath = 'src/app.ts'
-  const absolutePath = '/Users/me/repo/src/app.ts'
-
-  it('shows the relative path when the absolute-path match fits inside it', () => {
-    const entry = makeEntry({
-      contentType: 'editor',
-      secondaryText: relativePath,
-      secondarySearchTexts: [relativePath, absolutePath]
-    })
-    const [result] = searchWorkspaceTabs([entry], 'app.ts')
-    expect(result.secondaryText).toBe(relativePath)
-    expect(result.secondaryRanges).toEqual([{ start: 4, end: 10 }])
-  })
-
-  it('keeps the absolute path when only its prefix matched', () => {
-    const entry = makeEntry({
-      contentType: 'editor',
-      secondaryText: relativePath,
-      secondarySearchTexts: [relativePath, absolutePath]
-    })
-    const [result] = searchWorkspaceTabs([entry], 'Users/me')
-    expect(result.secondaryText).toBe(absolutePath)
-    expect(result.secondaryRanges).toEqual([{ start: 1, end: 9 }])
   })
 })

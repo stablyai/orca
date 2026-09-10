@@ -18,7 +18,7 @@ export function buildWorktreeJumpPaletteDocumentIndex({
   repoMap,
   repoByHostIdentity,
   hostOptions,
-  hostFilterActive,
+  forceHostBadges,
   prCache,
   issueCache,
   workspacePortScan,
@@ -28,7 +28,7 @@ export function buildWorktreeJumpPaletteDocumentIndex({
   repoMap: ReadonlyMap<string, Repo>
   repoByHostIdentity: ReadonlyMap<string, Repo>
   hostOptions: readonly SidebarHostOption[]
-  hostFilterActive: boolean
+  forceHostBadges: boolean
   prCache: AppState['prCache'] | null
   issueCache: AppState['issueCache'] | null
   workspacePortScan: WorkspacePortScanResult | null
@@ -37,7 +37,7 @@ export function buildWorktreeJumpPaletteDocumentIndex({
   const hostLabelByWorktreeId = new Map<string, string>()
   for (const worktree of worktrees) {
     const repo = resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity)
-    const badge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
+    const badge = getPaletteHostBadge(repo, hostOptions, { force: forceHostBadges })
     if (badge) {
       hostLabelByWorktreeId.set(getPaletteWorktreeIdentity(worktree), badge.label)
     }

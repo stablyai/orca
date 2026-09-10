@@ -38,7 +38,7 @@ export function WorktreeJumpPaletteWorktreeRow({
     activeWorktreeId,
     sshConnectionStates,
     hostOptions,
-    hostFilterActive,
+    forceHostBadges,
     handleSelectItem
   } = controller
   const worktree = entry.worktree
@@ -61,7 +61,7 @@ export function WorktreeJumpPaletteWorktreeRow({
     ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
     : null
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
-  const hostBadge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
+  const hostBadge = getPaletteHostBadge(repo, hostOptions, { force: forceHostBadges })
 
   return (
     <CommandItem

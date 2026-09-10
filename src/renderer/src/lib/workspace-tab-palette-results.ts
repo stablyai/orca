@@ -11,7 +11,6 @@ import {
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
 import { matchWorkspaceTabAgentSnippet } from './workspace-tab-agent-snippet-match'
-import { preferDisplaySecondaryText } from './palette-secondary-text-display'
 import { maxAgentActivityAt } from './workspace-tab-agent-metadata'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { MatchRange } from './palette-match/normalized-text'
@@ -185,28 +184,22 @@ function matchEntry(
     return null
   }
 
-  // Why: the engine may match the absolute path, but the row should keep showing
-  // the relative one whenever the hit fits inside it.
-  const secondary = preferDisplaySecondaryText({
-    displayText: entry.secondaryText,
-    matchedText:
-      match.secondary !== null
-        ? (entry.secondarySearchTexts[match.secondary.index] ?? entry.secondaryText)
-        : entry.secondaryText,
-    ranges: match.secondary?.ranges ?? NO_RANGES
-  })
+  const secondaryText =
+    match.secondary !== null
+      ? (entry.secondarySearchTexts[match.secondary.index] ?? entry.secondaryText)
+      : entry.secondaryText
   const alias =
     match.typeAlias !== null ? (entry.typeSearchAliases ?? [])[match.typeAlias.index] : undefined
 
   return {
     ...baseResult(entry, context),
-    secondaryText: secondary.text,
-    secondaryMatches: match.secondaryMatches.map((secondaryMatch) => ({
-      text: entry.secondarySearchTexts[secondaryMatch.index] ?? '',
-      ranges: secondaryMatch.ranges
+    secondaryText,
+    secondaryMatches: match.secondaryMatches.map((secondary) => ({
+      text: entry.secondarySearchTexts[secondary.index] ?? '',
+      ranges: secondary.ranges
     })),
     titleRanges: match.titleRanges,
-    secondaryRanges: secondary.ranges,
+    secondaryRanges: match.secondary?.ranges ?? NO_RANGES,
     repoRanges: match.repoRanges,
     worktreeRanges: match.worktreeRanges,
     branchRanges: match.branchRanges,
