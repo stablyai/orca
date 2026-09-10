@@ -24,6 +24,11 @@ export function getPaletteFilterSelectionCount(filter: PaletteFilterState): numb
   return filter.hostIds.length + filter.repoIds.length
 }
 
+/** A single selected host is already named by its filter chip; only a multi-host filter needs per-row host badges. */
+export function isPaletteHostFilterAmbiguous(filter: PaletteFilterState): boolean {
+  return filter.hostIds.length > 1
+}
+
 function toggleValue(values: readonly string[], id: string): readonly string[] {
   if (values.includes(id)) {
     return values.filter((value) => value !== id)

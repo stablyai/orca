@@ -3,15 +3,14 @@ import { FileText, SquareTerminal } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { CommandItem } from '@/components/ui/command'
 import { PaletteRecentTabStatusDot } from '@/components/cmd-j/palette-live-status'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceTabPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import {
-  HighlightedText,
   PaletteHostBadgeChip,
+  PaletteLocationChip,
   PaletteOpenTabPrimaryLine,
   PaletteRowShortcutBadge
 } from './worktree-jump-palette-primitives'
@@ -76,8 +75,6 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
               secondaryText={result.secondaryText}
               secondaryRanges={result.secondaryRanges}
               secondaryMatches={result.secondaryMatches}
-              worktreeName={result.worktreeName}
-              worktreeRanges={result.worktreeRanges}
               sessionAge={sessionAge}
               leadingBadges={
                 <>
@@ -105,14 +102,14 @@ export function WorktreeJumpPaletteWorkspaceTabRow({
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <PaletteHostBadgeChip badge={workspaceTabHostBadge} />
-            {workspaceTabRepoName && (
-              <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                <RepoBadgeMark color={workspaceTabRepo?.badgeColor} />
-                <span className="truncate">
-                  <HighlightedText text={workspaceTabRepoName} matchRanges={result.repoRanges} />
-                </span>
-              </span>
-            )}
+            <PaletteLocationChip
+              repoName={workspaceTabRepoName}
+              repoRanges={result.repoRanges}
+              repoColor={workspaceTabRepo?.badgeColor}
+              worktreeName={result.worktreeName}
+              worktreeRanges={result.worktreeRanges}
+              worktree={workspaceTabWorktree}
+            />
             <PaletteRowShortcutBadge
               index={controller.recentTabShortcutIndexByItem.get(entry)}
               modifierKeys={controller.digitShortcutModifiers}

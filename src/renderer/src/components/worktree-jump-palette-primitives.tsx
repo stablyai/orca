@@ -6,6 +6,9 @@ import type { MatchRange, PaletteSearchResult } from '@/lib/worktree-palette-sea
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Worktree } from '../../../shared/worktree/types'
 import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
+import { splitPathHeadForElision } from '@/lib/palette-path-head-elision'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import { cn } from '@/lib/utils'
 
 const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []
 
@@ -67,14 +70,44 @@ export function HighlightedText({
   return <>{parts}</>
 }
 
+function PaletteOpenTabSecondaryText({
+  text,
+  ranges
+}: {
+  text: string
+  ranges: readonly MatchRange[]
+}): React.JSX.Element {
+  const split = splitPathHeadForElision(text, ranges)
+  if (!split) {
+    return (
+      <span
+        data-slot="palette-open-tab-secondary"
+        className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/80"
+      >
+        <HighlightedText text={text} matchRanges={ranges} />
+      </span>
+    )
+  }
+  return (
+    <span
+      data-slot="palette-open-tab-secondary"
+      className="flex min-w-0 items-baseline overflow-hidden font-mono text-[11px] text-muted-foreground/80"
+    >
+      {/* Head collapses first; the tail (and any match inside it) only truncates once the head is gone. */}
+      <span className="min-w-0 shrink-[999] truncate">{split.head}</span>
+      <span className="min-w-0 shrink truncate">
+        <HighlightedText text={split.tail} matchRanges={split.tailRanges} />
+      </span>
+    </span>
+  )
+}
+
 export function PaletteOpenTabPrimaryLine({
   title,
   titleRanges,
   secondaryText,
   secondaryRanges,
   secondaryMatches = NO_SECONDARY_MATCHES,
-  worktreeName,
-  worktreeRanges,
   sessionAge,
   leadingBadges
 }: {
@@ -83,22 +116,23 @@ export function PaletteOpenTabPrimaryLine({
   secondaryText: string
   secondaryRanges: readonly MatchRange[]
   secondaryMatches?: readonly { text: string; ranges: readonly MatchRange[] }[]
-  worktreeName: string
-  worktreeRanges: readonly MatchRange[]
   sessionAge?: string
   leadingBadges?: React.ReactNode
 }): React.JSX.Element {
   const showSecondary = secondaryText.trim().length > 0
-  const showWorktree = worktreeName.trim().length > 0
   const additionalSecondaryMatches = secondaryMatches.filter(
     (match) => match.text && match.text !== secondaryText
   )
 
   return (
     <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+      {/* Why shrink-0 + a ceiling, not a floor: flex shrinks by content width, so a long
+          path would otherwise squeeze the title to a stub. The title keeps its natural
+          width up to ~60% of the line and only the path absorbs overflow. A min-width
+          would pad short titles and strand the session age in a fixed column. */}
       <span
         data-slot="palette-open-tab-title"
-        className="min-w-0 flex-auto truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
+        className="max-w-[62%] shrink-0 truncate text-[14px] font-semibold tracking-[-0.01em] text-foreground"
       >
         <HighlightedText text={title} matchRanges={titleRanges} />
       </span>
@@ -116,12 +150,7 @@ export function PaletteOpenTabPrimaryLine({
       ) : null}
       {leadingBadges}
       {showSecondary ? (
-        <>
-          <span className="shrink-0 text-muted-foreground/45">·</span>
-          <span className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92">
-            <HighlightedText text={secondaryText} matchRanges={secondaryRanges} />
-          </span>
-        </>
+        <PaletteOpenTabSecondaryText text={secondaryText} ranges={secondaryRanges} />
       ) : null}
       {additionalSecondaryMatches.length ? (
         <>
@@ -154,18 +183,68 @@ export function PaletteOpenTabPrimaryLine({
           </Tooltip>
         </>
       ) : null}
-      {showWorktree ? (
+    </div>
+  )
+}
+
+/**
+ * One location chip per row: `repo · worktree`. Folding the worktree into the
+ * repo chip frees the primary line for the title and matches the worktree row's
+ * repo/branch pairing.
+ */
+export function PaletteLocationChip({
+  repoName,
+  repoRanges,
+  repoColor,
+  worktreeName,
+  worktreeRanges,
+  worktree,
+  className
+}: {
+  repoName: string
+  repoRanges: readonly MatchRange[]
+  repoColor?: string
+  worktreeName: string
+  worktreeRanges: readonly MatchRange[]
+  worktree?: Pick<Worktree, 'branch'> | null
+  className?: string
+}): React.JSX.Element | null {
+  const showRepo = repoName.trim().length > 0
+  // The primary worktree is named after its repo; saying it twice adds nothing.
+  const showWorktree = worktreeName.trim().length > 0 && !(showRepo && worktreeName === repoName)
+  if (!showRepo && !showWorktree) {
+    return null
+  }
+  return (
+    <span
+      data-slot="palette-location-chip"
+      className={cn(
+        'inline-flex max-w-[260px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground',
+        className
+      )}
+    >
+      {showRepo ? (
         <>
-          <span className="shrink-0 text-muted-foreground/45">·</span>
-          <span
-            data-slot="palette-open-tab-worktree"
-            className="min-w-0 truncate text-[12px] font-medium text-muted-foreground/92"
-          >
-            <HighlightedText text={worktreeName} matchRanges={worktreeRanges} />
+          <RepoBadgeMark color={repoColor} />
+          <span className="min-w-0 shrink-0 truncate" data-slot="palette-location-repo">
+            <HighlightedText text={repoName} matchRanges={repoRanges} />
           </span>
         </>
       ) : null}
-    </div>
+      {showRepo && showWorktree ? (
+        <span aria-hidden className="text-muted-foreground/50">
+          ·
+        </span>
+      ) : null}
+      {showWorktree ? (
+        <PaletteOpenTabWorktreeRailLabel
+          name={worktreeName}
+          matchRanges={worktreeRanges}
+          worktree={worktree}
+          className="min-w-0 truncate font-medium text-muted-foreground"
+        />
+      ) : null}
+    </span>
   )
 }
 

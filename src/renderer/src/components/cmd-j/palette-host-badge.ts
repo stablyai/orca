@@ -24,8 +24,9 @@ function hasActiveRemoteHost(hostOptions: readonly SidebarHostOption[]): boolean
 export function getPaletteHostBadge(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | null | undefined,
   hostOptions: readonly SidebarHostOption[],
-  // Why: with a host filter applied the badge is the only thing explaining which
-  // rows survived, so it must show even when every remote is disconnected.
+  // Why: with several hosts selected the badge is the only thing explaining which
+  // rows survived, so it must show even when every remote is disconnected. A
+  // single-host filter is already named by its chip, so callers pass false then.
   alwaysShowHostLabel = false
 ): PaletteHostBadge | null {
   if (!repo || (!alwaysShowHostLabel && !hasActiveRemoteHost(hostOptions))) {

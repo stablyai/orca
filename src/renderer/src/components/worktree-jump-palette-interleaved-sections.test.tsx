@@ -448,8 +448,10 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const title = row?.querySelector('[data-slot="palette-open-tab-title"]')
     const worktree = row?.querySelector('[data-slot="palette-open-tab-worktree"]')
     expect(title?.textContent).toBe(longTitle)
-    expect(title?.classList.contains('flex-auto')).toBe(true)
+    // Why: the title must never lose the shrink fight to the path segment.
+    expect(title?.classList.contains('shrink-0')).toBe(true)
     expect(worktree?.textContent).toBe('user-support')
+    expect(worktree?.closest('[data-slot="palette-location-chip"]')).not.toBeNull()
     expect(worktree?.compareDocumentPosition(title ?? document.createElement('span'))).toBe(
       Node.DOCUMENT_POSITION_PRECEDING
     )
