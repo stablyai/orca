@@ -1,7 +1,7 @@
 // Resolves the stable "conversation name" an agent row can show instead of the
 // live last-message preview. Sources, in the same precedence the tab bar uses
 // (tab-title-resolution.ts): manual rename → quick-command label → OpenCode's
-// semantic session title → Orca's generated title → the agent-set live title.
+// semantic session title → saved AI Vault title → Orca's generated title → live title.
 // Live titles are accepted only when they carry a real name — pure status,
 // identity-echo, and spinner/cwd titles yield null so callers keep the
 // last-message label.
@@ -15,7 +15,7 @@ import type { TerminalTab } from './terminal-tab-types'
 
 export type ConversationNameTab = Pick<
   TerminalTab,
-  'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title' | 'defaultTitle'
+  'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle' | 'title' | 'defaultTitle'
 >
 
 // Why: synthetic status titles ("Codex ready", "Cursor - action required") are
@@ -38,7 +38,7 @@ const AGENT_IDENTITY_ALIASES_LOWER: Readonly<Record<string, readonly string[]>> 
 }
 
 const STATUS_WITH_CONTEXT_RE = /^(?:ready|idle|done)(?:\s+\([^)]*\))?$/i
-const DEFAULT_TERMINAL_TITLE_RE = /^terminal \d+$/i
+const DEFAULT_TERMINAL_TITLE_RE = /^terminal(?: \d+)?$/i
 
 function isIdentityStatusTitle(titleLower: string, identityLower: string): boolean {
   return (
@@ -81,8 +81,7 @@ function isCwdLikeTitle(title: string): boolean {
 function conversationNameFromLiveTitle(
   liveTitle: string,
   agentType: AgentType | null | undefined,
-  agentTypeLabelLower: string,
-  defaultTitle: string | undefined
+  agentTypeLabelLower: string
 ): string | null {
   const stripped = stripLeadingAgentTitleDecorationOrEmpty(liveTitle.trim()).trim()
   if (!stripped) {
@@ -100,9 +99,7 @@ function conversationNameFromLiveTitle(
   ) {
     return null
   }
-  if (defaultTitle && stripped === defaultTitle.trim()) {
-    return null
-  }
+  // Mirrored tabs can retain a real conversation name as their defaultTitle.
   return stripped
 }
 
@@ -134,6 +131,11 @@ export function getAgentRowConversationName(
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
   }
+  // A saved session title belongs to one conversation, not sibling split panes.
+  const savedTitle = paneLiveTitle === undefined ? tab.aiVaultTitle?.title.trim() : ''
+  if (savedTitle) {
+    return savedTitle
+  }
   const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
   if (generatedTitle) {
     return generatedTitle
@@ -144,7 +146,6 @@ export function getAgentRowConversationName(
   return conversationNameFromLiveTitle(
     liveTitle,
     agentType,
-    formatAgentTypeLabel(agentType).toLowerCase(),
-    tab.defaultTitle
+    formatAgentTypeLabel(agentType).toLowerCase()
   )
 }
