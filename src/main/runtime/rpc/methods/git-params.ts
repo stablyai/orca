@@ -216,6 +216,7 @@ const GitPushTargetParam = z.object({
 export const GitPush = WorktreeSelector.extend({
   publish: z.boolean().optional(),
   forceWithLease: z.boolean().optional(),
+  noVerify: z.boolean().optional(),
   pushTarget: GitPushTargetParam.optional()
 })
 

@@ -18,6 +18,7 @@ import {
 
 export type RemoteDropdownItems = {
   push: DropdownItem
+  pushNoVerify: DropdownItem
   forcePush: DropdownItem
   pull: DropdownItem
   fastForward: DropdownItem
@@ -25,6 +26,7 @@ export type RemoteDropdownItems = {
   rebase: DropdownItem
   fetch: DropdownItem
   publish: DropdownItem
+  publishNoVerify: DropdownItem
 }
 
 export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDropdownItems {
@@ -71,6 +73,24 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
                     ? `Nothing to push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
                     : describePushCount(ahead),
     // Why: Push stays available without an upstream (git resolves --set-upstream) and under force-with-lease; only detached HEAD and unknown review targets block.
+    disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
+  }
+
+  const pushNoVerify: DropdownItem = {
+    kind: 'push_no_verify',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.push.no.verify.label',
+      'Push (Skip Hooks)'
+    ),
+    title: publishBlockedByDetachedHead
+      ? 'Check out a branch before pushing commits'
+      : pushBlockedByOpenHostedReviewTarget
+        ? 'Linked review branch target is unavailable'
+        : translate(
+            'auto.components.right.sidebar.source.control.dropdown.items.push.no.verify.title',
+            'Push this branch without running pre-push hooks'
+          ),
+    // Why: same availability as Push — noVerify only changes the git argv, not when the row is usable.
     disabled: globalBusy || publishBlockedByDetachedHead || pushBlockedByOpenHostedReviewTarget
   }
 
@@ -229,5 +249,57 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
       publishBlockedByDetachedHead
   }
 
-  return { push, forcePush, pull, fastForward, sync, rebase, fetch, publish }
+  const publishNoVerify: DropdownItem = {
+    kind: 'publish_no_verify',
+    label:
+      publishBlockedByMergedPR || publishBlockedByPRLoading
+        ? 'PR Status'
+        : publishBlockedByOpenHostedReview
+          ? 'Linked Review'
+          : publishBlockedByDetachedHead
+            ? 'No Branch'
+            : translate(
+                'auto.components.right.sidebar.source.control.dropdown.items.publish.no.verify.label',
+                'Publish Branch (Skip Hooks)'
+              ),
+    title: upstreamLoading
+      ? 'Checking branch status…'
+      : publishBlockedByPRLoading
+        ? 'Checking PR status…'
+        : publishBlockedByMergedPR
+          ? 'PR is already merged'
+          : publishBlockedByOpenHostedReview
+            ? canPushLinkedReviewWithoutUpstream
+              ? 'Linked review branch already exists'
+              : 'Linked review branch target is unavailable'
+            : publishBlockedByDetachedHead
+              ? 'Check out a branch before publishing commits'
+              : hasUpstream
+                ? 'Branch is already published'
+                : translate(
+                    'auto.components.right.sidebar.source.control.dropdown.items.publish.no.verify.title',
+                    'Publish this branch to origin without running pre-push hooks'
+                  ),
+    disabled:
+      globalBusy ||
+      upstreamLoading ||
+      hasUpstream ||
+      publishBlockedByPRLoading ||
+      publishBlockedByMergedPR ||
+      publishBlockedByOpenHostedReview ||
+      publishBlockedByDetachedHead
+  }
+
+  return {
+    push,
+    pushNoVerify,
+    forcePush,
+    pull,
+    fastForward,
+    sync,
+    rebase,
+    fetch,
+    publish,
+    publishNoVerify
+  }
 }

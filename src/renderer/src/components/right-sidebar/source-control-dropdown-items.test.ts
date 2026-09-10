@@ -39,6 +39,7 @@ describe('resolveDropdownItems', () => {
       'commit_sync',
       'separator',
       'push',
+      'push_no_verify',
       'force_push',
       'create_pr',
       'push_create_pr',
@@ -47,7 +48,8 @@ describe('resolveDropdownItems', () => {
       'sync',
       'rebase_base',
       'fetch',
-      'publish'
+      'publish',
+      'publish_no_verify'
     ])
   })
 
@@ -94,9 +96,13 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push_no_verify.disabled).toBe(false)
+    expect(byKind.push_no_verify.label).toBe('Push (Skip Hooks)')
     expect(byKind.force_push.disabled).toBe(false)
     expect(byKind.commit_push.disabled).toBe(true)
     expect(byKind.publish.disabled).toBe(false)
+    expect(byKind.publish_no_verify.disabled).toBe(false)
+    expect(byKind.publish_no_verify.label).toBe('Publish Branch (Skip Hooks)')
     expect(byKind.fetch.disabled).toBe(false)
   })
 
@@ -112,9 +118,12 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.push.title).toBe('Check out a branch before pushing commits')
+    expect(byKind.push_no_verify.title).toBe('Check out a branch before pushing commits')
     expect(byKind.publish.label).toBe('No Branch')
     expect(byKind.publish.title).toBe('Check out a branch before publishing commits')
     expect(byKind.publish.disabled).toBe(true)
+    expect(byKind.publish_no_verify.label).toBe('No Branch')
+    expect(byKind.publish_no_verify.disabled).toBe(true)
   })
 
   it('disables Publish Branch when branch already has an upstream', () => {
@@ -127,6 +136,7 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.publish.disabled).toBe(true)
+    expect(byKind.publish_no_verify.disabled).toBe(true)
   })
 
   it('renders counts on action labels when > 0', () => {

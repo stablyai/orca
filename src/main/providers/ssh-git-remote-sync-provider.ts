@@ -8,14 +8,15 @@ export class SshGitRemoteSyncProvider extends SshGitWorkingTreeProvider {
     worktreePath: string,
     publish = false,
     pushTarget?: GitPushTarget,
-    options: { forceWithLease?: boolean } = {}
+    options: { forceWithLease?: boolean; noVerify?: boolean } = {}
   ): Promise<void> {
     await this.runWithGitReadInvalidation(async () => {
       await this.mux.request('git.push', {
         worktreePath,
         publish,
         pushTarget,
-        ...(options.forceWithLease === true ? { forceWithLease: true } : {})
+        ...(options.forceWithLease === true ? { forceWithLease: true } : {}),
+        ...(options.noVerify === true ? { noVerify: true } : {})
       })
     })
   }

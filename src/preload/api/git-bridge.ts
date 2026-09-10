@@ -81,6 +81,7 @@ export const gitApi = {
     worktreeId?: string
     publish?: boolean
     forceWithLease?: boolean
+    noVerify?: boolean
     connectionId?: string
     pushTarget?: unknown
   }): Promise<void> => ipcRenderer.invoke('git:push', args),

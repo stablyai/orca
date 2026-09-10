@@ -18,12 +18,14 @@ import type { SourceControlStatusRefresh } from './use-status-refresh'
 
 export type SourceControlRemoteActionKind =
   | 'push'
+  | 'push_no_verify'
   | 'force_push'
   | 'pull'
   | 'fast_forward'
   | 'sync'
   | 'fetch'
   | 'publish'
+  | 'publish_no_verify'
   | 'rebase'
 
 // Why: statuses distinguish real failures from supersession and no-ops; collapsing to { ok: false } made Create PR treat supersession as a destructive failure.
@@ -119,37 +121,25 @@ export function useSourceControlRemoteActionRunner({
       const failureBranchName = targetIsActiveWorktree ? branchName || null : null
       setRemoteActionErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
       try {
-        if (kind === 'publish') {
-          await pushBranch(
-            target.worktreeId,
-            target.worktreePath,
-            true,
-            target.connectionId,
-            target.pushTarget,
-            { runtimeTargetSettings: target.settings }
-          )
-          return { status: 'ok' }
-        }
-        if (kind === 'push') {
+        if (
+          kind === 'publish' ||
+          kind === 'publish_no_verify' ||
+          kind === 'push' ||
+          kind === 'push_no_verify' ||
+          kind === 'force_push'
+        ) {
           // Why: kind 'push' must stay a regular push; auto-upgrading made the always-enabled dropdown Push row silently force-push against its tooltip.
           await pushBranch(
             target.worktreeId,
             target.worktreePath,
-            false,
+            kind === 'publish' || kind === 'publish_no_verify',
             target.connectionId,
             target.pushTarget,
-            { runtimeTargetSettings: target.settings }
-          )
-          return { status: 'ok' }
-        }
-        if (kind === 'force_push') {
-          await pushBranch(
-            target.worktreeId,
-            target.worktreePath,
-            false,
-            target.connectionId,
-            target.pushTarget,
-            { forceWithLease: true, runtimeTargetSettings: target.settings }
+            {
+              forceWithLease: kind === 'force_push',
+              noVerify: kind === 'publish_no_verify' || kind === 'push_no_verify',
+              runtimeTargetSettings: target.settings
+            }
           )
           return { status: 'ok' }
         }
@@ -220,9 +210,15 @@ export function useSourceControlRemoteActionRunner({
         if (remoteActionErrorSequenceByWorktreeRef.current[target.worktreeId] !== sequence) {
           return { status: 'superseded' }
         }
+        // Why: 'publish_no_verify' / 'push_no_verify' are Publish/Push variants at the
+        // dropdown/dispatch layer only — they report and refresh as plain 'publish'/'push'
+        // failures, matching the messaging Force Push gets for 'force_push' vs. its own
+        // 'push' primary kind.
+        const errorKind =
+          kind === 'publish_no_verify' ? 'publish' : kind === 'push_no_verify' ? 'push' : kind
         const actionError: SourceControlActionError = {
-          kind,
-          message: resolveRemoteActionError(kind, error),
+          kind: errorKind,
+          message: resolveRemoteActionError(errorKind, error),
           rawError: error instanceof Error ? error.message : String(error),
           syncPushStage: kind === 'sync' ? isSyncPushStageError(error) : false,
           branchName: failureBranchName,

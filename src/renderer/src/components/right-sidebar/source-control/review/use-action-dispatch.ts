@@ -77,12 +77,14 @@ export function useSourceControlActionDispatch({
           void runCreatePrIntent()
           return
         case 'push':
+        case 'push_no_verify':
         case 'force_push':
         case 'pull':
         case 'fast_forward':
         case 'sync':
         case 'fetch':
         case 'publish':
+        case 'publish_no_verify':
         case 'rebase_base':
           void runRemoteAction(kind === 'rebase_base' ? 'rebase' : kind)
       }

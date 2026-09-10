@@ -59,7 +59,7 @@ export type EditorGitSlice = {
     publish?: boolean,
     connectionId?: string,
     pushTarget?: GitPushTarget,
-    options?: GitRuntimeOperationOptions & { forceWithLease?: boolean }
+    options?: GitRuntimeOperationOptions & { forceWithLease?: boolean; noVerify?: boolean }
   ) => Promise<void>
   pullBranch: (
     worktreeId: string,

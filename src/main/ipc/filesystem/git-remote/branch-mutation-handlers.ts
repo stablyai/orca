@@ -27,6 +27,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
         worktreeId?: string
         publish?: boolean
         forceWithLease?: boolean
+        noVerify?: boolean
         connectionId?: string
         pushTarget?: GitPushTarget
       }
@@ -53,7 +54,8 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
             )
           : undefined
         return provider.pushBranch(args.worktreePath, publish, materializedPushTarget, {
-          forceWithLease: args.forceWithLease === true
+          forceWithLease: args.forceWithLease === true,
+          noVerify: args.noVerify === true
         })
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
@@ -80,6 +82,7 @@ export function registerGitRemoteBranchMutationHandlers(context: FilesystemHandl
       }
       await gitPush(worktreePath, publish, materializedPushTarget, {
         forceWithLease: args.forceWithLease === true,
+        noVerify: args.noVerify === true,
         ...gitOptions,
         admissionTier: 'interactive'
       })

@@ -31,6 +31,7 @@ export class GitHandlerSyncOperations extends GitHandlerOperationContext {
         const args = [
           'push',
           ...(params.forceWithLease === true ? ['--force-with-lease'] : []),
+          ...(params.noVerify === true ? ['--no-verify'] : []),
           '--set-upstream',
           ...(target ? [target.remote, target.refspec] : ['origin', 'HEAD'])
         ]

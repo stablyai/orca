@@ -19,6 +19,7 @@ export type DropdownActionKind =
   | 'create_pr'
   | 'push_create_pr'
   | 'push'
+  | 'push_no_verify'
   | 'force_push'
   | 'pull'
   | 'fast_forward'
@@ -26,6 +27,7 @@ export type DropdownActionKind =
   | 'rebase_base'
   | 'fetch'
   | 'publish'
+  | 'publish_no_verify'
 
 export type DropdownItem = {
   kind: DropdownActionKind

@@ -12825,7 +12825,23 @@
                   "226b85a3a7": "Fetch",
                   "323bb614aa": "Commit & Sync",
                   "2b8e6595fd": "Commit",
-                  "04d709801d": "Fetch from remote without merging"
+                  "04d709801d": "Fetch from remote without merging",
+                  "publish": {
+                    "no": {
+                      "verify": {
+                        "label": "Publish Branch (Skip Hooks)",
+                        "title": "Publish this branch to origin without running pre-push hooks"
+                      }
+                    }
+                  },
+                  "push": {
+                    "no": {
+                      "verify": {
+                        "label": "Push (Skip Hooks)",
+                        "title": "Push this branch without running pre-push hooks"
+                      }
+                    }
+                  }
                 }
               },
               "primary": {
