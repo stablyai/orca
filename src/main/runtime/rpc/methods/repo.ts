@@ -4,6 +4,7 @@ import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 import { createRepoUpdateSchema } from './repo-update-schema'
+import { projectRepoSearchRefsForClient } from './repo-search-ref-projection'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
@@ -268,8 +269,11 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.searchRefs',
     params: RepoSearchRefs,
-    handler: async (params, { runtime }) =>
-      runtime.searchRepoRefs(params.repo, params.query, params.limit)
+    handler: async (params, { runtime, clientCapabilities }) =>
+      projectRepoSearchRefsForClient(
+        await runtime.searchRepoRefs(params.repo, params.query, params.limit),
+        clientCapabilities
+      )
   }),
   defineMethod({
     name: 'repo.hooks',

@@ -240,6 +240,21 @@ export function parseAndFilterSearchRefDetails(
   const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
 
   const canonicalShortRef = (fullRef: string, gitShortRef: string): string => {
+    const fullRefParts = /^refs\/(heads|remotes)\/(.+)$/.exec(fullRef)
+    // Preserve the full selector when Git emits a namespace disambiguator,
+    // when Apple Git splits a multibyte short ref, or when a slash-containing
+    // remote would otherwise impersonate a fully qualified local ref.
+    if (
+      (fullRefParts && gitShortRef === `${fullRefParts[1]}/${fullRefParts[2]}`) ||
+      (fullRefParts &&
+        gitShortRef.includes('\uFFFD') &&
+        ![fullRef, `${fullRefParts[1]}/${fullRefParts[2]}`, fullRefParts[2]].includes(
+          gitShortRef
+        )) ||
+      (fullRef.startsWith('refs/remotes/') && gitShortRef.startsWith('refs/heads/'))
+    ) {
+      return fullRef
+    }
     // Git's refname:short DWIM rule can strip a trailing `/HEAD` (for example,
     // `refs/remotes/origin/feature/HEAD` becomes `origin/feature`). Derive the
     // display name only for that case; otherwise Git's disambiguation prefixes
@@ -303,6 +318,10 @@ export function resolveLocalBranchName(
   shortRef: string,
   remotes: string[]
 ): string {
+  const localRefPrefix = 'refs/heads/'
+  if (fullRef.startsWith(localRefPrefix)) {
+    return fullRef.slice(localRefPrefix.length) || shortRef
+  }
   const remoteRefPrefix = 'refs/remotes/'
   if (!fullRef.startsWith(remoteRefPrefix)) {
     return shortRef
@@ -315,6 +334,5 @@ export function resolveLocalBranchName(
   return remoteAndBranch.split('/').slice(1).join('/') || shortRef
 }
 
-export function normalizeRefSearchQuery(query: string): string {
-  return query.trim().replace(/[*?[\]\\]/g, '')
-}
+export const normalizeRefSearchQuery = (query: string): string =>
+  query.trim().replace(/[*?[\]\\]/g, '')

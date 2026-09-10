@@ -232,6 +232,137 @@ describe('searchBaseRefs (widened glob)', () => {
     })
   })
 
+  it('recovers complete Unicode ref names when Git splits a short ref byte sequence', () => {
+    const branch = 'feature/运动记录及预约详情页优化'
+    const results = parseAndFilterSearchRefDetails(
+      [
+        `refs/heads/${branch}\0feature/运动记录及预约详�`,
+        `refs/remotes/origin/${branch}\0origin/feature/运动记录及预约详�`
+      ].join('\n'),
+      10,
+      ['origin']
+    )
+
+    expect(results).toEqual([
+      { refName: `refs/heads/${branch}`, localBranchName: branch },
+      { refName: `refs/remotes/origin/${branch}`, localBranchName: branch }
+    ])
+  })
+
+  it('preserves namespace disambiguation while recovering colliding Unicode refs', () => {
+    const branch = 'origin/feature/运动记录及预约详情页优化'
+    const results = parseAndFilterSearchRefDetails(
+      [
+        `refs/heads/${branch}\0origin/feature/运动记录及预约详�`,
+        `refs/remotes/${branch}\0origin/feature/运动记录及预约详�`
+      ].join('\n'),
+      10,
+      ['origin']
+    )
+
+    expect(results).toEqual([
+      { refName: `refs/heads/${branch}`, localBranchName: branch },
+      {
+        refName: `refs/remotes/${branch}`,
+        localBranchName: 'feature/运动记录及预约详情页优化'
+      }
+    ])
+  })
+
+  it('distinguishes literal U+FFFD from a later decoder-introduced truncation marker', () => {
+    const literal = 'feature/�'
+    const fullyQualifiedLiteral = 'feature/fully-qualified/�'
+    const truncated = 'feature/�运动记录及预约详情页优化'
+    const results = parseAndFilterSearchRefDetails(
+      [
+        `refs/heads/${literal}\0${literal}`,
+        `refs/heads/${fullyQualifiedLiteral}\0refs/heads/${fullyQualifiedLiteral}`,
+        `refs/heads/${truncated}\0feature/�运动记录及预约详�`
+      ].join('\n'),
+      10
+    )
+
+    expect(results).toEqual([
+      { refName: literal, localBranchName: literal },
+      {
+        refName: `refs/heads/${fullyQualifiedLiteral}`,
+        localBranchName: fullyQualifiedLiteral
+      },
+      { refName: `refs/heads/${truncated}`, localBranchName: truncated }
+    ])
+  })
+
+  it('returns intact Unicode ref names from the real Git search', async () => {
+    const branch = 'feature/运动记录及预约详情页优化'
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    git(tmpDir, ['branch', branch])
+    createRemoteRef(tmpDir, `origin/${branch}`, sha)
+
+    const results = await searchBaseRefDetails(tmpDir, '运动记录')
+
+    const refNames = results.map(({ refName }) => refName)
+    expect(refNames.some((ref) => ref === branch || ref === `refs/heads/${branch}`)).toBe(true)
+    expect(
+      refNames.some((ref) => ref === `origin/${branch}` || ref === `refs/remotes/origin/${branch}`)
+    ).toBe(true)
+    expect(results.every(({ localBranchName }) => localBranchName === branch)).toBe(true)
+    expect(results.every(({ refName }) => !refName.includes('\uFFFD'))).toBe(true)
+    expect(
+      results.every(({ refName }) => git(tmpDir, ['rev-parse', '--verify', refName]).trim() === sha)
+    ).toBe(true)
+  })
+
+  it('returns distinct resolvable names for real colliding Unicode refs', async () => {
+    const branch = 'origin/运动记录及预约详情页优化'
+    const localSha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
+    git(tmpDir, ['branch', branch, localSha])
+    git(tmpDir, ['commit', '--allow-empty', '-m', 'remote ref', '--quiet'])
+    const remoteSha = getHeadSha(tmpDir)
+    createRemoteRef(tmpDir, branch, remoteSha)
+
+    const results = await searchBaseRefDetails(tmpDir, 'origin/运动')
+
+    expect(results).toHaveLength(2)
+    expect(
+      Object.fromEntries(
+        results.map(({ refName, localBranchName }) => [
+          localBranchName,
+          git(tmpDir, ['rev-parse', '--verify', refName]).trim()
+        ])
+      )
+    ).toEqual({
+      [branch]: localSha,
+      运动记录及预约详情页优化: remoteSha
+    })
+  })
+
+  it('resolves a Unicode branch rather than a same-name tag', async () => {
+    const branch = 'feature/运动记录及预约详情页优化'
+    const branchSha = getHeadSha(tmpDir)
+    git(tmpDir, ['branch', branch, branchSha])
+    git(tmpDir, ['commit', '--allow-empty', '-m', 'tag target', '--quiet'])
+    git(tmpDir, ['tag', branch])
+
+    const results = await searchBaseRefDetails(tmpDir, '运动记录')
+
+    expect(results).toHaveLength(1)
+    expect(results[0]?.refName).toBe(`refs/heads/${branch}`)
+    expect(results[0]?.localBranchName).toBe(branch)
+    expect(git(tmpDir, ['rev-parse', '--verify', results[0]?.refName ?? '']).trim()).toBe(branchSha)
+
+    const worktreeDir = mkdtempSync(path.join(tmpdir(), 'orca-ref-worktree-test-'))
+    rmSync(worktreeDir, { recursive: true })
+    try {
+      git(tmpDir, ['worktree', 'add', '--quiet', worktreeDir, results[0]?.localBranchName ?? ''])
+      expect(git(worktreeDir, ['symbolic-ref', 'HEAD']).trim()).toBe(`refs/heads/${branch}`)
+    } finally {
+      rmSync(worktreeDir, { recursive: true, force: true })
+      git(tmpDir, ['worktree', 'prune'])
+    }
+  })
+
   it('allows creating a local branch from the selected matching remote base ref', async () => {
     const sha = getHeadSha(tmpDir)
     git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
@@ -304,6 +435,19 @@ describe('searchBaseRefs (widened glob)', () => {
     )
 
     expect(result).toBe('remote')
+  })
+
+  it('keeps a remote named refs/heads distinct from a fully qualified local ref', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'refs/heads', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'refs/heads/feature-example', sha)
+
+    const results = await searchBaseRefDetails(tmpDir, 'feature-example')
+
+    expect(results).toContainEqual({
+      refName: 'refs/remotes/refs/heads/feature-example',
+      localBranchName: 'feature-example'
+    })
   })
 
   it('uses the longest configured remote name when deriving local branch names', () => {
@@ -438,10 +582,17 @@ describe('searchBaseRefs (widened glob)', () => {
       ['origin']
     )
 
-    expect(results.map((result) => result.refName)).toEqual([
-      'heads/origin/main',
-      'remotes/origin/main'
+    expect(results).toEqual([
+      { refName: 'refs/heads/origin/main', localBranchName: 'origin/main' },
+      { refName: 'refs/remotes/origin/main', localBranchName: 'main' }
     ])
+  })
+
+  it('keeps a disambiguated local branch attached to its real branch name', () => {
+    const branch = 'feature/colliding-tag'
+    const results = parseAndFilterSearchRefDetails(`refs/heads/${branch}\0heads/${branch}`, 10)
+
+    expect(results).toEqual([{ refName: `refs/heads/${branch}`, localBranchName: branch }])
   })
 
   it('tolerates trailing, leading, and doubled slashes in the query', async () => {

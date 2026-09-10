@@ -248,6 +248,17 @@ describe('resolveComposerReuseOverride', () => {
     ).toBeUndefined()
   })
 
+  it('drops the override for a fully qualified local ref checked out elsewhere', () => {
+    expect(
+      resolveComposerReuseOverride({
+        refName: 'refs/heads/feature/运动记录',
+        localBranchName: 'feature/运动记录',
+        branchNameOverride: 'feature/运动记录',
+        branchCheckedOutElsewhere: true
+      })
+    ).toBeUndefined()
+  })
+
   it('keeps the override for a remote-only ref even if its local name is busy', () => {
     // Why: a remote-only ref (ref !== local name) creates a fresh local tracking
     // branch, so the busy check on the local name must not drop its override.
@@ -283,6 +294,17 @@ describe('resolveComposerBranchReuse', () => {
         branchCheckedOutElsewhere: false
       })
     ).toEqual({ reuseEligibleBranch: 'fix/bug-0', defaultReuse: true })
+  })
+
+  it('treats a fully qualified local ref as the same reusable branch', () => {
+    expect(
+      resolveComposerBranchReuse({
+        refName: 'refs/heads/feature/运动记录',
+        localBranchName: 'feature/运动记录',
+        selectionProducedOverride: true,
+        branchCheckedOutElsewhere: false
+      })
+    ).toEqual({ reuseEligibleBranch: 'feature/运动记录', defaultReuse: true })
   })
 
   it('does not offer reuse for a remote-only ref (ref carries an origin/ prefix)', () => {
