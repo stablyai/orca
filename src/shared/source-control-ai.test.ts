@@ -125,6 +125,68 @@ describe('source-control AI resolution', () => {
     expect(result.ok && result.value.params.model).toBe('gpt-5.5')
   })
 
+  it('uses a contextual default agent when the action follows the default agent', () => {
+    const base = settings()
+    base.defaultTuiAgent = 'claude'
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      agentId: null,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        branchName: { agentId: null, commandInputTemplate: '{basePrompt}' }
+      }
+    }
+
+    const result = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: null,
+      operation: 'branchName',
+      discoveryHostKey: 'local',
+      contextualDefaultAgent: 'codex'
+    })
+
+    expect(result.ok && result.value.params.agentId).toBe('codex')
+  })
+
+  it('keeps explicit Source Control AI agent choices ahead of a contextual default', () => {
+    const base = settings()
+    base.defaultTuiAgent = 'codex'
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      agentId: 'claude',
+      selectedModelByAgent: { claude: 'sonnet', codex: 'gpt-5.5' },
+      actions: {
+        ...base.sourceControlAi!.actions,
+        branchName: { commandInputTemplate: '{basePrompt}' }
+      }
+    }
+
+    const globalResult = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: null,
+      operation: 'branchName',
+      discoveryHostKey: 'local',
+      contextualDefaultAgent: 'codex'
+    })
+    expect(globalResult.ok && globalResult.value.params.agentId).toBe('claude')
+
+    base.sourceControlAi = {
+      ...base.sourceControlAi,
+      actions: {
+        ...base.sourceControlAi.actions,
+        branchName: { agentId: 'claude', commandInputTemplate: '{basePrompt}' }
+      }
+    }
+    const actionResult = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: null,
+      operation: 'branchName',
+      discoveryHostKey: 'local',
+      contextualDefaultAgent: 'codex'
+    })
+    expect(actionResult.ok && actionResult.value.params.agentId).toBe('claude')
+  })
+
   it('lets repo action visibility override the global default', () => {
     const base = settings()
     base.sourceControlAi = {
