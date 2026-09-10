@@ -213,3 +213,19 @@ export const WorktreeResolveMrBase = z.object({
   targetBranch: OptionalString,
   isCrossRepository: OptionalBoolean
 })
+
+export const WorktreeInventoryParams = z
+  .object({
+    repo: z.string().startsWith('id:').min(4),
+    repoPath: z.string().min(1),
+    projectId: z.string().min(1),
+    hostId: z.string().transform((value, ctx) => {
+      const hostId = normalizeExecutionHostId(value)
+      if (!hostId || hostId !== value) {
+        ctx.addIssue({ code: 'custom', message: 'Expected an exact execution host id' })
+        return z.NEVER
+      }
+      return hostId
+    })
+  })
+  .strict()

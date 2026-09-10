@@ -29,6 +29,7 @@ export type RuntimeStore = {
   removeProject?: Store['removeProject']
   removeProjectForHost?: Store['removeProjectForHost']
   reorderRepos?: Store['reorderRepos']
+  getWorktreeInventoryRecords?: Store['getWorktreeInventoryRecords']
   getAllWorktreeMeta: Store['getAllWorktreeMeta']
   captureNativeLocalWorktreeMetadataScanExpectation?: Store['captureNativeLocalWorktreeMetadataScanExpectation']
   pruneSessionlessMissingLocalWorktreeMetadataForRepo?: Store['pruneSessionlessMissingLocalWorktreeMetadataForRepo']

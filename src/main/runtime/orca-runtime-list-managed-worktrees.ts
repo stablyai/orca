@@ -1,4 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import type { WorktreeInventoryRequest } from '../../shared/worktree/inventory'
+import { listWorktreeInventory } from './runtime-managed-worktree-inventory'
+import { readTranslatedWorktreeGraph } from '../git/worktree-list-reader'
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from './orca-runtime-restore-structured-agent-session-tabs-once'
 import { DEFAULT_WORKTREE_LIST_LIMIT } from './orca-runtime-postlude'
 import type { RuntimeWorktreeListResult } from '../../shared/runtime-types'
@@ -21,6 +24,13 @@ import {
 } from '../ports/workspace-port-ownership'
 
 export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
+  inventoryManagedWorktrees(request: WorktreeInventoryRequest) {
+    return listWorktreeInventory(this.requireStore(), request, async (repo) => ({
+      ok: true,
+      worktrees: await readTranslatedWorktreeGraph(repo.path, { includeCreatePreparations: true })
+    }))
+  }
+
   listManagedWorktrees(
     repoSelector?: string,
     limit = DEFAULT_WORKTREE_LIST_LIMIT,
