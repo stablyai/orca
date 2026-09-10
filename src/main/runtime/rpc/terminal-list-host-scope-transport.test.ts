@@ -21,6 +21,7 @@ const LIST_RESULT: RuntimeTerminalListResult = {
       writable: true,
       lastOutputAt: null,
       preview: '',
+      surface: 'visible',
       executionHostId: 'ssh:box-1'
     }
   ],

@@ -41,6 +41,7 @@ describe('remote CLI bridge terminal list', () => {
           writable: true,
           lastOutputAt: null,
           preview: '',
+          surface: 'visible',
           executionHostId: 'ssh:box-1'
         }
       ],

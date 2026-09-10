@@ -35,6 +35,11 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
       preview: pty.preview,
+      surface: this.getLeavesForPty(pty.ptyId).some(
+        (leaf) => (leaf.surface ?? (leaf.parked ? 'background' : 'visible')) === 'visible'
+      )
+        ? 'visible'
+        : 'background',
       ...(pty.lastExitCause ? { exitCause: pty.lastExitCause } : {}),
       ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId),
       ...this.resolvePaneAgentIdentityField(

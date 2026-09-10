@@ -57,6 +57,7 @@ function createServiceWithLeader(): {
       writable: true,
       lastOutputAt: null,
       preview: '',
+      surface: 'visible' as const,
       paneRuntimeId: -1,
       ptyId: 'pty-1',
       rendererGraphEpoch: 1
