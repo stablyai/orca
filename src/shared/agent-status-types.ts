@@ -65,6 +65,8 @@ export type AgentStateHistoryEntry = {
   /** True when this `done` was a cancellation (agent hook like Claude `is_interrupt`,
    *  or Orca's guarded fallback). Always falsy for non-`done` states so retention logic can preserve it. */
   interrupted?: boolean
+  /** Provider-owned conversation/session id for this historical state, when reported. */
+  providerSession?: AgentProviderSessionMetadata
 }
 
 /** Maximum number of history entries kept per agent to bound memory. */

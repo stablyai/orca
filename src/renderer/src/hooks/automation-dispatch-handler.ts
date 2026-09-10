@@ -85,6 +85,7 @@ export async function handleAutomationDispatchRequest({
     }
     const completion = createAutomationDispatchCompletion({
       run,
+      prompt: automation.prompt,
       worktree,
       precheckResult: resolved.context.precheckResult,
       markDispatchResult,
@@ -116,16 +117,6 @@ export async function handleAutomationDispatchRequest({
             if (!submitted) {
               completion.cleanupRunObservers()
             } else {
-              let reuseSawWorking = false
-              const handleReusableAgentStatus = (payload: { state: string }): void => {
-                if (payload.state === 'working') {
-                  reuseSawWorking = true
-                  return
-                }
-                if (payload.state === 'done' && reuseSawWorking) {
-                  completion.handleAgentDone()
-                }
-              }
               const reuseCompletionStartedAt = Date.now()
               completion.setSessionObserver(
                 await observeExistingAutomationSession({
@@ -134,8 +125,9 @@ export async function handleAutomationDispatchRequest({
                   runId: run.id,
                   onData: completion.appendOutput,
                   onAgentStatus: (payload) => {
-                    completion.captureAssistantMessage(payload.lastAssistantMessage)
-                    handleReusableAgentStatus(payload)
+                    completion.handleAgentStatusPayload(payload, {
+                      requireWorkingAfterStart: true
+                    })
                   },
                   onExit: completion.handleExit
                 })
@@ -172,12 +164,9 @@ export async function handleAutomationDispatchRequest({
       title: run.title,
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
-        completion.captureAssistantMessage(payload.lastAssistantMessage)
-        // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
-        if (payload.state !== 'done' || payload.sessionBoundary === true) {
-          return
-        }
-        completion.handleAgentDone()
+        completion.handleAgentStatusPayload(payload, {
+          requireWorkingAfterStart: true
+        })
       },
       onExit: (_ptyId, code) => {
         completion.handleExit(code)
@@ -193,7 +182,9 @@ export async function handleAutomationDispatchRequest({
       releaseTerminalOwnership()
     }
     const launchedTabId = result.tabId
-    completion.observeAgentStatus(result.paneKey, dispatchStartedAt)
+    completion.observeAgentStatus(result.paneKey, dispatchStartedAt, {
+      requireWorkingAfterStart: true
+    })
     try {
       await markDispatchResult({
         runId: run.id,
