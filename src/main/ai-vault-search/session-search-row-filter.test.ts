@@ -6,7 +6,7 @@ import { sessionRowFilter } from './session-search-row-filter'
 import {
   openSessionSearchIndexFile,
   type SessionSearchIndexFile
-} from './session-search-staged-write-test-fixture'
+} from './session-search-index-test-fixture'
 
 let index: SessionSearchIndexFile | null = null
 
@@ -44,7 +44,7 @@ function selected(db: SyncDatabase, filters: SessionSearchFilters = {}): number[
   const filter = sessionRowFilter(filters)
   const where = filter.conditions.length > 0 ? `WHERE ${filter.conditions.join(' AND ')}` : ''
   return (
-    db.prepare(`SELECT id FROM visible_sessions ${where} ORDER BY id`).all(...filter.values) as {
+    db.prepare(`SELECT id FROM sessions ${where} ORDER BY id`).all(...filter.values) as {
       id: number
     }[]
   ).map((row) => row.id)
@@ -114,7 +114,7 @@ describe('caller filters', () => {
     ).run()
     const filter = sessionRowFilter({}, 300)
     const rows = db
-      .prepare(`SELECT id FROM visible_sessions WHERE ${filter.conditions.join(' AND ')}`)
+      .prepare(`SELECT id FROM sessions WHERE ${filter.conditions.join(' AND ')}`)
       .all(...filter.values) as { id: number }[]
     expect(rows.map((row) => row.id)).toEqual([2])
   })

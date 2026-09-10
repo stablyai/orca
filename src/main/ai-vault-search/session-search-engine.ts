@@ -14,7 +14,7 @@ import {
   type SessionSearchResponse,
   type SessionSearchSourcePresence
 } from './session-search-engine-types'
-import type { SessionSearchUnavailableFeature } from './session-search-index-capabilities'
+import { readIndexGeneration } from './session-search-index-generation'
 import {
   rankSessionHits,
   type MessageRow,
@@ -35,10 +35,12 @@ import {
   type Retrieved
 } from './session-search-retrieval'
 import { sessionRowFilter } from './session-search-row-filter'
-import { sessionSearchUnavailableFeatures } from './session-search-index-capabilities'
+import {
+  ensureSessionSearchQuerySchema,
+  type SessionSearchUnavailableFeature
+} from './session-search-query-schema'
 import { EMPTY_SNIPPET, sessionSearchSnippet } from './session-search-snippet'
 import { sessionSourcePresence } from './session-search-source-presence'
-import type { SessionSearchStore } from './session-search-store'
 
 /**
  * Sessions retrieved before ranking cuts the page.
@@ -74,8 +76,16 @@ export type SessionSearchEngineOptions = {
  * Ranked session search over the PR 2 index.
  *
  * A library: it holds no timers, reads no settings, and knows nothing about
- * Electron, IPC or a panel. It reads through the store's own connection, so a
- * query cannot pin a second WAL snapshot behind the writer.
+ * Electron, IPC or a panel. It is handed a connection rather than opening one,
+ * because which process may open, rebuild or unlink the index file is PR 3b's
+ * decision and not a query engine's.
+ *
+ * **Every read here is a single statement, and no read transaction is ever
+ * open across an `await`.** There is no `BEGIN` on this path, no `.iterate()`
+ * outliving its statement, and `search` is synchronous end to end. That is a
+ * constraint PR 2 measured rather than a style: a reader that pins a WAL
+ * snapshot holds off every checkpoint behind it, and the same 47 MB of writes
+ * that leave a 9.9 MB WAL grew to 266 MB with one `BEGIN` + `SELECT` held open.
  *
  * One search is one synchronous pass, and every page of it is a slice of the
  * same ranked list. That list is rebuilt per page rather than streamed, which
@@ -83,7 +93,7 @@ export type SessionSearchEngineOptions = {
  * ranks the same way, and a cursor from any other generation is refused.
  *
  * That fence is strict on purpose, and the cost is worth stating plainly: any
- * published read moves the generation, so while a backfill is running an
+ * committed read moves the generation, so while a backfill is running an
  * outstanding cursor will be refused, often within a second. Pagination is
  * usable against a settled index and unreliable against one still filling. The
  * rejection carries both generations, so a caller that sees `stale-generation`
@@ -91,31 +101,27 @@ export type SessionSearchEngineOptions = {
  * re-issue page one instead of showing anyone an error.
  */
 export class SessionSearchEngine {
-  private readonly db: SyncDatabase
   private retrieval: SessionSearchRetrieval
   private readonly candidateLimit: number
   /** Re-probed whenever a query proves it stale; see `withCapabilityRetry`. */
   private unavailable: readonly SessionSearchUnavailableFeature[]
 
   constructor(
-    private readonly store: SessionSearchStore,
+    private readonly db: SyncDatabase,
     private readonly options: SessionSearchEngineOptions = {}
   ) {
-    this.db = store.connection
-    // Seeded as fully capable so the first probe rebuilds only if it disagrees.
-    this.unavailable = []
-    this.retrieval = new SessionSearchRetrieval(this.db, true)
     this.candidateLimit = options.sessionCandidateLimit ?? SESSION_SEARCH_CANDIDATE_LIMIT_DEFAULT
+    // Installed here and not on the first search, so the generation triggers are
+    // watching before anything this engine will be asked to page over is
+    // written, and so retrieval below prepares against tables that exist.
+    this.unavailable = ensureSessionSearchQuerySchema(this.db)
+    this.retrieval = new SessionSearchRetrieval(this.db, !this.unavailable.includes('typo-repair'))
   }
 
   search(request: SessionSearchRequest): SessionSearchResponse {
     const startedAt = performance.now()
-    // Why here and nowhere else: warming is only worth its I/O once something
-    // is about to read those pages. The store memoizes, so this is one warm-up
-    // per store and a no-op on every later query.
-    void this.store.warm()
-
-    const generation = this.store.generation
+    this.probeCapabilities()
+    const generation = readIndexGeneration(this.db)
     const scope = request.scope ?? 'all'
     const sort = request.filters?.sort ?? 'relevance'
     const capped = request.query.slice(0, SESSION_SEARCH_QUERY_MAX_LENGTH)
@@ -134,7 +140,6 @@ export class SessionSearchEngine {
       ? decodeSessionSearchCursor(request.cursor, generation, pageKey)
       : 0
 
-    this.probeCapabilities()
     const plan = planSessionSearchQuery(split.text)
     const { ranked, retrieved, incomplete } = this.withCapabilityRetry(() =>
       plan.terms.length === 0
@@ -170,7 +175,7 @@ export class SessionSearchEngine {
       generation,
       durationMs: performance.now() - startedAt
     }
-    if (this.options.logQueries && !this.unavailable.includes('query-log')) {
+    if (this.options.logQueries) {
       logSessionSearchQuery(this.db, {
         query: request.query,
         route: response.planner.route,
@@ -182,17 +187,17 @@ export class SessionSearchEngine {
   }
 
   /**
-   * Two indexed `sqlite_master` lookups, run per search rather than once.
+   * Where the engine's own schema is created and checked, once per search.
    *
    * A capability is a fact about the file, not about this object: another handle
    * can rebuild the index under a live connection, so a verdict cached in the
    * constructor is wrong for the rest of the engine's life in both directions —
    * it would keep reaching for a table that went away, and never pick one back
    * up when it returned. Retrieval is only rebuilt when the answer changes, so
-   * the steady-state cost is the two lookups and nothing else.
+   * the steady-state cost is one indexed lookup and nothing else.
    */
   private probeCapabilities(): void {
-    const unavailable = sessionSearchUnavailableFeatures(this.db)
+    const unavailable = ensureSessionSearchQuerySchema(this.db)
     if (unavailable.join() === this.unavailable.join()) {
       return
     }
@@ -298,7 +303,9 @@ export class SessionSearchEngine {
 }
 
 // SQLite reports a table that went away at the statement that reaches for it.
-const MISSING_TABLE = /no such table/i
+// `fts5` is in the message when the table is the vocabulary's target, which is
+// the one an index rebuilt under a live connection loses first.
+const MISSING_TABLE = /no such (fts5 )?table/i
 
 function isMissingTableError(error: unknown): boolean {
   return error instanceof Error && MISSING_TABLE.test(error.message)

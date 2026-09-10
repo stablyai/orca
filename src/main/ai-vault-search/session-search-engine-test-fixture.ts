@@ -7,14 +7,15 @@ import { SessionSearchStore } from './session-search-store'
 import {
   openSessionSearchIndexFile,
   type SessionSearchIndexFile
-} from './session-search-staged-write-test-fixture'
+} from './session-search-index-test-fixture'
 
 // Synthetic index rows for the query tests. The write path has its own tests;
 // driving it here would make every retrieval assertion depend on the parser.
 
 export type SessionSearchHarness = {
-  /** A second connection: the store keeps its own private. */
+  /** The engine's own connection; the store next to it keeps a second, private one. */
   db: SyncDatabase
+  /** A real writer on the same file, so a test can move the index under the engine. */
   store: SessionSearchStore
   engine: SessionSearchEngine
   close: () => Promise<void>
@@ -28,10 +29,13 @@ export async function openSessionSearchHarness(
   const store = new SessionSearchStore(index.path, (error) => {
     throw error
   })
+  // Constructed before any row is planted, because constructing it is what
+  // installs the generation triggers the planted rows have to move.
+  const engine = new SessionSearchEngine(index.db, options)
   return {
     db: index.db,
     store,
-    engine: new SessionSearchEngine(store, options),
+    engine,
     close: async () => {
       store.close()
       await index.close()

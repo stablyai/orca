@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { openSessionSearchIndexFile } from './session-search-staged-write-test-fixture'
+import type SyncDatabase from '../sqlite/sync-database'
+import { openSessionSearchIndexFile } from './session-search-index-test-fixture'
+import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { SessionSearchTypoRepair } from './session-search-typo-repair'
+
+/** A session row the planted messages below hang off, so a repair can see them. */
+function addSession(db: SyncDatabase, id: number): void {
+  db.prepare(
+    `INSERT INTO sessions(id,agent,session_id,file_path,title,resume_command)
+     VALUES (?, 'claude', ?, '/synthetic/fixture', 'typo fixture', '')`
+  ).run(id, String(id))
+}
+
+function addTerm(db: SyncDatabase, sessionRowId: number, term: string): void {
+  const rowid = db
+    .prepare("INSERT INTO messages(session_row_id, role) VALUES (?, 'user')")
+    .run(sessionRowId).lastInsertRowid
+  db.prepare('INSERT INTO messages_fts(rowid, user_text) VALUES (?, ?)').run(Number(rowid), term)
+}
 
 describe('typo repair policy', () => {
   it.each([
@@ -15,12 +32,13 @@ describe('typo repair policy', () => {
     async ({ input, candidate, copies, exact, expected }) => {
       const index = await openSessionSearchIndexFile('ss-typo-policy')
       try {
-        const insert = index.db.prepare('INSERT INTO messages_fts(user_text) VALUES (?)')
+        ensureSessionSearchQuerySchema(index.db)
+        addSession(index.db, 1)
         for (let i = 0; i < copies; i++) {
-          insert.run(candidate)
+          addTerm(index.db, 1, candidate)
         }
         if (exact) {
-          insert.run(input)
+          addTerm(index.db, 1, input)
         }
         expect(new SessionSearchTypoRepair(index.db).correct(input)).toBe(expected)
       } finally {
@@ -29,31 +47,31 @@ describe('typo repair policy', () => {
     }
   )
 
-  // Mid-write the closest term can be one no reader can see yet. Abandoning the
-  // prefix there would lose a repair the published index can already serve.
-  it('falls through to the best visible candidate when the closest one is staged', async () => {
-    const index = await openSessionSearchIndexFile('ss-typo-staged')
+  // A purge cuts a session loose in one transaction and reclaims its rows over
+  // many, so the vocabulary can still list a term whose only rows nothing can
+  // reach. Abandoning the prefix at that term would lose a repair the rest of
+  // the index can already serve.
+  it('falls through to the best candidate a reader can still reach', async () => {
+    const index = await openSessionSearchIndexFile('ss-typo-orphaned')
     try {
       const { db } = index
-      db.prepare(
-        `INSERT INTO sessions(id,agent,session_id,file_path,title,resume_command)
-         VALUES (1, 'claude', '1', '/synthetic/1', 'staged fixture', '')`
-      ).run()
-      db.prepare('INSERT INTO search_write_batches(id, session_row_id) VALUES (1, 1)').run()
-      const message = db.prepare(
-        "INSERT INTO messages(session_row_id, batch_id, role) VALUES (1, ?, 'user')"
-      )
-      const text = db.prepare('INSERT INTO messages_fts(rowid, user_text) VALUES (?, ?)')
+      ensureSessionSearchQuerySchema(db)
+      addSession(db, 1)
       // `coalesces` scores higher against `coalescs` than `coalesced` does, and
-      // shares its prefix, so only the fall-through can reach the visible one.
-      for (const [term, batch] of [
-        ['coalesces', 1],
-        ['coalesces', 1],
-        ['coalesced', null],
-        ['coalesced', null]
+      // shares its prefix, so only the fall-through can reach the reachable one.
+      // Session 2 is never created: these rows are what an unfinished purge
+      // leaves behind, and the vocabulary counts them all the same.
+      for (const [term, session] of [
+        ['coalesces', 2],
+        ['coalesces', 2],
+        ['coalesced', 1],
+        ['coalesced', 1]
       ] as const) {
-        text.run(Number(message.run(batch).lastInsertRowid), term)
+        addTerm(db, session, term)
       }
+      expect(db.prepare("SELECT doc FROM messages_vocab WHERE term='coalesces'").get()).toEqual({
+        doc: 2
+      })
       expect(new SessionSearchTypoRepair(db).correct('coalescs')).toBe('coalesced')
     } finally {
       await index.close()
