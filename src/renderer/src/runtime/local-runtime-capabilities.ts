@@ -30,11 +30,18 @@ export async function ensureLocalRuntimeCapabilities(): Promise<
   return localRuntimeCapabilities
 }
 
+/** Calls the bridge SYNCHRONOUSLY — callers overlap this probe with their own RPC and rely on it
+ *  being in flight on return — while turning a broken bridge into a rejection rather than a throw. */
+function startLocalRuntimeCapabilityProbe(): ReturnType<typeof window.api.runtime.getStatus> {
+  try {
+    return window.api.runtime.getStatus()
+  } catch (error) {
+    return Promise.reject(error)
+  }
+}
+
 export function refreshLocalRuntimeCapabilities(): Promise<readonly RuntimeCapability[]> {
-  // Starts inside the chain so a broken bridge rejects into the catch below
-  // instead of throwing synchronously out of the ??= expression.
-  refreshPromise ??= Promise.resolve()
-    .then(() => window.api.runtime.getStatus())
+  refreshPromise ??= startLocalRuntimeCapabilityProbe()
     .then((status) => {
       localRuntimeCapabilities = [...(status.capabilities ?? [])]
       return localRuntimeCapabilities
