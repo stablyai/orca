@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import {
   buildAskAnswerKeys,
+  buildAskChatRowKeys,
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
@@ -16,6 +17,7 @@ import {
 
 export {
   buildAskAnswerKeys,
+  buildAskChatRowKeys,
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
