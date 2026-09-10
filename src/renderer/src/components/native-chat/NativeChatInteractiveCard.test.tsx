@@ -608,8 +608,6 @@ describe('NativeChatInteractiveCard escape-to-chat routing', () => {
       typeReply('whichever the linter wants')
       fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
 
-      // The chat message must not overtake the selector keystrokes.
-      expect(mocks.sendChatText).not.toHaveBeenCalled()
       act(() => {
         vi.advanceTimersByTime(1_000)
       })
@@ -617,13 +615,14 @@ describe('NativeChatInteractiveCard escape-to-chat routing', () => {
       vi.useRealTimers()
     }
 
-    // Q1's pick still goes through the selector; Q2's unattached words do not.
+    // Q1's pick still goes through the selector; Q2's unattached words ride
+    // with the answer, so a mid-flight cancel cannot strand them.
     expect(mocks.cancel).not.toHaveBeenCalled()
     expect(mocks.sendAnswer.mock.calls[0]![1]).toEqual([
       { indices: [0], other: '' },
       { indices: [], other: '' }
     ])
-    expect(mocks.sendChatText).toHaveBeenCalledWith('Quotes?\nwhichever the linter wants')
+    expect(mocks.sendAnswer.mock.calls[0]![3]).toBe('Quotes?\nwhichever the linter wants')
   })
 
   it('leaves Skip alone when nothing was entered anywhere', () => {

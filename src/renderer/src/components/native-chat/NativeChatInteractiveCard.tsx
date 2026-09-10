@@ -65,7 +65,7 @@ export function NativeChatInteractiveCard({
   // Thread the sibling `toolName` from the same status entry so the question
   // parser can dispatch through the tool's registered parser (mobile parity).
   const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
-  const { sendAnswer, sendRaw, sendChatText, escapeToChat, cancelPending, cancel } = send
+  const { sendAnswer, sendRaw, escapeToChat, cancelPending, cancel } = send
 
   const card = useMemo(() => {
     const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
@@ -197,11 +197,6 @@ export function NativeChatInteractiveCard({
           // Picks travel through the selector carrying their notes; words with no
           // pick to attach to have no selector representation and follow as chat.
           const routing = routeAskAnswer(card.prompt, selections)
-          const sendStrandedText = (): void => {
-            if (routing.chatText) {
-              sendChatText(routing.chatText)
-            }
-          }
 
           if (routing.rejectsPrompt) {
             // Nothing picked anywhere: leave through the selector's own "Chat
@@ -219,11 +214,11 @@ export function NativeChatInteractiveCard({
             (delivered) => {
               if (delivered) {
                 dismissAnsweredCard(result.confirmAnswered, result.settleAfterMs)
-                sendStrandedText()
               } else {
                 keepRejectedAnswerVisible()
               }
-            }
+            },
+            routing.chatText
           )
           if (result.settleAfterMs <= 0) {
             // Keep the actionable card visible when its PTY disappeared between
@@ -243,7 +238,6 @@ export function NativeChatInteractiveCard({
           dismissTimerRef.current = setTimeout(() => {
             cancelPending()
             dismissAnsweredCard(result.confirmAnswered, result.settleAfterMs)
-            sendStrandedText()
           }, result.settleAfterMs)
         }}
         onCancel={() => {

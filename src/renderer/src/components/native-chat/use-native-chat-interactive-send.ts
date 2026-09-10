@@ -29,11 +29,16 @@ const ESC = '\x1b'
 
 export type NativeChatInteractiveSend = {
   /** Deliver the answer to an AskUserQuestion prompt. Claude-format selectors
-   *  verify every runtime write before reporting settlement. */
+   *  verify every runtime write before reporting settlement.
+   *
+   *  `strandedText` is the words that had no option to attach to. It follows the
+   *  answer as a chat message once the selector settles, and survives a
+   *  cancellation that retires the remaining keystrokes. */
   sendAnswer: (
     prompt: AskPrompt,
     selections: AskAnswerSelection[],
-    onDeliverySettled?: (delivered: boolean) => void
+    onDeliverySettled?: (delivered: boolean) => void,
+    strandedText?: string
   ) => {
     settleAfterMs: number
     waitsForVerifiedDelivery: boolean
@@ -53,8 +58,8 @@ export type NativeChatInteractiveSend = {
    *  never race a selector that is still torn down. */
   escapeToChat: (prompt: AskPrompt, text: string) => void
   /** Stop the in-flight answer's delayed keystrokes without interrupting the
-   *  agent. Scoped to selector keystrokes: a chat write carries the user's own
-   *  words, which the card's dismissal must never discard. */
+   *  agent. Scoped to selector keystrokes: any stranded text still owed to chat
+   *  is delivered, since it carries the user's own words. */
   cancelPending: () => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
   cancel: () => void
@@ -77,13 +82,23 @@ export function useNativeChatInteractiveSend(
   // The in-flight ANSWER's cancel handle; cleared on a new send, on Stop, and on
   // unmount so a detached setTimeout chain can't keep writing PTY bytes after
   // the view is gone / the user switched away. Only selector keystrokes are
-  // enrolled — a chat send stays outside this handle so dismissing the card
-  // cannot drop words the user typed.
+  // enrolled: cancelling drops keystrokes a retired selector no longer reads,
+  // and must never reach a write carrying the user's words.
   const inFlightRef = useRef<NativeChatSendHandle | null>(null)
+  // Words the user typed with no option to attach to, owed to chat once the
+  // answer settles. Held outside the handle: cancelling an answer drops
+  // keystrokes the selector no longer needs, never the user's own text.
+  const strandedTextRef = useRef<(() => void) | null>(null)
+  const flushStrandedText = useCallback(() => {
+    const send = strandedTextRef.current
+    strandedTextRef.current = null
+    send?.()
+  }, [])
   const cancelInFlight = useCallback(() => {
     inFlightRef.current?.cancel()
     inFlightRef.current = null
-  }, [])
+    flushStrandedText()
+  }, [flushStrandedText])
   // Why: a split can be rebound without unmounting this view. Cancel during
   // commit so no delayed answer write can race the replacement PTY.
   useLayoutEffect(
@@ -105,7 +120,8 @@ export function useNativeChatInteractiveSend(
     (
       prompt: AskPrompt,
       selections: AskAnswerSelection[],
-      onDeliverySettled?: (delivered: boolean) => void
+      onDeliverySettled?: (delivered: boolean) => void,
+      strandedText?: string
     ): {
       settleAfterMs: number
       waitsForVerifiedDelivery: boolean
@@ -117,6 +133,10 @@ export function useNativeChatInteractiveSend(
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
       const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
+      const stranded = strandedText?.trim()
+      if (stranded) {
+        strandedTextRef.current = () => sendNativeChatMessage(settings, targetPtyId, stranded)
+      }
       // Claude and Codex ignore pasted labels but have different selector state
       // machines; Grok commits pasted text. OpenClaude follows Claude's path.
       const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
@@ -156,6 +176,9 @@ export function useNativeChatInteractiveSend(
               // promises, and prompt callback until the next send or unmount.
               inFlightRef.current = null
             }
+            if (delivered) {
+              flushStrandedText()
+            }
             onDeliverySettled?.(delivered)
           }
         : undefined
@@ -180,7 +203,7 @@ export function useNativeChatInteractiveSend(
         confirmAnswered
       }
     },
-    [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight]
+    [terminalTabId, paneKey, targetPtyId, agent, cancelInFlight, flushStrandedText]
   )
 
   // Stop/cancel: drop any pending answer writes, then send ESC to interrupt.
@@ -198,22 +221,15 @@ export function useNativeChatInteractiveSend(
       cancelInFlight()
       const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
       const body = text.trim()
-      const handle = sendNativeChatAskAnswer(
-        settings,
-        targetPtyId,
-        buildAskChatRowKeys(question),
-        () => {
-          if (inFlightRef.current === handle) {
-            inFlightRef.current = null
-          }
-          if (body) {
-            // The chat send stays outside `inFlightRef`: these are the user's
-            // words, and the card is already dismissed by the time they go.
-            sendNativeChatMessage(settings, targetPtyId, body)
-          }
+      // Why: the whole sequence stays outside `inFlightRef`. Selecting the chat
+      // row resolves the ask, which clears the card's key and runs its cleanup
+      // `cancelPending()` — enrolling either half here would cancel the row
+      // keystroke and the user's words before they reach the PTY.
+      sendNativeChatAskAnswer(settings, targetPtyId, buildAskChatRowKeys(question), () => {
+        if (body) {
+          sendNativeChatMessage(settings, targetPtyId, body)
         }
-      )
-      inFlightRef.current = handle
+      })
     },
     [terminalTabId, targetPtyId, cancelInFlight]
   )
