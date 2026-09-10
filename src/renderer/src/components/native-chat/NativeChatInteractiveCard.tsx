@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
-import { resolveNativeChatAsk, routeAskAnswer } from '../../../../shared/native-chat-ask'
+import { resolveNativeChatAsk } from '../../../../shared/native-chat-ask'
+import { routeAskAnswer } from '../../../../shared/native-chat-ask-routing'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { parseInteractivePrompt } from './native-chat-interactive-prompt'
 import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
