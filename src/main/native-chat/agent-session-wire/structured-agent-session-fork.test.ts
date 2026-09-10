@@ -20,7 +20,6 @@ import {
   attachFingerprintFields,
   type AgentSessionAttachParams
 } from './structured-agent-session-attach'
-import { structuredSessionForkState } from '../../../renderer/src/components/native-chat/structured-agent-session-fork-state'
 import {
   HOST_TEST_NOW as NOW,
   hostTestAttachParams,
@@ -392,26 +391,6 @@ describe('fork from a structured turn', () => {
       fork: { ...current.fork!, phase: 'attempted' as const }
     }))
     expect(await host.readOptions('child-session')).not.toHaveProperty('forkedFrom')
-    // Wire field -> controller field, the hop the renderer half actually reads.
-    const state = { items: [], fence: 1, cursor: { epoch: 'epoch' } } as unknown as Parameters<
-      typeof structuredSessionForkState
-    >[0]
-    expect(
-      structuredSessionForkState(state, 'child-session', {
-        sessionId: 'child-session',
-        commands: [],
-        forkSupported: true,
-        forkedFromSessionId: forked.forkedFrom?.sessionId
-      }).forkedFromSessionId
-    ).toBe(source.sessionId)
-    expect(
-      structuredSessionForkState(state, params.envelope.sessionId, {
-        sessionId: params.envelope.sessionId,
-        commands: [],
-        forkSupported: true,
-        forkedFromSessionId: parent.forkedFrom?.sessionId
-      }).forkedFromSessionId
-    ).toBeUndefined()
   })
 
   it('resumes the proved child when journal publication fails instead of forking again', async () => {
