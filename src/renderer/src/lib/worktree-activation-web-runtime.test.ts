@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { activateAndRevealWorktree } from './worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from './worktree-initial-terminal-seeding'
 import type { AppStoreState } from './worktree-activation-test-harness'
 import {
@@ -6,8 +7,53 @@ import {
   registerWorktreeActivationReset
 } from './worktree-activation-test-harness'
 import { useAppStore } from '@/store'
+import {
+  makeCreatedAgentWorktree,
+  seedEmptyActivatableWorktree
+} from './worktree-activation-created-agent-test-state'
+import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
 
 registerWorktreeActivationReset()
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  resetWebRuntimeWakeTerminalRespawnForTests()
+})
+
+describe('activateAndRevealWorktree', () => {
+  it('does not ask a paired host to seed a shell for an agent selection', async () => {
+    const worktree = {
+      ...makeCreatedAgentWorktree(),
+      hostId: 'local' as const,
+      runtimeOwnerEnvironmentId: 'web-runtime-1'
+    }
+    const callRuntimeEnvironment = vi.fn().mockResolvedValue({
+      ok: false,
+      error: { code: 'test', message: 'stop after recording the request' }
+    })
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    vi.stubGlobal('window', {
+      api: { runtimeEnvironments: { call: callRuntimeEnvironment } }
+    })
+    seedEmptyActivatableWorktree(worktree)
+    useAppStore.setState((state) => ({
+      settings: state.settings
+        ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
+        : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings)
+    }))
+
+    activateAndRevealWorktree(worktree.id, { agent: 'codex' })
+    await vi.waitFor(() =>
+      expect(callRuntimeEnvironment).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'worktree.activate' })
+      )
+    )
+
+    expect(callRuntimeEnvironment).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'session.tabs.createTerminal' })
+    )
+  })
+})
 
 describe('ensureWorktreeHasInitialTerminal', () => {
   it('does not create a local fallback tab in the paired web runtime client', () => {

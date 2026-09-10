@@ -207,6 +207,7 @@ export async function submitFolderWorkspaceCreate({
   onOpenChange(false)
   try {
     let activation = activateAndRevealFolderWorkspace(workspace.id, {
+      agent: quickAgent,
       ...(!structuredLaunch && startup ? { startup } : {}),
       ...(structuredLaunch ? { providesInitialSurface: true } : {}),
       runtimeEnvironmentId
@@ -229,6 +230,7 @@ export async function submitFolderWorkspaceCreate({
                   connectionId: workspace.connectionId ?? projectGroup.connectionId
                 })
                 const fallbackActivation = activateAndRevealFolderWorkspace(workspace.id, {
+                  agent: quickAgent,
                   ...(startup ? { startup } : {}),
                   runtimeEnvironmentId
                 })

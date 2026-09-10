@@ -168,6 +168,7 @@ export async function executeWorktreeCreation(
   if (shouldActivateOnCompletion && !structuredLaunch) {
     activation = activateAndRevealWorktree(worktree.id, {
       sidebarRevealBehavior: 'auto',
+      ...(preparedRequest.agent !== null ? { agent: preparedRequest.agent } : {}),
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),
@@ -181,7 +182,7 @@ export async function executeWorktreeCreation(
       startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
     )
     primaryTabId =
-      structuredLaunch && !hasExplicitTerminalWork
+      preparedRequest.agent !== null && !hasExplicitTerminalWork
         ? null
         : ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),
@@ -192,7 +193,7 @@ export async function executeWorktreeCreation(
             result.defaultTabs,
             {
               activateCreatedTabs: false,
-              ...(structuredLaunch ? { callerProvidesSurface: true } : {}),
+              ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
               ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
             }
           )
