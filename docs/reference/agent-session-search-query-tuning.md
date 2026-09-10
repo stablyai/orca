@@ -49,16 +49,16 @@ several milliseconds run to run if anything else is competing for the disk.
 
 Per query, `all` then `conversation` (p50 / p95):
 
-| Query | `all` | `conversation` |
-| --- | --- | --- |
-| `"terminal reattach"` (phrase) | 5.24 / 8.42 | 2.97 / 3.24 |
-| `resolveTerminalPath` (identifier) | 7.55 / 8.94 | 6.47 / 6.72 |
-| `src/main/…/session-transcript-reader.ts` (path) | 8.69 / 10.12 | 7.78 / 8.04 |
-| `why is the daemon snapshot stale` (prose) | 7.84 / 8.57 | 5.90 / 7.01 |
-| `reattahc worktre` (typo repair) | 7.30 / 7.39 | 5.53 / 5.89 |
-| `index` (common term) | 5.45 / 5.66 | 3.81 / 4.02 |
-| `repo:app-3` (operator only) | 0.12 / 0.16 | 0.10 / 0.10 |
-| `worktree` scoped to one cwd | 1.47 / 1.63 | 1.25 / 1.49 |
+| Query                                            | `all`        | `conversation` |
+| ------------------------------------------------ | ------------ | -------------- |
+| `"terminal reattach"` (phrase)                   | 5.24 / 8.42  | 2.97 / 3.24    |
+| `resolveTerminalPath` (identifier)               | 7.55 / 8.94  | 6.47 / 6.72    |
+| `src/main/…/session-transcript-reader.ts` (path) | 8.69 / 10.12 | 7.78 / 8.04    |
+| `why is the daemon snapshot stale` (prose)       | 7.84 / 8.57  | 5.90 / 7.01    |
+| `reattahc worktre` (typo repair)                 | 7.30 / 7.39  | 5.53 / 5.89    |
+| `index` (common term)                            | 5.45 / 5.66  | 3.81 / 4.02    |
+| `repo:app-3` (operator only)                     | 0.12 / 0.16  | 0.10 / 0.10    |
+| `worktree` scoped to one cwd                     | 1.47 / 1.63  | 1.25 / 1.49    |
 
 Reading it:
 
@@ -94,7 +94,7 @@ conversation also uses, so a conversation term really does have postings the
 filter must discard. Twenty queries per rung, both scopes interleaved query by
 query, warm cache; `config/scripts/session-search-scope-benchmark.ts`, run twice.
 
-| Tool share | Rung | `all` p50 / p95 | `conversation` p50 / p95 |
+| Tool share | Rung   | `all` p50 / p95 | `conversation` p50 / p95 |
 | ---------- | ------ | --------------- | ------------------------ |
 | 86%        | phrase | 16.69 / 17.48   | 13.08 / 13.52            |
 | 86%        | or     | 31.91 / 35.74   | 22.25 / 23.87            |
@@ -141,12 +141,12 @@ one of them matching the query. Limits are interleaved sample by sample, because
 run back to back the first configuration pays for every page the OS cache had not
 seen and the ordering alone moves p95 further than the limit does.
 
-| Limit | p50 | p95 | Pages of 20 a caller can reach |
-| --- | --- | --- | --- |
-| 200 | 6.85 | 7.21 | 10 |
-| 600 | 7.93 | 8.36 | 30 |
-| 1200 | 9.55 | 10.53 | 60 |
-| 2400 | 12.32 | 13.45 | 120 |
+| Limit | p50   | p95   | Pages of 20 a caller can reach |
+| ----- | ----- | ----- | ------------------------------ |
+| 200   | 6.85  | 7.21  | 10                             |
+| 600   | 7.93  | 8.36  | 30                             |
+| 1200  | 9.55  | 10.53 | 60                             |
+| 2400  | 12.32 | 13.45 | 120                            |
 
 600 is the default: it costs about 16% over 200 at p50 and buys three times the
 reachable depth, and the curve only turns steep past 1200. A host with a much
@@ -159,6 +159,30 @@ not what it retrieves. The MRR figures quoted in the BM25 weights
 (`session-search-identifier-split.ts`) come from the original retrieval shoot-out
 on real transcripts and are not reproducible from this repository. Any change to
 the limit justified on relevance grounds needs an eval set, not this benchmark.
+
+## What typo repair costs
+
+The repair is the one rung whose cost tracks the size of the vocabulary rather
+than the size of a result. It only runs for a term the scope has no posting for,
+so an ordinary query never pays it; a query of nonsense pays it once per term.
+
+Measured over a synthetic vocabulary of 1.6 M distinct terms, every term in two
+rows so none is filtered out:
+
+| Query                                  | p50    |
+| -------------------------------------- | ------ |
+| one known term (no repair)             | 11 ms  |
+| one unknown term                       | 10 ms  |
+| 39 unknown 12-character terms (480 ch) | 387 ms |
+| 12 unknown 40-character terms          | 99 ms  |
+
+Two things follow. The cost is linear in unknown terms and in vocabulary size,
+and `search` is synchronous, so a 512-character query of nonsense holds the
+thread for a third of a second on an index that large. And the scoped-count fix
+made this cheaper rather than dearer — it was 737 ms before — because ordering
+the vocabulary scan by term drops the sort that ordering by `doc` required, and
+the counts it added are at most eight bounded probes per prefix. A cap on
+unknown terms per query is recorded as a follow-up in the split plan.
 
 ## Page warmup, dropped
 
