@@ -151,6 +151,13 @@ export async function runRelayOrcaCliChannel(
     }
   }
 
+  // Why an explicit error path: the decoder contains a throwing frame owner instead of letting
+  // it escape, so a malformed relay reply must still end this one-shot command, not park it.
+  const onDecodeError = (error: Error): void => {
+    process.stderr.write(`[orca-cli] Relay protocol error: ${error.message}\n`)
+    sock.destroy()
+    process.exit(1)
+  }
   const decoder = new FrameDecoder((frame: DecodedFrame) => {
     if (frame.id > highestReceivedSeq) {
       highestReceivedSeq = frame.id
@@ -194,7 +201,7 @@ export async function runRelayOrcaCliChannel(
       }
       sendPostOutput(result.postOutput)
     })
-  })
+  }, onDecodeError)
 
   const connectTimeout = setTimeout(() => {
     process.stderr.write(`[orca-cli] Relay connection timed out after ${CONNECT_TIMEOUT_MS}ms\n`)
