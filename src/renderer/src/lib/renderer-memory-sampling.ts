@@ -1,7 +1,8 @@
 /**
  * Renderer memory sampling for crash reports: the periodic `renderer_memory`
- * crumb, and the one-shot `renderer_memory_highwater` crumbs that carry the
- * subsystem census naming whatever grew.
+ * crumb, and the periodically re-armed
+ * `renderer_memory_highwater` crumbs that carry the subsystem census naming
+ * whatever grew.
  */
 import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
 import type { RendererProcessMemory } from '../../../shared/renderer-process-memory'
@@ -25,6 +26,11 @@ const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
  * outside every heap counter, so footprint is the only mark that sees them.
  */
 const RENDERER_PRIVATE_HIGHWATER_MB = [600, 1000] as const
+// Why re-arm on a timer, not on a dip below the mark: fb476b1c crossed 600MB
+// once, plateaued 21h and died at 577MB, so a dip-armed rearm ships that same
+// stale census. 15min = 1 census per 15 samples, and the store keys retained
+// highwater crumbs by mark, so a refresh replaces the stale one.
+const RENDERER_HIGHWATER_RECENSUS_MS = 15 * 60_000
 
 export type RendererSurface = 'main' | 'dashboard-popout'
 
@@ -41,8 +47,9 @@ type HeapMetrics = BrowserPerformanceMemory & {
   exact: boolean
 }
 
-const emittedHighwaterRatios = new Set<number>()
-const emittedPrivateHighwaterMarks = new Set<number>()
+/** Mark -> monotonic time it last emitted a census. */
+const emittedHighwaterRatios = new Map<number, number>()
+const emittedPrivateHighwaterMarks = new Map<number, number>()
 let lastProcessFootprint: RendererProcessMemory | null = null
 let processFootprintReadGeneration = 0
 let processFootprintReadInFlight = false
@@ -154,15 +161,16 @@ function recordRendererMemoryHighwater(
   const used = memory.usedJSHeapSize
   const limit = memory.jsHeapSizeLimit
   // Why: NaN would satisfy `ratio < threshold` for nothing, emitting both
-  // levels spuriously and disarming the one-shot for the session.
+  // levels spuriously and disarming both marks.
   const ratio =
     isFiniteHeapBytes(used) && isFiniteHeapBytes(limit) && limit > 0 ? used / limit : null
   const privateMB =
     footprint === null ? null : (toMegabytes(footprint.privateKB * BYTES_PER_KILOBYTE) ?? null)
+  const nowMs = performance.now()
   let crossedThreshold = false
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
-      if (ratio >= threshold && !emittedHighwaterRatios.has(threshold)) {
+      if (ratio >= threshold && isHighwaterMarkArmed(emittedHighwaterRatios, threshold, nowMs)) {
         crossedThreshold = true
         break
       }
@@ -170,7 +178,7 @@ function recordRendererMemoryHighwater(
   }
   if (privateMB !== null) {
     for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
-      if (privateMB >= mark && !emittedPrivateHighwaterMarks.has(mark)) {
+      if (privateMB >= mark && isHighwaterMarkArmed(emittedPrivateHighwaterMarks, mark, nowMs)) {
         crossedThreshold = true
         break
       }
@@ -197,10 +205,10 @@ function recordRendererMemoryHighwater(
   })
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
-      if (ratio < threshold || emittedHighwaterRatios.has(threshold)) {
+      if (ratio < threshold || !isHighwaterMarkArmed(emittedHighwaterRatios, threshold, nowMs)) {
         continue
       }
-      emittedHighwaterRatios.add(threshold)
+      emittedHighwaterRatios.set(threshold, nowMs)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
         thresholdPct: Math.round(threshold * 100)
@@ -209,16 +217,22 @@ function recordRendererMemoryHighwater(
   }
   if (privateMB !== null) {
     for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
-      if (privateMB < mark || emittedPrivateHighwaterMarks.has(mark)) {
+      if (privateMB < mark || !isHighwaterMarkArmed(emittedPrivateHighwaterMarks, mark, nowMs)) {
         continue
       }
-      emittedPrivateHighwaterMarks.add(mark)
+      emittedPrivateHighwaterMarks.set(mark, nowMs)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
         thresholdPrivateMB: mark
       })
     }
   }
+}
+
+/** Why monotonic: a wall-clock correction must not stretch or collapse the window. */
+function isHighwaterMarkArmed(emitted: Map<number, number>, mark: number, nowMs: number): boolean {
+  const lastEmittedAtMs = emitted.get(mark)
+  return lastEmittedAtMs === undefined || nowMs - lastEmittedAtMs >= RENDERER_HIGHWATER_RECENSUS_MS
 }
 
 function isFiniteHeapBytes(value: number | undefined): value is number {
