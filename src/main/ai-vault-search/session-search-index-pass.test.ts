@@ -88,9 +88,9 @@ it('hands back everything the allowance had no room for, in order', async () => 
   expect(pass.deferred.map((one) => one.file.path)).toEqual(
     all.slice(1).map((one) => one.file.path)
   )
-  expect(
-    harness.read((db) => db.prepare('SELECT count(*) AS n FROM visible_sessions').get())
-  ).toEqual({ n: 1 })
+  expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
+    n: 1
+  })
 })
 
 it('skips a source the reader cannot even open without failing the pass', async () => {
@@ -98,9 +98,9 @@ it('skips a source the reader cannot even open without failing the pass', async 
   await rm(transcript(FIRST))
   const pass = await runSessionSearchIndexPass(store, all)
   expect(pass.deferred).toEqual([])
-  expect(
-    harness.read((db) => db.prepare('SELECT count(*) AS n FROM visible_sessions').get())
-  ).toEqual({ n: 1 })
+  expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
+    n: 1
+  })
 })
 
 // Finding 6: mtime alone is not the freshness key. A transcript that grows
@@ -138,9 +138,9 @@ it('is not overtaken by a list parse racing the same path', async () => {
   ])
 
   expect(pass.deferred).toEqual([])
-  expect(
-    harness.read((db) => db.prepare('SELECT count(*) AS n FROM visible_sessions').get())
-  ).toEqual({ n: 1 })
+  expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
+    n: 1
+  })
 })
 
 // Finding 4d: a declined read is a parse that returns normally and indexes
@@ -158,9 +158,9 @@ it('does not count a read the index declined, even though the parse succeeded', 
 
   expect(pass.stats.fullParses).toBe(1)
   expect(indexed).toEqual([])
-  expect(
-    harness.read((db) => db.prepare('SELECT count(*) AS n FROM visible_sessions').get())
-  ).toEqual({ n: 0 })
+  expect(harness.read((db) => db.prepare('SELECT count(*) AS n FROM sessions').get())).toEqual({
+    n: 0
+  })
   // Declined, not forgotten: the store records it for a later whole re-read.
   expect(store.takeStale()).toHaveLength(1)
 })

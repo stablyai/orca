@@ -70,8 +70,8 @@ function sessionsMatching(term: string): string[] {
       db
         .prepare(
           `SELECT DISTINCT s.session_id AS id FROM messages_fts
-           JOIN visible_messages m ON m.id = messages_fts.rowid
-           JOIN visible_sessions s ON s.id = m.session_row_id
+           JOIN messages m ON m.id = messages_fts.rowid
+           JOIN sessions s ON s.id = m.session_row_id
            WHERE messages_fts MATCH ? ORDER BY s.session_id`
         )
         .all(term) as { id: string }[]
@@ -82,7 +82,7 @@ function sessionsMatching(term: string): string[] {
 function indexedSessionCount(): number {
   return harness.read(
     (db: SyncDatabase) =>
-      (db.prepare('SELECT count(*) AS n FROM visible_sessions').get() as { n: number }).n
+      (db.prepare('SELECT count(*) AS n FROM sessions').get() as { n: number }).n
   )
 }
 
@@ -204,7 +204,7 @@ it('resumes after close and reopen without re-reading what it already indexed', 
   )
   await newIndexer().start()
   const indexedRows = harness.read((db: SyncDatabase) =>
-    db.prepare('SELECT count(*) AS n FROM visible_messages').get()
+    db.prepare('SELECT count(*) AS n FROM messages').get()
   )
   indexer?.close()
 
@@ -219,9 +219,7 @@ it('resumes after close and reopen without re-reading what it already indexed', 
   // Zero bytes read is the claim that matters — nothing was opened again.
   expect(reopened.status()).toMatchObject({ filesIndexed: 2, bytesIndexed: 0 })
   expect(
-    harness.read((db: SyncDatabase) =>
-      db.prepare('SELECT count(*) AS n FROM visible_messages').get()
-    )
+    harness.read((db: SyncDatabase) => db.prepare('SELECT count(*) AS n FROM messages').get())
   ).toEqual(indexedRows)
   expect(sessionsMatching('indexed')).toEqual([SESSION_ID, OTHER_SESSION_ID].sort())
 })
@@ -347,23 +345,6 @@ it('fills an empty index over a warm session-list cache on the first sweep', asy
   await newIndexer().start()
 
   expect(sessionsMatching('scanned')).toEqual([SESSION_ID])
-})
-
-it('reports the rows a crashed writer left behind on the next open', async () => {
-  await writeClaudeTranscript(transcriptPath(), ['a crashed write'], SESSION_ID)
-  await newIndexer().start()
-  expect(indexer?.status().recoveredRows).toBe(0)
-  indexer?.close()
-
-  // What a killed writer leaves: a staging session nothing published.
-  harness.write((db: SyncDatabase) => {
-    db.prepare(
-      "INSERT INTO sessions(index_ready,agent,session_id,file_path,title,resume_command) VALUES (0,'claude','','/gone','','')"
-    ).run()
-    return null
-  })
-  resetTranscriptConsumersForTests()
-  expect(newIndexer().status().recoveredRows).toBeGreaterThan(0)
 })
 
 // Finding 1: a pause part way through a sweep used to abandon it. The flag was

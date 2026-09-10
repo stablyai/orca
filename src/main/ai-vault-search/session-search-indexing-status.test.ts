@@ -108,9 +108,8 @@ it('reports paused over everything, and keeps the counters it had', () => {
   })
 })
 
-it('starts a new sweep from zero but keeps what only an open can know', () => {
+it('starts a new sweep from zero', () => {
   const status = startedStatus()
-  status.setRecoveredRows(7)
   status.beginSweep()
   status.planned(1, 0)
   status.indexed(500)
@@ -118,7 +117,6 @@ it('starts a new sweep from zero but keeps what only an open can know', () => {
   status.beginSweep()
   expect(status.snapshot()).toMatchObject({
     bytesIndexed: 0,
-    failures: 0,
-    recoveredRows: 7
+    failures: 0
   })
 })

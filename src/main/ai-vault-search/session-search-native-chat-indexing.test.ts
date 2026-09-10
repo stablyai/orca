@@ -63,8 +63,8 @@ function messageTexts(term: string): { role: string; session: string }[] {
       db
         .prepare(
           `SELECT m.role AS role, s.session_id AS session FROM messages_fts
-           JOIN visible_messages m ON m.id = messages_fts.rowid
-           JOIN visible_sessions s ON s.id = m.session_row_id
+           JOIN messages m ON m.id = messages_fts.rowid
+           JOIN sessions s ON s.id = m.session_row_id
            WHERE messages_fts MATCH ? ORDER BY m.id`
         )
         .all(term) as { role: string; session: string }[]
@@ -93,9 +93,9 @@ it('indexes a native-chat conversation and its later turns with no panel and no 
   await indexer.start()
 
   expect(messageTexts('watchdog')).toEqual([{ role: 'assistant', session: SESSION_ID }])
-  expect(
-    harness.read((db: SyncDatabase) => db.prepare('SELECT cwd FROM visible_sessions').get())
-  ).toEqual({ cwd: CWD })
+  expect(harness.read((db: SyncDatabase) => db.prepare('SELECT cwd FROM sessions').get())).toEqual({
+    cwd: CWD
+  })
 
   // The conversation continues in the panel; nothing tells the index about it.
   await appendFile(

@@ -35,7 +35,6 @@ export type SessionSearchIndexStatus = {
    */
   droppedPending: number
   /** Unfinished writes the open tombstoned; a non-zero value means a crash. */
-  recoveredRows: number
   failures: number
   /**
    * Files the index holds under no root it is configured to walk, still on
@@ -60,7 +59,6 @@ export class SessionSearchIndexingStatus {
   private bytesIndexed = 0
   private filesPending = 0
   private droppedPending = 0
-  private recoveredRows = 0
   private failures = 0
   private orphanedFiles = 0
   private degradedRoots: SessionSearchDegradedRoot[] = []
@@ -79,7 +77,6 @@ export class SessionSearchIndexingStatus {
       bytesIndexed: this.bytesIndexed,
       filesPending: this.filesPending,
       droppedPending: this.droppedPending,
-      recoveredRows: this.recoveredRows,
       failures: this.failures,
       orphanedFiles: this.orphanedFiles,
       degradedRoots: this.degradedRoots.map((root) => ({ ...root })),
@@ -147,10 +144,6 @@ export class SessionSearchIndexingStatus {
 
   setPaused(paused: boolean): void {
     this.paused = paused
-  }
-
-  setRecoveredRows(rows: number): void {
-    this.recoveredRows = rows
   }
 
   /** A full sweep restarts the progress pair; a reconcile cycle only reports work. */

@@ -396,7 +396,6 @@ export class SessionSearchIndexer {
   }
 
   private openStore(): void {
-    const store = this.registered.open(this.cutoffMs(), !this.paused)
-    this.indexingStatus.setRecoveredRows(store.recoveredWrites)
+    this.registered.open(this.cutoffMs(), !this.paused)
   }
 }

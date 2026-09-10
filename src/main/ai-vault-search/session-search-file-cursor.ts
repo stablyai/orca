@@ -39,3 +39,17 @@ export function fileIdentity(file: FileWithMtime): SessionSearchFileIdentity {
     ? { dev: file.dev, ino: file.ino }
     : null
 }
+
+/** True when the index already covers this file at its current stat. */
+export function isSessionSearchFileCurrent(
+  indexed: SessionSearchIndexedFile | null,
+  file: FileWithMtime
+): boolean {
+  return (
+    indexed !== null &&
+    indexed.mtimeMs === file.mtimeMs &&
+    (indexed.sizeBytes === null ||
+      file.sizeBytes === undefined ||
+      indexed.sizeBytes === file.sizeBytes)
+  )
+}

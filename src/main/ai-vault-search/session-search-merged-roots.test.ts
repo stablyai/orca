@@ -53,8 +53,8 @@ function sessionsMatching(term: string): string[] {
       db
         .prepare(
           `SELECT DISTINCT s.session_id AS id FROM messages_fts
-           JOIN visible_messages m ON m.id = messages_fts.rowid
-           JOIN visible_sessions s ON s.id = m.session_row_id
+           JOIN messages m ON m.id = messages_fts.rowid
+           JOIN sessions s ON s.id = m.session_row_id
            WHERE messages_fts MATCH ? ORDER BY s.session_id`
         )
         .all(term) as { id: string }[]

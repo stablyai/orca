@@ -241,7 +241,7 @@ function indexedSessions(): string[] {
   return harness
     .read(
       (db: SyncDatabase) =>
-        db.prepare('SELECT session_id AS id FROM visible_sessions').all() as { id: string }[]
+        db.prepare('SELECT session_id AS id FROM sessions').all() as { id: string }[]
     )
     .map((row) => row.id)
     .sort()
