@@ -34,3 +34,17 @@
 # Generated runtime English subset: compared byte-for-byte by
 # verify:localization-runtime-catalog, so a CRLF checkout would fail the gate.
 /src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf
+# Generated skill bundle artifacts: verify:skill-bundle-manifest compares them
+# byte-for-byte against a fresh generation, so a CRLF checkout fails the gate.
+/resources/skills/*.json linguist-generated=true text eol=lf
+# Vitest writes snapshots with LF, so a CRLF checkout makes every local test run
+# report them as modified with an empty content diff.
+**/__snapshots__/*.snap text eol=lf
+# Source read back as bytes: 29 test files load repo source through `readFileSync`
+# and assert on `\n`-joined text, so a CRLF checkout fails them. Pinning the source
+# tree keeps that class of test honest on every platform. `.mjs` stays out: the
+# `config/scripts` pin is already scoped, and `shebang-script-line-ending-pin`
+# guards that scoping. Windows script files (.cmd/.ps1/.nsh) are deliberately
+# left to the platform default.
+*.ts text eol=lf
+*.tsx text eol=lf
