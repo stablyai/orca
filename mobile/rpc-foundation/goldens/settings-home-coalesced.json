@@ -8,969 +8,918 @@
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,
+  "goldenFormatVersion": 2,
+  "values": {
+    "13d58e42ea1c": [
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "preflight.check#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+      },
+      {
+        "name": "linear.status#1",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+      }
+    ],
+    "1476fcb5bc03": [
+      {
+        "name": "providers",
+        "value": {
+          "host-1": ["github"]
+        }
+      },
+      {
+        "name": "providers",
+        "value": {
+          "host-1": ["github"]
+        }
+      }
+    ],
+    "31e52986b3e4": [
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "preflight.check#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+      },
+      {
+        "name": "linear.status#1",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+      },
+      {
+        "name": "settings.get#2",
+        "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "preflight.check#2",
+        "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+      },
+      {
+        "name": "linear.status#2",
+        "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+      },
+      {
+        "name": "settings.get#3",
+        "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "preflight.check#3",
+        "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+      },
+      {
+        "name": "linear.status#3",
+        "json": "{\"id\":\"frame-9\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+      }
+    ],
+    "31e67b0a25f2": {
+      "load": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "overlapping-load": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "third-load": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "40b162c1b21a": [
+      {
+        "name": "providers",
+        "value": {
+          "host-1": ["github"]
+        }
+      }
+    ],
+    "44136fa355b3": {},
+    "4dcb2d5d42b8": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "preflight.check#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-5",
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "linear.status#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-6",
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        }
+      }
+    ],
+    "4f53cda18c2b": [],
+    "5871e7f00cdb": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ],
+    "79b8c1b0d1d1": {
+      "host-1": ["github"]
+    },
+    "99a5d230cf0d": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "preflight.check#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "linear.status#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ],
+    "9d93973e9811": {
+      "load": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "overlapping-load": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "d1e42a0a312d": [
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "preflight.check#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+      },
+      {
+        "name": "linear.status#1",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+      },
+      {
+        "name": "settings.get#2",
+        "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "preflight.check#2",
+        "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+      },
+      {
+        "name": "linear.status#2",
+        "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+      }
+    ],
+    "d3995c8f35b2": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "preflight.check#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-5",
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "linear.status#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-6",
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#3",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "preflight.check#3",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "linear.status#3",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ]
+  },
   "recording": {
     "scenario": "settings-home-coalesced",
     "checkpoints": [
       {
         "id": "settings-pending",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            },
-            {
-              "name": "preflight.check#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "preflight.check"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            },
-            {
-              "name": "linear.status#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "linear.status"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            },
-            {
-              "name": "preflight.check#1",
-              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-            },
-            {
-              "name": "linear.status#1",
-              "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-            }
-          ],
-          "settlements": {
-            "load": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "overlapping-load": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {},
-          "effects": []
+          "sender": "5871e7f00cdb",
+          "payloads": "13d58e42ea1c",
+          "settlements": "9d93973e9811",
+          "state": "44136fa355b3",
+          "effects": "4f53cda18c2b"
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "settings": {
-                      "defaultTuiAgent": "codex",
-                      "disabledTuiAgents": ["claude"],
-                      "hostSettingOverrides": {},
-                      "prBotAuthorOverrides": ["bot-user"],
-                      "visibleTaskProviders": ["github", "linear"]
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "preflight.check#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "preflight.check"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-2",
-                  "ok": true,
-                  "result": {
-                    "glab": {
-                      "installed": false
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "linear.status#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "linear.status"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-3",
-                  "ok": true,
-                  "result": {
-                    "connected": false
-                  }
-                }
-              }
-            },
-            {
-              "name": "settings.get#2",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            },
-            {
-              "name": "preflight.check#2",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "preflight.check"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            },
-            {
-              "name": "linear.status#2",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "linear.status"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            },
-            {
-              "name": "preflight.check#1",
-              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-            },
-            {
-              "name": "linear.status#1",
-              "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-            },
-            {
-              "name": "settings.get#2",
-              "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            },
-            {
-              "name": "preflight.check#2",
-              "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-            },
-            {
-              "name": "linear.status#2",
-              "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-            }
-          ],
-          "settlements": {
-            "load": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "overlapping-load": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "host-1": ["github"]
-          },
-          "effects": [
-            {
-              "name": "providers",
-              "value": {
-                "host-1": ["github"]
-              }
-            }
-          ]
+          "sender": "99a5d230cf0d",
+          "payloads": "d1e42a0a312d",
+          "settlements": "9d93973e9811",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
         }
       },
       {
         "id": "follow-up-settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "settings": {
-                      "defaultTuiAgent": "codex",
-                      "disabledTuiAgents": ["claude"],
-                      "hostSettingOverrides": {},
-                      "prBotAuthorOverrides": ["bot-user"],
-                      "visibleTaskProviders": ["github", "linear"]
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "preflight.check#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "preflight.check"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-2",
-                  "ok": true,
-                  "result": {
-                    "glab": {
-                      "installed": false
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "linear.status#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "linear.status"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-3",
-                  "ok": true,
-                  "result": {
-                    "connected": false
-                  }
-                }
-              }
-            },
-            {
-              "name": "settings.get#2",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-4",
-                  "ok": true,
-                  "result": {
-                    "settings": {
-                      "defaultTuiAgent": "codex",
-                      "disabledTuiAgents": ["claude"],
-                      "hostSettingOverrides": {},
-                      "prBotAuthorOverrides": ["bot-user"],
-                      "visibleTaskProviders": ["github", "linear"]
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "preflight.check#2",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "preflight.check"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-5",
-                  "ok": true,
-                  "result": {
-                    "glab": {
-                      "installed": false
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "linear.status#2",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "linear.status"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-6",
-                  "ok": true,
-                  "result": {
-                    "connected": false
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            },
-            {
-              "name": "preflight.check#1",
-              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-            },
-            {
-              "name": "linear.status#1",
-              "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-            },
-            {
-              "name": "settings.get#2",
-              "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            },
-            {
-              "name": "preflight.check#2",
-              "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-            },
-            {
-              "name": "linear.status#2",
-              "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-            }
-          ],
-          "settlements": {
-            "load": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "overlapping-load": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "host-1": ["github"]
-          },
-          "effects": [
-            {
-              "name": "providers",
-              "value": {
-                "host-1": ["github"]
-              }
-            },
-            {
-              "name": "providers",
-              "value": {
-                "host-1": ["github"]
-              }
-            }
-          ]
+          "sender": "4dcb2d5d42b8",
+          "payloads": "d1e42a0a312d",
+          "settlements": "9d93973e9811",
+          "state": "79b8c1b0d1d1",
+          "effects": "1476fcb5bc03"
         }
       },
       {
         "id": "third-query",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "settings": {
-                      "defaultTuiAgent": "codex",
-                      "disabledTuiAgents": ["claude"],
-                      "hostSettingOverrides": {},
-                      "prBotAuthorOverrides": ["bot-user"],
-                      "visibleTaskProviders": ["github", "linear"]
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "preflight.check#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "preflight.check"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-2",
-                  "ok": true,
-                  "result": {
-                    "glab": {
-                      "installed": false
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "linear.status#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "linear.status"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-3",
-                  "ok": true,
-                  "result": {
-                    "connected": false
-                  }
-                }
-              }
-            },
-            {
-              "name": "settings.get#2",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-4",
-                  "ok": true,
-                  "result": {
-                    "settings": {
-                      "defaultTuiAgent": "codex",
-                      "disabledTuiAgents": ["claude"],
-                      "hostSettingOverrides": {},
-                      "prBotAuthorOverrides": ["bot-user"],
-                      "visibleTaskProviders": ["github", "linear"]
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "preflight.check#2",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "preflight.check"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-5",
-                  "ok": true,
-                  "result": {
-                    "glab": {
-                      "installed": false
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "linear.status#2",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "linear.status"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-6",
-                  "ok": true,
-                  "result": {
-                    "connected": false
-                  }
-                }
-              }
-            },
-            {
-              "name": "settings.get#3",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            },
-            {
-              "name": "preflight.check#3",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "preflight.check"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            },
-            {
-              "name": "linear.status#3",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "linear.status"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "undefined"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            },
-            {
-              "name": "preflight.check#1",
-              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-            },
-            {
-              "name": "linear.status#1",
-              "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-            },
-            {
-              "name": "settings.get#2",
-              "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            },
-            {
-              "name": "preflight.check#2",
-              "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-            },
-            {
-              "name": "linear.status#2",
-              "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-            },
-            {
-              "name": "settings.get#3",
-              "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            },
-            {
-              "name": "preflight.check#3",
-              "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
-            },
-            {
-              "name": "linear.status#3",
-              "json": "{\"id\":\"frame-9\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
-            }
-          ],
-          "settlements": {
-            "load": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "overlapping-load": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "third-load": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "host-1": ["github"]
-          },
-          "effects": [
-            {
-              "name": "providers",
-              "value": {
-                "host-1": ["github"]
-              }
-            },
-            {
-              "name": "providers",
-              "value": {
-                "host-1": ["github"]
-              }
-            }
-          ]
+          "sender": "d3995c8f35b2",
+          "payloads": "31e52986b3e4",
+          "settlements": "31e67b0a25f2",
+          "state": "79b8c1b0d1d1",
+          "effects": "1476fcb5bc03"
         }
       }
     ]

@@ -8,106 +8,102 @@
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,
+  "goldenFormatVersion": 2,
+  "values": {
+    "1dbaae55a83d": {
+      "mount": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "3c5a01aff17a": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "error": {
+            "category": "Error",
+            "message": "settings disconnected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "4f53cda18c2b": [],
+    "95115856c445": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ],
+    "9e493785145e": [
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      }
+    ]
+  },
   "recording": {
     "scenario": "settings-bot-overrides-transport-error",
     "checkpoints": [
       {
         "id": "settings-pending",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": [],
-          "effects": []
+          "sender": "95115856c445",
+          "payloads": "9e493785145e",
+          "settlements": "1dbaae55a83d",
+          "state": "4f53cda18c2b",
+          "effects": "4f53cda18c2b"
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "rejected",
-                "error": {
-                  "category": "Error",
-                  "message": "settings disconnected",
-                  "isRpcDeliveryUnknown": true
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": [],
-          "effects": []
+          "sender": "3c5a01aff17a",
+          "payloads": "9e493785145e",
+          "settlements": "1dbaae55a83d",
+          "state": "4f53cda18c2b",
+          "effects": "4f53cda18c2b"
         }
       }
     ]

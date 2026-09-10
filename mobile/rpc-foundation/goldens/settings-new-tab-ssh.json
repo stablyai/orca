@@ -8,216 +8,227 @@
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,
+  "goldenFormatVersion": 2,
+  "values": {
+    "27ad71a245af": {
+      "load": {
+        "status": "pending"
+      }
+    },
+    "3076d0a13ab4": [
+      {
+        "name": "repo.list#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+      },
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      }
+    ],
+    "44136fa355b3": {},
+    "4cb89a6de3f9": {
+      "load": {
+        "status": "fulfilled",
+        "value": [
+          {
+            "agent": "codex",
+            "label": "Codex"
+          },
+          {
+            "agent": "claude",
+            "label": "Claude"
+          }
+        ]
+      }
+    },
+    "4f53cda18c2b": [],
+    "503a535a0cd0": [
+      {
+        "name": "repo.list#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+      },
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "preflight.detectRemoteAgents#1",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
+      }
+    ],
+    "5d23a5396232": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": "ssh-1",
+                  "id": "repo-1"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": []
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "preflight.detectRemoteAgents#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.detectRemoteAgents"
+          },
+          {
+            "name": "params",
+            "value": {
+              "connectionId": "ssh-1"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": ["codex", "claude"]
+          }
+        }
+      }
+    ],
+    "d6a9522c3750": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ]
+  },
   "recording": {
     "scenario": "settings-new-tab-ssh",
     "checkpoints": [
       {
         "id": "pending",
         "observation": {
-          "sender": [
-            {
-              "name": "repo.list#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "repo.list"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            },
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "repo.list#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-            },
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            }
-          ],
-          "settlements": {
-            "load": {
-              "status": "pending"
-            }
-          },
-          "state": {},
-          "effects": []
+          "sender": "d6a9522c3750",
+          "payloads": "3076d0a13ab4",
+          "settlements": "27ad71a245af",
+          "state": "44136fa355b3",
+          "effects": "4f53cda18c2b"
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": [
-            {
-              "name": "repo.list#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "repo.list"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "repos": [
-                      {
-                        "connectionId": "ssh-1",
-                        "id": "repo-1"
-                      }
-                    ]
-                  }
-                }
-              }
-            },
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-2",
-                  "ok": true,
-                  "result": {
-                    "settings": {
-                      "defaultTuiAgent": "codex",
-                      "disabledTuiAgents": []
-                    }
-                  }
-                }
-              }
-            },
-            {
-              "name": "preflight.detectRemoteAgents#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "preflight.detectRemoteAgents"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "connectionId": "ssh-1"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-3",
-                  "ok": true,
-                  "result": ["codex", "claude"]
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "repo.list#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-            },
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            },
-            {
-              "name": "preflight.detectRemoteAgents#1",
-              "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.detectRemoteAgents\",\"params\":{\"connectionId\":\"ssh-1\"}}"
-            }
-          ],
-          "settlements": {
-            "load": {
-              "status": "fulfilled",
-              "value": [
-                {
-                  "agent": "codex",
-                  "label": "Codex"
-                },
-                {
-                  "agent": "claude",
-                  "label": "Claude"
-                }
-              ]
-            }
-          },
-          "state": {},
-          "effects": []
+          "sender": "5d23a5396232",
+          "payloads": "503a535a0cd0",
+          "settlements": "4cb89a6de3f9",
+          "state": "44136fa355b3",
+          "effects": "4f53cda18c2b"
         }
       }
     ]

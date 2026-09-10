@@ -8,187 +8,194 @@
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,
-  "recording": {
-    "scenario": "settings-task-workspace-fulfilled",
-    "checkpoints": [
+  "goldenFormatVersion": 2,
+  "values": {
+    "005164ebb458": {
+      "mount": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "submit": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "0ffb818cf79c": [
       {
-        "id": "settings-pending",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "submit": {
-              "status": "pending"
-            }
-          },
-          "state": {
-            "creating": "linear:1",
-            "error": "",
-            "settings": {
-              "disabledTuiAgents": ["claude"]
-            }
-          },
-          "effects": [
-            {
-              "name": "creatingKey",
-              "value": "linear:1"
-            },
-            {
-              "name": "error",
-              "value": ""
-            }
-          ]
+        "name": "creatingKey",
+        "value": "linear:1"
+      },
+      {
+        "name": "error",
+        "value": ""
+      },
+      {
+        "name": "runtimeTaskSettings",
+        "value": {
+          "defaultTuiAgent": "codex",
+          "disabledTuiAgents": ["claude"],
+          "hostSettingOverrides": {},
+          "prBotAuthorOverrides": ["bot-user"],
+          "visibleTaskProviders": ["github", "linear"]
         }
       },
       {
-        "id": "settled",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.get#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.get"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "settings": {
-                      "defaultTuiAgent": "codex",
-                      "disabledTuiAgents": ["claude"],
-                      "hostSettingOverrides": {},
-                      "prBotAuthorOverrides": ["bot-user"],
-                      "visibleTaskProviders": ["github", "linear"]
-                    }
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.get#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "submit": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
+        "name": "workspaceAgent",
+        "value": "codex"
+      },
+      {
+        "name": "workspaceAgentOverridden",
+        "value": false
+      },
+      {
+        "name": "error",
+        "value": "Selected agent is disabled. Choose an enabled agent before creating."
+      },
+      {
+        "name": "creatingKey",
+        "value": {
+          "$rpc": "null"
+        }
+      }
+    ],
+    "7abdfe20af50": {
+      "creating": "linear:1",
+      "error": "",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "8ad24c7e79a6": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
             }
           },
-          "state": {
-            "creating": {
-              "$rpc": "null"
-            },
-            "error": "Selected agent is disabled. Choose an enabled agent before creating.",
-            "settings": {
-              "defaultTuiAgent": "codex",
-              "disabledTuiAgents": ["claude"],
-              "hostSettingOverrides": {},
-              "prBotAuthorOverrides": ["bot-user"],
-              "visibleTaskProviders": ["github", "linear"]
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
             }
-          },
-          "effects": [
-            {
-              "name": "creatingKey",
-              "value": "linear:1"
-            },
-            {
-              "name": "error",
-              "value": ""
-            },
-            {
-              "name": "runtimeTaskSettings",
-              "value": {
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
                 "defaultTuiAgent": "codex",
                 "disabledTuiAgents": ["claude"],
                 "hostSettingOverrides": {},
                 "prBotAuthorOverrides": ["bot-user"],
                 "visibleTaskProviders": ["github", "linear"]
               }
-            },
-            {
-              "name": "workspaceAgent",
-              "value": "codex"
-            },
-            {
-              "name": "workspaceAgentOverridden",
-              "value": false
-            },
-            {
-              "name": "error",
-              "value": "Selected agent is disabled. Choose an enabled agent before creating."
-            },
-            {
-              "name": "creatingKey",
-              "value": {
-                "$rpc": "null"
-              }
             }
-          ]
+          }
+        }
+      }
+    ],
+    "8b8197eed660": {
+      "creating": {
+        "$rpc": "null"
+      },
+      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "settings": {
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["bot-user"],
+        "visibleTaskProviders": ["github", "linear"]
+      }
+    },
+    "95115856c445": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ],
+    "9e493785145e": [
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      }
+    ],
+    "b05ebf557542": [
+      {
+        "name": "creatingKey",
+        "value": "linear:1"
+      },
+      {
+        "name": "error",
+        "value": ""
+      }
+    ],
+    "bd10b5abf164": {
+      "mount": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "submit": {
+        "status": "pending"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "settings-task-workspace-fulfilled",
+    "checkpoints": [
+      {
+        "id": "settings-pending",
+        "observation": {
+          "sender": "95115856c445",
+          "payloads": "9e493785145e",
+          "settlements": "bd10b5abf164",
+          "state": "7abdfe20af50",
+          "effects": "b05ebf557542"
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": "8ad24c7e79a6",
+          "payloads": "9e493785145e",
+          "settlements": "005164ebb458",
+          "state": "8b8197eed660",
+          "effects": "0ffb818cf79c"
         }
       }
     ]

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { operationModuleLoader } from './operation-module-loader'
@@ -7,8 +7,17 @@ import { describe, expect, it } from 'vitest'
 import { captureArguments, captureValue } from './recording-values'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
-import { readGolden, writeGolden, type GoldenRecording } from './golden-recording'
+import {
+  compareGolden,
+  GOLDEN_FORMAT_VERSION,
+  goldenBytes,
+  readGolden,
+  writeGolden,
+  type GoldenRecording
+} from './golden-recording'
+import { hoistPreludeCheckpoints } from './prelude-checkpoints'
 import { replyPartitions } from './reply-matrix'
+import type { Observation, RecordingScenario } from './recording-scenario'
 
 describe('recording boundaries', () => {
   it('preserves omitted arguments, explicit undefined, null, order, and tagged-looking objects', () => {
@@ -112,7 +121,7 @@ describe('recording boundaries', () => {
 
   it('never writes from candidate mode and requires both recording authorizations', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'rpc-recording-'))
-    const golden = { recording: { scenario: 'test' } } as GoldenRecording
+    const golden = sampleGolden('test')
     const previous = process.env.RPC_FOUNDATION_RECORD
     try {
       process.env.RPC_FOUNDATION_RECORD = '0'
@@ -122,6 +131,16 @@ describe('recording boundaries', () => {
       await writeGolden(directory, golden, '--record')
       expect(readGolden(directory, 'test')).toEqual(golden)
       expect(() => readGolden(directory, '../escape')).toThrow('Unsafe')
+      writeFileSync(
+        join(directory, 'stale.json'),
+        JSON.stringify({
+          ...JSON.parse(readFileSync(join(directory, 'test.json'), 'utf8')),
+          goldenFormatVersion: 1
+        })
+      )
+      expect(() => readGolden(directory, 'stale')).toThrow(
+        `format version 1; this reader requires ${GOLDEN_FORMAT_VERSION}`
+      )
     } finally {
       if (previous === undefined) {
         delete process.env.RPC_FOUNDATION_RECORD
@@ -132,6 +151,71 @@ describe('recording boundaries', () => {
     }
   })
 
+  it('pools repeated observation values and still resolves them for comparison', () => {
+    const golden = sampleGolden('pooled')
+    golden.recording.checkpoints.push({ id: 'again', observation: observation('idle') })
+    const file = JSON.parse(goldenBytes(golden)) as {
+      values: Record<string, unknown>
+      recording: { checkpoints: { observation: Observation }[] }
+    }
+    const [first, second] = file.recording.checkpoints
+    expect(second!.observation).toEqual(first!.observation)
+    // [] is shared by three fields; {} and the state object are the other two pool entries.
+    expect(Object.keys(file.values)).toHaveLength(3)
+    expect(file.values[first!.observation.state as unknown as string]).toEqual({ phase: 'idle' })
+  })
+
+  it('names the scenario, checkpoint and field, and prints values rather than hashes', () => {
+    const expected = sampleGolden('diffable')
+    const actual = sampleGolden('diffable')
+    actual.recording.checkpoints[0]!.observation.state = { phase: 'busy' }
+    expect(() => compareGolden(expected, actual)).toThrow(
+      /Recording differs: diffable checkpoint settled field state\.phase[\s\S]*"idle"[\s\S]*"busy"/
+    )
+  })
+
+  it('records a shared prefix once and refuses a variant that already diverged', () => {
+    const base: RecordingScenario = {
+      id: 'family',
+      operation: 'op',
+      version: 1,
+      family: 'op',
+      sites: [],
+      schedules: [],
+      steps: [
+        { action: 'mount', id: 'mount' },
+        { checkpoint: 'pending' },
+        { complete: 'a#1', params: {}, reply: { ok: true } },
+        { checkpoint: 'settled' }
+      ]
+    }
+    const variant = (id: string, reply: unknown): RecordingScenario => ({
+      ...base,
+      id,
+      steps: base.steps.map((step) => ('complete' in step ? { ...step, reply } : step))
+    })
+    const hoisted = hoistPreludeCheckpoints(base, [
+      { divergence: 2, scenario: variant('family.ok', { ok: true }) },
+      { divergence: 2, scenario: variant('family.refused', { ok: false }) }
+    ])
+    expect(hoisted.map((scenario) => scenario.id)).toEqual([
+      'family.prelude',
+      'family.ok',
+      'family.refused'
+    ])
+    expect(hoisted[0]!.steps.filter((step) => 'checkpoint' in step)).toEqual([
+      { checkpoint: 'pending' }
+    ])
+    expect(hoisted[1]!.steps.filter((step) => 'checkpoint' in step)).toEqual([
+      { checkpoint: 'settled' }
+    ])
+    expect(() =>
+      hoistPreludeCheckpoints(base, [
+        { divergence: 3, scenario: variant('family.late', { ok: false }) }
+      ])
+    ).toThrow('diverges from the base')
+  })
+
   it('keeps absent and explicit undefined replies in separate matrix partitions', () => {
     const rows = replyPartitions({ settings: {} }, [['settings']])
     const absent = rows.find((row) => row.id === 'result-absent')!
@@ -140,3 +224,29 @@ describe('recording boundaries', () => {
     expect(Object.hasOwn(explicit.reply as object, 'result')).toBe(true)
   })
 })
+
+function observation(phase: string): Observation {
+  return {
+    sender: [],
+    payloads: [],
+    settlements: {},
+    state: { phase },
+    effects: []
+  }
+}
+
+function sampleGolden(id: string): GoldenRecording {
+  return {
+    operation: 'op',
+    family: 'op',
+    namedDeltas: [],
+    runnerVersion: 1,
+    baseline: 'a'.repeat(40),
+    lockfileSha256: 'b'.repeat(64),
+    platform: process.platform,
+    scenarioVersion: 1,
+    projectionVersion: 1,
+    goldenFormatVersion: GOLDEN_FORMAT_VERSION,
+    recording: { scenario: id, checkpoints: [{ id: 'settled', observation: observation('idle') }] }
+  }
+}

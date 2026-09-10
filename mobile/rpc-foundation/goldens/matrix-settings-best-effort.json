@@ -8,3068 +8,1120 @@
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 1,
+  "goldenFormatVersion": 2,
+  "values": {
+    "0efe672b07d3": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending"
+        }
+      }
+    ],
+    "15563d51502f": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "2614969a3e03": {
+      "mount": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "write": {
+        "status": "fulfilled",
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "2b6e268f52b3": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": []
+          }
+        }
+      }
+    ],
+    "2e32ed408f05": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "error": {
+            "category": "Error",
+            "message": "transport failure",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "42826211345b": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true
+          }
+        }
+      }
+    ],
+    "460da2d71e0e": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": "value"
+          }
+        }
+      }
+    ],
+    "4d8f9161968e": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        }
+      }
+    ],
+    "5716764daaac": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": true
+            }
+          }
+        }
+      }
+    ],
+    "578047ee7baf": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "$rpc": "null"
+            }
+          }
+        }
+      }
+    ],
+    "5db909d58c6f": {
+      "preset": "assigned"
+    },
+    "6d81983993f5": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": true
+            }
+          }
+        }
+      }
+    ],
+    "8099ee779486": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "refused"
+            }
+          }
+        }
+      }
+    ],
+    "9962de8298fc": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": 0
+          }
+        }
+      }
+    ],
+    "a0cbd27ad55b": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": true
+          }
+        }
+      }
+    ],
+    "b26f6d594d62": [
+      {
+        "name": "defaultGitHubPreset",
+        "value": "assigned"
+      }
+    ],
+    "b651aa9da323": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {}
+          }
+        }
+      }
+    ],
+    "c1877dfba205": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": false
+            }
+          }
+        }
+      }
+    ],
+    "c48c361670b0": [
+      {
+        "name": "settings.update#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
+      }
+    ],
+    "c7028455fc61": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "undefined"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "c8c087cd719b": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "error": {
+              "code": "refused",
+              "message": "outer refused"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      }
+    ],
+    "cad21ab19461": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": "yes"
+            }
+          }
+        }
+      }
+    ],
+    "cce314a522c5": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "$rpc": "undefined"
+            }
+          }
+        }
+      }
+    ],
+    "d573b38c712e": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": false
+          }
+        }
+      }
+    ],
+    "d58dc50e3df3": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": false
+            }
+          }
+        }
+      }
+    ],
+    "eabd364c141b": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      }
+    ],
+    "ed8dbcab2c80": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": "yes"
+            }
+          }
+        }
+      }
+    ],
+    "f1c4cdaf70fd": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": {
+                "$rpc": "undefined"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "fdc544945571": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": {
+                "$rpc": "null"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
   "recording": {
     "scenario": "matrix-settings-best-effort",
     "checkpoints": [
       {
-        "id": "settings-task-write.normal:optimistic",
+        "id": "settings-task-write.prelude:optimistic",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "0efe672b07d3",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.normal:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "ok": true
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.result-absent:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "4d8f9161968e",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.result-absent:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.result-undefined:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "42826211345b",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.result-undefined:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "$rpc": "undefined"
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.result-null:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "cce314a522c5",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.result-null:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "$rpc": "null"
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.result-empty:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "578047ee7baf",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.result-empty:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {}
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.result-true:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "b651aa9da323",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.result-true:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": true
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.result-false:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "a0cbd27ad55b",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.result-false:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": false
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.result-zero:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "d573b38c712e",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.result-zero:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": 0
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.result-string:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "9962de8298fc",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.result-string:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": "value"
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.result-array:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "460da2d71e0e",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.result-array:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": []
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-ok-missing:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "2b6e268f52b3",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-ok-missing:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": "refused"
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-undefined-string-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "8099ee779486",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-undefined-string-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": "inner refused",
-                    "ok": {
-                      "$rpc": "undefined"
-                    }
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-undefined-object-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "c7028455fc61",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-undefined-object-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": {
-                      "message": "inner refused"
-                    },
-                    "ok": {
-                      "$rpc": "undefined"
-                    }
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-null-string-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "f1c4cdaf70fd",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-null-string-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": "inner refused",
-                    "ok": {
-                      "$rpc": "null"
-                    }
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-null-object-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "fdc544945571",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-null-object-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": {
-                      "message": "inner refused"
-                    },
-                    "ok": {
-                      "$rpc": "null"
-                    }
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-false-string-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "15563d51502f",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-false-string-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": "inner refused",
-                    "ok": false
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-false-object-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "c1877dfba205",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-false-object-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": {
-                      "message": "inner refused"
-                    },
-                    "ok": false
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-true-string-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "d58dc50e3df3",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-true-string-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": "inner refused",
-                    "ok": true
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-true-object-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "5716764daaac",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-true-object-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": {
-                      "message": "inner refused"
-                    },
-                    "ok": true
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-truthy-string-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "6d81983993f5",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-truthy-string-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": "inner refused",
-                    "ok": "yes"
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.inner-truthy-object-error:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "cad21ab19461",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.inner-truthy-object-error:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "id": "frame-1",
-                  "ok": true,
-                  "result": {
-                    "error": {
-                      "message": "inner refused"
-                    },
-                    "ok": "yes"
-                  }
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.outer-refused:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "ed8dbcab2c80",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.outer-refused:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "error": {
-                    "code": "refused",
-                    "message": "outer refused"
-                  },
-                  "id": "frame-1",
-                  "ok": false
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.method-not-found:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "c8c087cd719b",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.method-not-found:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "fulfilled",
-                "value": {
-                  "error": {
-                    "code": "method_not_found",
-                    "message": "Unknown method"
-                  },
-                  "id": "frame-1",
-                  "ok": false
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
-        }
-      },
-      {
-        "id": "settings-task-write.transport-rejection:optimistic",
-        "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "pending"
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "eabd364c141b",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       },
       {
         "id": "settings-task-write.transport-rejection:settled",
         "observation": {
-          "sender": [
-            {
-              "name": "settings.update#1",
-              "args": [
-                {
-                  "name": "method",
-                  "value": "settings.update"
-                },
-                {
-                  "name": "params",
-                  "value": {
-                    "defaultTaskViewPreset": "assigned"
-                  }
-                },
-                {
-                  "name": "options",
-                  "value": {
-                    "$rpc": "absent"
-                  }
-                }
-              ],
-              "settlement": {
-                "status": "rejected",
-                "error": {
-                  "category": "Error",
-                  "message": "transport failure",
-                  "isRpcDeliveryUnknown": true
-                }
-              }
-            }
-          ],
-          "payloads": [
-            {
-              "name": "settings.update#1",
-              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
-            }
-          ],
-          "settlements": {
-            "mount": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            },
-            "write": {
-              "status": "fulfilled",
-              "value": {
-                "$rpc": "undefined"
-              }
-            }
-          },
-          "state": {
-            "preset": "assigned"
-          },
-          "effects": [
-            {
-              "name": "defaultGitHubPreset",
-              "value": "assigned"
-            }
-          ]
+          "sender": "2e32ed408f05",
+          "payloads": "c48c361670b0",
+          "settlements": "2614969a3e03",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
         }
       }
     ]

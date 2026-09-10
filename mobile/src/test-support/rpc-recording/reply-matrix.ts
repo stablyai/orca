@@ -1,3 +1,4 @@
+import { hoistPreludeCheckpoints } from './prelude-checkpoints'
 import type { RecordingScenario, Rejection, ScenarioStep } from './recording-scenario'
 
 export type ReplyPartition = { id: string; reply?: unknown; reject?: Rejection }
@@ -95,23 +96,32 @@ export function driveReplyMatrix(
   normal: unknown,
   fields: readonly string[][]
 ): RecordingScenario[] {
-  const siteCount = base.steps.filter(
-    (step) => 'complete' in step && step.complete === request
-  ).length
-  if (siteCount !== 1) {
+  const sites = base.steps.flatMap((step, index) =>
+    'complete' in step && step.complete === request ? [index] : []
+  )
+  if (sites.length !== 1) {
     throw new Error(`Matrix requires exactly one completion: ${request}`)
   }
-  return replyPartitions(normal, fields).map((partition) => ({
-    ...base,
-    id: `${base.id}.${partition.id}`,
-    steps: base.steps.map((step): ScenarioStep =>
-      'complete' in step && step.complete === request
-        ? {
-            complete: request,
-            params: step.params,
-            ...('reject' in partition ? { reject: partition.reject } : { reply: partition.reply })
-          }
-        : step
-    )
-  }))
+  const divergence = sites[0]!
+  return hoistPreludeCheckpoints(
+    base,
+    replyPartitions(normal, fields).map((partition) => ({
+      divergence,
+      scenario: {
+        ...base,
+        id: `${base.id}.${partition.id}`,
+        steps: base.steps.map((step, index): ScenarioStep =>
+          index === divergence && 'complete' in step
+            ? {
+                complete: request,
+                params: step.params,
+                ...('reject' in partition
+                  ? { reject: partition.reject }
+                  : { reply: partition.reply })
+              }
+            : step
+        )
+      }
+    }))
+  )
 }

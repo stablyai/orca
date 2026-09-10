@@ -39,7 +39,14 @@ export type RecordingScheduler = {
   advance: (ms: number) => Promise<void>
   stop: () => void
 }
+export type Observation = {
+  sender: RecordedValue
+  payloads: RecordedValue
+  settlements: RecordedValue
+  state: RecordedValue
+  effects: RecordedValue
+}
 export type Recording = {
   scenario: string
-  checkpoints: { id: string; observation: RecordedValue }[]
+  checkpoints: { id: string; observation: Observation }[]
 }

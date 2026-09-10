@@ -37,13 +37,34 @@ Math.random, Web Crypto random bytes/UUIDs, and transport ids are deterministic.
 ## Golden schema
 
 Each file pins `runnerVersion`, `baseline`, `lockfileSha256` (mobile's lockfile), `platform`,
-`scenarioVersion`, `projectionVersion`, `operation`, `family`, and `namedDeltas`. Checkpoints
+`scenarioVersion`, `projectionVersion`, `goldenFormatVersion`, `operation`, `family`, and
+`namedDeltas`. Checkpoints
 contain ordered sender calls and serialized physical application payloads, action and request
 settlements, projected state, and ordered external effects. Sender args have three positional
 slots; absent, undefined and null are distinct `$rpc` tags. Literal objects containing `$rpc`
 are escaped. Only object keys are sorted; array/effect order, options, budgets and errors stay
 observable. Errors contain category, message and `isRpcDeliveryUnknown`, never stack paths.
 Platform is provenance; candidate comparison does not require the same operating system.
+
+### Value pool
+
+Format version 2 stores each distinct observation field value once under `values`, keyed by the
+first 12 hex of sha256 over the value's sorted-key, whitespace-free JSON. A checkpoint holds five
+hashes (`sender`, `payloads`, `settlements`, `state`, `effects`). Files stay pretty-printed so a
+diff is reviewable; compact printing, element-level interning of list fields and delta encoding
+against the previous checkpoint were measured and rejected. `readGolden` refuses any other
+`goldenFormatVersion`, resolves hashes back to values, and `compareGolden` reports the scenario,
+the checkpoint id, the field, the JSON path inside it, and both resolved values.
+
+### Prelude checkpoints
+
+A generated variant declares the index where its distinguishing input lands. Checkpoints before
+that index observe steps identical to the base, so `hoistPreludeCheckpoints` records them once in
+a `<base>.prelude` scenario and starts each variant at its own divergence; it asserts each
+variant's pre-divergence prefix matches the base. Reply matrices, interruption schedules and
+lifecycle schedules use it. Checkpoints that merely happen to be equal are never merged: reaching
+the same state through different inputs is evidence. Sibling schedules already drop their shared
+prefix, so they are unchanged.
 
 Family matrices and schedule recordings retain both boundaries. Matrices execute
 raw reply partitions at the scripted sender port; they do not claim malformed-frame coverage

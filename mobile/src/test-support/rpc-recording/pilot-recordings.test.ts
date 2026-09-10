@@ -24,7 +24,7 @@ const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-
 const mutants: Record<string, Mutation> = { b1: 'race', b2: 'acceptance', b3: 'order' }
 
 function visibleState(recording: Recording): RecordedValue {
-  return (recording.checkpoints.at(-1)!.observation as Record<string, RecordedValue>).state
+  return recording.checkpoints.at(-1)!.observation.state
 }
 
 describe('RPC main recordings', () => {

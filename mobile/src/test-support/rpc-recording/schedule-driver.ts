@@ -1,3 +1,4 @@
+import { hoistPreludeCheckpoints, type DivergingScenario } from './prelude-checkpoints'
 import type { RecordingScenario, ScenarioStep } from './recording-scenario'
 
 type Completion = Extract<ScenarioStep, { complete: string }>
@@ -56,16 +57,29 @@ export function siblingSchedules(
   }))
 }
 
+/** Completions are rebound so a lifecycle boundary can land between a request and its reply. */
+export function bindCompletions(steps: readonly ScenarioStep[]): ScenarioStep[] {
+  return steps.flatMap((step): ScenarioStep[] =>
+    'complete' in step
+      ? [
+          { bind: `lifecycle-${step.complete}`, request: step.complete, params: step.params },
+          { ...step, complete: `lifecycle-${step.complete}` }
+        ]
+      : [step]
+  )
+}
+
 export function lifecycleSchedules(
   base: RecordingScenario,
   action: 'reset' | 'unmount' | 'blur'
-): RecordingScenario[] {
+): DivergingScenario[] {
   const completions = base.steps.flatMap((step, index) => ('complete' in step ? [index] : []))
   return completions.flatMap((index, occurrence) =>
     ['before', 'after'].map((side) => {
+      const insertion = index + (side === 'after' ? 1 : 0)
       const steps = [...base.steps]
       steps.splice(
-        index + (side === 'after' ? 1 : 0),
+        insertion,
         0,
         { action, id: `lifecycle-${action}` },
         { checkpoint: 'lifecycle-boundary' }
@@ -73,19 +87,14 @@ export function lifecycleSchedules(
       if (action === 'unmount') {
         steps.push({ action: 'remount', id: 'remount' }, { checkpoint: 'remounted' })
       }
-      const boundSteps = steps.flatMap((step): ScenarioStep[] =>
-        'complete' in step
-          ? [
-              { bind: `lifecycle-${step.complete}`, request: step.complete, params: step.params },
-              { ...step, complete: `lifecycle-${step.complete}` }
-            ]
-          : [step]
-      )
       return {
-        ...base,
-        id: `${base.id}.${action}-${side}-${occurrence + 1}`,
-        schedules: [`${action}-${side}-${occurrence + 1}`],
-        steps: boundSteps
+        divergence: bindCompletions(base.steps.slice(0, insertion)).length,
+        scenario: {
+          ...base,
+          id: `${base.id}.${action}-${side}-${occurrence + 1}`,
+          schedules: [`${action}-${side}-${occurrence + 1}`],
+          steps: bindCompletions(steps)
+        }
       }
     })
   )
@@ -96,15 +105,23 @@ export function interruptionSchedules(base: RecordingScenario): RecordingScenari
   if (completion === -1) {
     throw new Error('Interruption schedule needs an in-flight request')
   }
-  return ['timeout', 'disconnect', 'cutover'].map((interruption) => ({
-    ...base,
-    id: `${base.id}.${interruption}`,
-    schedules: [interruption],
-    steps: [
-      ...base.steps.slice(0, completion),
-      interruption === 'timeout' ? { advance: 30_000 } : { action: interruption, id: interruption },
-      { checkpoint: 'interrupted' },
-      ...base.steps.slice(completion)
-    ]
-  }))
+  return hoistPreludeCheckpoints(
+    base,
+    ['timeout', 'disconnect', 'cutover'].map((interruption) => ({
+      divergence: completion,
+      scenario: {
+        ...base,
+        id: `${base.id}.${interruption}`,
+        schedules: [interruption],
+        steps: [
+          ...base.steps.slice(0, completion),
+          interruption === 'timeout'
+            ? { advance: 30_000 }
+            : { action: interruption, id: interruption },
+          { checkpoint: 'interrupted' },
+          ...base.steps.slice(completion)
+        ]
+      }
+    }))
+  )
 }

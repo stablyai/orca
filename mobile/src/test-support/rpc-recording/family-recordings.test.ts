@@ -2,7 +2,13 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { readScenarios } from './scenario-input'
 import { driveReplyMatrix } from './reply-matrix'
-import { interruptionSchedules, lifecycleSchedules, siblingSchedules } from './schedule-driver'
+import {
+  bindCompletions,
+  interruptionSchedules,
+  lifecycleSchedules,
+  siblingSchedules
+} from './schedule-driver'
+import { hoistPreludeCheckpoints } from './prelude-checkpoints'
 import { runRecording } from './run-recording'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
@@ -175,12 +181,12 @@ describe('family reply partitions and owned schedules', () => {
     it(`${id}: lifecycle boundaries`, async () => {
       await certify(
         `lifecycle-${id}`,
-        actions.flatMap((action) =>
-          lifecycleSchedules(base, action).filter(
-            (scenario) => !id.includes('hydration') || !scenario.id.endsWith('-1')
-          )
-        ),
-        false
+        hoistPreludeCheckpoints(
+          { ...base, steps: bindCompletions(base.steps) },
+          actions
+            .flatMap((action) => lifecycleSchedules(base, action))
+            .filter(({ scenario }) => !id.includes('hydration') || !scenario.id.endsWith('-1'))
+        )
       )
     })
   }
