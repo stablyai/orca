@@ -3370,7 +3370,10 @@
             "1d04b1630b": "Split Down",
             "6b3efb106e": "Split Up",
             "fdd29eb669": "Pin Tab",
-            "8e9d603a09": "Unpin Tab"
+            "8e9d603a09": "Unpin Tab",
+            "91176b5625": "Reveal in Finder",
+            "fe23001e60": "Open Containing Folder",
+            "3da91e073d": "Reveal in File Explorer"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
@@ -11978,7 +11981,10 @@
             "3161c4e425": "folder",
             "e887fa4b2e": "Open in Terminal",
             "1d8e182c32": "View File",
-            "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable"
+            "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable",
+            "1af7db7303": "Reveal in Finder",
+            "be6e5de482": "Open Containing Folder",
+            "9408844a19": "Reveal in File Explorer"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -15216,6 +15222,11 @@
           "a0af0198aa": "Large diffs are not rendered by default.",
           "c3d9f4a712": "This diff's size isn't known yet, so it loads on request.",
           "f7fa7a40d0": "Load diff"
+        },
+        "EditorPanelHeaderPath": {
+          "4c9305c4fe": "Reveal in Finder",
+          "0322308c13": "Open Containing Folder",
+          "3116e33ca6": "Reveal in File Explorer"
         }
       },
       "diff": {

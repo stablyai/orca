@@ -42,12 +42,13 @@ import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-f
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
 
-/** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
-const revealLabel = isMac
-  ? 'Reveal in Finder'
-  : isLinux
-    ? 'Open Containing Folder'
-    : 'Reveal in File Explorer'
+/** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files.
+ *  Resolved at render time so the label follows the UI language (translate() must not run at module load). */
+function revealLabel(): string {
+  if (isMac) return translate('auto.components.right.sidebar.FileExplorerRow.1af7db7303', 'Reveal in Finder')
+  if (isLinux) return translate('auto.components.right.sidebar.FileExplorerRow.be6e5de482', 'Open Containing Folder')
+  return translate('auto.components.right.sidebar.FileExplorerRow.9408844a19', 'Reveal in File Explorer')
+}
 
 function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
@@ -290,7 +291,7 @@ export function FileExplorerRowContextMenu({
         }}
       >
         <ExternalLink />
-        {revealLabel}
+        {revealLabel()}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => onStartRename(node)}>

@@ -3160,7 +3160,10 @@
             "1d04b1630b": "Scinder vers le bas",
             "6b3efb106e": "Scinder vers le haut",
             "fdd29eb669": "Épingler l'onglet",
-            "8e9d603a09": "Détacher l'onglet"
+            "8e9d603a09": "Détacher l'onglet",
+            "91176b5625": "Afficher dans le Finder",
+            "fe23001e60": "Ouvrir le dossier parent",
+            "3da91e073d": "Afficher dans l'Explorateur de fichiers"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Paramètres de l'agent…",
@@ -11470,7 +11473,10 @@
             "3161c4e425": "dossier",
             "e887fa4b2e": "Ouvrir dans le terminal",
             "1d8e182c32": "Afficher le fichier",
-            "clipboardStagingUnavailable": "Impossible de copier le fichier car le stockage temporaire d'Orca est indisponible"
+            "clipboardStagingUnavailable": "Impossible de copier le fichier car le stockage temporaire d'Orca est indisponible",
+            "1af7db7303": "Afficher dans le Finder",
+            "be6e5de482": "Ouvrir le dossier parent",
+            "9408844a19": "Afficher dans l'Explorateur de fichiers"
           },
           "FileExplorerToolbar": {
             "d238264654": "Afficher les fichiers ignorés par Git",
@@ -14618,6 +14624,11 @@
           "insertColumnRight": "Insérer une colonne à droite",
           "deleteRow": "Supprimer la ligne",
           "deleteColumn": "Supprimer la colonne"
+        },
+        "EditorPanelHeaderPath": {
+          "4c9305c4fe": "Afficher dans le Finder",
+          "0322308c13": "Ouvrir le dossier parent",
+          "3116e33ca6": "Afficher dans l'Explorateur de fichiers"
         }
       },
       "diff": {

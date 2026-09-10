@@ -19,12 +19,13 @@ import { getEditorHeaderCopyState } from './editor-header'
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
 
-/** Platform-appropriate label: macOS -> Finder, Windows -> File Explorer, Linux -> Files */
-const revealLabel = isMac
-  ? 'Reveal in Finder'
-  : isLinux
-    ? 'Open Containing Folder'
-    : 'Reveal in File Explorer'
+/** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files.
+ *  Resolved at render time so the label follows the UI language (translate() must not run at module load). */
+function revealLabel(): string {
+  if (isMac) return translate('auto.components.editor.EditorPanelHeaderPath.4c9305c4fe', 'Reveal in Finder')
+  if (isLinux) return translate('auto.components.editor.EditorPanelHeaderPath.0322308c13', 'Open Containing Folder')
+  return translate('auto.components.editor.EditorPanelHeaderPath.3116e33ca6', 'Reveal in File Explorer')
+}
 
 type EditorPanelHeaderPathProps = {
   activeFile: OpenFile
@@ -196,7 +197,7 @@ export function EditorPanelHeaderPath({
           {!isVirtualEditorTab && (
             <DropdownMenuItem onSelect={onOpenContainingFolder}>
               <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-              {revealLabel}
+              {revealLabel()}
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>

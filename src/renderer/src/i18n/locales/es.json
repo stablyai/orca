@@ -2947,7 +2947,10 @@
             "1d04b1630b": "Dividir hacia abajo",
             "6b3efb106e": "Dividir hacia arriba",
             "fdd29eb669": "Fijar pestaña",
-            "8e9d603a09": "Desanclar pestaña"
+            "8e9d603a09": "Desanclar pestaña",
+            "91176b5625": "Mostrar en Finder",
+            "fe23001e60": "Abrir la carpeta contenedora",
+            "3da91e073d": "Mostrar en el Explorador de archivos"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Ajustes de Agents…",
@@ -10417,7 +10420,10 @@
             "f9d7ca753d": "Copiar rutas",
             "3161c4e425": "carpeta",
             "e887fa4b2e": "Abrir en terminal",
-            "1d8e182c32": "Ver archivo"
+            "1d8e182c32": "Ver archivo",
+            "1af7db7303": "Mostrar en Finder",
+            "be6e5de482": "Abrir la carpeta contenedora",
+            "9408844a19": "Mostrar en el Explorador de archivos"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados por Git",
@@ -13370,6 +13376,11 @@
               }
             }
           }
+        },
+        "EditorPanelHeaderPath": {
+          "4c9305c4fe": "Mostrar en Finder",
+          "0322308c13": "Abrir la carpeta contenedora",
+          "3116e33ca6": "Mostrar en el Explorador de archivos"
         }
       },
       "diff": {
