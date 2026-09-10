@@ -1,6 +1,6 @@
 import { PUSH_LIMITS } from '@orca-cloud/push-contract'
 import { Hono } from 'hono'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ClientIpRateLimiter, clientIpRateLimit } from './client-ip-rate-limit.js'
 
 const CAPACITY = PUSH_LIMITS.unauthenticatedRequestsPerMinutePerIp
@@ -51,6 +51,26 @@ describe('client ip rate limiter', () => {
       limiter.allow(`198.51.100.${index}`)
     }
     expect(limiter.trackedIpCount()).toBeLessThanOrEqual(8)
+  })
+
+  it('evicts the least recently used bucket without scanning the map', () => {
+    const limiter = new ClientIpRateLimiter({ capacity: 1, maxTrackedIps: 2, now: () => 1_000 })
+    limiter.allow('old')
+    limiter.allow('recent')
+    expect(limiter.allow('old')).toBe(false)
+    const entries = vi.spyOn(Map.prototype, 'entries')
+    const iterator = vi.spyOn(Map.prototype, Symbol.iterator)
+    try {
+      limiter.allow('new')
+      expect(entries).not.toHaveBeenCalled()
+      expect(iterator).not.toHaveBeenCalled()
+    } finally {
+      entries.mockRestore()
+      iterator.mockRestore()
+    }
+    expect(limiter.available('old')).toBe(false)
+    expect(limiter.available('recent')).toBe(true)
+    expect(limiter.trackedIpCount()).toBe(2)
   })
 
   it('answers 429 with a rate_limited body once the bucket is empty', async () => {

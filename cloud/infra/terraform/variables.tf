@@ -571,12 +571,6 @@ variable "push_request_timeout_seconds" {
   default     = 30
 }
 
-variable "push_fcm_project_id" {
-  type        = string
-  description = "Firebase project for FCM V1 sends; empty uses project_id."
-  default     = ""
-}
-
 variable "manage_push_domain_mapping" {
   type        = bool
   description = "Manage the push gateway Cloud Run domain mapping; the DNS record stays in the apps root."

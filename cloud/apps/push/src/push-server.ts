@@ -95,6 +95,16 @@ export function createPushServer(
     trustedProxyHops: config.trustedProxyHops,
     onLimited: () => observability.record('ip_rate_limited')
   })
+  const limitAuthenticatedIp = clientIpRateLimit(
+    new ClientIpRateLimiter({
+      now,
+      capacity: PUSH_LIMITS.authenticatedRequestsPerMinutePerIp
+    }),
+    {
+      trustedProxyHops: config.trustedProxyHops,
+      onLimited: () => observability.record('ip_rate_limited')
+    }
+  )
   const authAdmission = new PushAuthAdmission()
   const invalidBearerIps = new ClientIpRateLimiter({ now })
   const authenticatedHosts = new ClientIpRateLimiter({
@@ -162,8 +172,8 @@ export function createPushServer(
   }
   // `/v1/devices/*` matches `/v1/devices` itself; a second registration for the
   // bare path would run both middlewares twice on it.
-  app.use('/v1/devices/*', bearerSession)
-  app.use('/v1/send', bearerSession)
+  app.use('/v1/devices/*', limitAuthenticatedIp, bearerSession)
+  app.use('/v1/send', limitAuthenticatedIp, bearerSession)
 
   app.post('/v1/host/challenge', limitUnauthenticatedIp, limitBody, async (context) => {
     const body = PushHostChallengeRequestSchema.safeParse(

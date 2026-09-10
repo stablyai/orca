@@ -32,9 +32,7 @@ export function readClientIp(context: Context, trustedProxyHops = 0): string {
   return client ?? UNKNOWN_CLIENT_IP
 }
 
-// In-memory and per-instance on purpose. A shared counter would put a database
-// round trip in front of the only routes an attacker can reach unauthenticated,
-// and Cloud Run's instance fan-out only loosens the cap by the instance count.
+// Per-instance admission avoids a database round trip; capacity scales with instance count.
 export class ClientIpRateLimiter {
   private readonly buckets = new Map<string, Bucket>()
   private readonly capacity: number
@@ -56,13 +54,13 @@ export class ClientIpRateLimiter {
   allow(clientIp: string): boolean {
     const now = this.now()
     const tokens = this.tokensAt(this.buckets.get(clientIp), now)
-    if (tokens < 1) {
-      this.buckets.set(clientIp, { tokens, updatedAt: now })
-      return false
+    this.buckets.delete(clientIp)
+    this.buckets.set(clientIp, { tokens: tokens < 1 ? tokens : tokens - 1, updatedAt: now })
+    if (this.buckets.size > this.maxTrackedIps) {
+      const oldest = this.buckets.keys().next().value
+      if (oldest !== undefined) this.buckets.delete(oldest)
     }
-    this.buckets.set(clientIp, { tokens: tokens - 1, updatedAt: now })
-    this.evict(now)
-    return true
+    return tokens >= 1
   }
 
   trackedIpCount(): number {
@@ -73,22 +71,6 @@ export class ClientIpRateLimiter {
     if (!bucket) return this.capacity
     const refilled = ((now - bucket.updatedAt) * this.capacity) / this.windowMs
     return Math.min(this.capacity, bucket.tokens + Math.max(0, refilled))
-  }
-
-  private evict(now: number): void {
-    if (this.buckets.size <= this.maxTrackedIps) return
-    // A bucket that has refilled to capacity is indistinguishable from an
-    // absent one, so dropping it changes no decision.
-    for (const [clientIp, bucket] of this.buckets) {
-      if (this.tokensAt(bucket, now) >= this.capacity) this.buckets.delete(clientIp)
-    }
-    if (this.buckets.size <= this.maxTrackedIps) return
-    // A flood of distinct live IPs can still overflow. The least recently seen
-    // are the least likely to be mid-burst.
-    const excess = [...this.buckets.entries()]
-      .sort((left, right) => left[1].updatedAt - right[1].updatedAt)
-      .slice(0, this.buckets.size - this.maxTrackedIps)
-    for (const [clientIp] of excess) this.buckets.delete(clientIp)
   }
 }
 

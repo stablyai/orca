@@ -11,7 +11,10 @@ function apnsKeyPem(): string {
   }).privateKey
 }
 
-const MINIMAL = { ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev' }
+const MINIMAL = {
+  ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev',
+  ORCA_PUSH_FCM_PROJECT_ID: 'onorca-cloud'
+}
 
 describe('push gateway config', () => {
   it('applies the documented defaults', () => {
@@ -24,7 +27,7 @@ describe('push gateway config', () => {
       databasePoolMax: PUSH_DATABASE_POOL_MAX,
       apns: undefined,
       apnsTopic: PUSH_DEFAULTS.apnsTopic,
-      fcmProjectId: PUSH_DEFAULTS.fcmProjectId,
+      fcmProjectId: 'onorca-cloud',
       trustedProxyHops: 0
     })
   })
@@ -54,6 +57,11 @@ describe('push gateway config', () => {
     })
   })
 
+  it('requires an explicit FCM project instead of silently targeting production', () => {
+    expect(() => loadPushConfig({ ...MINIMAL, ORCA_PUSH_FCM_PROJECT_ID: undefined })).toThrow()
+    expect(() => loadPushConfig({ ...MINIMAL, ORCA_PUSH_FCM_PROJECT_ID: ' ' })).toThrow()
+  })
+
   it('refuses a partial APNs credential', () => {
     expect(() => loadPushConfig({ ...MINIMAL, ORCA_PUSH_APNS_KEY: apnsKeyPem() })).toThrow(
       'configured together'
@@ -69,15 +77,15 @@ describe('push gateway config', () => {
   })
 
   it('requires a canonical HTTPS origin outside loopback', () => {
-    expect(() => loadPushConfig({ ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev/v1' })).toThrow(
-      'must be an origin'
-    )
-    expect(() => loadPushConfig({ ORCA_PUSH_PUBLIC_URL: 'http://push.onorca.dev' })).toThrow(
-      'must use HTTPS'
-    )
-    expect(loadPushConfig({ ORCA_PUSH_PUBLIC_URL: 'http://localhost:8080' }).publicUrl).toBe(
-      'http://localhost:8080'
-    )
+    expect(() =>
+      loadPushConfig({ ...MINIMAL, ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev/v1' })
+    ).toThrow('must be an origin')
+    expect(() =>
+      loadPushConfig({ ...MINIMAL, ORCA_PUSH_PUBLIC_URL: 'http://push.onorca.dev' })
+    ).toThrow('must use HTTPS')
+    expect(
+      loadPushConfig({ ...MINIMAL, ORCA_PUSH_PUBLIC_URL: 'http://localhost:8080' }).publicUrl
+    ).toBe('http://localhost:8080')
   })
 
   it('treats an empty optional variable as unset', () => {
@@ -93,7 +101,6 @@ it('treats blank defaulted environment settings as absent', () => {
       'PORT',
       'ORCA_PUSH_DATA_DIR',
       'ORCA_PUSH_APNS_TOPIC',
-      'ORCA_PUSH_FCM_PROJECT_ID',
       'ORCA_PUSH_DATABASE_POOL_MAX',
       'ORCA_PUSH_TRUSTED_PROXY_HOPS'
     ].map((key) => [key, ' '])

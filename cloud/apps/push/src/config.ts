@@ -31,10 +31,7 @@ const EnvSchema = z.object({
       .optional()
   ),
   ORCA_PUSH_APNS_TOPIC: z.string().min(1).max(255).default(PUSH_DEFAULTS.apnsTopic),
-  ORCA_PUSH_FCM_PROJECT_ID: z
-    .string()
-    .regex(/^[a-z0-9-]{4,64}$/)
-    .default(PUSH_DEFAULTS.fcmProjectId),
+  ORCA_PUSH_FCM_PROJECT_ID: z.string().regex(/^[a-z0-9-]{4,64}$/),
   // How many proxies append to x-forwarded-for after the client. 0 is Cloud Run
   // alone; raise it to 1 when a load balancer fronts the service.
   ORCA_PUSH_TRUSTED_PROXY_HOPS: z.coerce.number().int().nonnegative().max(8).default(0)

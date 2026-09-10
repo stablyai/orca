@@ -5,9 +5,6 @@ export const PUSH_LIMITS = {
   // A host pairs phones, not a fleet. The cap bounds what one session can write
   // through a caller-chosen deviceId.
   maxDevicesPerHost: 64,
-  // The list response is bounded well above the per-host cap so the query LIMIT
-  // and the response schema can never disagree.
-  maxDevicesPerListResponse: 1024,
   maxHttpBodyBytes: 16 * 1024,
   hostEventsPerWindow: 300,
   eventQuotaWindowMs: 15 * 60 * 1000,
@@ -19,14 +16,13 @@ export const PUSH_LIMITS = {
   // The challenge and session routes are the only unauthenticated writes, so
   // they are capped per client IP before any key material is generated.
   unauthenticatedRequestsPerMinutePerIp: 30,
+  authenticatedRequestsPerMinutePerIp: 6_000,
   authenticatedRequestsPerMinutePerHost: 600
 } as const
 
 export const PUSH_DEFAULTS = {
   apnsTopic: 'com.stably.orca.mobile',
-  fcmProjectId: 'onorca-cloud',
-  androidChannelId: 'orca-desktop',
-  gatewayUrl: 'https://push.onorca.dev'
+  androidChannelId: 'orca-desktop'
 } as const
 
 export const PUSH_HOST_FINGERPRINT_LENGTH = 16

@@ -38,7 +38,6 @@ describe('push contract limits', () => {
       bodyMaxChars: 180,
       maxRegistrationIdsPerSend: 20,
       maxDevicesPerHost: 64,
-      maxDevicesPerListResponse: 1_024,
       hostEventsPerWindow: 300,
       eventQuotaWindowMs: 900_000,
       challengeTtlMs: 10_000,
@@ -49,7 +48,6 @@ describe('push contract limits', () => {
       authenticatedRequestsPerMinutePerHost: 600
     })
     expect(PUSH_DEFAULTS.apnsTopic).toBe('com.stably.orca.mobile')
-    expect(PUSH_DEFAULTS.fcmProjectId).toBe('onorca-cloud')
     expect(PUSH_DEFAULTS.androidChannelId).toBe('orca-desktop')
   })
 })

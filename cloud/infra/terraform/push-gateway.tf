@@ -35,8 +35,6 @@ locals {
     "${var.name_prefix}-push-apple-team-id" = "ORCA_PUSH_APPLE_TEAM_ID"
   }
 
-  push_fcm_project_id = var.push_fcm_project_id == "" ? var.project_id : var.push_fcm_project_id
-
   push_fqdn = replace(replace(var.push_base_url, "https://", ""), "http://", "")
 
 
@@ -161,7 +159,7 @@ resource "google_cloud_run_v2_service" "push" {
 
       env {
         name  = "ORCA_PUSH_FCM_PROJECT_ID"
-        value = local.push_fcm_project_id
+        value = var.project_id
       }
 
       # Bound the declared pool against the dedicated database rollout budget.

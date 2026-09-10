@@ -55,7 +55,7 @@ Set on the container by Terraform:
 | ----------------------------- | -------------------------------------------------------- |
 | `PORT`                        | Cloud Run, container port 8080                           |
 | `ORCA_PUSH_PUBLIC_URL`        | `push_base_url`                                          |
-| `ORCA_PUSH_FCM_PROJECT_ID`    | `push_fcm_project_id`, empty means `project_id`          |
+| `ORCA_PUSH_FCM_PROJECT_ID`    | `project_id` (required for standalone runtime)          |
 | `ORCA_PUSH_DATABASE_URL`      | Secret `orca-cloud-push-dedicated-database-url`, pinned version  |
 | `ORCA_PUSH_DATABASE_POOL_MAX` | `push_database_pool_max`, 2 per instance                 |
 | `ORCA_PUSH_APNS_KEY`          | Secret `orca-cloud-push-apns-key`, version `latest`      |
@@ -312,9 +312,9 @@ or when iOS reissues it. Both providers report this, and the shapes differ:
 
 The gateway marks the registration `dead_at` and returns `status: "dead"` for it, and the
 desktop drops the registration when it sees that. Nothing here retries a dead token. A phone
-that comes back registers again and gets a fresh `registrationId`, so a rising dead count is
-normal churn; a dead count that spikes across many hosts at once is a credential or topic
-problem, not device churn.
+that comes back re-registers the same host/device pair, retaining its `registrationId` and
+clearing `dead_at`. The per-minute `delivery_dead` counter measures delivery outcomes, not
+currently dead registrations. A spike across many hosts warrants checking credentials and topics.
 
 ## Quotas
 
@@ -329,7 +329,9 @@ Two independent limits, both enforced in the gateway and both returning HTTP 200
 
 Fanout to several phones counts one logical event; there is no per-phone daily allowance.
 Unauthenticated handshakes and invalid bearer attempts have separate 30/minute IP buckets.
-Authenticated requests use a 600/minute host bucket per instance. Auth database lookup concurrency
+Authenticated routes use a 600/minute host bucket and a shared 6,000/minute client-IP bucket
+per instance. The IP budget cannot be reset by generating another host key. It is shared by
+clients behind one NAT and is an abuse safeguard, not a global provider-spending cap. Auth database lookup concurrency
 and waiting work are bounded independently of HTTP concurrency.
 
 `push_events` backs quota accounting. `push_event_recipients` deduplicates fanout and

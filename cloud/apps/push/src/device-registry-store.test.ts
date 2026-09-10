@@ -157,9 +157,9 @@ describe('push device registry store', () => {
     ).toBe(true)
   })
 
-  it('never returns more devices than the list response schema accepts', async () => {
+  it('bounds list reads to the host device allowance', async () => {
     // Straight past the per-host cap, so only the query LIMIT can bound this.
-    const rows = PUSH_LIMITS.maxDevicesPerListResponse + 5
+    const rows = PUSH_LIMITS.maxDevicesPerHost + 5
     for (let index = 0; index < rows; index++) {
       await database.query(
         `INSERT INTO push_devices (registration_id, host_fingerprint, device_id, platform, token,
@@ -168,7 +168,7 @@ describe('push device registry store', () => {
         [`reg-${index}`, OWNER, `device-${index}`, 'android', 'token', clock + index, clock]
       )
     }
-    expect(await devices.list(OWNER)).toHaveLength(PUSH_LIMITS.maxDevicesPerListResponse)
+    expect(await devices.list(OWNER)).toHaveLength(PUSH_LIMITS.maxDevicesPerHost)
   })
 
   it('separates the same device id registered against two hosts', async () => {

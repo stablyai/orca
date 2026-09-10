@@ -49,10 +49,10 @@ FCM notification messages are inherently collapsible while offline and have a
 small concurrent collapse-key budget, so every pending alert is not guaranteed.
 
 Storage follows the relay pattern: PostgreSQL in production, SQLite for tests
-and local development. Configure it with `ORCA_PUSH_PUBLIC_URL`,
+and local development. Configure it with `ORCA_PUSH_PUBLIC_URL`, `ORCA_PUSH_FCM_PROJECT_ID`,
 `ORCA_PUSH_DATABASE_URL`, the three APNs variables (`ORCA_PUSH_APNS_KEY`,
 `ORCA_PUSH_APNS_KEY_ID`, `ORCA_PUSH_APPLE_TEAM_ID`, all three or none), and
-optionally `ORCA_PUSH_APNS_TOPIC` and `ORCA_PUSH_FCM_PROJECT_ID`. The FCM credential comes from
+optionally `ORCA_PUSH_APNS_TOPIC`. The FCM credential comes from
 the runtime service account, so no key material is configured for Android. See
 [push gateway operations](docs/push-gateway.md) for deployment and recovery.
 

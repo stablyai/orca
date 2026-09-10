@@ -7,7 +7,11 @@ import { startPushBackground } from './push-background.js'
 it('fails closed on an invalid validation mode', () => {
   for (const mode of ['typo', '', ' ']) {
     expect(() =>
-      loadPushConfig({ ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev', ORCA_PUSH_MODE: mode })
+      loadPushConfig({
+        ORCA_PUSH_FCM_PROJECT_ID: 'onorca-cloud',
+        ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev',
+        ORCA_PUSH_MODE: mode
+      })
     ).toThrow()
   }
 })
@@ -35,6 +39,7 @@ it.skipIf(!databaseUrl)(
       readOnly: true
     })
     const config = loadPushConfig({
+      ORCA_PUSH_FCM_PROJECT_ID: 'onorca-cloud',
       ORCA_PUSH_PUBLIC_URL: 'https://push.onorca.dev',
       ORCA_PUSH_MODE: 'validation'
     })
