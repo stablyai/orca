@@ -21,6 +21,9 @@ import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
 import { createRelayRegionPreferenceReader } from './relay-region-preference'
 import { pairingAuthorizationForContext } from './relay-pairing-authorization'
+import { buildPairingEndpointsResult } from './relay-pairing-endpoints-result'
+import type { MobilePairingConnectionMode } from '../../../shared/mobile-pairing-connection-mode'
+import { isMobileRelayAllowed } from '../../../shared/mobile-relay-policy'
 
 export { pairingAuthorizationForContext } from './relay-pairing-authorization'
 
@@ -30,6 +33,9 @@ type DesktopRelayServiceOptions = {
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
   onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
+  // Live host policy (settings.mobilePairingConnectionMode); read on every
+  // demand decision so a LAN pick applies to already-paired devices.
+  hostMobilePairingConnectionMode?: () => MobilePairingConnectionMode
 }
 
 // Why: a broker that died without arming a retry (sleep past token expiry,
@@ -42,6 +48,7 @@ export class DesktopRelayService {
   private readonly revokeOutbox: RelayRevokeOutbox
   private readonly runtimeRpc: OrcaRuntimeRpcServer
   private readonly demandLedger: RelayDemandLedger
+  private readonly hostMobilePairingConnectionMode?: () => MobilePairingConnectionMode
   private demandExpiryTimer: ReturnType<typeof setTimeout> | null = null
   private livenessTimer: ReturnType<typeof setInterval> | null = null
   private stopped = false
@@ -54,10 +61,12 @@ export class DesktopRelayService {
     }
     this.runtimeRpc = options.runtimeRpc
     this.revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
+    this.hostMobilePairingConnectionMode = options.hostMobilePairingConnectionMode
     this.demandLedger = new RelayDemandLedger({
       deviceRegistry: options.runtimeRpc.getDeviceRegistry()!,
       revokeOutbox: this.revokeOutbox,
-      relayHostId: deriveRelayHostId(keypair.publicKey)
+      relayHostId: deriveRelayHostId(keypair.publicKey),
+      isRelayAllowedForDevice: (deviceId) => this.isRelayAllowedForDevice(deviceId)
     })
     const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
@@ -116,7 +125,7 @@ export class DesktopRelayService {
   async createPairingRelay(
     relayDeviceId: string
   ): Promise<{ relay: PairingRelay; binding: RelayDeviceBinding }> {
-    return await this.withTransientDemand(`pairing:${relayDeviceId}`, async () => {
+    return await this.withTransientDemand('pairing', relayDeviceId, async () => {
       const broker = await this.requireActiveBroker()
       const relay = await broker.createPairingRelay(relayDeviceId)
       return {
@@ -148,38 +157,21 @@ export class DesktopRelayService {
     params: PairingGetEndpointsParams
   ): Promise<PairingGetEndpointsResult> {
     this.requireMobileDevice(context.deviceId)
-    if (
-      this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
-      'local-only'
-    ) {
+    if (!this.isRelayAllowedForDevice(context.deviceId)) {
       return { v: 1, relay: null }
     }
-    return await this.withTransientDemand(`endpoints:${context.deviceId}`, async () => {
+    return await this.withTransientDemand('endpoints', context.deviceId, async () => {
       const broker = await this.activeBrokerForDemand()
       if (!broker?.endpoint) {
         return { v: 1, relay: null }
       }
       this.assertRelayHost(context, broker)
-      const result: PairingGetEndpointsResult = { v: 1, relay: broker.endpoint }
-      if (params.installReqId) {
-        result.installStatus = await broker.credentialInstallStatus(
-          context.deviceId,
-          params.installReqId
-        )
-      }
-      if (params.resumeConfirmReqId) {
-        if (
-          context.transport.transport !== 'relay' ||
-          context.transport.credentialKind !== 'resume'
-        ) {
-          throw new Error('resume_confirmation_unavailable')
-        }
-        result.resumeConfirmation = await broker.confirmResume(
-          context.transport.basisConnId,
-          params.resumeConfirmReqId
-        )
-      }
-      return result
+      return await buildPairingEndpointsResult({
+        broker,
+        endpoint: broker.endpoint,
+        context,
+        params
+      })
     })
   }
 
@@ -188,13 +180,10 @@ export class DesktopRelayService {
     params: PairingProvisionRelayParams
   ): Promise<DeviceCredentialInstalled> {
     this.requireMobileDevice(context.deviceId)
-    if (
-      this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(context.deviceId) ===
-      'local-only'
-    ) {
+    if (!this.isRelayAllowedForDevice(context.deviceId)) {
       throw new Error('relay_disabled_for_device')
     }
-    return await this.withTransientDemand(`provision:${context.deviceId}`, async () => {
+    return await this.withTransientDemand('provision', context.deviceId, async () => {
       const broker = await this.requireActiveBroker()
       if (!broker.endpoint) {
         throw new Error('relay_control_not_active')
@@ -222,6 +211,13 @@ export class DesktopRelayService {
 
   demandStateChanged(): void {
     this.refreshDemand()
+  }
+
+  // Wake signal for a host connection-mode change; the decision is the pull in
+  // isRelayAllowedForDevice. Skips the pairing-churn linger: a deliberate LAN
+  // pick that kept Relay open for ten more minutes would look like #18211.
+  pairingPolicyChanged(): void {
+    this.refreshDemand({ skipLinger: true })
   }
 
   stop(): void {
@@ -275,8 +271,27 @@ export class DesktopRelayService {
     }
   }
 
-  private async withTransientDemand<T>(key: string, operation: () => Promise<T>): Promise<T> {
-    const release = this.demandLedger.acquireTransient(key)
+  // Restrictive-only: the host setting withdraws Relay from an `automatic`
+  // device, never grants it to a `local-only` one.
+  private isRelayAllowedForDevice(deviceId: string): boolean {
+    return isMobileRelayAllowed({
+      hostConnectionMode: this.hostMobilePairingConnectionMode?.() ?? 'automatic',
+      deviceConnectionMode:
+        this.runtimeRpc.getDeviceRegistry()?.getMobilePairingConnectionMode(deviceId) ?? null
+    })
+  }
+
+  // Why the gate lives here: every path that can grant Relay — including
+  // createPairingRelay, which had no per-device check — funnels through it.
+  private async withTransientDemand<T>(
+    kind: 'pairing' | 'endpoints' | 'provision',
+    deviceId: string,
+    operation: () => Promise<T>
+  ): Promise<T> {
+    if (!this.isRelayAllowedForDevice(deviceId)) {
+      throw new Error('relay_disabled_for_device')
+    }
+    const release = this.demandLedger.acquireTransient(`${kind}:${deviceId}`, deviceId)
     this.refreshDemand()
     try {
       return await operation()
@@ -302,7 +317,7 @@ export class DesktopRelayService {
     return result.broker
   }
 
-  private refreshDemand(): void {
+  private refreshDemand(options?: { skipLinger?: boolean }): void {
     if (this.stopped) {
       return
     }
@@ -313,7 +328,7 @@ export class DesktopRelayService {
       clearTimeout(this.demandExpiryTimer)
       this.demandExpiryTimer = null
     }
-    this.coordinator.reconcile()
+    this.coordinator.reconcile(options)
     const expiresAt = this.demandLedger.nextPendingExpiry()
     if (expiresAt !== null) {
       // Why: an unscanned QR must stop holding a standing control when its

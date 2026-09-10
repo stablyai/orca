@@ -13,7 +13,8 @@ import type {
   LiveBrokerWaitResult,
   RelayAuthContext,
   RelayAuthCoordinatorOptions,
-  RelayAuthIdentity
+  RelayAuthIdentity,
+  RelayReconcileOptions as ReconcileOptions
 } from './relay-auth-coordinator-contract'
 
 export type {
@@ -64,11 +65,15 @@ export class RelayAuthCoordinator {
     this.retry = new RelayRetrySchedule(options.random)
   }
 
-  reconcile(): void {
-    this.beginReconcile(true)
+  reconcile(options?: ReconcileOptions): void {
+    this.beginReconcile(true, undefined, options)
   }
 
-  private beginReconcile(resetRetry: boolean, expectedIdentityKey?: string): void {
+  private beginReconcile(
+    resetRetry: boolean,
+    expectedIdentityKey?: string,
+    options?: ReconcileOptions
+  ): void {
     if (this.stopped) {
       return
     }
@@ -78,7 +83,7 @@ export class RelayAuthCoordinator {
     }
     const epoch = ++this.authEpoch
     this.invalidatePendingOwnerships()
-    const reconcile = this.reconcileEpoch(epoch, expectedIdentityKey)
+    const reconcile = this.reconcileEpoch(epoch, expectedIdentityKey, options)
     this.latestReconcile = reconcile
     void reconcile
   }
@@ -184,7 +189,11 @@ export class RelayAuthCoordinator {
     this.fenceAndCloseNow()
   }
 
-  private async reconcileEpoch(epoch: number, expectedIdentityKey?: string): Promise<void> {
+  private async reconcileEpoch(
+    epoch: number,
+    expectedIdentityKey?: string,
+    options?: ReconcileOptions
+  ): Promise<void> {
     let retryIdentityKey: string | undefined
     try {
       const context = await this.options.readContext()
@@ -210,7 +219,10 @@ export class RelayAuthCoordinator {
       }
       if (!(this.options.hasDemand?.(context) ?? true)) {
         this.retry.reset()
-        if (this.ownership?.valid && this.ownership.identityKey !== nextIdentityKey) {
+        if (
+          this.ownership?.valid &&
+          (options?.skipLinger || this.ownership.identityKey !== nextIdentityKey)
+        ) {
           this.cancelLinger()
           this.invalidateOwnership()
         } else if (this.ownership?.valid) {
