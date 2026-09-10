@@ -17,6 +17,7 @@ import {
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { syncProjectHostSetupCompatibilityState } from './repo-lifecycle-operations'
 import {
   planRepoPathRelocation,
   type RepoWorkspaceIdentityMove
@@ -133,10 +134,16 @@ export class Store {
     }
     const moves = planRepoPathRelocation(this.state, stored, newPath)
     // Re-key first: a migration reads the old id, so the repo must still spell the old path.
+    // No host argument, matching the folder-rename path: naming a host that disagrees with the row's
+    // own persisted `hostId` makes the migration skip the session it was called to move.
     for (const move of moves) {
-      this.migrateWorktreeIdentity(move.from, move.to, getRepoExecutionHostId(stored))
+      this.migrateWorktreeIdentity(move.from, move.to)
     }
     stored.path = newPath
+    // Project host setups are projected from the repo catalog, so a path written without this stays
+    // stale on the setup row until an unrelated catalog mutation happens to rebuild it — and
+    // `setup.path` is what an automation resolves its run directory from.
+    syncProjectHostSetupCompatibilityState(this)
     scheduleSave(this.domains.scheduling)
     return { repo: this.getRepo(repoId) ?? stored, moves }
   }

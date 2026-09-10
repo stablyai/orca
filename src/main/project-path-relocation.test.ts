@@ -11,6 +11,8 @@ import {
 } from './project-path-relocation'
 import { RuntimeProjectHostSetupController } from './runtime/runtime-project-host-setup-controller'
 import { registerProjectHostSetupHandlers } from './ipc/repos/project-host-setup-handlers'
+import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
+import { computeWorktreePath } from './ipc/worktree-logic'
 
 const ipcHandlers = new Map<string, (event: unknown, args: unknown) => unknown>()
 
@@ -224,6 +226,68 @@ describe('relocateProjectPath', () => {
   })
 })
 
+describe('pty identity across a re-key', () => {
+  beforeEach(() => makeDirs('pty'))
+  afterEach(cleanupDirs)
+
+  function seedTerminal(store: Store, worktreeId: string): string {
+    const ptyId = `${worktreeId}@@22222222-2222-2222-2222-222222222222`
+    store.setWorktreeMeta(worktreeId, { displayName: 'wt' })
+    store.setWorkspaceSession({
+      tabsByWorktree: {
+        [worktreeId]: [{ id: 'tab-1', worktreeId, type: 'terminal', title: 'zsh', ptyId }]
+      }
+    } as never)
+    return ptyId
+  }
+
+  function ptyIdAt(store: Store, worktreeId: string): string | undefined {
+    const session = store.getWorkspaceSession() as unknown as {
+      tabsByWorktree?: Record<string, { ptyId?: string }[]>
+    }
+    return session.tabsByWorktree?.[worktreeId]?.[0]?.ptyId
+  }
+
+  /**
+   * A minted pty id embeds the worktree id that owned it, and neither re-key path rewrites it. This
+   * pins that the two paths behave the same, so the orphaned terminal is a property of the shared
+   * rename mechanism and not something relocation introduced. Remapping it is its own change.
+   */
+  it('leaves the pty id spelling the old worktree id on the existing folder-rename path', async () => {
+    const store = createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: oldPath, kind: 'git' }))
+    // No directories are created: the move itself is stubbed, only the re-key is under test.
+    const worktreePath = computeWorktreePath('wt-old', oldPath, store.getSettings())
+    const oldId = `r1::${worktreePath}`
+    const ptyId = seedTerminal(store, oldId)
+    let newId = ''
+
+    await renameWorktreeFolderOnFirstWork(oldId, 'wt-new', {
+      getRepo: (id) => store.getRepo(id),
+      getSettings: () => store.getSettings(),
+      migrateWorktreeIdentity: (from, to) => store.migrateWorktreeIdentity(from, to),
+      notifyWorktreeRenamed: (_repoId, _from, to) => {
+        newId = to
+      },
+      pathExists: async () => false,
+      moveWorktree: async () => {}
+    })
+
+    expect(newId).not.toBe('')
+    expect(ptyIdAt(store, newId)).toBe(ptyId)
+  })
+
+  it('leaves the pty id spelling the old worktree id on relocation, identically', () => {
+    const store = createStore()
+    store.addRepo(makeRepo({ id: 'r1', path: oldPath, kind: 'folder' }))
+    const ptyId = seedTerminal(store, `r1::${oldPath}`)
+
+    relocateProjectPath(store, store.getRepo('r1') as never, newPath, recordingNotifier().notify)
+
+    expect(ptyIdAt(store, `r1::${newPath}`)).toBe(ptyId)
+  })
+})
+
 describe('projectHostSetup.update entry points', () => {
   beforeEach(() => makeDirs('entry'))
   afterEach(cleanupDirs)
@@ -319,6 +383,39 @@ describe('projectHostSetup.update entry points', () => {
     ).toThrow(/another host/)
     expect(store.getRepos().find((repo) => !repo.connectionId)?.path).toBe(oldPath)
     expect(notices).toEqual([])
+  })
+
+  it('moves the project host setup row with the repo', () => {
+    const store = storeWithFolderProject()
+    store.setWorktreeMeta(rootWorkspaceId(), { displayName: 'example-project' })
+    const { controller } = rpcController(store)
+
+    controller.updateSetup({ setupId: 'r1', updates: { path: newPath } })
+
+    // `setup.path` is projected from the repo catalog and is what an automation resolves its run
+    // directory from, so a stale row would run work in the directory the project just left.
+    expect(store.getProjectHostSetups().find((setup) => setup.repoId === 'r1')?.path).toBe(newPath)
+  })
+
+  it('migrates the session even when the workspace row names its own host', () => {
+    const store = storeWithFolderProject()
+    // A row carrying a `hostId` must still migrate: naming a disagreeing host at the call site
+    // makes the identity migration skip the legacy session state entirely.
+    store.setWorktreeMeta(instanceWorkspaceId(), { displayName: 'draft', hostId: 'ssh:elsewhere' })
+    store.setWorkspaceSession({
+      tabsByWorktree: {
+        [instanceWorkspaceId()]: [
+          { id: 'tab-1', worktreeId: instanceWorkspaceId(), type: 'terminal', title: 'zsh' }
+        ]
+      }
+    } as never)
+
+    relocateProjectPath(store, store.getRepo('r1') as never, newPath, recordingNotifier().notify)
+
+    const session = store.getWorkspaceSession() as unknown as {
+      tabsByWorktree?: Record<string, { id: string }[]>
+    }
+    expect(session.tabsByWorktree?.[`r1::${newPath}::workspace:${INSTANCE_UUID}`]).toHaveLength(1)
   })
 
   it('does not hand persistence a path it did not apply', () => {
