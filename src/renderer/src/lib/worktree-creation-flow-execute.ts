@@ -202,10 +202,15 @@ export async function executeWorktreeCreation(
   }
 
   let structuredLaunchAccepted = structuredLaunch
-  if (structuredLaunch && isAgentSessionHandleProvider(preparedRequest.agent)) {
+  const { agentLaunchRoute } = preparedRequest
+  if (
+    agentLaunchRoute === 'structured-native-chat' &&
+    isAgentSessionHandleProvider(preparedRequest.agent)
+  ) {
     const structuredSession = await launchStructuredWorktreeSession({
       creationId,
       request: preparedRequest,
+      agentLaunchRoute,
       worktreeId: worktree.id,
       shouldActivateOnCompletion,
       fallbackStartupOpt,

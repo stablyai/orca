@@ -3,6 +3,7 @@ import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-termina
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import type { StructuredAgentLegacyFallbackResult } from '@/lib/structured-agent-launch-settlement'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import { activateStructuredAgentSessionById } from '@/lib/structured-agent-session-tab-activation'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -22,6 +23,8 @@ export type WorktreeCreationStructuredSessionResult = {
 type LaunchStructuredWorktreeSessionArgs = {
   creationId: string
   request: WorktreeCreationRequest
+  /** Required: a non-structured route opens no session here, so the caller must have gated on it. */
+  agentLaunchRoute: AgentLaunchRoute
   worktreeId: string
   shouldActivateOnCompletion: boolean
   fallbackStartupOpt: WorktreeStartupPayload | undefined
@@ -49,6 +52,11 @@ async function openLegacyWorktreeSurface(
   isCancelled: () => boolean
 ): Promise<StructuredAgentLegacyFallbackResult> {
   const unchanged = { activation: args.activation, primaryTabId: args.primaryTabId }
+  // Why cancel first: an abandoned creation is being torn down, so its worktree must not be marked
+  // for a rename that will never happen.
+  if (isCancelled()) {
+    return unchanged
+  }
   if (args.request.pendingFirstAgentMessageRename) {
     await useAppStore
       .getState()
@@ -101,7 +109,7 @@ export async function launchStructuredWorktreeSession(
 ): Promise<WorktreeCreationStructuredSessionResult> {
   const { activation, primaryTabId } = args
   const settled = { accepted: true, cancelled: false, visibilityUnknown: false }
-  const { agent, agentLaunchRoute } = args.request
+  const { agent } = args.request
   if (!agent) {
     return { ...settled, activation, primaryTabId }
   }
@@ -114,7 +122,7 @@ export async function launchStructuredWorktreeSession(
   // Why: the composer decided route and delivery mode before the worktree existed; re-entering
   // with that persisted verdict is what keeps recovery from re-resolving on a changed host.
   const plan = adoptAgentSessionLaunchVerdict({
-    route: agentLaunchRoute ?? 'terminal-tui',
+    route: args.agentLaunchRoute,
     agent,
     ...(args.recoverUnknownLaunch
       ? {}
@@ -123,39 +131,56 @@ export async function launchStructuredWorktreeSession(
           ...(args.request.promptDelivery ? { promptDelivery: args.request.promptDelivery } : {})
         })
   })
-  const settlement = await plan.launch(
-    {
-      cancellation: {
-        isCancelled,
-        subscribe: (onCancel) =>
-          useAppStore.subscribe((state) => {
-            if (!state.pendingWorktreeCreations[args.creationId]) {
-              onCancel()
-            }
-          })
-      },
-      legacyFallback: () => {
-        refused = true
-        return openLegacyWorktreeSurface(args, isCancelled)
-      },
-      onStructuredReady: (sessionId) => {
-        if (args.shouldActivateOnCompletion) {
-          activateStructuredAgentSessionById({ worktreeId: args.worktreeId, sessionId })
+  const abandoned = new AbortController()
+  const unsubscribe = useAppStore.subscribe((state) => {
+    if (!state.pendingWorktreeCreations[args.creationId]) {
+      abandoned.abort()
+    }
+  })
+  let settlement: Awaited<ReturnType<typeof plan.launch>>
+  try {
+    settlement = await plan.launch(
+      {
+        signal: abandoned.signal,
+        legacyFallback: () => {
+          refused = true
+          return openLegacyWorktreeSurface(args, isCancelled)
+        },
+        onStructuredReady: (sessionId) => {
+          if (args.shouldActivateOnCompletion) {
+            activateStructuredAgentSessionById({ worktreeId: args.worktreeId, sessionId })
+          }
         }
-      }
-    },
-    { worktreeId: args.worktreeId }
-  )
+      },
+      { worktreeId: args.worktreeId }
+    )
+  } catch {
+    // Why: nothing awaits this creation's caller, so an escaped throw would strand the panel
+    // mid-create. Report it the way a failed launch already does; the launch layer toasts it.
+    return { ...settled, activation, primaryTabId }
+  } finally {
+    unsubscribe()
+  }
   if (!settlement) {
     return { ...settled, activation, primaryTabId }
   }
   switch (settlement.kind) {
-    case 'cancelled':
+    case 'cancelled': {
       // Why: a refusal means no session exists on the host, so there is nothing to retire.
       if (!refused) {
         await retireCancelledStructuredSession(args.worktreeId, settlement.sessionId)
       }
-      return { ...settled, accepted: !refused, cancelled: true, activation, primaryTabId }
+      // Why: a fallback that already opened a terminal owns the surface, cancel or not; reporting
+      // the pre-launch tab would hand the caller a workspace the user cannot see the agent in.
+      const surface = settlement.fallback
+      return {
+        ...settled,
+        accepted: !refused,
+        cancelled: true,
+        activation: surface?.activation ?? activation,
+        primaryTabId: surface ? surface.primaryTabId : primaryTabId
+      }
+    }
     case 'refused-then-legacy':
       return {
         ...settled,

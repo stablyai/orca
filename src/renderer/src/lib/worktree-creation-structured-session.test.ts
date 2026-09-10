@@ -135,6 +135,7 @@ describe('launchStructuredWorktreeSession', () => {
       launchStructuredWorktreeSession({
         creationId: 'creation-1',
         request,
+        agentLaunchRoute: 'structured-native-chat',
         worktreeId: 'worktree-1',
         shouldActivateOnCompletion: true,
         fallbackStartupOpt: undefined,
@@ -165,6 +166,7 @@ describe('launchStructuredWorktreeSession', () => {
     await launchStructuredWorktreeSession({
       creationId: 'creation-1',
       request: { ...request, launchDraftPrompt: 'PR #1 context', promptDelivery: 'draft' },
+      agentLaunchRoute: 'structured-native-chat',
       worktreeId: 'worktree-1',
       shouldActivateOnCompletion: true,
       fallbackStartupOpt: undefined,
@@ -190,6 +192,7 @@ describe('launchStructuredWorktreeSession', () => {
     await launchStructuredWorktreeSession({
       creationId: 'creation-1',
       request,
+      agentLaunchRoute: 'structured-native-chat',
       worktreeId: 'worktree-1',
       shouldActivateOnCompletion: false,
       fallbackStartupOpt: undefined,
@@ -211,6 +214,7 @@ describe('launchStructuredWorktreeSession', () => {
     await launchStructuredWorktreeSession({
       creationId: 'creation-1',
       request,
+      agentLaunchRoute: 'structured-native-chat',
       worktreeId: 'worktree-1',
       shouldActivateOnCompletion: true,
       fallbackStartupOpt: undefined,
@@ -228,6 +232,7 @@ describe('launchStructuredWorktreeSession', () => {
       launchStructuredWorktreeSession({
         creationId: 'creation-1',
         request,
+        agentLaunchRoute: 'structured-native-chat',
         worktreeId: 'worktree-1',
         shouldActivateOnCompletion: true,
         fallbackStartupOpt: undefined,
@@ -252,6 +257,7 @@ describe('launchStructuredWorktreeSession', () => {
     void launchStructuredWorktreeSession({
       creationId: 'creation-1',
       request,
+      agentLaunchRoute: 'structured-native-chat',
       worktreeId: 'worktree-1',
       shouldActivateOnCompletion: true,
       fallbackStartupOpt: undefined,
@@ -280,6 +286,7 @@ describe('launchStructuredWorktreeSession', () => {
       launchStructuredWorktreeSession({
         creationId: 'creation-1',
         request,
+        agentLaunchRoute: 'structured-native-chat',
         worktreeId: 'worktree-1',
         shouldActivateOnCompletion: true,
         fallbackStartupOpt: startup as never,
@@ -320,6 +327,7 @@ describe('launchStructuredWorktreeSession', () => {
       launchStructuredWorktreeSession({
         creationId: 'creation-1',
         request,
+        agentLaunchRoute: 'structured-native-chat',
         worktreeId: 'worktree-1',
         shouldActivateOnCompletion: false,
         fallbackStartupOpt: undefined,
@@ -356,6 +364,7 @@ describe('launchStructuredWorktreeSession', () => {
       launchStructuredWorktreeSession({
         creationId: 'creation-1',
         request,
+        agentLaunchRoute: 'structured-native-chat',
         worktreeId: 'worktree-1',
         shouldActivateOnCompletion: true,
         fallbackStartupOpt: undefined,
@@ -374,6 +383,73 @@ describe('launchStructuredWorktreeSession', () => {
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
+  it('never marks an abandoned creation for a first-message rename', async () => {
+    storeWithWorktree()
+    const launchResult = Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'session-refused',
+      launchResult,
+      isVisibilityUnknown: () => false,
+      releaseCallerAfterUnknownOutcome: vi.fn(),
+      claimDefinitiveRefusalFallback: vi.fn((fallback: () => Promise<void>) =>
+        launchResult.catch(() => {
+          // The user dismisses the creation between the loop's own check and the fallback body.
+          mocks.state = { ...mocks.state, pendingWorktreeCreations: {} }
+          return Promise.resolve()
+            .then(fallback)
+            .then(() => true)
+        })
+      )
+    })
+
+    await launchStructuredWorktreeSession({
+      creationId: 'creation-1',
+      request,
+      agentLaunchRoute: 'structured-native-chat',
+      worktreeId: 'worktree-1',
+      shouldActivateOnCompletion: true,
+      fallbackStartupOpt: undefined,
+      activation: false,
+      primaryTabId: null
+    })
+
+    // Why: the workspace is being torn down, so a rename flag on it would never be consumed.
+    expect(mocks.updateWorktreeMeta).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+  })
+
+  it('keeps the terminal a finished fallback opened when the cancel lands after it', async () => {
+    storeWithWorktree()
+    refusedLaunch()
+    mocks.activateAndRevealWorktree.mockImplementation(() => {
+      // The user dismisses the creation only once the fallback's terminal is already up.
+      mocks.state = { ...mocks.state, pendingWorktreeCreations: {} }
+      mocks.listener?.(mocks.state)
+      return { primaryTabId: 'terminal-tab' }
+    })
+
+    await expect(
+      launchStructuredWorktreeSession({
+        creationId: 'creation-1',
+        request,
+        agentLaunchRoute: 'structured-native-chat',
+        worktreeId: 'worktree-1',
+        shouldActivateOnCompletion: true,
+        fallbackStartupOpt: undefined,
+        activation: false,
+        primaryTabId: null
+      })
+    ).resolves.toEqual({
+      ...idle,
+      accepted: false,
+      cancelled: true,
+      activation: { primaryTabId: 'terminal-tab' },
+      primaryTabId: 'terminal-tab'
+    })
+    // Why: a refusal means no session exists on the host, so nothing is retired.
+    expect(mocks.closeStructuredAgentSession).not.toHaveBeenCalled()
+  })
+
   it('reports a known failure as accepted with the caller surface untouched', async () => {
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
@@ -387,6 +463,7 @@ describe('launchStructuredWorktreeSession', () => {
       launchStructuredWorktreeSession({
         creationId: 'creation-1',
         request,
+        agentLaunchRoute: 'structured-native-chat',
         worktreeId: 'worktree-1',
         shouldActivateOnCompletion: true,
         fallbackStartupOpt: undefined,
@@ -425,6 +502,7 @@ describe('launchStructuredWorktreeSession', () => {
         quickPrompt: 'Fix the route',
         quickTelemetry: null
       },
+      agentLaunchRoute: 'structured-native-chat',
       worktreeId: 'worktree-1',
       shouldActivateOnCompletion: true,
       fallbackStartupOpt: undefined,
@@ -479,6 +557,7 @@ describe('launchStructuredWorktreeSession', () => {
           quickPrompt: 'Fix the route',
           quickTelemetry: null
         },
+        agentLaunchRoute: 'structured-native-chat',
         worktreeId: 'worktree-1',
         shouldActivateOnCompletion: true,
         fallbackStartupOpt: undefined,
