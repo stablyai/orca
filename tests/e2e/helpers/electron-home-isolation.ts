@@ -9,6 +9,8 @@ const RESTRICTED_ENV_KEYS = new Set([
   'HOMEPATH',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
+  // A host Claude Code session's real account; Orca and its agents would write through it.
+  'CLAUDE_CONFIG_DIR',
   'ORCA_E2E_USER_DATA_DIR',
   'ORCA_E2E_HOME_DIR',
   'ZDOTDIR',

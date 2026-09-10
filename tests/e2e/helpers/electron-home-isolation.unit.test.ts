@@ -31,6 +31,7 @@ describe('createElectronHomeIsolation', () => {
         USERPROFILE: '/real/home',
         CODEX_HOME: '/real/codex',
         ORCA_CODEX_HOME: '/real/orca-codex',
+        CLAUDE_CONFIG_DIR: '/real/claude-account',
         ZDOTDIR: '/real/zdotdir',
         PATH: '/bin'
       },
@@ -54,6 +55,9 @@ describe('createElectronHomeIsolation', () => {
     })
     expect(isolation.env.CODEX_HOME).toBeUndefined()
     expect(isolation.env.ORCA_CODEX_HOME).toBeUndefined()
+    // Inherited from a host Claude Code session, it names the developer's real
+    // account; the app and the agents it spawns would log that account out.
+    expect(isolation.env.CLAUDE_CONFIG_DIR).toBeUndefined()
     expect(isolation.env.ZDOTDIR).toBeUndefined()
     // Codex always routes to the resolved home, so the post-launch guard must
     // accept the boundary this env produces.
@@ -72,6 +76,16 @@ describe('createElectronHomeIsolation', () => {
         realHome: '/real/home'
       })
     ).toThrow(/launchEnv\.CODEX_HOME/)
+
+    expect(() =>
+      createElectronHomeIsolation({
+        inheritedEnv: {},
+        launchEnv: { CLAUDE_CONFIG_DIR: '/real/claude-account' },
+        extraEnv: {},
+        userDataDir: createUserDataDir(),
+        realHome: '/real/home'
+      })
+    ).toThrow(/launchEnv\.CLAUDE_CONFIG_DIR/)
 
     expect(() =>
       createElectronHomeIsolation({
