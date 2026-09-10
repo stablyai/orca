@@ -1,0 +1,1507 @@
+{
+  "operation": "linear.issue-detail",
+  "family": "linear-detail-barrier",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 1,
+  "recording": {
+    "scenario": "schedules-b3",
+    "checkpoints": [
+      {
+        "id": "b3.forward:sibling-pending",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "refused",
+                    "message": "issue refused"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "",
+            "loading": true,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.forward:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "refused",
+                    "message": "issue refused"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "comments transport error",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "comments transport error",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "comments transport error"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.reverse:sibling-pending",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "comments transport error",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "comments transport error",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "comments transport error"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.reverse:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "refused",
+                    "message": "issue refused"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "comments transport error",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "comments transport error",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "comments transport error"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.both-reject-forward:sibling-pending",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "linear.getIssue#1 rejected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "linear.getIssue#1 rejected",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "linear.getIssue#1 rejected"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.both-reject-forward:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "linear.getIssue#1 rejected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "linear.issueComments#1 rejected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "linear.getIssue#1 rejected",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "linear.getIssue#1 rejected"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.both-reject-reverse:sibling-pending",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "linear.issueComments#1 rejected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "linear.issueComments#1 rejected",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "linear.issueComments#1 rejected"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.both-reject-reverse:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "linear.getIssue#1 rejected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "linear.issueComments#1 rejected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "linear.issueComments#1 rejected",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "linear.issueComments#1 rejected"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.reject-peer-pending:sibling-pending",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "linear.getIssue#1 rejected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "linear.getIssue#1 rejected",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "linear.getIssue#1 rejected"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.reject-peer-pending:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "linear.getIssue#1 rejected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "linear.getIssue#1 rejected",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "linear.getIssue#1 rejected"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.timeout:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "Request timed out: linear.getIssue",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "Request timed out: linear.issueComments",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "Request timed out: linear.getIssue",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "Request timed out: linear.getIssue"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.disconnect:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "Connection lost",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "Connection lost",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "disconnect": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "Connection lost",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "Connection lost"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      },
+      {
+        "id": "b3.client-cutover:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "linear.getIssue#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.getIssue"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "id": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "LogicalClientCutoverError",
+                  "message": "RPC interrupted by connection migration",
+                  "isRpcDeliveryUnknown": false
+                }
+              }
+            },
+            {
+              "name": "linear.issueComments#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "linear.issueComments"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "issueId": "issue-1",
+                    "workspaceId": "linear-workspace"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "LogicalClientCutoverError",
+                  "message": "RPC interrupted by connection migration",
+                  "isRpcDeliveryUnknown": false
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "linear.getIssue#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"linear.getIssue\",\"params\":{\"id\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            },
+            {
+              "name": "linear.issueComments#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"linear.issueComments\",\"params\":{\"issueId\":\"issue-1\",\"workspaceId\":\"linear-workspace\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "cutover": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "RPC interrupted by connection migration",
+            "loading": false,
+            "payload": {
+              "$rpc": "null"
+            }
+          },
+          "effects": [
+            {
+              "name": "detailPayload",
+              "value": {
+                "$rpc": "null"
+              }
+            },
+            {
+              "name": "detailError",
+              "value": ""
+            },
+            {
+              "name": "detailLoading",
+              "value": true
+            },
+            {
+              "name": "detailError",
+              "value": "RPC interrupted by connection migration"
+            },
+            {
+              "name": "detailLoading",
+              "value": false
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

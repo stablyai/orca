@@ -1,0 +1,174 @@
+{
+  "operation": "settings.task-workspace",
+  "family": "settings.task-workspace",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 1,
+  "recording": {
+    "scenario": "settings-task-workspace-transport-error",
+    "checkpoints": [
+      {
+        "id": "settings-pending",
+        "observation": {
+          "sender": [
+            {
+              "name": "settings.get#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "settings.get"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "settings.get#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "submit": {
+              "status": "pending"
+            }
+          },
+          "state": {
+            "creating": "linear:1",
+            "error": "",
+            "settings": {
+              "disabledTuiAgents": ["claude"]
+            }
+          },
+          "effects": [
+            {
+              "name": "creatingKey",
+              "value": "linear:1"
+            },
+            {
+              "name": "error",
+              "value": ""
+            }
+          ]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "settings.get#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "settings.get"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "settings disconnected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "settings.get#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "submit": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "creating": {
+              "$rpc": "null"
+            },
+            "error": "Selected agent is disabled. Choose an enabled agent before creating.",
+            "settings": {
+              "disabledTuiAgents": ["claude"]
+            }
+          },
+          "effects": [
+            {
+              "name": "creatingKey",
+              "value": "linear:1"
+            },
+            {
+              "name": "error",
+              "value": ""
+            },
+            {
+              "name": "workspaceAgent",
+              "value": "codex"
+            },
+            {
+              "name": "workspaceAgentOverridden",
+              "value": false
+            },
+            {
+              "name": "error",
+              "value": "Selected agent is disabled. Choose an enabled agent before creating."
+            },
+            {
+              "name": "creatingKey",
+              "value": {
+                "$rpc": "null"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

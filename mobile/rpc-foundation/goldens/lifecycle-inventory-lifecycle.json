@@ -1,0 +1,2913 @@
+{
+  "operation": "workspace.file-inventory",
+  "family": "legacy-inventory",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 1,
+  "recording": {
+    "scenario": "lifecycle-inventory-lifecycle",
+    "checkpoints": [
+      {
+        "id": "inventory-lifecycle.reset-before-1:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-reset": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.reset-before-1:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-reset": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.reset-after-1:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-reset": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.reset-after-1:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-reset": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.reset-before-2:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-reset": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.reset-before-2:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-reset": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.reset-after-2:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-reset": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.reset-after-2:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-reset": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-before-1:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-before-1:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-before-1:remounted",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "remount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-after-1:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-after-1:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-after-1:remounted",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "remount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-before-2:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-before-2:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-before-2:remounted",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "remount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-after-2:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": ["old.ts"]
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-after-2:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": ["old.ts"]
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.unmount-after-2:remounted",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-unmount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "remount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.blur-before-1:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-blur": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.blur-before-1:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-blur": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": ["old.ts"]
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.blur-after-1:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-blur": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.blur-after-1:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-blur": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": ["old.ts"]
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.blur-before-2:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-blur": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": []
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.blur-before-2:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-blur": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": ["old.ts"]
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.blur-after-2:lifecycle-boundary",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-blur": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": ["old.ts"]
+          },
+          "effects": []
+        }
+      },
+      {
+        "id": "inventory-lifecycle.blur-after-2:settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "files.searchPaths#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.searchPaths"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "limit": 16,
+                    "query": "old",
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "error": {
+                    "code": "method_not_found",
+                    "message": "Unknown method"
+                  },
+                  "id": "frame-1",
+                  "ok": false
+                }
+              }
+            },
+            {
+              "name": "files.list#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "files.list"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "worktree": "id:A"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-2",
+                  "ok": true,
+                  "result": {
+                    "files": [
+                      {
+                        "relativePath": "old.ts"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "files.searchPaths#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+            },
+            {
+              "name": "files.list#1",
+              "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "old": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "lifecycle-blur": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "files": ["old.ts"]
+          },
+          "effects": []
+        }
+      }
+    ]
+  }
+}

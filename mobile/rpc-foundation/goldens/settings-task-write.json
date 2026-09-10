@@ -1,0 +1,141 @@
+{
+  "operation": "settings.task-preferences",
+  "family": "settings-best-effort",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 1,
+  "recording": {
+    "scenario": "settings-task-write",
+    "checkpoints": [
+      {
+        "id": "optimistic",
+        "observation": {
+          "sender": [
+            {
+              "name": "settings.update#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "settings.update"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "defaultTaskViewPreset": "assigned"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "settings.update#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "write": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "preset": "assigned"
+          },
+          "effects": [
+            {
+              "name": "defaultGitHubPreset",
+              "value": "assigned"
+            }
+          ]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "settings.update#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "settings.update"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "defaultTaskViewPreset": "assigned"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "rejected",
+                "error": {
+                  "category": "Error",
+                  "message": "write disconnected",
+                  "isRpcDeliveryUnknown": true
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "settings.update#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "write": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "preset": "assigned"
+          },
+          "effects": [
+            {
+              "name": "defaultGitHubPreset",
+              "value": "assigned"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

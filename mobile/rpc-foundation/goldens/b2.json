@@ -1,0 +1,182 @@
+{
+  "operation": "project.update-metadata",
+  "family": "project-explicit-false",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 1,
+  "recording": {
+    "scenario": "b2",
+    "checkpoints": [
+      {
+        "id": "pending",
+        "observation": {
+          "sender": [
+            {
+              "name": "github.project.updateIssueBySlug#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "github.project.updateIssueBySlug"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "host": "github.enterprise.test",
+                    "number": 1,
+                    "owner": "owner",
+                    "repo": "repo",
+                    "updates": {
+                      "addLabels": ["recorded"]
+                    }
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "github.project.updateIssueBySlug#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"addLabels\":[\"recorded\"]}}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "submit": {
+              "status": "pending"
+            }
+          },
+          "state": {
+            "error": "",
+            "mutating": true,
+            "row": {
+              "content": {
+                "assignees": [],
+                "labels": [],
+                "number": 1,
+                "repository": "owner/repo"
+              },
+              "id": "item-1",
+              "itemType": "ISSUE"
+            }
+          },
+          "effects": [
+            {
+              "name": "projectMutating",
+              "value": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "github.project.updateIssueBySlug#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "github.project.updateIssueBySlug"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "host": "github.enterprise.test",
+                    "number": 1,
+                    "owner": "owner",
+                    "repo": "repo",
+                    "updates": {
+                      "addLabels": ["recorded"]
+                    }
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "timeoutMs": 30000
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-1",
+                  "ok": true,
+                  "result": {
+                    "$rpc": "null"
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "github.project.updateIssueBySlug#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.project.updateIssueBySlug\",\"params\":{\"owner\":\"owner\",\"repo\":\"repo\",\"host\":\"github.enterprise.test\",\"number\":1,\"updates\":{\"addLabels\":[\"recorded\"]}}}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            },
+            "submit": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": {
+            "error": "Cannot read properties of null (reading 'ok')",
+            "mutating": false,
+            "row": {
+              "content": {
+                "assignees": [],
+                "labels": [],
+                "number": 1,
+                "repository": "owner/repo"
+              },
+              "id": "item-1",
+              "itemType": "ISSUE"
+            }
+          },
+          "effects": [
+            {
+              "name": "projectMutating",
+              "value": true
+            },
+            {
+              "name": "projectRowDetailError",
+              "value": "Cannot read properties of null (reading 'ok')"
+            },
+            {
+              "name": "projectMutating",
+              "value": false
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

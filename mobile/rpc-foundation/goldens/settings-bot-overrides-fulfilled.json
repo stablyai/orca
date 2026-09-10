@@ -1,0 +1,123 @@
+{
+  "operation": "settings.bot-overrides",
+  "family": "settings.bot-overrides",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 1,
+  "recording": {
+    "scenario": "settings-bot-overrides-fulfilled",
+    "checkpoints": [
+      {
+        "id": "settings-pending",
+        "observation": {
+          "sender": [
+            {
+              "name": "settings.get#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "settings.get"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "pending"
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "settings.get#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": [],
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [
+            {
+              "name": "settings.get#1",
+              "args": [
+                {
+                  "name": "method",
+                  "value": "settings.get"
+                },
+                {
+                  "name": "params",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                },
+                {
+                  "name": "options",
+                  "value": {
+                    "$rpc": "absent"
+                  }
+                }
+              ],
+              "settlement": {
+                "status": "fulfilled",
+                "value": {
+                  "id": "frame-1",
+                  "ok": true,
+                  "result": {
+                    "settings": {
+                      "defaultTuiAgent": "codex",
+                      "disabledTuiAgents": ["claude"],
+                      "hostSettingOverrides": {},
+                      "prBotAuthorOverrides": ["bot-user"],
+                      "visibleTaskProviders": ["github", "linear"]
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "payloads": [
+            {
+              "name": "settings.get#1",
+              "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+            }
+          ],
+          "settlements": {
+            "mount": {
+              "status": "fulfilled",
+              "value": {
+                "$rpc": "undefined"
+              }
+            }
+          },
+          "state": ["bot-user"],
+          "effects": []
+        }
+      }
+    ]
+  }
+}
