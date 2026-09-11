@@ -48,12 +48,13 @@ export function connectPanePty(
   const session = { pane, manager, deps } as ConnectPanePtySession
   session.shouldRefreshForegroundSynchronously = (): boolean =>
     !session.manager.hasWebglRenderer(session.pane.id)
-  session.tabGeneration =
-    findTerminalTabForPane(useAppStore.getState(), deps.worktreeId, deps.tabId)?.generation ?? 0
+  // One lookup for both epochs: the remount generation and the recovery
+  // ledger's both live on this row, so resolving it twice would put a second
+  // scan of tabsByWorktree on the connect path.
+  const terminalTab = findTerminalTabForPane(useAppStore.getState(), deps.worktreeId, deps.tabId)
+  session.tabGeneration = terminalTab?.generation ?? 0
   // Why: recovery ownership belongs to this xterm instance. A request that
   // settles after remount must not remount its already-replaced successor.
-  // Read off the row already resolved above — the epoch lives on it, so this
-  // costs no extra scan of tabsByWorktree on the connect path.
   session.terminalRecoveryGeneration = captureTabRecoveryGeneration(terminalTab)
   session.terminalRecoveryInstance = registerTerminalPaneRecoveryInstance(session.deps.tabId)
   session.mountFollowsTerminalPark = session.deps.mountFollowsTerminalPark

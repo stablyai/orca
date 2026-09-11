@@ -1,3 +1,5 @@
+import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
+
 type TerminalTabLookup = {
   getTab?: (tabId: string) => { contentType: string; entityId: string } | null
   hasTerminalTab?: (tabId: string) => boolean
@@ -14,7 +16,14 @@ export function resolveTerminalTabId(state: TerminalTabLookup, tabId: string): s
   return unifiedTab?.contentType === 'terminal' ? unifiedTab.entityId : tabId
 }
 
-type TerminalTabRecord = { id: string; generation?: number }
+// `recovery` rides along because the connect path reads the tab's remount
+// generation and its recovery epoch off the SAME row — both live on it, and
+// resolving the row twice would put a second tabsByWorktree scan on that path.
+type TerminalTabRecord = {
+  id: string
+  generation?: number
+  recovery?: TerminalTab['recovery']
+}
 type TerminalTabState = {
   getTab?: (
     tabId: string

@@ -96,7 +96,11 @@ export function readTerminalRecoveryOutcome(
   return ledger.outcome
 }
 
-export function captureTabRecoveryGeneration(tab: TerminalTab | null | undefined): number {
+/** Narrowed to the one field it reads, so the connect path can pass the row it
+ *  already resolved rather than looking the full TerminalTab up a second time. */
+export function captureTabRecoveryGeneration(
+  tab: Pick<TerminalTab, 'recovery'> | null | undefined
+): number {
   return tab?.recovery?.generation ?? 0
 }
 
