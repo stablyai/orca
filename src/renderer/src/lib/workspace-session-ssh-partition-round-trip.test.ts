@@ -13,7 +13,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import {
   exportRemoteWorkspaceSession,
   importRemoteWorkspaceSession
@@ -143,7 +143,12 @@ describe('ssh host partition hydration', () => {
     expect(read.session.activeTabIdByWorktree?.[WORKTREE_ID]).toBeUndefined()
   })
 
-  it('routes the reunited workspace back to the partition that owns it', async () => {
+  it('routes the reunited workspace to the partition every shipped build reads', async () => {
+    // Release N: the read above reunites `ssh:<targetId>`, but the WRITE still lands in `local`.
+    // Flipping both at once is what a downgrade cannot survive -- a previous build reads SSH
+    // session state out of `local` alone, so a moved workspace looks empty to it and its publish
+    // then omits the workspace, which `replace-session` applies as a wholesale host overwrite.
+    // N+1 flips this assertion to SSH_HOST_ID; see docs/reference/ssh-session-partition-move.md.
     const { buildHostIdByWorktreeId } = await import('./workspace-session-host-persistence')
 
     const hostIdByWorktreeId = buildHostIdByWorktreeId({
@@ -151,7 +156,7 @@ describe('ssh host partition hydration', () => {
       worktreesByRepo: {}
     })
 
-    expect(hostIdByWorktreeId(WORKTREE_ID)).toBe(SSH_HOST_ID)
+    expect(hostIdByWorktreeId(WORKTREE_ID)).toBe(LOCAL_EXECUTION_HOST_ID)
   })
 })
 
@@ -560,15 +565,17 @@ describe('ssh host partition and the closed-last-terminal tombstone', () => {
     return { restored: read.session, partitions }
   }
 
-  it('writes an SSH workspace emptied by this build into the partition that owns it', async () => {
-    // The precondition the whole non-recurrence claim rests on: the tombstone lands in
-    // `ssh:<targetId>` and `local` keeps no row, so the legacy shape cannot be regenerated.
+  it('writes an SSH workspace emptied by this build into the partition it writes to', async () => {
+    // The precondition the non-recurrence claim rests on is that the tombstone survives as an
+    // explicit empty row in ONE partition, not which partition that is. Release N writes it to
+    // `local`; N+1 flips these two assertions to `ssh:<targetId>` and to `local` holding no row.
+    // The behavioural claim is asserted by the three tests below and is destination-independent.
     const { partitions } = await roundTripSession(
       session({ tabsByWorktree: { [WORKTREE_ID]: [] } })
     )
 
-    expect(partitions[SSH_HOST_ID]?.tabsByWorktree?.[WORKTREE_ID]).toEqual([])
-    expect(Object.hasOwn(partitions.local?.tabsByWorktree ?? {}, WORKTREE_ID)).toBe(false)
+    expect(partitions.local?.tabsByWorktree?.[WORKTREE_ID]).toEqual([])
+    expect(Object.hasOwn(partitions[SSH_HOST_ID]?.tabsByWorktree ?? {}, WORKTREE_ID)).toBe(false)
   })
 
   it('restores that tombstone as an explicit empty row, not a deleted key', async () => {

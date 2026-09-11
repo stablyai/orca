@@ -8,7 +8,7 @@ import { describe, expect, it, vi, type Mock } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   indexWorktreeHostClaims,
@@ -332,8 +332,14 @@ describe('read-time primary is the one the write path honours', () => {
 
   it('keeps an SSH claimant out of the rotating runtime partition', () => {
     // Why this shape: the claims catalog sorts `runtime:` before `ssh:`, so a plain sort sent the
-    // SSH workspace's rows into the runtime partition. It now persists in its own.
-    expect(buildHostIdByWorktreeId(sshVersusRuntimeState())(SHARED_ID)).toBe(SSH_HOST)
+    // SSH workspace's rows into the runtime partition, which a re-created environment then takes
+    // over. That is the invariant, and it holds in both releases of the partition move.
+    const partition = buildHostIdByWorktreeId(sshVersusRuntimeState())(SHARED_ID)
+
+    expect(partition).not.toBe(RUNTIME_HOST)
+    // Release N writes SSH state to `local`, where every shipped build reads it; N+1 flips this
+    // to SSH_HOST. See docs/reference/ssh-session-partition-move.md.
+    expect(partition).toBe(LOCAL_EXECUTION_HOST_ID)
   })
 
   it('does not strand the runtime co-claimant when the SSH row is written', async () => {
@@ -351,11 +357,15 @@ describe('read-time primary is the one the write path honours', () => {
       })
     )
 
+    // The claim under test is that neither claimant's row is lost to the other, which is
+    // destination-independent: the runtime co-claimant keeps its own partition either way.
     const runtimeWrite = set.mock.calls.find(([, hostId]) => hostId === RUNTIME_HOST)?.[0]
     expect(runtimeWrite?.tabsByWorktree[SHARED_ID]?.map((entry) => entry.id)).toEqual([
       'runtime-tab'
     ])
-    const sshWrite = set.mock.calls.find(([, hostId]) => hostId === SSH_HOST)?.[0]
+    // Release N puts the SSH claimant's row in the local write (no hostId argument); N+1 moves it
+    // to a SSH_HOST write. See docs/reference/ssh-session-partition-move.md.
+    const sshWrite = set.mock.calls.find(([, hostId]) => hostId === undefined)?.[0]
     expect(sshWrite?.tabsByWorktree[SHARED_ID]?.map((entry) => entry.id)).toEqual(['ssh-tab'])
   })
 
