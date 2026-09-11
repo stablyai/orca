@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   isConnectedRuntimeHostState,
@@ -247,4 +248,66 @@ it('does not report reconnecting after verification is terminally blocked', () =
       }
     })
   ).toBe('disconnected')
+})
+
+describe('snapshot transport evidence', () => {
+  const snapshotWith = (
+    transport: RuntimeHostStatusSnapshot['transport'],
+    verification: RuntimeHostStatusSnapshot['verification']
+  ): RuntimeHostStatusSnapshot => ({
+    environmentId: 'host',
+    pairingRevision: 1,
+    sequence: 1,
+    checkedAt: 1,
+    status: null,
+    verification,
+    transport
+  })
+
+  // Enumerated rather than spot-checked: the destructive verdict must be reachable
+  // only from transport evidence that actually proves the host is gone.
+  it.each([
+    ['disconnected', 'unavailable', 'reconnecting'],
+    ['disconnected', 'checking', 'reconnecting'],
+    ['ready', 'unavailable', 'runtime-unavailable'],
+    // A null status under 'checking' is answered by the checking guard, before transport.
+    ['ready', 'checking', 'checking'],
+    ['connecting', 'checking', 'checking'],
+    ['unknown', 'checking', 'checking'],
+    // Was 'disconnected': a transport still being established fell through to the default.
+    ['connecting', 'unavailable', 'checking'],
+    ['unknown', 'unavailable', 'checking']
+  ] as const)('reads transport=%s verification=%s as %s', (transport, verification, expected) => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        snapshot: snapshotWith(transport, verification)
+      })
+    ).toBe(expected)
+  })
+
+  it('still lets a blocked or retired snapshot reach the disconnected verdict', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        snapshot: snapshotWith('connecting', 'blocked')
+      })
+    ).toBe('disconnected')
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        snapshot: { ...snapshotWith('connecting', 'unavailable'), retired: true }
+      })
+    ).toBe('disconnected')
+  })
+
+  it('keeps a closed control channel disconnected while the transport is connecting', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        remoteControl: remoteControl('closed'),
+        snapshot: snapshotWith('connecting', 'unavailable')
+      })
+    ).toBe('disconnected')
+  })
 })
