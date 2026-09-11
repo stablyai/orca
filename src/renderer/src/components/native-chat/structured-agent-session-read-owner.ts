@@ -5,6 +5,7 @@ import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryResult
 } from '../../../../shared/agent-session-wire'
+import { isUnattachedAgentSessionReadRefusal } from '../../../../shared/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
@@ -75,7 +76,7 @@ function createReadOwner(
     emit()
   }
   const apply = (action: StructuredAgentSessionAction): void => {
-    const state = reduceStructuredAgentSession(snapshot.state, action)
+    const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
     if (state !== snapshot.state) {
       setSnapshot({ ...snapshot, state })
     }
@@ -253,7 +254,10 @@ function createReadOwner(
           }
         }
       } catch (error) {
-        if (!shouldStop()) {
+        // An unattached session is the live transport's subject, not this page's: it re-asks and
+        // decides. A page that refused that way must not put the pane in an error state the
+        // transport is about to clear.
+        if (!shouldStop() && !isUnattachedAgentSessionReadRefusal(error)) {
           apply({ type: 'error', message: String(error) })
         }
       } finally {

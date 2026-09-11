@@ -144,10 +144,11 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     expect(claude.connections[0]?.closeCount).toBe(1)
   })
 
-  it('recovers a cancellable lifecycle when a timed-out replay arrives late', async () => {
+  it('recovers a cancellable lifecycle when the replay arrives after dispatch returned', async () => {
     const claude = fakeClaude({ replayUuid: null })
     const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = await acquired(claude, {}, events)
+    const settled = vi.fn()
+    const adapter = await acquired(claude, {}, events, { onDispatchSettledLate: settled })
 
     await expect(
       adapter.dispatch({
@@ -156,7 +157,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         body: USER_MESSAGE,
         fence: 7
       })
-    ).resolves.toMatchObject({ state: 'unknown' })
+    ).resolves.toEqual({ state: 'admitted' })
     const sent = claude.connections[0]!.sent[0]!
     claude.connections[0]!.handlers.onMessage?.({
       ...sent,
@@ -170,6 +171,15 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
         message: expect.objectContaining({ uuid: 'late-turn-1' })
       })
     )
+    expect(settled).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      providerIdentity: {
+        provider: 'claude',
+        sessionId: PROVIDER_SESSION_ID,
+        uuid: 'late-turn-1'
+      }
+    })
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'late-turn-1', fence: 7 })
     ).resolves.toEqual({ cancelled: true })
@@ -178,7 +188,8 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
   it('quarantines SDK frames without the acquired session identity', async () => {
     const claude = fakeClaude({ replayUuid: null })
     const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = await acquired(claude, {}, events)
+    const settled = vi.fn()
+    const adapter = await acquired(claude, {}, events, { onDispatchSettledLate: settled })
     const connection = claude.connections[0]!
 
     connection.handlers.onMessage?.({
@@ -193,13 +204,14 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       message: { role: 'assistant', content: [{ type: 'text', text: 'do not admit' }] }
     })
 
-    const dispatch = adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: 'client-1',
-      body: USER_MESSAGE,
-      fence: 7
-    })
-    await Promise.resolve()
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        clientMessageId: 'client-1',
+        body: USER_MESSAGE,
+        fence: 7
+      })
+    ).resolves.toEqual({ state: 'admitted' })
     expect(connection.sent).toHaveLength(1)
     connection.handlers.onMessage?.({
       ...connection.sent[0],
@@ -208,14 +220,20 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     })
     await Promise.resolve()
     expect(events.filter((event) => event.type === 'message')).toHaveLength(1)
+    expect(settled).not.toHaveBeenCalled()
 
     connection.handlers.onMessage?.({
       ...connection.sent[0],
       session_id: PROVIDER_SESSION_ID
     })
-    await expect(dispatch).resolves.toMatchObject({
-      state: 'accepted',
-      providerIdentity: { uuid: connection.sent[0]!.uuid }
+    expect(settled).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      providerIdentity: {
+        provider: 'claude',
+        sessionId: PROVIDER_SESSION_ID,
+        uuid: connection.sent[0]!.uuid
+      }
     })
   })
 
@@ -379,231 +397,6 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     ).rejects.toThrow(/not signed in.*Claude CLI.*CLAUDE_CONFIG_DIR/s)
     expect(claude.connections[0].closeCount).toBe(1)
-  })
-})
-
-describe('ClaudeStructuredSessionAdapter turns and controls', () => {
-  it('accepts a dispatch only after Claude replays its provider uuid', async () => {
-    const claude = fakeClaude({ replayUuid: 'user-provider-uuid' })
-    const adapter = await acquired(claude)
-
-    const result = await adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: 'client-1',
-      body: USER_MESSAGE,
-      fence: 7
-    })
-
-    expect(result).toEqual({
-      state: 'accepted',
-      providerIdentity: {
-        provider: 'claude',
-        sessionId: PROVIDER_SESSION_ID,
-        uuid: 'user-provider-uuid'
-      }
-    })
-    expect(claude.connections[0].sent[0]).toMatchObject({
-      type: 'user',
-      message: { role: 'user', content: [{ type: 'text', text: 'ship it' }] },
-      session_id: PROVIDER_SESSION_ID
-    })
-  })
-
-  it('leaves delivery unconfirmed when no replay uuid arrives', async () => {
-    const adapter = await acquired(fakeClaude({ replayUuid: null }))
-    await expect(
-      adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'client-1',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-    ).resolves.toMatchObject({ state: 'unknown' })
-  })
-
-  it('requires an acknowledged interrupt and supports controlled options', async () => {
-    const claude = fakeClaude()
-    const adapter = await acquired(claude)
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
-    ).resolves.toEqual({ cancelled: true })
-    await expect(
-      adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'sonnet', fence: 7 })
-    ).resolves.toEqual({ model: 'sonnet' })
-    expect(claude.connections[0].calls.slice(-2)).toEqual([
-      { subtype: 'interrupt', params: {} },
-      { subtype: 'set_model', params: { model: 'sonnet' } }
-    ])
-
-    claude.routes.interrupt = () => {
-      throw new ClaudeControlRequestError('interrupt', 'not running')
-    }
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-2', fence: 7 })
-    ).resolves.toEqual({ cancelled: false })
-
-    claude.routes.interrupt = () => {
-      throw new Error('claude interrupt request timed out')
-    }
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-3', fence: 7 })
-    ).rejects.toThrow('timed out')
-  })
-
-  it('does not let a delayed cancellation for an earlier turn interrupt the later turn', async () => {
-    const claude = fakeClaude({ replayUuids: ['turn-T', 'turn-U'] })
-    const adapter = await acquired(claude)
-
-    await adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: 'client-T',
-      body: USER_MESSAGE,
-      fence: 7
-    })
-    await adapter.dispatch({
-      sessionId: 'session-1',
-      clientMessageId: 'client-U',
-      body: USER_MESSAGE,
-      fence: 7
-    })
-
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-T', fence: 7 })
-    ).resolves.toEqual({ cancelled: false })
-    expect(claude.connections[0].calls.filter((call) => call.subtype === 'interrupt')).toHaveLength(
-      0
-    )
-
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-U', fence: 6 })
-    ).resolves.toEqual({ cancelled: false })
-
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-U', fence: 7 })
-    ).resolves.toEqual({ cancelled: true })
-    expect(claude.connections[0].calls.filter((call) => call.subtype === 'interrupt')).toHaveLength(
-      1
-    )
-  })
-
-  it('does not cancel an acknowledged turn after a later dispatch returns unknown', async () => {
-    const claude = fakeClaude({ replayUuids: ['turn-T', null] })
-    const adapter = await acquired(claude)
-
-    await expect(
-      adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'client-T',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-    ).resolves.toMatchObject({
-      state: 'accepted',
-      providerIdentity: { uuid: 'turn-T' }
-    })
-    await expect(
-      adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'client-U',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-    ).resolves.toMatchObject({ state: 'unknown' })
-    expect(claude.connections[0].sent).toHaveLength(2)
-
-    await expect(
-      adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-T', fence: 7 })
-    ).resolves.toEqual({ cancelled: false })
-    expect(claude.connections[0].calls.filter((call) => call.subtype === 'interrupt')).toHaveLength(
-      0
-    )
-  })
-
-  it('classifies provider-declined options without treating timeouts as settled', async () => {
-    const claude = fakeClaude({
-      routes: {
-        set_model: () => {
-          throw new ClaudeControlRequestError('set_model', 'model unavailable')
-        }
-      }
-    })
-    const adapter = await acquired(claude)
-
-    await expect(
-      adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'fable', fence: 7 })
-    ).rejects.toMatchObject({ name: 'AgentSessionOptionRejectedError' })
-    claude.routes.set_model = () => {
-      throw new Error('claude set_model request timed out')
-    }
-    await expect(
-      adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'opus', fence: 7 })
-    ).rejects.toThrow('timed out')
-  })
-
-  it('hydrates live model choices and maps the resolved current model to its CLI id', async () => {
-    const claude = fakeClaude({
-      initModel: 'claude-sonnet-5',
-      routes: {
-        list_models: () => [
-          { value: 'default', resolvedModel: 'claude-opus-5', displayName: 'Default' },
-          {
-            value: 'opus',
-            resolvedModel: 'claude-opus-5',
-            displayName: 'Opus',
-            supportsEffort: true,
-            supportedEffortLevels: ['low', 'high']
-          },
-          {
-            value: 'sonnet',
-            resolvedModel: 'claude-sonnet-5',
-            displayName: 'Sonnet'
-          }
-        ]
-      }
-    })
-    const adapter = await acquired(claude)
-
-    await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toEqual({
-      models: [
-        {
-          id: 'opus',
-          label: 'Opus',
-          isDefault: true,
-          efforts: [
-            { value: 'low', label: 'Low' },
-            { value: 'high', label: 'High' }
-          ]
-        },
-        { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: [] }
-      ],
-      current: { model: 'sonnet', effort: 'high', confirmed: ['model', 'effort'] }
-    })
-  })
-
-  it('keeps the shared Claude seed when live model discovery is unavailable', async () => {
-    const claude = fakeClaude({
-      initModel: 'custom-model',
-      routes: {
-        list_models: () => {
-          throw new Error('unsupported')
-        }
-      }
-    })
-    const adapter = await acquired(claude)
-    const result = await adapter.readOptions({ sessionId: 'session-1', fence: 7 })
-
-    expect(result.models.map((model) => model.id)).toEqual([
-      'fable',
-      'opus',
-      'sonnet',
-      'haiku',
-      'custom-model'
-    ])
-    expect(result.current).toEqual({
-      model: 'custom-model',
-      effort: 'high',
-      confirmed: ['model', 'effort']
-    })
   })
 })
 

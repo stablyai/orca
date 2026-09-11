@@ -232,7 +232,7 @@ export class AgentSessionJournal {
   }
 
   /**
-   * Advance a submission to exactly one of accepted / rejected / unknown.
+   * Record a dispatch transition, including a proven retry returning to pending.
    *
    * Accepting REQUIRES the provider identity rather than a free-form id: the
    * adopted key is what the provider's echo will upsert into, so a mismatched

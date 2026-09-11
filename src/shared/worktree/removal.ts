@@ -22,11 +22,12 @@ export type WorktreeForceDeleteReason =
 // rather than scanning the whole message and letting a path spell out a verdict.
 export const UNSTOPPED_PTY_DETAIL_SEPARATOR = ' — '
 
-// Why: verification distinguishes a PTY it watched stay alive from one it could not reach,
+// Why: verification distinguishes a process it watched stay alive from one it could not reach,
 // and the delete toast must not flatten the two — a user waiving "we could not confirm" is
-// making a different decision than one killing a terminal Orca just saw running. The marker
-// and its matcher stay together for the same reason the force hint does.
-export const UNSTOPPED_PTY_LIVE_DETAIL_PREFIX = 'still live:'
+// making a different decision than one killing something Orca just saw running. The marker
+// and its matcher stay together for the same reason the force hint does. Shared by the PTY
+// sweep and the structured-session sweep, which both re-observe after their stop.
+export const STILL_LIVE_DETAIL_PREFIX = 'still live:'
 
 // Why (#11960): a sweep that never answers wedges removal exactly like a stop that could not
 // be proven, and the waiver clears both — but this error carries different words, so without
@@ -54,7 +55,15 @@ export function isUnstoppedPtyRemovalError(error: string): boolean {
 export function isProvenLivePtyRemovalError(error: string): boolean {
   return (
     isUnstoppedPtyRemovalError(error) &&
-    error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${UNSTOPPED_PTY_LIVE_DETAIL_PREFIX}`)
+    error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${STILL_LIVE_DETAIL_PREFIX}`)
+  )
+}
+
+/** True only when the observation AFTER the close found the session still attached. */
+export function isProvenLiveStructuredSessionRemovalError(error: string): boolean {
+  return (
+    isRunningAgentSessionRemovalError(error) &&
+    error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${STILL_LIVE_DETAIL_PREFIX}`)
   )
 }
 

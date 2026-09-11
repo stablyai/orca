@@ -1,4 +1,5 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { ChevronRight, FilePlus2, FileMinus2, FilePen } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -113,21 +114,29 @@ export function NativeChatDiffCard({
   file,
   revealSignal,
   onReveal,
-  initiallyExpanded = false
+  initiallyExpanded = false,
+  disclosureKey
 }: {
   file: NativeChatEditFile
   revealSignal?: number
   onReveal?: (element: HTMLElement) => void
   initiallyExpanded?: boolean
+  /** Identity this card's open state is remembered under while it is unmounted. */
+  disclosureKey?: string
 }): React.JSX.Element {
-  const [expanded, setExpanded] = useState(initiallyExpanded)
+  const { open: expanded, setOpen: setExpanded } = useNativeChatDisclosure(
+    disclosureKey,
+    initiallyExpanded
+  )
   const cardRef = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
     if (revealSignal && cardRef.current) {
       setExpanded(true)
+      // Reported from the card, not the row: a turn that touched four files must
+      // land on the one that was asked for, and only the card knows where it is.
       onReveal?.(cardRef.current)
     }
-  }, [revealSignal, onReveal])
+  }, [revealSignal, onReveal, setExpanded])
   // Joining every row to seed the copy button is the card's most expensive
   // work, and a collapsed card renders none of those rows.
   const copyText = useMemo(() => patchText(file.lines), [file.lines])
@@ -141,7 +150,7 @@ export function NativeChatDiffCard({
     <div ref={cardRef} className="my-1 overflow-hidden rounded-md border border-border">
       <button
         type="button"
-        onClick={() => hasBody && setExpanded((value) => !value)}
+        onClick={() => hasBody && setExpanded(!expanded)}
         className={cn(
           'group flex w-full items-center gap-1.5 px-2 py-1 text-left',
           hasBody ? 'cursor-pointer hover:bg-accent/30' : 'cursor-default'

@@ -420,6 +420,56 @@ describe('host rewind', () => {
     expect(await host.rewind(caller, params(target))).toMatchObject({ ok: true })
   })
 
+  it('keeps the host-stamped turn rows before the boundary through a Codex provider hydration', async () => {
+    expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    const message = (turnId: string) => ({
+      provider: 'codex' as const,
+      threadId: HOST_TEST_THREAD,
+      turnId,
+      ordinal: 0
+    })
+    const turnRow = (turnId: string) => ({
+      provider: 'legacy' as const,
+      agent: 'codex',
+      sessionId: HOST_TEST_SESSION,
+      recordId: `turn-lifecycle:${turnId}`
+    })
+    const keptTurn = {
+      kind: 'turn' as const,
+      turnId: 'kept',
+      state: 'completed' as const,
+      userItemId: agentJournalItemKey(message('kept')),
+      startedAt: HOST_TEST_NOW - 9_000,
+      completedAt: HOST_TEST_NOW - 4_000,
+      durationMs: 5_000
+    }
+    sink.appendItem(message('kept'), hostTestMessage('kept'))
+    sink.appendItem(turnRow('kept'), keptTurn)
+    sink.appendItem(message('drop'), hostTestMessage('drop'))
+    sink.appendItem(turnRow('drop'), { ...keptTurn, turnId: 'drop', durationMs: 1_000 })
+    sink.appendItem(message('tip'), { ...hostTestMessage('tip'), role: 'assistant' })
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+    // The provider preflight knows only its own items, never the host's turn rows.
+    const items = [{ identity: message('kept'), body: hostTestMessage('kept from provider') }]
+    rewind.mockImplementationOnce(async (input) => {
+      await input.onPrepared?.(items)
+      await input.onReverted?.()
+      return { ok: true, items }
+    })
+
+    expect(await host.rewind(caller, params(agentJournalItemKey(message('drop'))))).toMatchObject({
+      ok: true
+    })
+
+    expect(
+      host.journalSnapshot(HOST_TEST_SESSION).items.map(({ itemId, body }) => ({ itemId, body }))
+    ).toEqual([
+      { itemId: agentJournalItemKey(message('kept')), body: hostTestMessage('kept from provider') },
+      { itemId: agentJournalItemKey(turnRow('kept')), body: keptTurn }
+    ])
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+  })
+
   it('recovers against the complete provider preflight when the local journal omitted an older turn', async () => {
     const target = await seed()
     const items = ['older', 'kept'].map((turnId) => ({

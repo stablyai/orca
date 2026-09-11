@@ -125,6 +125,8 @@ export type PersistedUIState = {
   /** Client-side footer presentation; verbose preserves the pre-roster all-window default. */
   statusBarUsageMode?: StatusBarUsageMode
   dismissedUpdateVersion: string | null
+  /** App version that last dismissed the unexpected-sign-out card; null = never. Re-arms on each new version while still signed out. */
+  dismissedUnexpectedSignoutVersion?: string | null
   lastUpdateCheckAt: number | null
   /** Dev-only update channel override; absent means the build's own channel. */
   releaseChannelOverride?: ReleaseChannel | null

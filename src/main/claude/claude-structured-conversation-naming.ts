@@ -7,7 +7,7 @@
 import { normalizeAgentSessionConversationName } from '../../shared/agent-session-conversation-name'
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionDispatchOutcome } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { DISPATCH_ACK_TIMEOUT_MS, dispatchClaudeTurn } from './claude-structured-dispatch'
+import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { claudeDispatchTypedText } from './claude-structured-dispatch-content'
 import type {
   ClaudeSession,
@@ -38,12 +38,10 @@ export class ClaudeConversationNaming {
     session: ClaudeSession,
     input: ClaudeNamedDispatchInput
   ): Promise<AgentSessionDispatchOutcome> {
-    return dispatchClaudeTurn(
-      session,
-      input,
-      deps.dispatchAckTimeoutMs ?? DISPATCH_ACK_TIMEOUT_MS
-    ).then((outcome) => {
-      if (outcome.state === 'accepted') {
+    return dispatchClaudeTurn(session, input).then((outcome) => {
+      // Both states mean the provider took the message; `admitted` just settles its identity
+      // later, and naming needs the turn to exist, not its identity.
+      if (outcome.state === 'accepted' || outcome.state === 'admitted') {
         this.start(deps, session, input)
       }
       return outcome

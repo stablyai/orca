@@ -39,6 +39,7 @@ vi.mock('os', async (importOriginal) => {
 })
 
 import { PiTitlebarExtensionService, isSafeDescendCandidate } from './titlebar-extension-service'
+import { getPiTitlebarExtensionSource } from './titlebar-extension-source'
 
 function legacyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
@@ -456,6 +457,16 @@ describe('PiTitlebarExtensionService', () => {
     svc.buildPtyEnv('pty-3', piHome, 'pi')
     svc.buildPtyEnv('pty-3', piHome, 'pi')
     expectPiHomeIntact()
+  })
+
+  it('refreshes a managed spinner in an explicitly selected senpi home', () => {
+    const agentDir = join(userDataDir, '.omo', 'agent')
+    const extensionPath = join(agentDir, 'extensions', 'orca-titlebar-spinner.ts')
+    mkdirSync(join(agentDir, 'extensions'), { recursive: true })
+    writeFileSync(extensionPath, '// @orca-managed-pi-extension\nstale spinner')
+    const svc = new PiTitlebarExtensionService()
+    svc.buildPtyEnv('pty-senpi', agentDir, 'pi')
+    expect(readFileSync(extensionPath, 'utf8')).toContain(getPiTitlebarExtensionSource())
   })
 
   it('rebuilding updates Orca-owned extensions while preserving user files', () => {

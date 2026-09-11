@@ -2,6 +2,7 @@
 
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as AgentAutoAckPresence from './agent-auto-ack-presence'
 import { useAutoAckViewedAgent } from './useAutoAckViewedAgent'
 import { useAppStore } from '../store'
 import { makeTab } from '../store/slices/store-test-helpers'
@@ -12,6 +13,15 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 // so its ref guard never suppresses the rescan an ack triggers. It only terminated because
 // acknowledgeAgents returned the same object within one millisecond — a scan costing >=1ms with a
 // turn stamped ahead of the local clock (SSH/remote host) re-acked forever (React #185).
+
+// These suites isolate synchronous acknowledgement and layout behavior.
+vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
+  ...(await importOriginal<typeof AgentAutoAckPresence>()),
+  createAutoAckPresenceCheck: (_read: unknown, onPresent: () => void) => ({
+    request: onPresent,
+    dispose() {}
+  })
+}))
 
 const TAB_ID = 'tab-main'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

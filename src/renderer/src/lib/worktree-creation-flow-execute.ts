@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { preflightAgentTrust as preflightWorkspaceAgentTrust } from '@/lib/agent-trust-preflight'
+import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import {
@@ -22,24 +22,13 @@ import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-st
 import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structured-session'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { markStructuredWorktreeLaunchUnconfirmed } from '@/lib/worktree-creation-structured-recovery'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
 // Why: activePendingCreationId can outlive the terminal route when the user
 // switches app views; only the terminal route renders the creation panel.
 function isPendingCreationSurfaceVisible(creationId: string): boolean {
   const state = useAppStore.getState()
   return state.activeView === 'terminal' && state.activePendingCreationId === creationId
-}
-
-async function preflightAgentTrust(
-  request: WorktreeCreationRequest,
-  path: string,
-  connectionId?: string | null
-): Promise<void> {
-  await preflightWorkspaceAgentTrust({
-    agent: request.agent,
-    workspacePath: path,
-    connectionId
-  })
 }
 
 export async function executeWorktreeCreation(
@@ -157,7 +146,11 @@ export async function executeWorktreeCreation(
   if (worktree.path && !structuredLaunch) {
     const repoConnectionId =
       useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
-    await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)
+    await preflightAgentTrust({
+      agent: preparedRequest.agent,
+      workspacePath: worktree.path,
+      connectionId: repoConnectionId
+    })
   }
 
   // `createWorktree` already inserted the real worktree row. Leaving for an app
@@ -176,6 +169,7 @@ export async function executeWorktreeCreation(
   if (shouldActivateOnCompletion && !structuredLaunch) {
     activation = activateAndRevealWorktree(worktree.id, {
       sidebarRevealBehavior: 'auto',
+      ...(preparedRequest.agent !== null ? { agent: preparedRequest.agent } : {}),
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),
@@ -189,7 +183,7 @@ export async function executeWorktreeCreation(
       startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
     )
     primaryTabId =
-      structuredLaunch && !hasExplicitTerminalWork
+      preparedRequest.agent !== null && !hasExplicitTerminalWork
         ? null
         : ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),
@@ -200,17 +194,29 @@ export async function executeWorktreeCreation(
             result.defaultTabs,
             {
               activateCreatedTabs: false,
-              ...(structuredLaunch ? { callerProvidesSurface: true } : {}),
+              ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
               ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
             }
           )
+    if (!structuredLaunch && !backendSpawned) {
+      ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+        startup: startupOpt,
+        agent: preparedRequest.agent,
+        activate: false
+      })
+    }
   }
 
   let structuredLaunchAccepted = structuredLaunch
-  if (structuredLaunch && isAgentSessionHandleProvider(preparedRequest.agent)) {
+  const { agentLaunchRoute } = preparedRequest
+  if (
+    agentLaunchRoute === 'structured-native-chat' &&
+    isAgentSessionHandleProvider(preparedRequest.agent)
+  ) {
     const structuredSession = await launchStructuredWorktreeSession({
       creationId,
       request: preparedRequest,
+      agentLaunchRoute,
       worktreeId: worktree.id,
       shouldActivateOnCompletion,
       fallbackStartupOpt,

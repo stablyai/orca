@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store'
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
+import { locateTerminalTab } from '@/store/terminals/terminal-tab-location'
 import {
   _resetTerminalInputQuarantineForTests,
   armTerminalInputQuarantine
@@ -140,8 +142,11 @@ export function registerTerminalPaneRecoveryInstance(tabId: string): {
       if (pendingRetry?.requestsByInstanceId.size === 0) {
         cancelPendingRecoveryRetry(tabId)
       }
-      const getTab = useAppStore.getState().getTab
-      if (getTab && !getTab(tabId)) {
+      // Read the SAME index remountTerminalTabForRecovery mutates. getTab answers
+      // from unifiedTabsByWorktree, which several slices let drift out of sync with
+      // tabsByWorktree; on the direct-SSH path that drift made every remount erase
+      // the budget it had just consumed, so the cap never held (crash b5cfc6ca).
+      if (!isTerminalTabPresent(useAppStore.getState(), tabId)) {
         recoveryTimestampsByTabId.delete(tabId)
         recoveryGenerationByTabId.delete(tabId)
         cancelPendingRecoveryRetry(tabId)
@@ -222,8 +227,15 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   }
   // A terminal-backed tab is intentionally hidden while native chat owns the
   // provider. Late xterm callbacks from that hidden surface must not remount
-  // the tab and race the handoff's owner transition.
-  if (useAppStore.getState().getTab?.(request.tabId)?.viewMode === 'chat') {
+  // the tab and race the handoff's owner transition. Ask both indices: local
+  // toggles only patch the unified tab, but that index can transiently drop a
+  // row the remount index still holds (crash b5cfc6ca) and a hole there must
+  // not read as "not chat-owned".
+  const state = useAppStore.getState()
+  if (
+    state.getTab?.(request.tabId)?.viewMode === 'chat' ||
+    locateTerminalTab(state.tabsByWorktree, request.tabId)?.tab.viewMode === 'chat'
+  ) {
     return false
   }
   const budget = recoveryBudget(request.tabId, Date.now())

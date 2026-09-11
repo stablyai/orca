@@ -22,6 +22,7 @@ import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-co
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 
 type StoppingBackgroundTasks = {
   sessionId: string
@@ -41,6 +42,14 @@ export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
+  const launchDraftSignal = useNativeChatLaunchDraftSignal({
+    terminalTabId: props.tabId,
+    agent: props.agent,
+    messages: controller.messages,
+    // Why: the controller starts at `idle`, before any read; like the legacy view's unsettled
+    // phases, that empty list must not become the draft's turn baseline.
+    transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
+  })
   const [composerError, setComposerError] = useState<string | null>(null)
   const [stoppingBackgroundTasks, setStoppingBackgroundTasks] =
     useState<StoppingBackgroundTasks | null>(null)
@@ -129,12 +138,17 @@ export function NativeChatStructuredSession(
           }
         ]
       : [])
+  // Only the head of the outbox is ever dispatched, so it is the only entry a
+  // Retry can act on and the only one whose state can be holding the queue.
+  // Scanning past it named a message the user was not looking at and re-sent
+  // one from earlier in the session while their newest sat behind it.
+  const outboxHead = controller.outbox[0] ?? null
   const retryableOutboxEntry =
-    controller.outbox.find((entry) => entry.state === 'unconfirmed') ??
-    controller.outbox.find(
-      (entry) => entry.clientMessageId === controller.blockedClientMessageId
-    ) ??
-    null
+    outboxHead &&
+    (outboxHead.state === 'unconfirmed' ||
+      outboxHead.clientMessageId === controller.blockedClientMessageId)
+      ? outboxHead
+      : null
   const structuredTransport = useMemo(
     () => ({
       send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
@@ -210,7 +224,8 @@ export function NativeChatStructuredSession(
             isWorking={controller.isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
-            workingStartedAt={null}
+            workingStartedAt={controller.workingStartedAt}
+            settledTurns={controller.settledTurns}
             showTurnStatus
             turnActivity={controller.turnActivity}
             onLinkClick={onLinkClick}
@@ -385,6 +400,7 @@ export function NativeChatStructuredSession(
             }
           }}
           structuredTransport={structuredTransport}
+          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft: true }}
         />
       )}
       {paneCommands.menu}

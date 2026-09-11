@@ -9,7 +9,6 @@ import {
   cancelClaudeTurn,
   stopClaudeBackgroundTasks
 } from './claude-structured-control-actions'
-import { DISPATCH_ACK_TIMEOUT_MS } from './claude-structured-dispatch'
 import { ClaudeConversationNaming } from './claude-structured-conversation-naming'
 import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
@@ -154,7 +153,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         reason: exit.error.message,
         cause: 'unexpected-exit',
         fence: exit.session.fence,
-        acquisitionGeneration: exit.session.acquisitionGeneration
+        acquisitionGeneration: exit.session.acquisitionGeneration,
+        observedAt: this.deps.now?.() ?? Date.now()
       }
       try {
         this.emit(exit.session, ended)
@@ -225,12 +225,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   drainConversationNaming = (): Promise<void> => this.naming.drain()
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
-    compactClaudeSession(
-      this.session(input.sessionId),
-      this.compactions,
-      input,
-      this.deps.dispatchAckTimeoutMs ?? DISPATCH_ACK_TIMEOUT_MS
-    )
+    compactClaudeSession(this.session(input.sessionId), this.compactions, input)
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) => {
     const session = this.session(input.sessionId)

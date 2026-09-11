@@ -53,7 +53,7 @@ function sessionWith(
   session.connection = {
     closed: false,
     send: async (message: Record<string, unknown>) => {
-      // Echo the dispatch back as its own replay so the turn is accepted.
+      // Echo the dispatch back as its own replay so the turn is admitted.
       resolveClaudeReplayWaiter(session, message)
     },
     generateSessionTitle: async (description: string, options?: { persist?: boolean }) => {
@@ -70,7 +70,6 @@ function depsWith(
 ): ClaudeStructuredSessionAdapterDeps {
   return {
     resolveLaunch: () => Promise.reject(new Error('unused')),
-    dispatchAckTimeoutMs: 50,
     readConversationName: () => storedName,
     storeConversationName: async (_sessionId, name) => {
       stored.push(name)
@@ -101,7 +100,7 @@ describe('Claude structured conversation naming', () => {
     )
     await naming.drain()
 
-    expect(outcome.state).toBe('accepted')
+    expect(outcome.state).toBe('admitted')
     expect(titles).toEqual([{ description: 'fix the lease probe', persist: true }])
     expect(stored).toEqual(['Fix the lease probe'])
   })
@@ -173,7 +172,7 @@ describe('Claude structured conversation naming', () => {
     expect(stored).toEqual(['Screenshot review'])
   })
 
-  it('keeps a turn accepted when the title request throws', async () => {
+  it('keeps a turn admitted when the title request throws', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const titles: TitleCall[] = []
     const stored: string[] = []
@@ -183,7 +182,7 @@ describe('Claude structured conversation naming', () => {
     const outcome = await naming.dispatchTurn(depsWith(stored), session, dispatchInput())
     await expect(naming.drain()).resolves.toBeUndefined()
 
-    expect(outcome.state).toBe('accepted')
+    expect(outcome.state).toBe('admitted')
     expect(stored).toEqual([])
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
@@ -209,7 +208,7 @@ describe('Claude structured conversation naming', () => {
     })
     await adapter.drainConversationNaming()
 
-    expect(outcome.state).toBe('accepted')
+    expect(outcome.state).toBe('admitted')
     expect(stored).toEqual(['Ship it review'])
     expect(claude.connections[0]?.calls).toContainEqual({
       subtype: 'generate_session_title',

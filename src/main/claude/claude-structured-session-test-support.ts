@@ -228,7 +228,6 @@ export function adapterFor(
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
     ...(initTimeoutMs === undefined ? {} : { initTimeoutMs }),
-    dispatchAckTimeoutMs: 10,
     persistHandle:
       persistHandle ??
       (async (handle) => {

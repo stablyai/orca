@@ -247,7 +247,7 @@ describe('OrcaRuntimeService', () => {
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 1_000 })
     ).resolves.toMatchObject({
       satisfied: false,
-      blockedReason: 'codex-interactive-prompt'
+      blockedReason: 'agent-interactive-prompt'
     })
   })
 

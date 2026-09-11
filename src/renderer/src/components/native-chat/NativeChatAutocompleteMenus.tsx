@@ -209,7 +209,14 @@ function PickerOption({
         <Package className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
       ) : null}
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-mono font-medium">{item.token}</span>
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="min-w-0 truncate font-mono font-medium">{item.token}</span>
+          {item.kind === 'command' && item.argumentHint ? (
+            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+              {item.argumentHint}
+            </span>
+          ) : null}
+        </span>
         {item.description ? (
           <span className="block truncate text-xs text-muted-foreground">{item.description}</span>
         ) : null}

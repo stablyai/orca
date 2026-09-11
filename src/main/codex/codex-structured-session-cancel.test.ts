@@ -80,7 +80,10 @@ async function acquired(
   codex: ReturnType<typeof fakeCodex>,
   events: CodexStructuredSessionEvent[] = [],
   processControl: Partial<
-    Pick<CodexStructuredSessionAdapterDeps, 'captureTurnProcesses' | 'terminateTurnProcesses'>
+    Pick<
+      CodexStructuredSessionAdapterDeps,
+      'captureTurnProcesses' | 'terminateTurnProcesses' | 'now'
+    >
   > = {}
 ): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
@@ -258,6 +261,32 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
       state: 'accepted',
       providerIdentity: { turnId: 'turn-2' }
     })
+  })
+
+  it('keeps the receipt time of a completion deferred behind physical termination', async () => {
+    const events: CodexStructuredSessionEvent[] = []
+    let clock = 5_000
+    let finishTermination!: (terminated: boolean) => void
+    const termination = new Promise<boolean>((resolve) => {
+      finishTermination = resolve
+    })
+    const codex = fakeCodex()
+    codex.routes['turn/interrupt'] = () => {
+      completeTurn(codex)
+      return {}
+    }
+    const adapter = await acquired(codex, events, {
+      terminateTurnProcesses: async () => termination,
+      now: () => clock
+    })
+
+    const pending = adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
+    await vi.waitFor(() => expect(codex.connections[0].calls.at(-1)?.method).toBe('turn/interrupt'))
+    clock = 9_000
+    finishTermination(true)
+    await expect(pending).resolves.toEqual({ cancelled: true })
+
+    expect(events.at(-1)).toMatchObject({ method: 'turn/completed', observedAt: 5_000 })
   })
 
   it('does not strand a deferred completion when the interrupt receipt fails', async () => {
