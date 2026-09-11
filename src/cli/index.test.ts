@@ -523,7 +523,8 @@ describe('orca root help', () => {
 
     const createHelp = String(logSpy.mock.calls[0][0])
     expect(createHelp).toContain('[--pr <number>]')
-    expect(createHelp).toContain('--pr <number|null>     Linked pull request number')
+    expect(createHelp).toContain('--pr <number>          Linked pull request number')
+    expect(createHelp).not.toContain('--pr <number|null>')
 
     logSpy.mockClear()
     await main(['worktree', 'set', '--help'], '/tmp/repo')

@@ -159,6 +159,11 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear create' && flag === 'parent-current') {
     return '--parent-current      Use the current linked issue as parent'
   }
+  // Why: create never clears a link, so the shared `<number|null>` text would advertise
+  // a `null` that create rejects.
+  if (command === 'worktree create' && flag === 'pr') {
+    return '--pr <number>          Linked pull request number'
+  }
   if (command === 'worktree create' && flag === 'parent-worktree') {
     return '--parent-worktree <selector> Parent selector such as identity:<identity>, active/current, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<worktreeId>'
   }
