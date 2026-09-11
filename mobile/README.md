@@ -2,6 +2,15 @@
 
 React Native companion app for Orca. Monitor worktrees, view terminal output, and send commands from your phone.
 
+## Terminal Appearance
+
+Terminal colors default to **Automatic (phone)** and follow the phone's light or dark mode.
+Open the session's **⋯ → Terminal appearance** menu to choose Automatic (phone), Dark,
+Light, or Match desktop. The selection is saved on the phone and immediately updates all
+open terminal panes, including hidden tabs, without restarting their sessions. Match desktop
+uses the colors published by the connected host. Automatic, Dark, and Light use Orca's
+shared default palettes in `src/shared/terminal-default-themes.ts`.
+
 Local development uses two processes:
 
 - Orca desktop/Electron from the repo root. This hosts the mobile WebSocket RPC server on port `6768`.
