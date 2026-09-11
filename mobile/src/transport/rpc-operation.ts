@@ -1,5 +1,5 @@
 import type { RpcClient, SendRequestOptions } from './rpc-client'
-import type { RpcMethodName, RpcParams } from './rpc-params-contract'
+import type { RpcMethodName, RpcSendParams } from './rpc-params-contract'
 import type { RpcResponse } from './types'
 import {
   isMethodNotFoundRefusal,
@@ -210,7 +210,7 @@ export async function runRpcOperation<
 >(
   client: RpcClient,
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'on-settle'>,
-  params: RpcParams<Method>,
+  params: RpcSendParams<Method>,
   options?: SendRequestOptions
 ): Promise<RpcVerdict<Acceptance, Value>> {
   const outcome = await request(client, operation, params, options)
@@ -228,7 +228,7 @@ export async function captureRpcOperationSettlement<
 >(
   client: RpcClient,
   operation: RpcOperation<Method, Acceptance, Variant, Value, Barrier>,
-  params: RpcParams<Method>,
+  params: RpcSendParams<Method>,
   options?: SendRequestOptions
 ): Promise<RpcOperationSettlement<Variant, Value>> {
   try {
@@ -253,7 +253,7 @@ export function startRpcOperation<
 >(
   client: RpcClient,
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'after-all-requests'>,
-  params: RpcParams<Method>,
+  params: RpcSendParams<Method>,
   options?: SendRequestOptions
 ): PendingRpcOperation<RpcOperation<Method, Acceptance, Variant, Value, 'after-all-requests'>> {
   return {
