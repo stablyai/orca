@@ -218,12 +218,19 @@ export class RuntimeHostStatusOwner {
     this.response = response
     if (response.ok) {
       this.attempt = 0
-      this.update({ status: response.result, checkedAt: Date.now(), verification: 'verified' })
+      this.update({
+        status: response.result,
+        checkedAt: Date.now(),
+        verification: 'verified',
+        blockedCode: undefined
+      })
       this.persistent = this.options.verified(response, this.active)
     } else {
+      const blocked = isRuntimeHostStatusBlocked(response)
       this.update({
         checkedAt: Date.now(),
-        verification: isRuntimeHostStatusBlocked(response) ? 'blocked' : 'unavailable'
+        verification: blocked ? 'blocked' : 'unavailable',
+        blockedCode: blocked ? response.error.code : undefined
       })
       this.scheduleRetry()
     }

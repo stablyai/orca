@@ -15,6 +15,8 @@ export type RuntimeHostStatusSnapshot = {
   transport: 'unknown' | 'connecting' | 'ready' | 'disconnected'
   remoteControl?: RemoteRuntimeSharedConnectionDiagnostics | null
   retired?: true
+  /** RPC failure code behind `verification: 'blocked'`; the seven codes are not one cause. */
+  blockedCode?: string
 }
 
 export type RuntimeHostStatusResponse = RuntimeRpcResponse<RuntimeStatus>

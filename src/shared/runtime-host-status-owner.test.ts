@@ -205,3 +205,34 @@ it.each(['unknown', 'ready'] as const)(
     })
   }
 )
+
+it.each([
+  ['protocol_version_mismatch', 'blocked', 'protocol_version_mismatch'],
+  ['unauthorized', 'blocked', 'unauthorized'],
+  ['runtime_unavailable', 'unavailable', undefined]
+] as const)('records %s as the cause behind %s', async (code, verification, blockedCode) => {
+  const { owner, request } = createOwner()
+  request.mockResolvedValueOnce(runtimeHostStatusFailure(code, 'nope'))
+  await owner.refresh()
+  expect(owner.read().verification).toBe(verification)
+  expect(owner.read().blockedCode).toBe(blockedCode)
+})
+
+it('clears a recorded cause once the host verifies again', async () => {
+  const { owner, request } = createOwner()
+  request.mockResolvedValueOnce(runtimeHostStatusFailure('runtime_unavailable', 'offline'))
+  await owner.refresh()
+  expect(owner.read().blockedCode).toBeUndefined()
+  owner.acceptVerified(success())
+  expect(owner.read()).toMatchObject({ verification: 'verified', blockedCode: undefined })
+})
+
+it('keeps an authentication rejection distinguishable from a client-side disconnect', () => {
+  const { owner } = createOwner()
+  owner.authenticationRejected()
+  expect(owner.read()).toMatchObject({ verification: 'blocked', blockedCode: 'unauthorized' })
+  const disconnected = createOwner()
+  disconnected.owner.dispose()
+  expect(disconnected.owner.read().retired).toBe(true)
+  expect(disconnected.owner.read().blockedCode).toBeUndefined()
+})
