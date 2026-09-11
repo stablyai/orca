@@ -31,10 +31,18 @@ type BrokerOwnership = {
 }
 
 export class RelayAuthCoordinator {
-  // Why 20s: bounds only how long a waiter sits through armed retries, never
-  // an open already in flight. It spans the first few rungs of the backoff
-  // ladder and stays inside the phone's 30s request budget, so a sustained
-  // outage fails the caller with its cause instead of parking the demand ref.
+  // Why 20s: bounds only how long a waiter sits through armed retries, never a reconcile already
+  // in flight. It spans the first few rungs of the backoff ladder, so a sustained outage fails the
+  // caller with its cause instead of parking the demand ref.
+  //
+  // It does NOT bound the call. The deadline is only consulted after `await pending` below, and a
+  // reconcile's own ceiling is `readContext`'s cloud-refresh timeout (60s, plus one retry for a
+  // definitive 5xx) followed by the broker open — several times the phone's 30s request budget,
+  // which an earlier version of this comment claimed it stayed inside. A phone whose
+  // pairing.provisionRelay reaches this through requireActiveBroker can therefore give up and
+  // retry while the desktop still holds a transient demand ref for the call it abandoned.
+  // Bounding the reconcile instead would fail a slow-but-succeeding open, which is the worse trade;
+  // relay-auth-coordinator-wait-budget.test.ts pins the behaviour so the claim cannot drift back.
   private static readonly LIVE_BROKER_WAIT_BUDGET_MS = 20_000
   private readonly options: RelayAuthCoordinatorOptions
   private authEpoch = 0
@@ -145,9 +153,11 @@ export class RelayAuthCoordinator {
         return { broker }
       }
       const pending = this.latestReconcile
-      // Why unbounded: a reconcile always settles (opens carry HTTP deadlines),
-      // and cutting a slow-but-succeeding open short would fail a pairing that
-      // was about to work. The budget bounds only the retry chain below.
+      // Why unbounded: a reconcile always settles — BOTH its awaits carry a deadline, the broker
+      // open and `readContext`'s cloud refresh (the larger of the two, and the one the original
+      // parenthetical here left out) — and cutting a slow-but-succeeding open short would fail a
+      // pairing that was about to work. "Settles" is not "settles soon": see the ceiling noted on
+      // LIVE_BROKER_WAIT_BUDGET_MS. The budget bounds only the retry chain below.
       await pending
       if (pending !== this.latestReconcile) {
         continue
