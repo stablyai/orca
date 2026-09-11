@@ -1,10 +1,9 @@
 // HOW TO RUN: copy this file, relay-gc-host.cjs, the built `relay.js` and its `.version` into one
-// directory on the target host (they resolve each other via import.meta.dirname), install a
-// matching `node-pty` beside them, then `node <this file>`. Results are exact counts and
-// post-collection heap figures; nothing here asserts on a duration.
-// Discriminator: is retained-after-GC heap proportional to churn (a leak) or fixed (init cost)?
-// Repeats spawn-20-PTYs / shutdown-all / forced-GC many times and reports the retained heap each
-// cycle. A per-PTY or per-connection leak climbs with the cycle count; init cost plateaus.
+// directory on the target host, install a matching `node-pty` beside them, then `node <this file>`.
+//
+// Same cycle shape as relay-pty-gc-cycles-probe.mjs, but captures a heap snapshot after the forced
+// collection at two chosen cycles so the residual can be attributed to a constructor rather than
+// guessed at. Feed the two files to relay-heap-snapshot-diff.mjs.
 import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { readFileSync, readdirSync, existsSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -12,15 +11,14 @@ import { join } from 'node:path'
 
 const HERE = import.meta.dirname
 const VERSION = readFileSync(join(HERE, '.version'), 'utf8').trim()
-const RUNDIR = '/tmp/orca-pty-gc-cycles'
+const RUNDIR = '/tmp/orca-pty-heap-capture'
 const SOCK = join(RUNDIR, 'relay.sock')
 const GC_REPORT = join(RUNDIR, 'gc.json')
+const SNAP_REQUEST = join(RUNDIR, 'snapshot.request')
 const HEADER = 13
 const PTYS = 20
-// Why 30 and not 10: the first ~10 cycles are still inside V8's JIT warmup, where retained heap
-// climbs about 0.064 MB/cycle and looks like a linear leak. It decays to ~0.017 MB/cycle over the
-// second decade and is flat across the last three. Reading 10 cycles alone produces a false leak.
-const CYCLES = Number.parseInt(process.env.ORCA_PROBE_CYCLES ?? '30', 10)
+const CYCLES = 10
+const SNAPSHOT_AT = new Set([2, 10])
 
 rmSync(RUNDIR, { recursive: true, force: true })
 mkdirSync(RUNDIR, { recursive: true })
@@ -136,14 +134,18 @@ const fds = (pid) => {
   }
 }
 
-async function forcedGc(pid) {
+async function forcedGc(pid, snapshotPath) {
   writeFileSync(GC_REPORT, '')
+  if (snapshotPath) {
+    writeFileSync(SNAP_REQUEST, snapshotPath)
+  }
   process.kill(pid, 'SIGUSR2')
-  for (let i = 0; i < 80; i++) {
-    await sleep(100)
+  // A snapshot write is slow; the report is written last so it gates on completion.
+  for (let i = 0; i < 600; i++) {
+    await sleep(200)
     const raw = readFileSync(GC_REPORT, 'utf8')
     if (raw.trim()) {
-      return JSON.parse(raw).mem
+      return JSON.parse(raw)
     }
   }
   return null
@@ -169,6 +171,7 @@ async function main() {
       env: {
         ...process.env,
         ORCA_GC_REPORT: GC_REPORT,
+        ORCA_HEAP_SNAPSHOT_REQUEST: SNAP_REQUEST,
         ORCA_RELAY_EMPTY_STARTUP_GRACE_MS: '3600000',
         ORCA_RELAY_IDLE_GRACE_MS: '3600000'
       }
@@ -184,17 +187,6 @@ async function main() {
   const obs = await connect()
   const rows = []
 
-  const m0 = await forcedGc(pid)
-  rows.push({
-    cycle: 0,
-    ptysCreatedSoFar: 0,
-    connsSoFar: 1,
-    ptys: 0,
-    fds: fds(pid),
-    heapAfterGcMb: +(m0.heapUsed / 1048576).toFixed(3)
-  })
-
-  let created = 0
   for (let c = 1; c <= CYCLES; c++) {
     const holder = await connect()
     const ids = []
@@ -207,14 +199,12 @@ async function main() {
         args: []
       })
       ids.push(r.id)
-      created++
     }
     holder.destroy()
     await sleep(500)
     for (const id of ids) {
       await rpc(obs, 'pty.shutdown', { id })
     }
-    // poll to a real baseline rather than guessing a settle
     for (let i = 0; i < 120; i++) {
       const st = await rpc(obs, 'relay.status', {})
       if (st.ptys.active === 0) {
@@ -222,15 +212,14 @@ async function main() {
       }
       await sleep(500)
     }
-    const m = await forcedGc(pid)
-    const st = await rpc(obs, 'relay.status', {})
+    const wantSnapshot = SNAPSHOT_AT.has(c) ? join(RUNDIR, `cycle-${c}.heapsnapshot`) : null
+    const rep = await forcedGc(pid, wantSnapshot)
     rows.push({
       cycle: c,
-      ptysCreatedSoFar: created,
-      connsSoFar: 1 + c,
-      ptys: st.ptys.active,
+      ptysCreatedSoFar: c * PTYS,
       fds: fds(pid),
-      heapAfterGcMb: +(m.heapUsed / 1048576).toFixed(3)
+      heapAfterGcMb: +(rep.mem.heapUsed / 1048576).toFixed(3),
+      snapshot: rep.snapshot
     })
   }
 
