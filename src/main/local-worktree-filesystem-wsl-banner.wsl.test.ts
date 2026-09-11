@@ -10,6 +10,9 @@ const runRealWsl = process.platform === 'win32' && process.env.ORCA_REAL_WSL_BAN
 
 const FILE_CONTENTS = 'line one\nline two\n'
 
+/** Printed by the fixture HOME's own `.profile`, so the contrast below proves rc really ran. */
+const RC_CHATTER = 'ORCA_RC_CHATTER'
+
 function unc(linuxPath: string): string {
   return `\\\\wsl.localhost\\${DISTRO}${linuxPath.replaceAll('/', '\\')}`
 }
@@ -23,11 +26,25 @@ async function wsl(command: string, ...args: string[]): Promise<string> {
   return stdout.trim()
 }
 
-/** What an unfenced login-shell read returns — the shape this suite exists to rule out. */
-async function readThroughRawLoginShell(linuxPath: string): Promise<string> {
+/** What an unfenced login-shell read returns — the shape this suite exists to rule out.
+ *
+ *  `HOME` is the fixture's, not the distro user's. One distro is shared by every suite in the
+ *  run and by the developer running it, and `wsl-runner.wsl.test.ts` appends `sleep 60` to the
+ *  real `~/.profile` for the length of its describe (#14288, reproduced not simulated). Reading
+ *  the real HOME here made that sibling's state observable: run in the same Vitest invocation,
+ *  this call inherited the 60s stall and died on its own 30s timeout, while each suite passed
+ *  alone. Owning the rc file the contrast reads is what makes the overlap impossible rather
+ *  than unlikely — and it also stops a developer's own slow `.profile` from failing this. */
+async function readThroughRawLoginShell(linuxPath: string, home: string): Promise<string> {
   const { stdout } = await execFileAsync(
     'wsl.exe',
-    buildWslExecArgs(DISTRO, ['sh', '-lc', buildWslLoginShellCommand(`cat -- '${linuxPath}'`)]),
+    buildWslExecArgs(DISTRO, [
+      'env',
+      `HOME=${home}`,
+      'sh',
+      '-lc',
+      buildWslLoginShellCommand(`cat -- '${linuxPath}'`)
+    ]),
     { encoding: 'utf-8', timeout: 30000 }
   )
   return stdout
@@ -39,6 +56,11 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
   beforeAll(async () => {
     fixtureRoot = await wsl("mktemp -d -p /tmp 'orca-wsl-banner.XXXXXX'")
     await wsl('mkdir -p "$1/dir" && printf \'%s\' "$2" > "$1/file.txt"', fixtureRoot, FILE_CONTENTS)
+    await wsl(
+      'mkdir -p "$1/home" && printf \'echo %s\\n\' "$2" > "$1/home/.profile"',
+      fixtureRoot,
+      RC_CHATTER
+    )
   }, 120_000)
 
   afterAll(async () => {
@@ -55,12 +77,15 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
 
   it('is unaffected by what a login shell would have printed', async () => {
     const { readPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
-    const raw = await readThroughRawLoginShell(`${fixtureRoot}/file.txt`)
+    const raw = await readThroughRawLoginShell(`${fixtureRoot}/file.txt`, `${fixtureRoot}/home`)
 
     // Contrast: routed through a login shell the read carries whatever the rc
-    // files printed (stock Ubuntu ships a sudo hint). These reads use a plain
-    // `sh -c`, which runs no rc at all, so they are exactly the file.
+    // files printed. Asserting the chatter is present first is what keeps this
+    // honest — without it the contrast passes on a login shell that sourced
+    // nothing, and the comparison below would prove nothing.
+    expect(raw).toContain(RC_CHATTER)
     expect(raw.endsWith(FILE_CONTENTS)).toBe(true)
+    // These reads use a plain `sh -c`, which runs no rc at all, so they are exactly the file.
     expect(await readPath(unc(`${fixtureRoot}/file.txt`))).toBe(FILE_CONTENTS)
   }, 60_000)
 
