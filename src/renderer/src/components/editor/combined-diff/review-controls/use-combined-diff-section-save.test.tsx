@@ -45,18 +45,19 @@ function section(key = 'file.ts'): DiffSection {
   }
 }
 const reloadSpy = vi.fn()
+const reloadRef = { current: (index: number) => reloadSpy(index) }
 function setup(initial = [section()]) {
   return renderHook(() => {
     const { sections, setSections, sectionsRef } = useCombinedDiffSectionsState(initial)
     const [heights, setSectionHeights] = useState<Record<number, number>>({ 0: 100, 1: 200 })
     const save = useCombinedDiffSectionSave({
       file,
-      requestSectionReloadRef: { current: reloadSpy },
+      retryDeferredSectionReloadRef: reloadRef,
       sectionsRef,
       setSections,
       setSectionHeights
     })
-    return { sections, setSections, heights, save }
+    return { sections, setSections, sectionsRef, heights, save }
   })
 }
 function deferred() {
@@ -222,14 +223,42 @@ describe('combined diff section saves', () => {
     })
     expect(writeFile).not.toHaveBeenCalled()
   })
-})
 
-it('re-drives a reload after saving, so a revalidation rejected while dirty is not stranded', async () => {
-  const { result } = setup()
-  await act(async () => {
-    await result.current.save.current(0)
+  it('re-drives the reload only after the row is acknowledged clean', async () => {
+    writeFile.mockResolvedValue(undefined)
+    const view = setup()
+    // Why assert inside the spy, against the ref: the contract is ordering, and the reload reads
+    // sectionsRef (React has not re-rendered yet). Firing it before acknowledgeSectionSave would
+    // still satisfy a plain toHaveBeenCalledWith.
+    let dirtyAtReload: boolean | undefined
+    reloadSpy.mockImplementation(() => {
+      dirtyAtReload = view.result.current.sectionsRef.current[0]?.dirty
+    })
+    await act(async () => {
+      await view.result.current.save.current(0)
+    })
+    expect(reloadSpy).toHaveBeenCalledWith(0)
+    expect(dirtyAtReload).toBe(false)
   })
-  // The git-status signature does not change for an edit inside an already-modified line, so the
-  // save is the only event that can recover a stale original side.
-  expect(reloadSpy).toHaveBeenCalledWith(0)
+
+  it('still re-drives the reload when a draft lands mid-write and leaves the row dirty', async () => {
+    const pending = deferred()
+    writeFile.mockReturnValueOnce(pending.promise)
+    const view = setup()
+    let save!: Promise<void>
+    await act(async () => {
+      save = view.result.current.save.current(0)
+    })
+    act(() =>
+      view.result.current.setSections((prev) => [{ ...prev[0], modifiedContent: 'newer draft' }])
+    )
+    await act(async () => {
+      pending.resolve()
+      await save
+    })
+    // The row is still dirty, so the real reload refuses; the request must still be made so the
+    // deferred-reload bookkeeping sees it.
+    expect(view.result.current.sectionsRef.current[0].dirty).toBe(true)
+    expect(reloadSpy).toHaveBeenCalledWith(0)
+  })
 })

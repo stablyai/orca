@@ -27,6 +27,12 @@ export type CombinedDiffSectionLoadRegistry = {
   reloadTimersRef: React.RefObject<Map<number, number>>
   renderedIndicesRef: React.RefObject<Set<number>>
   requestSectionReloadRef: React.RefObject<(index: number) => void>
+  /** Re-drives a reload only for a row that refused one while dirty. */
+  retryDeferredSectionReloadRef: React.RefObject<(index: number) => void>
+  /** Keys whose reload was refused because the row was dirty; keyed by section, not index. */
+  deferredReloadKeysRef: React.RefObject<Set<string>>
+  /** False once the viewer unmounts, so a late save cannot revive load bookkeeping. */
+  registryLiveRef: React.RefObject<boolean>
   retrySectionRef: React.RefObject<(index: number) => void>
   sectionLoadTokensRef: React.RefObject<Map<number, number>>
   sectionsRef: React.RefObject<DiffSection[]>
@@ -46,6 +52,9 @@ export function useCombinedDiffSectionLoadRegistry(
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
   const retrySectionRef = useRef<(index: number) => void>(() => {})
   const requestSectionReloadRef = useRef<(index: number) => void>(() => {})
+  const retryDeferredSectionReloadRef = useRef<(index: number) => void>(() => {})
+  const deferredReloadKeysRef = useRef<Set<string>>(new Set())
+  const registryLiveRef = useRef(true)
   const loadSchedulerRef = useRef<ReturnType<typeof createCombinedDiffLoadScheduler>>(undefined!)
   loadSchedulerRef.current ??= createCombinedDiffLoadScheduler({
     loadSection: (index) => loadSectionRef.current(index)
@@ -56,7 +65,9 @@ export function useCombinedDiffSectionLoadRegistry(
     const scheduler = loadSchedulerRef.current
     const reloadTimers = reloadTimersRef.current
     scheduler.reset()
+    registryLiveRef.current = true
     return () => {
+      registryLiveRef.current = false
       clearPendingSectionReloadTimers(reloadTimers)
       scheduler.dispose()
     }
@@ -72,6 +83,9 @@ export function useCombinedDiffSectionLoadRegistry(
     reloadTimersRef,
     renderedIndicesRef,
     requestSectionReloadRef,
+    retryDeferredSectionReloadRef,
+    deferredReloadKeysRef,
+    registryLiveRef,
     retrySectionRef,
     sectionLoadTokensRef,
     sectionsRef
