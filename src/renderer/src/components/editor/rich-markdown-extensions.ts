@@ -56,7 +56,11 @@ const RichMarkdownLink = Link.extend({
 const RichMarkdownCode = Code.extend({
   // Why: Markdown supports linked code labels, so code cannot exclude the link
   // mark even though it should still stay exclusive with emphasis marks.
-  excludes: 'code bold italic strike underline'
+  excludes: 'code bold italic strike underline',
+  // Why: ProseMirror ranks a text node's marks by schema order, which Tiptap takes
+  // from priority; code must outrank emphasis so **`x`** serializes with the
+  // asterisks outside the backticks.
+  priority: 200
 })
 
 export function createRichMarkdownExtensions({
