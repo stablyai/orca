@@ -6,7 +6,12 @@ export const getCommitMessageAiPaneSearchEntries = createLocalizedCatalog(() => 
   {
     title: translate('settings.piConfiguredModelReset.title', 'Saved Pi model choices'),
     description: translate('settings.piConfiguredModelReset.action', 'Use Pi’s configured model'),
-    keywords: ['pi', 'model', 'copilot', 'reset']
+    keywords: [
+      ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.pi', 'pi'),
+      ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.model', 'model'),
+      ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.copilot', 'copilot'),
+      ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.reset', 'reset')
+    ]
   },
   {
     title: translate(

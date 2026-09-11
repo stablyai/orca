@@ -1,3 +1,4 @@
+import { translateSearchKeyword } from './settings-search-keywords'
 import { PiConfiguredModelReset } from './PiConfiguredModelReset'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useRef } from 'react'
@@ -226,7 +227,12 @@ export function CommitMessageAiPane({
     matchesSettingsSearch(searchQuery, {
       title: translate('settings.piConfiguredModelReset.title', 'Saved Pi model choices'),
       description: translate('settings.piConfiguredModelReset.action', 'Use Pi’s configured model'),
-      keywords: ['pi', 'model', 'copilot']
+      keywords: [
+        ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.pi', 'pi'),
+        ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.model', 'model'),
+        ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.copilot', 'copilot'),
+        ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.reset', 'reset')
+      ]
     })
   ) {
     sections.push(
