@@ -132,7 +132,8 @@ export function AppWorkspaceShell(props: {
                     // The floating header covers the center border; restore the seam and size to its own controls.
                     className={`titlebar-left${
                       layout.leftTitlebarChromeLayout.isFloating
-                        ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
+                        ? // Why: above z-20 — an auto-hidden tab strip reveals over the pane and would otherwise bury this floating header.
+                          ' titlebar-left-floating absolute top-0 left-0 z-30 w-max border-r border-border'
                         : ''
                     }`}
                     style={{
@@ -164,7 +165,8 @@ export function AppWorkspaceShell(props: {
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
                 {layout.workspaceChromeActive && !layout.rightSidebarOpen && (
                   <div
-                    className="absolute top-0 z-10 flex items-center h-[36px]"
+                    // Why: above z-20 — an auto-hidden tab strip reveals over the pane and would otherwise bury this toggle.
+                    className="absolute top-0 z-30 flex items-center h-[36px]"
                     style={
                       {
                         // Why: --window-controls-width keeps the toggle clear of the fixed window-controls overlay (138px on custom chrome, 0px otherwise); no internal spacer — one would cover the pane-actions Ellipsis button with an unclickable div.

@@ -1,6 +1,7 @@
-import { Suspense, useCallback, useMemo } from 'react'
+import { Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
+import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../../store'
 import TabBar from '../tab-bar/TabBar'
 
@@ -13,6 +14,8 @@ import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDra
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { registerTabGroupBody } from './tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
+import { resolveSingleTabStripVisibility } from './single-tab-strip-visibility'
+import { useTabStripRevealHover } from './tab-strip-reveal-hover'
 import { translate } from '@/i18n/i18n'
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
@@ -90,6 +93,39 @@ export default function TabGroupPanel({
   const clientHostedRows = ownsClientHostedRows
     ? worktreeClientHostedRows
     : EMPTY_CLIENT_HOSTED_ROWS
+  const autoHideSingleTabStrip = useAppStore(
+    (state) => state.settings?.autoHideSingleTabStrip === true
+  )
+  const [stripHovered, setStripHovered] = useState(false)
+  const { autoHidden: stripAutoHidden, revealed: stripRevealed } = resolveSingleTabStripVisibility({
+    // Why: an 'external' host renders the strip itself, so there is nothing here to collapse.
+    autoHideEnabled: autoHideSingleTabStrip && tabStrip === 'attached',
+    groupTabCount: model.groupTabs.length,
+    clientHostedRowCount: clientHostedRows.length,
+    stripHovered,
+    tabDragActive: isTabDragActive
+  })
+  // Why: the watcher stops with the collapsed strip, so a reveal that ends by gaining a tab never
+  // sees the pointer leave and would come back already revealed once the group drops to one tab again.
+  if (!stripAutoHidden && stripHovered) {
+    setStripHovered(false)
+  }
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  useTabStripRevealHover({
+    enabled: stripAutoHidden && isVisible,
+    panelRef,
+    onHoverChange: setStripHovered
+  })
+  // Why: this transition moves the pane body by 32px and xterm only reflows on this event; skipping
+  // the mount run matters because every worktree's groups stay mounted and each would refit them all.
+  const didSyncStripHeightRef = useRef(false)
+  useLayoutEffect(() => {
+    if (!didSyncStripHeightRef.current) {
+      didSyncStripHeightRef.current = true
+      return
+    }
+    window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
+  }, [stripAutoHidden])
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -245,8 +281,75 @@ export default function TabGroupPanel({
     'ml-1.5 flex shrink-0 items-center gap-0.5 transition-opacity duration-150',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
   )
+  // Why: dim the children, not the root — root opacity opens a stacking context that traps the revealed strip under the worktree-level pane overlays.
+  const unfocusedDimClassName = hasSplitGroups && !isFocused ? ' opacity-95' : ''
+  const stripRow = (
+    <div
+      className={`${
+        stripAutoHidden
+          ? // Why: no slide during a tab drag — dnd-kit measures droppable rects once at drag start and would record the strip mid-animation.
+            `@container/tab-strip absolute inset-x-0 top-0 h-[32px] border-b border-border bg-card ${
+              isTabDragActive ? '' : 'transition-transform duration-150'
+            } ${stripRevealed ? 'translate-y-0' : '-translate-y-full'}`
+          : '@container/tab-strip h-[32px] shrink-0 border-b border-border bg-card'
+      }${unfocusedDimClassName}`}
+      // Why: a drag region swallows renderer pointer events, so a revealed strip that kept one would lose the hover that holds it open.
+      // Why: collapsed, the hover wrapper carries the strip identity — pane-detach drops hit-test the topmost element, and a translated-away strip is never it.
+      {...(stripAutoHidden
+        ? {}
+        : {
+            'data-terminal-focus-release-surface': 'true',
+            'data-tab-group-strip-id': groupId,
+            'data-worktree-id': worktreeId
+          })}
+      inert={stripAutoHidden && !stripRevealed}
+    >
+      <div className="flex h-full items-stretch pr-1.5">
+        {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
+        {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+          <div
+            className="shrink-0"
+            style={
+              {
+                width: 'var(--collapsed-sidebar-header-width)',
+                WebkitAppRegion: 'no-drag'
+              } as React.CSSProperties
+            }
+          />
+        ) : null}
+        <div className="min-w-0 flex-1 h-full">{tabBar}</div>
+        <div
+          className={actionChromeClassName}
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          <TabBarQuickCommandsButton
+            worktreeId={worktreeId}
+            groupId={groupId}
+            isFocused={isFocused}
+          />
+          {hasSplitGroups ? (
+            <TabGroupPaneActionsMenu isFocused={isFocused} onCloseGroup={commands.closeGroup} />
+          ) : null}
+        </div>
+        {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
+        {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+          <div
+            className="shrink-0"
+            style={
+              {
+                width: 'calc(40px + var(--window-controls-width, 0px))',
+                WebkitAppRegion: 'no-drag'
+              } as React.CSSProperties
+            }
+          />
+        ) : null}
+      </div>
+    </div>
+  )
+
   return (
     <div
+      ref={panelRef}
       // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
@@ -267,61 +370,28 @@ export default function TabGroupPanel({
     >
       {/* Each visible split needs its own strip; the shared titlebar cannot represent them all. */}
       {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
-      {tabStrip !== 'attached' ? null : (
+      {tabStrip !== 'attached' ? null : stripAutoHidden ? (
+        // Why: while collapsed this carries the strip's identity for pane-detach drops but stays
+        // click-through, so the pane keeps its own top rows until the strip actually reveals.
         <div
-          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-card"
+          className={`absolute inset-x-0 top-0 z-20 h-[32px] ${
+            stripRevealed ? '' : 'pointer-events-none'
+          }`}
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           data-tab-group-strip-id={groupId}
-          data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
         >
-          <div className="flex h-full items-stretch pr-1.5">
-            {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
-            {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
-              <div
-                className="shrink-0"
-                style={
-                  {
-                    width: 'var(--collapsed-sidebar-header-width)',
-                    WebkitAppRegion: 'no-drag'
-                  } as React.CSSProperties
-                }
-              />
-            ) : null}
-            <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-            <div
-              className={actionChromeClassName}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            >
-              <TabBarQuickCommandsButton
-                worktreeId={worktreeId}
-                groupId={groupId}
-                isFocused={isFocused}
-              />
-              {hasSplitGroups ? (
-                <TabGroupPaneActionsMenu isFocused={isFocused} onCloseGroup={commands.closeGroup} />
-              ) : null}
-            </div>
-            {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
-            {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
-              <div
-                className="shrink-0"
-                style={
-                  {
-                    width: 'calc(40px + var(--window-controls-width, 0px))',
-                    WebkitAppRegion: 'no-drag'
-                  } as React.CSSProperties
-                }
-              />
-            ) : null}
-          </div>
+          {stripRow}
         </div>
+      ) : (
+        stripRow
       )}
 
       <div
         ref={setBodyRef}
         data-tab-group-body-id={groupId}
         data-worktree-id={worktreeId}
-        className="relative flex-1 min-h-0 overflow-hidden"
+        className={`relative flex-1 min-h-0 overflow-hidden${unfocusedDimClassName}`}
         style={bodyAnchorStyle}
       >
         {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}

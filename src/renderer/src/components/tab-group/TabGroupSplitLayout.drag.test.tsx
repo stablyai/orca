@@ -14,7 +14,10 @@ vi.mock('../../store', () => {
   const state = (): Record<string, unknown> => ({
     recordFeatureInteraction: recordFeatureInteractionMock,
     setTabGroupSplitRatio: setTabGroupSplitRatioMock,
-    layoutByWorktree: {}
+    layoutByWorktree: {},
+    groupsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    settings: {}
   })
   // The switch-on ratio commit reads the store directly.
   const useAppStore = Object.assign(
@@ -23,6 +26,10 @@ vi.mock('../../store', () => {
   )
   return { useAppStore }
 })
+
+vi.mock('@/lib/pane-manager/client-hosted-browser-row-state', () => ({
+  useClientHostedBrowserRows: () => []
+}))
 
 vi.mock('./TabGroupPanel', () => ({
   default: ({ groupId }: { groupId: string }) => <div data-testid={`panel-${groupId}`} />
