@@ -251,12 +251,6 @@ export class DesktopRelayService {
     }
   }
 
-  private async flushRevokeOutbox(broker: RelaySessionBroker): Promise<void> {
-    for (const item of this.revokeOutbox.pendingFor(broker.ownerIdentityKey, broker.hostId)) {
-      await this.flushRevoke(broker, item)
-    }
-  }
-
   private requireMobileDevice(deviceId: string): void {
     if (this.runtimeRpc.getDeviceRegistry()?.getDevice(deviceId)?.scope !== 'mobile') {
       throw new Error('mobile_device_not_found')
