@@ -9,6 +9,7 @@ const {
 } = require('node:fs')
 const { dirname, join, resolve } = require('node:path')
 const { builtinModules, createRequire } = require('node:module')
+const { conptyTargetsArch } = require('./scripts/node-pty-job-ownership.cjs')
 
 const projectDir = resolve(__dirname, '..')
 const requireFromProject = createRequire(join(projectDir, 'package.json'))
@@ -388,17 +389,19 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) 
   // require, and its caller resolves null with silent: true), and removes the
   // winpty backend that node-pty still selects below Windows build 18309.
   //
-  // Why the arch check: a cross-arch package copies the host's build/Release,
-  // so its mere presence does not mean it matches electronArch -- deleting the
-  // target-arch prebuild would then remove the only loadable binary.
-  if (
-    electronPlatformName === 'win32' &&
-    electronArch === process.arch &&
-    existsSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'))
-  ) {
-    const prebuildDir = join(nodePtyDir, 'prebuilds', `win32-${electronArch}`)
-    for (const staleFallback of ['conpty.node', 'conpty.pdb']) {
-      rmSync(join(prebuildDir, staleFallback), { force: true })
+  // Why the arch check: a cross-HOST package can copy a build/Release that is not a Windows
+  // binary at all, so its mere presence does not mean it matches electronArch -- deleting the
+  // target-arch prebuild would then remove the only loadable binary. This used to approximate
+  // that with `electronArch === process.arch`, which also skipped the arm64 slice cross-built on
+  // an x64 Windows host -- a rebuild that DOES produce a correct arm64 addon. That slice then
+  // shipped the unpatched prebuild as a live fallback. Read the header instead of guessing.
+  if (electronPlatformName === 'win32') {
+    const releaseAddon = join(nodePtyDir, 'build', 'Release', 'conpty.node')
+    if (conptyTargetsArch(releaseAddon, electronArch)) {
+      const prebuildDir = join(nodePtyDir, 'prebuilds', `win32-${electronArch}`)
+      for (const staleFallback of ['conpty.node', 'conpty.pdb']) {
+        rmSync(join(prebuildDir, staleFallback), { force: true })
+      }
     }
   }
 

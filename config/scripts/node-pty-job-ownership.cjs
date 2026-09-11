@@ -24,6 +24,40 @@ const NODE_PTY_JOB_EXPORTS = ['listJobProcessIds', 'terminateJob', 'assignCurren
  */
 const CYGWIN_BREAKAWAY_MARKER = Buffer.from('msys-2.0.dll', 'utf16le')
 
+/** PE `Machine`, for the Windows slices we package. Names match electron-builder's Arch enum. */
+const PE_MACHINE_BY_ARCH = Object.freeze({ ia32: 0x14c, x64: 0x8664, arm64: 0xaa64 })
+
+/**
+ * Whether a `.node` is a PE built for `arch`, or null when the file cannot be read as one.
+ *
+ * Why the packaged prune needs this: it used to approximate "build/Release holds the target's
+ * addon" with `electronArch === process.arch`, which is false for an arm64 slice cross-built on
+ * x64 even though that rebuild does produce a correct arm64 addon. Reading the header answers the
+ * question the proxy was standing in for. Shape mirrors readElfMachine() in
+ * verify-linux-glibc-floor.cjs.
+ */
+function conptyTargetsArch(addonPath, arch) {
+  const expected = PE_MACHINE_BY_ARCH[arch]
+  if (expected === undefined) {
+    return null
+  }
+  let binary
+  try {
+    binary = readFileSync(addonPath)
+  } catch {
+    return null
+  }
+  // PE header offset lives at 0x3c; `Machine` is the first field after the 4-byte signature.
+  if (binary.length < 0x40) {
+    return null
+  }
+  const peHeaderOffset = binary.readUInt32LE(0x3c)
+  if (peHeaderOffset + 6 > binary.length) {
+    return null
+  }
+  return binary.readUInt16LE(peHeaderOffset + 4) === expected
+}
+
 /**
  * Absolute path of the addon `loadNativeModule` just resolved.
  *
@@ -95,5 +129,6 @@ function assertCygwinBreakawayDenied(addonPath, native) {
 module.exports = {
   assertNodePtyJobOwnership,
   assertCygwinBreakawayDenied,
+  conptyTargetsArch,
   nodePtyAddonPath
 }
