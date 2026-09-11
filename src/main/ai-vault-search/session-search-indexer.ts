@@ -81,6 +81,7 @@ export type SessionSearchIndexStatus = {
  * one reconcile interval. Everything else is reached by the periodic sweep.
  */
 export class SessionSearchIndexer {
+  private readonly ownershipPath: string
   private readonly clock: SessionSearchClock
   private readonly intervalMs: number
   private readonly passDeadlineMs: number
@@ -103,6 +104,7 @@ export class SessionSearchIndexer {
   private closed = false
 
   constructor(private readonly options: SessionSearchIndexerOptions) {
+    this.ownershipPath = resolve(options.databasePath)
     this.clock = options.clock ?? systemSessionSearchClock
     this.intervalMs = options.reconcileIntervalMs ?? DEFAULT_SESSION_SEARCH_RECONCILE_INTERVAL_MS
     this.passDeadlineMs =
@@ -120,7 +122,7 @@ export class SessionSearchIndexer {
       intervalMs: this.intervalMs,
       onFailure: onError
     })
-    if (liveIndexerPaths.has(options.databasePath)) {
+    if (liveIndexerPaths.has(this.ownershipPath)) {
       throw new Error(
         `SessionSearchIndexer: ${options.databasePath} already has a live indexer; close it first`
       )
@@ -133,7 +135,7 @@ export class SessionSearchIndexer {
     // it -- including the one that fixes whatever broke the open -- would be
     // refused for the life of the process.
     this.store = new SessionSearchStore(options.databasePath, onError)
-    liveIndexerPaths.add(options.databasePath)
+    liveIndexerPaths.add(this.ownershipPath)
     this.store.setRetentionCutoffMs(this.cutoffMs())
     this.unregister = registerSessionSearchIndexConsumer(this.store)
   }
@@ -209,7 +211,7 @@ export class SessionSearchIndexer {
     this.loop.close()
     this.unregister()
     this.store.close()
-    liveIndexerPaths.delete(this.options.databasePath)
+    liveIndexerPaths.delete(this.ownershipPath)
   }
 
   /** Tests only: everything else drives this through the timer. */
@@ -320,3 +322,4 @@ export class SessionSearchIndexer {
     return sessionSearchHistoryCutoffMs(this.options.historyDays, this.clock.now())
   }
 }
+import { resolve } from 'node:path'
