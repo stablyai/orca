@@ -1,9 +1,11 @@
 import type * as Monaco from 'monaco-editor'
 import { describe, expect, it } from 'vitest'
-import { EMBED_ENTRY_REST_OF_LINE_BUDGET } from './monarch-embed-entry-budget'
+import {
+  EMBED_ENTRY_REST_OF_LINE_BUDGET,
+  MAX_TOKENIZATION_LINE_LENGTH
+} from './monarch-embed-entry-budget'
 import {
   createMonarchTokenizer,
-  DEFAULT_MAX_TOKENIZATION_LINE_LENGTH,
   endEmbeddedLanguages,
   measureNestedDepth,
   tokenizeLines
@@ -15,10 +17,15 @@ import { vueMonarchLanguage } from './register-vue'
 // Monarch tokenizes embedded languages by mutual recursion: `_nestedTokenize`
 // tail-calls `_myTokenize`, which tail-calls `_nestedTokenize` again for every
 // embed entered mid-line. V8 has no TCO, so each mid-line embed entry costs
-// real JS stack. Before the embed-entry budget, one 17_000-character line of
-// `<script></script>` (under Monaco's own 20_000 line cap) reached ~1743 nested
-// levels and died with `RangeError: Maximum call stack size exceeded` — the
-// renderer-side STATUS_STACK_OVERFLOW this suite guards.
+// real JS stack. Embeds cannot nest (monarchLexer throws "cannot enter embedded
+// language from within an embedded language"), so these are sequential
+// enter/exit transitions on one line, each holding a frame until the line ends.
+//
+// Before the embed-entry budget, one 17_000-character line of `<script></script>`
+// (under Monaco's own 20_000 line cap) reached ~1743 frames and threw
+// `RangeError: Maximum call stack size exceeded`. Monaco's `safeTokenize` catches
+// that per line, so the visible failure is a line that silently loses all
+// highlighting; the frame count is what this suite bounds.
 
 // 6600 is the largest `{a}` count under Monaco's line cap (19_800 chars); the
 // filter below drops it for the longer chunk shapes, so the densest embed
@@ -46,15 +53,13 @@ const PATHOLOGICAL_LINES: [string, (count: number) => string][] = [
 describe.each([
   ['svelte', svelteMonarchLanguage],
   ['astro', astroMonarchLanguage]
-])('%s embedded-tokenizer recursion depth', (languageId, language) => {
+])('%s embed-entry recursion', (languageId, language) => {
   it.each(PATHOLOGICAL_LINES)(
     'stays within the embed budget for a line of %s',
     (_name, buildLine) => {
       // Monaco refuses to tokenize at all past its line cap, so the ramp stops
       // where a real editor would.
-      const ramp = RAMP.filter(
-        (count) => buildLine(count).length < DEFAULT_MAX_TOKENIZATION_LINE_LENGTH
-      )
+      const ramp = RAMP.filter((count) => buildLine(count).length < MAX_TOKENIZATION_LINE_LENGTH)
       expect(ramp.length).toBeGreaterThanOrEqual(3)
 
       const depths = ramp.map((count) =>
@@ -122,9 +127,9 @@ describe.each([
 
 describe('unguarded embedded tokenizer', () => {
   // Control: the same markup/expression shape with no budget on embed entry.
-  // Depth then tracks the interpolation count one-for-one, which is what took
-  // the renderer down; ~1700 levels is already a RangeError in this runtime,
-  // so the ramp stops short of the overflow to stay deterministic.
+  // The frame count then tracks the interpolation count one-for-one; ~1700
+  // frames is already a RangeError in this runtime, so the ramp stops short of
+  // the overflow to stay deterministic.
   const perInterpolationEmbedLanguage: Monaco.languages.IMonarchLanguage = {
     defaultToken: '',
     tokenizer: {
@@ -148,13 +153,13 @@ describe('unguarded embedded tokenizer', () => {
   })
 })
 
-describe('vue embedded-tokenizer recursion depth', () => {
+describe('vue embed-entry recursion', () => {
   const templateLine = (count: number): string =>
     `<template><p>${'{{a}}'.repeat(count)}</p></template>`
 
   it('stays within the embed budget for a line of interpolations', () => {
     const ramp = [50, 200, 1000, 2500, 3900].filter(
-      (count) => templateLine(count).length < DEFAULT_MAX_TOKENIZATION_LINE_LENGTH
+      (count) => templateLine(count).length < MAX_TOKENIZATION_LINE_LENGTH
     )
     expect(ramp.length).toBeGreaterThanOrEqual(3)
 

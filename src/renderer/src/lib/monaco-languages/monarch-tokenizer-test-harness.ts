@@ -1,6 +1,7 @@
 import type * as Monaco from 'monaco-editor'
 import { compile } from 'monaco-editor/esm/vs/editor/standalone/common/monarch/monarchCompile.js'
 import { MonarchTokenizer } from 'monaco-editor/esm/vs/editor/standalone/common/monarch/monarchLexer.js'
+import { MAX_TOKENIZATION_LINE_LENGTH } from './monarch-embed-entry-budget'
 
 // Drives the real `MonarchTokenizer` shipped with monaco-editor rather than
 // walking a grammar's rule table. A table walk cannot see the failures that
@@ -22,13 +23,10 @@ export type MonarchTokenizerInstance = {
   _nestedTokenize: (...args: unknown[]) => unknown
 }
 
-/** Monaco's default `editor.maxTokenizationLineLength`; longer lines are never tokenized. */
-export const DEFAULT_MAX_TOKENIZATION_LINE_LENGTH = 20_000
-
 export function createMonarchTokenizer(
   languageId: string,
   language: Monaco.languages.IMonarchLanguage,
-  maxTokenizationLineLength = DEFAULT_MAX_TOKENIZATION_LINE_LENGTH
+  maxTokenizationLineLength = MAX_TOKENIZATION_LINE_LENGTH
 ): MonarchTokenizerInstance {
   // Nested languages stay unregistered, so `nestedLanguageTokenize` emits one
   // empty-typed token tagged with the embedded language id instead of running
@@ -128,10 +126,11 @@ export function formatTokenizedLines(lines: TokenizedLine[]): string[] {
 export type TokenizeMeasurement = { maxNestedDepth: number; error: Error | undefined }
 
 /**
- * Tokenizes `lines`, recording peak `_nestedTokenize` recursion. Monarch enters
- * an embed by mutual recursion with no TCO, so this is the renderer's real JS
- * stack cost. Errors are captured rather than thrown so a caller can assert on
- * depth and failure together.
+ * Tokenizes `lines`, recording peak `_nestedTokenize` recursion — the real JS
+ * stack cost, since Monarch enters an embed by mutual recursion with no TCO.
+ * Embeds cannot nest, so this counts sequential embed enter/exit transitions on
+ * one line, each holding a frame until the line ends. Errors are captured rather
+ * than thrown so a caller can assert on frame count and failure together.
  */
 export function measureNestedDepth(
   tokenizer: MonarchTokenizerInstance,

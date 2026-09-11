@@ -103,6 +103,18 @@ const title = 'Home'
     ).toEqual(['typescript', 'typescript', null, 'html'])
   })
 
+  // Pins monaco-editor#1127: the pop rule's `^` survives Monaco's regex
+  // rebuild, so an indented or trailing `---` must not close the fence early.
+  it('keeps the frontmatter fence open past a --- that is not at column 0', () => {
+    expect(endEmbeddedLanguages(tokenizeAstro('---\n// ---\n  ---\n---\n<h1>hi</h1>'))).toEqual([
+      'typescript',
+      'typescript',
+      'typescript',
+      null,
+      'html'
+    ])
+  })
+
   // Regression (verified live in the Electron app): an expression in the first
   // markup line popped the html embed before any push, and Monarch threw
   // "cannot pop embedded language if not inside one".
