@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import type { RuntimeMobileSessionAgentTab } from '../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { headStructuredProviderSessionId } from '../native-chat/agent-session-wire/structured-provider-session-ownership'
 import {
@@ -11,7 +12,7 @@ import {
   withStructuredProviderSessionId
 } from './structured-agent-session-provider-session-publication'
 
-function chatTab(providerSessionId?: string): RuntimeMobileSessionTabsSnapshot['tabs'][number] {
+function chatTab(providerSessionId?: string): RuntimeMobileSessionAgentTab {
   return {
     type: 'agent-session',
     id: 'agent-session:session-1',
@@ -20,7 +21,7 @@ function chatTab(providerSessionId?: string): RuntimeMobileSessionTabsSnapshot['
     agent: 'claude',
     ...(providerSessionId ? { providerSessionId } : {}),
     isActive: false
-  } as RuntimeMobileSessionTabsSnapshot['tabs'][number]
+  }
 }
 
 function forkedTo(sessionId: string): AgentSessionRecord {
