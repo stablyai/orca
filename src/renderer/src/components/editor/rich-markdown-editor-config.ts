@@ -22,6 +22,10 @@ import {
   type RichMarkdownRuntimeSettings
 } from './rich-markdown-editor-click-routing'
 import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
+import {
+  getRichMarkdownSliceSerializer,
+  serializeRichMarkdownSliceToMarkdown
+} from './rich-markdown-clipboard-markdown-text'
 import { commitRichMarkdownSerialization } from './rich-markdown-serialization-commit'
 import {
   createRichMarkdownImageResolverContext,
@@ -141,6 +145,14 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       handleDOMEvents: {
         cut: handleRichMarkdownCut
       },
+      // Why: ProseMirror's default plain-text flavor is a block-joined text
+      // dump; terminals and other plain-text targets read that flavor only.
+      clipboardTextSerializer: (slice, view) =>
+        serializeRichMarkdownSliceToMarkdown(
+          getRichMarkdownSliceSerializer(editorRef.current),
+          slice,
+          view.state.selection.$from.parent
+        ),
       handlePaste: (view, event, slice) =>
         handleRichMarkdownPaste({
           editor: editorRef.current,
