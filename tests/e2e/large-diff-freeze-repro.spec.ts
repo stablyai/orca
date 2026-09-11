@@ -158,8 +158,8 @@ test.describe('Large diff freeze repro', () => {
         expect(measurement.editorCount).toBeGreaterThan(0)
       }
       // Steady-state responsiveness is the contract this test defends, and it is the axis
-      // @pierre/diffs improved: p95 lag is ~2ms here versus ~7ms on the Monaco renderer this
-      // replaced. Assert it tightly so a real freeze still fails the run.
+      // @pierre/diffs improved: this test measures p95 ~14ms, where the Monaco renderer it
+      // replaced measured ~65ms on the same fixture. Assert it tightly so a real freeze fails.
       expect(measurement.p95LagMs).toBeLessThan(50)
       // The max bound is deliberately looser than Monaco's ~110ms. Pierre's worker returns the
       // themed AST for the WHOLE file in one message (WorkerPoolManager.highlightDiffAST submits
