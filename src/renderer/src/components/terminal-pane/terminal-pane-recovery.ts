@@ -225,7 +225,15 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   // A terminal-backed tab is intentionally hidden while native chat owns the
   // provider. Late xterm callbacks from that hidden surface must not remount
   // the tab and race the handoff's owner transition.
-  if (tab?.viewMode === 'chat') {
+  //
+  // Both indices, deliberately. The row is now the durable record (viewMode
+  // persists on it, and the local toggles patch it in the same set() as the
+  // unified tab), but a session written before that lives on disk with viewMode
+  // only on the unified tab, so the row reads undefined on the first load after
+  // upgrade. More generally this is a disjunction over two partly-redundant
+  // sources for a SAFETY check: a hole in either index errs toward refusing a
+  // heal on a hidden surface, never toward remounting a chat-owned one.
+  if (tab?.viewMode === 'chat' || state.getTab?.(request.tabId)?.viewMode === 'chat') {
     return false
   }
   // Fail fast before the liveness probe. The authoritative admission runs

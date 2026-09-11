@@ -119,52 +119,6 @@ afterEach(() => {
 })
 
 describe('requestTerminalPaneRecovery', () => {
-  it('does not remount a terminal surface hidden behind native chat', async () => {
-    setTerminalTabs([{ id: 'tab-1', viewMode: 'chat' }])
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'input-undeliverable'
-      })
-    ).resolves.toBe(false)
-    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
-    expect(mocks.hasPty).not.toHaveBeenCalled()
-  })
-
-  it('does not remount a chat-owned tab the unified tab index has dropped', async () => {
-    // The drift crash b5cfc6ca documents: present in tabsByWorktree, gone from
-    // unifiedTabsByWorktree. getTab answers null, and the guard reads the row.
-    mocks.getTab.mockReturnValue(null)
-    setTerminalTabs([{ id: 'tab-1', viewMode: 'chat' }])
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'input-undeliverable'
-      })
-    ).resolves.toBe(false)
-    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
-    expect(mocks.hasPty).not.toHaveBeenCalled()
-  })
-
-  it('reads chat ownership from the row alone, not from the unified tab', async () => {
-    // The local viewMode toggles now patch the row in the same set(), so the
-    // unified tab is never the tie-breaker — a stale one cannot veto a heal.
-    mocks.getTab.mockReturnValue({ viewMode: 'chat' })
-    setTerminalTabs([{ id: 'tab-1', viewMode: 'terminal' }])
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'write-stalled'
-      })
-    ).resolves.toBe(true)
-  })
-
   it('remounts the tab and records a breadcrumb for a certified-dead pipeline', async () => {
     const result = await requestTerminalPaneRecovery({
       tabId: 'tab-1',

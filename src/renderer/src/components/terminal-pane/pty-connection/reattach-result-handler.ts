@@ -164,9 +164,13 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     if (!isCurrentReattachPayload()) {
       return false
     }
-    // The first authoritative attach of the pane a recovery remount produced —
-    // past the no-PTY-id and session-expired branches, which are failures and
-    // settle themselves. This is the observation the ledger was waiting for.
+    // The first authoritative attach of the pane a recovery remount produced:
+    // the observation the ledger was waiting for. Placed past the no-PTY-id and
+    // session-expired branches so a failure can never be reported as a success.
+    // Those branches do NOT all settle: only the no-PTY-id arm does, and only
+    // when `session.connectionId` is set (:120). The local arm and the
+    // sessionExpired arm fall through to startFreshColdRestoreAgentResume and
+    // leave the attempt pending, which the 31s bound then ages out.
     session.settlePaneAttachAttempt?.(undefined, 'success')
     // Strict precedence snapshot > replay > coldRestore: paint exactly one, else overlapping tails duplicate TUI output on worktree switch.
     const hasStructuralReplay = Boolean(
