@@ -24,6 +24,8 @@ export type StructuredAgentSessionSendDisposition = {
   /** The entry the queue is stuck on, or null when nothing blocks it. Always the
    *  next value, never "unchanged": the caller assigns it verbatim. */
   blockedClientMessageId: string | null
+  /** A rejected result arrived before the journal snapshot; Retry must rotate this id. */
+  retryWithFreshClientMessageId: string | null
 }
 
 type SendDispositionInput = {
@@ -118,7 +120,8 @@ export function disposeStructuredAgentSessionSendResult(
     return {
       entries,
       error: result.refusal.message,
-      blockedClientMessageId: entries[0]?.clientMessageId ?? null
+      blockedClientMessageId: entries[0]?.clientMessageId ?? null,
+      retryWithFreshClientMessageId: null
     }
   }
   const submission = result.value.submission
@@ -126,21 +129,24 @@ export function disposeStructuredAgentSessionSendResult(
     return {
       entries: dropEntry(input),
       error: 'Message delivery is unconfirmed and Orca will not send it again',
-      blockedClientMessageId: input.blockedClientMessageId
+      blockedClientMessageId: input.blockedClientMessageId,
+      retryWithFreshClientMessageId: null
     }
   }
   if (submission.dispatchState === 'accepted') {
     return {
       entries: dropEntry(input),
       error: null,
-      blockedClientMessageId: input.blockedClientMessageId
+      blockedClientMessageId: input.blockedClientMessageId,
+      retryWithFreshClientMessageId: null
     }
   }
   if (submission.dispatchState === 'rejected') {
     return {
       entries: replaceEntryState(input, 'queued'),
       error: rejectionNotice(submission.reason),
-      blockedClientMessageId: input.entry.clientMessageId
+      blockedClientMessageId: input.entry.clientMessageId,
+      retryWithFreshClientMessageId: input.entry.clientMessageId
     }
   }
   // `pending` is the host saying the message was written and is awaiting the
@@ -153,7 +159,8 @@ export function disposeStructuredAgentSessionSendResult(
       submission.dispatchState === 'unknown' ? 'unconfirmed' : 'dispatching'
     ),
     error: null,
-    blockedClientMessageId: input.blockedClientMessageId
+    blockedClientMessageId: input.blockedClientMessageId,
+    retryWithFreshClientMessageId: null
   }
 }
 
@@ -170,6 +177,7 @@ export function disposeStructuredAgentSessionSendFailure(
     error: deliveryUnknown ? 'Message delivery is unconfirmed' : String(input.cause),
     blockedClientMessageId: deliveryUnknown
       ? input.blockedClientMessageId
-      : input.entry.clientMessageId
+      : input.entry.clientMessageId,
+    retryWithFreshClientMessageId: null
   }
 }

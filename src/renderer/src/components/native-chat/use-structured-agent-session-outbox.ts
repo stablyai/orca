@@ -52,6 +52,7 @@ export function useStructuredAgentSessionOutbox(args: {
   const dispatchingRef = useRef(false)
   const dispatchGenerationRef = useRef(0)
   const blockedIdRef = useRef<string | null>(null)
+  const retryWithFreshClientMessageIdRef = useRef<string | null>(null)
   const probeAttemptsRef = useRef({ id: null as string | null, attempts: 0 })
   const [error, setError] = useState<string | null>(null)
   const [errorSession, setErrorSession] = useState(sessionId)
@@ -70,6 +71,7 @@ export function useStructuredAgentSessionOutbox(args: {
     dispatchGenerationRef.current += 1
     dispatchingRef.current = false
     blockedIdRef.current = null
+    retryWithFreshClientMessageIdRef.current = null
     probeAttemptsRef.current = { id: null, attempts: 0 }
   }, [fence, sessionId, targetKey])
 
@@ -125,6 +127,7 @@ export function useStructuredAgentSessionOutbox(args: {
   const applyDisposition = useCallback(
     (disposition: StructuredAgentSessionSendDisposition): void => {
       blockedIdRef.current = disposition.blockedClientMessageId
+      retryWithFreshClientMessageIdRef.current = disposition.retryWithFreshClientMessageId
       setError(disposition.error)
       outboxRef.current = disposition.entries
       setOutbox(disposition.entries)
@@ -275,7 +278,12 @@ export function useStructuredAgentSessionOutbox(args: {
     // A provider-history reconciliation can settle an earlier unknown as
     // rejected before the user presses Retry. Reusing that operation id only
     // replays the settled rejection forever, so rotate the id for a safe resend.
-    if (current && submission?.dispatchState === 'rejected') {
+    if (
+      current &&
+      (submission?.dispatchState === 'rejected' ||
+        retryWithFreshClientMessageIdRef.current === clientMessageId)
+    ) {
+      retryWithFreshClientMessageIdRef.current = null
       const rotated = outboxRef.current.map((entry) =>
         entry.clientMessageId === clientMessageId
           ? {

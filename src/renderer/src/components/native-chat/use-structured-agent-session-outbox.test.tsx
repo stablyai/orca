@@ -643,7 +643,7 @@ describe('useStructuredAgentSessionOutbox', () => {
           11
         )
       )
-    const { result, rerender } = renderHook(
+    const { result } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
           sessionId: 'session-1',
@@ -669,7 +669,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     expect(result.current.outbox[0]?.state).toBe('queued')
     expect(result.current.blockedClientMessageId).toBe(firstId)
 
-    rerender({ submissions: [writeFailed(firstId)] })
+    // Retry immediately, before the journal subscription can publish the rejected row.
     act(() => result.current.retry(firstId))
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
 
