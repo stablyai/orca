@@ -57,13 +57,19 @@ function goalStateFromItem(itemId: string, thread: string): GoalThreadState | nu
 function persistedGoalIdentity(
   journal: Pick<AgentSessionJournal, 'latestItemIdMatching'>,
   thread: string,
-  signature: string
+  signature: string,
+  requirePrevious: boolean
 ): AgentJournalItemIdentity | null {
   const previousItemId = journal.latestItemIdMatching(
     (itemId) => goalStateFromItem(itemId, thread) !== null
   )
   const previous = previousItemId ? goalStateFromItem(previousItemId, thread) : null
   if (previous?.signature === signature) {
+    return null
+  }
+  // Codex sends a cleared snapshot while resuming threads that never had a goal.
+  // A clear is only a lifecycle occurrence when durable history proves one existed.
+  if (previous === null && requirePrevious) {
     return null
   }
   const occurrence = previous
@@ -116,7 +122,8 @@ export class CodexJournalGoals {
       this.sink,
       goalIdentity(thread, signatureKey, occurrence),
       translated.body,
-      (journal) => persistedGoalIdentity(journal, thread, signatureKey)
+      (journal) =>
+        persistedGoalIdentity(journal, thread, signatureKey, event.method === 'thread/goal/cleared')
     )
     if (!admission.accepted) {
       return admission

@@ -96,6 +96,28 @@ function texts(rows: readonly AgentJournalItemBody[]): string[] {
 }
 
 describe('codex goal lifecycle resume', () => {
+  it('does not append a cleared snapshot when the journal has no prior goal occurrence', async () => {
+    const journal = goalJournal()
+    journal.unbind()
+    const resumed = new CodexJournalGoals(journal.sink)
+
+    expect(
+      resumed.handle({
+        threadId: THREAD,
+        method: 'thread/goal/cleared',
+        params: { threadId: THREAD, turnId: null, clearedAt: 1789068999 }
+      })
+    ).toEqual({ accepted: true })
+    expect(journal.writes).toHaveLength(0)
+
+    journal.rebind()
+    await journal.drained()
+
+    expect(journal.writes).toHaveLength(0)
+    expect(journal.publishes()).toBe(0)
+    resumed.dispose()
+  })
+
   it('does not scan durable history for accounting-only updates', async () => {
     const journal = goalJournal()
     const goals = new CodexJournalGoals(journal.sink)
