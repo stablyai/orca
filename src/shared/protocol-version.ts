@@ -227,6 +227,20 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 ] as const
 
+// Reading a structured chat a paired host owns, and nothing that writes to one.
+//
+// A host withholds structured session-tab rows and refuses the whole `agentSession.*` surface to a
+// client that advertises none of these, so adding them changes what this connection is published —
+// a wire change with no codec change. Each string is a separate promise about renderer behaviour
+// that is live NOW: hold, reveal and resume-history stay out until the surfaces that answer for
+// them ship, because advertising one is what makes a host expect this client to drive it.
+export const STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES = [
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
+  AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY
+] as const
+
 // Electron clients can decode client-hosted page placement; becoming a page
 // host still requires the separate authenticated browser-client lease.
 export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
@@ -235,7 +249,8 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   // Why: only the renderer runs the retirement-proof ledger; CLI and mobile must keep full lists.
-  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
+  SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
+  ...STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES
 ] as const
 
 export const RUNTIME_CAPABILITIES = [

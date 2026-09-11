@@ -50,6 +50,10 @@ export type AgentSessionWireBuild = {
   /** Capability strings this build defines. A peer cannot advertise — nor a client
    *  ask for — a string its own source never names. */
   capabilities: readonly string[]
+  /** What this build's own Electron desktop advertises when it pairs, read from the shipped
+   *  constant. A journey written against a hand-copied list stops describing the desktop the
+   *  moment someone edits that constant, and passes while doing it. */
+  clientCapabilities: readonly string[]
   protocolVersion: number
   /** RPC method names the build registers, read from source. */
   methodNames: readonly string[]
@@ -94,6 +98,16 @@ function capabilityStrings(module: Record<string, unknown>): readonly string[] {
   return declared as readonly string[]
 }
 
+function electronClientCapabilityStrings(module: Record<string, unknown>): readonly string[] {
+  const declared = module.ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+  if (!Array.isArray(declared) || declared.length === 0) {
+    throw new Error(
+      'Cross-version harness found no ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES to advertise'
+    )
+  }
+  return declared as readonly string[]
+}
+
 async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
   const [protocol, dispatcher, methodRegistry] = await Promise.all([
     import('../../../src/shared/protocol-version'),
@@ -106,6 +120,9 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
     label: WORKING_TREE,
     revision: WORKING_TREE,
     capabilities: capabilityStrings(protocol as unknown as Record<string, unknown>),
+    clientCapabilities: electronClientCapabilityStrings(
+      protocol as unknown as Record<string, unknown>
+    ),
     protocolVersion: protocol.RUNTIME_PROTOCOL_VERSION,
     methodNames: registeredMethodNames(methods),
     createDispatcher: (runtime) =>
@@ -133,6 +150,7 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<AgentSession
     label: checkout.ref,
     revision: checkout.commit,
     capabilities: capabilityStrings(protocol),
+    clientCapabilities: electronClientCapabilityStrings(protocol),
     protocolVersion: protocol.RUNTIME_PROTOCOL_VERSION as number,
     methodNames: registeredMethodNames(methods),
     createDispatcher: (runtime) =>

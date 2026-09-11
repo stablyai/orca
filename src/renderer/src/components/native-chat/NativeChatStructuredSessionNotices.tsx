@@ -60,6 +60,23 @@ function RetryButton({ onClick }: { onClick: () => void }): React.JSX.Element {
   )
 }
 
+/** A live host this build only reads. Deliberately not one of the hold states below: nothing was
+ *  refused and nothing is missing on the other machine, so saying "update that server" would send
+ *  the user after the wrong fix. */
+function RemoteReadOnlyNotice(): React.JSX.Element {
+  return (
+    <NoticeRow>
+      <span data-native-chat-remote="read-only">
+        {translate(
+          'components.native-chat.structuredSessionRemoteReadOnly',
+          'This chat runs on a paired host. This version of Orca shows it here but does not send to it.'
+        )}{' '}
+        {holdLifetimeNote()}
+      </span>
+    </NoticeRow>
+  )
+}
+
 /** The two degraded states stay apart: a host that answers and lacks the method is an update
  *  prompt, never an error; a host that never answered is the read-only one. */
 function HoldNotice({
@@ -151,7 +168,11 @@ export function NativeChatStructuredSessionNotices({
           )}
         </p>
       ) : null}
-      <HoldNotice hold={controller.hold} onRetry={controller.retryHold} />
+      {controller.remoteReadOnly ? (
+        <RemoteReadOnlyNotice />
+      ) : (
+        <HoldNotice hold={controller.hold} onRetry={controller.retryHold} />
+      )}
       {controller.error || composerError ? (
         <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-destructive">
           {controller.error ?? composerError}

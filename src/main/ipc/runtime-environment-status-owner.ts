@@ -1,9 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
-import {
-  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
-} from '../../shared/protocol-version'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
@@ -20,6 +17,7 @@ import {
   captureRuntimeEnvironmentCapabilityEvidence
 } from './runtime-environment-capability-evidence'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
+import { electronRemoteRuntimeClientCapabilities } from './structured-reader-advertisement'
 
 export function createRuntimeEnvironmentStatusOwner(
   userDataPath: string,
@@ -49,7 +47,7 @@ export function createRuntimeEnvironmentStatusOwner(
             15_000,
             undefined,
             signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            electronRemoteRuntimeClientCapabilities()
           )
     },
     verified: (response, active) => {

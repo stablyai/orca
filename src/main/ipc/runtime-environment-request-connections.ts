@@ -4,7 +4,6 @@ import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import type { RuntimeHostStatusOwner } from '../../shared/runtime-host-status-owner'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
@@ -22,6 +21,7 @@ import {
   advanceRuntimeEnvironmentTransportGeneration,
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
+import { electronRemoteRuntimeClientCapabilities } from './structured-reader-advertisement'
 
 type CachedRuntimeConnection = {
   pairingKey: string
@@ -102,7 +102,7 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
       pairingKey,
       connection: new RemoteRuntimeRequestConnection(
         pairing,
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+        electronRemoteRuntimeClientCapabilities()
       )
     }
     requestConnections.set(environmentId, cached)
@@ -212,7 +212,7 @@ function getSharedControlConnection(
       pairingKey,
       connection: new RemoteRuntimeSharedControlConnection(pairing, {
         environmentId,
-        clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+        clientCapabilities: electronRemoteRuntimeClientCapabilities(),
         isManuallyDisconnected: () => isRuntimeEnvironmentManuallyDisconnected(environmentId),
         isCapabilityPaused: () => isRuntimeEnvironmentCapabilityPaused(environmentId),
         onDiagnosticsChanged: (diagnostics) => {

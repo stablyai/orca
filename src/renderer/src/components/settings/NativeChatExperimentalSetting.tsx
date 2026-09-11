@@ -20,6 +20,7 @@ export function NativeChatExperimentalSetting({
 }: NativeChatExperimentalSettingProps): React.JSX.Element {
   const nativeChatEnabled = settings.experimentalNativeChat === true
   const structuredNativeChatEnabled = settings.experimentalStructuredNativeChat === true
+  const structuredChatRemoteRead = settings.structuredChatRemoteRead !== false
   const defaultView: NativeChatDefaultView =
     settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
 
@@ -132,7 +133,7 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredScope',
-                    'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+                    'Orca starts these sessions locally for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
                   )}
                 </p>
               </div>
@@ -146,6 +147,41 @@ export function NativeChatExperimentalSetting({
                   updateSettings({
                     experimentalStructuredNativeChat: !structuredNativeChatEnabled
                   })
+                }
+              />
+            </div>
+          ) : null}
+
+          {defaultView === 'native-chat' && structuredNativeChatEnabled ? (
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {translate(
+                    'components.settings.nativeChat.remoteReadTitle',
+                    'Read structured chats on paired hosts'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'components.settings.nativeChat.remoteReadCopy',
+                    'Show the structured chats a paired Orca host is running. They are read-only here; sending and starting new ones stay on that machine.'
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'components.settings.nativeChat.remoteReadScope',
+                    'Turning this off stops Orca asking each paired host for them from the next time it connects to that host.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={structuredChatRemoteRead}
+                ariaLabel={translate(
+                  'components.settings.nativeChat.remoteReadToggleLabel',
+                  'Toggle reading structured chats on paired hosts'
+                )}
+                onChange={() =>
+                  updateSettings({ structuredChatRemoteRead: !structuredChatRemoteRead })
                 }
               />
             </div>

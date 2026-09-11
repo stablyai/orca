@@ -36,6 +36,7 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
 } from '../../shared/computer-awake-mode'
+import { setStructuredChatRemoteReadSource } from './structured-reader-advertisement'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -72,6 +73,9 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  // Read live rather than mirrored: every paired connection this process opens decides its
+  // structured-reader advertisement from this, and a copy taken here would outlive the switch.
+  setStructuredChatRemoteReadSource(() => store.getSettings().structuredChatRemoteRead !== false)
   ipcMain.handle(
     'agentAwake:getStatus',
     () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }

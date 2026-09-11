@@ -32,6 +32,7 @@ import {
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
+import { structuredRemoteSessionWritesEnabled } from './structured-remote-session-writes'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import {
   pendingStructuredSessionPrompts,
@@ -60,17 +61,22 @@ export function useStructuredAgentSession(args: {
   // A re-paired owner leaves the transcript exactly as last read and stops every write: the id now
   // names a different machine, so re-reading or mutating would address a stranger's journal.
   const live = isVisible && !ownerPairingStale
+  // A chat this client only reads. Not a degraded state and not a host's answer: the host is
+  // willing, and this build is the side that has not shipped the other half yet.
+  const remoteReadOnly = target.kind === 'environment' && !structuredRemoteSessionWritesEnabled()
   // Declared first: the hold is what gives a restored session its provider child back, and the
   // read below is useless for sending until it lands.
   const hold = useStructuredAgentSessionHold({
     sessionId,
     target,
     surface: 'desktop-chat',
-    enabled: live
+    // Never merely ignored: the hold is the provider wake, so a read-only pane must not make the
+    // call at all rather than make it and refuse to use what it reserved.
+    enabled: live && !remoteReadOnly
   })
   // A host that never answered cannot have taken the hold a restored session needs, so the pane is
   // looking at the last transcript it read; a write would address a host it has no contact with.
-  const readOnly = ownerPairingStale || hold.state.kind === 'unreachable'
+  const readOnly = ownerPairingStale || remoteReadOnly || hold.state.kind === 'unreachable'
   const { state, loadingOlder, loadOlder } = useStructuredAgentSessionRead({
     ...args,
     isVisible: live
@@ -219,6 +225,8 @@ export function useStructuredAgentSession(args: {
     cached: ownerPairingStale,
     /** Every reason this pane refuses writes, re-paired owner or unreachable host alike. */
     readOnly,
+    /** Specifically: a live, willing paired host this build reads and does not drive. */
+    remoteReadOnly,
     hold: hold.state,
     retryHold: hold.retry,
     conversationCommands:

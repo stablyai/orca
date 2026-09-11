@@ -262,10 +262,42 @@ describe('ExperimentalPane', () => {
     expect(container.textContent).toContain(
       'Opt in to the host-owned structured chat runtime for Codex and Claude.'
     )
+    // Scoped to STARTING a session: a paired host's own structured chats are readable here, so
+    // the line must not read as "remote hosts have none of this".
     expect(container.textContent).toContain(
-      'Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+      'Orca starts these sessions locally for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
     )
     expect(container.textContent).toContain('Default view')
+    root.unmount()
+  })
+
+  it('offers the paired-host read retreat only once structured chat is on, and writes it off', async () => {
+    const updateSettings = vi.fn()
+    const structuredOff = {
+      ...getDefaultSettings('/tmp'),
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true
+    }
+    const hidden = await renderExperimentalPane({ updateSettings, settings: structuredOff })
+    // Nothing to retreat from while structured chat itself is off.
+    expect(hidden.container.textContent).not.toContain('Read structured chats on paired hosts')
+    hidden.root.unmount()
+
+    const { root, container } = await renderExperimentalPane({
+      updateSettings,
+      settings: { ...structuredOff, experimentalStructuredNativeChat: true }
+    })
+    const remoteReadSwitch = container.querySelector<HTMLButtonElement>(
+      '#experimental-native-chat button[role="switch"][aria-label="Toggle reading structured chats on paired hosts"]'
+    )
+    // On for a profile that never saw the setting: the reader ships advertised.
+    expect(remoteReadSwitch?.getAttribute('aria-checked')).toBe('true')
+
+    await act(async () => {
+      remoteReadSwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ structuredChatRemoteRead: false })
     root.unmount()
   })
 

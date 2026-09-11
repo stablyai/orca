@@ -3,6 +3,10 @@
 // Two degraded panes that must never look alike: a paired host that answers and has no hold method
 // still reads and still sends, it just needs an update; a host that has not answered leaves the
 // pane on the transcript it last read, with writes off and a Retry.
+//
+// Every case here is about a pane that holds, so remote writes are on for the file: with them off
+// a paired pane takes no hold at all, which is its own guard in
+// `structured-remote-read-only-pane.test.tsx` rather than a variant of these.
 
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,6 +26,9 @@ vi.mock('@/runtime/structured-agent-session-client', () =>
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcClientModule>()),
   runtimeEnvironmentSupportsCapability: holdMocks.supportsCapability
+}))
+vi.mock('./structured-remote-session-writes', () => ({
+  structuredRemoteSessionWritesEnabled: () => true
 }))
 vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())

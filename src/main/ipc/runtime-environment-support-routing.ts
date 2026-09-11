@@ -7,7 +7,6 @@ import type {
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
 import { markEnvironmentUsed, resolveEnvironment } from '../../shared/runtime-environment-store'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 import {
   subscribeRemoteRuntimeRequest,
   type RemoteRuntimeSubscription
@@ -24,6 +23,7 @@ import {
   sendRemoteRuntimeSharedControlRequestAbortable
 } from './runtime-environment-abortable-requests'
 import { subscribeRemoteRuntimeSharedControlRequest } from './runtime-environment-request-connections'
+import { electronRemoteRuntimeClientCapabilities } from './structured-reader-advertisement'
 
 type SupportRoute = {
   environment: KnownRuntimeEnvironment
@@ -98,7 +98,7 @@ export function executeSupportRoutedCall(args: {
         args.timeoutMs,
         args.envelope,
         args.signal,
-        ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+        electronRemoteRuntimeClientCapabilities()
       ),
     markUsed: (environmentId, response) => {
       if (response.ok) {
@@ -156,7 +156,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
         args.params,
         args.timeoutMs,
         callbacks,
-        { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
+        { clientCapabilities: electronRemoteRuntimeClientCapabilities() }
       )
     }
   })

@@ -15,6 +15,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES,
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import type {
@@ -26,7 +30,8 @@ import {
   materializeReleaseCheckout,
   resolveBaselineReleaseRef
 } from './release-checkout'
-import { turnItemSkew } from './structured-agent-session-host-fixture'
+import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import { structuredHostStub, turnItemSkew } from './structured-agent-session-host-fixture'
 import {
   loadAgentSessionWireBuild,
   WORKING_TREE,
@@ -49,6 +54,7 @@ const CLAUDE_TAB_TITLE = 'Claude Chat'
 const LIST_METHOD = 'session.tabs.list'
 const SUBSCRIBE_METHOD = 'session.tabs.subscribe'
 const CLOSE_METHOD = 'session.tabs.close'
+const HOLD_METHOD = 'agentSession.hold'
 
 const PROJECTION_MODULE = '/src/main/runtime/rpc/methods/session-tab-agent-status-projection.ts'
 
@@ -237,6 +243,23 @@ function c1(): string[] {
 
 function c1WithClaudeReader(): string[] {
   return [...c1(), CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+}
+
+/**
+ * D — what a paired desktop of that build actually advertises, taken from the shipped constant
+ * rather than assembled here. C0 and C1 above are hypotheses about clients; this one is the
+ * client, so the day someone edits that list these journeys change with it instead of quietly
+ * continuing to describe a desktop that no longer exists.
+ */
+function desktopOf(build: AgentSessionWireBuild): string[] {
+  return [...build.clientCapabilities]
+}
+
+/** A desktop from before the advertisement, derived the way C0 is: once a release ships the reader
+ *  strings, a hand-written list would stop being that client and start being this one. */
+function withoutStructuredReader(capabilities: readonly string[]): string[] {
+  const reader = new Set<string>(STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES)
+  return capabilities.filter((capability) => !reader.has(capability))
 }
 
 async function callBuild(
@@ -555,6 +578,111 @@ describe('cross-version session-tab sync', () => {
         // an unknown kind to a client whose tab it had just decided to show.
         expect(replies[0]).toMatchObject({ ok: true, result: { page: { items: [item] } } })
       }
+    })
+  })
+
+  /**
+   * The desktop this release ships is the client PR-12 was written against in the abstract. These
+   * journeys use its real advertisement, so the harness stops describing a hypothesis and starts
+   * describing the build.
+   */
+  describe('the paired desktop this release ships', () => {
+    let stub: SessionTabsRuntimeStub
+
+    beforeEach(() => {
+      stub = sessionTabsRuntimeStub()
+    })
+
+    afterEach(() => {
+      setStructuredAgentSessionHost(null)
+    })
+
+    it('advertises the reader and nothing whose surface it cannot yet drive', () => {
+      const desktop = desktopOf(current)
+      // Anti-vacuous: a list read from the wrong export, or an empty one, would satisfy every
+      // absence below while proving nothing about what this desktop says on the wire.
+      expect(desktop.length).toBeGreaterThan(0)
+      for (const capability of STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES) {
+        expect(desktop, `the desktop advertises ${capability}`).toContain(capability)
+      }
+      for (const adjunct of [
+        STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+        STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
+        STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
+      ]) {
+        // This build names all three, so leaving them out is a decision about what the renderer
+        // can answer for rather than a string nobody has written down yet.
+        expect(current.capabilities, `${adjunct} exists in this build`).toContain(adjunct)
+        expect(desktop, `the desktop withholds ${adjunct}`).not.toContain(adjunct)
+      }
+    })
+
+    it('is published the structured rows by either host while an older desktop still is not', async () => {
+      const olderDesktop = withoutStructuredReader(desktopOf(baseline))
+      expect(olderDesktop.length).toBeGreaterThan(0)
+      for (const build of hostBuilds()) {
+        const projected = await listTabs(build, stub, runtimeClient(desktopOf(current)))
+        expect(tabIds(projected), `${build.label} publishes both chats to this desktop`).toEqual([
+          TERMINAL_TAB,
+          CODEX_TAB,
+          CLAUDE_TAB
+        ])
+        expect(projected.tabs.find((tab) => tab.id === CLAUDE_TAB)).toMatchObject({
+          title: CLAUDE_TAB_TITLE,
+          sessionId: CLAUDE_SESSION
+        })
+        // Same host, same socket, a client that predates the advertisement: the decision is per
+        // connection, so shipping it here does not change what an older desktop is handed.
+        const older = await listTabs(build, stub, runtimeClient(olderDesktop))
+        expect(tabIds(older), `${build.label} still withholds from an older desktop`).toEqual([
+          TERMINAL_TAB
+        ])
+      }
+      expect(stub.published).toEqual(hostSnapshot())
+    })
+
+    it('finds a session the host already had, at the publication it was already at', async () => {
+      for (const build of hostBuilds()) {
+        const projected = await listTabs(build, stub, runtimeClient(desktopOf(current)))
+        expect(tabIds(projected)).toContain(CODEX_TAB)
+        // The advertisement restores the host's own records; it does not mint a publication, so a
+        // desktop that turns it on lands on the work that was already there.
+        expect(projected.publicationEpoch).toBe(hostSnapshot().publicationEpoch)
+        expect(projected.snapshotVersion).toBe(hostSnapshot().snapshotVersion)
+      }
+      expect(stub.restoreCalls).toBeGreaterThan(0)
+      expect(stub.published).toEqual(hostSnapshot())
+    })
+
+    it('would be let through to a hold, so only this client keeps it from waking a provider', async () => {
+      const host = structuredHostStub(CODEX_SESSION, WORKTREE)
+      setStructuredAgentSessionHost(host as unknown as StructuredAgentSessionHost)
+      const held = await callBuild(
+        current,
+        HOLD_METHOD,
+        { sessionId: CODEX_SESSION, holderId: 'desktop-chat' },
+        runtimeClient(desktopOf(current)),
+        stub.runtime
+      )
+      // The reader advertisement admits the whole read surface AND the hold: the host gates the
+      // hold on the reader string, not on the hold string this desktop withholds. So nothing on
+      // the host side is what stops a read-only pane opening a record and handing its session a
+      // provider child back — the renderer is, and its guard is the only one there is.
+      expect(held[0], 'the host admits a hold from this desktop').toMatchObject({ ok: true })
+      expect(host.hold).toHaveBeenCalledTimes(1)
+      host.hold.mockClear()
+      const refused = await callBuild(
+        current,
+        HOLD_METHOD,
+        { sessionId: CODEX_SESSION, holderId: 'desktop-chat' },
+        runtimeClient(withoutStructuredReader(desktopOf(baseline))),
+        stub.runtime
+      )
+      expect(refused[0], 'a desktop without the advertisement is refused').toMatchObject({
+        ok: false,
+        error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+      })
+      expect(host.hold).not.toHaveBeenCalled()
     })
   })
 })

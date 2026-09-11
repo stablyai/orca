@@ -1,5 +1,4 @@
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 import { resolveEnvironment, markEnvironmentUsed } from '../../shared/runtime-environment-store'
 import { isOrchestrationMutation } from '../../shared/orchestration-rpc-contract'
 import type {
@@ -30,6 +29,7 @@ import {
   shouldRouteSubscriptionBySupport,
   subscribeSupportRoutedRuntimeEnvironment
 } from './runtime-environment-support-routing'
+import { electronRemoteRuntimeClientCapabilities } from './structured-reader-advertisement'
 
 const DEFAULT_REMOTE_RUNTIME_TIMEOUT_MS = 15_000
 
@@ -114,7 +114,7 @@ export async function callRuntimeEnvironment(
             effectiveTimeoutMs,
             envelope,
             options?.signal,
-            ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+            electronRemoteRuntimeClientCapabilities()
           )
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
@@ -152,7 +152,7 @@ export async function callRuntimeEnvironment(
           effectiveTimeoutMs,
           sharedControlEnvelope,
           options?.signal,
-          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+          electronRemoteRuntimeClientCapabilities()
         )
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response
@@ -236,7 +236,7 @@ export async function subscribeRuntimeEnvironment(
       params,
       effectiveTimeoutMs,
       callbacksWithMarkUsed,
-      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
+      { clientCapabilities: electronRemoteRuntimeClientCapabilities() }
     )
   } catch (error) {
     if (error instanceof Error) {

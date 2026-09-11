@@ -7030,7 +7030,7 @@
             "defaultViewNative": "Chat UI",
             "structuredTitle": "Use updated structured native chat",
             "structuredCopy": "Opt in to the host-owned structured chat runtime for Codex and Claude. Off keeps the existing terminal-backed chat path.",
-            "structuredScope": "Local sessions only for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.",
+            "structuredScope": "Orca starts these sessions locally for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.",
             "structuredToggleLabel": "Toggle updated structured native chat"
           },
           "agentDashboard": {
@@ -17250,6 +17250,7 @@
       "structuredSessionHoldConflict": "Another surface already holds this session on its host, so this pane did not reserve it.",
       "structuredSessionHoldOwnerUnknown": "This session\u2019s host could not prove who owns it, so this pane did not reserve it.",
       "structuredSessionHoldFailed": "This session could not be reserved on its host.",
+      "structuredSessionRemoteReadOnly": "This chat runs on a paired host. This version of Orca shows it here but does not send to it.",
       "handoff": {
         "stage": {
           "finishingChat": "Finishing chat session…",
@@ -17610,6 +17611,14 @@
         "copySessionId": "Copy Session ID",
         "copySessionIdSuccess": "Session ID copied",
         "copySessionIdError": "Unable to copy session ID"
+      }
+    },
+    "settings": {
+      "nativeChat": {
+        "remoteReadTitle": "Read structured chats on paired hosts",
+        "remoteReadCopy": "Show the structured chats a paired Orca host is running. They are read-only here; sending and starting new ones stay on that machine.",
+        "remoteReadScope": "Turning this off stops Orca asking each paired host for them from the next time it connects to that host.",
+        "remoteReadToggleLabel": "Toggle reading structured chats on paired hosts"
       }
     }
   },
