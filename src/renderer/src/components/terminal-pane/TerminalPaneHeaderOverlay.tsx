@@ -1,19 +1,11 @@
 import type { CSSProperties, RefObject } from 'react'
-import {
-  MessageSquare,
-  MessageSquarePlus,
-  SquareSplitVertical,
-  SquareTerminal,
-  X
-} from 'lucide-react'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { PtyTransport } from './pty-transport'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
+import PaneTitleActions from './PaneTitleActions'
 
 export type PaneTitleOverlayRect = {
   left: number
@@ -126,6 +118,13 @@ export default function TerminalPaneHeaderOverlay({
         const isActivePane = activePaneId === pane.id
         const isChromeless = showAlwaysOnHeaders && !title && !isEditing
         const showHeader = overlayRect && (showAlwaysOnHeaders || Boolean(title) || isEditing)
+        const editTitleLabel = title
+          ? translate(
+              'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
+              'Edit pane title: {{value0}}',
+              { value0: title }
+            )
+          : ''
         if (!showHeader || !overlayRect) {
           return null
         }
@@ -144,10 +143,12 @@ export default function TerminalPaneHeaderOverlay({
               title || isEditing ? () => onActivatePaneTitleInteraction(pane.id) : undefined
             }
             onPointerDown={(event) => {
-              // Why: the bar itself is the drag-initiating surface (title text,
-              // rename input, and every action button stop propagation on their
-              // own pointerdown so this only fires for the empty bar area) —
-              // matches SortableTab.tsx's root-drag/child-stopPropagation split.
+              // Why: the bar itself is the drag-initiating surface. The title
+              // text deliberately does NOT stop propagation — it's part of the
+              // drag surface too (single click/drag drags; double-click
+              // renames) — only the rename input and the action buttons opt
+              // out, matching SortableTab.tsx's root-drag/child-stopPropagation
+              // split.
               if (paneCount > 1 && !isEditing) {
                 onBeginPaneDrag(pane.id, event.currentTarget, event.nativeEvent)
               }
@@ -248,200 +249,44 @@ export default function TerminalPaneHeaderOverlay({
             ) : (
               <>
                 {title ? (
-                  // Why: plain drag surface, not a button — double-click-to-rename
-                  // is wired on the bar itself (see onDoubleClick above), because
-                  // pointer capture retargets the dblclick there, not to a child.
-                  // Matches SortableTab.tsx's tab label (also a plain span).
+                  // Why: a plain drag surface (not a <button>) so click/drag
+                  // isn't stolen from the bar; rename is on double-click (on
+                  // the bar itself — see onDoubleClick above, pointer capture
+                  // retargets there) plus tabIndex/role/Enter-Space so a
+                  // keyboard-only user can still reach it.
                   <span
                     className="pane-title-text"
-                    title={translate(
-                      'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
-                      'Edit pane title: {{value0}}',
-                      { value0: title }
-                    )}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={editTitleLabel}
+                    title={editTitleLabel}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onStartRename(pane.id)
+                      }
+                    }}
                   >
                     {title}
                   </span>
                 ) : null}
-                <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
-                  {canContinueAgentSessionInNewSession && isActivePane ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="pane-title-split-trigger"
-                          aria-label={translate(
-                            'components.agentSessionContinuation.continueInNewSession',
-                            'Continue in New Session…'
-                          )}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          // Why: a native dblclick isn't blocked by the click
-                          // handler's stopPropagation above (a separate event)
-                          // — without this it would bubble up and incorrectly
-                          // trigger the bar's rename handler (same reasoning
-                          // applies to every action button below).
-                          onDoubleClick={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onContinueAgentSessionInNewSession?.(pane)
-                          }}
-                        >
-                          <MessageSquarePlus className="size-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={4}>
-                        {translate(
-                          'components.agentSessionContinuation.continueInNewSession',
-                          'Continue in New Session…'
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                  {canToggleNativeChat && isActivePane ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          // Same class as split so it shares the hover/active reveal
-                          // and sits as a peer in the [chat][split][×] cluster.
-                          className="pane-title-split-trigger"
-                          aria-label={
-                            isChatViewMode
-                              ? translate(
-                                  'components.native-chat.toggle.showTerminal',
-                                  'Show terminal'
-                                )
-                              : translate(
-                                  'components.native-chat.toggle.showChat',
-                                  'Show chat view'
-                                )
-                          }
-                          aria-pressed={isChatViewMode}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          // Why: see the first action button's comment above —
-                          // a native dblclick would otherwise bubble up and
-                          // incorrectly trigger the bar's rename handler.
-                          onDoubleClick={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onToggleNativeChat?.()
-                          }}
-                        >
-                          {isChatViewMode ? (
-                            <SquareTerminal className="size-3" />
-                          ) : (
-                            <MessageSquare className="size-3" />
-                          )}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={4}>
-                        {isChatViewMode
-                          ? translate('components.native-chat.toggle.showTerminal', 'Show terminal')
-                          : translate('components.native-chat.toggle.showChat', 'Show chat view')}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                  {showAlwaysOnHeaders && showSplitButton ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="pane-title-split-trigger"
-                          data-contextual-tour-target={
-                            isActivePane ? 'terminal-pane-split-target' : undefined
-                          }
-                          aria-label={splitRightLabel}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          // Why: see the first action button's comment above —
-                          // a native dblclick would otherwise bubble up and
-                          // incorrectly trigger the bar's rename handler.
-                          onDoubleClick={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onSplitPane(pane, 'vertical')
-                          }}
-                        >
-                          <SquareSplitVertical className="size-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={4}>
-                        {splitRightLabel}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                  {title ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="pane-title-close"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          // Why: see the first action button's comment above —
-                          // a native dblclick would otherwise bubble up and
-                          // incorrectly trigger the bar's rename handler.
-                          onDoubleClick={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onRemoveTitle(pane.id)
-                          }}
-                          aria-label={translate(
-                            'auto.components.terminal.pane.TerminalPane.f984ab2a30',
-                            'Remove pane title: {{value0}}',
-                            { value0: title }
-                          )}
-                        >
-                          <X className="size-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={4}>
-                        {translate(
-                          'auto.components.terminal.pane.TerminalPane.ac112e9036',
-                          'Remove title'
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : paneCount > 1 && showAlwaysOnHeaders ? (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-xs"
-                          className="pane-title-close"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          // Why: see the first action button's comment above —
-                          // a native dblclick would otherwise bubble up and
-                          // incorrectly trigger the bar's rename handler.
-                          onDoubleClick={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            onClosePane(pane.id)
-                          }}
-                          aria-label={translate(
-                            'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                            'Close Pane'
-                          )}
-                        >
-                          <X className="size-3" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" sideOffset={4}>
-                        {translate(
-                          'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-                          'Close Pane'
-                        )}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : null}
-                </div>
+                <PaneTitleActions
+                  pane={pane}
+                  title={title}
+                  isActivePane={isActivePane}
+                  paneCount={paneCount}
+                  showAlwaysOnHeaders={showAlwaysOnHeaders}
+                  showSplitButton={showSplitButton}
+                  splitRightLabel={splitRightLabel}
+                  canContinueAgentSessionInNewSession={canContinueAgentSessionInNewSession}
+                  onContinueAgentSessionInNewSession={onContinueAgentSessionInNewSession}
+                  canToggleNativeChat={canToggleNativeChat}
+                  isChatViewMode={isChatViewMode}
+                  onToggleNativeChat={onToggleNativeChat}
+                  onSplitPane={onSplitPane}
+                  onRemoveTitle={onRemoveTitle}
+                  onClosePane={onClosePane}
+                />
               </>
             )}
           </div>

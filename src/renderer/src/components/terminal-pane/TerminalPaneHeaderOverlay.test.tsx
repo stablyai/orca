@@ -310,6 +310,30 @@ describe('TerminalPaneHeaderOverlay', () => {
       expect(onStartRename).toHaveBeenCalledWith(1)
     })
 
+    // Why: the title text moved from a <button> to a plain <span> so a single
+    // click/drag isn't stolen from the bar (see the drag tests above). That
+    // dropped native keyboard activation, so it's restored explicitly here —
+    // a keyboard-only user must still be able to reach rename without a mouse.
+    it('is keyboard-focusable and opens rename on Enter/Space', () => {
+      const { container, onStartRename } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' }
+      })
+      const titleText = container.querySelector<HTMLSpanElement>('.pane-title-text')
+
+      expect(titleText).not.toBeNull()
+      expect(titleText?.getAttribute('role')).toBe('button')
+      expect(titleText?.getAttribute('tabindex')).toBe('0')
+
+      act(() =>
+        titleText?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      )
+      expect(onStartRename).toHaveBeenCalledWith(1)
+
+      onStartRename.mockClear()
+      act(() => titleText?.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })))
+      expect(onStartRename).toHaveBeenCalledWith(1)
+    })
+
     it('does not open rename on double-click of an action button', () => {
       // Why: an action button's pointerdown stops propagation, so the bar never
       // captures the pointer for that gesture — its native dblclick is a

@@ -339,11 +339,15 @@
   color: inherit;
   font: inherit;
   text-align: left;
-  /* Why: override main.css's global `:where(button:not(:disabled))` pointer
-     cursor — inherit the bar's grab cursor instead, so a single click/drag on
-     the title text drags the pane; double-click still renames. */
-  cursor: inherit;
+  /* Why: no cursor override here — a <span> has no default cursor style, so it
+     shows the bar's grab cursor by inheritance, letting a single click/drag on
+     the title text drag the pane; double-click still renames. */
   line-height: var(--orca-pane-title-height);
+}
+
+.pane-title-text:focus-visible {
+  outline: 1px solid var(--ring);
+  outline-offset: 1px;
 }
 
 .pane-title-bar[data-chromeless] {
