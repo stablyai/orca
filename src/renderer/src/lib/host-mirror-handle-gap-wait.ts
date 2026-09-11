@@ -47,13 +47,21 @@ const waitersByPane = new Map<string, HandleGapWaiter>()
 /**
  * Connection generation whose wait already expired for the pane.
  *
- * Two rules drain it, and neither subsumes the other because both are driven by a recording:
- * `recordExpiredWait` drops rows from a superseded generation, and a separate rule (8f166411306)
- * drops rows whose tab is no longer published, both scoped to the environment doing the recording.
- * An environment that is REMOVED records nothing ever again, so neither rule can reach it — hence
- * the teardown clear below, which is the only thing that can. A stranded row is inert (removing an
- * environment advances its connection generation, so it can never match again); this is a leak
- * fix, not a correctness one.
+ * THREE drains, with three different triggers. Getting the scopes right is the whole design; see
+ * `recordExpiredWait` for why the first two must NOT share a scope.
+ *  - superseded generation: per key, EVERY environment. Runs on any recording, anywhere.
+ *  - dead tab row: the recording environment ONLY. Runs on a recording in that environment.
+ *  - removed environment: `clearHostMirrorHandleGapVerdictsForEnvironment`, on teardown. The only
+ *    trigger that fires at all for an environment that will never record again. A row stranded
+ *    there is inert — removal advances the generation, so it can never match — so that one is a
+ *    leak fix, not a correctness fix.
+ *
+ * ONE CLASS IS STILL UNCOVERED, and unlike the rest it is NOT conservative: a retracted tab id
+ * that is republished inherits the old pane's verdict and skips its own wait, which is the #19735
+ * direction rather than a longer hold. No trigger above reaches it — the dead-row predicate stops
+ * matching once the id is live again, teardown is the wrong event, and a pane holding a verdict
+ * never parks, so no waiter observes the retraction. Closing it needs a fourth trigger, on row
+ * retraction. Pinned in host-mirror-handle-gap-verdict-union.test.ts; do not delete that case.
  */
 const expiredGenerationByPane = new Map<string, number>()
 let unsubscribeStore: (() => void) | null = null

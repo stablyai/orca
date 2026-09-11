@@ -26,9 +26,15 @@ const WORKTREE_ID = 'repo-1::/workspace/repo'
 const initialAppStoreState = useAppStore.getState()
 
 function parkAndExpire(environmentId: string, tabId: string): void {
+  // Rows ACCUMULATE. Replacing them would unpublish the panes parked earlier, and the tab-death
+  // rule would then legitimately sweep their verdicts before teardown was ever reached — this
+  // suite is about a class no recording-driven prune can reach, so every pane here stays live.
+  const published = useAppStore.getState().tabsByWorktree[WORKTREE_ID] ?? []
   useAppStore.setState({
     ptyIdsByTabId: {},
-    tabsByWorktree: { [WORKTREE_ID]: [{ id: tabId, title: tabId }] }
+    tabsByWorktree: {
+      [WORKTREE_ID]: [...published.filter((tab) => tab.id !== tabId), { id: tabId, title: tabId }]
+    }
   } as never)
   parkUntilHostMirrorHandleLands(environmentId, WORKTREE_ID, tabId, () => {})
   vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)

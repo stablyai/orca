@@ -73,7 +73,13 @@ function service(mode: { current: MobilePairingConnectionMode }): DesktopRelaySe
       publicKeyB64: 'x'
     }),
     getMobileSocketWiring: () => ({ attachTransport: () => () => {} }),
-    getRelayRevokeOutbox: () => ({ pendingFor: () => [], remove: vi.fn() }),
+    // `demandingFor` is what hasDemand reads; a stub missing it throws inside reconcile and the
+    // mint never settles, which surfaces only as a test timeout.
+    getRelayRevokeOutbox: () => ({
+      pendingFor: () => [],
+      demandingFor: () => [],
+      remove: vi.fn()
+    }),
     getDeviceRegistry: () => ({
       listDevices: () => [],
       getDevice: () => ({ deviceId: 'device-1', scope: 'mobile' }),
