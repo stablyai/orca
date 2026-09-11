@@ -71,12 +71,26 @@ const waitersByPane = new Map<string, HandleGapWaiter>()
  *    subscription to outlive the waiters, which is why `stopStoreSubscriptionIfIdle` counts
  *    verdicts too.
  *
- * ONE CLASS IS STILL UNCOVERED, and unlike the rest it is NOT conservative: a retracted tab id
- * that is republished inherits the old pane's verdict and skips its own wait, which is the #19735
- * direction rather than a longer hold. No trigger above reaches it — the dead-row predicate stops
- * matching once the id is live again, teardown is the wrong event, and a pane holding a verdict
- * never parks, so no waiter observes the retraction. Closing it needs a fourth trigger, on row
- * retraction. Pinned in host-mirror-handle-gap-verdict-union.test.ts; do not delete that case.
+ * A FIFTH class is covered but NOT by any of those drains: a retracted tab id republished as a
+ * different pane, which would inherit the old pane's verdict and skip its own wait — the #19735
+ * direction rather than a longer hold. No trigger can reach it, and the reason is worth keeping:
+ * the dead-row predicate stops matching once the id is live again, teardown is the wrong event,
+ * and a pane holding a verdict never parks, so no waiter is there to observe the retraction. It is
+ * closed at READ time instead, by `hasHostMirrorHandleWaitExpired` comparing the verdict's
+ * park-time `paneBinding` — a pane that binds a newly minted PTY does not answer to a verdict
+ * about its predecessor. Pinned as class D in host-mirror-handle-gap-verdict-union.test.ts; do not
+ * delete that case.
+ *
+ * The PUBLISHED HANDLE drain does not close that class and must not be read as closing it: it
+ * needs the row to stay published throughout, and that class needs the row to go away. Read-time
+ * identity separates two panes behind one tab id; the drain separates two gaps on one pane. They
+ * look adjacent and are orthogonal — mutation kills them with disjoint tests.
+ *
+ * Why this comment block is worth re-reading against the code rather than trusting: the paragraph
+ * above it spent one commit asserting this class was still open and demanding a trigger that had
+ * just been replaced by the read-time check, while the test it named as its pin said the opposite.
+ * Several agents change this map in parallel and the invariants move faster than the prose, so
+ * when the two disagree the test file is the one that ran.
  */
 type ExpiredHandleGapVerdict = {
   generation: number
