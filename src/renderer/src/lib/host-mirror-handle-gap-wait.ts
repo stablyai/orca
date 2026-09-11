@@ -70,13 +70,41 @@ export function hasHostMirrorHandleWaitExpired(environmentId: string, tabId: str
   )
 }
 
+function liveTabIds(): Set<string> {
+  const tabIds = new Set<string>()
+  for (const tabs of Object.values(useAppStore.getState().tabsByWorktree)) {
+    for (const tab of tabs) {
+      tabIds.add(tab.id)
+    }
+  }
+  return tabIds
+}
+
 function recordExpiredWait(environmentId: string, key: string): void {
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
-  // Why: a verdict from a previous connection is dead weight; drop it so the map
-  // stays bounded by the panes parked on the current connection.
+  // TWO rules with DIFFERENT scopes, deliberately. Flattening them to one scope is wrong either
+  // way round, and both wrong shapes were independently written before this was reconciled.
   const prefix = `${environmentId}\0`
+  const liveTabs = liveTabIds()
   for (const [staleKey, staleGeneration] of expiredGenerationByPane) {
-    if (staleKey.startsWith(prefix) && staleGeneration !== generation) {
+    // GENERATION, judged per key across EVERY environment. `hasHostMirrorHandleWaitExpired`
+    // compares a row against its own environment's CURRENT generation, so a row whose generation
+    // has moved can never return true for anyone. Retiring it cannot cost a reader a verdict,
+    // whoever owns it. Scoped to the recording environment, an environment that reconnects and
+    // then goes quiet strands its rows forever.
+    const staleEnvironmentId = staleKey.slice(0, staleKey.indexOf('\0'))
+    if (staleGeneration !== getRuntimeEnvironmentConnectionGeneration(staleEnvironmentId)) {
+      expiredGenerationByPane.delete(staleKey)
+      continue
+    }
+    // TAB DEATH, this environment ONLY. Unlike a generation, row absence is transient: a sibling
+    // mid-republish has no rows for a frame and would lose a verdict its pane still needs. What
+    // licenses the inference here is that the recording pane's own row is published right now —
+    // the deadline only records while its waiter is parked — which establishes that THIS
+    // environment has a published row. It does not establish that it has finished republishing,
+    // so do not widen this further: a host that has published p1 but not yet p2 can still cost p2
+    // its verdict. That residual is conservative — drop, re-park, hold longer, never resume early.
+    if (staleKey.startsWith(prefix) && !liveTabs.has(staleKey.slice(prefix.length))) {
       expiredGenerationByPane.delete(staleKey)
     }
   }
