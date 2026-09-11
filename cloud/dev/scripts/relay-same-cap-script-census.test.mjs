@@ -77,14 +77,14 @@ function rollPlan({ cellId, cap, protocol }) {
             metadata_startup_script: startupScript({
               cap,
               image: ROLLBACK_IMAGE,
-              trusted: protocol === 1
+              trusted: protocol >= 1
             })
           },
           after: {
             metadata_startup_script: startupScript({
               cap,
               image: TARGET_IMAGE,
-              trusted: protocol === 1
+              trusted: protocol >= 1
             }),
             self_link: null
           },
