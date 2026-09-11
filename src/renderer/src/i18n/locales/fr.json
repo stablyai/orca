@@ -11292,8 +11292,6 @@
               "apiTokenPlaceholder": "Token API Atlassian",
               "baseUrl": "URL de base de l'API (facultatif)",
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
-              "tokenHint": "Les tokens d'accès de dépôt, projet et espace de travail se créent depuis la page de paramètres Bitbucket correspondante et nécessitent un accès en lecture aux pull requests.",
-              "basicHint": "Créez un token API Atlassian pour votre compte, puis associez-le à l'adresse e-mail qui en est propriétaire.",
               "docsLink": "Documentation des tokens API Bitbucket",
               "storageNote": "Stocké sur cette machine avec chiffrement quand le trousseau de l'OS est disponible. Les variables d'environnement ORCA_BITBUCKET_* ont toujours priorité sur ce que vous enregistrez ici.",
               "cancel": "Annuler",

@@ -27,6 +27,8 @@ import {
   type JiraClientForSite
 } from './authenticated-request'
 import { getSiteId, normalizeJiraSiteUrl, siteToViewer, toViewer } from './site-identity'
+import { resolveJiraGatewayBaseUrl } from './cloud-gateway'
+import { normalizeJiraAuthType } from '../../shared/jira-auth-type'
 
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
   const file = getSiteFile()
@@ -82,7 +84,7 @@ export async function connect(
     return { ok: false, error: 'Enter a valid Jira site URL.' }
   }
 
-  const authType: JiraAuthType = args.authType === 'server' ? 'server' : 'cloud'
+  const authType: JiraAuthType = normalizeJiraAuthType(args.authType)
   const email = args.email.trim()
   const apiToken = args.apiToken.trim()
   if (authType === 'server') {
@@ -94,16 +96,25 @@ export async function connect(
         error: email ? 'Password is required.' : 'Personal access token is required.'
       }
     }
+  } else if (authType === 'cloud-scoped') {
+    // The email is optional here: it only switches Bearer to Basic.
+    if (!apiToken) {
+      return { ok: false, error: 'Scoped API token is required.' }
+    }
   } else if (!email || !apiToken) {
     return { ok: false, error: 'Email and API token are required.' }
   }
 
   await acquire()
   try {
+    // Why: scoped tokens are rejected on the site host with a bare 401, so the
+    // gateway URL is resolved up front and stored alongside the site.
+    const apiBaseUrl =
+      authType === 'cloud-scoped' ? await resolveJiraGatewayBaseUrl(siteUrl) : undefined
     const myselfPath = authType === 'server' ? '/rest/api/2/myself' : '/rest/api/3/myself'
     const viewer = toViewer(
       (await requestWithCredentials(
-        siteUrl,
+        apiBaseUrl ?? siteUrl,
         email,
         apiToken,
         myselfPath,
@@ -123,7 +134,8 @@ export async function connect(
       email,
       displayName: viewer.displayName,
       accountId: viewer.accountId,
-      authType
+      authType,
+      ...(apiBaseUrl ? { apiBaseUrl } : {})
     }
     saveToken(id, apiToken)
     const file = getSiteFile()

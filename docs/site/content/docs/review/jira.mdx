@@ -16,8 +16,9 @@ Jira sits next to GitHub and Linear in the task drawer. Browse Jira issues, upda
 **Cloud**
 
 - **Jira Cloud site URL** — e.g. `https://example.atlassian.net`.
-- **Atlassian email** — the address on your Atlassian account.
-- **Atlassian API token** — create one at [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
+- Token type:
+  - **API token** — a classic token paired with your **Atlassian email**. Create one at [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
+  - **Scoped API token** — a token created with scopes. Atlassian only accepts these on the `api.atlassian.com` gateway, so Orca resolves your site's cloud id once and routes every request through `https://api.atlassian.com/ex/jira/<cloudId>`; the site URL is still used for browse links. Grant `read:jira-work`, `write:jira-work`, and `read:jira-user`. The email is optional: with it the token is sent as Basic auth, without it as a Bearer token.
 
 **Self-hosted**
 

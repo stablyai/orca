@@ -11783,13 +11783,13 @@
               "apiTokenPlaceholder": "Atlassian API token",
               "baseUrl": "API base URL (optional)",
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
-              "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
-              "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
               "docsLink": "Bitbucket API token docs",
               "storageNote": "Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.",
               "cancel": "Cancel",
               "verifying": "Verifying...",
-              "connect": "Connect"
+              "connect": "Connect",
+              "tokenHintScopes": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page; an Atlassian API token with Bitbucket scopes works here too. Reading needs read:pullrequest:bitbucket, creating pull requests needs write:pullrequest:bitbucket.",
+              "basicHintScopes": "Create an Atlassian API token for your account and pair it with the email address that owns it. A scoped token needs read:user:bitbucket, read:repository:bitbucket, read:pullrequest:bitbucket, and write:pullrequest:bitbucket to create pull requests."
             }
           },
           "integration": {
@@ -16349,7 +16349,14 @@
             "be9eba0a1b": "username",
             "70035652d7": "Password",
             "c50abbf340": "Jira account password",
-            "d8737db691": "Use your Jira Server or Data Center account username and password."
+            "d8737db691": "Use your Jira Server or Data Center account username and password.",
+            "8e851d7ba0": "Use a Jira Cloud site URL and a scoped API token; Orca calls the api.atlassian.com gateway on its behalf.",
+            "4823d0100d": "Cloud token type",
+            "327c8aeb62": "Scoped API token",
+            "b4303bfe5a": "Atlassian email (optional)",
+            "8d9f6669a7": "Atlassian API token with scopes",
+            "cc1ca58cd8": "Create a token with scopes in",
+            "fbf2400a02": "and grant read:jira-work, write:jira-work, and read:jira-user."
           }
         }
       },
