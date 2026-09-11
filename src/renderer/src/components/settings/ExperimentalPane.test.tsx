@@ -262,10 +262,10 @@ describe('ExperimentalPane', () => {
     expect(container.textContent).toContain(
       'Opt in to the host-owned structured chat runtime for Codex and Claude.'
     )
-    // Scoped to STARTING a session: a paired host's own structured chats are readable here, so
-    // the line must not read as "remote hosts have none of this".
+    // Scoped to STARTING a session, and honest about where: a paired host is reachable behind the
+    // switch below, while WSL and SSH are not, so the line must say which is which.
     expect(container.textContent).toContain(
-      'Orca starts these sessions locally for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+      'Orca starts these sessions on this machine, and on a paired host once you switch that on below. WSL and SSH execution hosts continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
     )
     expect(container.textContent).toContain('Default view')
     root.unmount()
@@ -298,6 +298,59 @@ describe('ExperimentalPane', () => {
     })
 
     expect(updateSettings).toHaveBeenCalledWith({ structuredChatRemoteRead: false })
+    root.unmount()
+  })
+
+  it('offers starting chats on paired hosts off by default, and writes it on', async () => {
+    const updateSettings = vi.fn()
+    const structuredOn = {
+      ...getDefaultSettings('/tmp'),
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true,
+      experimentalStructuredNativeChat: true
+    }
+    const { root, container } = await renderExperimentalPane({
+      updateSettings,
+      settings: structuredOn
+    })
+    const remoteCreateSwitch = container.querySelector<HTMLButtonElement>(
+      '#experimental-native-chat button[role="switch"][aria-label="Toggle starting structured chats on paired hosts"]'
+    )
+    // Off for a profile that never saw it: starting a session runs a provider child on somebody
+    // else's machine, so an upgrade must never turn it on by itself.
+    expect(remoteCreateSwitch?.getAttribute('aria-checked')).toBe('false')
+    // The lifetime sentence this stack is required to use, never "work continues while you are away".
+    expect(container.textContent).toContain(
+      'The in-flight turn and its approvals survive going offline; idle sessions park after about 15 seconds and resume on demand.'
+    )
+    expect(container.textContent).not.toMatch(/work continues/i)
+    // The forge-identity split, stated rather than fixed: gh and glab run as this user, while an
+    // agent inside one of these chats runs them on its host.
+    expect(container.textContent).toContain('cannot open pull requests')
+
+    await act(async () => {
+      remoteCreateSwitch?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ structuredChatRemoteCreate: true })
+    root.unmount()
+  })
+
+  it('hides the paired-host create switch when this client is not reading those chats', async () => {
+    const { root, container } = await renderExperimentalPane({
+      updateSettings: vi.fn(),
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        experimentalStructuredNativeChat: true,
+        structuredChatRemoteRead: false
+      }
+    })
+
+    expect(container.textContent).not.toContain(
+      'Start and send to structured chats on paired hosts'
+    )
     root.unmount()
   })
 

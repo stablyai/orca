@@ -9,6 +9,7 @@
  */
 
 import { isAgentSessionHandleProvider } from './agent-session-provider-handle'
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from './execution-host'
 import type { GlobalSettings } from './global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from './project-execution-runtime'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from './protocol-version'
@@ -16,7 +17,10 @@ import type { TuiAgent } from './tui-agent'
 
 export type NativeChatDefaultSettings = Pick<
   GlobalSettings,
-  'experimentalNativeChat' | 'experimentalStructuredNativeChat' | 'openAgentTabsInChatByDefault'
+  | 'experimentalNativeChat'
+  | 'experimentalStructuredNativeChat'
+  | 'openAgentTabsInChatByDefault'
+  | 'structuredChatRemoteCreate'
 >
 
 /** Why a launch that the user's default asked to be structured cannot be. */
@@ -26,6 +30,8 @@ export type StructuredNativeChatBlocker =
   | 'floating-workspace'
   | 'tui-launch-customization'
   | 'remote-execution-host'
+  /** A paired host that could run this, on a client whose remote-create switch is still off. */
+  | 'remote-create-disabled'
   | 'project-runtime'
   | 'runtime-capability'
   /** The owning host has not answered yet. Distinct from `runtime-capability`, which is the
@@ -59,6 +65,8 @@ export type StructuredNativeChatSupportInput = {
   requiresTuiLaunchCustomization?: boolean
   /** An existing PTY agent keeps its execution transport. */
   reusesTerminal?: boolean
+  /** The client's own switch for creating on a paired host. Absent reads as off. */
+  remoteCreateEnabled?: boolean
 }
 
 /** The user's default for a new agent tab: native chat rather than the raw TUI. */
@@ -79,11 +87,39 @@ export function prefersStructuredNativeChatByDefault(
   )
 }
 
+/** The kill switch for starting a structured chat on a paired host. Absent settings are a user who
+ *  has never been offered it, which is not consent, so only an explicit `true` turns it on. */
+export function structuredNativeChatRemoteCreateEnabled(
+  settings: Partial<NativeChatDefaultSettings> | null | undefined
+): boolean {
+  return settings?.structuredChatRemoteCreate === true
+}
+
+/**
+ * A non-local host is only ever a paired `runtime:` peer. `ssh:` has no client RPC path to a
+ * structured session at all, so it stays refused whatever the switch says.
+ *
+ * Feasibility beyond reachability is the peer's own answer, not this table's: its createSupport
+ * probe is where a Windows peer refuses on the process-start-time proof it cannot obtain.
+ */
+function remoteExecutionHostBlocker(
+  input: StructuredNativeChatSupportInput
+): StructuredNativeChatBlocker | null {
+  if (input.executionHostId === LOCAL_EXECUTION_HOST_ID) {
+    return null
+  }
+  if (parseExecutionHostId(input.executionHostId)?.kind !== 'runtime') {
+    return 'remote-execution-host'
+  }
+  return input.remoteCreateEnabled === true ? null : 'remote-create-disabled'
+}
+
 export function resolveStructuredNativeChatSupport(
   input: StructuredNativeChatSupportInput
 ): StructuredNativeChatSupport {
-  if (input.executionHostId !== 'local') {
-    return { supported: false, blocker: 'remote-execution-host' }
+  const remoteBlocker = remoteExecutionHostBlocker(input)
+  if (remoteBlocker) {
+    return { supported: false, blocker: remoteBlocker }
   }
   if (input.reusesTerminal === true) {
     return { supported: false, blocker: 'reused-terminal' }

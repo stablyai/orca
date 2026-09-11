@@ -60,16 +60,16 @@ function RetryButton({ onClick }: { onClick: () => void }): React.JSX.Element {
   )
 }
 
-/** A live host this build only reads. Deliberately not one of the hold states below: nothing was
+/** A live host this client only reads. Deliberately not one of the hold states below: nothing was
  *  refused and nothing is missing on the other machine, so saying "update that server" would send
- *  the user after the wrong fix. */
+ *  the user after the wrong fix. The reason is here, in a setting the user owns. */
 function RemoteReadOnlyNotice(): React.JSX.Element {
   return (
     <NoticeRow>
       <span data-native-chat-remote="read-only">
         {translate(
           'components.native-chat.structuredSessionRemoteReadOnly',
-          'This chat runs on a paired host. This version of Orca shows it here but does not send to it.'
+          'This chat runs on a paired host. Sending to chats on paired hosts is off in your settings, so it is shown here read-only.'
         )}{' '}
         {holdLifetimeNote()}
       </span>

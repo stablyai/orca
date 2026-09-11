@@ -217,6 +217,11 @@ export type GlobalSettings = {
   /** Read structured chats a paired host owns. On by default; off retreats the advertisement that
    *  makes a host publish them, and applies to each pairing from its next connection. */
   structuredChatRemoteRead?: boolean
+  /** Start and drive structured chats on a paired host. Off by default: creating one runs a
+   *  provider child on somebody else's machine, and that host — not this client — answers whether
+   *  it can (a Windows peer refuses on its process-start-time proof). Turning it off stops new
+   *  creates and writes only; closing, cancelling and releasing an existing session stay live. */
+  structuredChatRemoteCreate?: boolean
   /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */
   nativeChatSessionOptions?: PersistedNativeChatSessionOptions
   /** Extra launcher rows for the worktree "Open in" submenu. VS Code is always shown first. */

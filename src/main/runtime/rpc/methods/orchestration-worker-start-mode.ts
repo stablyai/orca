@@ -18,6 +18,7 @@ import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
 import {
   prefersStructuredNativeChatByDefault,
   resolveStructuredNativeChatSupport,
+  structuredNativeChatRemoteCreateEnabled,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
 } from '../../../../shared/structured-native-chat-launch-route'
@@ -30,6 +31,7 @@ export type WorkerStartMode = 'structured' | 'terminal'
 export type WorkerStartModeReason =
   | 'user_default'
   | 'remote_execution_host'
+  | 'remote_create_disabled'
   | 'reused_terminal'
   | 'agent_without_structured_session'
   | 'tui_launch_customization'
@@ -70,6 +72,8 @@ type WorkerStartModePlacement = {
 
 const DOWNGRADE_DETAIL: Record<Exclude<WorkerStartModeReason, 'user_default'>, string> = {
   remote_execution_host: 'this worker runs on a remote execution host',
+  remote_create_disabled:
+    'starting chat sessions on a paired host is switched off in your settings',
   reused_terminal: '--terminal reuses a running terminal agent',
   agent_without_structured_session: 'this agent has no structured session',
   tui_launch_customization:
@@ -92,6 +96,7 @@ const BLOCKER_REASON: Record<
   'floating-workspace': 'structured_unsupported_on_host',
   'tui-launch-customization': 'tui_launch_customization',
   'remote-execution-host': 'remote_execution_host',
+  'remote-create-disabled': 'remote_create_disabled',
   'project-runtime': 'wsl_execution_runtime',
   'runtime-capability': 'structured_sessions_unavailable',
   'runtime-capability-unknown': 'structured_support_unknown',
@@ -133,7 +138,8 @@ export function decideWorkerStartMode(args: {
     // Orchestration resolves a managed worktree or folder workspace; a floating terminal is never
     // a worker placement. WSL is left to the executing host's own create-support probe, which
     // reads the resolved workspace rather than guessing from a client-side project runtime.
-    requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(settings, agent)
+    requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(settings, agent),
+    remoteCreateEnabled: structuredNativeChatRemoteCreateEnabled(settings)
   })
   if (!support.supported) {
     return downgraded(BLOCKER_REASON[support.blocker])

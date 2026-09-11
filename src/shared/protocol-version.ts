@@ -232,13 +232,22 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 // A host withholds structured session-tab rows and refuses the whole `agentSession.*` surface to a
 // client that advertises none of these, so adding them changes what this connection is published —
 // a wire change with no codec change. Each string is a separate promise about renderer behaviour
-// that is live NOW: hold, reveal and resume-history stay out until the surfaces that answer for
-// them ship, because advertising one is what makes a host expect this client to drive it.
+// that is live NOW: reveal and resume-history stay out until the surfaces that answer for them
+// ship, because advertising one is what makes a host expect this client to drive it.
 export const STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY
+] as const
+
+// Reading one, plus the one call that reserves it. Hold retreats WITH the reader set rather than
+// with the per-user create switch: a client that stops holding must still be able to release what
+// it holds, and a capability is negotiated once per connection, so withdrawing it on a switch flip
+// would leave a live session on the peer that this client can no longer let go of.
+export const STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES = [
+  ...STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES,
+  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY
 ] as const
 
 // Electron clients can decode client-hosted page placement; becoming a page
@@ -250,7 +259,7 @@ export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY,
   // Why: only the renderer runs the retirement-proof ledger; CLI and mobile must keep full lists.
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
-  ...STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES
+  ...STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES
 ] as const
 
 export const RUNTIME_CAPABILITIES = [

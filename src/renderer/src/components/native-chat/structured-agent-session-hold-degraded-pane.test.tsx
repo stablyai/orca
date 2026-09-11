@@ -28,7 +28,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   runtimeEnvironmentSupportsCapability: holdMocks.supportsCapability
 }))
 vi.mock('./structured-remote-session-writes', () => ({
-  structuredRemoteSessionWritesEnabled: () => true
+  useStructuredRemoteSessionWritesEnabled: () => true
 }))
 vi.mock('./use-native-chat-font-scale', () => moduleFactories.useNativeChatFontScale())
 vi.mock('./use-native-chat-file-link-context', () => moduleFactories.useNativeChatFileLinkContext())

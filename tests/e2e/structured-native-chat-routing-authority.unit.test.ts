@@ -45,6 +45,7 @@ const blockers: StructuredNativeChatBlocker[] = [
   'floating-workspace',
   'tui-launch-customization',
   'remote-execution-host',
+  'remote-create-disabled',
   'project-runtime',
   'runtime-capability',
   'runtime-capability-unknown'

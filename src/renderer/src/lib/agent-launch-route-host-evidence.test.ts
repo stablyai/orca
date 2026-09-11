@@ -2,9 +2,9 @@
  * Capability evidence must belong to the machine that would run the session.
  *
  * The route builder used to fill `hostCapabilities` from this client's own cache for every target,
- * so a remote launch would be admitted or refused on facts about the wrong machine. Remote launches
- * are still refused outright, so each row asserts both halves: the evidence the builder captured,
- * and that user-visible creation on a remote host stays refused.
+ * so a remote launch would be admitted or refused on facts about the wrong machine. Each row
+ * asserts both halves: the evidence the builder captured, and what the route then decides — with
+ * the remote-create switch off, which is what a fresh install has, and with it on.
  */
 
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +16,7 @@ import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-sta
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   resolveStructuredNativeChatSupport,
+  structuredNativeChatRemoteCreateEnabled,
   type StructuredNativeChatBlocker,
   type StructuredNativeChatHostStatusBlocker,
   type StructuredNativeChatSupport
@@ -47,6 +48,10 @@ vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.readLocalRuntimeCapabilitiesOrUnknown
 }))
 
+import {
+  structuredAgentLaunchSupported,
+  type AgentLaunchRoutingInput
+} from './agent-launch-routing'
 import {
   buildAgentLaunchRouteInput,
   type AgentLaunchRouteStore,
@@ -181,17 +186,43 @@ const ROWS: Row[] = [
   }
 ]
 
-function store(row: Row): AgentLaunchRouteStore {
+/** Deliberately built WITHOUT `structuredChatRemoteCreate` unless a row asks: the field a fresh
+ *  install has never written is the one the default has to be read from. */
+function store(row: Row, remoteCreate = false): AgentLaunchRouteStore {
   return {
     settings: {
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: true,
-      experimentalStructuredNativeChat: true
+      experimentalStructuredNativeChat: true,
+      ...(remoteCreate ? { structuredChatRemoteCreate: true } : {})
     },
     runtimeStatusByEnvironmentId: row.entry
       ? new Map([[ENVIRONMENT_ID, row.entry]])
       : new Map<string, RuntimeEnvironmentStatus>()
   } as unknown as AgentLaunchRouteStore
+}
+
+/** The route as the renderer asks it: the switch is read off the store's settings, never handed in.
+ *  `structuredAgentLaunchSupported` below is the production wiring; this only names the blocker. */
+function routeAnswer(input: AgentLaunchRoutingInput): StructuredNativeChatSupport {
+  return resolveStructuredNativeChatSupport({
+    ...input,
+    remoteCreateEnabled: structuredNativeChatRemoteCreateEnabled(input.settings)
+  })
+}
+
+function isSshTarget(executionHostId: string): boolean {
+  return executionHostId.startsWith('ssh:')
+}
+
+/** What a user who has never touched the switch gets. */
+function switchedOffAnswer(row: Row): StructuredNativeChatSupport {
+  if (row.workspace.worktreeId) {
+    return SUPPORTED
+  }
+  return isSshTarget(row.workspace.executionHostId ?? '')
+    ? refused('remote-execution-host')
+    : refused('remote-create-disabled')
 }
 
 describe('launch capability evidence per execution host', () => {
@@ -217,13 +248,27 @@ describe('launch capability evidence per execution host', () => {
     })
     expect(input.hostCapabilities).toEqual(row.hostCapabilities)
     expect(input.hostStatusBlocker).toBe(row.hostStatusBlocker)
-    // The evidence decides the answer the route will give once the remote refusal moves.
+    // The evidence alone, with the host question settled, decides the answer.
     expect(resolveStructuredNativeChatSupport({ ...input, executionHostId: 'local' })).toEqual(
       row.onEvidence
     )
-    // ...and until then a remote target is still refused before any of it is read.
-    expect(resolveStructuredNativeChatSupport(input)).toEqual(
-      input.executionHostId === 'local' ? SUPPORTED : refused('remote-execution-host')
+    // ...and with the switch off — a fresh install — a paired host is refused before any of it is
+    // read, while SSH is refused for the reason that never changes.
+    expect(routeAnswer(input)).toEqual(switchedOffAnswer(row))
+    expect(structuredAgentLaunchSupported(input)).toBe(input.executionHostId === 'local')
+  })
+
+  it.each(ROWS)('admits $label only as far as its own evidence once the switch is on', (row) => {
+    const input = buildAgentLaunchRouteInput(store(row, true), {
+      agent: 'claude',
+      workspace: row.workspace
+    })
+    // SSH has no client RPC path to a structured session, so the switch never reaches it.
+    expect(routeAnswer(input)).toEqual(
+      isSshTarget(input.executionHostId) ? refused('remote-execution-host') : row.onEvidence
+    )
+    expect(structuredAgentLaunchSupported(input)).toBe(
+      !isSshTarget(input.executionHostId) && row.onEvidence.supported
     )
   })
 

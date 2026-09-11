@@ -13,11 +13,13 @@
 
 import {
   ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES,
+  STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES,
   type RuntimeCapability
 } from '../../shared/protocol-version'
 
-const READER_CAPABILITIES = new Set<string>(STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES)
+// The hold goes with them: a client that no longer reads a paired host's chats has no surface left
+// to reserve one for.
+const READER_CAPABILITIES = new Set<string>(STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES)
 
 const WITHOUT_STRUCTURED_READER: readonly RuntimeCapability[] =
   ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES.filter(

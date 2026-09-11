@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES
+  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES
 } from '../../shared/protocol-version'
 import {
   electronRemoteRuntimeClientCapabilities,
@@ -29,23 +30,29 @@ afterEach(() => {
 })
 
 describe('what this desktop advertises to a paired host', () => {
-  it('carries the structured reader while the setting is on or unset', () => {
+  it('carries the structured reader and the hold while the setting is on or unset', () => {
     expect(structuredChatRemoteReadEnabled()).toBe(true)
     setStructuredChatRemoteReadSource(() => true)
-    for (const capability of STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES) {
+    for (const capability of STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES) {
       expect(electronRemoteRuntimeClientCapabilities()).toContain(capability)
     }
+    // The hold is what lets a pane reserve a paired host's session — and, once taken, let it go.
+    // It is advertised on every paired connection, never per-user: the create switch is a client
+    // policy, and withdrawing a negotiated term on a switch flip would strand a held session.
+    expect(electronRemoteRuntimeClientCapabilities()).toContain(
+      STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY
+    )
   })
 
-  it('drops only the reader when the setting is off, so the retreat is not a new client', () => {
+  it('drops only the paired surface when the setting is off, so the retreat is not a new client', () => {
     setStructuredChatRemoteReadSource(() => false)
     const advertised = electronRemoteRuntimeClientCapabilities()
-    for (const capability of STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES) {
+    for (const capability of STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES) {
       expect(advertised, `${capability} is withheld`).not.toContain(capability)
     }
     // Everything else is untouched: a user retreating from structured reads must not also lose
     // page placement or the retirement-proof ledger and start looking like some other client.
-    const withheld = new Set<string>(STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES)
+    const withheld = new Set<string>(STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES)
     expect(advertised).toEqual(
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES.filter((capability) => !withheld.has(capability))
     )

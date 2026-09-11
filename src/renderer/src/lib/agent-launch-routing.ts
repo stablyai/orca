@@ -3,6 +3,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-
 import {
   prefersStructuredNativeChatByDefault,
   resolveStructuredNativeChatSupport,
+  structuredNativeChatRemoteCreateEnabled,
   type StructuredNativeChatHostStatusBlocker
 } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -27,6 +28,7 @@ export type AgentLaunchRoutingInput = {
         | 'experimentalNativeChat'
         | 'experimentalStructuredNativeChat'
         | 'openAgentTabsInChatByDefault'
+        | 'structuredChatRemoteCreate'
       >
     | null
     | undefined
@@ -49,8 +51,9 @@ export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLa
   // terminal mirror gate (a TUI cannot clear more than forty lines of prefilled draft), which has
   // no meaning for a session that seeds the composer store directly. Its other gates are already
   // implied here: the structured resolver admits only claude/codex, both native-chat agents, and
-  // refuses every non-local host, and a structured session reads its journal over RPC rather than
-  // the transcript file, so local transcript readability does not apply either.
+  // admits no host beyond this machine and a paired peer the user switched on, and a structured
+  // session reads its journal over RPC rather than the transcript file, so local transcript
+  // readability does not apply either.
   if (
     prefersStructuredNativeChatByDefault(input.settings) &&
     structuredAgentLaunchSupported(input)
@@ -81,7 +84,8 @@ export function structuredAgentLaunchSupported(
       hostStatusBlocker: input.hostStatusBlocker,
       workspaceKind: input.workspaceKind,
       projectRuntime: input.projectRuntime,
-      requiresTuiLaunchCustomization: input.requiresTuiLaunchCustomization
+      requiresTuiLaunchCustomization: input.requiresTuiLaunchCustomization,
+      remoteCreateEnabled: structuredNativeChatRemoteCreateEnabled(input.settings)
     }).supported
   )
 }

@@ -9,6 +9,7 @@ import {
   agentTabsDefaultToNativeChat,
   prefersStructuredNativeChatByDefault,
   resolveStructuredNativeChatSupport,
+  structuredNativeChatRemoteCreateEnabled,
   type StructuredNativeChatSupportInput
 } from './structured-native-chat-launch-route'
 
@@ -116,4 +117,65 @@ describe('per-launch structured feasibility', () => {
   it('supports a folder workspace without widening floating scope', () => {
     expect(support({ workspaceKind: 'folder' })).toEqual({ supported: true })
   })
+})
+
+describe('creating on a paired host', () => {
+  const PAIRED = { executionHostId: 'runtime:env-1' } as const
+
+  it('is off for a user who has never been asked', () => {
+    // Not `!== false`: absent settings are a user who never saw the switch, and this is the state
+    // the merge commit ships in. A default of on here would start sessions on other people's
+    // machines for every user who upgrades.
+    expect(structuredNativeChatRemoteCreateEnabled(undefined)).toBe(false)
+    expect(structuredNativeChatRemoteCreateEnabled(null)).toBe(false)
+    expect(structuredNativeChatRemoteCreateEnabled({})).toBe(false)
+    expect(structuredNativeChatRemoteCreateEnabled({ ...ON })).toBe(false)
+    expect(structuredNativeChatRemoteCreateEnabled({ structuredChatRemoteCreate: false })).toBe(
+      false
+    )
+    expect(structuredNativeChatRemoteCreateEnabled({ structuredChatRemoteCreate: true })).toBe(true)
+  })
+
+  it('names the switch, not the host, while the switch is off', () => {
+    expect(support(PAIRED)).toEqual({ supported: false, blocker: 'remote-create-disabled' })
+    expect(support({ ...PAIRED, remoteCreateEnabled: false })).toEqual({
+      supported: false,
+      blocker: 'remote-create-disabled'
+    })
+  })
+
+  it('is supported once the switch is on and the host advertises it', () => {
+    expect(support({ ...PAIRED, remoteCreateEnabled: true })).toEqual({ supported: true })
+  })
+
+  it('still lets the host answer for itself once the switch is on', () => {
+    expect(
+      support({ ...PAIRED, remoteCreateEnabled: true, hostStatusBlocker: 'host-policy-disabled' })
+    ).toEqual({ supported: false, blocker: 'host-policy-disabled' })
+    expect(
+      support({ ...PAIRED, remoteCreateEnabled: true, hostStatusBlocker: 'host-disconnected' })
+    ).toEqual({ supported: false, blocker: 'host-disconnected' })
+    expect(support({ ...PAIRED, remoteCreateEnabled: true, hostCapabilities: [] })).toEqual({
+      supported: false,
+      blocker: 'runtime-capability'
+    })
+    expect(support({ ...PAIRED, remoteCreateEnabled: true, hostCapabilities: null })).toEqual({
+      supported: false,
+      blocker: 'runtime-capability-unknown'
+    })
+  })
+
+  // `runtimeTargetForExecutionHostId` has no environment target for `ssh:`, so there is no client
+  // RPC path to create one there however this client is configured.
+  it.each(['ssh:host-a', 'ssh:runtime-ssh-env-1', 'nonsense'])(
+    'refuses %s whatever the switch says',
+    (executionHostId) => {
+      for (const remoteCreateEnabled of [false, true]) {
+        expect(support({ executionHostId, remoteCreateEnabled })).toEqual({
+          supported: false,
+          blocker: 'remote-execution-host'
+        })
+      }
+    }
+  )
 })

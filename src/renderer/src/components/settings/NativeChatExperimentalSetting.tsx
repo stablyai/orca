@@ -21,6 +21,7 @@ export function NativeChatExperimentalSetting({
   const nativeChatEnabled = settings.experimentalNativeChat === true
   const structuredNativeChatEnabled = settings.experimentalStructuredNativeChat === true
   const structuredChatRemoteRead = settings.structuredChatRemoteRead !== false
+  const structuredChatRemoteCreate = settings.structuredChatRemoteCreate === true
   const defaultView: NativeChatDefaultView =
     settings.openAgentTabsInChatByDefault === true ? 'native-chat' : 'terminal-chat'
 
@@ -133,7 +134,7 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.structuredScope',
-                    'Orca starts these sessions locally for now. WSL and remote execution hosts (including SSH) continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
+                    'Orca starts these sessions on this machine, and on a paired host once you switch that on below. WSL and SSH execution hosts continue to use terminal chat, and Windows falls back to it unless Orca can read process start times.'
                   )}
                 </p>
               </div>
@@ -164,7 +165,7 @@ export function NativeChatExperimentalSetting({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'components.settings.nativeChat.remoteReadCopy',
-                    'Show the structured chats a paired Orca host is running. They are read-only here; sending and starting new ones stay on that machine.'
+                    'Show the structured chats a paired Orca host is running. On its own this only reads them; the switch below is what sends to them.'
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
@@ -182,6 +183,51 @@ export function NativeChatExperimentalSetting({
                 )}
                 onChange={() =>
                   updateSettings({ structuredChatRemoteRead: !structuredChatRemoteRead })
+                }
+              />
+            </div>
+          ) : null}
+
+          {/* Hidden without the read switch: creating on a host whose chats this client refuses to
+              show would land the new session somewhere the user cannot see it. */}
+          {defaultView === 'native-chat' &&
+          structuredNativeChatEnabled &&
+          structuredChatRemoteRead ? (
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {translate(
+                    'components.settings.nativeChat.remoteCreateTitle',
+                    'Start and send to structured chats on paired hosts'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'components.settings.nativeChat.remoteCreateCopy',
+                    'Let new structured chats start on a paired Orca host, and send to the ones already there. The agent runs on that machine, using its files, its tools and its logins.'
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'components.settings.nativeChat.remoteCreateScope',
+                    'Each host answers for itself, so one may still decline. SSH hosts keep using terminal chat. The in-flight turn and its approvals survive going offline; idle sessions park after about 15 seconds and resume on demand.'
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'components.settings.nativeChat.remoteCreateForgeNote',
+                    'GitHub and GitLab commands you run stay signed in as you, but an agent in one of these chats runs them on its host — so a host without its own sign-in cannot open pull requests.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={structuredChatRemoteCreate}
+                ariaLabel={translate(
+                  'components.settings.nativeChat.remoteCreateToggleLabel',
+                  'Toggle starting structured chats on paired hosts'
+                )}
+                onChange={() =>
+                  updateSettings({ structuredChatRemoteCreate: !structuredChatRemoteCreate })
                 }
               />
             </div>

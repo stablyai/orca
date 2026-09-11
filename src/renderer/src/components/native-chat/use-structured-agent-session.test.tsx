@@ -26,7 +26,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 vi.mock('./structured-remote-session-writes', () => ({
-  structuredRemoteSessionWritesEnabled: () => remoteWrites.enabled
+  useStructuredRemoteSessionWritesEnabled: () => remoteWrites.enabled
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({

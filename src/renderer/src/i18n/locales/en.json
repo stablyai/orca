@@ -17250,7 +17250,7 @@
       "structuredSessionHoldConflict": "Another surface already holds this session on its host, so this pane did not reserve it.",
       "structuredSessionHoldOwnerUnknown": "This session\u2019s host could not prove who owns it, so this pane did not reserve it.",
       "structuredSessionHoldFailed": "This session could not be reserved on its host.",
-      "structuredSessionRemoteReadOnly": "This chat runs on a paired host. This version of Orca shows it here but does not send to it.",
+      "structuredSessionRemoteReadOnly": "This chat runs on a paired host. Sending to chats on paired hosts is off in your settings, so it is shown here read-only.",
       "handoff": {
         "stage": {
           "finishingChat": "Finishing chat session…",
@@ -17616,9 +17616,14 @@
     "settings": {
       "nativeChat": {
         "remoteReadTitle": "Read structured chats on paired hosts",
-        "remoteReadCopy": "Show the structured chats a paired Orca host is running. They are read-only here; sending and starting new ones stay on that machine.",
+        "remoteReadCopy": "Show the structured chats a paired Orca host is running. On its own this only reads them; the switch below is what sends to them.",
         "remoteReadScope": "Turning this off stops Orca asking each paired host for them from the next time it connects to that host.",
-        "remoteReadToggleLabel": "Toggle reading structured chats on paired hosts"
+        "remoteReadToggleLabel": "Toggle reading structured chats on paired hosts",
+        "remoteCreateTitle": "Start and send to structured chats on paired hosts",
+        "remoteCreateCopy": "Let new structured chats start on a paired Orca host, and send to the ones already there. The agent runs on that machine, using its files, its tools and its logins.",
+        "remoteCreateScope": "Each host answers for itself, so one may still decline. SSH hosts keep using terminal chat. The in-flight turn and its approvals survive going offline; idle sessions park after about 15 seconds and resume on demand.",
+        "remoteCreateForgeNote": "GitHub and GitLab commands you run stay signed in as you, but an agent in one of these chats runs them on its host \u2014 so a host without its own sign-in cannot open pull requests.",
+        "remoteCreateToggleLabel": "Toggle starting structured chats on paired hosts"
       }
     }
   },

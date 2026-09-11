@@ -32,7 +32,7 @@ import {
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
-import { structuredRemoteSessionWritesEnabled } from './structured-remote-session-writes'
+import { useStructuredRemoteSessionWritesEnabled } from './structured-remote-session-writes'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import {
   pendingStructuredSessionPrompts,
@@ -62,8 +62,9 @@ export function useStructuredAgentSession(args: {
   // names a different machine, so re-reading or mutating would address a stranger's journal.
   const live = isVisible && !ownerPairingStale
   // A chat this client only reads. Not a degraded state and not a host's answer: the host is
-  // willing, and this build is the side that has not shipped the other half yet.
-  const remoteReadOnly = target.kind === 'environment' && !structuredRemoteSessionWritesEnabled()
+  // willing, and this client's own remote-writes switch is off.
+  const remoteWritesEnabled = useStructuredRemoteSessionWritesEnabled()
+  const remoteReadOnly = target.kind === 'environment' && !remoteWritesEnabled
   // Declared first: the hold is what gives a restored session its provider child back, and the
   // read below is useless for sending until it lands.
   const hold = useStructuredAgentSessionHold({
@@ -89,6 +90,13 @@ export function useStructuredAgentSession(args: {
   })
   const cachedMutate = useCallback(async () => null, [])
   const mutate = readOnly ? (cachedMutate as StructuredAgentSessionMutate) : liveMutate
+  // Stopping work the user already started is never what the remote-writes switch exists to
+  // prevent, and refusing it after a flip leaves a turn running on the peer with nothing here able
+  // to stop it. A re-paired or silent owner still blocks it: that id now names a different machine.
+  const cancelMutate =
+    ownerPairingStale || hold.state.kind === 'unreachable'
+      ? (cachedMutate as StructuredAgentSessionMutate)
+      : liveMutate
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
@@ -262,9 +270,10 @@ export function useStructuredAgentSession(args: {
     turnActivity,
     backgroundTasks,
     turnId,
-    cancel: (turnId: string) => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
+    cancel: (turnId: string) =>
+      cancelMutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
     stopBackgroundTask: (taskId?: string) =>
-      mutate('agentSession.cancel', 'agentSession.cancel', {
+      cancelMutate('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
         scope: 'background-tasks',
         ...(taskId ? { taskId } : {})
