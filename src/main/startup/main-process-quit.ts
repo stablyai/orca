@@ -73,10 +73,6 @@ function installBeforeQuitHandler(): void {
     state.isQuitting = true
     state.desktopRelayService?.fenceAndCloseNow()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
-    state.unsubscribeAgentAwakeStatusChanges?.()
-    state.unsubscribeAgentAwakeStatusChanges = null
-    state.agentAwakeService?.dispose()
-    state.agentAwakeService = null
     // Why wait but not uninstall: a renderer beforeunload can still veto this
     // quit, and tearing the sweep down here would kill it for the rest of the
     // session. `isQuitting` already vetoes new attempts; will-quit does the teardown.
@@ -119,8 +115,14 @@ function installWillQuitHandler(): void {
         { message: 'will-quit cleanup for update install; daemonTeardown=disconnect' }
       )
     }
-    // Why: before-quit can still be aborted by renderer beforeunload; only remove the Windows tray icon on the committed quit path.
+    // Why: before-quit can still be aborted by renderer beforeunload; only remove the Windows tray icon
+    // and dispose the caffeinate assertion on the committed quit path — disposing on the vetoed path
+    // would silently stop "keep computer awake" for the rest of the session.
     destroySystemTray()
+    state.unsubscribeAgentAwakeStatusChanges?.()
+    state.unsubscribeAgentAwakeStatusChanges = null
+    state.agentAwakeService?.dispose()
+    state.agentAwakeService = null
     // Why: an agent still working at quit gets no terminating hook, so stats.flushAsync() closes those sessions out synchronously (only the write is deferred) — otherwise their duration is lost.
     state.starNag?.stop()
     state.automations?.stop()
