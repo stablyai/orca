@@ -18,6 +18,7 @@ import { TEST_LEAF_1, TEST_LEAF_2 } from './persistence-session-fixtures'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../shared/constants'
 import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import { _resetTracerForTests, setActiveSink } from './observability/tracer'
+import { _resetPtyBindingSpanSamplingForTests } from './persistence/loading-store/pty-binding-span'
 
 // Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
@@ -68,6 +69,8 @@ describe('Store', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
+    _resetPtyBindingSpanSamplingForTests()
     rmSync(testState.dir, { recursive: true, force: true })
   })
   // ── 10. flush writes synchronously ─────────────────────────────────
@@ -439,7 +442,6 @@ describe('Store', () => {
         expect(flushSpy).not.toHaveBeenCalled()
         expect(cloneSpy).not.toHaveBeenCalled()
         expect(statSync(dataFile()).ino).toBe(inoBefore)
-        cloneSpy.mockRestore()
       }
     )
 

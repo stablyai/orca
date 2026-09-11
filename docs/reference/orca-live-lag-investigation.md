@@ -61,7 +61,7 @@ Source: `debug-orca-performance` session `3a100df6`, 2026-09-10, packaged
 | H2 | Activity Monitor (PID 67969) leaked to a 99 GB footprint, all dirty malloc, after 7 days, burning 82–101% CPU | Killing it: swap 47.0→16 GB, RAM used 124→95 GB, free 3→31 GB, CPU idle 0.3%→20% | Resolved by SIGKILL |
 | H3 | A Codex-spawned `rg --hidden` scanning the whole home directory | PID 65656, 130–340% CPU for over 3 minutes, ~16k IOPS | Operational |
 | H4 | 179 agent CLI processes (93 codex, 65 claude, 11 agy, 10 opencode) plus four dev Orca instances, one renderer at 2.6 GB | 27 GB RSS, ~200% CPU combined | Operational |
-| H5 | Earlier (2026-09-05/07) skill-discovery scan storm from release agents: `find /Users/jinjingliang -path */SKILL.md` and `rg --hidden --glob SKILL.md` over the home directory | `rg` at 314%, 351% and 390% CPU; 18 CPUs, 3,075 processes, 33,750 threads, 73.86% system, 4.92% idle, load 17.13. Remediation is targeted skill-directory discovery and dedup across release workers | Open (agent-side) |
+| H5 | Earlier (2026-09-05/07) skill-discovery scan storm from release agents over the home directory | `rg` at 314%, 351% and 390% CPU; 18 CPUs, 3,075 processes, 33,750 threads, 73.86% system, 4.92% idle, load 17.13. Remediation is targeted skill-directory discovery and dedup across release workers | Open (agent-side) |
 
 Keystroke path context: every keystroke crosses six process hops (renderer,
 main, daemon, shell, back, GPU, WindowServer). Under H1 each hop competes with a
@@ -148,6 +148,10 @@ the real profile. Full numbers are in the PR body.
 | Before any fix (22 calls) | 4 | 0 | 22 | 710 ms, 13–84 ms per call |
 | After tab-row fix (17 calls) | 13 | 2 (0 ms total) | 15 | 337 ms, of which 209 ms was `not_durable` alone |
 | After per-pane durability | — | expected to absorb that 209 ms | — | — |
+
+`Reattaches` counts a subset of all calls by origin; it overlaps the outcome columns.
+`Fast lane` and `Flushed` are mutually exclusive outcomes and sum to the call count
+(0 + 22 and 2 + 15 respectively). Do not add `Reattaches` to those outcomes.
 
 Real-profile eligibility: 1,078 of 1,764 panes (61%) before the tab-row fix, all
 1,764 after it, subject to the durability check.
@@ -317,7 +321,7 @@ Terminal replay/rendering is a lead, not an established root cause. Ghostty's re
 
 ## Deeper checks
 
-- Mapped the replay breadcrumb workspace hash `db7a2eae` to the main Orca repository workspace (`/Users/jinjingliang/Documents/projects/orca`), rather than this debug worktree. The two tab hashes were not found in the persisted terminal-tab inventory. No additional wedge breadcrumbs appeared through approximately 21:52. The initial warnings cannot establish the cause of current typing lag.
+- Mapped the replay breadcrumb workspace hash `db7a2eae` to the main Orca repository workspace (`<repo>`), rather than this debug worktree. The two tab hashes were not found in the persisted terminal-tab inventory. No additional wedge breadcrumbs appeared through approximately 21:52. The initial warnings cannot establish the cause of current typing lag.
 - Read `replay-guard.ts`: the warning can follow a rejected write (including disposal), or a FIFO probe with no parse progress. The default stalled-write path waits 10 seconds to probe and another quiet 10 seconds before declaring a wedge. It is not a measurement of per-keystroke latency.
 - A second, 15-second renderer sample contained 12,899 main-thread samples, including 11,280 in the idle wait: approximately 12.5% outside idle. File: `/tmp/orca-live-renderer-long.sample.txt`. This does not support continuous renderer saturation; short stalls remain possible. Native Electron symbols are insufficient to identify the JavaScript functions responsible.
 - Confirmed recurring Git fan-out: recent bursts frequently contain 18 `show-ref` calls, 17 failing, with individual maximum durations around 20–31 ms. Source path: `getPullRequestRemoteRefState` → `listExactRemoteBaseRefs` in `src/main/text-generation/pull-request-remote-ref-probes.ts` → `probeExactRefs` in `src/main/git/exact-ref-probe.ts`. It builds a candidate for every configured remote and runs separate processes with concurrency eight. This explains the observed probe pattern, but does not prove typing stalls.
@@ -344,7 +348,7 @@ The improvement coincides with an actual update/restart and a much lighter rende
 - Latest terminal rendering diagnostics show 12–13 mounted managers, versus roughly 33–35 earlier. Recent renderer JS heap snapshots fall from 167 MB to 133 MB; private memory is approximately 534–587 MB. The resource population is lower, but not identical to just after restart.
 - Orca's resource inventory reports 458 managed sessions across 133 workspaces, totaling approximately 65.6 GiB RSS. RSS sums include shared pages and are not unique physical memory. The app's aggregate RSS was approximately 2.55 GiB, including all renderer processes; this is not comparable directly to the main renderer's private-memory breadcrumb.
 - The `1.4.198-release` workspace accounted for approximately 346% CPU in the inventory. Direct OS sampling then found `rg` processes at 314%, 351%, and 390% CPU, plus several `find` processes around 33–40% each.
-- Confirmed search commands include `find /Users/jinjingliang -path */SKILL.md -type f` and `rg -l --hidden --glob SKILL.md prod-release-scan|release scan|production release /Users/jinjingliang /tmp`. Two surviving `rg` processes had cwd `/Users/jinjingliang/Documents/projects/orca/1.4.198-release`. These scans were launched by other agents, not this investigation.
+- Confirmed search commands include `find <home> -path */SKILL.md -type f` and `rg -l --hidden --glob SKILL.md prod-release-scan|release scan|production release <home> /tmp`. Two surviving `rg` processes had cwd `<repo>/1.4.198-release`. These scans were launched by other agents, not this investigation.
 - System snapshot at 22:56:57: 18 logical CPUs, 3,075 processes, 33,750 threads; CPU 21.21% user, 73.86% system, only 4.92% idle; one-minute load average 17.13. The scan storm is therefore material system contention, not merely a large percentage on one otherwise-idle core.
 
 This establishes a current source of CPU/filesystem pressure: overlapping whole-home skill-discovery scans from release agents. Similar `find` activity appeared in the original capture, but these later scans do not retrospectively prove the original typing bottleneck. The appropriate remediation for this confirmed waste is targeted skill-directory discovery and deduplication across release workers. No agents were messaged, stopped, or modified, and no user processes were killed.

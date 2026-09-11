@@ -31,12 +31,12 @@ describe('tabRowPtyIdAfterLeafBinding', () => {
     ).toBe('pty-1')
   })
 
-  it('reclaims a row that names a PTY no leaf holds', () => {
+  it('preserves a non-null row until the renderer clears or replaces it', () => {
     expect(
       tabRowPtyIdAfterLeafBinding({ ptyId: 'pty-gone' }, { [LEAF_A]: 'pty-1' }, LEAF_B, 'pty-2')
-    ).toBe('pty-2')
+    ).toBe('pty-gone')
     expect(tabRowPtyIdAfterLeafBinding({ ptyId: 'pty-gone' }, undefined, LEAF_A, 'pty-1')).toBe(
-      'pty-1'
+      'pty-gone'
     )
   })
 })

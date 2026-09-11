@@ -7,6 +7,13 @@ export async function connectOrcaMainInspector(expectedPid, rendererId = 1) {
   })
   const pending = new Map()
   let nextId = 0
+  socket.onclose = () => {
+    for (const [id, callback] of pending) {
+      pending.delete(id)
+      clearTimeout(callback.timer)
+      callback.reject(new Error('Inspector socket closed'))
+    }
+  }
   socket.onmessage = (event) => {
     const message = JSON.parse(event.data)
     const callback = pending.get(message.id)
@@ -23,13 +30,23 @@ export async function connectOrcaMainInspector(expectedPid, rendererId = 1) {
   }
   function send(method, params = {}) {
     return new Promise((resolve, reject) => {
+      if (socket.readyState !== WebSocket.OPEN) {
+        reject(new Error('Inspector socket is not open'))
+        return
+      }
       const id = ++nextId
       const timer = setTimeout(() => {
         pending.delete(id)
         reject(new Error(`Timed out: ${method}`))
       }, 15_000)
       pending.set(id, { resolve, reject, timer })
-      socket.send(JSON.stringify({ id, method, params }))
+      try {
+        socket.send(JSON.stringify({ id, method, params }))
+      } catch (error) {
+        pending.delete(id)
+        clearTimeout(timer)
+        reject(error)
+      }
     })
   }
   async function evaluateMain(expression) {

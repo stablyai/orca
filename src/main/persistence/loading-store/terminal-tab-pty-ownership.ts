@@ -8,8 +8,8 @@ type LeafPtyIds = Readonly<Record<string, string>> | undefined
  * because a remount reattaches the tab to whatever the row says. Main must agree, or every
  * sibling pane's reattach rewrites the row and the two sides ping-pong forever.
  *
- * The row is rewritten only when it names nothing useful: it is null, it points at the PTY this
- * very leaf is replacing, or it names a PTY no leaf of the layout holds any more.
+ * The row is rewritten only when it is null or points at the PTY this leaf is replacing.
+ * A missing leaf is not evidence that a non-null row can be reassigned.
  */
 export function tabRowPtyIdAfterLeafBinding(
   tab: Pick<TerminalTab, 'ptyId'>,
@@ -21,8 +21,5 @@ export function tabRowPtyIdAfterLeafBinding(
   if (current === null || current === ptyIdsByLeafId?.[leafId]) {
     return ptyId
   }
-  const heldByAnotherLeaf = Object.entries(ptyIdsByLeafId ?? {}).some(
-    ([otherLeafId, otherPtyId]) => otherLeafId !== leafId && otherPtyId === current
-  )
-  return heldByAnotherLeaf ? current : ptyId
+  return current
 }

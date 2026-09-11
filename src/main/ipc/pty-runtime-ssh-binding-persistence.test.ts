@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { spawnMock, openCodeClearPtyMock, piClearPtyMock } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { commitRuntimePtySpawn } from './pty/runtime/spawn-commit'
 import { SSH_SESSION_EXPIRED_ERROR, SshPtyAbsentFromRelayError } from '../providers/ssh-pty-errors'
 import {
   registerPtyHandlers,
@@ -57,6 +58,27 @@ vi.mock('../codex/codex-state-db-backfill-recovery', () =>
 
 describe('registerPtyHandlers', () => {
   const { mainWindow, mainWindowIpcEvent, getPtyWriteListener } = setupPtyIpcSuite()
+
+  it('labels an adopted relay binding as reattach even without an isReattach flag', async () => {
+    const persistPtyBinding = vi.fn(() => false)
+    await expect(
+      commitRuntimePtySpawn({
+        args: { connectionId: 'ssh-adopted' },
+        result: { id: 'relay-pty', agentSessionEnsure: { disposition: 'adopted' } },
+        hostSessionBinding: { store: { persistPtyBinding }, worktreeId: 'wt-remote' },
+        stablePaneOwner: {
+          ptyId: 'relay-pty',
+          tabId: 'tab-remote',
+          leafId: 'leaf-remote',
+          hasPersistedBinding: true
+        }
+      } as never)
+    ).rejects.toThrow('terminal_pane_owner_changed')
+    expect(persistPtyBinding).toHaveBeenCalledWith(
+      expect.objectContaining({ origin: 'reattach', ptyId: 'relay-pty' }),
+      'ssh:ssh-adopted'
+    )
+  })
 
   it('rejects runtime-owned binding persistence without complete stable identity', async () => {
     type RuntimeSpawnController = {

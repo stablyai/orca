@@ -89,6 +89,10 @@ export function installRendererIpcProbe() {
       if (requests.length < 2000) {
         requests.push({ epoch, durationMs: performance.now() - start })
       }
+    } catch (error) {
+      if (requests.length < 2000) {
+        requests.push({ epoch, durationMs: performance.now() - start, failed: String(error) })
+      }
     } finally {
       pending = false
     }

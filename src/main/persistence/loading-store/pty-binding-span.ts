@@ -12,13 +12,15 @@ export type PtyBindingOrigin = 'reattach' | 'spawn' | 'relay_reattach' | 'split'
 
 /** The spawn-commit paths share one rule: a split outranks a reattach, a reattach outranks a spawn. */
 export function spawnCommitBindingOrigin(
-  commit: { isReattach?: boolean },
+  commit: { isReattach?: boolean; agentSessionEnsure?: { disposition: string } },
   expectedSourceBinding?: unknown
 ): PtyBindingOrigin {
   if (expectedSourceBinding !== undefined) {
     return 'split'
   }
-  return commit.isReattach === true ? 'reattach' : 'spawn'
+  return commit.isReattach === true || commit.agentSessionEnsure?.disposition === 'adopted'
+    ? 'reattach'
+    : 'spawn'
 }
 
 // Bound frequent no-op traces; writes, refusals, and failures are always recorded.
