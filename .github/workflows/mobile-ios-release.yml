@@ -94,6 +94,13 @@ jobs:
         run: node -e 'const fs = require("node:fs"); const { expo } = require("./app.json"); fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${expo.version}\nbuild_number=${expo.ios.buildNumber}\n`)'
 
       - name: Expo prebuild
+        # Why the env var: app.config.js derives the expo-notifications plugin's
+        # `mode` from it, which is what writes `aps-environment: production` into the
+        # entitlements. push-token.ts reports a production APNs environment for every
+        # non-__DEV__ build, so a development entitlement here would leave TestFlight
+        # and App Store builds registered against a sandbox they never receive from.
+        env:
+          ORCA_IOS_APS_ENVIRONMENT: production
         run: npx expo prebuild --platform ios --no-install
 
       - name: Install CocoaPods

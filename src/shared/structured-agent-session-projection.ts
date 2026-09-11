@@ -54,6 +54,7 @@ function itemBlocks(item: AgentJournalRenderItem): {
           name: body.name,
           input: body.input,
           state: body.state,
+          ...(body.callId !== undefined ? { callId: body.callId } : {}),
           ...(body.mcpIdentity !== undefined ? { mcpIdentity: body.mcpIdentity } : {}),
           ...(body.exitCode !== undefined ? { exitCode: body.exitCode } : {}),
           ...(body.durationMs !== undefined ? { durationMs: body.durationMs } : {}),
