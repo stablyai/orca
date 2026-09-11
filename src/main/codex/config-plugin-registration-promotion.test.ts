@@ -250,6 +250,45 @@ describe('codex plugin registration survives the managed-home mirror', () => {
     expect(readRuntimeConfig()).toContain('disabled_reason = "canonical"')
   })
 
+  // Why: `enabled` is three-valued in practice — true, false, and absent — so
+  // "both sides changed" is only reachable when one of them adds the key.
+  it('lets the canonical config win when enablement changed to a different value on each side', () => {
+    writeSystemConfig(
+      `model = "gpt-5"\n\n${MARKETPLACE_TABLE}\n\n${PLUGIN_TABLE.replace('enabled = true\n', '')}\n`
+    )
+    syncSystemConfigIntoManagedCodexHome()
+    expect(readFileSync(baselinePath(), 'utf-8')).not.toContain('"enabled"')
+
+    writeFileSync(
+      runtimeConfigPath(),
+      readRuntimeConfig().replace('version = "4.8.4"', 'version = "4.8.4"\nenabled = false'),
+      'utf-8'
+    )
+    writeSystemConfig(
+      readSystemConfig().replace('version = "4.8.4"', 'version = "4.8.4"\nenabled = true')
+    )
+    mirrorTwice()
+
+    expect(readSystemConfig()).toContain('enabled = true')
+    expect(readSystemConfig()).not.toContain('enabled = false')
+    expect(readRuntimeConfig()).toContain('enabled = true')
+  })
+
+  it('lets the canonical config win when the registration has no mirrored ancestor', () => {
+    writeSystemConfig(`model = "gpt-5"\n\n${MARKETPLACE_TABLE}\n\n${PLUGIN_TABLE}\n`)
+    syncSystemConfigIntoManagedCodexHome()
+
+    simulateCodexRegistrationFieldWrite('enabled', 'false')
+    // A v2 baseline, or one rebuilt after corruption, tracks no registration at all.
+    const baseline = JSON.parse(readFileSync(baselinePath(), 'utf-8'))
+    delete baseline.registrations
+    writeFileSync(baselinePath(), `${JSON.stringify(baseline, null, 2)}\n`, 'utf-8')
+    mirrorTwice()
+
+    expect(readSystemConfig()).toContain('enabled = true')
+    expect(readRuntimeConfig()).toContain('enabled = true')
+  })
+
   it('keeps an unrelated canonical edit authoritative while a registration is promoted', () => {
     writeSystemConfig('model = "gpt-5"\n')
     syncSystemConfigIntoManagedCodexHome()
@@ -495,6 +534,58 @@ describe('codex registration reconciliation isolates accounts and source homes',
     expect(readSystemConfig()).toBe('model = "host"\n')
   })
 
+  it('heals a registration held only by a runtime home still on the v2 baseline schema', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    const { settings } = JSON.parse(readFileSync(baselinePath(), 'utf-8'))
+    writeFileSync(baselinePath(), `${JSON.stringify({ version: 2, settings }, null, 2)}\n`, 'utf-8')
+
+    simulateCodexRegistrationWrite(`${MARKETPLACE_TABLE}\n\n${PLUGIN_TABLE}`)
+    mirrorTwice()
+
+    expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
+    expect(readSystemConfig()).toContain('[plugins."ponytail@ponytail"]')
+    expect(readRuntimeConfig()).toContain('[plugins."ponytail@ponytail"]')
+    expect(JSON.parse(readFileSync(baselinePath(), 'utf-8'))).toMatchObject({
+      version: 3,
+      registrations: { [MARKETPLACE_KEY]: {}, [PLUGIN_KEY]: { enabled: 'true' } }
+    })
+  })
+
+  // Why: the baseline is the only record of what a mirror already made canonical,
+  // so losing it re-reads a pending canonical removal as a runtime-only addition.
+  it('re-promotes a canonically removed registration when the baseline is lost first', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    simulateCodexRegistrationWrite(MARKETPLACE_TABLE)
+    mirrorTwice()
+
+    writeSystemConfig('model = "gpt-5"\n')
+    rmSync(baselinePath())
+    mirrorTwice()
+    expect(readSystemConfig()).toContain('[marketplaces.ponytail]')
+
+    // Recoverable: with the rebuilt baseline in place, removing it again sticks.
+    writeSystemConfig('model = "gpt-5"\n')
+    mirrorTwice()
+    expect(readSystemConfig()).toBe('model = "gpt-5"\n')
+  })
+
+  it('leaves a settled config byte-identical when the baseline is lost with no removal pending', () => {
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
+    simulateCodexRegistrationWrite(MARKETPLACE_TABLE)
+    mirrorTwice()
+    const settledSystem = readSystemConfig()
+    const settledRuntime = readRuntimeConfig()
+
+    rmSync(baselinePath())
+    mirrorTwice()
+
+    expect(readSystemConfig()).toBe(settledSystem)
+    expect(readRuntimeConfig()).toBe(settledRuntime)
+  })
+
   it('treats a runtime home seeded without a baseline as holding additions, not removals', () => {
     mkdirSync(runtimeHomeDir(), { recursive: true })
     writeFileSync(runtimeConfigPath(), `model = "gpt-5"\n\n${MARKETPLACE_TABLE}\n`, 'utf-8')
@@ -536,6 +627,26 @@ describe('codex registration table identity', () => {
     expect(entries.size).toBe(1)
     expect(entry?.block).toContain('[marketplaces.m.auth]')
     expect(entry?.fields.has('token')).toBe(false)
+  })
+
+  it("leaves the next table's leading comment out of the captured block", () => {
+    const entries = readCodexRegistrationEntries(
+      '[marketplaces.m]\nsource = "s" # inline\n# keeps this one\nkey = 1\n\n# belongs to mcp_servers\n[mcp_servers.docs]\ncommand = "d"\n'
+    )
+    const block = entries.get(getCodexRegistrationKey('marketplaces', 'm'))?.block
+
+    expect(block).toContain('# keeps this one')
+    expect(block).toContain('source = "s" # inline')
+    expect(block).not.toContain('belongs to mcp_servers')
+  })
+
+  it('keeps a hash inside a multiline value out of the trailing-comment trim', () => {
+    const entries = readCodexRegistrationEntries(
+      '[marketplaces.m]\nnotes = """\n# not a comment"""\n\n[mcp_servers.docs]\ncommand = "d"\n'
+    )
+    const block = entries.get(getCodexRegistrationKey('marketplaces', 'm'))?.block
+
+    expect(block).toContain('# not a comment"""')
   })
 
   it('ignores an array-of-tables header under a registration root', () => {

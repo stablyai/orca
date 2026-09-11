@@ -51,13 +51,18 @@ export function planCodexRegistrationPromotion(
 ): CodexRegistrationPromotion[] {
   const runtimeEntries = readCodexRegistrationEntries(runtimeConfig)
   const systemEntries = readCodexRegistrationEntries(systemConfig)
-  const appends: CodexRegistrationPromotion[] = []
+  // Why: a marketplace must be declared before the plugins that name it, so the
+  // canonical file stays readable after an install promotes both at once.
+  const appends: Record<CodexRegistrationRoot, CodexRegistrationPromotion[]> = {
+    marketplaces: [],
+    plugins: []
+  }
   const fields: CodexRegistrationPromotion[] = []
   for (const entry of runtimeEntries.values()) {
     const systemEntry = systemEntries.get(entry.key)
     if (!systemEntry) {
       if (!mirroredRegistrations.has(entry.key)) {
-        appends.push({ kind: 'append', key: entry.key, block: entry.block })
+        appends[entry.root].push({ kind: 'append', key: entry.key, block: entry.block })
       }
       continue
     }
@@ -70,13 +75,7 @@ export function planCodexRegistrationPromotion(
         : planPluginEnablementPromotion(entry, systemEntry, mirroredRegistrations.get(entry.key)))
     )
   }
-  // Why: a marketplace must be declared before the plugins that name it, so the
-  // canonical file stays readable after an install promotes both at once.
-  return [
-    ...appends.filter((promotion) => promotion.key.startsWith('marketplaces:')),
-    ...appends.filter((promotion) => !promotion.key.startsWith('marketplaces:')),
-    ...fields
-  ]
+  return [...appends.marketplaces, ...appends.plugins, ...fields]
 }
 
 export function applyCodexRegistrationPromotions(

@@ -56,7 +56,7 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
     const key = getCodexRegistrationKey(root, name)
     const isOwner = header.segments.length === 2
     const existing = entries.get(key)
-    const block = lines.slice(header.index, end).join('\n').trimEnd()
+    const block = readRegistrationBlock(lines, header.index, end)
     if (!existing) {
       entries.set(key, {
         key,
@@ -87,6 +87,27 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
 
 export function hasCodexRegistrationEntries(config: string): boolean {
   return readCodexRegistrationEntries(config).size > 0
+}
+
+// Why: the block ends at the NEXT header, so its trailing blank and comment lines
+// are that table's leading comment — appending them would copy it into the wrong
+// section. Only structural lines are inspected, so a `#` inside a multiline string
+// is never mistaken for one.
+function readRegistrationBlock(lines: string[], start: number, end: number): string {
+  let state = createTomlLineScanState()
+  let lastBodyLine = start
+  for (let index = start; index < end; index += 1) {
+    const line = lines[index] ?? ''
+    const trimmed = line.trim()
+    if (!isTomlStructuralLine(state) || (trimmed !== '' && !trimmed.startsWith('#'))) {
+      lastBodyLine = index
+    }
+    state = updateTomlLineScanState(state, line)
+  }
+  return lines
+    .slice(start, lastBodyLine + 1)
+    .join('\n')
+    .trimEnd()
 }
 
 /** Compares values by meaning, so quote style and a trailing comment never read as a change. */
