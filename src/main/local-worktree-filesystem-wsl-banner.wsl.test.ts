@@ -57,9 +57,19 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
     const { readPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
     const raw = await readThroughRawLoginShell(`${fixtureRoot}/file.txt`)
 
-    // Contrast: routed through a login shell the read carries whatever the rc
-    // files printed (stock Ubuntu ships a sudo hint). These reads use a plain
-    // `sh -c`, which runs no rc at all, so they are exactly the file.
+    // Precondition, not decoration. This row is the suite's only contrast, and
+    // `endsWith` alone holds whether or not the rc files printed anything -- so
+    // without this line the contrast is satisfied by a machine that produces no
+    // banner at all, and the suite reports success having exercised nothing.
+    //
+    // The banner is conditional on distro user state this suite does not own:
+    // Ubuntu's sudo hint is gated on `~/.sudo_as_admin_successful` and the MOTD
+    // on `~/.motd_shown` (once per day per HOME). On any machine where the user
+    // has sudo'd and today's MOTD already fired -- every developer box after day
+    // one -- `raw` is exactly the file. Fail loudly there instead: "the hazard is
+    // not reproducible on this machine" is a real answer, and a green run that
+    // never met the banner is not.
+    expect(raw).not.toBe(FILE_CONTENTS)
     expect(raw.endsWith(FILE_CONTENTS)).toBe(true)
     expect(await readPath(unc(`${fixtureRoot}/file.txt`))).toBe(FILE_CONTENTS)
   }, 60_000)
