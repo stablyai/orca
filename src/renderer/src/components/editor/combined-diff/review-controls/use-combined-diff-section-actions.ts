@@ -26,6 +26,7 @@ export function useCombinedDiffSectionActions({
   isAllMode,
   isBranchMode,
   isCommitMode,
+  requestSectionReloadRef,
   sectionsRef,
   setSectionHeights,
   setSections
@@ -38,6 +39,7 @@ export function useCombinedDiffSectionActions({
   isAllMode: boolean
   isBranchMode: boolean
   isCommitMode: boolean
+  requestSectionReloadRef: React.RefObject<(index: number) => void>
   sectionsRef: React.RefObject<DiffSection[]>
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
@@ -144,6 +146,7 @@ export function useCombinedDiffSectionActions({
 
   const handleSectionSaveRef = useCombinedDiffSectionSave({
     file,
+    requestSectionReloadRef,
     sectionsRef,
     setSectionHeights,
     setSections

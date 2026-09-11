@@ -43,11 +43,13 @@ function acknowledgeSectionSave(section: DiffSection, content: string): DiffSect
 
 export function useCombinedDiffSectionSave({
   file,
+  requestSectionReloadRef,
   sectionsRef,
   setSectionHeights,
   setSections
 }: {
   file: OpenFile
+  requestSectionReloadRef: React.RefObject<(index: number) => void>
   sectionsRef: React.RefObject<DiffSection[]>
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
@@ -95,6 +97,10 @@ export function useCombinedDiffSectionSave({
                 : entry
             )
           )
+          // Why: a revalidation rejected while this row was dirty left the original side stale,
+          // and the git-status signature does not change for an edit inside an already-modified
+          // line, so nothing else re-drives it. The row is clean now, so the reload can proceed.
+          requestSectionReloadRef.current(savedIndex)
         })
         .catch((error: unknown) => {
           console.error('Save failed:', error)
@@ -107,7 +113,7 @@ export function useCombinedDiffSectionSave({
       saves.set(key, tracked)
       return tracked
     },
-    [file, sectionsRef, setSectionHeights, setSections]
+    [file, requestSectionReloadRef, sectionsRef, setSectionHeights, setSections]
   )
   const saveRef = useRef(saveSection)
   useLayoutEffect(() => {

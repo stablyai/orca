@@ -44,11 +44,18 @@ function section(key = 'file.ts'): DiffSection {
     }
   }
 }
+const reloadSpy = vi.fn()
 function setup(initial = [section()]) {
   return renderHook(() => {
     const { sections, setSections, sectionsRef } = useCombinedDiffSectionsState(initial)
     const [heights, setSectionHeights] = useState<Record<number, number>>({ 0: 100, 1: 200 })
-    const save = useCombinedDiffSectionSave({ file, sectionsRef, setSections, setSectionHeights })
+    const save = useCombinedDiffSectionSave({
+      file,
+      requestSectionReloadRef: { current: reloadSpy },
+      sectionsRef,
+      setSections,
+      setSectionHeights
+    })
     return { sections, setSections, heights, save }
   })
 }
@@ -215,4 +222,14 @@ describe('combined diff section saves', () => {
     })
     expect(writeFile).not.toHaveBeenCalled()
   })
+})
+
+it('re-drives a reload after saving, so a revalidation rejected while dirty is not stranded', async () => {
+  const { result } = setup()
+  await act(async () => {
+    await result.current.save.current(0)
+  })
+  // The git-status signature does not change for an edit inside an already-modified line, so the
+  // save is the only event that can recover a stale original side.
+  expect(reloadSpy).toHaveBeenCalledWith(0)
 })
