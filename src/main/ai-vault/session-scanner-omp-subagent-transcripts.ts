@@ -101,6 +101,7 @@ export function withOmpSubagentTranscriptCount(
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => state.consumeLine(line),
+    identity: () => state.identity?.() ?? null,
     clone: () => withOmpSubagentTranscriptCount(state.clone(), transcriptFilePath),
     touchFile: (file) => state.touchFile(file),
     finalize: async (platform, options) => {
