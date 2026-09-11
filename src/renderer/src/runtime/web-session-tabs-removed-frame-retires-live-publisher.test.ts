@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { decideWebSessionTabsSnapshot } from './web-session-tabs-sync'
 import {
+  recordReceivedWebSessionTabsRemoval,
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './web-session-tabs-sync/tracking'
-import { nextReceivedSessionTabsFrame } from './web-session-tabs-sync/state'
+import {
+  nextReceivedSessionTabsFrame,
+  VISIBILITY_INVENTORY_REMOVAL_EPOCH
+} from './web-session-tabs-sync/state'
 import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
 
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
@@ -131,6 +135,41 @@ describe('a removal frame must not retire the publisher that is still live', () 
       'bootstrap'
     )
     expect(admits(delayed, delayedReceived)).toBe(false)
+  })
+
+  /**
+   * The boundary is evidence, so a retraction may only ever advance it. A visibility-resume
+   * inventory reserves its received frame before it lists, so an omission it reports can be older
+   * than a stream frame that landed meanwhile. Letting that stale omission rewind the ledger would
+   * forget the stream frame's version and readmit a delayed frame the ledger had already outranked.
+   */
+  it('does not let an inventory omission older than the last stream frame rewind the boundary', () => {
+    const inventoryReceived = nextReceivedSessionTabsFrame()
+    const delayedReceived = nextReceivedSessionTabsFrame()
+    const streamReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(3))
+    expect(delayedReceived).toBeGreaterThan(inventoryReceived)
+    expect(streamReceived).toBeGreaterThan(delayedReceived)
+
+    // The inventory sweep finally reports this worktree missing, on its older frame.
+    recordReceivedWebSessionTabsRemoval(
+      ENVIRONMENT_ID,
+      WORKTREE,
+      inventoryReceived,
+      VISIBILITY_INVENTORY_REMOVAL_EPOCH
+    )
+
+    // A list reserved before the stream frame lands last, carrying a genuinely stale version.
+    const delayed = liveFrame(1)
+    recordReceivedWebSessionTabsSnapshot(
+      ENVIRONMENT_ID,
+      delayed,
+      delayedReceived,
+      undefined,
+      'bootstrap'
+    )
+    expect(
+      shouldApplyRecoveredWebSessionTabsSnapshot(ENVIRONMENT_ID, delayed, delayedReceived)
+    ).toBe(false)
   })
 
   // Why this stays fenced: a genuinely superseded generation is retired by a *successor's*
