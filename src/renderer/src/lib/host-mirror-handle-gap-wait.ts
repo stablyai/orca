@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '@/runtime/web-session-tab-rpc-timeout'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 
 /**
  * Per-pane park for the frame between a host's tab rows and its PTY handles.
@@ -34,6 +35,8 @@ type HandleGapWaiter = {
   tabId: string
   /** Connection generation the wait was armed on; its verdict is void on any other. */
   generation: number
+  /** Which PANE this wait is about, captured at park time; see ExpiredHandleGapVerdict. */
+  paneBinding: string
   deadline: ReturnType<typeof setTimeout>
   run: () => void
 }
@@ -63,18 +66,54 @@ const waitersByPane = new Map<string, HandleGapWaiter>()
  * never parks, so no waiter observes the retraction. Closing it needs a fourth trigger, on row
  * retraction. Pinned in host-mirror-handle-gap-verdict-union.test.ts; do not delete that case.
  */
-const expiredGenerationByPane = new Map<string, number>()
+type ExpiredHandleGapVerdict = {
+  generation: number
+  /** Sorted environment-minted PTY ids the tab's leaves held AT PARK TIME; '' when none. */
+  paneBinding: string
+}
+const expiredGenerationByPane = new Map<string, ExpiredHandleGapVerdict>()
 let unsubscribeStore: (() => void) | null = null
 
 function paneWaitKey(environmentId: string, tabId: string): string {
   return `${environmentId}\0${tabId}`
 }
 
-/** True once the deadline fired for this pane on the current connection. */
+/**
+ * The environment-minted PTY ids this tab's leaves are bound to, as one comparable string.
+ *
+ * Read from the layout, not `ptyIdsByTabId`: during the handle gap the published-handle map is
+ * empty by definition — that is the gap — while the layout binding is what
+ * `tabHoldsEnvironmentPtyBinding` already uses to call the pane unverifiable rather than dead.
+ */
+function paneBindingFor(tabId: string, environmentId: string): string {
+  const bindings = useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+  return Object.values(bindings)
+    .filter(
+      (ptyId): ptyId is string =>
+        typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId)?.environmentId === environmentId
+    )
+    .sort()
+    .join('')
+}
+
+/** True once the deadline fired for THIS pane on the current connection. */
 export function hasHostMirrorHandleWaitExpired(environmentId: string, tabId: string): boolean {
+  const verdict = expiredGenerationByPane.get(paneWaitKey(environmentId, tabId))
+  if (verdict === undefined || verdict.paneBinding === '') {
+    // Why '' never answers: it is a MATCH VALUE, not a null. Two different panes that both hold no
+    // environment-minted PTY compare equal, which is the reused-tab-id inheritance this check
+    // exists to stop, in a narrower window. Unreachable through the production park path —
+    // `findUnhydratedHostMirrorForPane` only reports `kind: 'handle'` when
+    // `tabHoldsEnvironmentPtyBinding` finds a binding, reading the same map through the same
+    // predicate as `paneBindingFor` — and pinned by the coupling test in
+    // host-mirror-handle-gap-verdict-union.test.ts. Refusing costs a re-park, which is the
+    // conservative direction, so the pair stays safe even if those two reads ever drift apart.
+    return false
+  }
   return (
-    expiredGenerationByPane.get(paneWaitKey(environmentId, tabId)) ===
-    getRuntimeEnvironmentConnectionGeneration(environmentId)
+    verdict.generation === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
+    // Why this and not the key alone: the key is a tab id, and the pane behind it can be replaced.
+    verdict.paneBinding === paneBindingFor(tabId, environmentId)
   )
 }
 
@@ -94,14 +133,14 @@ function recordExpiredWait(environmentId: string, key: string): void {
   // way round, and both wrong shapes were independently written before this was reconciled.
   const prefix = `${environmentId}\0`
   const liveTabs = liveTabIds()
-  for (const [staleKey, staleGeneration] of expiredGenerationByPane) {
+  for (const [staleKey, stale] of expiredGenerationByPane) {
     // GENERATION, judged per key across EVERY environment. `hasHostMirrorHandleWaitExpired`
     // compares a row against its own environment's CURRENT generation, so a row whose generation
     // has moved can never return true for anyone. Retiring it cannot cost a reader a verdict,
     // whoever owns it. Scoped to the recording environment, an environment that reconnects and
     // then goes quiet strands its rows forever.
     const staleEnvironmentId = staleKey.slice(0, staleKey.indexOf('\0'))
-    if (staleGeneration !== getRuntimeEnvironmentConnectionGeneration(staleEnvironmentId)) {
+    if (stale.generation !== getRuntimeEnvironmentConnectionGeneration(staleEnvironmentId)) {
       expiredGenerationByPane.delete(staleKey)
       continue
     }
@@ -116,7 +155,14 @@ function recordExpiredWait(environmentId: string, key: string): void {
       expiredGenerationByPane.delete(staleKey)
     }
   }
-  expiredGenerationByPane.set(key, generation)
+  // Why the waiter's park-time binding and not a fresh read: this verdict is about the pane whose
+  // wait just ran out. Re-reading here would attribute it to whatever holds the id NOW, handing a
+  // pane that replaced it mid-wait a verdict it never served. The caller must therefore record
+  // BEFORE `releaseWaiter` deletes the entry; the union suite pins that ordering.
+  expiredGenerationByPane.set(key, {
+    generation,
+    paneBinding: waitersByPane.get(key)?.paneBinding ?? ''
+  })
 }
 
 function stopStoreSubscriptionIfIdle(): void {
@@ -218,7 +264,14 @@ export function parkUntilHostMirrorHandleLands(
     }
     releaseWaiter(key)
   }, HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
-  waitersByPane.set(key, { worktreeId, tabId, generation, deadline, run })
+  waitersByPane.set(key, {
+    worktreeId,
+    tabId,
+    generation,
+    paneBinding: paneBindingFor(tabId, environmentId),
+    deadline,
+    run
+  })
   startStoreSubscription()
 }
 

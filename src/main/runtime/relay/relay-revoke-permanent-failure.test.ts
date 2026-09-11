@@ -56,9 +56,11 @@ function serviceOver(revokeOutbox: RelayRevokeOutbox, ledger: RelayDemandLedger)
 
 describe('a revoke that can never succeed', () => {
   it('stops pinning relay demand once its window passes, but is never abandoned', async () => {
-    let now = Date.now()
+    let now = 0
     const { revokeOutbox, ledger } = fixture(() => now)
-    revokeOutbox.enqueue(binding('device-1'))
+    // Anchor the injected clock to the item's own `createdAt`. Reading Date.now() separately races
+    // enqueue's real-clock stamp, and under load the drift silently eats into the window.
+    now = revokeOutbox.enqueue(binding('device-1')).createdAt
     expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
 
     const revokeDevice = vi.fn().mockRejectedValue(new Error('device_not_found'))
@@ -83,9 +85,11 @@ describe('a revoke that can never succeed', () => {
   })
 
   it('still lets a revoke that lands remove the item and release demand', async () => {
-    let now = Date.now()
+    let now = 0
     const { revokeOutbox, ledger } = fixture(() => now)
-    revokeOutbox.enqueue(binding('device-1'))
+    // Anchor the injected clock to the item's own `createdAt`. Reading Date.now() separately races
+    // enqueue's real-clock stamp, and under load the drift silently eats into the window.
+    now = revokeOutbox.enqueue(binding('device-1')).createdAt
     const revokeDevice = vi.fn().mockResolvedValue(undefined)
     const service = serviceOver(revokeOutbox, ledger)
 
