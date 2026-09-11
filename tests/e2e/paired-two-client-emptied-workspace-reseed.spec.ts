@@ -14,26 +14,26 @@
  * Phase 0 is the control: with both clients attached, does a terminal created on one reach the
  * other at all? Without it a later divergence cannot be attributed to the emptying.
  *
- * KNOWN RED as of this commit, and the shape of the failure is the finding. Across 8 runs the
- * close phases were all-or-nothing: either every retraction reached both clients in single-digit
- * milliseconds, or none reached either client within 90 seconds — and phase 1a, which closes a
- * terminal while others remain open, fails alongside phase 1b, so it is not about the workspace
- * going empty. Creates always propagate, including the phase 2 create that lands in ~3ms on the
- * very clients that just missed a close for 90s, so the subscription is demonstrably alive. Both
- * clients failing together, while the host's own window shows the correct count, puts the fault
- * on the host's publish-after-close rather than on any client's mirror. What the user sees: a
- * terminal they closed on one machine stays in the tab bar on the other, pointing at a process
- * that no longer exists, until some unrelated change to the workspace forces a republish.
+ * WAS RED, NOW GREEN, AND THE MEASUREMENT IS THE POINT. This spec was written to pin a defect
+ * rather than to assert a fix. Across 8 runs on a branch that carried neither of this PR's
+ * publish-side changes, the close phases were all-or-nothing: either every retraction reached both
+ * clients in single-digit milliseconds, or none reached either client within 90 seconds. Phase 1a,
+ * which closes a terminal while others remain open, failed alongside phase 1b, so it was never
+ * about the workspace going empty. Creates always propagated, including the phase 2 create landing
+ * in ~3ms on the very clients that had just missed a close for 90s, so the subscription was
+ * demonstrably alive. Both clients failing together while the host's own window showed the correct
+ * count put the fault on the host's publish-after-close, not on any client's mirror.
  *
- * WHY IT SITS ON THIS PR. That diagnosis -- the host publishes a stale surface list after a close
- * -- is the defect this PR's `publish a terminal retirement proof on the exit's own evidence` and
- * `a removal retraction is not a publisher handover` fix. The spec was written on a branch that
- * carried neither, which is why it was red there. It is kept un-skipped on purpose: it is the
- * end-to-end proof of the fix, and CI on this PR is the measurement. If it still fails here the
- * finding is that the unit-level retirement proof does not reach the wire, which is worth knowing
- * loudly rather than quietly. Do not skip-tag it to green the build; split the close phases into
- * their own spec instead -- they share this test's two-client pairing fixture and phase 2 depends
- * on phase 1b's emptying, so a split means duplicating that fixture, not moving a block.
+ * That diagnosis named exactly what this PR changes: `publish a terminal retirement proof on the
+ * exit's own evidence` and `a removal retraction is not a publisher handover`. Measured on this
+ * branch with both of them present, all phases pass and the close retractions arrive in
+ * single-digit to low-hundreds of milliseconds (phase1a A=9ms B=158ms, phase1b A=1ms B=192ms).
+ * So this is no longer a pinned defect; it is the end-to-end proof that the unit-level retirement
+ * proof actually reaches the wire.
+ *
+ * If it goes red again, that is a regression in the publish-after-close path and the numbers above
+ * are the baseline to compare against — do not skip-tag it. The failure shape to expect is the
+ * all-or-nothing one: a 90s timeout on both clients at once, with creates still propagating.
  *
  * Run:
  *   pnpm exec playwright test \
