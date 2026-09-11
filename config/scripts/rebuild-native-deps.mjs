@@ -35,8 +35,11 @@ import {
   readFileSync,
   writeFileSync
 } from 'node:fs'
+import { createRequire } from 'node:module'
 import { platform as osPlatform } from 'node:os'
 import { join, resolve } from 'node:path'
+
+const requireLocal = createRequire(import.meta.url)
 
 const projectDir = process.cwd()
 let cliOptions
@@ -177,6 +180,7 @@ try {
   })
   restoreNodePtyWindowsConptyRuntime()
   assertWindowsProcessTreeAddonIsPatched()
+  assertNodePtyConptyDeniesMsysBreakaway()
 } catch (/** @type {any} */ err) {
   console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
   if (isWindowsNativeLockError(err)) {
@@ -228,6 +232,41 @@ function assertWindowsProcessTreeAddonIsPatched() {
           'command-line reader. The packaged app would carry the primitive MDE scores as ' +
           'credential dumping.'
   )
+}
+
+/**
+ * The other half of the same problem, for the addon this rebuild just produced.
+ *
+ * The Electron probe below carries the marker check too, but it is skipped
+ * whenever the Electron package binary is unusable -- and "covered by another
+ * path" is not "this path checks". Reading the binary needs neither a loadable
+ * Electron nor an executable target arch, so it runs here regardless.
+ *
+ * Absent rather than unmarked warns: a cross-platform rebuild does not
+ * necessarily leave a win32 addon on this disk, and that must not fail an
+ * install that was working. A binary that IS there and predates the denial is
+ * fatal -- it is the one that ships.
+ */
+function assertNodePtyConptyDeniesMsysBreakaway() {
+  if (rebuildPlatform !== 'win32' || !modulesToRebuild.includes('node-pty')) {
+    return
+  }
+  const { assertCygwinBreakawayDenied } = requireLocal('./node-pty-job-ownership.cjs')
+  const addonPath = resolve(
+    projectDir,
+    'node_modules',
+    'node-pty',
+    'build',
+    'Release',
+    'conpty.node'
+  )
+  if (!existsSync(addonPath)) {
+    console.warn(
+      `[rebuild] no addon at ${addonPath}; could not check the MSYS job-breakaway denial.`
+    )
+    return
+  }
+  assertCygwinBreakawayDenied(addonPath, { dir: addonPath })
 }
 
 function restoreNodePtyWindowsConptyRuntime() {
