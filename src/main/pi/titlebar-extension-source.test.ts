@@ -682,6 +682,7 @@ describe('getPiTitlebarExtensionSource', () => {
     const old = createHarness({ globals, isIdle: () => false })
     const other = createHarness({ globals, paneKey: 'pane-2' })
     await old.callHook('agent_start')
+    await old.callHook('ui_prompt_start')
     await old.callHook('agent_end')
     await other.callHook('agent_start')
     const replacement = createHarness({ globals })
@@ -700,5 +701,38 @@ describe('getPiTitlebarExtensionSource', () => {
     await third.callHook('agent_start')
     await replacement.callHook('session_shutdown')
     expect(vi.getTimerCount()).toBe(2)
+  })
+
+  it('stops spinner, prompt reassertion and idle recheck together on invalidation', async () => {
+    let stale = false
+    const harness = createHarness({
+      isIdle: () => false,
+      sessionNameImpl: () => {
+        if (stale) {
+          throw new Error('stale generation')
+        }
+        return SESSION
+      }
+    })
+    await harness.callHook('agent_start')
+    await harness.callHook('ui_prompt_start')
+    await harness.callHook('agent_end')
+    expect(vi.getTimerCount()).toBe(3)
+    stale = true
+    await vi.advanceTimersByTimeAsync(80)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears prompt and idle timers at session_start without needing shutdown', async () => {
+    const harness = createHarness({ isIdle: () => false })
+    await harness.callHook('agent_start')
+    await harness.callHook('ui_prompt_start')
+    await harness.callHook('agent_end')
+    expect(vi.getTimerCount()).toBe(3)
+    await harness.callHook('session_start')
+    expect(vi.getTimerCount()).toBe(0)
+    await harness.callHook('agent_start')
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+    expect(vi.getTimerCount()).toBe(1)
   })
 })
