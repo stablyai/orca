@@ -35,6 +35,7 @@ import {
 import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
 
+/** Renders account selection and usage details for the connected host. */
 export default function AccountsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -190,6 +191,7 @@ export default function AccountsScreen() {
     [client, refresh, snapshot]
   )
 
+  /** Renders the account and usage rows for one provider. */
   const renderProviderSection = (provider: ProviderKey, title: string) => {
     if (!snapshot) {
       return null

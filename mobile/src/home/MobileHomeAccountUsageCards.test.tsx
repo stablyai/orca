@@ -26,6 +26,7 @@ const host = {
   lastConnected: 0
 }
 
+/** Builds Claude rate limits for usage-card tests. */
 function makeClaudeLimits(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
   return {
     provider: 'claude',
@@ -38,6 +39,7 @@ function makeClaudeLimits(overrides: Partial<ProviderRateLimits> = {}): Provider
   }
 }
 
+/** Builds an accounts snapshot with the provided Claude limits. */
 function makeSnapshot(claudeLimits: ProviderRateLimits): AccountsSnapshot {
   return {
     claude: {
@@ -69,6 +71,7 @@ describe('MobileHomeAccountUsageCards', () => {
     renderer = null
   })
 
+  /** Renders the usage cards and returns their text content. */
   async function renderWith(snapshot: AccountsSnapshot): Promise<string[]> {
     await act(async () => {
       renderer = create(
