@@ -41,7 +41,9 @@ export type WorkerLaunchModelAuthority = {
 
 export type WorkerLaunchModelDiscoveryRuntime = Pick<
   OrcaRuntimeService,
-  'discoverRuntimeCommitMessageModels' | 'resolveRuntimeCommitMessageDiscoveryHostKey'
+  | 'discoverRuntimeCommitMessageModels'
+  | 'getAccountsSnapshot'
+  | 'resolveRuntimeCommitMessageDiscoveryHostKey'
 >
 export type WorkerLaunchModelDiscoveryTarget = string | { repoSelector: string }
 
@@ -57,7 +59,7 @@ export const SEED_WORKER_LAUNCH_MODEL_AUTHORITY: WorkerLaunchModelAuthority = {
 
 type CachedModels = { expiresAt: number; models: readonly CommitMessageModelCapability[] }
 
-/** Callers that share an agent, execution host, and resolved command share one CLI fact. */
+/** Callers that share an agent, execution host, command, and auth identity share one CLI fact. */
 const cachedByScope = new Map<string, CachedModels>()
 const inFlightByScope = new Map<string, Promise<readonly CommitMessageModelCapability[] | null>>()
 
@@ -151,6 +153,28 @@ function readCachedModels(scope: string): readonly CommitMessageModelCapability[
   return cachedByScope.get(scope)?.models ?? null
 }
 
+function resolveDiscoveryAuthScope(
+  runtime: WorkerLaunchModelDiscoveryRuntime,
+  agent: TuiAgent,
+  hostKey: string
+): string | null {
+  if (agent !== 'claude' || hostKey.startsWith('ssh:')) {
+    return 'not-account-scoped'
+  }
+  try {
+    const state = runtime.getAccountsSnapshot().claude
+    const activeAccountId = hostKey.startsWith('wsl:')
+      ? (state.activeAccountIdsByRuntime?.wsl[hostKey.slice(4)] ?? null)
+      : state.activeAccountId
+    const account = activeAccountId ? state.accounts.find(({ id }) => id === activeAccountId) : null
+    // Re-auth updates the account timestamp, so it must invalidate membership too.
+    return JSON.stringify([activeAccountId, account?.updatedAt ?? null])
+  } catch {
+    // Without an auth identity, concurrent calls may coalesce but a completed list is not reusable.
+    return null
+  }
+}
+
 /**
  * `worktreeSelector` names the existing workspace or destination repo whose host will run the
  * worker. The historical name is retained because workspace callers pass string selectors.
@@ -194,8 +218,9 @@ export async function resolveWorkerLaunchModelAuthority(args: {
     }
     return SEED_WORKER_LAUNCH_MODEL_AUTHORITY
   }
-  const scope = JSON.stringify([agent, hostKey, agentCommandOverride])
-  const cached = readCachedModels(scope)
+  const authScope = resolveDiscoveryAuthScope(runtime, agent, hostKey)
+  const scope = JSON.stringify([agent, hostKey, agentCommandOverride, authScope])
+  const cached = authScope === null ? null : readCachedModels(scope)
   if (cached) {
     return liveWorkerLaunchModelAuthority({ catalog, agent, models: cached })
   }
@@ -204,7 +229,12 @@ export async function resolveWorkerLaunchModelAuthority(args: {
     // Failures are never cached, so the next dispatch retries rather than inheriting a miss.
     pending = probeHostModels(runtime, agent, target, agentCommandOverride).then((models) => {
       inFlightByScope.delete(scope)
-      if (models) {
+      // An account switch during discovery makes its answer non-authoritative for this launch.
+      const authScopeAfterProbe = resolveDiscoveryAuthScope(runtime, agent, hostKey)
+      if (authScopeAfterProbe !== authScope) {
+        return null
+      }
+      if (models && authScope !== null) {
         cachedByScope.set(scope, { expiresAt: Date.now() + DISCOVERY_TTL_MS, models })
       }
       return models

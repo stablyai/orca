@@ -42,6 +42,7 @@ function probeRuntime(
   return {
     runtime: {
       discoverRuntimeCommitMessageModels: discover,
+      getAccountsSnapshot: () => ({ claude: { accounts: [], activeAccountId: null } }),
       resolveRuntimeCommitMessageDiscoveryHostKey: resolveHostKey
     } as never,
     discover,
