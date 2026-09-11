@@ -15,6 +15,7 @@ import {
 import { prepareCodexRuntimeHomeForLaunch } from './codex-launch-preparation'
 import { prepareCodexSessionResumeForLaunch } from './codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
+import { ensureDesktopRelayService } from './main-process-relay-startup'
 import { RELAY_HOST_CLOSE_REASON } from '../../shared/relay-host-close-reason'
 
 export function attachMainWindowCoreServices(
@@ -90,7 +91,7 @@ export function attachMainWindowCoreServices(
           store
         })
       },
-      onOrcaProfileAuthMutation: () => state.desktopRelayService?.authMutated(),
+      onOrcaProfileAuthMutation: () => ensureDesktopRelayService()?.authMutated(),
       // Sign-out is the one fence a paired phone can be told about; quit and
       // relaunch above stay reasonless so a restart never reads as signed out.
       onBeforeOrcaProfileSignOut: () =>

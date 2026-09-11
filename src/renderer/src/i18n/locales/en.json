@@ -13868,7 +13868,7 @@
           "unavailableTitle": "Orca Relay isn’t available on this desktop.",
           "title": "Couldn’t create a Relay pairing code.",
           "retryingBody": "Creating a new pairing code. This can take a moment over a remote connection.",
-          "unavailableBody": "Use LAN to pair over Tailscale or the same Wi‑Fi.",
+          "unavailableBody": "Retry Relay. If it still fails, restart Orca or use LAN over Tailscale or the same Wi‑Fi.",
           "body": "Retry, or use LAN to pair over Tailscale or the same Wi‑Fi.",
           "useLan": "Use LAN",
           "retrying": "Retrying…",

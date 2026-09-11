@@ -51,6 +51,7 @@ function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
 export type MobileHandlerDependencies = {
   firewallEnvironment?: WindowsMobileFirewallEnvironment
   openWindowsNetworkSettings?: () => Promise<void>
+  onBeforeRelayPairing?: () => void
   getRelayStatus?: () => MobileRelayStatusDetail
   consumePendingUnpairedDeviceAuthFailure?: (webContentsId: number) => boolean
   encodePairingQr?: (pairingUrl: string) => Promise<MobilePairingQrResult>
@@ -110,6 +111,9 @@ export function registerMobileHandlers(
       // `rotate: true` (explicit "Regenerate" intent because the prior token
       // may have been exposed), we discard any pending token and mint a fresh
       // one so the new QR carries a different credential.
+      if (args?.connectionMode !== 'local-only') {
+        dependencies.onBeforeRelayPairing?.()
+      }
       const offer = await rpcServer.createMobilePairingOffer({
         address: ip,
         connectionMode: args?.connectionMode,

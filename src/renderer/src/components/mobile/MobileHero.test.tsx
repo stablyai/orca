@@ -214,18 +214,21 @@ describe('HeroFlow height', () => {
     await waitFor(() => expect(screen.getByText(/Creating a new pairing code/)).toBeVisible())
   })
 
-  it('does not offer a futile retry when Relay is unavailable on the desktop', () => {
+  it('lets the user retry desktop Relay initialization', async () => {
+    const onRetryRelay = vi.fn()
     renderFlow(1, {
       relayMintFailure: {
         code: 'relay_provider_unavailable',
         stage: 'provider_missing',
         message: 'Orca Relay is not available on this desktop'
-      }
+      },
+      onRetryRelay
     })
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Orca Relay isn’t available on this desktop'
     )
-    expect(screen.queryByRole('button', { name: 'Retry Relay' })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Retry Relay' }))
+    expect(onRetryRelay).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: 'Use LAN' })).toBeEnabled()
   })
 
