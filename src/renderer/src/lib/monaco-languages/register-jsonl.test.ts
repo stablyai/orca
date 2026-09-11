@@ -84,16 +84,42 @@ describe('jsonl tokenization', () => {
     expect(tokenTypeAt(line, 8)).toBe('string')
   })
 
-  // KNOWN DEFECT, found by this suite once it started running the real
-  // tokenizer. Each JSONL line is an independent JSON value, but the `@string`
-  // state survives the line break, so one truncated record (common in logs)
-  // renders every record after it as a single string. `it.fails` pins it: this
-  // flips to a failure the moment the grammar is fixed, so the fix lands with
-  // this expectation inverted rather than silently.
-  it.fails('never carries string state across a record boundary', () => {
-    const [, second] = tokenizeJsonl('{"a": "unterminated\n{"b": 1}')
+  // Regression, found by this suite once it started running the real tokenizer:
+  // `@string` used to survive the line break, so one truncated record rendered
+  // every record after it as a single string.
+  it.each([
+    ['mid-string', '{"a": "truncated here'],
+    ['mid-escape', '{"a": "truncated\\'],
+    ['on a trailing backslash', '{"a": "x\\']
+  ])('does not let a record truncated %s poison the next one', (_name, truncated) => {
+    const [, second] = tokenizeJsonl(`${truncated}\n{"b": 1}`)
 
     expect(tokenTypeAt(second, 1)).toBe('type.identifier')
     expect(tokenTypeAt(second, 6)).toBe('number')
+  })
+
+  it('marks the unterminated remainder of a truncated record', () => {
+    const [first] = tokenizeJsonl('{"a": "truncated here')
+
+    expect(tokenTypeAt(first, 6)).toBe('string.invalid')
+  })
+
+  it.each([
+    ['escaped quote', '{"m": "he said \\"hi\\""}', 15],
+    ['escaped backslash', '{"m": "C:\\\\Users"}', 10],
+    ['unicode escape', '{"m": "\\u00e9"}', 7],
+    ['newline escape', '{"m": "a\\nb"}', 8]
+  ])('still highlights an %s inside a well-formed record', (_name, record, escapeOffset) => {
+    // The fix must not cost escape fidelity on the common case: a candidate that
+    // collapsed the string into one regex lost every one of these.
+    const [line] = tokenizeJsonl(record)
+
+    expect(tokenTypeAt(line, escapeOffset)).toBe('string.escape')
+  })
+
+  it('flags an invalid escape inside a well-formed record', () => {
+    const [line] = tokenizeJsonl('{"m": "a\\qb"}')
+
+    expect(tokenTypeAt(line, 8)).toBe('string.escape.invalid')
   })
 })
