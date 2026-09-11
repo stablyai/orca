@@ -47,8 +47,19 @@ export const CREDENTIAL_NOUN_SOURCE =
 // accesses. The noun is what corroborates an otherwise-inert bottom row, so an identifier reading
 // as the noun is enough on its own to refuse a screen that is only printing source. Only `.` is
 // excluded, not all of `\w` — the env-var form (`OPENAI_API_KEY`) is a real ask.
-const CREDENTIAL_NOUN_RE = new RegExp(`(?<!\\.)(?:${CREDENTIAL_NOUN_SOURCE})`, 'gi')
-const CREDENTIAL_NOUN_ANYWHERE_RE = new RegExp(`(?<!\\.)(?:${CREDENTIAL_NOUN_SOURCE})`, 'i')
+// Why the lookbehind spans identifier characters: the noun can sit mid-identifier, so a fixed
+// one-character check misses `candidate.personal_access_token` — the dot precedes `personal`, not
+// `access_token`. Anchoring on the dot at the START of the identifier catches the whole family.
+// Still only `.`: the env-var ask (`OPENAI_API_KEY`) has no dot and is a real prompt.
+const CREDENTIAL_NOUN_LOOKBEHIND = '(?<!\\.[a-z0-9_$]*)'
+const CREDENTIAL_NOUN_RE = new RegExp(
+  `${CREDENTIAL_NOUN_LOOKBEHIND}(?:${CREDENTIAL_NOUN_SOURCE})`,
+  'gi'
+)
+const CREDENTIAL_NOUN_ANYWHERE_RE = new RegExp(
+  `${CREDENTIAL_NOUN_LOOKBEHIND}(?:${CREDENTIAL_NOUN_SOURCE})`,
+  'i'
+)
 
 // Why a vendor slot: real prompts read "enter your Anthropic API key" and
 // "paste your personal access token", not just "enter your API key".
@@ -123,8 +134,18 @@ const AUTH_ACTION_FLOW_LEADS_ROW_RE = new RegExp(
 
 // An inquirer-style question row. Prose never starts with a bare `?` — but FORMATTED CODE does:
 // oxfmt puts a ternary's consequent on its own row as `? someValue`, and 5,666 tracked files in
-// this repo have one. So the row rule alone is not enough; see `COMPOSER_CARET_ROW_RE`.
+// this repo have one.
 const AUTH_QUESTION_ROW_RE = /^\?\s+\S/
+
+/**
+ * Source code rather than a sentence. This is what actually separates an inquirer header from a
+ * ternary consequent, because POSITION cannot: `? How would you like to authenticate?` above its
+ * two option rows and `? prevAssignees.filter(...)` above a caret and a status bar sit at exactly
+ * the same offset from the bottom.
+ *
+ * Parentheses are deliberately allowed — real prompts write `(Use arrow keys)`.
+ */
+const CODE_SHAPED_ROW_RE = /[{}[\]`'"]|=>|!==|===|;\s*$|\b[a-z_$][\w$]*\.[a-z_$]/i
 
 /**
  * A row that proves the agent is sitting at its own composer, so nothing is asking the user
@@ -135,7 +156,13 @@ const AUTH_QUESTION_ROW_RE = /^\?\s+\S/
  * #19749 shape, whose own bottom row is `>` — matches through `isCredentialPromptLine` instead,
  * and that returns before this is consulted.
  */
-const COMPOSER_CARET_ROW_RE = /^(?:›\s*ask\b.*|✳\s*claude code\b.*|[>❯›◇»$])$/i
+const COMPOSER_CARET_ROW_RE = /^(?:[›❯>◇»]\s*ask\b.*|✳\s*claude code\b.*|[>❯›◇»$])$/i
+
+// Why a region and not the bottom row: every agent draws chrome UNDER its caret — Codex a model
+// footer, OpenCode a status bar, droid a key-hint row — so the caret is rarely the last row on a
+// real screen. Three covers the deepest captured footer without reaching the option rows of a
+// dialog, whose own caret sits further up (`terminal-live-credential-surfaces-corpus.ts`).
+const COMPOSER_REGION_ROWS = 3
 
 // A finished sentence, i.e. narration. A lone `.`/`!`/`?` ends a clause; `...`
 // and `…` are progress wording ("opening browser...") and are not sentences.
@@ -226,7 +253,9 @@ export function findCredentialPromptIndex(normalized: string): number | null {
       sawCredentialNoun = sawCredentialNoun || CREDENTIAL_NOUN_ANYWHERE_RE.test(line)
       sawAuthQuestion =
         sawAuthQuestion ||
-        (AUTH_QUESTION_ROW_RE.test(line) && (AUTH_VERB_RE.test(line) || AUTH_FLOW_RE.test(line)))
+        (AUTH_QUESTION_ROW_RE.test(line) &&
+          !CODE_SHAPED_ROW_RE.test(line) &&
+          (AUTH_VERB_RE.test(line) || AUTH_FLOW_RE.test(line)))
     }
     offset += raws[index].length + 1
   }
@@ -245,6 +274,9 @@ export function findCredentialPromptIndex(normalized: string): number | null {
     bottomRowAsks &&
     !NARRATION_ROW_RE.test(bottomRow) &&
     (sawAuthVerb || sawCredentialNoun)
-  const bottomRowIsComposerCaret = COMPOSER_CARET_ROW_RE.test(bottomRow)
+  const nonBlank = lines.filter((line) => line.length > 0)
+  const bottomRowIsComposerCaret = nonBlank
+    .slice(-COMPOSER_REGION_ROWS)
+    .some((line) => COMPOSER_CARET_ROW_RE.test(line))
   return authFlowOwnsBottom || (sawAuthQuestion && !bottomRowIsComposerCaret) ? windowStart : null
 }

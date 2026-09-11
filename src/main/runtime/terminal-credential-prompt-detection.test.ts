@@ -615,6 +615,37 @@ const LEGITIMATE_AGENT_SCREENS: readonly (readonly [string, string[]])[] = [
     ['    const owner = candidate.credential', '    Enter the code below to finish linking']
   ],
   [
+    'bare identifier ternary above a codex caret and its model footer',
+    ['      ? login', '', '\u203a Ask Codex to do anything', '', '  gpt-6 medium \u00b7 ~/repo']
+  ],
+  [
+    'bare identifier ternary above an opencode caret and status bar',
+    ['      ? authorization', '', '\u276f ', 'opencode  anthropic/claude-opus-4  ~/repo']
+  ],
+  [
+    'ternary above a codex caret and its model footer',
+    [
+      "      ? 'Update desktop Orca and sign in to connect from anywhere'",
+      '',
+      '\u203a Ask Codex to do anything',
+      '',
+      '  gpt-6 medium \u00b7 ~/repo'
+    ]
+  ],
+  [
+    'login access above an opencode caret and status bar',
+    [
+      '        ? prevAssignees.filter((user) => user.login.toLowerCase() !== lowerLogin)',
+      '',
+      '\u276f ',
+      'opencode  anthropic/claude-opus-4  ~/repo'
+    ]
+  ],
+  [
+    'personal_access_token identifier cannot corroborate',
+    ['    const owner = candidate.personal_access_token', '    Enter the code below to finish']
+  ],
+  [
     'source rows where a .login access is the only would-be auth verb',
     [
       '    const owner = candidate.login',
