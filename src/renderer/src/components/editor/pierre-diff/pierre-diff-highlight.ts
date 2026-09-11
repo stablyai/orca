@@ -1,6 +1,14 @@
 import { getFiletypeFromFileName, type FileDiffMetadata } from '@pierre/diffs'
 import { createDiffHighlightPool } from './pierre-diff-highlight-pool'
 
+/**
+ * Pierre cancels a task (e.g. a theme change mid-flight) by rejecting its callbacks and dropping
+ * the instance mapping in `clearInstanceRequests` -- it never calls `onHighlightError` on the
+ * instance. Our renderer only learns of completion through those callbacks, so a cancelled task
+ * would leave this promise pending forever and hang any caller awaiting it.
+ */
+const HIGHLIGHT_SETTLE_CEILING_MS = 10_000
+
 export function preparePierreDiffHighlight(
   diff: FileDiffMetadata,
   signal: AbortSignal
@@ -22,7 +30,9 @@ export function preparePierreDiffHighlight(
     return Promise.resolve()
   }
   return new Promise((resolve, reject) => {
+    const ceiling = setTimeout(() => finish(), HIGHLIGHT_SETTLE_CEILING_MS)
     const finish = (error?: unknown) => {
+      clearTimeout(ceiling)
       signal.removeEventListener('abort', abort)
       pool.cleanUpTasks(renderer)
       if (error !== undefined) {

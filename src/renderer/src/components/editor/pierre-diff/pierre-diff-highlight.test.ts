@@ -50,3 +50,23 @@ it('keeps errors recoverable instead of falling back to blocking highlighting', 
     'unavailable'
   )
 })
+
+it('settles when the pool cancels a task without notifying the instance', async () => {
+  // Why: Pierre's removeActiveTask rejects its own callbacks and drops the instance mapping in
+  // clearInstanceRequests, but never calls onHighlightError. Without a ceiling this promise
+  // pends forever and an editable surface awaiting it never renders.
+  vi.useFakeTimers()
+  try {
+    const promise = preparePierreDiffHighlight(diff, new AbortController().signal)
+    let settled = false
+    void promise.then(() => (settled = true))
+    await vi.advanceTimersByTimeAsync(9_000)
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(2_000)
+    await promise
+    expect(settled).toBe(true)
+    expect(pool.cleanUpTasks).toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
+})

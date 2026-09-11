@@ -25,8 +25,12 @@ export function createDiffHighlightPool(): WorkerPoolManager {
       workerFactory: () => new PierreDiffHighlightWorker(),
       poolSize: resolvePoolSize(),
       // Why: each entry is a whole-file per-line AST and a mounted row pins its own on top of
-      // this. Pierre's default of 100 retained ~63MB more than the Monaco path it replaced.
-      totalASTLRUCacheSize: 16
+      // this. Pierre's default of 100 retained ~63MB more than the Monaco path it replaced, but
+      // the bound must stay clear of the mounted-section count (overscan 5/side puts 15-25 rows
+      // in the DOM) or scrolling back evicts a row's AST and flashes it unhighlighted. Measured
+      // on a 150-file diff: 100 (default) 150MB, 48 133MB, 32 104MB, 16 104MB -- 32 is the
+      // cheapest value that still clears the mounted count.
+      totalASTLRUCacheSize: 32
     },
     // Why: the pool owns `theme` for every component instance; per-file options are ignored.
     highlighterOptions: { theme: PIERRE_DIFF_THEMES, useTokenTransformer: true }
