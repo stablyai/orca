@@ -1,12 +1,5 @@
-/**
- * Where a newly created session tab lands in a tab list.
- *
- * Shared because a client that optimistically paints a created tab and the host that publishes
- * the authoritative snapshot must agree. When they disagreed — the client appending while the
- * host spliced after `afterTabId` — the new tab painted at the end and then visibly jumped to its
- * real slot as soon as the host frame landed.
- */
-export function placeCreatedSessionTab<T extends { id: string }>(
+/** Places a created tab after the anchor's top-level terminal group, or appends when unanchored. */
+export function placeCreatedSessionTab<T extends { id: string; parentTabId?: string }>(
   tabs: readonly T[],
   created: T,
   afterTabId: string | null | undefined
@@ -17,6 +10,16 @@ export function placeCreatedSessionTab<T extends { id: string }>(
     next.push(created)
     return next
   }
-  next.splice(anchor + 1, 0, created)
+  let insertAfter = anchor
+  const anchorParentTabId = next[anchor].parentTabId
+  if (anchorParentTabId) {
+    while (
+      insertAfter + 1 < next.length &&
+      next[insertAfter + 1].parentTabId === anchorParentTabId
+    ) {
+      insertAfter += 1
+    }
+  }
+  next.splice(insertAfter + 1, 0, created)
   return next
 }

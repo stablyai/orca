@@ -305,6 +305,20 @@ describe('optimistic placement of a created tab', () => {
     ])
   })
 
+  it('paints after the active split parent, matching headed host placement', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    scope.activeSessionTabId = 'existing-tab::left'
+    await createLegacyTerminal(scope)
+
+    expect(
+      tabIdsAfterCreate(scope, [
+        { id: 'existing-tab::left', parentTabId: 'existing-tab' },
+        { id: 'existing-tab::right', parentTabId: 'existing-tab' },
+        { id: 'trailing-tab' }
+      ])
+    ).toEqual(['existing-tab::left', 'existing-tab::right', 'terminal-tab-1', 'trailing-tab'])
+  })
+
   it('sends the same anchor it paints with', async () => {
     const scope = createScope(clientReturning(terminalCreateResponse()))
     await createLegacyTerminal(scope)

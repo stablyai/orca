@@ -10,6 +10,20 @@ describe('placeCreatedSessionTab', () => {
     ).toEqual(['a', 'new', 'b', 'c'])
   })
 
+  it('inserts after all leaves of a split parent', () => {
+    expect(
+      placeCreatedSessionTab(
+        [
+          { id: 'split::left', parentTabId: 'split' },
+          { id: 'split::right', parentTabId: 'split' },
+          { id: 'trailing' }
+        ],
+        { id: 'new' },
+        'split::left'
+      ).map((tab) => tab.id)
+    ).toEqual(['split::left', 'split::right', 'new', 'trailing'])
+  })
+
   it('appends when the anchor is the last tab', () => {
     expect(
       placeCreatedSessionTab([{ id: 'a' }, { id: 'b' }], created, 'b').map((t) => t.id)
