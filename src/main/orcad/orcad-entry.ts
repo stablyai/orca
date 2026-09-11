@@ -151,7 +151,7 @@ async function startOrcadRuntime(
   const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
-  const { AgentStatusObservedPaneIdentities, recordObservedAgentStatusPaneIdentity } =
+  const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/agent-status-observed-pane-identity')
 
   let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
@@ -179,6 +179,7 @@ async function startOrcadRuntime(
   initOrcaProfilePaths()
   const profile = ensureActiveOrcaProfile(runtimeUserDataPath)
   const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
+  const observedStatusCapture = new AgentStatusObservedPaneIdentityCapture(observedPaneIdentities)
   // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`
   // and the read paths that use `this.store?.x ?? []` quietly answer "empty" instead —
   // a server that pairs and lists nothing looks healthy and is not.
@@ -190,6 +191,9 @@ async function startOrcadRuntime(
   initSshHostKeyStoreFile(profile.dataFile)
 
   if (isAgentStatusHooksEnabled(store.getSettings())) {
+    uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
+      observedStatusCapture.observe(enriched)
+    )
     await agentHookServer.start({ env: 'production', userDataPath: runtimeUserDataPath })
   }
 
@@ -238,10 +242,6 @@ async function startOrcadRuntime(
       isAgentStatusHooksEnabled(store.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
 
-  uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
-    recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
-  )
-
   // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a
   // pane's status row changes, and orcad's whole job is serving paired clients.
   uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
@@ -257,6 +257,9 @@ async function startOrcadRuntime(
   // flows. A launch that needs one fails with its own message rather than silently
   // spawning an unauthenticated agent.
   await registerHeadlessPtyRuntime(runtime, undefined, () => store.getSettings(), undefined, store)
+
+  // PTY recovery binds terminal identities; only now can startup spool observations be fenced.
+  observedStatusCapture.attach(runtime)
 
   // Why: same post-registration reconciliation `--serve` performs. Skipping it leaves
   // restored orchestration rows claiming an authority this host never took over.

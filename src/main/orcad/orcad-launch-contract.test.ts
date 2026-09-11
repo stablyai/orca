@@ -60,6 +60,28 @@ describe('orcad lifecycle cleanup', () => {
     expect(cleanupHost).toHaveBeenCalledOnce()
   })
 
+  it('preserves the startup error when rollback also fails', async () => {
+    const startupError = new Error('bind failed')
+    const cleanupError = new Error('daemon stop failed')
+    const cleanupRuntime = vi.fn(async () => {})
+    const cleanupHost = vi.fn(async () => {
+      throw cleanupError
+    })
+    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await expect(
+        startOrcadWithLifecycle(async (registerCleanup) => {
+          registerCleanup(cleanupRuntime)
+          throw startupError
+        }, cleanupHost)
+      ).rejects.toBe(startupError)
+      expect(report).toHaveBeenCalledWith('[orcad] startup cleanup failed:', cleanupError)
+    } finally {
+      report.mockRestore()
+    }
+  })
+
   it('coalesces concurrent and repeated normal stops', async () => {
     const cleanupRuntime = vi.fn(async () => {})
     const cleanupHost = vi.fn(async () => {})

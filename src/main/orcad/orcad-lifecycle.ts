@@ -24,7 +24,12 @@ export async function startOrcadWithLifecycle<T extends object>(
     })
     return { ...handle, stop: cleanup }
   } catch (error) {
-    await cleanup()
+    try {
+      await cleanup()
+    } catch (cleanupError) {
+      // Keep the launch failure as the supervisor-facing verdict; cleanup still needs a breadcrumb.
+      console.error('[orcad] startup cleanup failed:', cleanupError)
+    }
     throw error
   }
 }

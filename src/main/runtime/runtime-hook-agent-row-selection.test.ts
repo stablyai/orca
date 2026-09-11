@@ -9,6 +9,7 @@ import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
 const OTHER_PANE_KEY = 'tab-1:22222222-2222-4222-8222-222222222222'
 const HANDLE = 'term_selection'
+const PROVIDER_SESSION = { key: 'session_id' as const, id: 'session-1' }
 
 function row(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpcPayload {
   const now = Date.now()
@@ -108,6 +109,15 @@ describe('selectFreshAgentRowForMobileTab', () => {
       hookRows: [row()]
     })
     expect(selected).toMatchObject({ paneKey: PANE_KEY, payload: { prompt: 'ship it' } })
+  })
+
+  it('carries provider-session identity through a terminal-handle rejoin', () => {
+    const selected = selectFreshAgentRowForMobileTab({
+      paneKey: OTHER_PANE_KEY,
+      terminalHandle: HANDLE,
+      hookRows: [row({ providerSession: PROVIDER_SESSION })]
+    })
+    expect(selected?.providerSession).toEqual(PROVIDER_SESSION)
   })
 
   it('has no fallback when the tab is bound to no terminal', () => {

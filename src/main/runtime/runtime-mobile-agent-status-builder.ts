@@ -47,7 +47,9 @@ export function buildRuntimeMobileAgentStatus(
   }
   const providerSession = hookRow.providerSession
     ? { providerSession: hookRow.providerSession }
-    : {}
+    : retained?.providerSession
+      ? { providerSession: retained.providerSession }
+      : {}
   const leaf = host.getLeaf(tab)
   const trackerOnlyTitle = host.getTrackedTitle(pty?.ptyId ?? leaf?.ptyId ?? null)
   const ptyTitle = pty

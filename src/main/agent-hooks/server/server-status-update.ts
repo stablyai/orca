@@ -230,7 +230,8 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
 
   protected refreshTerminalStatusEvidence(
     previous: EnrichedAgentHookEventPayload,
-    mutationBefore?: EnrichedAgentHookEventPayload
+    mutationBefore?: EnrichedAgentHookEventPayload,
+    emitEnrichedStatus = false
   ): void {
     const connectionClearWatermark = previous.connectionId
       ? this.connectionTimestampWatermarkById.get(previous.connectionId)
@@ -277,6 +278,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       ...(refreshed.worktreeId ? { worktreeId: refreshed.worktreeId } : {}),
       ...(refreshed.terminalHandle ? { terminalHandle: refreshed.terminalHandle } : {})
     })
+    if (emitEnrichedStatus) {
+      this.emitEnrichedStatus(refreshed)
+    }
   }
 
   // Why: every status emit must reach plugins too, so a new early-return path

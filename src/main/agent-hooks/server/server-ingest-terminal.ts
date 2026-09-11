@@ -104,7 +104,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       previous.terminalHandle === (terminalHandle ?? previous.terminalHandle) &&
       terminalStatusPayloadMatchesHook(previous.payload, event.payload, preserveActiveTurnStamp)
     ) {
-      this.refreshTerminalStatusEvidence(previous, mutationBefore)
+      // A handle-authority transfer is a new pane observation even when its payload is a
+      // duplicate; enriched subscribers must capture the replacement pane identity.
+      this.refreshTerminalStatusEvidence(previous, mutationBefore, mutationBefore !== undefined)
       return
     }
     // Why: the OSC 9999 wire payload has no providerSession field at all, so an OSC observation is

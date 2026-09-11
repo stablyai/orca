@@ -183,6 +183,20 @@ describe('the terminal handle a status row is stamped with', () => {
     }
   })
 
+  it('publishes an enriched observation when duplicate OSC transfers pane authority', () => {
+    const server = new AgentHookServer()
+    const enriched = vi.fn()
+    server.subscribeEnrichedStatus(enriched)
+    ingest(server)
+    enriched.mockClear()
+
+    ingest(server, { paneKey: NEW_PANE_KEY, tabId: 'tab-reminted' })
+
+    expect(enriched).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: NEW_PANE_KEY, terminalHandle: HANDLE })
+    )
+  })
+
   it('does not renew freshness from a provider-session-only dismissal remnant', () => {
     const server = new AgentHookServer()
     const freshness = vi.fn()
