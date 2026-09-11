@@ -59,6 +59,7 @@ export async function selectIdleRegionalRehomes(input: {
        AND r.last_heartbeat_at > ? AND rt.last_heartbeat_at > ?
        AND s.cell_id IN (${cleanCells.map(() => '?').join(',')})
        AND target.cell_id IN (${targetCells.map(() => '?').join(',')})
+       -- Reserve the moving host's source activity plus its assignment on the target.
        AND target.reserved_requests + 1 + (
          SELECT COALESCE(SUM(activity.request_units), 0)
          FROM relay_assignment_activity_leases activity

@@ -111,6 +111,31 @@ async function setup() {
 }
 
 describe('constrained idle regional assignment transaction', () => {
+  it.each([10, 11])('reserves source activity plus assignment at target capacity %i', async (capacity) => {
+    const { store, database, safety, request } = await setup()
+    // Model three source activity units and seven units already reserved at the target.
+    await database.query(
+      'UPDATE relay_assignment_activity_leases SET request_units = 3 WHERE user_id = ? AND relay_host_id = ?',
+      [identity.userId, identity.relayHostId]
+    )
+    await database.query("UPDATE relay_cells SET reserved_requests = 4 WHERE cell_id = 'source'")
+    await database.query(
+      "UPDATE relay_cells SET reserved_requests = 7, capacity_requests = ? WHERE cell_id = 'target'",
+      [capacity]
+    )
+    const candidates = await store.selectIdleRegionalRehomeCandidates(safety)
+    expect(candidates).toHaveLength(capacity === 11 ? 1 : 0)
+    expect(await store.commitIdleRegionalRehome(request, safety)).toEqual({
+      outcome: capacity === 11 ? 'committed' : 'deferred'
+    })
+    const [target] = await database.query("SELECT reserved_requests FROM relay_cells WHERE cell_id = 'target'")
+    expect(Number(target!.reserved_requests)).toBe(capacity === 11 ? 11 : 7)
+    expect(await store.resolve(identity)).toMatchObject({
+      cellId: capacity === 11 ? 'target' : 'source',
+      assignmentEpoch: capacity === 11 ? 2 : 1
+    })
+  })
+
   it('progresses past a full page of busy candidates without writing eligibility state', async () => {
     const { store, database, safety } = await setup()
     for (const table of [
