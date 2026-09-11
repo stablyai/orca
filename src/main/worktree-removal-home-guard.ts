@@ -54,16 +54,24 @@ export function containsPath(parentPath: string, childPath: string, pathOps: Pat
 }
 
 /**
- * Whether removing `resolvedWorktreePath` would take a home directory with it.
+ * Whether removing `worktreePath` would take a home directory with it.
  *
  * True when the path is, or contains, the home of the machine that executes the
  * removal, or when its shape is a home directory on the filesystem it names.
+ *
+ * Why the ops are re-derived from `worktreePath` alone: whose home a path is, is
+ * a property of that path and nothing else. The caller's `getPathOps(worktreePath,
+ * repoPath)` lets the *repo* spelling vote, and a WSL project is registered as
+ * `\\wsl.localhost\<distro>\...` while git-in-the-distro answers in Linux paths
+ * (`toWslExecutionSpace`), so the pair picked win32 and every POSIX home shape
+ * went quiet — `/home/<user>` read back as an ordinary deletable directory.
  */
 export function isHomeDirectoryRemovalPath(
-  resolvedWorktreePath: string,
-  pathOps: PathOps,
+  worktreePath: string,
   home: WorktreeRemovalHomeAuthority
 ): boolean {
+  const pathOps = getPathOps(worktreePath)
+  const resolvedWorktreePath = pathOps.resolve(worktreePath)
   const homePath = resolveGuardHomePath(home, pathOps)
   if (!!homePath && containsPath(resolvedWorktreePath, pathOps.resolve(homePath), pathOps)) {
     return true

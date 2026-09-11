@@ -75,7 +75,7 @@ export function isDangerousWorktreeRemovalPath(
     return true
   }
 
-  return isHomeDirectoryRemovalPath(resolvedWorktreePath, pathOps, home)
+  return isHomeDirectoryRemovalPath(worktreePath, home)
 }
 
 export function getRegisteredDeletableWorktree(

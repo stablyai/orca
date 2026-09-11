@@ -8,15 +8,14 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: homedirMock }
 })
 
-const { CLIENT_REMOVAL_HOME, executionHostRemovalHome, getPathOps, isHomeDirectoryRemovalPath } =
+const { CLIENT_REMOVAL_HOME, executionHostRemovalHome, isHomeDirectoryRemovalPath } =
   await import('./worktree-removal-home-guard')
 
 function isHome(
   worktreePath: string,
-  home: Parameters<typeof isHomeDirectoryRemovalPath>[2]
+  home: Parameters<typeof isHomeDirectoryRemovalPath>[1]
 ): boolean {
-  const pathOps = getPathOps(worktreePath)
-  return isHomeDirectoryRemovalPath(pathOps.resolve(worktreePath), pathOps, home)
+  return isHomeDirectoryRemovalPath(worktreePath, home)
 }
 
 function withProcessPlatform<T>(platform: NodeJS.Platform, callback: () => T): T {
