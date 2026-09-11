@@ -2,11 +2,20 @@
 // schema. Reading it back — instead of hand-listing 600 methods — is what keeps the
 // shared catalog and the dispatcher from drifting apart.
 import { execFileSync } from 'node:child_process'
-import { existsSync, globSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  globSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import process from 'node:process'
 import * as esbuild from 'esbuild'
+import { resolveOxcCliInvocation } from './oxc-cli-invocation.mjs'
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..')
 const SHARED_DIR = path.join(REPO_ROOT, 'src', 'shared')
@@ -14,7 +23,16 @@ const CONTRACT_DIR = path.join(SHARED_DIR, 'rpc-contract')
 const RPC_DIR = path.join(REPO_ROOT, 'src', 'main', 'runtime', 'rpc')
 const REGISTRY_ENTRY = path.join(RPC_DIR, 'methods', 'index.ts')
 const OUTPUT_PATH = path.join(CONTRACT_DIR, 'rpc-params-catalog.generated.ts')
-const OXFMT = path.join(REPO_ROOT, 'node_modules', '.bin', 'oxfmt')
+
+// Why mkdirSync first: out/ is gitignored and absent on a fresh checkout, so
+// mkdtempSync threw ENOENT and took `pnpm lint` down with it. Why not os.tmpdir():
+// the bundle keeps its node_modules deps external and oxfmt reads .oxfmtrc.json by
+// walking up, so both scratch files have to sit under the repo to resolve at all.
+function scratchDir(prefix) {
+  const root = path.join(REPO_ROOT, 'out')
+  mkdirSync(root, { recursive: true })
+  return mkdtempSync(path.join(root, prefix))
+}
 
 const posix = (value) => value.split(path.sep).join('/')
 const repoPath = (absolute) => posix(path.relative(REPO_ROOT, absolute))
@@ -44,7 +62,7 @@ function indexableModules() {
 // Why: one bundle keeps the registry and the shared modules on the same module
 // instances, so schema object identity is what maps a method to its export.
 function loadRegistryAndSchemas(modules) {
-  const buildDir = mkdtempSync(path.join(REPO_ROOT, 'out', 'rpc-params-catalog-'))
+  const buildDir = scratchDir('rpc-params-catalog-')
   try {
     const entry = path.join(buildDir, 'entry.ts')
     const importOf = (file) => JSON.stringify(posix(path.relative(buildDir, file)))
@@ -192,11 +210,15 @@ export type RpcParams<Method extends RpcMethodName> =
 // Why: the drift gate compares bytes, so the generator must emit exactly what the
 // formatter would produce or every run would look like drift.
 function formatted(source) {
-  const buildDir = mkdtempSync(path.join(REPO_ROOT, 'out', 'rpc-params-catalog-fmt-'))
+  const buildDir = scratchDir('rpc-params-catalog-fmt-')
   try {
     const file = path.join(buildDir, 'rpc-params-catalog.generated.ts')
     writeFileSync(file, source)
-    execFileSync(OXFMT, ['--write', file], { stdio: 'ignore' })
+    const { command, prefixArgs } = resolveOxcCliInvocation('oxfmt', 'oxfmt', REPO_ROOT)
+    execFileSync(command, [...prefixArgs, '--write', file], {
+      stdio: 'ignore',
+      windowsHide: true
+    })
     return readFileSync(file, 'utf8')
   } finally {
     rmSync(buildDir, { recursive: true, force: true })
