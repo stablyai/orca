@@ -191,7 +191,15 @@ export async function executeWorktreeCreation(
       // return one here.
       const stateAfterActivationFailure = useAppStore.getState()
       const existingTabs = stateAfterActivationFailure.tabsByWorktree[worktree.id] ?? []
-      if (existingTabs.length === 0) {
+      const launchAgent = startupOpt?.launchAgent ?? preparedRequest.agent
+      const verifiedLaunchTabId =
+        result.startupTerminal?.tabId ??
+        (launchAgent ? existingTabs.find((tab) => tab.launchAgent === launchAgent)?.id : undefined)
+      if (verifiedLaunchTabId) {
+        // Startup terminal ids and stamped agent tabs are the only safe primary
+        // ids when activation returned no result.
+        primaryTabId = verifiedLaunchTabId
+      } else if (existingTabs.length === 0) {
         try {
           primaryTabId = ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),

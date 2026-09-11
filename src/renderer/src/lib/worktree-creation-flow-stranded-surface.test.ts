@@ -247,7 +247,7 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
 
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
     expect(ensureAgentStartupInTerminal).toHaveBeenCalledWith(
-      expect.objectContaining({ primaryTabId: null })
+      expect.objectContaining({ primaryTabId: 'agent-tab' })
     )
   })
 
