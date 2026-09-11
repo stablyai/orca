@@ -14,8 +14,39 @@
 export const RELAY_PROTOCOL_VERSION = 1
 
 /**
+ * ## This negotiation is not reachable yet. Do not read it as fixing #13852.
+ *
+ * Measured, not inferred: the deploy path namespaces the relay directory by the CLIENT'S OWN build
+ * hash — `remoteInstallDirName` is `relay-<fullVersion>` — and the daemon socket lives inside that
+ * directory (`ssh-relay-deploy.ts`, `--connect --sock-path ~/.orca-remote/relay-<ownVersion>/…`;
+ * the short-socket fallback derives its segment from the same version dir). Every
+ * `runConnectHandshake` caller takes its path from that one deploy result. So a bridge can only
+ * ever meet a daemon of its own build, `msg.version === launchVersion` short-circuits first, and
+ * `relayProtocolOfferAdmits` never decides anything on any live path. The stranded incumbent this
+ * exists for sits in `relay-<otherVersion>/`, which nothing dials.
+ *
+ * What ships today is therefore three log lines: `describeRelayProtocolVersion` in
+ * `relay-handshake.ts`. `MIN_RELAY_PROTOCOL_VERSION` and the `minProtocolVersion` wire field have
+ * no live reader at all.
+ *
+ * Keep it — the mechanism is correct and hostile-input-safe, and it is the part that has to exist
+ * first. Making it live needs two more changes, both of which must land together:
+ *   1. route the bridge to the incumbent's socket rather than to its own version directory;
+ *   2. stop `validateGrant` (`ssh-pty-consumer-session.ts`) refusing on `serverBuildId`. Its
+ *      premise, "client and relay ship in one build", is still TRUE today and becomes false the
+ *      moment (1) lands — it is a second gate that would refuse what the handshake just admitted.
+ *
+ * Until both land, a change here cannot be validated by any end-to-end test, only by the
+ * handshake's own unit suite.
+ */
+
+/**
  * Oldest peer protocol this build can still speak. Raising it strands every relay below the new
  * floor for good, so it moves only when serving a version is actually impossible.
+ *
+ * No live reader — see the note above. It is serialized onto every handshake and reply so that the
+ * field exists on the wire before any peer needs it (Rule 1, docs/reference/remote-wire-
+ * compatibility.md); an older peer ignoring it today is the point.
  */
 export const MIN_RELAY_PROTOCOL_VERSION = 1
 
