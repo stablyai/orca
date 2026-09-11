@@ -10,6 +10,10 @@ import {
   resolveRuntimeHookLiveAgentRow,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
+import {
+  excludeRetiredPaneEvidenceRows,
+  type RetiredPaneEvidence
+} from './runtime-retired-pane-evidence'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import {
@@ -22,6 +26,8 @@ type RuntimeMobileAgentStatusHost = {
   getPaneKey(tab: RuntimeMobileSessionTerminalTab): string
   getLeaf(tab: RuntimeMobileSessionTerminalTab): RuntimeLeafRecord | null
   getTrackedTitle(ptyId: string | null): string | null
+  /** Evidence a proven replacement retired for this pane; null when the pane replaced nothing. */
+  getRetiredPaneEvidence(paneKey: string): RetiredPaneEvidence | null
 }
 
 export function buildRuntimeMobileAgentStatus(
@@ -37,7 +43,15 @@ export function buildRuntimeMobileAgentStatus(
   // provider session — only the hook payload does, and headless serve has no
   // renderer to publish `tab.agentStatus`. Without it mobile native chat has no
   // transcript to address and sits on the empty state forever.
-  const hookRow = selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
+  // Why also the retirement filter: a row the host itself retired with a proven
+  // replacement is the predecessor's identity, and the successor handle would
+  // otherwise stamp it as this pane's agent. The row stays in the store for resume.
+  const hookRow = selectRuntimeHookAgentRowForPane(
+    excludeRetiredPaneEvidenceRows(
+      getHookRowsForPane(paneKey),
+      host.getRetiredPaneEvidence(paneKey)
+    )
+  )
   // Why: the hook row is evidence in its own right. Returning early on a missing
   // PTY status/retained row put this check ahead of the only headless carrier, so
   // an agent that reported its session but never emitted a recognized title got no

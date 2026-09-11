@@ -107,6 +107,17 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     if (!title) {
       return
     }
+    // Why the record guard, not only the tracker's seed guard: a cold-restore
+    // title belongs to the predecessor. Once an admitted live title exists,
+    // seeding its PTY/leaf records would reinstate retired evidence.
+    if (this.ptysById.get(ptyId)?.lastAgentStatusObservedLive === true) {
+      return
+    }
+    // A proven replacement already retired this pane's predecessor identity; the restored
+    // scrollback the seed is derived from still contains it, so it is not this process's title.
+    if (this.hasRetiredPtyRestoreSeed(ptyId)) {
+      return
+    }
     // Why: a relaunched main starts its per-PTY title tracker cold — without
     // this seed it misses the parked working→idle completion and never arms
     // the stale-title timer for a persisted 'working' title. Seeding no-ops

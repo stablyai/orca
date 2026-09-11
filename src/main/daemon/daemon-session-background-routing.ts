@@ -24,12 +24,12 @@ export class DaemonSessionBackgroundRouting {
     if (!changed) {
       return {}
     }
-    if (background) {
-      this.options.transientFactRelay.seedSessionScanState(
-        sessionId,
-        this.options.host.getPartialEscapeTailAnsi(sessionId)
-      )
-    }
+    const scanState = this.options.host.getStreamScanState(sessionId)
+    this.options.transientFactRelay.seedSessionScanState(
+      sessionId,
+      scanState.partialEscapeTailAnsi,
+      scanState.incarnationId
+    )
     const streamClientId = this.options.attachments.clientIdForSession(sessionId)
     if (!streamClientId) {
       return {}
@@ -39,13 +39,16 @@ export class DaemonSessionBackgroundRouting {
       ? ''
       : mode2031State.pendingSubscribe
         ? mode2031State.tail
-        : this.options.host.getPartialEscapeTailAnsi(sessionId)
+        : scanState.partialEscapeTailAnsi
     this.options.streamDataBatcher.enqueueControlEvent(streamClientId, sessionId, {
       type: 'event',
       event: 'sessionBackgroundMarker',
       sessionId,
       payload: {
         background,
+        ...(scanState.incarnationId === undefined
+          ? {}
+          : { incarnationId: scanState.incarnationId }),
         ...(scanSeedAnsi.length > 0 ? { scanSeedAnsi } : {}),
         ...(mode2031State.pendingSubscribe ? { mode2031PendingSubscribe: true as const } : {})
       }

@@ -1,6 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './orca-runtime-invalidate-all-handles-for-pty'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PreparedPtyObservationAdmission } from './runtime-pty-observation-capsule'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
@@ -23,7 +24,8 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         launchAgent: TuiAgent
       }
     },
-    isWsl?: boolean
+    isWsl?: boolean,
+    observationAdmission?: PreparedPtyObservationAdmission | null
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
     const existingPty = this.ptysById.get(ptyId)
@@ -131,6 +133,21 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       if (currentFence && (pendingReplacementMatches || !binding?.incarnationId)) {
         currentFence.pendingRegistration = false
       }
+    }
+    // Why here: registration's non-publication mutation is complete, so exactly
+    // one observation candidate may be promoted — before the publication tail
+    // below stamps this incarnation with whatever title/status it can read.
+    const replacedIncarnationId = observationAdmission
+      ? this.acceptPtyObservationAdmission(observationAdmission)
+      : this.admitRegisteredPtyObservationSource(ptyId, binding?.incarnationId)
+    if (replacedIncarnationId !== null && binding && paneKey) {
+      // Why before the tail: binding persistence/CAS and final registration are done, and the
+      // publication below reads the pane's durable title/hook evidence.
+      this.retireReplacedPtyDurableIdentity(
+        ptyId,
+        { worktreeId, tabId: binding.tabId, leafId: binding.leafId },
+        binding.incarnationId
+      )
     }
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).

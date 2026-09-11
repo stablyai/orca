@@ -18,7 +18,9 @@ type MockSubprocess = SubprocessHandle & {
 
 type DaemonLifecyclePrivate = {
   connections: { clients: Map<string, ConnectedDaemonClient> }
-  host: { getPartialEscapeTailAnsi(sessionId: string): string }
+  host: {
+    getStreamScanState(sessionId: string): { partialEscapeTailAnsi: string; incarnationId?: string }
+  }
   requestRouter: {
     route(clientId: string, request: DaemonRequest): Promise<unknown>
   }
@@ -128,7 +130,7 @@ describe('daemon stream droppability lifecycle', () => {
     const { daemon } = harness
     addClient(daemon)
     daemon.attachments.clientIdBySessionId.set('session-toggle', 'client-1')
-    vi.spyOn(daemon.host, 'getPartialEscapeTailAnsi').mockReturnValue('')
+    vi.spyOn(daemon.host, 'getStreamScanState').mockReturnValue({ partialEscapeTailAnsi: '' })
     const lifecycle: string[] = []
     vi.spyOn(daemon.streamDataBatcher, 'refreshSessionDroppability').mockImplementation(
       (sessionId) => {
@@ -177,7 +179,7 @@ describe('daemon stream droppability lifecycle', () => {
     daemon.attachments.clientIdBySessionId.set('session-toggle', 'client-1')
     daemon.transientFactRelay.setSessionBackground('session-toggle', true)
     daemon.transientFactRelay.onSessionData('session-toggle', '\x1b[?2031h\x1b[?')
-    vi.spyOn(daemon.host, 'getPartialEscapeTailAnsi').mockReturnValue('\x1b[?')
+    vi.spyOn(daemon.host, 'getStreamScanState').mockReturnValue({ partialEscapeTailAnsi: '\x1b[?' })
     const enqueue = vi.spyOn(daemon.streamDataBatcher, 'enqueueControlEvent')
 
     await daemon.requestRouter.route('client-1', {

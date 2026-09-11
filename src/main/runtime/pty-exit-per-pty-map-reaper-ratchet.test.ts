@@ -15,14 +15,47 @@
  */
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { makePaneKey } from '../../shared/stable-pane-id'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { MAX_RETIRED_PTY_PANES } from './runtime-pty-replacement-durable-retirement'
+import { TEST_WORKTREE_ID } from './orca-runtime-test-fixtures.spec'
 
 const repoRoot = resolve(__dirname, '../../..')
 const REAPER_MODULE = 'src/main/runtime/orca-runtime-on-pty-exit.ts'
+const PTY_REPLACEMENT_RETIREMENT_MODULE =
+  'src/main/runtime/runtime-pty-replacement-durable-retirement.ts'
 
 /** `fooByPtyId`, plus the older `ById` spellings that are still keyed by pty id. */
-const PTY_KEYED_FIELD = /(?:ByPtyId|Pty[A-Za-z]*ById)$/i
+const PTY_KEYED_FIELD = /(?:ByPtyId|Pty[A-Za-z]*ById|ByPaneKey)$/i
+
+/**
+ * Collections keyed by pane rather than by PTY: the pane outlives the PTY whose exit creates the
+ * entry, so the reaper above cannot own them. Each entry names the module that declares it and the
+ * release a successor consumes it through; a `boundedBy` record must also carry that bound in real
+ * source, because a pane that is closed instead of respawned has no later event to release it. The
+ * release itself is exercised against a real runtime below, not trusted from the names.
+ */
+const PANE_KEYED_RELEASED: Record<
+  string,
+  { module: string; releasedBy: string; boundedBy?: string }
+> = {
+  retiredPtyIncarnationByPaneKey: {
+    module: PTY_REPLACEMENT_RETIREMENT_MODULE,
+    // Consumed by the successor registration that persisted the pane's new binding.
+    releasedBy: 'this.retiredPtyIncarnationByPaneKey.delete(paneKey)',
+    boundedBy: 'this.retiredPtyIncarnationByPaneKey.size > MAX_RETIRED_PTY_PANES'
+  },
+  retiredPaneEvidenceByPaneKey: {
+    module: PTY_REPLACEMENT_RETIREMENT_MODULE,
+    // Released with the successor PTY the record is scoped to, by the reaper's own helper.
+    releasedBy: 'this.retiredPaneEvidenceByPaneKey.delete(paneKey)',
+    // One record per pane whose live successor is registered, so the successor's own disposal
+    // is the bound.
+    boundedBy: 'evidence.successorPtyId === ptyId'
+  }
+}
 
 /** Cleared by a helper the reaper calls; the helper is verified below, not trusted. */
 const CLEARED_BY_REAPER_HELPER: Record<string, { helper: string; module: string }> = {
@@ -41,6 +74,18 @@ const CLEARED_BY_REAPER_HELPER: Record<string, { helper: string; module: string 
   agentPromptPermissionSequenceByPtyId: {
     helper: 'advancePtyLifecycleGeneration',
     module: 'src/main/runtime/orca-runtime-record-agent-prompt-lifecycle-state.ts'
+  },
+  ptyObservationCapsulesByPtyId: {
+    helper: 'disposePtyObservationState',
+    module: 'src/main/runtime/orca-runtime-pty-observation-admission.ts'
+  },
+  admittedPtyObservationSourceByPtyId: {
+    helper: 'disposePtyObservationState',
+    module: 'src/main/runtime/orca-runtime-pty-observation-admission.ts'
+  },
+  retiredRestoreSeedIncarnationByPtyId: {
+    helper: 'disposePtyObservationState',
+    module: 'src/main/runtime/orca-runtime-pty-observation-admission.ts'
   }
 }
 
@@ -55,7 +100,14 @@ const SELF_CLEARING_IN_FLIGHT = new Set([
   'interactiveWaitProbesByPtyId',
   'orchestrationPointerAdmissionByPtyId',
   'messageDeliveryFlightsByPtyId',
-  'parkedMessageRedeliveriesByPtyId'
+  'parkedMessageRedeliveriesByPtyId',
+  // One entry per in-flight spawn, settled by that spawn's own accept/cancel path.
+  // Reaping it on exit would cancel a replacement spawn's admission mid-flight.
+  // Its by-token sibling (pendingPtyObservationAdmissionsByToken) is keyed by
+  // operation, not PTY, so it is outside this scan; it is deleted on every settle
+  // path — accept, cancel, and a contested transfer whose canonical id already has
+  // an owner (pty-observation-admission.spec.ts asserts that last one).
+  'pendingPtyObservationAdmissionTokensByPtyId'
 ])
 
 /** Outlives the exit on purpose; each is reaped by its own later teardown. */
@@ -109,6 +161,7 @@ describe('onPtyExit per-PTY map reaper coverage', () => {
       (field) =>
         !reaperSource.includes(`this.${field}.delete(ptyId)`) &&
         !(field in CLEARED_BY_REAPER_HELPER) &&
+        !(field in PANE_KEYED_RELEASED) &&
         !SELF_CLEARING_IN_FLIGHT.has(field) &&
         !(field in INTENTIONALLY_RETAINED)
     )
@@ -122,10 +175,30 @@ describe('onPtyExit per-PTY map reaper coverage', () => {
     const known = new Set(fields)
     const stale = [
       ...Object.keys(CLEARED_BY_REAPER_HELPER),
+      ...Object.keys(PANE_KEYED_RELEASED),
       ...SELF_CLEARING_IN_FLIGHT,
       ...Object.keys(INTENTIONALLY_RETAINED)
     ].filter((field) => !known.has(field))
     expect(stale, 'classified fields that no longer exist').toEqual([])
+  })
+
+  it('verifies each pane-keyed release against the module that declares it', () => {
+    for (const [field, { module, releasedBy, boundedBy }] of Object.entries(PANE_KEYED_RELEASED)) {
+      const source = readModule(module)
+      expect(source, `${module} must declare ${field}`).toContain(`${field} = new Map`)
+      expect(source, `${field} must be released by ${module}`).toContain(releasedBy)
+      if (boundedBy) {
+        expect(source, `${field} must carry its declared bound in ${module}`).toContain(boundedBy)
+      }
+    }
+  })
+
+  it('leaves no pane-keyed field unclassified and none double-counted', () => {
+    // The two buckets must stay disjoint: a pane-keyed field can never be reaped by `ptyId`.
+    for (const field of Object.keys(PANE_KEYED_RELEASED)) {
+      expect(field.endsWith('ByPaneKey'), `${field} is not a pane-keyed spelling`).toBe(true)
+      expect(reaperSource.includes(`this.${field}.delete(ptyId)`)).toBe(false)
+    }
   })
 
   it('verifies each helper is called by the reaper and deletes the field it is credited with', () => {
@@ -137,6 +210,102 @@ describe('onPtyExit per-PTY map reaper coverage', () => {
         `this.${field}.delete(ptyId)`
       )
     }
+  })
+})
+
+describe('pane-keyed replacement record retention (leak regression)', () => {
+  type RetirementMaps = {
+    retiredPtyIncarnationByPaneKey: Map<string, { ptyId: string }>
+    retiredPaneEvidenceByPaneKey: Map<string, { successorPtyId: string }>
+  }
+
+  const PTY = 'pty-retirement-reaped'
+  const OLD_INCARNATION = 'incarnation-predecessor'
+  const NEW_INCARNATION = 'incarnation-successor'
+  const TAB_ID = 'tab-retirement-reaped'
+  const LEAF_ID = '11111111-2222-4333-8444-555555555555'
+  const SURFACE = { worktreeId: TEST_WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_ID }
+
+  /** The identity-only shape the hook server retains on this retirement path. */
+  function retiredRow(): AgentStatusIpcPayload {
+    return {
+      paneKey: makePaneKey(TAB_ID, LEAF_ID),
+      state: 'idle',
+      prompt: '',
+      agentType: 'pi',
+      connectionId: null,
+      receivedAt: 1,
+      stateStartedAt: 1
+    } as unknown as AgentStatusIpcPayload
+  }
+
+  /** The durable known-old of a pane whose own exit removed the binding, and its retired row. */
+  function retiredPaneRuntime(): OrcaRuntimeService {
+    const runtime = new OrcaRuntimeService(null, undefined, {
+      getAgentProviderSessionRowsForPane: () => [retiredRow()],
+      reconcileAgentStatusForEndedProcess: vi.fn()
+    })
+    runtime['retireMobileSessionSurfacesForPty'](PTY, OLD_INCARNATION, [
+      { worktreeId: SURFACE.worktreeId, parentTabId: SURFACE.tabId, leafId: SURFACE.leafId }
+    ])
+    return runtime
+  }
+
+  function retirementMaps(runtime: OrcaRuntimeService): RetirementMaps {
+    return runtime as unknown as RetirementMaps
+  }
+
+  function registerSuccessor(runtime: OrcaRuntimeService): void {
+    const token = runtime.beginPtyObservationAdmission(PTY)
+    const prepared = runtime.preparePtyObservationAdmission(token, PTY, NEW_INCARNATION, SURFACE)
+    runtime.registerPty(
+      PTY,
+      TEST_WORKTREE_ID,
+      null,
+      { tabId: TAB_ID, leafId: LEAF_ID, incarnationId: NEW_INCARNATION },
+      undefined,
+      prepared
+    )
+  }
+
+  it('consumes the pane known-old once the successor registration persisted the binding', () => {
+    const runtime = retiredPaneRuntime()
+    expect(retirementMaps(runtime).retiredPtyIncarnationByPaneKey.size).toBe(1)
+
+    registerSuccessor(runtime)
+
+    // The record existed only until the successor's own durable binding could carry known-old.
+    expect(retirementMaps(runtime).retiredPtyIncarnationByPaneKey.size).toBe(0)
+  })
+
+  it('releases the retired row evidence with the successor PTY that proved the replacement', () => {
+    const runtime = retiredPaneRuntime()
+
+    registerSuccessor(runtime)
+    expect(retirementMaps(runtime).retiredPaneEvidenceByPaneKey.size).toBe(1)
+
+    runtime.onPtyExit(PTY, 0)
+
+    // The successor's own teardown is the only thing that can release it: no later event will.
+    expect(retirementMaps(runtime).retiredPaneEvidenceByPaneKey.size).toBe(0)
+  })
+
+  it('bounds the panes whose successor never arrives', () => {
+    const runtime = retiredPaneRuntime()
+
+    for (let index = 0; index < MAX_RETIRED_PTY_PANES + 20; index += 1) {
+      runtime['retireMobileSessionSurfacesForPty'](`pty-${index}`, `incarnation-${index}`, [
+        { worktreeId: TEST_WORKTREE_ID, parentTabId: `tab-${index}`, leafId: LEAF_ID }
+      ])
+    }
+
+    expect(retirementMaps(runtime).retiredPtyIncarnationByPaneKey.size).toBe(MAX_RETIRED_PTY_PANES)
+    // The first pane's record is the oldest, so the bound evicted it first.
+    expect(
+      [...retirementMaps(runtime).retiredPtyIncarnationByPaneKey.values()].some(
+        (entry) => entry.ptyId === PTY
+      )
+    ).toBe(false)
   })
 })
 

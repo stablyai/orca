@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithPreparePtyExecutionContext } from './orca-runtime-prepare-pty-execution-context'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TerminalOutputSourceRange } from '../../shared/terminal-output-source-range'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { appendNormalizedToTailBuffer } from './terminal-tail-buffer'
@@ -23,13 +24,42 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     sequenceChars = data.length,
     transformed = false,
     captureModelReceipt?: (completion: Promise<void>) => void,
-    sourceRanges?: readonly TerminalOutputSourceRange[]
+    sourceRanges?: readonly TerminalOutputSourceRange[],
+    incarnationId?: PtyIncarnationId
   ): number {
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
     for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
       tracker.scan(data)
+    }
+    // Source selection happens before any parsing: an unadmitted known source
+    // parses into its own capsule while raw delivery, query ownership, model
+    // receipts and sequence accounting continue unchanged.
+    const observationCapsule = this.resolvePtyObservationCapsule(ptyId, incarnationId)
+    if (
+      observationCapsule !== null ||
+      this.shouldWithholdUnadmittedPtyObservation(ptyId, incarnationId)
+    ) {
+      const forwardQueryRepliesForCandidate = this.shouldAnswerQueriesForLiveChunk(ptyId)
+      this.maybeHydrateHeadlessFromRenderer(ptyId)
+      captureModelReceipt?.(
+        this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryRepliesForCandidate)
+      )
+      if (observationCapsule) {
+        this.observePtyAutomaticData(observationCapsule, data)
+      }
+      this.terminalStreamConsumers.publish(ptyId, data, () => ({
+        seq: outputSequence,
+        rawLength: sequenceChars,
+        ...(transformed ? { transformed: true } : {}),
+        ...(sourceRanges && sourceRanges.length > 0 ? { sourceRanges } : {})
+      }))
+      return outputSequence
+    }
+    if (incarnationId !== undefined && this.canSeedAdmittedPtyObservationSource(ptyId)) {
+      // No pending admission means nothing to protect: the live stream is this PTY's accepted source.
+      this.noteAdmittedPtyObservationSource(ptyId, incarnationId)
     }
     const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
     const cwd = osc7Metadata.cwd

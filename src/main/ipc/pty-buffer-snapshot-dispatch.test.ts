@@ -369,7 +369,9 @@ describe('registerPtyHandlers', () => {
         opts: { scrollbackRows: 5000 }
       })
 
-      expect(runtime.notePtyDataGap).toHaveBeenCalledWith('daemon-pty', 512)
+      // The third argument is the observation source: this thinning fact carried no
+      // emitting incarnation, so the gap stays on the conservative legacy path.
+      expect(runtime.notePtyDataGap).toHaveBeenCalledWith('daemon-pty', 512, undefined)
       expect(provider.getBufferSnapshot).toHaveBeenCalledWith('daemon-pty', {
         scrollbackRows: 5000
       })

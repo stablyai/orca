@@ -303,6 +303,8 @@ const INVENTORY: readonly InventoryGroup[] = [
       ['src/main/runtime/orca-runtime-get-unpersisted-tracked-title-for-pty.ts', 2],
       ['src/main/runtime/orca-runtime-maybe-hydrate-headless-from-renderer.ts', 2],
       ['src/main/runtime/orca-runtime-record-agent-prompt-lifecycle-state.ts', 2],
+      ['src/main/runtime/runtime-pty-observation-capsule.ts', 2],
+      ['src/main/runtime/runtime-pty-observation-promotion.ts', 2],
       ['src/main/runtime/runtime-terminal-agent-status-query.ts', 3],
       ['src/main/runtime/runtime-worktree-status-projection.ts', 4],
       ['src/main/runtime/terminal-wait-detection.ts', 2],

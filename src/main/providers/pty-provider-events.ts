@@ -6,6 +6,8 @@ export type PtyDataEvent = {
   sequenceChars?: number
   transformed?: boolean
   seq?: number
+  /** Observed source; does not admit or replace the provider binding. */
+  incarnationId?: string
 }
 
 /** Notification-bearing fact a thinning transport detected while it held
@@ -17,7 +19,7 @@ export type PtyTransientFact =
   | { kind: '2031-subscribe' }
   | { kind: '2031-unsubscribe' }
 
-export type PtyBackgroundStreamEvent =
+export type PtyBackgroundStreamEvent = { incarnationId?: string } & (
   | {
       id: string
       kind: 'backgroundMarker'
@@ -27,3 +29,4 @@ export type PtyBackgroundStreamEvent =
     }
   | { id: string; kind: 'dataGap'; droppedChars: number; sequenceChars?: number }
   | { id: string; kind: 'transientFact'; fact: PtyTransientFact }
+)

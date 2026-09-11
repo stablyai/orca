@@ -173,9 +173,9 @@ export class DaemonTerminalAdmission {
     sessionId: () => string
   ): CreateOrAttachOptions['streamClient'] {
     return {
-      onData: (data, rawLength = data.length, transformed = false, seq) => {
+      onData: (data, rawLength = data.length, transformed = false, seq, incarnationId) => {
         const routedSessionId = sessionId()
-        this.options.transientFactRelay.onSessionData(routedSessionId, data)
+        this.options.transientFactRelay.onSessionData(routedSessionId, data, incarnationId)
         const lastInputAt = this.options.attachments.lastInputAt(routedSessionId)
         const isInteractiveOutput =
           data.length <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS &&
@@ -186,7 +186,8 @@ export class DaemonTerminalAdmission {
           flushMaxChars: DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS,
           rawLength,
           transformed,
-          seq
+          seq,
+          incarnationId
         })
       },
       onExit: (code, incarnationId, cause) => {
@@ -206,7 +207,7 @@ export class DaemonTerminalAdmission {
         recordDaemonStreamBacklogEvent('sessionExit', {
           sessionIdSuffix: routedSessionId.slice(-10)
         })
-        this.options.transientFactRelay.onSessionExit(routedSessionId)
+        this.options.transientFactRelay.onSessionExit(routedSessionId, incarnationId)
         this.options.streamDataBatcher.refreshSessionDroppability(routedSessionId)
         this.options.attachments.release(routedSessionId)
         this.options.reevaluateIdleShutdown()

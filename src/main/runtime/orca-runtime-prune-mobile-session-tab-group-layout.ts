@@ -93,6 +93,7 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getLiveBrowserTabs: (worktreeId) => this.getLiveBrowserTabsByPageId(worktreeId),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
+      getRetiredPaneEvidence: (paneKey) => this.getRetiredPaneEvidence(paneKey),
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),
@@ -121,7 +122,8 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getPaneKey: (candidate) => this.getMobileTerminalPaneKey(candidate),
       getLeaf: (candidate) =>
         this.leaves.get(this.getLeafKey(candidate.parentTabId, candidate.leafId)) ?? null,
-      getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId)
+      getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
+      getRetiredPaneEvidence: (paneKey) => this.getRetiredPaneEvidence(paneKey)
     })
   }
 

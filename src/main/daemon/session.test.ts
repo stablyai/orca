@@ -269,9 +269,9 @@ describe('Session', () => {
 
       expect(subprocess.written).toEqual(['\x1b]10;rgb:2e2e/3434/3434\x1b\\'])
       expect(onData.mock.calls).toEqual([
-        ['', query.length, true, query.length],
-        ['', echo.length, true, query.length + echo.length],
-        ['prompt']
+        ['', query.length, true, query.length, session.incarnationId],
+        ['', echo.length, true, query.length + echo.length, session.incarnationId],
+        ['prompt', undefined, undefined, undefined, session.incarnationId]
       ])
       expect(session.takePendingOutput(false)?.records).toEqual([
         { kind: 'output', data: 'prompt' }
@@ -323,8 +323,8 @@ describe('Session', () => {
       expect(subprocess.written).toEqual([reply])
       subprocess.simulateData(projectedEcho)
       expect(legacyOnData.mock.calls).toEqual([
-        [query],
-        ['', projectedEcho.length, true, query.length + projectedEcho.length]
+        [query, undefined, undefined, undefined, session.incarnationId],
+        ['', projectedEcho.length, true, query.length + projectedEcho.length, session.incarnationId]
       ])
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
       session.dispose()
@@ -346,7 +346,10 @@ describe('Session', () => {
 
       expect(fixedReplyProducers).toEqual([])
       expect(subprocess.written).toEqual([])
-      expect(fixedOnData.mock.calls).toEqual([['', query.length, true, query.length], ['prompt']])
+      expect(fixedOnData.mock.calls).toEqual([
+        ['', query.length, true, query.length, session.incarnationId],
+        ['prompt', undefined, undefined, undefined, session.incarnationId]
+      ])
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
     })
   })
@@ -398,7 +401,13 @@ describe('Session', () => {
 
       subprocess.simulateData('\x1b[0c')
 
-      expect(onData).toHaveBeenCalledWith('', '\x1b[0c'.length, true, '\x1b[0c'.length)
+      expect(onData).toHaveBeenCalledWith(
+        '',
+        '\x1b[0c'.length,
+        true,
+        '\x1b[0c'.length,
+        session.incarnationId
+      )
       expect(session.takePendingOutput(false)?.records).toEqual([])
       expect(session.getSnapshot()?.outputSequence).toBe('\x1b[0c'.length)
       subprocess.simulateData('\x1b]777;orca-shell-ready\x07prompt')
@@ -837,7 +846,13 @@ describe('Session', () => {
       subprocess.simulateData('late output')
       subprocess.simulateExit(23)
 
-      expect(onData).toHaveBeenCalledWith('late output')
+      expect(onData).toHaveBeenCalledWith(
+        'late output',
+        undefined,
+        undefined,
+        undefined,
+        session.incarnationId
+      )
       expect(onExit).toHaveBeenCalledTimes(1)
       expect(onExit).toHaveBeenCalledWith(23, session.incarnationId, {
         kind: 'exited',

@@ -97,3 +97,76 @@ describe('BackgroundTransientFactRelay', () => {
     }
   })
 })
+
+describe('BackgroundTransientFactRelay source generations', () => {
+  it.each([
+    ['old', 'new'],
+    ['known', undefined],
+    [undefined, 'known']
+  ])('does not complete predecessor OSC with a successor BEL (%s → %s)', (old, successor) => {
+    const emit = vi.fn()
+    const relay = new BackgroundTransientFactRelay(emit)
+    relay.setSessionBackground('s', true)
+    relay.onSessionData('s', '\x1b]133;D;7', old)
+    relay.onSessionData('s', '\x07', successor)
+    expect(emit.mock.calls).toEqual([['s', { kind: 'bell' }, successor]])
+    relay.onSessionData('s', '\x1b]133;D;', successor)
+    relay.onSessionData('s', '0\x07', successor)
+    expect(emit.mock.calls.at(-1)).toEqual([
+      's',
+      { kind: 'command-finished', exitCode: 0 },
+      successor
+    ])
+    relay.dispose()
+  })
+
+  it('keeps same-incarnation parser carry over an attach/background handoff, but not a replacement seed', () => {
+    const emit = vi.fn()
+    const relay = new BackgroundTransientFactRelay(emit)
+    relay.onSessionData('s', '\x1b[?2031h\x1b[?', 'old')
+    relay.setSessionBackground('s', true)
+    relay.seedSessionScanState('s', '\x1b[?', 'old')
+    relay.onSessionData('s', '25h', 'old')
+    expect(emit.mock.calls).toEqual([['s', { kind: '2031-subscribe' }, 'old']])
+    relay.onSessionData('s', '\x1b[?2031h\x1b[?', 'old')
+    relay.seedSessionScanState('s', '', 'new')
+    expect(relay.getMode2031ReplyScanState('s')).toEqual({ tail: '', pendingSubscribe: false })
+    relay.onSessionData('s', '25h', 'new')
+    expect(emit).toHaveBeenCalledTimes(1)
+    relay.dispose()
+  })
+
+  it('keeps late facts with their observed source and bounds parser lifetime to one source per session', () => {
+    vi.useFakeTimers()
+    try {
+      const emit = vi.fn()
+      const relay = new BackgroundTransientFactRelay(emit)
+      relay.setSessionBackground('s', true)
+      for (let i = 0; i < 200; i++) {
+        relay.onSessionData('s', '\x1b]133;D;0\x07\x1b[?', String(i))
+      }
+      relay.onSessionExit('s', 'old')
+      expect(relay.isBackgrounded('s')).toBe(true)
+      relay.onSessionData('s', '\x1b]133;D;7\x07', 'old')
+      expect(emit.mock.calls.at(-1)).toEqual([
+        's',
+        { kind: 'command-finished', exitCode: 7 },
+        'old'
+      ])
+      expect(relay['sourceIncarnations'].size).toBe(1)
+      expect(relay['trackersBySessionId'].size).toBe(1)
+      expect(relay['mode2031ReplyScanStateBySessionId'].size).toBeLessThanOrEqual(1)
+      expect(vi.getTimerCount()).toBe(0)
+      relay.onSessionExit('s', 'old')
+      expect(relay['sourceIncarnations'].size).toBe(0)
+      expect(relay['trackersBySessionId'].size).toBe(0)
+      expect(relay['mode2031ReplyScanStateBySessionId'].size).toBe(0)
+      relay.onSessionData('another', '\x1b[?', 'one')
+      relay.dispose()
+      expect(relay['sourceIncarnations'].size).toBe(0)
+      expect(relay['mode2031ReplyScanStateBySessionId'].size).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})

@@ -27,7 +27,13 @@ type TerminalSummary = {
   handle: string
   ptyId: string
   incarnationId: string
+  title?: string | null
   agentIdentity?: string
+}
+
+type HostSessionTab = {
+  title?: string
+  agentStatus?: { agentType?: string }
 }
 
 async function verifyReleaseBuild(app: ElectronApplication) {
@@ -251,6 +257,9 @@ test('retained remote pane reconciles replacement shell and preserves a survivin
       .toBe(true)
     await installRemoteTerminalGeometryProbe(page, webTabId)
     evidence.before = await inspectPane(page, webTabId)
+    expect((evidence.before as Awaited<ReturnType<typeof inspectPane>>)?.title).toMatch(
+      /^(?:π|Pi) - replacement-test$/
+    )
     evidence.mouseBefore = await probeMouse(page, webTabId)
     expect(
       (evidence.mouseBefore as Awaited<ReturnType<typeof probeMouse>>).reports.length
@@ -333,6 +342,15 @@ test('retained remote pane reconciles replacement shell and preserves a survivin
     evidence.hostSessionAfter = await hostCall('session.tabs.list', {
       worktree: `id:${worktreeId}`
     })
+    // The host owns the published identity; the client mirror can only hide what the host sent,
+    // so the predecessor's label/agent must be absent where it is produced.
+    expect.soft(replacement.title ?? '').not.toMatch(/^(?:π|Pi) - replacement-test$/)
+    expect.soft(replacement.agentIdentity).toBeUndefined()
+    const hostSessionTabs = (evidence.hostSessionAfter as { tabs?: HostSessionTab[] }).tabs ?? []
+    expect
+      .soft(hostSessionTabs.some((tab) => /^(?:π|Pi) - replacement-test$/.test(tab.title ?? '')))
+      .toBe(false)
+    expect.soft(hostSessionTabs.some((tab) => tab.agentStatus?.agentType === 'pi')).toBe(false)
     evidence.hostScreen = await hostCall('terminal.read', {
       terminal: replacement.handle,
       screen: true
@@ -357,9 +375,10 @@ test('retained remote pane reconciles replacement shell and preserves a survivin
           return Boolean(
             pane &&
             pane.mouseMode === 'none' &&
+            !/^(?:π|Pi) - replacement-test$/.test(pane.title ?? '') &&
             pane.cols === pane.proposedGrid?.cols &&
             pane.rows === pane.proposedGrid?.rows &&
-            !pane.agentStates.some((entry) => entry.agentType === 'pi' && entry.state === 'working')
+            !pane.agentStates.some((entry) => entry.agentType === 'pi')
           )
         },
         { timeout: 10_000, message: 'Replacement retained agent modes/status after settling' }
@@ -379,11 +398,8 @@ test('retained remote pane reconciles replacement shell and preserves a survivin
     expect
       .soft((evidence.mouseAfter as Awaited<ReturnType<typeof probeMouse>>).reports)
       .toHaveLength(0)
-    expect
-      .soft(
-        after?.agentStates.some((entry) => entry.agentType === 'pi' && entry.state === 'working')
-      )
-      .toBe(false)
+    expect.soft(after?.title).not.toMatch(/^(?:π|Pi) - replacement-test$/)
+    expect.soft(after?.agentStates.some((entry) => entry.agentType === 'pi')).toBe(false)
     expect.soft(after?.cols).toBe(after?.proposedGrid?.cols)
     expect.soft(after?.rows).toBe(after?.proposedGrid?.rows)
     const hostScreen = evidence.hostScreen as { terminal: { tail: string[]; source?: string } }

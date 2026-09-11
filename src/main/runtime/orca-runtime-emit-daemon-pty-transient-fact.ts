@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from './orca-runtime-schedule-wait-blocked-check'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyTransientFact } from '../providers/types'
 import type {
   TerminalSideEffectBatch,
@@ -12,7 +13,16 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
    *  between chunks, so recordTerminalSideEffectFact emits it immediately. */
-  emitDaemonPtyTransientFact(ptyId: string, fact: PtyTransientFact): void {
+  emitDaemonPtyTransientFact(
+    ptyId: string,
+    fact: PtyTransientFact,
+    incarnationId?: PtyIncarnationId
+  ): void {
+    const capsule = this.resolvePtyObservationCapsule(ptyId, incarnationId)
+    if (capsule) {
+      this.observePtyObservationTransientFact(capsule, fact)
+      return
+    }
     switch (fact.kind) {
       case 'bell':
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
@@ -40,7 +50,23 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
    *  carry so a half-open escape from before the gap cannot corrupt what
    *  follows, and drop the mobile headless mirror — it rebuilds from the
    *  delivered tail / snapshot seeds instead of parsing a gapped stream. */
-  notePtyDataGap(ptyId: string, droppedChars = 0): void {
+  notePtyDataGap(ptyId: string, droppedChars = 0, incarnationId?: PtyIncarnationId): void {
+    const capsule = this.resolvePtyObservationCapsule(ptyId, incarnationId)
+    if (capsule) {
+      // Source-local: the candidate's discontinuity resets its own carries and its
+      // sequence weight, and never drops the accepted source's parser or mirror.
+      if (droppedChars > 0) {
+        this.ptyOutputSequenceById.set(
+          ptyId,
+          (this.ptyOutputSequenceById.get(ptyId) ?? 0) + droppedChars
+        )
+      }
+      this.resetPtyObservationParseCarry(capsule)
+      // The candidate's bytes DID reach the shared headless mirror, so it is now
+      // discontinuous; the accepted source's tail carries stay untouched.
+      this.disposeHeadlessTerminal(ptyId)
+      return
+    }
     if (droppedChars > 0) {
       // Why: the daemon snapshot's seq counts bytes its monitoring stream
       // dropped. Advancing without parsing preserves that absolute domain so
