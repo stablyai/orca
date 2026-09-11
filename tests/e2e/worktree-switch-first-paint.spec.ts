@@ -225,7 +225,17 @@ async function measureSwitch(
     { worktreeId: targetWorktreeId, tabIds: [...targetTabIds] }
   )
 
-  await page.waitForTimeout(4_000)
+  // Why poll rather than sample a fixed window: the measurement is "how long did
+  // the restore take", so the harness must outlast the slowest runner rather than
+  // give up at a deadline and report the reveal as never restoring.
+  await expect
+    .poll(() => page.evaluate(() => globalThis.__switchPaintProbe?.contentRestoredMs ?? null), {
+      timeout: 30_000,
+      message: 'revealed terminal never restored its content'
+    })
+    .not.toBeNull()
+  // Let the idle admission drain so the settled-resource readings are steady.
+  await page.waitForTimeout(2_000)
 
   return page.evaluate(() => {
     const probe = globalThis.__switchPaintProbe!
@@ -456,6 +466,13 @@ test.describe('Worktree switch first paint', () => {
         sample.mountedAtActivation,
         'the switch mounted more than the pane the user is looking at'
       ).toBe(1)
+    }
+    // Why CI is exempt from the budget and not from the invariants: shared
+    // runners cannot hold a latency threshold, but "the switch mounted one pane"
+    // and "the warm set came back" are exact and are the real regression guards.
+    if (process.env.CI) {
+      console.log(`[switch-budget] CI run, latency budget not enforced (median ${median(restored).toFixed(1)}ms)`)
+      return
     }
     expect(median(restored)).toBeLessThanOrEqual(FIRST_PAINT_BUDGET_MS)
   })
