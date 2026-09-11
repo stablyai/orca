@@ -48,7 +48,7 @@ const SWITCH_SAMPLE_COUNT = Number(process.env.ORCA_SWITCH_ROUNDS ?? '5')
 type SwitchSample = {
   activationMs: number | null
   paneMountedMs: number | null
-  contentPaintedMs: number | null
+  contentRestoredMs: number | null
   maxFrameGapMs: number
   longTaskTotalMs: number
   worstLongTaskMs: number
@@ -62,7 +62,7 @@ type SwitchPaintProbe = {
   t0: number
   activationMs: number | null
   paneMountedMs: number | null
-  contentPaintedMs: number | null
+  contentRestoredMs: number | null
   frames: number[]
   longTasks: number[]
   mountedAtActivation: number
@@ -146,7 +146,7 @@ async function measureSwitch(
         t0: performance.now(),
         activationMs: null as number | null,
         paneMountedMs: null as number | null,
-        contentPaintedMs: null as number | null,
+        contentRestoredMs: null as number | null,
         frames: [] as number[],
         longTasks: [] as number[],
         mountedAtActivation: 0,
@@ -192,9 +192,11 @@ async function measureSwitch(
         if (probe.paneMountedMs === null && pane?.container?.isConnected) {
           probe.paneMountedMs = now
         }
-        if (probe.contentPaintedMs === null && pane) {
-          // Painted = the revealed viewport actually carries restored text, not
-          // an empty grid. A blank reveal fails this until the replay lands.
+        if (probe.contentRestoredMs === null && pane) {
+          // Restored = the revealed viewport carries real text rather than an
+          // empty grid. Read on a frame callback, so this is the frame the
+          // content became renderable — one frame ahead of the pixels, and not
+          // a pixel assertion. Both arms are measured identically.
           const buffer = pane.terminal.buffer.active
           let filledRows = 0
           for (let row = 0; row < pane.terminal.rows; row += 1) {
@@ -204,7 +206,7 @@ async function measureSwitch(
             }
           }
           if (filledRows >= Math.min(5, pane.terminal.rows)) {
-            probe.contentPaintedMs = now
+            probe.contentRestoredMs = now
           }
         }
         requestAnimationFrame(tick)
@@ -238,12 +240,14 @@ async function measureSwitch(
     let settledWebglContexts = 0
     const managers = window.__paneManagers
     for (const manager of managers?.values() ?? []) {
-      for (const pane of manager.getPanes?.() ?? []) {
-        settledPanes += 1
-        if ((pane as { webglAddon?: unknown }).webglAddon) {
-          settledWebglContexts += 1
-        }
-      }
+      settledPanes += (manager.getPanes?.() ?? []).length
+      // Why diagnostics and not `pane.webglAddon`: getPanes() hands back a public
+      // projection that has no webglAddon field, so reading it is always falsy.
+      const diagnostics =
+        (
+          manager as { getRenderingDiagnostics?: () => { hasWebgl?: boolean }[] }
+        ).getRenderingDiagnostics?.() ?? []
+      settledWebglContexts += diagnostics.filter((entry) => entry.hasWebgl === true).length
     }
     return {
       settledPaneManagers: managers?.size ?? 0,
@@ -251,7 +255,7 @@ async function measureSwitch(
       settledWebglContexts,
       activationMs: probe.activationMs,
       paneMountedMs: probe.paneMountedMs,
-      contentPaintedMs: probe.contentPaintedMs,
+      contentRestoredMs: probe.contentRestoredMs,
       maxFrameGapMs: +maxGap.toFixed(1),
       longTaskTotalMs: +probe.longTasks.reduce((total, value) => total + value, 0).toFixed(1),
       worstLongTaskMs: +probe.longTasks
@@ -267,7 +271,7 @@ function report(label: string, sample: SwitchSample): string {
     `${label}:`,
     `  activation        ${sample.activationMs?.toFixed(1) ?? 'n/a'}ms`,
     `  pane mounted      ${sample.paneMountedMs?.toFixed(1) ?? 'n/a'}ms`,
-    `  content painted   ${sample.contentPaintedMs?.toFixed(1) ?? 'never'}ms`,
+    `  content restored  ${sample.contentRestoredMs?.toFixed(1) ?? 'never'}ms`,
     `  max frame gap     ${sample.maxFrameGapMs}ms`,
     `  long tasks        total=${sample.longTaskTotalMs}ms worst=${sample.worstLongTaskMs}ms`,
     `  panes at switch   ${sample.mountedAtActivation}/${TABS_PER_WORKTREE}`,
@@ -293,12 +297,46 @@ async function addFillerWorktrees(
   const paths = Array.from({ length: FILLER_WORKTREE_COUNT }, (_, index) =>
     path.join(parent, `filler-${index}`)
   )
-  for (const worktreePath of paths) {
-    execFileSync('git', ['worktree', 'add', '--detach', worktreePath, 'HEAD'], {
-      cwd: testRepoPath,
-      stdio: 'ignore'
-    })
+  const removeAll = (): void => {
+    for (const worktreePath of paths) {
+      try {
+        execFileSync('git', ['worktree', 'remove', '--force', worktreePath], {
+          cwd: testRepoPath,
+          stdio: 'ignore'
+        })
+      } catch {
+        /* best effort */
+      }
+    }
+    rmSync(parent, { recursive: true, force: true })
   }
+  // Why clean up before rethrowing: testRepoPath is worker-scoped and reused by
+  // later specs, so a half-built fixture would leak worktrees into them.
+  try {
+    for (const worktreePath of paths) {
+      execFileSync('git', ['worktree', 'add', '--detach', worktreePath, 'HEAD'], {
+        cwd: testRepoPath,
+        stdio: 'ignore'
+      })
+    }
+  } catch (error) {
+    removeAll()
+    throw error
+  }
+  try {
+    return await registerFillerWorktrees(page, testRepoPath, paths, removeAll)
+  } catch (error) {
+    removeAll()
+    throw error
+  }
+}
+
+async function registerFillerWorktrees(
+  page: Page,
+  testRepoPath: string,
+  paths: readonly string[],
+  cleanup: () => void
+): Promise<{ ids: string[]; cleanup: () => void }> {
   const repoId = await page.evaluate(
     (repoPath) =>
       window.__store!.getState().repos.find((repo) => repo.path === repoPath)?.id ?? null,
@@ -307,7 +345,7 @@ async function addFillerWorktrees(
   if (!repoId) {
     throw new Error(`seeded repo not registered: ${testRepoPath}`)
   }
-  await loadWorktreesUntilPathsPresent(page, repoId, paths)
+  await loadWorktreesUntilPathsPresent(page, repoId, [...paths])
   const ids = await page.evaluate(
     ({ id, wanted }) =>
       (window.__store!.getState().worktreesByRepo[id] ?? [])
@@ -315,22 +353,7 @@ async function addFillerWorktrees(
         .map((worktree) => worktree.id),
     { id: repoId, wanted: paths }
   )
-  return {
-    ids,
-    cleanup: () => {
-      for (const worktreePath of paths) {
-        try {
-          execFileSync('git', ['worktree', 'remove', '--force', worktreePath], {
-            cwd: testRepoPath,
-            stdio: 'ignore'
-          })
-        } catch {
-          /* best effort */
-        }
-      }
-      rmSync(parent, { recursive: true, force: true })
-    }
-  }
+  return { ids, cleanup }
 }
 
 function median(values: readonly number[]): number {
@@ -354,65 +377,67 @@ test.describe('Worktree switch first paint', () => {
     const [primaryId, targetId] = worktreeIds
     const filler = await addFillerWorktrees(orcaPage, testRepoPath)
 
-    const targetTabIds = await ensureTabs(orcaPage, targetId, 'WTB')
-
-    // Give the filler worktrees persisted tabs without mounting them, so the
-    // store carries a field-scale tab population (the profile that motivated
-    // this budget has 846 tabs across 449 worktrees).
-    await orcaPage.evaluate(
-      ({ ids, perWorktree }) => {
-        const state = window.__store!.getState()
-        for (const id of ids) {
-          const existing = state.tabsByWorktree[id] ?? []
-          for (let index = existing.length; index < perWorktree; index += 1) {
-            state.createTab(id)
-          }
-        }
-      },
-      { ids: filler.ids, perWorktree: 2 }
-    )
-
     const samples: SwitchSample[] = []
     const lines: string[] = []
-    for (let round = 0; round < SWITCH_SAMPLE_COUNT; round += 1) {
-      // Leave the primary active and let the session persist before reloading:
-      // startup restores the persisted active worktree, so this is what makes
-      // the target come back with tabs in the session and no pane ever mounted
-      // — the state every switch lands in once the worktree count exceeds the
-      // hot-retain working set.
-      await switchToWorktree(orcaPage, primaryId)
-      await ensureTerminalVisible(orcaPage)
-      await orcaPage.waitForTimeout(2_500)
-      await orcaPage.reload()
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      await ensureTerminalVisible(orcaPage)
-      await orcaPage.waitForTimeout(2_500)
-      const unmounted = await waitForUnmountedTabs(orcaPage, targetTabIds)
-      expect(unmounted, 'target worktree was already mounted before the switch').toBe(true)
+    try {
+      const targetTabIds = await ensureTabs(orcaPage, targetId, 'WTB')
 
-      const sample = await measureSwitch(orcaPage, targetId, targetTabIds)
-      samples.push(sample)
-      lines.push(report(`round ${round + 1} (target unmounted=${unmounted})`, sample))
-
-      // The half of the contract that keeps the speed-up free: the hidden tabs
-      // the switch skipped still end up mounted, so the next tab switch is as
-      // warm as it was before the reveal stopped mounting them up front.
-      const warmedTabIds = await waitForMountedTabs(orcaPage, targetTabIds)
-      expect(warmedTabIds, 'deferred tabs never joined the warm working set').toEqual(
-        [...targetTabIds].sort()
+      // Give the filler worktrees persisted tabs without mounting them, so the
+      // store carries a field-scale tab population (the profile that motivated
+      // this budget has 846 tabs across 449 worktrees).
+      await orcaPage.evaluate(
+        ({ ids, perWorktree }) => {
+          const state = window.__store!.getState()
+          for (const id of ids) {
+            const existing = state.tabsByWorktree[id] ?? []
+            for (let index = existing.length; index < perWorktree; index += 1) {
+              state.createTab(id)
+            }
+          }
+        },
+        { ids: filler.ids, perWorktree: 2 }
       )
+
+      for (let round = 0; round < SWITCH_SAMPLE_COUNT; round += 1) {
+        // Leave the primary active and let the session persist before reloading:
+        // startup restores the persisted active worktree, so this is what makes
+        // the target come back with tabs in the session and no pane ever mounted
+        // — the state every switch lands in once the worktree count exceeds the
+        // hot-retain working set.
+        await switchToWorktree(orcaPage, primaryId)
+        await ensureTerminalVisible(orcaPage)
+        await orcaPage.waitForTimeout(2_500)
+        await orcaPage.reload()
+        await waitForSessionReady(orcaPage)
+        await waitForActiveWorktree(orcaPage)
+        await ensureTerminalVisible(orcaPage)
+        await orcaPage.waitForTimeout(2_500)
+        const unmounted = await waitForUnmountedTabs(orcaPage, targetTabIds)
+        expect(unmounted, 'target worktree was already mounted before the switch').toBe(true)
+
+        const sample = await measureSwitch(orcaPage, targetId, targetTabIds)
+        samples.push(sample)
+        lines.push(report(`round ${round + 1} (target unmounted=${unmounted})`, sample))
+
+        // The half of the contract that keeps the speed-up free: the hidden tabs
+        // the switch skipped still end up mounted, so the next tab switch is as
+        // warm as it was before the reveal stopped mounting them up front.
+        const warmedTabIds = await waitForMountedTabs(orcaPage, targetTabIds)
+        expect(warmedTabIds, 'deferred tabs never joined the warm working set').toEqual(
+          [...targetTabIds].sort()
+        )
+      }
+    } finally {
+      filler.cleanup()
     }
 
-    filler.cleanup()
-
-    const painted = samples
-      .map((sample) => sample.contentPaintedMs)
+    const restored = samples
+      .map((sample) => sample.contentRestoredMs)
       .filter((value): value is number => value !== null)
-    expect(painted.length, 'revealed terminal never painted restored content').toBe(samples.length)
+    expect(restored.length, 'revealed terminal never restored its content').toBe(samples.length)
     const summary = [
       `first activation -> ${TABS_PER_WORKTREE}-tab worktree, ${samples.length} rounds`,
-      `  content painted: median=${median(painted).toFixed(1)}ms samples=${painted
+      `  content restored: median=${median(restored).toFixed(1)}ms samples=${restored
         .map((value) => value.toFixed(0))
         .join(', ')}ms`,
       `  activation:      median=${median(
@@ -432,6 +457,6 @@ test.describe('Worktree switch first paint', () => {
         'the switch mounted more than the pane the user is looking at'
       ).toBe(1)
     }
-    expect(median(painted)).toBeLessThanOrEqual(FIRST_PAINT_BUDGET_MS)
+    expect(median(restored)).toBeLessThanOrEqual(FIRST_PAINT_BUDGET_MS)
   })
 })

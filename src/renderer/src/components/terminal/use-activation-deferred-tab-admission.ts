@@ -29,24 +29,31 @@ export function useActivationDeferredTabAdmission(
     renderedActiveWorktreeId,
     setBackgroundMountRevision
   } = controller
-  // Why the verdict is taken once per activation: draining the set must not walk
-  // an over-cap worktree down into eligibility and warm up tabs the pre-deferral
-  // behaviour would have left unmounted.
-  const admissionRef = useRef<{ worktreeId: string; eligible: boolean } | null>(null)
+  // Why the high-water mark rather than the live count: draining must not walk an
+  // over-cap worktree down into eligibility and warm up tabs the pre-deferral
+  // behaviour left unmounted — but a verdict latched on one reading would never
+  // recover either. At launch the active worktree is restored before hydration
+  // opens the startup gate, so the first reading is an empty set; only re-reading
+  // on growth lets that worktree's real plan be judged when it finally lands.
+  const admissionRef = useRef<{ worktreeId: string; maxDeferredTabCount: number } | null>(null)
 
   useEffect(() => {
     const worktreeId = renderedActiveWorktreeId
     if (!worktreeId) {
       return
     }
-    const deferredTabIds = activationDeferredMountTabIdsByWorktreeRef.current.get(worktreeId)
-    if (admissionRef.current?.worktreeId !== worktreeId) {
-      admissionRef.current = {
-        worktreeId,
-        eligible: isActivationAdmissionEligible(deferredTabIds?.size ?? 0)
-      }
+    const deferredTabCount =
+      activationDeferredMountTabIdsByWorktreeRef.current.get(worktreeId)?.size ?? 0
+    if (deferredTabCount === 0) {
+      return
     }
-    if (!admissionRef.current.eligible || !deferredTabIds?.size) {
+    const previous = admissionRef.current
+    const maxDeferredTabCount =
+      previous?.worktreeId === worktreeId
+        ? Math.max(previous.maxDeferredTabCount, deferredTabCount)
+        : deferredTabCount
+    admissionRef.current = { worktreeId, maxDeferredTabCount }
+    if (!isActivationAdmissionEligible(maxDeferredTabCount)) {
       return
     }
     return scheduleActivationDeferredAdmission(() => {
