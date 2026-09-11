@@ -200,7 +200,9 @@ describe('the terminal handle a status row is stamped with', () => {
   it('publishes only the remint observation for a Claude child-only row', () => {
     const server = new AgentHookServer()
     const enriched = vi.fn()
+    const mutations = vi.fn()
     server.subscribeEnrichedStatus(enriched)
+    server.subscribeStatusRowMutations(mutations)
     const payload = { state: 'working' as const, prompt: 'ship it', agentType: 'claude' as const }
     ingest(server, { payload })
     const row = server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY) as
@@ -211,12 +213,19 @@ describe('the terminal handle a status row is stamped with', () => {
     }
     row.claudeLeadBoundaryChildOnly = true
     enriched.mockClear()
+    mutations.mockClear()
 
     ingest(server, { payload })
     expect(enriched).not.toHaveBeenCalled()
+    expect(mutations).not.toHaveBeenCalled()
 
     ingest(server, { paneKey: NEW_PANE_KEY, tabId: 'tab-reminted', payload })
     expect(enriched).toHaveBeenCalledOnce()
+    expect(mutations).toHaveBeenCalledOnce()
+    expect(mutations).toHaveBeenCalledWith({
+      before: { paneKey: PANE_KEY, worktreeId: 'worktree', terminalHandle: HANDLE },
+      after: { paneKey: NEW_PANE_KEY, worktreeId: 'worktree', terminalHandle: HANDLE }
+    })
     expect(enriched).toHaveBeenCalledWith(
       expect.objectContaining({ paneKey: NEW_PANE_KEY, terminalHandle: HANDLE })
     )

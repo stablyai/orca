@@ -87,8 +87,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.payload.agentType === 'claude'
     ) {
       // Why: OSC has no child identity or lead boundary, so it cannot replace a persisted child-only proof before the lifecycle hook arrives.
-      this.commitStatusRowMutation(mutationBefore, previous)
       if (mutationBefore !== undefined) {
+        this.commitStatusRowMutation(mutationBefore, previous)
         this.emitEnrichedStatus(previous)
       }
       return
