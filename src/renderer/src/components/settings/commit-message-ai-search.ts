@@ -4,6 +4,11 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getCommitMessageAiPaneSearchEntries = createLocalizedCatalog(() => [
   {
+    title: translate('settings.piConfiguredModelReset.title', 'Saved Pi model choices'),
+    description: translate('settings.piConfiguredModelReset.action', 'Use Pi’s configured model'),
+    keywords: ['pi', 'model', 'copilot', 'reset']
+  },
+  {
     title: translate(
       'auto.components.settings.commit.message.ai.search.24dbdfca78',
       'Show Source Control AI actions'

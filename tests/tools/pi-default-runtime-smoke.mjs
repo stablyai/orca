@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -88,7 +88,9 @@ try {
     join(dir, 'settings.json'),
     JSON.stringify({ defaultProvider: 'orca-proof', defaultModel: 'local' })
   )
-  const settings = getDefaultSettings(scratch)
+  const settings = process.argv[3]
+    ? JSON.parse(await readFile(resolve(process.argv[3]), 'utf8')).settings
+    : getDefaultSettings(scratch)
   settings.defaultTuiAgent = 'pi'
   settings.sourceControlAi.agentId = 'pi'
   settings.commitMessageAi.agentId = 'pi'
