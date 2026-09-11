@@ -6,7 +6,10 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
 import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent-session-wire'
-import { dispatchWriteFailureReason } from './structured-agent-session-dispatch-rejection'
+import {
+  dispatchWriteFailureReason,
+  DISPATCH_REJECTED_QUEUE_FULL
+} from './structured-agent-session-dispatch-rejection'
 import { disposeStructuredAgentSessionSendResult } from './structured-agent-session-send-disposition'
 import {
   createStructuredAgentSessionOutboxEntry,
@@ -72,5 +75,13 @@ describe('what a rejection shows the user', () => {
 
   it('claims no cause when the rejection names none', () => {
     expect(notice(null)).toBe('Message was not sent.')
+  })
+
+  it('never puts a local-capacity marker on screen either', () => {
+    // Neither the provider's words nor a transport failure: a refusal we minted
+    // ourselves. It has no user-facing meaning, so it gets copy rather than the token.
+    const shown = notice(DISPATCH_REJECTED_QUEUE_FULL)
+    expect(shown).not.toContain('queue is full')
+    expect(shown).toBe('Orca could not send your message — Retry to send it again.')
   })
 })

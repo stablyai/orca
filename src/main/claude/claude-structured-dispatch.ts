@@ -16,7 +16,10 @@ import {
   claudeDispatchMessageContent
 } from './claude-structured-dispatch-content'
 import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
-import { dispatchWriteFailureReason } from '../../shared/structured-agent-session-dispatch-rejection'
+import {
+  DISPATCH_REJECTED_QUEUE_FULL,
+  dispatchWriteFailureReason
+} from '../../shared/structured-agent-session-dispatch-rejection'
 import { claudeUserMessageWasProvablyUnwritten } from './claude-agent-sdk-user-message-queue'
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
@@ -261,7 +264,7 @@ export async function dispatchClaudeTurn(
     return { state: 'rejected', reason: (error as Error).message }
   }
   if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
-    return { state: 'rejected', reason: 'claude structured dispatch queue is full' }
+    return { state: 'rejected', reason: DISPATCH_REJECTED_QUEUE_FULL }
   }
   const dispatchSequence = ++session.dispatchSequence
   // Read the sent content, not the journal blocks: only the mapped trailing prompt decides

@@ -8,7 +8,10 @@
 // entry's state.
 
 import type { AgentSessionMutationResult, AgentSessionSendResult } from './agent-session-wire'
-import { dispatchRejectionWasTransportWriteFailure } from './structured-agent-session-dispatch-rejection'
+import {
+  dispatchRejectionReasonIsInternal,
+  dispatchRejectionWasTransportWriteFailure
+} from './structured-agent-session-dispatch-rejection'
 import {
   classifyStructuredAgentSessionSendFailure,
   requeueStructuredAgentSessionSendRefusal,
@@ -85,8 +88,13 @@ function rejectionNotice(reason: string | null): string {
   if (reason === null) {
     return 'Message was not sent.'
   }
-  return dispatchRejectionWasTransportWriteFailure(reason)
-    ? "Couldn't reach the agent. Your message was not sent — Retry to send it again."
+  if (dispatchRejectionWasTransportWriteFailure(reason)) {
+    return "Couldn't reach the agent. Your message was not sent — Retry to send it again."
+  }
+  // Any other reason we minted is an internal cause with no user-facing meaning;
+  // only a provider's own explanation is worth reading verbatim.
+  return dispatchRejectionReasonIsInternal(reason)
+    ? 'Orca could not send your message — Retry to send it again.'
     : reason
 }
 

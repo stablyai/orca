@@ -20,6 +20,9 @@
 
 export const DISPATCH_REJECTED_WRITE_FAILED = 'provider_write_failed'
 
+/** Local admission refused the frame before any transport was involved. */
+export const DISPATCH_REJECTED_QUEUE_FULL = 'claude structured dispatch queue is full'
+
 export function dispatchWriteFailureReason(error: unknown): string {
   const detail = error instanceof Error ? error.message : String(error)
   return `${DISPATCH_REJECTED_WRITE_FAILED}: ${detail}`
@@ -32,5 +35,16 @@ export function dispatchRejectionWasTransportWriteFailure(
   return (
     reason === DISPATCH_REJECTED_WRITE_FAILED ||
     reason?.startsWith(`${DISPATCH_REJECTED_WRITE_FAILED}: `) === true
+  )
+}
+
+/**
+ * True when the reason is ours rather than the provider's, so it must not be
+ * shown verbatim. A content rejection carries the provider's own explanation and
+ * is the only kind a person should read.
+ */
+export function dispatchRejectionReasonIsInternal(reason: string | null | undefined): boolean {
+  return (
+    dispatchRejectionWasTransportWriteFailure(reason) || reason === DISPATCH_REJECTED_QUEUE_FULL
   )
 }

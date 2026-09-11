@@ -281,6 +281,39 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_2')?.providerItemId).toBe('claude:session-1:user-1')
   })
 
+  it('does not give a newer identical echo to a legacy unknown write failure', () => {
+    const body = userText('same message')
+    const state = fold([
+      { ...submission, body, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        ...submission,
+        clientMessageId: 'cm_2',
+        body,
+        payloadFingerprint: sendFingerprint(body),
+        ...base(3)
+      },
+      { kind: 'item', itemId: 'claude:session-1:user-1', revision: 1, body, ...base(4) }
+    ])
+
+    // A journal written before a refused write became `rejected` still holds it as
+    // `unknown`. Replay must not let that row claim the echo of a later send that
+    // genuinely landed, which would attach the delivery to the wrong message.
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_2')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1'
+    })
+    expect(state.receipts.has('cm_1')).toBe(false)
+  })
+
   it('does not accept a submission from a stale provider item behind its tombstone', () => {
     const body = userText('hi')
     const providerItemId = 'claude:session-1:user-1'
