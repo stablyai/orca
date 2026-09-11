@@ -10,8 +10,8 @@ import {
   readUtf8CodePointAt
 } from '../../../../shared/utf8-byte-limits'
 
-// Why: cap document size in UTF-16 code units (`.length`) since re-parse cost scales with length — the per-commit throwaway TipTap safety re-parse (~50-67ms here) must stay under the 300ms serialize debounce so it can't stall the main thread on slow/SSH hosts.
-const RECONCILE_SIZE_CAP_CODE_UNITS = 50_000
+// Why: cap document size in UTF-16 code units (`.length`) since the per-commit throwaway TipTap safety re-parse scales superlinearly with it — 17ms at 50k, 44ms at 100k, 143ms at 200k on an Apple Silicon laptop — and must stay well inside the 300ms serialize debounce on slow/SSH hosts, which are slower by an unmeasured factor.
+const RECONCILE_SIZE_CAP_CODE_UNITS = 100_000
 
 // Why: dmp's default 1s search freezes the renderer on replacement-heavy paths; a coarse timed-out diff is safe since the round-trip proof below rejects bad placements.
 const RECONCILE_DIFF_TIMEOUT_SECONDS = 0.01
