@@ -4,10 +4,10 @@ export async function diffTextSelectionPoints(code: Locator, text: string) {
   return code.evaluate(async (code, text) => {
     // Why re-queried: if the upgrade replaces the container rather than its rows, a cached
     // reference walks a detached tree and never matches again.
-    const contentEl = () => code.querySelector('[data-content]')!
+    const contentEl = () => code.querySelector('[data-content]')
     const collect = () => {
       const found: Text[] = []
-      for (const row of contentEl().querySelectorAll('[data-line]')) {
+      for (const row of contentEl()?.querySelectorAll('[data-line]') ?? []) {
         if (found.length > 0 && !found.at(-1)!.data.endsWith('\n')) {
           // Pierre renders line breaks as separate rows rather than text nodes.
           found.push(document.createTextNode('\n'))
@@ -82,7 +82,11 @@ export async function diffTextSelectionPoints(code: Locator, text: string) {
     if (!settled) {
       // Why named: otherwise this surfaces below as a clipping error reporting a zero-width
       // glyph, which misattributes a detached node to pane geometry.
-      throw new Error('Selection glyphs never settled: the rendered nodes kept being replaced')
+      throw new Error(
+        `Selection glyphs never settled for ${JSON.stringify(text)}: either the highlight upgrade ` +
+          'kept replacing the rows, or the text stopped matching (row unmounted by scrolling, or ' +
+          'an endpoint landed on a synthetic newline node, which is never attached).'
+      )
     }
     const viewport = code.getBoundingClientRect()
     const left = Math.min(first.getBoundingClientRect().left, last.getBoundingClientRect().left)
@@ -100,15 +104,23 @@ export async function diffTextSelectionPoints(code: Locator, text: string) {
       0
     )
     const inset = Math.max(24, gutterRight > 0 ? gutterRight - viewport.left + 8 : 0)
+    // No await after this point: nothing here scrolls smoothly (no `scroll-behavior: smooth` in
+    // our CSS or Pierre's), and getBoundingClientRect forces sync layout. A frame yield here would
+    // reopen the window for the highlight upgrade to detach the glyphs just before measuring.
     code.scrollLeft += left - viewport.left - Math.max(inset, (viewport.width - (right - left)) / 2)
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     const point = (range: Range, end: boolean) => {
       const rect = range.getBoundingClientRect()
+      if (rect.width === 0 || !code.contains(range.startContainer)) {
+        throw new Error(
+          'Selection glyph was detached before measurement: the highlight upgrade replaced the ' +
+            'row nodes. This is not a geometry problem.'
+        )
+      }
       const x = end ? rect.right - 0.5 : rect.left + 0.5
       const y = rect.top + rect.height / 2
       const root = code.getRootNode() as ShadowRoot
       const hit = root.elementFromPoint(x, y)
-      if (!hit || !contentEl().contains(hit) || document.elementFromPoint(x, y) !== root.host) {
+      if (!hit || !contentEl()?.contains(hit) || document.elementFromPoint(x, y) !== root.host) {
         // Why the detail: this only reproduces on displays narrower than a dev machine, so the
         // numbers have to come back from the runner rather than be guessed at locally.
         const pane = code.getBoundingClientRect()
@@ -122,7 +134,7 @@ export async function diffTextSelectionPoints(code: Locator, text: string) {
             scrollLeft: Math.round(code.scrollLeft),
             window: { width: window.innerWidth, height: window.innerHeight },
             hit: hit ? hit.tagName : null,
-            hitInContent: hit ? contentEl().contains(hit) : false
+            hitInContent: hit ? (contentEl()?.contains(hit) ?? false) : false
           })}`
         )
       }
