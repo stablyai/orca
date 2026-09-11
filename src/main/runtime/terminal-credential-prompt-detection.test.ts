@@ -100,6 +100,42 @@ const LIVE_CREDENTIAL_SURFACES: readonly (readonly [string, string[]])[] = [
       'https://claude.ai/oauth/authorize?code=true',
       'Paste code here if prompted >'
     ]
+  ],
+  // The dialog this guard was written for (F19749-1). A numbered menu of credential actions
+  // ending in a bare `>` caret: no terminator anywhere, so only the row-final noun carries it.
+  [
+    'antigravity sign-in menu over ready chrome',
+    [
+      'Antigravity CLI 1.0.3',
+      'user@example.com (Antigravity Business)',
+      'Sign in to continue',
+      '~/orca/workspaces/orca/agy-dispatch-issue',
+      '1. Open browser',
+      '2. Paste an API key',
+      '>'
+    ]
+  ],
+  ['vendor-qualified indented api-key ask', ['  Enter your Antigravity API key:']],
+  // sudo translates its prompt but never its `[sudo]` tag, and the only thing it asks for is a
+  // password. An English-only rule here misses every non-English desktop.
+  ['sudo password on a German system', ['[sudo] Passwort für neil:']],
+  ['sudo password on a zh-TW system', ['[sudo] neil 的密碼：']],
+  ['sudo retry notice', ['[sudo] Sorry, try again.', '[sudo] password for neil:']],
+  // The common api-key ask names the env var it fills, so the noun carries an underscore.
+  [
+    'aider env-var api-key ask',
+    ['Aider v0.86.1', 'Model: gpt-6 with diff edit format', '', 'Enter your OPENAI_API_KEY:']
+  ],
+  ['bare env-var api-key label', ['ANTHROPIC_API_KEY:']],
+  ['waiting on the user to sign in', ['Waiting for you to sign in…']],
+  [
+    'crush api-key onboarding dialog',
+    [
+      '╭─ Crush ──────────╮',
+      '│  Connect your model provider           │',
+      '│  Paste your API key here:              │',
+      '╰────────────╯'
+    ]
   ]
 ]
 
@@ -385,6 +421,85 @@ const LEGITIMATE_AGENT_SCREENS: readonly (readonly [string, string[]])[] = [
       '  password:',
       '› Ask Codex to do anything'
     ]
+  ],
+  // Records, not requests: the auth phrase is quoted inside a line whose subject is something
+  // else, and nothing under it repaints a composer caret.
+  [
+    'git log ending on a sign-in commit subject',
+    [
+      '$ git log --oneline -3',
+      'a1b2c3d fix(auth): drop the stale authorization header',
+      'd4e5f6a feat(auth): sign in with GitHub'
+    ]
+  ],
+  ['single sign-in commit subject', ['d4e5f6a feat(auth): sign in with GitHub']],
+  [
+    'changelog entry for a sign-in feature',
+    ['## Unreleased', '- feat(auth): sign in with Apple support']
+  ],
+  [
+    'checklist item for a sign-in button',
+    ['Plan:', '  [x] add session cookie', '  [ ] add sign in with Google button']
+  ],
+  [
+    'error summary quoting an auth failure',
+    ['• Fixed the deploy step', '• Root cause: authentication required from the vercel CLI']
+  ],
+  [
+    'rg hits ending the screen on a sign-in match',
+    [
+      '$ rg "sign in with" src/',
+      'src/Login.tsx:31:  <button>Sign in with GitHub</button>',
+      'src/Login.tsx:44:  // authorization code exchange happens here'
+    ]
+  ],
+  // "waiting for you to ..." is how every agent narrates waiting on a human, auth or not.
+  [
+    'agent waiting on a diff review after login work',
+    ['• Updated the login page copy', 'Waiting for you to review the diff']
+  ],
+  [
+    'agent waiting on a branch choice after authorization work',
+    ['• Rebased the authorization middleware', 'Waiting for you to choose a base branch']
+  ],
+  // Localized narration: the wording it embeds is English, the punctuation is not.
+  [
+    'zh-TW narration of a failed deploy on the bottom row',
+    ['$ pnpm deploy', '錯誤：authentication required，請先執行 gh auth login']
+  ],
+  [
+    'german narration of login work on the bottom row',
+    [
+      '• Anmeldung überarbeitet',
+      '• Der Nutzer kann sich jetzt per sign in with Google authentifizieren'
+    ]
+  ],
+  // The sibling dialogs of the Antigravity sign-in menu, same chrome and same bare `>` caret.
+  [
+    'antigravity model picker',
+    [
+      'Antigravity CLI 1.0.3',
+      'user@example.com (Antigravity Business)',
+      'Select a model',
+      '~/orca/workspaces/orca/agy-dispatch-issue',
+      '1. Claude Sonnet 4.5',
+      '2. GPT-5.1',
+      '>'
+    ]
+  ],
+  [
+    'antigravity privacy notice',
+    [
+      'Antigravity CLI 1.0.3',
+      'We collect usage data to improve the product',
+      '1. Accept',
+      '2. Decline',
+      '>'
+    ]
+  ],
+  [
+    'dotenv example printed by the agent',
+    ['$ cat .env.example', 'DATABASE_URL=', 'API_KEY=', 'SESSION_SECRET=']
   ]
 ]
 
@@ -420,6 +535,39 @@ describe('findCredentialPromptIndex', () => {
       const matched = lines.some((line) => TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE.test(line))
       expect(matched, name).toBe(true)
     }
+  })
+
+  it('keeps the sentinel a superset over every screen, not just the ones we expect to block', () => {
+    // Why both corpora: asserting the superset only over screens we already believe block makes
+    // the test as biased as the corpus. The invariant is about the detector's OWN verdict -- any
+    // screen it matches must survive the prefilter -- and that is what caught this lane silently
+    // passing the Antigravity sign-in menu.
+    for (const [name, lines] of [...LIVE_CREDENTIAL_SURFACES, ...LEGITIMATE_AGENT_SCREENS]) {
+      if (findCredentialPromptIndex(screen(lines).toLowerCase()) === null) {
+        continue
+      }
+      const matched = lines.some((line) => TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE.test(line))
+      expect(matched, name).toBe(true)
+    }
+  })
+
+  it('keeps the sentinel linear on adversarial lines', () => {
+    // The sentinel runs per retained tail line at streaming rate, so a variable-length prefix
+    // inside its noun alternation is not a style question: the obvious way to spell the env-var
+    // vendor slot (`(?:[a-z0-9]+_)?api[ _-]?key`) costs 30ms on one 5.5k-char line, ~1000x this
+    // budget, and stalls the whole tail index.
+    const lines = [
+      `${'a'.repeat(5000)}${'_'.repeat(500)}`,
+      `${'a_'.repeat(2500)}api key${'x'.repeat(200)}`,
+      'passwordx'.repeat(500)
+    ]
+    const started = performance.now()
+    for (let run = 0; run < 100; run += 1) {
+      for (const line of lines) {
+        TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE.test(line)
+      }
+    }
+    expect(performance.now() - started).toBeLessThan(500)
   })
 
   it('does not fire on any realistic terminal title', () => {
