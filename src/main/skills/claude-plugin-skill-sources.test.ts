@@ -120,3 +120,25 @@ describe('Claude plugin skill sources', () => {
     expect(roots[0]?.path).toBe(join('/home/alice/.claude/plugins/cache/compound/new', 'skills'))
   })
 })
+
+describe('claude plugin skill source plugin identity', () => {
+  it('carries the structured plugin name on the plugin root', () => {
+    const pluginId = 'compound-engineering@compound-engineering-plugin'
+    const roots = resolveClaudePluginSkillSources({
+      cwd: join('/workspace/orca', 'worktree'),
+      metadata: {
+        installedPlugins: installedPlugins({
+          [pluginId]: [
+            {
+              scope: 'user',
+              installPath: '/home/alice/.claude/plugins/cache/compound/3.14.3',
+              lastUpdated: '2026-06-23T00:00:00.000Z'
+            }
+          ]
+        }),
+        settings: [settings({ [pluginId]: true })]
+      }
+    })
+    expect(roots[0]?.plugin).toBe('compound-engineering')
+  })
+})

@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
@@ -27,9 +28,16 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
   const restoreRejectedDraft = vi.fn()
   const sendStructured = vi.fn()
 
-  function Harness({ agent }: { agent: AgentSessionHandleProvider }): null {
+  function Harness({
+    agent,
+    reportedCommands
+  }: {
+    agent: AgentSessionHandleProvider
+    reportedCommands?: readonly AgentSessionSlashCommand[]
+  }): null {
     sendWithOutcome = useMobileStructuredNativeChatSendBridge({
       agent,
+      ...(reportedCommands !== undefined ? { reportedCommands } : {}),
       acceptSend,
       captureSendOrigin,
       clearDraftForSend,
@@ -41,9 +49,12 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     return null
   }
 
-  function mount(agent: AgentSessionHandleProvider): void {
+  function mount(
+    agent: AgentSessionHandleProvider,
+    reportedCommands?: readonly AgentSessionSlashCommand[]
+  ): void {
     act(() => {
-      renderer = create(createElement(Harness, { agent }))
+      renderer = create(createElement(Harness, { agent, reportedCommands }))
     })
   }
 
@@ -83,6 +94,38 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
 
     expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/review')
+    expect(holdUnconfirmedSend).not.toHaveBeenCalled()
+  })
+
+  it('does not echo a session-reported skill as an optimistic user bubble', async () => {
+    sendStructured.mockResolvedValue('accepted')
+    mount('claude', [
+      { name: 'opsx:apply', kind: 'command' },
+      { name: 'to-spec', kind: 'skill' }
+    ])
+
+    await expect(sendWithOutcome('/to-spec write the spec')).resolves.toBe('accepted')
+
+    expect(sendStructured).toHaveBeenCalledWith('/to-spec write the spec')
+    expect(acceptSend).not.toHaveBeenCalled()
+  })
+
+  it('still echoes ordinary chat sends', async () => {
+    sendStructured.mockResolvedValue('accepted')
+    mount('claude', [])
+
+    await expect(sendWithOutcome('hello there')).resolves.toBe('accepted')
+
+    expect(acceptSend).toHaveBeenCalledTimes(1)
+  })
+
+  it('restores the draft when a reported command send lands unknown', async () => {
+    sendStructured.mockResolvedValue('unknown')
+    mount('claude', [{ name: 'to-spec', kind: 'skill' }])
+
+    await expect(sendWithOutcome('/to-spec')).resolves.toBe('unknown')
+
+    expect(restoreRejectedDraft).toHaveBeenCalledTimes(1)
     expect(holdUnconfirmedSend).not.toHaveBeenCalled()
   })
 })

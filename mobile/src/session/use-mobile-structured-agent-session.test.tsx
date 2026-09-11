@@ -5,7 +5,10 @@ import type {
   AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type {
+  AgentSessionSlashCommand,
+  AgentSessionSubscribeEvent
+} from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
@@ -850,5 +853,15 @@ describe('useMobileStructuredAgentSession', () => {
       )
     })
     expect(hook?.session.messages).toEqual([])
+  })
+
+  it('surfaces the session-reported command surface as it arrives on the stream', async () => {
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    const reported: AgentSessionSlashCommand[] = [{ name: 'to-spec', kind: 'skill' }]
+    act(() => listener?.({ ...snapshotEvent(3), commands: reported }))
+    expect(hook?.sessionCommands).toEqual(reported)
   })
 })

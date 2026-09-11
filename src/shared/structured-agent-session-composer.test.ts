@@ -96,6 +96,24 @@ describe('isStructuredAgentSessionComposerCommand', () => {
   })
 })
 
+describe('isStructuredAgentSessionComposerCommand with a session report', () => {
+  const reported = [
+    { name: 'opsx:apply', kind: 'command' as const },
+    { name: 'to-spec', kind: 'skill' as const }
+  ]
+
+  it('claims reported commands and skills the curated catalogs never knew', () => {
+    expect(isStructuredAgentSessionComposerCommand('/opsx:apply', 'claude', reported)).toBe(true)
+    expect(
+      isStructuredAgentSessionComposerCommand('/to-spec write the spec', 'claude', reported)
+    ).toBe(true)
+  })
+
+  it('stays false for a name the session never reported', () => {
+    expect(isStructuredAgentSessionComposerCommand('/my-skill', 'claude', [])).toBe(false)
+  })
+})
+
 describe('dispatchStructuredAgentSessionComposerCommand', () => {
   const controller = {
     agent: 'codex' as const,

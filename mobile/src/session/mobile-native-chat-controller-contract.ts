@@ -4,6 +4,7 @@ import type {
   AskPrompt,
   parseAskFromStatus
 } from '../../../src/shared/native-chat-ask'
+import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { detectAgentPermission } from './mobile-native-chat-permission'
 import type { parseAgentQuestion } from './mobile-native-chat-question'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
@@ -28,6 +29,9 @@ export type MobileNativeChatController = {
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
+  /** Structured lane: the session's reported command surface (undefined until
+   *  the first report), feeding the composer's `/` menu. */
+  nativeChatSessionCommands: readonly AgentSessionSlashCommand[] | undefined
   nativeChatAgentWorking: boolean
   /** Structured lane: host-recorded turn timing for the per-turn status rows. */
   nativeChatWorkingStartedAt: number | null
