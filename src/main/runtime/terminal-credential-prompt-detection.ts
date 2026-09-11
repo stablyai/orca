@@ -56,12 +56,19 @@ export const CREDENTIAL_NOUN_SOURCE =
 // one-character check misses `candidate.personal_access_token` — the dot precedes `personal`, not
 // `access_token`. Anchoring on the dot at the START of the identifier catches the whole family.
 // Still only `.`: the env-var ask (`OPENAI_API_KEY`) has no dot and is a real prompt.
-// Why the {0,40} bound and not `*`: unbounded, this is QUADRATIC — the engine retries the
-// lookbehind from every position in an identifier run, so a 4096-char run costs 4.6ms against
-// 369us bounded, and doubling the run quadruples the time. 40 covers any real identifier segment
-// and reproduces the unbounded verdict on every correctness case, `candidate.personal_access_token`
-// and `OPENAI_API_KEY` included.
-const CREDENTIAL_NOUN_LOOKBEHIND = '(?<!\\.[a-z0-9_$]{0,40})'
+/**
+ * Why a bound at all: unbounded (`*`) this is QUADRATIC — the engine retries the lookbehind from
+ * every position in an identifier run, so a 4096-char run measures 4.3ms against 0.53ms bounded,
+ * and doubling the run quadruples the time. The cost comes from `*`, not from the size of the
+ * bound, so a larger number is free.
+ *
+ * Why 64 specifically, and not smaller: the bound has to exceed the longest realistic distance
+ * between the opening dot and the noun, or a long property chain stops being recognised as a
+ * property access and starts corroborating a prompt. The longest in this repo today is 39
+ * (`settings.defaultOrganizationServiceAccountClientApiKey`), which clears a bound of 40 by one
+ * character. Identifiers grow; the headroom is the point. Do not "simplify" this to `*`.
+ */
+const CREDENTIAL_NOUN_LOOKBEHIND = '(?<!\\.[a-z0-9_$]{0,64})'
 /**
  * Exported for the complexity budget only. `MAX_CREDENTIAL_LINE_LENGTH` keeps every caller under
  * 512 characters, which HIDES the rule's growth curve — the gap between a linear and a quadratic
