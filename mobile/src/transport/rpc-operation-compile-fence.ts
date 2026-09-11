@@ -1,6 +1,7 @@
 import type { RpcClient } from './rpc-client'
 import type { RpcMethodName } from './rpc-params-contract'
 import { defineRpcOperation, runRpcOperation, startRpcOperation } from './rpc-operation'
+import { rpcResultVariants } from './rpc-operation-result-reader'
 import {
   workspaceListAtBarrier,
   workspaceListOrNull,
@@ -23,6 +24,9 @@ import type {
 // no app code imports it. The FENCE markers are pinned by rpc-operation.test.ts.
 
 declare const client: RpcClient
+
+// @ts-expect-error a variant reader combinator must have at least one reader
+const _fenceEmptyVariantReaders = rpcResultVariants([])
 
 // FENCE: probe-cannot-take-a-reader
 export const fenceProbeWithReader: CapabilityProbeRpcDefinition<'worktree.ps', 'on-settle'> = {

@@ -39,7 +39,10 @@ export function rpcResultVariant<Variant extends string, Schema extends z.ZodTyp
 
 /** Tries each variant in declared order and takes the first that reads. */
 export function rpcResultVariants<Variant extends string, Value>(
-  readers: readonly NamedRpcResultReader<Variant, Value>[]
+  readers: readonly [
+    NamedRpcResultReader<Variant, Value>,
+    ...NamedRpcResultReader<Variant, Value>[]
+  ]
 ): RpcCompatibleReader<unknown, Variant, Value> {
   return (raw) => {
     const issues: RpcDecodeIssue[] = []
