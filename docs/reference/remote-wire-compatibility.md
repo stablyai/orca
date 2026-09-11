@@ -154,10 +154,42 @@ Run it with:
 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-agent-session-wire.unit.test.ts
 ```
 
-The harness covers the terminal stream and the structured agent-session surface. It does
-**not** cover the session-tab sync channel, legacy agent-session publications, file or Git
-RPCs, mobile/E2EE framing, or the relay transport. A change on those paths still needs its
-own reasoning against the three rules above.
+`tests/e2e/cross-version-wire/cross-version-session-tab-sync.unit.test.ts` pairs the same
+two builds over the session-tab sync channel. What a host puts in a worktree's tab list is
+decided per connection from the client's advertised capabilities, so one host publishes
+different rows to two clients on the same socket, and no single build can show that. Both
+client states are derived from the baseline's own list rather than written down: C0 removes
+the structured capabilities from it, C1 adds the reader back. Each runs against both builds,
+and each build's fallback copy is read from its own checkout, because rewording a host's own
+string is not a break. It covers:
+
+- structured rows withheld from C0 and published verbatim to C1, with focus, groups and
+  layout repaired around the withheld row rather than left dangling;
+- the host's own record unchanged by either projection, so a client that cannot read a chat
+  is never why the host stops holding it, and a destructive close of a row the client was
+  never shown is refused instead of pruning durable work;
+- the projection applied to live `updated` frames and not only to the opening snapshot;
+- a mobile client keeping a metadata-only row under its build's fallback title, and being
+  refused when it closes a row it can see but not read;
+- a client that turns the advertisement on finding a pre-existing session already there,
+  with nothing republished for it;
+- the turn-item downgrade riding the same connection, so advertising that you can read the
+  row stays independent of the item bodies inside it.
+
+Run it with:
+
+```bash
+pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-session-tab-sync.unit.test.ts
+```
+
+The cross-version job runs a hand-listed set of files (`.github/workflows/pr.yml`, the
+`cross-version-wire` job). A new file under this directory is picked up by `pnpm test` but
+gates nothing until it is added to that list.
+
+The harness covers the terminal stream, the structured agent-session surface and the
+session-tab sync channel. It does **not** cover legacy agent-session publications, file or
+Git RPCs, mobile/E2EE framing, or the relay transport. A change on those paths still needs
+its own reasoning against the three rules above.
 
 ## Worked example: `agentWait` on terminal and worker reads
 
