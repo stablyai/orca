@@ -11,6 +11,7 @@ import {
   type ActiveHistoryRecoveryFreeze,
   type HistoryRecoveryFreeze
 } from './terminal-history-recovery-quarantine'
+import { TerminalHistoryRecoveryFreezes } from './terminal-history-recovery-freezes'
 import {
   removeTerminalHistorySessionTrees,
   schedulePendingSessionTreeRemovals
@@ -39,7 +40,7 @@ export class HistoryManager {
   private writers = new Map<string, TerminalHistorySessionWriter>()
   private disabledSessions = new Set<string>()
   private mutations = new TerminalHistoryMutationTracker()
-  private recoveryFreezes = new Map<string, ActiveHistoryRecoveryFreeze>()
+  private readonly recoveryFreezes: TerminalHistoryRecoveryFreezes
   private onWriteError?: (sessionId: string, error: Error) => void
   private checkpointMaxBytes: number
 
@@ -49,6 +50,7 @@ export class HistoryManager {
   ) {
     this.onWriteError = opts?.onWriteError
     this.checkpointMaxBytes = opts?.checkpointMaxBytes ?? TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
+    this.recoveryFreezes = new TerminalHistoryRecoveryFreezes(basePath)
     // Why: a quit between tombstone and reclaim leaves the tree on disk; nothing else rescans the queue.
     schedulePendingSessionTreeRemovals(this.basePath)
   }
@@ -57,7 +59,7 @@ export class HistoryManager {
     let recoveryFreeze = opts.recoveryFreeze
     try {
       this.disabledSessions.delete(sessionId)
-      const dir = join(this.basePath, getHistorySessionDirName(sessionId))
+      const dir = this.sessionDir(sessionId)
       recoveryFreeze ??= await this.freezeForRecovery(sessionId)
       const activeFreeze = this.requireRecoveryFreeze(sessionId, recoveryFreeze)
 
@@ -70,7 +72,7 @@ export class HistoryManager {
       ) {
         throw new Error('terminal_history_recovery_generation_changed')
       }
-      this.recoveryFreezes.delete(sessionId)
+      this.recoveryFreezes.release(sessionId)
       ensurePrivateDir(dir)
 
       const meta: SessionMeta = {
@@ -110,14 +112,14 @@ export class HistoryManager {
       token: randomUUID()
     }
     const activeFreeze: ActiveHistoryRecoveryFreeze = { handle }
-    this.recoveryFreezes.set(sessionId, activeFreeze)
+    this.recoveryFreezes.hold(sessionId, activeFreeze)
     try {
       await this.mutations.wait(sessionId)
       activeFreeze.fingerprint = fingerprintTerminalHistorySession(this.basePath, sessionId)
       return handle
     } catch (err) {
       if (this.recoveryFreezes.get(sessionId) === activeFreeze) {
-        this.recoveryFreezes.delete(sessionId)
+        this.recoveryFreezes.release(sessionId)
       }
       throw err
     }
@@ -126,7 +128,7 @@ export class HistoryManager {
   abandonRecoveryFreeze(freeze?: HistoryRecoveryFreeze): void {
     const activeFreeze = freeze ? this.recoveryFreezes.get(freeze.sessionId) : undefined
     if (activeFreeze && activeFreeze.handle === freeze) {
-      this.recoveryFreezes.delete(activeFreeze.handle.sessionId)
+      this.recoveryFreezes.release(activeFreeze.handle.sessionId)
     }
   }
 
@@ -147,7 +149,7 @@ export class HistoryManager {
         ) {
           throw new Error('terminal_history_recovery_generation_changed')
         }
-        this.recoveryFreezes.delete(sessionId)
+        this.recoveryFreezes.release(sessionId)
       } catch (err) {
         this.abandonRecoveryFreeze(recoveryFreeze)
         this.handleWriteError(sessionId, err)
@@ -156,7 +158,7 @@ export class HistoryManager {
     } else if (this.recoveryFreezes.has(sessionId)) {
       return
     }
-    const dir = join(this.basePath, getHistorySessionDirName(sessionId))
+    const dir = this.sessionDir(sessionId)
     this.writers.set(
       sessionId,
       new TerminalHistorySessionWriter(dir, false, this.checkpointMaxBytes)
@@ -272,7 +274,7 @@ export class HistoryManager {
   async removeSession(sessionId: string): Promise<void> {
     this.writers.delete(sessionId)
     this.disabledSessions.delete(sessionId)
-    this.recoveryFreezes.delete(sessionId)
+    this.recoveryFreezes.release(sessionId)
     await this.mutations.wait(sessionId)
     // Why tombstoned: writer handles are closed by here, so the trees only have to become unreachable —
     // they reach hundreds of MB and every terminal a worktree delete tears down awaits this.
@@ -292,12 +294,11 @@ export class HistoryManager {
   }
 
   hasHistory(sessionId: string): boolean {
-    return existsSync(join(this.basePath, getHistorySessionDirName(sessionId), 'meta.json'))
+    return existsSync(join(this.sessionDir(sessionId), 'meta.json'))
   }
 
   readMeta(sessionId: string): SessionMeta | null {
-    const dir = join(this.basePath, getHistorySessionDirName(sessionId))
-    return readTerminalHistoryMetaFromDir(dir)
+    return readTerminalHistoryMetaFromDir(this.sessionDir(sessionId))
   }
 
   async dispose(): Promise<void> {
@@ -313,12 +314,17 @@ export class HistoryManager {
       }
     }
     this.writers.clear()
+    this.recoveryFreezes.releaseAll()
   }
 
   // Why: history is best-effort; callers fire-and-forget so a throw would be an unhandled rejection — disable instead.
   private handleWriteError(sessionId: string, err: unknown): void {
     this.disabledSessions.add(sessionId)
     this.onWriteError?.(sessionId, err as Error)
+  }
+
+  private sessionDir(sessionId: string): string {
+    return join(this.basePath, getHistorySessionDirName(sessionId))
   }
 
   private requireRecoveryFreeze(

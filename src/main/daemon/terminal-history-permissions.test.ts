@@ -17,7 +17,10 @@ import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { getHistorySessionDirName } from './history-paths'
 import { flushPendingSessionTreeRemovals } from './terminal-history-session-tombstone'
-import { repairTerminalHistoryPermissions } from './terminal-history-permission-repair'
+import {
+  repairTerminalHistoryPermissions,
+  scheduleTerminalHistoryPermissionRepair
+} from './terminal-history-permission-repair'
 import { tightenTerminalHistorySessionDirMode } from './terminal-history-session-files'
 import type { TerminalModes, TerminalSnapshot } from './types'
 
@@ -174,6 +177,79 @@ describe('terminal history file permissions', () => {
       chmodSync(checkpointPath, 0o644)
       await expect(repairTerminalHistoryPermissions(base)).resolves.toBe(false)
       expect(modeOf(checkpointPath)).toBe(0o644)
+    })
+
+    onPosix('leaves a session under an open recovery freeze alone', async () => {
+      const { base, sessionDir: legacyDir, checkpointPath } = seedLegacyTree()
+      const writeErrors: Error[] = []
+      const mgr = new HistoryManager(base, {
+        onWriteError: (_sessionId, error) => writeErrors.push(error)
+      })
+      try {
+        await mgr.openSession('frozen', { cwd: '/tmp', cols: 80, rows: 24 })
+        await mgr.checkpoint('frozen', makeSnapshot())
+
+        // The production ordering: freeze fingerprints, the sweep runs, then the writer re-registers.
+        const freeze = await mgr.freezeForRecovery('frozen')
+        await expect(repairTerminalHistoryPermissions(base)).resolves.toBe(true)
+        mgr.registerWriter('frozen', freeze)
+
+        expect(writeErrors.map((error) => error.message)).toEqual([])
+        expect(mgr.isSessionDisabled('frozen')).toBe(false)
+        // Persistence, not just the absence of an error: the pane must still reach disk.
+        await mgr.checkpoint('frozen', makeSnapshot({ snapshotAnsi: 'after the sweep\r\n' }))
+        expect(readFileSync(sessionPath(base, 'frozen', 'checkpoint.json'), 'utf-8')).toContain(
+          'after the sweep'
+        )
+      } finally {
+        await mgr.dispose()
+      }
+
+      // Narrow skip: every session that is not frozen is still tightened by the same sweep.
+      expect(modeOf(legacyDir)).toBe(0o700)
+      expect(modeOf(checkpointPath)).toBe(0o600)
+    })
+
+    onPosix('sweeps a session tree once its recovery freeze is released', async () => {
+      const base = isolatedDir()
+      const mgr = new HistoryManager(base)
+      try {
+        await mgr.openSession('thawed', { cwd: '/tmp', cols: 80, rows: 24 })
+        const freeze = await mgr.freezeForRecovery('thawed')
+        mgr.abandonRecoveryFreeze(freeze)
+      } finally {
+        await mgr.dispose()
+      }
+      const sessionDir = join(base, getHistorySessionDirName('thawed'))
+      chmodSync(sessionDir, 0o755)
+
+      await expect(repairTerminalHistoryPermissions(base)).resolves.toBe(true)
+
+      expect(modeOf(sessionDir)).toBe(0o700)
+    })
+
+    onPosix('defers the sweep off the daemon-init critical path and runs it once', async () => {
+      const { base, checkpointPath } = seedLegacyTree()
+      vi.useFakeTimers()
+      try {
+        const first = scheduleTerminalHistoryPermissionRepair(base)
+        // Both startup accessors ask for the same tree; only the first arms a sweep.
+        expect(scheduleTerminalHistoryPermissionRepair(base)).toBeNull()
+        expect(vi.getTimerCount()).toBe(1)
+
+        // Still armed, and the tree still untouched, well past daemon init — the sibling
+        // history GC waits the same 10s over this directory for the same reason.
+        await vi.advanceTimersByTimeAsync(9_999)
+        expect(vi.getTimerCount()).toBe(1)
+        expect(existsSync(join(base, REPAIR_MARKER_NAME))).toBe(false)
+        expect(modeOf(checkpointPath)).toBe(0o644)
+
+        await vi.advanceTimersByTimeAsync(1)
+        await expect(first).resolves.toBe(true)
+      } finally {
+        vi.useRealTimers()
+      }
+      expect(modeOf(checkpointPath)).toBe(0o600)
     })
 
     onPosix('finishes and marks the sweep done even when every chmod is rejected', async () => {

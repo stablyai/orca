@@ -21,7 +21,8 @@ export function getDaemonHistoryDir(): string {
   ensurePrivateDir(dir)
   // Why here: the one accessor every history producer goes through, so the backlog sweep is hooked
   // once per host that owns the files — native, WSL, or a remote SSH server's own main process.
-  scheduleTerminalHistoryPermissionRepair(dir)
+  // The scheduler defers and de-duplicates, so the several startup calls cost one late sweep.
+  void scheduleTerminalHistoryPermissionRepair(dir)
   return dir
 }
 
