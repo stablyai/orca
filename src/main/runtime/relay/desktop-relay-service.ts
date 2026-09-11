@@ -12,11 +12,8 @@ import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { relayOfflineReasonMintFailureCode } from './relay-offline-reason'
 import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
-import type {
-  RelayRevokeOutbox,
-  RelayDeviceBinding,
-  RelayRevokeOutboxItem
-} from './relay-revoke-outbox'
+import type { RelayDeviceBinding, RelayRevokeOutboxItem } from './relay-revoke-outbox'
+import { RelayRevokeOutboxFlusher } from './relay-revoke-outbox-flush'
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
 import { createRelayRegionPreferenceReader } from './relay-region-preference'
@@ -45,7 +42,7 @@ const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
 
 export class DesktopRelayService {
   private readonly coordinator: RelayAuthCoordinator
-  private readonly revokeOutbox: RelayRevokeOutbox
+  private readonly revokeFlusher: RelayRevokeOutboxFlusher
   private readonly runtimeRpc: OrcaRuntimeRpcServer
   private readonly demandLedger: RelayDemandLedger
   private readonly hostMobilePairingConnectionMode?: () => MobilePairingConnectionMode
@@ -60,11 +57,15 @@ export class DesktopRelayService {
       throw new Error('mobile_runtime_not_ready')
     }
     this.runtimeRpc = options.runtimeRpc
-    this.revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
+    const revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
+    this.revokeFlusher = new RelayRevokeOutboxFlusher({
+      outbox: revokeOutbox,
+      onDrained: () => this.refreshDemand()
+    })
     this.hostMobilePairingConnectionMode = options.hostMobilePairingConnectionMode
     this.demandLedger = new RelayDemandLedger({
       deviceRegistry: options.runtimeRpc.getDeviceRegistry()!,
-      revokeOutbox: this.revokeOutbox,
+      revokeOutbox,
       relayHostId: deriveRelayHostId(keypair.publicKey),
       isRelayAllowedForDevice: (deviceId) => this.isRelayAllowedForDevice(deviceId)
     })
@@ -89,7 +90,7 @@ export class DesktopRelayService {
           onAssignedCellActive: regionPreference.noteAssignedCell,
           onStatus: options.onStatus
         })
-        void this.flushRevokeOutbox(broker)
+        void this.revokeFlusher.flushAll(broker)
         return broker
       },
       onStatus: options.onStatus
@@ -148,7 +149,7 @@ export class DesktopRelayService {
       broker.hostId === item.relayHostId &&
       broker.ownerIdentityKey === item.ownerIdentityKey
     ) {
-      void this.flushRevoke(broker, item)
+      void this.revokeFlusher.flushItem(broker, item)
     }
   }
 
@@ -233,12 +234,6 @@ export class DesktopRelayService {
     this.coordinator.stop()
   }
 
-  private async flushRevokeOutbox(broker: RelaySessionBroker): Promise<void> {
-    for (const item of this.revokeOutbox.pendingFor(broker.ownerIdentityKey, broker.hostId)) {
-      await this.flushRevoke(broker, item)
-    }
-  }
-
   private requireMobileDevice(deviceId: string): void {
     if (this.runtimeRpc.getDeviceRegistry()?.getDevice(deviceId)?.scope !== 'mobile') {
       throw new Error('mobile_device_not_found')
@@ -254,20 +249,6 @@ export class DesktopRelayService {
       context.transport.relayHostId !== broker.hostId
     ) {
       throw new Error('stale_relay_connection')
-    }
-  }
-
-  private async flushRevoke(
-    broker: RelaySessionBroker,
-    item: RelayRevokeOutboxItem
-  ): Promise<void> {
-    try {
-      await broker.revokeDevice(item.relayDeviceId, item.reqId)
-      this.revokeOutbox.remove(item.reqId)
-      this.refreshDemand()
-    } catch {
-      // Why: the durable item is the source of truth; reconnecting the same
-      // account/control retries this stable reqId without delaying local revoke.
     }
   }
 
