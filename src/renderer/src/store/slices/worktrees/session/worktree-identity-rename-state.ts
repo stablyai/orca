@@ -192,6 +192,43 @@ export function buildWorktreeRenameState(
   const pendingReconnectWorktreeIds = s.pendingReconnectWorktreeIds?.includes(oldWorktreeId)
     ? s.pendingReconnectWorktreeIds.map((id) => (id === oldWorktreeId ? newWorktreeId : id))
     : s.pendingReconnectWorktreeIds
+  // Why these two and not just the pane records below: both are keyed by something other than the
+  // worktree, so the rename path skipped them, but each row names the worktree in its VALUE. A
+  // close tombstone on the old id never matches the merge's worktree scope, so a terminal tab the
+  // user closed is re-added by the next host snapshot; a close intent on the old id replays against
+  // a selector that no longer resolves, which reads as `definitively gone` and drops the intent
+  // while the page is still open. Both are resurrections the maps exist to prevent.
+  const repointRows = <T extends { worktreeId: string }>(
+    rows: readonly T[]
+  ): { rows: T[]; changed: boolean } => {
+    let changed = false
+    const next = rows.map((row) => {
+      if (row.worktreeId !== oldWorktreeId) {
+        return row
+      }
+      changed = true
+      return { ...row, worktreeId: newWorktreeId }
+    })
+    return { rows: next, changed }
+  }
+  const currentClosedTombstones = s.closedTerminalTabTombstonesByTabId ?? {}
+  const closedTombstoneEntries = repointRows(
+    Object.entries(currentClosedTombstones).map(([tabId, tombstone]) => ({ ...tombstone, tabId }))
+  )
+  const closedTerminalTabTombstonesByTabId = closedTombstoneEntries.changed
+    ? Object.fromEntries(
+        closedTombstoneEntries.rows.map(({ tabId, ...tombstone }) => [tabId, tombstone])
+      )
+    : s.closedTerminalTabTombstonesByTabId
+  const currentCloseIntents = s.clientHostedBrowserCloseIntentsByEnvironment ?? {}
+  let closeIntentsChanged = false
+  const clientHostedBrowserCloseIntentsByEnvironment = Object.fromEntries(
+    Object.entries(currentCloseIntents).map(([environmentId, intents]) => {
+      const repointed = repointRows(intents)
+      closeIntentsChanged = closeIntentsChanged || repointed.changed
+      return [environmentId, repointed.changed ? repointed.rows : intents]
+    })
+  )
   const currentSleepingAgentSessionsByPaneKey = s.sleepingAgentSessionsByPaneKey ?? {}
   const sleepingAgentSessionsByPaneKey = Object.values(currentSleepingAgentSessionsByPaneKey).some(
     (record) => record.worktreeId === oldWorktreeId
@@ -220,6 +257,10 @@ export function buildWorktreeRenameState(
     ...(sleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
       ? { sleepingAgentSessionsByPaneKey }
       : {}),
+    ...(closedTerminalTabTombstonesByTabId !== s.closedTerminalTabTombstonesByTabId
+      ? { closedTerminalTabTombstonesByTabId }
+      : {}),
+    ...(closeIntentsChanged ? { clientHostedBrowserCloseIntentsByEnvironment } : {}),
     ...(s.activeWorktreeId === oldWorktreeId ? { activeWorktreeId: newWorktreeId } : {}),
     // The active workspace key derives from the worktree id, so keep it in sync when the active worktree is renamed.
     ...(s.activeWorkspaceKey === worktreeWorkspaceKey(oldWorktreeId)
