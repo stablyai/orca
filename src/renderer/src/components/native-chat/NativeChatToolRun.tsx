@@ -318,9 +318,15 @@ export function NativeChatToolRun({
                     : `${block.type}`
               const occurrence = seen.get(signature) ?? 0
               seen.set(signature, occurrence + 1)
+              const providerCallId =
+                block.type === 'tool-call' &&
+                block.callId !== undefined &&
+                block.callId.trim().length > 0
+                  ? block.callId
+                  : undefined
               const lineIdentity =
-                block.type === 'tool-call' && block.callId
-                  ? `call:${block.callId}`
+                providerCallId !== undefined
+                  ? `call:${providerCallId}`
                   : `${signature}:${occurrence}`
               return (
                 <NativeChatToolLine

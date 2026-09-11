@@ -49,6 +49,11 @@ const KNOWN_BLOCK_TYPES = new Set([
   'subagent-group'
 ])
 
+/** Provider IDs are opaque; reject all-whitespace values without rewriting valid IDs. */
+const ProviderCallId = z
+  .string()
+  .refine((value) => value.trim().length > 0, 'callId must contain a non-whitespace character')
+
 /** Child-agent lifecycle stays an open string for the same reason tool states
  *  do: a state a newer build writes must not turn the row malformed. */
 const SubagentEntry = z.object({
@@ -78,7 +83,7 @@ const Block = z.union([
       type: z.literal('tool-call'),
       name: z.string(),
       input: z.unknown().optional(),
-      callId: z.string().min(1).optional(),
+      callId: ProviderCallId.optional(),
       ...ToolMetadata
     }),
     z.object({
@@ -141,7 +146,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     name: z.string(),
     // See the tool-call block: the key itself is lost when `input` is undefined.
     input: z.unknown().optional(),
-    callId: z.string().min(1).optional(),
+    callId: ProviderCallId.optional(),
     state: z.string().min(1),
     output: BoundedPayload.optional()
   }),

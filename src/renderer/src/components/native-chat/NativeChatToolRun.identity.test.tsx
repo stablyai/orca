@@ -103,6 +103,28 @@ describe('inline tool annotations', () => {
     )
   })
 
+  it('keeps occurrence identity for whitespace-only provider IDs', () => {
+    render(
+      <NativeChatDisclosureContext.Provider value={capturedDisclosures}>
+        <NativeChatToolRun
+          blocks={[
+            { ...shell, callId: ' ' },
+            { ...shell, callId: '\t' }
+          ]}
+          expandSignal
+          disclosureId="message-1"
+        />
+      </NativeChatDisclosureContext.Provider>
+    )
+
+    fireEvent.click(screen.getAllByRole('button')[2]!)
+
+    expect(disclosureWrite).toHaveBeenCalledExactlyOnceWith(
+      'line:message-1:tool-call:shell:{"command":"missing-command"}:1',
+      false
+    )
+  })
+
   it('keeps command completion annotations on the collapsed tool line', () => {
     render(
       <NativeChatToolRun
