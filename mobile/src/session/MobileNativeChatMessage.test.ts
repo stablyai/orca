@@ -9,6 +9,7 @@ vi.mock('react-native', async () => {
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
     React.createElement('Text', props, children)
   return {
+    ActivityIndicator: 'ActivityIndicator',
     Animated: {
       Text,
       Value: class {

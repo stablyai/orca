@@ -13,7 +13,10 @@ import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-ha
 import { ArrowDown, ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
+import type {
+  NativeChatLiveTurnIndicator,
+  NativeChatSettledTurns
+} from '../../../src/shared/native-chat-turn-status'
 import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-native-chat-view-styles'
 import {
@@ -53,6 +56,8 @@ type Props = {
   /** Structured lane: per-turn "Working for N" status plus live tool progress,
    *  replacing the bridge lane's static three-dot working row (desktop parity). */
   structuredActivityUi?: boolean
+  /** What labels the live turn's one indicator row (structured lane only). */
+  turnIndicator?: NativeChatLiveTurnIndicator | null
   /** Structured lane: host-recorded turn timing feeding the per-turn status rows. */
   workingStartedAt?: number | null
   settledTurns?: NativeChatSettledTurns | null
@@ -136,6 +141,7 @@ export function MobileNativeChatView({
   agentWorking,
   canStop = agentWorking,
   structuredActivityUi = false,
+  turnIndicator = null,
   workingStartedAt,
   settledTurns,
   onStop,
@@ -259,14 +265,17 @@ export function MobileNativeChatView({
     [hasMore, loadingEarlier, onLoadEarlier]
   )
 
-  // Per-turn "Thinking / Working for N / Worked for N" rows. The structured lane
-  // owns them; the bridge lane keeps its three-dot indicator.
+  // Per-turn status rows: one live indicator while the turn runs, then a settled
+  // "Worked for N" row. The structured lane owns them; the bridge lane keeps its
+  // three-dot indicator.
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: structuredActivityUi,
     isWorking: agentWorking === true,
     workingStartedAt,
     settledTurns,
+    thinking: turnIndicator?.thinking === true,
+    activityText: turnIndicator?.activityText ?? null,
     scopeKey: sendSurfaceId
   })
 
@@ -336,6 +345,7 @@ export function MobileNativeChatView({
                     startedAt={turns.active.startedAt}
                     thinking={turns.active.thinking}
                     workedSeconds={turns.active.workedSeconds}
+                    activityText={turns.activeActivityText}
                   />
                 ) : null
               }

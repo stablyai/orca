@@ -73,6 +73,7 @@ type Overrides = {
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
   structuredActivityUi?: boolean
+  turnIndicator?: Parameters<typeof MobileNativeChatView>[0]['turnIndicator']
   agentWorking?: boolean
   canStop?: boolean
   sendSurfaceId?: string
@@ -282,9 +283,48 @@ describe('MobileNativeChatView', () => {
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
       const props = rowProps('u1')
       expect(props.structuredActivityUi).toBe(true)
-      expect(props.turnStatus).toMatchObject({ thinking: true, workedSeconds: null })
+      // Nothing reports reasoning, so the one live row counts instead of guessing.
+      expect(props.turnStatus).toMatchObject({ thinking: false, workedSeconds: null })
+      expect(props.turnActivityText).toBeNull()
       expect(props.activeTurnIsWorking).toBe(true)
       expect(workingIndicators()).toHaveLength(0)
+    })
+
+    it('reports the live turn as thinking only when its journal says it is reasoning', async () => {
+      const folded = [userTurn('u1', 'go')]
+      await render({
+        messages: folded,
+        folded,
+        structuredActivityUi: true,
+        agentWorking: true,
+        turnIndicator: { thinking: true, activityText: null }
+      })
+      expect(rowProps('u1').turnStatus).toMatchObject({ thinking: true, workedSeconds: null })
+    })
+
+    it('hands the live row the provider activity copy that outranks its fallbacks', async () => {
+      const folded = [userTurn('u1', 'go')]
+      await render({
+        messages: folded,
+        folded,
+        structuredActivityUi: true,
+        agentWorking: true,
+        turnIndicator: { thinking: true, activityText: 'Running pnpm test' }
+      })
+      expect(rowProps('u1').turnActivityText).toBe('Running pnpm test')
+    })
+
+    it('withholds the activity copy from a settled turn', async () => {
+      const folded = [userTurn('u1', 'go'), userTurn('u2', 'again')]
+      await render({
+        messages: folded,
+        folded,
+        structuredActivityUi: true,
+        agentWorking: true,
+        turnIndicator: { thinking: false, activityText: 'Running pnpm test' }
+      })
+      expect(rowProps('u1').turnActivityText).toBeNull()
+      expect(rowProps('u2').turnActivityText).toBe('Running pnpm test')
     })
 
     it('keeps the bridge lane on the three-dot indicator with no turn status', async () => {
