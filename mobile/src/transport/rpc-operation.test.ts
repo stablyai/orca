@@ -3,8 +3,10 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from './types'
 import { FakeSession } from './mobile-endpoint-supervisor-test-fakes'
-import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
-import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
+import {
+  createStableLogicalRpcClient,
+  isLogicalClientCutoverError
+} from './stable-logical-rpc-client'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import {
   RpcIncompatibleReplyError,
