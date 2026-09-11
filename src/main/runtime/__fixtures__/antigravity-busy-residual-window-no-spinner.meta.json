@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T07:48:45.591Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy TUI 1.2.1; the residual window on a turn's FIRST frame, which draws the spinner row with no glyph yet. The whole transcript contains zero braille codepoints. Ground truth: working.",
+  "exitCode": 0
+}

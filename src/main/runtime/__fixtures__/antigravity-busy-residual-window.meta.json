@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T07:48:51.141Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy TUI 1.2.1; the residual window. Recording stopped 40 ms after a frame park and before the next spinner tick, so the tail ends on the bare caret while the turn is still running. Ground truth: working.",
+  "exitCode": 0
+}

@@ -3,8 +3,8 @@
  *
  * Five detector attempts were tuned against a five-line screen someone typed from memory, and
  * three of them shipped worse behaviour than the bug they replaced. Nothing here asserts what
- * Antigravity prints: the transcripts do. Six are recorded from a live `agy`; the rest name
- * themselves as skipped until someone can reach them.
+ * Antigravity prints: the transcripts do. Fourteen are recorded from a live `agy` across two
+ * versions; the rest name themselves as skipped until someone can reach them.
  *
  * Two things have to be right for a replay to mean anything, and both were wrong before:
  * the transcript must be fed to an emulator of the grid it was recorded on, and it must stop
@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { createTranscriptPane } from './agent-transcript-pane-test-harness'
 import { extractLastOscTitle } from '../../shared/osc-title-extraction'
-import { isKnownReadyPromptPreview } from './terminal-wait-detection'
+import { MAX_TAIL_LINES } from './terminal-tail-limits'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -46,6 +46,8 @@ const ANTIGRAVITY_COMMAND = 'agy'
 // String.fromCharCode, not a literal: the formatter rewrites an escape sequence into a raw
 // control byte in source, which is unreadable and survives badly in diffs.
 const ESC = String.fromCharCode(27)
+/** The braille spinner range, as `CURSOR_BUSY_SPINNER_RE` in terminal-wait-detection scans it. */
+const BUSY_SPINNER_GLYPH_RE = /[\u2800-\u28ff]/
 
 type TranscriptCase = {
   /** Fixture basename; `<name>.txt` under `__fixtures__/`. */
@@ -102,12 +104,73 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
   },
   {
     // Expected ready because the turn is over and the composer is back on screen. The captured
-    // turn ends in a backend error, which is the only ending this account's key can produce.
+    // turn ends in a backend error, which is the only ending this account's key can produce —
+    // but the ending that matters is the FRAME, not the error. See the pair below.
     name: 'antigravity-busy-turn-ended',
     capture: 'E',
-    what: 'the turn has ended and the composer has returned, process still alive',
+    what: 'a turn ended on agy’s spinner-erase touch-up frame, process still alive',
     expectReady: true,
-    knownDefect: 'refused: the retained tail ends on the error block, with no composer row in it'
+    knownDefect:
+      'refused: the touch-up frame moves up past the composer and re-emits the region with bare newlines, so the retained tail loses the composer rows it never redrew'
+  },
+  {
+    // The same failed turn, captured after agy's full composer repaint instead. Which of the two
+    // frames a turn ends on is not deterministic: six identical runs ended four this way and two
+    // the other. Committing the pair is what stops the defect above reading as "errors only".
+    name: 'antigravity-turn-ended-composer-repainted',
+    capture: 'E',
+    what: 'the same turn, ended on a full composer repaint instead of the touch-up',
+    expectReady: true
+  },
+  {
+    // The residual window, captured rather than argued: the recorder stopped 40 ms after a frame
+    // park and before the first spinner tick.
+    name: 'antigravity-busy-residual-window',
+    capture: 'E',
+    what: 'mid-turn, stopped between a frame park and the next tick — the tail ends on the bare caret',
+    expectReady: false,
+    knownDefect:
+      'accepted: nothing below the last line distinguishes this from idle, and the spinner row is two lines up'
+  },
+  {
+    // Why the second residual capture: a turn's FIRST frame draws the spinner row with no glyph,
+    // so this transcript contains zero braille codepoints anywhere. It refutes the proposed
+    // "braille means working" clause by capture instead of by argument.
+    name: 'antigravity-busy-residual-window-no-spinner',
+    capture: 'E',
+    what: 'mid-turn on a turn’s first frame, with no braille codepoint anywhere in the capture',
+    expectReady: false,
+    knownDefect:
+      'accepted: there is no spinner glyph in this transcript for any braille rule to see'
+  },
+  {
+    name: 'antigravity-ready-narrow-20-columns',
+    capture: 'F',
+    what: 'idle on a 20-column PTY — agy redraws the rule at the grid width, so it never wraps',
+    expectReady: true
+  },
+  {
+    name: 'antigravity-ready-narrow-10-columns',
+    capture: 'F',
+    what: 'idle on a 10-column PTY, where the banner row truncates to "Antigrav"',
+    expectReady: true,
+    knownDefect:
+      'refused: the banner gate loses "antigravity cli" before the rule loses its eighth glyph, so the grid floor is never the binding clause'
+  },
+  {
+    name: 'antigravity-composer-typed-caret',
+    capture: 'F',
+    what: 'a single ">" typed into the composer and not submitted, so the caret row reads "> >"',
+    expectReady: false
+  },
+  {
+    // The only capture that separates the two caret clauses. Everything else that ends on a bare
+    // `>` also has the composer rule directly above it, so the rule clause was inert against the
+    // whole corpus — mutating it away failed no test until this landed.
+    name: 'antigravity-composer-multiline-unsent',
+    capture: 'F',
+    what: 'a multi-line composer holding unsent text — the tail ends on a bare ">" whose line above is "> abc"',
+    expectReady: false
   },
   {
     name: 'antigravity-dialog-dismissed',
@@ -302,40 +365,70 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
     expect(verdict.ready).toBe(false)
   }, 20_000)
 
-  // KNOWN GAP, pinned so it is visible rather than argued about. Between a frame park and the
-  // next spinner tick the retained tail really does end on the bare caret, and no committed
-  // capture ends there, so nothing distinguishes it from idle by text alone.
+  // KNOWN GAP, now pinned by two real captures rather than a constructed screen. Between a frame
+  // park and the next spinner tick the retained tail ends on the bare caret and nothing below the
+  // last line separates it from idle. `antigravity-busy-residual-window.txt` and
+  // `antigravity-busy-residual-window-no-spinner.txt` are recordings stopped inside that window.
   //
-  // The clause proposed for this — "a braille glyph on the last visible line means working" — is
-  // asserted here to NOT close it, because it cannot: in this window the last visible line IS the
-  // bare caret and carries no braille. Braille on that line would make it not trim to `>`, which
-  // the caret rule already refuses, so the clause is subsumed and adding it would be dead code.
-  // Reverting it changes no test.
+  // The clause proposed for it — "a braille glyph means working" — is refuted here by capture,
+  // not by argument, and in two independent ways:
   //
-  // WHAT WOULD CLOSE THIS: one capture that ends *inside* the residual window — recording stopped
-  // between a frame park and the next spinner tick, so the transcript's own last row is the bare
-  // caret with the spinner still live above it. That fixes the line bound empirically, which is
-  // the only thing missing. A fix has to read more than the last line, and picking "the last N
-  // lines" without a capture to fix N is how attempts one through five were built. The bound is
-  // not free to guess either: `antigravity-busy-mid-turn.txt` prints `⣾  Signing in...` during its
-  // failed first launch, so an unbounded scan would call a ready screen busy forever — the hazard
-  // is demonstrated, not hypothetical.
+  //  1. Scoped to the last visible line it is dead code. That line IS the bare caret, and a
+  //     braille glyph on it would make the line not trim to `>`, which the caret rule already
+  //     refuses. Reverting the clause fails no test.
+  //  2. Widened to the whole tail it still misses, because a turn's first frame draws the spinner
+  //     row with no glyph at all: `antigravity-busy-residual-window-no-spinner.txt` contains zero
+  //     braille codepoints while the turn is live.
+  //
+  // The line bound is now calibrated — in both captures the spinner row is the third non-blank
+  // line from the end (caret, rule, spinner) — but a bound is not a rule. Closing this needs a
+  // predicate that holds for a *streaming* turn too, and no capture of one exists: this account's
+  // key cannot complete a turn. The bound is not free to guess either: `antigravity-busy-mid-turn`
+  // prints `⣾  Signing in...` during its failed first launch, so an unbounded scan would call a
+  // ready screen busy forever.
   //
   // Paths gated on sustained quiescence are unaffected: ticks keep arriving, so the pane is never
-  // quiet. This is only reachable by a caller that inspects retained text alone, and it is one
-  // inter-tick interval wide.
-  it('KNOWN GAP: the window between a frame park and the next tick still reads ready', () => {
-    const rule = '─'.repeat(120)
-    const residual = [
-      '▄▟▟▄        Antigravity CLI 1.2.0',
-      rule,
-      '> In about 80 words, explain what a pseudoterminal is.',
-      '⣟  Generating...',
-      rule,
-      '>'
-    ].join('\n')
-    expect(isKnownReadyPromptPreview(residual)).toBe(true)
+  // quiet. This is only reachable by a caller that inspects retained text alone.
+  it('KNOWN GAP: no braille rule reaches the residual window, at any line bound', () => {
+    const names = [
+      'antigravity-busy-residual-window',
+      'antigravity-busy-residual-window-no-spinner'
+    ]
+    const captured = names.filter((name) => existsSync(fixturePath(name)))
+    if (captured.length === 0) {
+      return
+    }
+    for (const name of captured) {
+      const bytes = readFileSync(fixturePath(name), 'utf8')
+      // Why assert the glyph and not just the verdict: the "no spinner" capture is only evidence
+      // if it really carries no braille, and a re-capture could silently acquire one.
+      expect({ name, braille: BUSY_SPINNER_GLYPH_RE.test(bytes) }).toEqual({
+        name,
+        braille: !name.endsWith('no-spinner')
+      })
+    }
   })
+
+  it('refuses a ready pane once scrollback has evicted the banner', async () => {
+    // The `antigravity cli` gate reads the whole retained tail, and the tail is bounded
+    // (MAX_TAIL_LINES / MAX_TAIL_CHARS). agy prints the banner once and never reprints it (§5),
+    // so a pane that outruns the window loses the gate permanently. Asserted because the
+    // direction matters: this has to be a wedge, never a mis-send.
+    const name = 'antigravity-ready-api-key-gemini-model'
+    if (!existsSync(fixturePath(name))) {
+      return
+    }
+    const ready = replayableLiveTranscript(name)
+    // Constructed scrollback over real capture bytes: the filler goes *between* the banner and
+    // the composer frame, which is where a session's output actually accumulates. Prepending it
+    // instead proves nothing — the window would keep the banner and drop the filler.
+    const bannerLineEnd = ready.indexOf('\n', ready.indexOf('Antigravity CLI'))
+    expect(bannerLineEnd).toBeGreaterThan(0)
+    const scrollback = `${ready.slice(0, bannerLineEnd + 1)}${'filler output line\r\n'.repeat(MAX_TAIL_LINES + 200)}${ready.slice(bannerLineEnd + 1)}`
+    const verdict = await readinessVerdict(scrollback, REFUSAL_TIMEOUT_MS, captureGrid(name))
+    // The composer rows survive intact; it is the gate that is gone, and the refusal is a wedge.
+    expect(verdict.ready).toBe(false)
+  }, 30_000)
 
   it('refuses a pane whose agy has already exited', async () => {
     // `antigravity-dialog-dismissed.txt` is the one capture whose teardown prints something:
