@@ -25,6 +25,16 @@
  * terminal they closed on one machine stays in the tab bar on the other, pointing at a process
  * that no longer exists, until some unrelated change to the workspace forces a republish.
  *
+ * WHY IT SITS ON THIS PR. That diagnosis -- the host publishes a stale surface list after a close
+ * -- is the defect this PR's `publish a terminal retirement proof on the exit's own evidence` and
+ * `a removal retraction is not a publisher handover` fix. The spec was written on a branch that
+ * carried neither, which is why it was red there. It is kept un-skipped on purpose: it is the
+ * end-to-end proof of the fix, and CI on this PR is the measurement. If it still fails here the
+ * finding is that the unit-level retirement proof does not reach the wire, which is worth knowing
+ * loudly rather than quietly. Do not skip-tag it to green the build; split the close phases into
+ * their own spec instead -- they share this test's two-client pairing fixture and phase 2 depends
+ * on phase 1b's emptying, so a split means duplicating that fixture, not moving a block.
+ *
  * Run:
  *   pnpm exec playwright test \
  *     tests/e2e/paired-two-client-emptied-workspace-reseed.spec.ts \
