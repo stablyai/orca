@@ -41,9 +41,12 @@ export const MANUAL_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, strin
   fx: { FX_PERMISSION_MODE: 'ask' }
 }
 
+function hasEnvPermissionMode(agent: string): agent is TuiAgent {
+  return agent in YOLO_TUI_AGENT_ENV || agent in MANUAL_TUI_AGENT_ENV
+}
+
 const PERMISSION_AGENT_IDS = Object.keys(TUI_AGENT_CONFIG).filter(
-  (agent): agent is TuiAgent =>
-    agent in YOLO_TUI_AGENT_ARGS || agent in YOLO_TUI_AGENT_ENV || agent in MANUAL_TUI_AGENT_ENV
+  (agent): agent is TuiAgent => agent in YOLO_TUI_AGENT_ARGS || hasEnvPermissionMode(agent)
 )
 
 function normalizeArgs(value: string | null | undefined): string {
@@ -115,7 +118,7 @@ export function resolveTuiAgentPermissionMode(args: {
       )
     )
   }
-  if (args.agent in YOLO_TUI_AGENT_ENV || args.agent in MANUAL_TUI_AGENT_ENV) {
+  if (hasEnvPermissionMode(args.agent)) {
     modes.push(
       resolveAgentEnvPermissionMode(
         args.agentEnv,
@@ -167,7 +170,7 @@ export function applyAgentPermissionMode(args: {
       }
     }
 
-    if (agent in YOLO_TUI_AGENT_ENV || agent in MANUAL_TUI_AGENT_ENV) {
+    if (hasEnvPermissionMode(agent)) {
       const yoloEnv = YOLO_TUI_AGENT_ENV[agent]
       const manualEnv = MANUAL_TUI_AGENT_ENV[agent] ?? {}
       const currentEnv = nextEnv[agent]

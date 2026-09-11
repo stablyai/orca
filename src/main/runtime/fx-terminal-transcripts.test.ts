@@ -18,6 +18,14 @@ function fixture(name: string): string {
   return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
 }
 
+function createFxTranscriptPane(transcript: string, titleSource = transcript) {
+  return createTranscriptPane({
+    paneTitle: extractLastOscTitle(titleSource) ?? 'fx',
+    foregroundProcess: 'fx',
+    data: transcript
+  })
+}
+
 describe('fx terminal evidence', () => {
   it.each([
     ['fx-startup-ready', 'Run /help for commands'],
@@ -26,11 +34,7 @@ describe('fx terminal evidence', () => {
     ['fx-post-turn-ready', 'EVIDENCE_COMPLETE']
   ])('replays raw %s output through the runtime', async (name, evidence) => {
     const transcript = fixture(name)
-    const { runtime, handle } = await createTranscriptPane({
-      paneTitle: extractLastOscTitle(transcript) ?? 'fx',
-      foregroundProcess: 'fx',
-      data: transcript
-    })
+    const { runtime, handle } = await createFxTranscriptPane(transcript)
 
     expect(transcript).toContain(ESC)
     expect(transcript).toContain(evidence)
@@ -41,11 +45,7 @@ describe('fx terminal evidence', () => {
 
   it('blocks guarded prompt sends while the approval dialog owns the live tail', async () => {
     const approval = fixture('fx-permission-prompt')
-    const { runtime, handle } = await createTranscriptPane({
-      paneTitle: extractLastOscTitle(approval) ?? 'fx',
-      foregroundProcess: 'fx',
-      data: approval
-    })
+    const { runtime, handle } = await createFxTranscriptPane(approval)
 
     await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toMatchObject({
       source: 'prompt-text',
@@ -67,11 +67,7 @@ describe('fx terminal evidence', () => {
     'does not report an approval prompt for %s',
     async (name) => {
       const transcript = fixture(name)
-      const { runtime, handle } = await createTranscriptPane({
-        paneTitle: extractLastOscTitle(transcript) ?? 'fx',
-        foregroundProcess: 'fx',
-        data: transcript
-      })
+      const { runtime, handle } = await createFxTranscriptPane(transcript)
 
       await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
     }
@@ -81,11 +77,7 @@ describe('fx terminal evidence', () => {
     const approval = fixture('fx-permission-prompt')
     const ready = fixture('fx-post-turn-ready')
     const transcript = `${approval}\n${ready}\nThe earlier menu said Apply once and Enter Confirm.\n`
-    const { runtime, handle } = await createTranscriptPane({
-      paneTitle: extractLastOscTitle(ready) ?? 'fx',
-      foregroundProcess: 'fx',
-      data: transcript
-    })
+    const { runtime, handle } = await createFxTranscriptPane(transcript, ready)
 
     await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
   })
@@ -94,11 +86,7 @@ describe('fx terminal evidence', () => {
     'keeps ordinary status unknown for %s without a reliable transition signal',
     async (name) => {
       const transcript = fixture(name)
-      const { runtime, handle } = await createTranscriptPane({
-        paneTitle: extractLastOscTitle(transcript) ?? 'fx',
-        foregroundProcess: 'fx',
-        data: transcript
-      })
+      const { runtime, handle } = await createFxTranscriptPane(transcript)
 
       await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
         isRunningAgent: true,

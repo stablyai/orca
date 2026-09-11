@@ -16,8 +16,21 @@ const HEADLESS_ONE_SHOT_MATCHERS: Partial<
   ante: isAnteHeadlessOneShotCommand
 }
 
+const INTERACTIVE_COMMAND_MATCHERS: Partial<
+  Record<TuiAgent, (tokens: readonly string[]) => boolean>
+> = {
+  fx: isInteractiveFxCommand
+}
+
 export function isHeadlessOneShotAgentCommand(agent: TuiAgent, tokens: readonly string[]): boolean {
   return HEADLESS_ONE_SHOT_MATCHERS[agent]?.(tokens) ?? false
+}
+
+function isNonInteractiveAgentCommand(agent: TuiAgent, tokens: readonly string[]): boolean {
+  return (
+    isHeadlessOneShotAgentCommand(agent, tokens) ||
+    INTERACTIVE_COMMAND_MATCHERS[agent]?.(tokens) === false
+  )
 }
 
 type AgentCommandRecognition = { agent: TuiAgent } | null
@@ -26,11 +39,7 @@ export function filterNonInteractiveAgentCommand<T extends AgentCommandRecogniti
   recognition: T,
   tokens: readonly string[]
 ): T | null {
-  if (
-    recognition &&
-    (isHeadlessOneShotAgentCommand(recognition.agent, tokens) ||
-      (recognition.agent === 'fx' && !isInteractiveFxCommand(tokens)))
-  ) {
+  if (recognition && isNonInteractiveAgentCommand(recognition.agent, tokens)) {
     return null
   }
   return recognition
