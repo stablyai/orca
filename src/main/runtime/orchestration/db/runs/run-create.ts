@@ -1,23 +1,19 @@
-import { principalFromPaneKey } from '../../../../../shared/orchestration-principal'
 import type { RunRow } from '../../types'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
+import { runCoordinatorBinding, type RunCoordinatorParam } from './run-coordinator-binding'
 
 // ── Runs ──
 
 export function createRun(
   this: OrchestrationDb,
-  params: {
-    objective: string
-    coordinatorHandle: string
-    coordinatorPaneKey: string
-  }
+  params: { objective: string } & RunCoordinatorParam
 ): RunRow {
   const id = generateId('run')
-  const coordinatorPrincipal = principalFromPaneKey(params.coordinatorPaneKey)
+  const coordinator = runCoordinatorBinding(params)
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    this.unbindOtherRunsForPane(params.coordinatorPaneKey)
+    this.unbindOtherRunsForPrincipal(coordinator.principalId)
     this.db
       .prepare(
         `INSERT INTO runs (
@@ -28,11 +24,13 @@ export function createRun(
       .run(
         id,
         params.objective,
-        params.coordinatorHandle,
-        params.coordinatorPaneKey,
-        coordinatorPrincipal
+        coordinator.terminalHandle,
+        coordinator.paneKey,
+        coordinator.principalId
       )
-    this.rememberRunCoordinatorHandle(id, params.coordinatorHandle)
+    if (coordinator.terminalHandle !== null) {
+      this.rememberRunCoordinatorHandle(id, coordinator.terminalHandle)
+    }
     this.db.exec('COMMIT')
   } catch (error) {
     this.db.exec('ROLLBACK')

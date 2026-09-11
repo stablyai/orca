@@ -1,16 +1,15 @@
-import { principalFromPaneKey } from '../../../../../shared/orchestration-principal'
 import type { RunRow } from '../../types'
 import { OrchestrationError } from '../../orchestration-error'
 import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { isEquivalentPaneKey } from '../pane-key-match'
+import { isEquivalentPrincipal } from '../principal-match'
 import type { OrchestrationDb } from '../orchestration-db'
+import { runCoordinatorBinding, type RunCoordinatorParam } from './run-coordinator-binding'
 
 export function bindRun(
   this: OrchestrationDb,
   params: {
     runId: string
-    coordinatorHandle: string
-    coordinatorPaneKey: string
     takeoverLegacy?: boolean
     legacyCoordinatorAuthority?: {
       runId: string
@@ -19,8 +18,9 @@ export function bindRun(
       paneKey: string
       consumerGeneration: number
     }
-  }
+  } & RunCoordinatorParam
 ): RunRow | undefined {
+  const coordinator = runCoordinatorBinding(params)
   this.db.exec('BEGIN IMMEDIATE')
   try {
     const run = this.getRunRaw(params.runId)
@@ -29,8 +29,8 @@ export function bindRun(
       return undefined
     }
     const sameBinding =
-      run.coordinator_pane_key !== null &&
-      isEquivalentPaneKey(run.coordinator_pane_key, params.coordinatorPaneKey)
+      run.coordinator_principal !== null &&
+      isEquivalentPrincipal(run.coordinator_principal, coordinator.principalId)
     const adoption = this.getLegacyAdoption()
     const adoptedRun = adoption?.adopted_run_id === params.runId
     const legacyAuthority = params.legacyCoordinatorAuthority
@@ -38,6 +38,7 @@ export function bindRun(
     const legacyPrincipal = legacyPrincipalId
       ? this.getLegacyCompatibilityPrincipal(legacyPrincipalId)
       : undefined
+    // Why: a null handle or pane key never proves — a session binding yields false, matching today.
     const provenLegacyBinding = Boolean(
       adoptedRun &&
       legacyAuthority &&
@@ -49,8 +50,9 @@ export function bindRun(
       legacyPrincipal.status === 'committed' &&
       legacyPrincipal.terminal_handle === legacyAuthority.terminalHandle &&
       isEquivalentPaneKey(legacyPrincipal.pane_key, legacyAuthority.paneKey) &&
-      params.coordinatorHandle === legacyAuthority.terminalHandle &&
-      isEquivalentPaneKey(params.coordinatorPaneKey, legacyAuthority.paneKey)
+      coordinator.terminalHandle === legacyAuthority.terminalHandle &&
+      coordinator.paneKey !== null &&
+      isEquivalentPaneKey(coordinator.paneKey, legacyAuthority.paneKey)
     )
     if (legacyAuthority && !provenLegacyBinding) {
       throw new OrchestrationError(
@@ -81,7 +83,8 @@ export function bindRun(
     const takeoverAlreadyApplied = Boolean(
       params.takeoverLegacy &&
       sameBinding &&
-      run.coordinator_handle === params.coordinatorHandle &&
+      coordinator.terminalHandle !== null &&
+      run.coordinator_handle === coordinator.terminalHandle &&
       coordinatorPrincipal?.status !== 'committed'
     )
     const replacesLegacyCoordinator = Boolean(
@@ -89,7 +92,7 @@ export function bindRun(
       !provenLegacyBinding &&
       retainedCoordinatorHandle &&
       (params.takeoverLegacy ||
-        retainedCoordinatorHandle !== params.coordinatorHandle ||
+        retainedCoordinatorHandle !== coordinator.terminalHandle ||
         !sameBinding)
     )
     if (params.takeoverLegacy && !adoptedRun) {
@@ -110,10 +113,9 @@ export function bindRun(
         }
       )
     }
-    const incomingPrincipal = principalFromPaneKey(params.coordinatorPaneKey)
-    this.unbindOtherRunsForPane(params.coordinatorPaneKey, params.runId)
+    this.unbindOtherRunsForPrincipal(coordinator.principalId, params.runId)
     for (const handle of new Set(
-      [run.coordinator_handle, params.coordinatorHandle].filter((value): value is string =>
+      [run.coordinator_handle, coordinator.terminalHandle].filter((value): value is string =>
         Boolean(value)
       )
     )) {
@@ -123,14 +125,15 @@ export function bindRun(
     if (
       (params.takeoverLegacy && !takeoverAlreadyApplied) ||
       !sameBinding ||
-      run.coordinator_handle !== params.coordinatorHandle
+      run.coordinator_handle !== coordinator.terminalHandle
     ) {
       if (adoptedRun && (params.takeoverLegacy || !activeLegacyAssignment)) {
         if (
           coordinatorPrincipal?.status === 'committed' &&
           (params.takeoverLegacy ||
-            coordinatorPrincipal.terminal_handle !== params.coordinatorHandle ||
-            !isEquivalentPaneKey(coordinatorPrincipal.pane_key, params.coordinatorPaneKey))
+            coordinatorPrincipal.terminal_handle !== coordinator.terminalHandle ||
+            coordinator.paneKey === null ||
+            !isEquivalentPaneKey(coordinatorPrincipal.pane_key, coordinator.paneKey))
         ) {
           this.setLegacyCompatibilityPrincipalStatus(coordinatorPrincipal.id, 'revoked')
         }
@@ -143,7 +146,7 @@ export function bindRun(
                updated_at = datetime('now')
            WHERE id = ?`
         )
-        .run(params.coordinatorHandle, params.coordinatorPaneKey, incomingPrincipal, params.runId)
+        .run(coordinator.terminalHandle, coordinator.paneKey, coordinator.principalId, params.runId)
       this.fenceOutstandingDelivery(params.runId)
       if (params.takeoverLegacy || replacesLegacyCoordinator) {
         this.promoteLegacyCoordinatorMailForTakeover(params.runId, retainedCoordinatorHandle)

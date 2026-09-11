@@ -3,21 +3,21 @@ import { defineMethod, type RpcMethod } from '../../../core'
 import { OptionalBoolean, OptionalString, requiredString } from '../../../schemas'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../../../shared/orchestration-run-pagination'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
+import { orchestrationCallerParamFields, resolveCallerPrincipal } from '../caller-principal'
 import { exposeRun } from './run-receipt'
 
 const RunCreateParams = z.object({
   objective: requiredString('Missing --objective'),
-  from: requiredString('Missing coordinator terminal')
+  ...orchestrationCallerParamFields
 })
 
 const RunUseParams = z.object({
   id: requiredString('Missing --id'),
-  from: requiredString('Missing coordinator terminal'),
-  takeoverLegacy: OptionalBoolean
+  takeoverLegacy: OptionalBoolean,
+  ...orchestrationCallerParamFields
 })
 
-const RunCurrentParams = z.object({ from: requiredString('Missing coordinator terminal') })
+const RunCurrentParams = z.object({ ...orchestrationCallerParamFields })
 const RunListParams = z.object({
   limit: z.number().int().min(1).max(ORCHESTRATION_RUN_PAGE_LIMIT).optional(),
   cursor: z.string().min(1).optional()
@@ -29,19 +29,19 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
     name: 'orchestration.runCreate',
     params: RunCreateParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
-      const paneKey = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: params.from,
-        callerEvidence: orchestrationCompatibilityEvidence,
-        requireStablePane: true
+      const caller = resolveCallerPrincipal(runtime, {
+        from: params.from,
+        agentSessionId: params.agentSessionId,
+        runtimeFence: params.runtimeFence,
+        evidence: orchestrationCompatibilityEvidence,
+        requireBindableCaller: true
       })
       const db = runtime.getOrchestrationDb()
-      const priorRun = db.getCurrentRunForPane(paneKey)
-      const run = db.createRun({
-        objective: params.objective,
-        coordinatorHandle: params.from,
-        coordinatorPaneKey: paneKey
-      })
-      runtime.cancelMessageWaiters(params.from)
+      const priorRun = db.getCurrentRunForPrincipal(caller.principalId)
+      const run = db.createRun({ objective: params.objective, coordinator: caller.binding })
+      for (const waiterHandle of caller.waiterHandles) {
+        runtime.cancelMessageWaiters(waiterHandle)
+      }
       if (priorRun) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
       }
@@ -60,30 +60,28 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
         orchestrationCompatibilityCallerAuthority: callerAuthority
       }
     ) => {
-      const paneKey = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: params.from,
-        callerEvidence: orchestrationCompatibilityEvidence,
+      const caller = resolveCallerPrincipal(runtime, {
+        from: params.from,
+        agentSessionId: params.agentSessionId,
+        runtimeFence: params.runtimeFence,
+        evidence: orchestrationCompatibilityEvidence,
         callerAuthority,
-        requireStablePane: true,
-        evidenceAssertedByCaller: true
+        requireBindableCaller: true,
+        deferEvidenceAssertion: true
       })
-      if (
-        params.takeoverLegacy &&
-        (callerAuthority?.terminalHandle !== params.from || callerAuthority.paneKey !== paneKey)
-      ) {
+      if (params.takeoverLegacy && !caller.attested) {
         throw new OrchestrationError(
           'legacy_read_only',
           'Legacy takeover must be invoked by the live coordinator agent terminal it will bind. No effects were applied.',
           { effectsApplied: false }
         )
       }
-      assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
+      caller.attestDeclaredCaller()
       const db = runtime.getOrchestrationDb()
-      const priorRun = db.getCurrentRunForPane(paneKey)
+      const priorRun = db.getCurrentRunForPrincipal(caller.principalId)
       const run = db.bindRun({
         runId: params.id,
-        coordinatorHandle: params.from,
-        coordinatorPaneKey: paneKey,
+        coordinator: caller.binding,
         takeoverLegacy: params.takeoverLegacy,
         legacyCoordinatorAuthority
       })
@@ -93,7 +91,9 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
           `Run ${params.id} was not found or is inspect-only.`
         )
       }
-      runtime.cancelMessageWaiters(params.from)
+      for (const waiterHandle of caller.waiterHandles) {
+        runtime.cancelMessageWaiters(waiterHandle)
+      }
       runtime.cancelMessageWaiters(`run:${params.id}`)
       if (priorRun && priorRun.id !== params.id) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
@@ -105,12 +105,14 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
     name: 'orchestration.runCurrent',
     params: RunCurrentParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
-      const paneKey = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: params.from,
-        callerEvidence: orchestrationCompatibilityEvidence,
-        requireStablePane: true
+      const caller = resolveCallerPrincipal(runtime, {
+        from: params.from,
+        agentSessionId: params.agentSessionId,
+        runtimeFence: params.runtimeFence,
+        evidence: orchestrationCompatibilityEvidence,
+        requireBindableCaller: true
       })
-      const run = runtime.getOrchestrationDb().getCurrentRunForPane(paneKey)
+      const run = runtime.getOrchestrationDb().getCurrentRunForPrincipal(caller.principalId)
       return { run: run ? exposeRun(run) : null }
     }
   }),
