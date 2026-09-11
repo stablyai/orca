@@ -73,9 +73,7 @@ describe('findSkillFiles', () => {
     // visited set collapses them to a single entry beside the real file.
     const withinDepth = await findSkillFiles(root, 5)
     expect(withinDepth).toContain(join(edge, 'SKILL.md'))
-    expect(withinDepth.filter((path) => /[\\/]link\d{2}[\\/]SKILL\.md$/.test(path))).toHaveLength(
-      1
-    )
+    expect(withinDepth.filter((path) => /[\\/]link\d{2}[\\/]SKILL\.md$/.test(path))).toHaveLength(1)
     expect(withinDepth).toHaveLength(2)
     expect(statPaths).toHaveLength(32)
   })
