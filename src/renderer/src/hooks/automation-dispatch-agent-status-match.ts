@@ -37,9 +37,6 @@ export function createAutomationAgentStatusMatcher(prompt: string) {
         agentProviderSessionsEqual(agentType, candidate.providerSession, targetProviderSession)
       )
     }
-    if (candidate.state !== 'done' && candidate.providerSession?.transcriptPath) {
-      return true
-    }
     return promptMatchesRun(candidate.prompt)
   }
 

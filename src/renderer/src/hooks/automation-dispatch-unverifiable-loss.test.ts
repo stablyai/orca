@@ -245,6 +245,46 @@ describe('automation dispatch completion on an unverifiable loss', () => {
     )
   })
 
+  it('does not count a mismatched transcript-backed working status for the run gate', async () => {
+    const completion = await createCompletion()
+    completion.observeAgentStatus('pane-1', 1000, { requireWorkingAfterStart: true })
+
+    publishAgentStatus(
+      agentStatusEntry('working', 'title-session', {
+        prompt: 'Generate a concise, single-line task title',
+        updatedAt: 1001
+      })
+    )
+    publishAgentStatus(
+      agentStatusEntry('done', 'sessionless', {
+        providerSession: undefined,
+        lastAssistantMessage: 'sessionless done',
+        updatedAt: 1002
+      })
+    )
+    await Promise.resolve()
+
+    expect(markDispatchResult).not.toHaveBeenCalled()
+
+    publishAgentStatus(agentStatusEntry('working', 'main-session', { updatedAt: 1003 }))
+    publishAgentStatus(
+      agentStatusEntry('done', 'main-session', {
+        lastAssistantMessage: 'Run completed',
+        updatedAt: 1004
+      })
+    )
+
+    await vi.waitFor(() =>
+      expect(markDispatchResult).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runId: 'run-1',
+          status: 'completed',
+          outputSnapshot: expect.objectContaining({ content: 'Run completed' })
+        })
+      )
+    )
+  })
+
   it('rejects sessionless store done statuses after the run session is known', async () => {
     const completion = await createCompletion()
     completion.observeAgentStatus('pane-1', 1000)
