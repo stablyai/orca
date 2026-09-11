@@ -46,7 +46,7 @@ export const ORCHESTRATION_CHECK_METHODS: RpcMethod[] = [
           runtime,
           db,
           handle,
-          paneKey: paneKey ?? boundRun?.coordinator_pane_key ?? undefined,
+          paneKey,
           typeFilter,
           signal,
           legacyCoordinatorRunId,

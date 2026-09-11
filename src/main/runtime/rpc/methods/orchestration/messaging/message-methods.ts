@@ -154,30 +154,9 @@ export const ORCHESTRATION_MESSAGE_METHODS: RpcMethod[] = [
       if (boundRun?.id) {
         handles.add(`run:${boundRun.id}`)
       }
-      type QueryableDb = {
-        db?: { prepare?: (sql: string) => { all: (param: unknown) => { id: string }[] } }
-      }
-      const rawDb = (db as unknown as QueryableDb).db
-      const runsWithCoord = rawDb
-        ?.prepare?.('SELECT id FROM runs WHERE coordinator_handle = ?')
-        ?.all?.(params.terminal)
-      if (runsWithCoord) {
-        for (const row of runsWithCoord) {
-          handles.add(`run:${row.id}`)
-        }
-      }
-
       const activeDispatches = db.getActiveDispatchMailboxOwners?.(params.terminal, paneKey) ?? []
       for (const d of activeDispatches) {
         handles.add(`dispatch:${d.id}`)
-      }
-      const assigneeDispatches = rawDb
-        ?.prepare?.('SELECT id FROM dispatch_contexts WHERE assignee_handle = ?')
-        ?.all?.(params.terminal)
-      if (assigneeDispatches) {
-        for (const row of assigneeDispatches) {
-          handles.add(`dispatch:${row.id}`)
-        }
       }
 
       const messages = db.getAllMessagesForHandles(Array.from(handles), params.limit)
