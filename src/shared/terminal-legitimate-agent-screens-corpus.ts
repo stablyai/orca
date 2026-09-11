@@ -4,6 +4,7 @@
 import type { TerminalCredentialPromptCase } from './terminal-live-credential-surfaces-corpus'
 import { AGENT_AUTH_SUMMARY_SCREENS } from './terminal-agent-auth-summary-screens-corpus'
 import { AGENT_AUTH_MENTION_SCREENS } from './terminal-auth-mention-screens-corpus'
+import { AGENT_SOURCE_OUTPUT_SCREENS } from './terminal-source-output-screens-corpus'
 
 export const LEGITIMATE_AGENT_SCREENS: readonly TerminalCredentialPromptCase[] = [
   // An agent narrating credential work and returning to its composer.
@@ -163,5 +164,6 @@ export const LEGITIMATE_AGENT_SCREENS: readonly TerminalCredentialPromptCase[] =
     ]
   ],
   ...AGENT_AUTH_SUMMARY_SCREENS,
-  ...AGENT_AUTH_MENTION_SCREENS
+  ...AGENT_AUTH_MENTION_SCREENS,
+  ...AGENT_SOURCE_OUTPUT_SCREENS
 ]
