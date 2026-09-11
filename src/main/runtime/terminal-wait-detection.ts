@@ -225,20 +225,24 @@ function findTerminalWaitBlockedSignal(
   return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
 }
 
+const FX_APPROVAL_TAIL_LINES = 10
+
 function findFxApprovalPromptIndex(normalized: string): number | null {
-  const permissionIndex = normalized.lastIndexOf('permission needed')
+  const windowStart = startOfLastNonBlankLines(normalized, FX_APPROVAL_TAIL_LINES)
+  const tail = normalized.slice(windowStart)
+  const permissionIndex = tail.lastIndexOf('permission needed')
   if (permissionIndex === -1) {
     return null
   }
-  const dialog = normalized.slice(permissionIndex)
-  const lines = dialog.split('\n').filter((line) => line.trim().length > 0)
-  const footer = lines.at(-1) ?? ''
-  return dialog.includes('apply this change?') &&
-    dialog.includes('apply once') &&
-    footer.includes('choose now') &&
-    footer.includes('enter confirm') &&
-    footer.includes('esc cancel')
-    ? permissionIndex
+  const footer = tail.slice(permissionIndex).trimEnd().split('\n').at(-1) ?? ''
+  const chooseIndex = footer.indexOf('choose now')
+  const confirmIndex = footer.indexOf('enter confirm')
+  const cancelIndex = footer.indexOf('esc cancel')
+  return chooseIndex !== -1 &&
+    confirmIndex > chooseIndex &&
+    cancelIndex > confirmIndex &&
+    cancelIndex + 'esc cancel'.length === footer.length
+    ? windowStart + permissionIndex
     : null
 }
 

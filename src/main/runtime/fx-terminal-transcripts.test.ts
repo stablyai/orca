@@ -31,6 +31,7 @@ describe('fx terminal evidence', () => {
     ['fx-startup-ready', 'Run /help for commands'],
     ['fx-active-turn', 'Generating'],
     ['fx-permission-prompt', 'Permission needed · Review change'],
+    ['fx-command-permission-prompt', 'Permission needed · Choose one'],
     ['fx-post-turn-ready', 'EVIDENCE_COMPLETE']
   ])('replays raw %s output through the runtime', async (name, evidence) => {
     const transcript = fixture(name)
@@ -43,25 +44,28 @@ describe('fx terminal evidence', () => {
     })
   })
 
-  it('blocks guarded prompt sends while the approval dialog owns the live tail', async () => {
-    const approval = fixture('fx-permission-prompt')
-    const { runtime, handle } = await createFxTranscriptPane(approval)
+  it.each(['fx-permission-prompt', 'fx-command-permission-prompt'])(
+    'blocks guarded prompt sends while the %s approval dialog owns the live tail',
+    async (name) => {
+      const approval = fixture(name)
+      const { runtime, handle } = await createFxTranscriptPane(approval)
 
-    await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toMatchObject({
-      source: 'prompt-text',
-      reason: 'agent-approval-prompt'
-    })
-    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
-      isRunningAgent: true,
-      status: 'permission'
-    })
-    await expect(
-      assertTerminalAgentSendable({ runtime, handle, assertWritable: () => {} })
-    ).rejects.toThrow('terminal_guard_permission')
-    await expect(runtime.sendTerminalAgentPrompt(handle, 'continue')).rejects.toThrow(
-      'agent_prompt_blocked'
-    )
-  })
+      await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toMatchObject({
+        source: 'prompt-text',
+        reason: 'agent-approval-prompt'
+      })
+      await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
+        isRunningAgent: true,
+        status: 'permission'
+      })
+      await expect(
+        assertTerminalAgentSendable({ runtime, handle, assertWritable: () => {} })
+      ).rejects.toThrow('terminal_guard_permission')
+      await expect(runtime.sendTerminalAgentPrompt(handle, 'continue')).rejects.toThrow(
+        'agent_prompt_blocked'
+      )
+    }
+  )
 
   it.each(['fx-startup-ready', 'fx-active-turn', 'fx-post-turn-ready'])(
     'does not report an approval prompt for %s',
@@ -73,11 +77,20 @@ describe('fx terminal evidence', () => {
     }
   )
 
-  it('does not revive an approval dialog from scrollback or later narration', async () => {
+  it('does not revive an approval dialog after the post-turn ready screen', async () => {
     const approval = fixture('fx-permission-prompt')
     const ready = fixture('fx-post-turn-ready')
-    const transcript = `${approval}\n${ready}\nThe earlier menu said Apply once and Enter Confirm.\n`
-    const { runtime, handle } = await createFxTranscriptPane(transcript, ready)
+    const { runtime, handle } = await createFxTranscriptPane(`${approval}\n${ready}`, ready)
+
+    await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
+  })
+
+  it('does not treat quoted or narrated approval wording as a live dialog', async () => {
+    const transcript = [
+      'The earlier dialog was headed "Permission needed".',
+      'Its footer mentioned "Choose now", "Enter Confirm", and "Esc Cancel".'
+    ].join('\n')
+    const { runtime, handle } = await createFxTranscriptPane(transcript)
 
     await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
   })
