@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
+import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
@@ -12,19 +14,62 @@ import {
   type CodexJournalTranslationAdmission
 } from './codex-structured-journal-contracts'
 import { MAX_CODEX_GOAL_THREADS } from './codex-structured-journal-limits'
-import { appendCodexLifecycleItem, publishCodexLifecycle } from './codex-structured-journal-sink'
+import { appendCodexLifecycleTransition } from './codex-structured-journal-sink'
 
 type GoalThreadState = {
   signature: string
   occurrence: string
 }
 
+const GOAL_IDENTITY_PREFIX = 'codex-goal'
+const DIGEST_PATTERN = /^[0-9a-f]{64}$/
+
 function digest(value: string): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
-function goalIdentity(occurrence: string): AgentJournalItemIdentity {
-  return { provider: 'orca', clientMessageId: `codex-goal:${occurrence}` }
+function goalIdentity(
+  thread: string,
+  signature: string,
+  occurrence: string
+): AgentJournalItemIdentity {
+  return {
+    provider: 'orca',
+    clientMessageId: `${GOAL_IDENTITY_PREFIX}:${thread}:${signature}:${occurrence}`
+  }
+}
+
+function goalStateFromItem(itemId: string, thread: string): GoalThreadState | null {
+  const identity = parseAgentJournalItemKey(itemId)
+  if (identity?.provider !== 'orca') {
+    return null
+  }
+  const [prefix, itemThread, signature, occurrence, ...rest] = identity.clientMessageId.split(':')
+  return prefix === GOAL_IDENTITY_PREFIX &&
+    itemThread === thread &&
+    DIGEST_PATTERN.test(signature ?? '') &&
+    DIGEST_PATTERN.test(occurrence ?? '') &&
+    rest.length === 0
+    ? { signature: signature as string, occurrence: occurrence as string }
+    : null
+}
+
+function persistedGoalIdentity(
+  journal: Pick<AgentSessionJournal, 'latestItemIdMatching'>,
+  thread: string,
+  signature: string
+): AgentJournalItemIdentity | null {
+  const previousItemId = journal.latestItemIdMatching(
+    (itemId) => goalStateFromItem(itemId, thread) !== null
+  )
+  const previous = previousItemId ? goalStateFromItem(previousItemId, thread) : null
+  if (previous?.signature === signature) {
+    return null
+  }
+  const occurrence = previous
+    ? digest(JSON.stringify([previous.occurrence, signature]))
+    : digest(JSON.stringify([thread, signature]))
+  return goalIdentity(thread, signature, occurrence)
 }
 
 /** Persists provider-owned goal lifecycle notifications outside generic-row policy. */
@@ -67,13 +112,14 @@ export class CodexJournalGoals {
     if (!translated) {
       return { accepted: false, reason: 'untranslated' }
     }
-    const admission = appendCodexLifecycleItem(this.sink, goalIdentity(occurrence), translated.body)
+    const admission = appendCodexLifecycleTransition(
+      this.sink,
+      goalIdentity(thread, signatureKey, occurrence),
+      translated.body,
+      (journal) => persistedGoalIdentity(journal, thread, signatureKey)
+    )
     if (!admission.accepted) {
       return admission
-    }
-    const published = publishCodexLifecycle(this.sink)
-    if (!published.accepted) {
-      return published
     }
     this.remember(thread, state)
     return CODEX_JOURNAL_ADMITTED

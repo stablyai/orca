@@ -96,6 +96,16 @@ describe('sequences', () => {
     expect(journal.snapshot().items[0]?.revision).toBe(3)
   })
 
+  it('finds the latest created matching item without promoting an older revision', async () => {
+    const journal = await open()
+    await journal.appendItem(item(0), body('first'), { fence: 1 })
+    const latest = await journal.appendItem(item(1), body('second'), { fence: 1 })
+    await journal.appendItem(item(0), body('first revised'), { fence: 1 })
+
+    expect(journal.latestItemIdMatching(() => true)).toBe(latest.itemId)
+    expect(journal.latestItemIdMatching((itemId) => itemId === latest.itemId)).toBe(latest.itemId)
+  })
+
   it('preserves an oversized identity and its raw digest-form mimic across reopen', async () => {
     const oversizedTurnId = 'a'.repeat(MAX_JOURNAL_KEY_COMPONENT_CHARS + 1)
     const digestFormMimic = boundJournalKeyComponent(oversizedTurnId)

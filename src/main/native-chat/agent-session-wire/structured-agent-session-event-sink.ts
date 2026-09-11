@@ -31,6 +31,10 @@ export type StructuredAgentSessionAppendOptions = {
   observedAt?: number
 }
 
+export type StructuredAgentSessionLifecycleIdentityResolver = (
+  journal: Pick<AgentSessionJournal, 'latestItemIdMatching'>
+) => AgentJournalItemIdentity | null
+
 export type StructuredAgentSessionEventSink = {
   appendItem(
     identity: AgentJournalItemIdentity,
@@ -51,6 +55,12 @@ export type StructuredAgentSessionEventSink = {
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     options?: StructuredAgentSessionAppendOptions
+  ): StructuredAgentSessionSinkAdmission
+  /** Queues one journal-derived lifecycle append; a null resolution is a no-op. */
+  tryAppendLifecycleTransition?(
+    identitySizeBound: AgentJournalItemIdentity,
+    body: AgentJournalItemBody,
+    resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver
   ): StructuredAgentSessionSinkAdmission
   appendLifecycleBatch?(
     settlementId: string,
@@ -186,6 +196,27 @@ export function createDeferredStructuredAgentSessionEventSink(
           },
           options
         ),
+      tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity) => {
+        const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
+        return queue.submit(
+          {
+            bytes,
+            lifecycle: true,
+            run: async (bound) => {
+              const identity = resolveIdentity(bound.journal)
+              if (identity === null) {
+                return
+              }
+              if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
+                throw new Error('structured agent-session item identity exceeded its reserved size')
+              }
+              await bound.journal.appendItem(identity, body, { fence: bound.fence })
+              bound.publish()
+            }
+          },
+          { lifecycle: true }
+        )
+      },
       appendLifecycleBatch: (settlementId, mutations, options = {}) => {
         const admission = appendLifecycleBatch(settlementId, mutations, options)
         if (!admission.accepted) {
