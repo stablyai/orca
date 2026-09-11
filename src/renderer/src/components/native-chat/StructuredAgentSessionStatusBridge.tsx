@@ -11,7 +11,6 @@ import {
   type AgentSubagentSnapshot,
   type AgentSubagentState
 } from '../../../../shared/agent-status-types'
-import { resolveAgentStatusStateStartedAt } from '../../../../shared/agent-status-state-start'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionStatusState
@@ -191,12 +190,8 @@ function projectStatus(
       updatedAt: summary.updatedAt,
       // This ordered host feed can correct a legacy publication clock after upgrade.
       allowOlderTimestamp: true,
-      // The host's rule, shared so the two writers cannot date the same turn differently.
-      stateStartedAt: resolveAgentStatusStateStartedAt({
-        previous: current,
-        nextState: desired.state,
-        observedAt: summary.updatedAt
-      }),
+      // No `stateStartedAt`: passing one overrode the store's own rule, which is the host's. A
+      // settled row keeps its completion time, which `agentEntryCompletionAt` reads.
       evidenceObservedAt: summary.updatedAt
     },
     { tabId: tab.id, worktreeId: tab.worktreeId },

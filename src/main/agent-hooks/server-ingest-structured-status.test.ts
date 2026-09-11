@@ -111,8 +111,8 @@ describe('AgentHookServer ingestStructuredStatus', () => {
   })
 
   // The renderer's bridge used to restamp a settled row on every republish while this writer held
-  // it. Both now share `resolveAgentStatusStateStartedAt`; `agentEntryCompletionAt` reads this
-  // field as the completion time, so a moving one would re-date a finished turn.
+  // it. This writer's rule is now the only one: `agentEntryCompletionAt` reads this field as the
+  // completion time, so a moving one would re-date a finished turn.
   it('keeps a completed turn dated when a settled session is republished', () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(summary({ status: 'idle' }))

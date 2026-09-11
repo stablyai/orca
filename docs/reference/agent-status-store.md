@@ -285,8 +285,18 @@ keying on it, and both are fixed:
   filter would have produced two rows for one chat;
 - the key held a second `:`, which `parsePaneKey` rejects. An unparseable key is
   dropped by `buildWorktreeAgentRows` (both the `entriesByTabId` bucket and the
-  worktree-attributed fallback), so a `:history-N` session had **no** sidebar or
-  dashboard row at all. It gets one now.
+  worktree-attributed fallback), so a surface re-hosted at `:history-N` published
+  a key no reader could bucket. It now publishes the session's key like any other
+  surface.
+
+  That is narrower than a session gaining a row it did not have. The suffix is
+  only assigned when the base id is already occupied, and the occupant is
+  normally the same session's other surface — which was already publishing the
+  base key, and whose row the suffixed surface now shares rather than adds to.
+  The bridge test for a disambiguated mirrored surface pins the derivation, not
+  a reachable end state: its fixture has a suffixed surface with nothing at the
+  base id, which `buildMirroredAgentTabs` does not produce. Read it as a guard
+  on the key, not as evidence of a row the user gains.
 
 Nothing was stranded under an old key: main never wrote a suffixed key, and the
 renderer's `agentStatusByPaneKey` is in-memory, so a `:history-N` row only ever
@@ -297,14 +307,46 @@ session (the collision that produces the suffix), and they now share one key, so
 the status bridge's unmount cleanup no longer clears the row while another
 surface still mirrors that session.
 
-### `stateStartedAt`: one rule, the host's
+### The key names the session, so readers resolve the surface by session
 
-`src/shared/agent-status-state-start.ts` holds it, and both writers call it:
-a row's `stateStartedAt` is the start of the state the row is in, so republished
+A structured pane key's tab-id half is `structuredAgentSessionTabId(sessionId)`,
+not the id of the surface hosting the chat. Two readers were using it as surface
+routing, and `terminal-surfaces.ts` breaks that agreement in both of its
+id-collision paths — a conversation that _replaces_ another reuses the superseded
+tab, so the local id keeps spelling the old session while `entityId` becomes the
+new one:
+
+- `WorktreeCardAgents`'s row click resolved the tab by exact id, so a replaced
+  conversation's row did nothing at all. It now falls back to
+  `activateStructuredAgentSessionForRow`, which reads the session id back out of
+  the tab id (`structuredAgentSessionIdFromTabId`) and resolves the surface by
+  `entityId`.
+- the live-entry worktree index in `worktree-agent-row-selectors.ts` maps tab id
+  to worktree, and a `done` row is bucketed only through that index (a live row
+  still has `entry.worktreeId` to fall back on). A replaced conversation's
+  settled row therefore vanished from the sidebar. The index now registers each
+  agent-session tab under its derived session tab id as well as its local id.
+
+`structured-agent-session-projection.ts` owns both directions of the derivation,
+so no reader re-spells the prefix.
+
+### `stateStartedAt`: the renderer stops overriding the store's rule
+
+A row's `stateStartedAt` is the start of the state the row is in, so republished
 evidence never moves it and only a state change (or Command Code's same-state
-new turn) resets it. `attachStatusTiming` had this rule already; the renderer's
-`projectStatus` had an extra `desired.state !== 'done'` clause that restamped a
-settled row on every republish, and that clause is gone.
+new turn) resets it. `attachStatusTiming` had this rule already, and so did the
+renderer store's own default in `agent-status-live-entry-builder.ts` — including
+the Command Code clause, which it computes internally.
+
+The divergence was that the bridge's `projectStatus` _passed_ a
+`timing.stateStartedAt`, which is exactly the override that displaces that
+default, and the value it passed carried an extra `desired.state !== 'done'`
+clause that restamped a settled row on every republish. The bridge now passes no
+`stateStartedAt` at all, so the store applies its own rule. There is no shared
+helper: one would have had a single caller, and it could not express the store's
+Command Code clause from the bridge's call site. `server-reaping.ts` still holds
+its own inline copy of the same shape, so "one rule for every writer" would not
+have been true either.
 
 `done` is not an exception, because `agentEntryCompletionAt` reads a settled
 row's `stateStartedAt` as its completion time. A moving one re-dates a turn that

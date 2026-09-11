@@ -1,3 +1,4 @@
+import { structuredAgentSessionIdFromTabId } from '../../../shared/structured-agent-session-projection'
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -39,5 +40,24 @@ export function activateStructuredAgentSessionById(args: {
   )
   return tab
     ? activateStructuredAgentSessionTab({ worktreeId: args.worktreeId, tabId: tab.id })
+    : false
+}
+
+/**
+ * Activate the session a status row points at. A structured row's tab id comes out of its pane key,
+ * which PR 2a derives from the session id alone, so it stops matching the local surface whenever
+ * `terminal-surfaces.ts` reuses a tab for a replacing conversation or re-hosts a mirror at
+ * `${baseId}:history-N`. The session id the key encodes is the identity that survives both.
+ */
+export function activateStructuredAgentSessionForRow(args: {
+  worktreeId: string
+  tabId: string
+}): boolean {
+  if (activateStructuredAgentSessionTab(args)) {
+    return true
+  }
+  const sessionId = structuredAgentSessionIdFromTabId(args.tabId)
+  return sessionId
+    ? activateStructuredAgentSessionById({ worktreeId: args.worktreeId, sessionId })
     : false
 }

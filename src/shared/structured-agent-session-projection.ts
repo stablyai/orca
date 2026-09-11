@@ -207,6 +207,15 @@ export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
 
+const STRUCTURED_AGENT_SESSION_TAB_ID_PREFIX = structuredAgentSessionTabId('')
+
+/** The session id a derived tab id (or the tab-id half of a status pane key) encodes, if any. */
+export function structuredAgentSessionIdFromTabId(tabId: string): string | null {
+  return tabId.startsWith(STRUCTURED_AGENT_SESSION_TAB_ID_PREFIX)
+    ? tabId.slice(STRUCTURED_AGENT_SESSION_TAB_ID_PREFIX.length) || null
+    : null
+}
+
 export function projectStructuredAgentSessionStatus(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
