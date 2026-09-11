@@ -155,6 +155,66 @@ describe('client accept abandoned mid-DB-phase', () => {
     vi.useRealTimers()
   })
 
+  it('does not admit new source work after a drain crosses activity acquisition', async () => {
+    const h = harness()
+    const control = await activeHost(h)
+    const slow = deferred<void>()
+    h.acquireActivity.mockReturnValueOnce(slow.promise)
+    const client = new FakeSocket()
+    const capacity = { bind: vi.fn(), release: vi.fn() }
+    const accepting = h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential',
+      capacity
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    h.registry.drainHost({
+      attemptId: 'attempt',
+      userId: identity.sub,
+      relayHostId: identity.relayHostId,
+      sourceAssignmentEpoch: 1,
+      graceMs: 60_000
+    })
+    slow.resolve()
+    await accepting
+    expect(control.send).not.toHaveBeenCalledWith(expect.stringContaining('conn-open'))
+    expect(capacity.bind).not.toHaveBeenCalled()
+    expect(client.close).toHaveBeenCalledWith(RELAY_CLOSE_CODE.WRONG_CELL, expect.any(String))
+    expect(h.releaseActivity).toHaveBeenCalled()
+  })
+
+  it('does not splice an attachment whose generation retired during basis persistence', async () => {
+    const h = harness()
+    await activeHost(h)
+    const client = new FakeSocket()
+    await h.registry.acceptClient(
+      client as unknown as WebSocket,
+      identity.relayHostId,
+      'credential'
+    )
+    const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+    const pending = [...session.pendingConns.values()][0]!
+    const slow = deferred<void>()
+    h.store.recordConnectionBasis.mockReturnValueOnce(slow.promise)
+    const host = new FakeSocket()
+    const attaching = h.registry.acceptHostData(
+      host as unknown as WebSocket,
+      pending.connId,
+      pending.connTicket,
+      1
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    h.registry.drain(0)
+    await vi.advanceTimersByTimeAsync(0)
+    slow.resolve()
+    expect(await attaching).toBe(false)
+    expect(session.activeSplices.size).toBe(0)
+    expect(h.store.deactivateBasis).toHaveBeenCalledWith(pending.connId)
+    expect(client.send).not.toHaveBeenCalledWith(expect.stringContaining('\"ok\":true'))
+    expect(host.close).toHaveBeenCalled()
+  })
+
   it('stops after a slow activity acquire when the phone already hung up', async () => {
     const h = harness()
     const control = await activeHost(h)
@@ -390,6 +450,7 @@ describe('successful client accept timing', () => {
         relayHostIdDigest: string
       }
       expect(event.credentialKind).toBe('resume')
+      expect(event).toMatchObject({ assignmentEpoch: 1, controlGeneration: 1, drainMode: 'none' })
       // Joins the line back to the emitting process, like the runtime metrics event.
       expect(event).toMatchObject({ role: 'cell', cellId: config.cellId, region: 'us-central1' })
       expect(Object.keys(event.stageMs).sort()).toEqual([
@@ -460,6 +521,9 @@ describe('control round-trip sampling', () => {
         cellId: config.cellId,
         region: 'us-central1',
         rttMsMedian: 40,
+        assignmentEpoch: 1,
+        controlGeneration: 1,
+        drainMode: 'none',
         sampleCount: 4
       })
       expect(rttLines()[0]).not.toContain(identity.relayHostId)

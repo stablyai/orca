@@ -799,8 +799,9 @@ describe('codex journal translation', () => {
 
     const reduced = new Map(tap.rows.map((row) => [row.key, row.body]))
     expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
       kind: 'diff',

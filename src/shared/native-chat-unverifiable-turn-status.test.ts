@@ -57,7 +57,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
       const options = {
         activeTurnKey: user.itemId,
         isWorking: false,
-        hasCurrentTurnResponse: true,
+        thinking: false,
         settledByTurn: selectStructuredAgentSettledTurns([user, recoveredTurn])
       }
 
@@ -87,7 +87,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
         {
           activeTurnKey: 'next',
           isWorking: true,
-          hasCurrentTurnResponse: true,
+          thinking: false,
           settledByTurn: selectStructuredAgentSettledTurns([userItem('turn-1'), item])
         }
       )
@@ -113,7 +113,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
       {
         activeTurnKey: 'turn-1',
         isWorking: false,
-        hasCurrentTurnResponse: true,
+        thinking: false,
         settledByTurn: selectStructuredAgentSettledTurns([
           userItem('turn-1'),
           userItem('old'),

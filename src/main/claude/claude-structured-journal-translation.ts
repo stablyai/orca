@@ -180,8 +180,11 @@ export function createClaudeJournalTranslator(
     const thinking = claudeThinkingText(outputEnvelope)
     if (thinking) {
       deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
-        kind: 'status',
-        text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [
+          { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
+        ]
       })
       changed = true
     }

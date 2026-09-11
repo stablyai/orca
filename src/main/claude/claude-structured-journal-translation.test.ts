@@ -569,8 +569,11 @@ describe('Claude structured journal translation', () => {
     translator.handle(message('assistant', 'assistant-thinking', [{ type: 'thinking', thinking }]))
 
     expect(state.items.at(-1)?.body).toEqual({
-      kind: 'status',
-      text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [
+        { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
+      ]
     })
   })
 

@@ -1,20 +1,23 @@
-// The Codex preflight returns provider items only. The host's turn rows are its own record, so a
-// rewind that takes the provider's list as the new epoch would drop every duration before the
-// boundary unless those rows are spliced back beside the item each one followed.
+// Provider preflight returns provider items only. The host's lifecycle rows are its own record, so
+// a rewind that takes the provider list as the new epoch must splice those rows back beside the
+// provider item each one followed.
 
+import { parseCodexGoalJournalItemId } from '../../codex/codex-goal-journal-identity'
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRewindRecord } from '../../../shared/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 
 type RetainedRow = AgentSessionRewindRecord['retained'][number]
 
-export function isRetainedTurnRow(item: Pick<RetainedRow, 'body'>): boolean {
-  return readAgentJournalTurn(item.body as AgentJournalItemBody) !== null
+export function isRetainedHostLifecycleRow(item: RetainedRow): boolean {
+  return (
+    readAgentJournalTurn(item.body as AgentJournalItemBody) !== null ||
+    parseCodexGoalJournalItemId(item.itemId) !== null
+  )
 }
 
-/** `reference` fixes where each turn row sits; the provider items are the spine and keep their
- *  own order, including turns the local journal never saw. */
-export function mergeRetainedTurnRows(
+/** `reference` fixes where each host row sits; provider items are the ordered spine. */
+export function mergeRetainedHostLifecycleRows(
   reference: readonly RetainedRow[],
   providerItems: readonly RetainedRow[]
 ): RetainedRow[] {
@@ -22,7 +25,7 @@ export function mergeRetainedTurnRows(
   const rowsAfter = new Map<number, RetainedRow[]>()
   let anchor = -1
   for (const item of reference) {
-    if (!isRetainedTurnRow(item)) {
+    if (!isRetainedHostLifecycleRow(item)) {
       anchor = spineIndex.get(item.itemId) ?? anchor
     } else if (!spineIndex.has(item.itemId)) {
       rowsAfter.set(anchor, [...(rowsAfter.get(anchor) ?? []), item])

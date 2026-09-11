@@ -399,3 +399,52 @@ describe('useStructuredAgentSessionRead history window', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(2)
   })
 })
+
+// A workspace delete closes its structured chats while the pane is still mounted, so every read
+// against that session refuses `agent_session_ownership_unknown` until the tab retires. A page that
+// lost that race must not leave the pane holding an error the live transport is about to clear.
+describe('useStructuredAgentSessionRead unattached page refusals', () => {
+  afterEach(cleanup)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetStructuredAgentSessionReadOwnersForTests()
+    mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  function refusal(code: string): Error & { code: string } {
+    const error = new Error(code) as Error & { code: string }
+    error.name = 'RuntimeRpcCallError'
+    error.code = code
+    return error
+  }
+
+  async function loadedTailThatRefusesOlder(error: Error) {
+    const tailItems = Array.from({ length: 300 }, (_, index) =>
+      message(`tail-${index}`, 301 + index, 'assistant')
+    )
+    mocks.call
+      .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
+      .mockRejectedValueOnce(error)
+    const { result } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
+    await act(async () => result.current.loadOlder())
+    return result
+  }
+
+  it('leaves the transcript alone when an older page hits a closed session', async () => {
+    const result = await loadedTailThatRefusesOlder(refusal('agent_session_ownership_unknown'))
+    expect(result.current.state.status).not.toBe('error')
+    expect(result.current.state.error).toBeUndefined()
+    expect(result.current.state.items).toHaveLength(300)
+    expect(result.current.loadingOlder).toBe(false)
+  })
+
+  it('still reports an older page that failed for any other reason', async () => {
+    const result = await loadedTailThatRefusesOlder(new Error('journal read failed'))
+    expect(result.current.state.status).toBe('error')
+    expect(result.current.state.error).toBe('Error: journal read failed')
+  })
+})

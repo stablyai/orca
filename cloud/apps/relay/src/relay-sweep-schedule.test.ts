@@ -35,7 +35,7 @@ describe('sweep schedule jitter', () => {
           rehomeAudience: 'https://rehome.example.test',
           rehomeDirectorServiceAccount: 'rehome@example.test'
         } as never,
-        { claimRegionalRehome: async () => null } as never,
+        { selectIdleRegionalRehomeCandidates: async () => [] } as never,
         { random: () => 0.5, safetySnapshot: () => ({}) as never }
       )
     } finally {
