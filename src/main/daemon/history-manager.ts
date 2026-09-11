@@ -1,7 +1,9 @@
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
+import { ensurePrivateDir } from './daemon-private-file-modes'
+import { clearReplayableTerminalHistorySessionFiles } from './terminal-history-session-files'
 import {
   fingerprintTerminalHistorySession,
   hasTerminalHistoryRecoveryProtection,
@@ -17,6 +19,7 @@ import { TerminalHistorySessionWriter } from './terminal-history-session-writer'
 import {
   readTerminalHistoryMetaFromDir,
   updateTerminalHistoryMeta,
+  writeTerminalHistoryMeta,
   type SessionMeta
 } from './terminal-history-metadata'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
@@ -68,7 +71,7 @@ export class HistoryManager {
         throw new Error('terminal_history_recovery_generation_changed')
       }
       this.recoveryFreezes.delete(sessionId)
-      mkdirSync(dir, { recursive: true })
+      ensurePrivateDir(dir)
 
       const meta: SessionMeta = {
         cwd: opts.cwd,
@@ -78,21 +81,10 @@ export class HistoryManager {
         endedAt: null,
         exitCode: null
       }
-      writeFileSync(join(dir, 'meta.json'), JSON.stringify(meta, null, 2))
+      writeTerminalHistoryMeta(dir, meta)
 
       if (!opts.quarantineUnreadableRecovery) {
-        // Why: a crash before the first checkpoint must not replay a cleanly ended prior session.
-        for (const staleFile of [
-          join(dir, 'checkpoint.json'),
-          join(dir, 'scrollback.bin'),
-          join(dir, 'output.log')
-        ]) {
-          try {
-            unlinkSync(staleFile)
-          } catch {
-            // ENOENT is expected for new sessions
-          }
-        }
+        clearReplayableTerminalHistorySessionFiles(dir)
       }
 
       this.writers.set(

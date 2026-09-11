@@ -1,14 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, lstatSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { ensurePrivateDir, PRIVATE_FILE_MODE } from './daemon-private-file-modes'
 import { getHistorySessionDirName } from './history-paths'
 
 const QUARANTINE_DIR_NAME = '.recovery-quarantine'
@@ -83,8 +76,8 @@ export function quarantineTerminalHistorySession(
   const sessionDir = join(basePath, getHistorySessionDirName(sessionId))
   const ownerDir = getTerminalHistoryQuarantineOwnerDir(basePath, sessionId)
   // Why: if rename is blocked, a later adapter must not attach a writer to the unreadable generation.
-  writeFileSync(join(sessionDir, RECOVERY_PROTECTION_MARKER), '')
-  mkdirSync(ownerDir, { recursive: true })
+  writeFileSync(join(sessionDir, RECOVERY_PROTECTION_MARKER), '', { mode: PRIVATE_FILE_MODE })
+  ensurePrivateDir(ownerDir)
   const quarantineDir = join(ownerDir, randomUUID())
   renameSync(sessionDir, quarantineDir)
   return quarantineDir
