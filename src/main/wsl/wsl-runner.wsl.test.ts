@@ -23,6 +23,15 @@ import { resolveWslExecutablePath } from './wsl-executable-path'
  *     deletes or reverts the user's profile.
  * Verified by hashing `$HOME/.profile` either side of a run, which is the check
  * to repeat if you must run it somewhere shared -- do not assume the restore.
+ *
+ * The mutation has to be distro-global: the stall it reproduces happens inside
+ * `getWslGuestEnvironment`'s probe, which takes no HOME from the caller. So for
+ * the length of this describe, every login shell in the distro blocks for 60s —
+ * including any run by a sibling suite in the same Vitest invocation. That is
+ * not hypothetical: it silently timed out the login-shell contrast read in
+ * `local-worktree-filesystem-wsl-banner.wsl.test.ts`, which passed alone and
+ * failed in the pair. Any new WSL suite that needs a predictable `~/.profile`
+ * must own the HOME it reads rather than the distro user's, as that one now does.
  */
 const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
 const enabled = process.platform === 'win32' && process.env.ORCA_REAL_WSL_RUNNER_TEST === '1'
