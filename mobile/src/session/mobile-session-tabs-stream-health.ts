@@ -1,4 +1,5 @@
 import type { RpcClient } from '../transport/rpc-client'
+import { readRpcClientGeneration } from '../transport/rpc-client-generation'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 
 export type SessionTabsApplyOutcome<Tab> =
@@ -44,8 +45,6 @@ type StreamSubscription = {
   listener: (payload: unknown) => void
   cancel: () => void
 }
-
-type GenerationClient = RpcClient & { getGeneration?: () => number }
 
 export class MobileSessionTabsStreamHealth<Result, Tab> {
   private readonly inFlight = new Map<string, RequestCohort>()
@@ -320,7 +319,7 @@ export class MobileSessionTabsStreamHealth<Result, Tab> {
   }
 
   private readGeneration(): number {
-    return (this.options.client as GenerationClient).getGeneration?.() ?? 0
+    return readRpcClientGeneration(this.options.client) ?? 0
   }
 
   private readApplicationRevision(): number {

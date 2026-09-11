@@ -1,7 +1,8 @@
 import { createElement, Suspense, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
+import { createRpcClientTestDouble } from '../test/rpc-client-test-double'
+import type { RpcResponse } from '../transport/types'
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn().mockResolvedValue(null),
@@ -48,6 +49,10 @@ import { getLocalExecutionHostLabel } from '../../../src/shared/execution-host'
 import { NewWorktreeModal } from './NewWorktreeModal'
 
 const LOCAL_HOST_LABEL = getLocalExecutionHostLabel('darwin')
+
+function rpcSuccess(result: unknown): RpcResponse {
+  return { id: '1', ok: true, result, _meta: { runtimeId: 'runtime-1' } }
+}
 
 const repos = [
   {
@@ -100,11 +105,11 @@ describe('NewWorktreeModal project targets', () => {
         return Promise.reject(new Error('connection closed'))
       }
       if (method === 'status.get') {
-        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+        return Promise.resolve(rpcSuccess({ hostPlatform: 'darwin' }))
       }
       return new Promise(() => {})
     })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = createRpcClientTestDouble({ sendRequest })
 
     await act(async () => {
       renderer = create(
@@ -118,9 +123,7 @@ describe('NewWorktreeModal project targets', () => {
       )
       await Promise.resolve()
     })
-    await act(async () => {
-      await Promise.resolve()
-    })
+    await flushUpdates()
 
     expect(sendRequest).toHaveBeenCalledWith('repo.list')
     expect(pickerItems(renderer, 'Project')).toEqual([
@@ -143,17 +146,17 @@ describe('NewWorktreeModal project targets', () => {
         upstream: { owner: 'stablyai', repo: 'orca' }
       }
     ]
-    const client = {
+    const client = createRpcClientTestDouble({
       sendRequest: vi.fn().mockImplementation((method: string) => {
         if (method === 'repo.list') {
           return Promise.resolve({ ok: true, result: { repos: listedRepos } })
         }
         if (method === 'status.get') {
-          return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+          return Promise.resolve(rpcSuccess({ hostPlatform: 'darwin' }))
         }
         return new Promise(() => {})
       })
-    } as unknown as RpcClient
+    })
 
     await act(async () => {
       renderer = create(
@@ -167,6 +170,7 @@ describe('NewWorktreeModal project targets', () => {
       )
       await Promise.resolve()
     })
+    await flushUpdates()
 
     expect(pickerItems(renderer, 'Project')).toEqual([
       expect.objectContaining({ label: 'orca', detail: 'stablyai/orca' })
@@ -223,14 +227,14 @@ describe('NewWorktreeModal project targets', () => {
         return Promise.resolve({ ok: true, result: {} })
       }
       if (method === 'status.get') {
-        return Promise.resolve({ ok: true, result: { hostPlatform: 'linux' } })
+        return Promise.resolve(rpcSuccess({ hostPlatform: 'linux' }))
       }
       if (method === 'repo.hooks') {
         return Promise.resolve({ ok: true, result: { hooks: null, source: null } })
       }
       return Promise.resolve({ ok: true, result: {} })
     })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = createRpcClientTestDouble({ sendRequest })
 
     await act(async () => {
       renderer = create(
@@ -279,14 +283,14 @@ describe('NewWorktreeModal project targets', () => {
         return Promise.resolve({ ok: true, result: {} })
       }
       if (method === 'status.get') {
-        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+        return Promise.resolve(rpcSuccess({ hostPlatform: 'darwin' }))
       }
       if (method === 'repo.hooks') {
         return Promise.resolve({ ok: true, result: { hooks: null, source: null } })
       }
       return Promise.resolve({ ok: true, result: {} })
     })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = createRpcClientTestDouble({ sendRequest })
 
     await act(async () => {
       renderer = create(
@@ -312,25 +316,25 @@ describe('NewWorktreeModal project targets', () => {
       resolveOldList = resolve
     })
     const freshRepo = { ...repos[0]!, id: 'repo-fresh', displayName: 'fresh' }
-    const oldClient = {
+    const oldClient = createRpcClientTestDouble({
       sendRequest: vi.fn().mockImplementation((method: string) => {
         if (method === 'repo.list') {
           return oldList
         }
         return new Promise(() => {})
       })
-    } as unknown as RpcClient
-    const freshClient = {
+    })
+    const freshClient = createRpcClientTestDouble({
       sendRequest: vi.fn().mockImplementation((method: string) => {
         if (method === 'repo.list') {
           return Promise.resolve({ ok: true, result: { repos: [freshRepo] } })
         }
         if (method === 'status.get') {
-          return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+          return Promise.resolve(rpcSuccess({ hostPlatform: 'darwin' }))
         }
         return new Promise(() => {})
       })
-    } as unknown as RpcClient
+    })
     const modalProps = {
       visible: true,
       hostId: 'host-1',
@@ -361,7 +365,7 @@ describe('NewWorktreeModal project targets', () => {
 
   it('remounts before the reopened session renders, so no stale instance sees visible', async () => {
     const sendRequest = vi.fn().mockImplementation(() => new Promise(() => {}))
-    const client = { sendRequest } as unknown as RpcClient
+    const client = createRpcClientTestDouble({ sendRequest })
     const modalProps = {
       client,
       hostId: 'host-1',
@@ -518,9 +522,9 @@ describe('NewWorktreeModal project targets', () => {
   })
 
   it('starts with fresh form state after closing and reopening', async () => {
-    const client = {
+    const client = createRpcClientTestDouble({
       sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
-    } as unknown as RpcClient
+    })
     const modalProps = {
       client,
       hostId: 'host-1',
