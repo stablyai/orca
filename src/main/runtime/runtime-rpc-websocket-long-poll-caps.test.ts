@@ -206,7 +206,10 @@ describe('OrcaRuntimeRpcServer', () => {
 
   it('shares one socket close listener across concurrent WebSocket dispatches', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const runtime = {
+      configureNotificationDismissalStore: () => {},
+      getRuntimeId: () => 'test-runtime'
+    } as unknown as OrcaRuntimeService
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
