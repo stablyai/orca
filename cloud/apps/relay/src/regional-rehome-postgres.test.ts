@@ -29,6 +29,11 @@ describePostgres('PostgreSQL regional rehoming', () => {
   })
 
   async function cleanup(): Promise<void> {
+    await primary.query(`DELETE FROM relay_region_retentions WHERE attempt_id IN
+      (SELECT attempt_id FROM relay_region_rehome_attempts WHERE user_id LIKE 'pg-rehome-user-%')`)
+    for (const table of ['relay_region_decisions', 'relay_control_capabilities']) {
+      await primary.query(`DELETE FROM ${table} WHERE user_id LIKE 'pg-rehome-user-%'`)
+    }
     await primary.query(
       `DELETE FROM relay_region_rehome_attempts WHERE user_id LIKE 'pg-rehome-user-%'`
     )
@@ -68,6 +73,81 @@ describePostgres('PostgreSQL regional rehoming', () => {
       await primary.query(`DELETE FROM ${table} WHERE cell_id LIKE 'pg-rehome-cell-%'`)
     }
   }
+
+  it('defaults to a closed correction cohort even with enabled durable control', async () => {
+    const context = await fixture()
+    const closed = new RelayAssignmentStore(primary, context.now, {
+      requireLiveCells: true,
+      heartbeatTtlMs: 45_000
+    })
+    expect(await closed.claimRegionalRehome()).toBeNull()
+    const preview = await closed.previewRegionalRehomeEligibility({
+      observedAt: context.now(),
+      sqlFailures: 0,
+      reconnects: 0,
+      controlActivityRecoveryFailures: 0,
+      databasePoolWaiting: 0,
+      databasePoolWaitersMax: 0,
+      databasePoolWaitMsMax: 0
+    })
+    expect(preview.cohortPercent).toBe(0)
+    expect(preview.counts['outside-cohort']).toBe(1)
+    expect(await attemptAndMigrationCounts(context.identity)).toEqual({
+      attempts: 0,
+      migrations: 0
+    })
+  })
+
+  it('counts existing generic migrations against the optimization cap and preview', async () => {
+    const context = await fixture()
+    const safety = {
+      observedAt: context.now(),
+      sqlFailures: 0,
+      reconnects: 0,
+      controlActivityRecoveryFailures: 0,
+      databasePoolWaiting: 0,
+      databasePoolWaitersMax: 0,
+      databasePoolWaitMsMax: 0
+    }
+    const before = await context.store.previewRegionalRehomeEligibility(safety)
+    expect(before.counts['eligible:us-central1-to-asia-east2']).toBe(1)
+    for (let index = 0; index < 8; index++) {
+      const identity = {
+        userId: `pg-rehome-user-budget-${sequence}-${index}`,
+        relayHostId: `budgethost${String(index).padStart(6, '0')}`
+      }
+      await context.store.assign(identity, undefined, 'us-central1')
+      await context.store.startEvacuation(identity, context.target.id)
+    }
+    const preview = await context.store.previewRegionalRehomeEligibility(safety)
+    expect(preview.openMigrations).toBe(8)
+    expect(preview.availableMigrationSlots).toBe(0)
+    expect(preview.counts['concurrent-migration-cap']).toBe(1)
+    expect(await context.store.claimRegionalRehome()).toBeNull()
+    expect(await attemptAndMigrationCounts(context.identity)).toEqual({
+      attempts: 0,
+      migrations: 0
+    })
+  })
+
+  it('preview excludes request capacity exhaustion before a claim', async () => {
+    const context = await fixture()
+    await primary.query(
+      `UPDATE relay_cells SET capacity_requests = reserved_requests + 1 WHERE cell_id = ?`,
+      [context.target.id]
+    )
+    const preview = await context.store.previewRegionalRehomeEligibility({
+      observedAt: context.now(),
+      sqlFailures: 0,
+      reconnects: 0,
+      controlActivityRecoveryFailures: 0,
+      databasePoolWaiting: 0,
+      databasePoolWaitersMax: 0,
+      databasePoolWaitMsMax: 0
+    })
+    expect(preview.counts['no-target-headroom']).toBe(1)
+    expect(await context.store.claimRegionalRehome()).toBeNull()
+  })
 
   it('claims through ambient per-cell sql retry noise', async () => {
     const context = await fixture()
@@ -146,13 +226,9 @@ describePostgres('PostgreSQL regional rehoming', () => {
   it('leaves a host whose preference is older than the configured max age', async () => {
     const context = await fixture()
     await primary.query(
-      `UPDATE relay_assignment_region_preferences SET observed_at = ?
+      `UPDATE relay_region_decisions SET observed_at = ?
        WHERE user_id = ? AND relay_host_id = ?`,
-      [
-        context.now() - 24 * 60 * 60_000 - 1,
-        context.identity.userId,
-        context.identity.relayHostId
-      ]
+      [context.now() - 24 * 60 * 60_000 - 1, context.identity.userId, context.identity.relayHostId]
     )
 
     await expect(context.store.claimRegionalRehome()).resolves.toBeNull()
@@ -401,7 +477,7 @@ describePostgres('PostgreSQL regional rehoming', () => {
     await lockedPromise
     const claim = context.store.claimRegionalRehome()
     await primary.query(
-      `UPDATE relay_assignment_region_preferences SET preferred_region = 'us-central1',
+      `UPDATE relay_region_decisions SET preferred_region = 'us-central1',
          observed_at = ? WHERE user_id = ? AND relay_host_id = ?`,
       [context.now(), context.identity.userId, context.identity.relayHostId]
     )
@@ -711,18 +787,12 @@ describePostgres('PostgreSQL regional rehoming', () => {
       drainGraceMs: 60_000
     })
     await store.reconcileCells([source, target])
-    await heartbeat(
-      store,
-      source,
-      '11111111-1111-4111-8111-111111111111',
-      1,
-      900_000
-    )
+    await heartbeat(store, source, '11111111-1111-4111-8111-111111111111', 2, 900_000)
     await heartbeat(
       store,
       target,
       '22222222-2222-4222-8222-222222222222',
-      options.targetProtocol ?? 1,
+      options.targetProtocol ?? 2,
       900_000
     )
     const identity = {
@@ -733,9 +803,32 @@ describePostgres('PostgreSQL regional rehoming', () => {
     const sourceControl = await store.activateControl(identity, {
       cellId: source.id,
       assignmentEpoch: assignment.assignmentEpoch,
-      generation: 1
+      generation: 1,
+      finishExistingRegionalRehome: true,
+      cellIncarnation: '11111111-1111-4111-8111-111111111111'
     })
     await store.assign(identity, preferredRegion)
+    const issued = await store.exchangeRegionCorrection(
+      identity,
+      { v: 1, action: 'issue-window' },
+      assignment.assignmentEpoch
+    )
+    await store.exchangeRegionCorrection(
+      identity,
+      {
+        v: 1,
+        action: 'report',
+        generation: issued.window!.generation,
+        assignmentEpoch: assignment.assignmentEpoch,
+        policyVersion: 1,
+        outcome: 'conclusive',
+        measurements: {
+          'us-central1': preferredRegion === 'us-central1' ? 50 : 150,
+          'asia-east2': preferredRegion === 'asia-east2' ? 50 : 150
+        }
+      },
+      assignment.assignmentEpoch
+    )
     return {
       preferredRegion,
       store,
@@ -753,6 +846,7 @@ describePostgres('PostgreSQL regional rehoming', () => {
 })
 
 const storeOptions = {
+  regionalRehomeCohortPercent: 100,
   requireLiveCells: true,
   heartbeatTtlMs: 45_000
 }

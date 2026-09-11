@@ -491,3 +491,63 @@ Run and record each scenario in staging before launch:
 - return a dormant host, overload a cell, kill a cell, evacuate active work, and exercise pre-registration rollback.
 
 The served black-box relay suite validates the protocol/state transitions used by these procedures. The physical-device and real-GFE canaries remain separate launch gates; unit/black-box success cannot replace them.
+
+## Optional measured region correction (deployment gated)
+
+New optimization claims require both the durable regional-rehome control and
+`ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT` (integer 0–100, default **0**).
+Turning either gate off stops new optional moves; cleanup and authorized renewal of
+existing finish-existing attempts must continue. Legacy preferred-region hints do
+not certify a correction. Both cells must advertise regional protocol 2 and the
+source desktop's authenticated control must advertise finish-existing support.
+
+The monitor/deploy identity can read **GET `/v1/admin/regional-rehome-preview`**.
+It returns full-population eligibility/exclusion counts, open-migration capacity,
+process-safety gating and aggregate retained-attempt outcomes; it never claims a
+host or changes the failure budget. This is advisory, with separately read state:
+concurrent assignments, capacity changes, rate pauses and control changes can make
+the next claim differ. Inspect the durable control separately before enabling.
+Do not treat an unavailable/failed preview as zero eligible hosts.
+
+`orca_relay_region_correction_outcomes` reports retained attempts by source/target,
+registration/completion/abort state, oldest open age, live source controls and target
+reservation units every five minutes. `orca_relay_region_comparison` samples a
+stable 10% of accepted reports (including unchanged hosts), keyed by host digest,
+assignment epoch and decision generation. Existing control RTT and client-accept
+logs include assignment epoch, control generation and drain mode; join those for
+matched before/after and unchanged-cohort comparisons. Client accept latency is
+connection setup, not application command round trip. No application-latency
+improvement has been demonstrated by probe differences alone.
+
+Forced source closure logs distinguish drain mode and emergency drain. Quiet live
+connections count as work. A healthy retained source may remain for days; age alone
+is not an alert requiring forced closure. Investigate failed registration, missing
+authority, stuck reservations, growing retained counts, reconnects and forced-close
+rates against the rollout's agreed limits.
+
+All director processes and cleanup workers must understand durable retention and
+rollback before enabling a cohort. After a first retained attempt, rolling a worker
+back below that implementation is unsafe even if new claims are disabled. Record
+the actual tested immutable revision as this floor during authorized deployment.
+Deploying supporting cells/desktops and enabling a cohort require separate rollout
+authorization and explicit numerical stop criteria; this change enables neither.
+
+### Setting the correction cohort during a reviewed director rollout
+
+The existing **Deploy Relay Production Director** workflow accepts
+`region-correction-cohort-percent`: `preserve` (default) or an integer0–100.
+It carries the cohort onto both candidate and compatible rollback revisions and
+verifies the environment before promotion. If the predecessor has no setting,
+`preserve` stamps zero. An explicit change requires the exact disabled durable
+rehome generation; configuring a nonzero cohort does not itself enable the sweep.
+The usual image, identity, health and traffic checks remain in force. No workflow
+was dispatched as part of implementation.
+
+Terraform reads the cohort from the same traffic-serving revision used to preserve
+regional placement. A later apply therefore preserves a workflow-set cohort,
+including explicit zero; only an absent service/setting bootstraps to0. Malformed
+or ambiguous live settings fail the plan instead of silently resetting the cohort.
+The audited director workflow owns subsequent changes.
+Before the first nonzero cohort, verify compatible protocol2 cells, updated
+cleanup workers, preview eligibility, both serving/rollback images and the
+explicitly approved observation/stop criteria.

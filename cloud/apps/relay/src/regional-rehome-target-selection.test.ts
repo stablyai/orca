@@ -25,6 +25,7 @@ async function setup() {
   let clock = 1_000_000
   const database = await openInMemoryRelayDatabase()
   const store = new RelayAssignmentStore(database, () => clock, {
+    regionalRehomeCohortPercent: 100,
     requireLiveCells: true,
     heartbeatTtlMs: 45_000
   })
@@ -83,9 +84,29 @@ async function setup() {
     await store.activateControl(identity, {
       cellId: source.id,
       assignmentEpoch: assignment.assignmentEpoch,
-      generation: 1
+      generation: 1,
+      finishExistingRegionalRehome: true,
+      cellIncarnation: incarnation(1)
     })
-    await store.assign(identity, 'asia-east2')
+    const { window } = await store.exchangeRegionCorrection(
+      identity,
+      { v: 1, action: 'issue-window' },
+      assignment.assignmentEpoch
+    )
+    expect(window).toBeDefined()
+    await store.exchangeRegionCorrection(
+      identity,
+      {
+        v: 1,
+        action: 'report',
+        generation: window!.generation,
+        assignmentEpoch: assignment.assignmentEpoch,
+        policyVersion: 1,
+        outcome: 'conclusive',
+        measurements: { 'us-central1': 180, 'asia-east2': 40 }
+      },
+      assignment.assignmentEpoch
+    )
   }
   return { database, store, beat, activatePreferredSource }
 }
@@ -95,28 +116,28 @@ const UNCLEAN = REGIONAL_REHOME_SQL_FAILURES_PER_CELL_LIMIT + 1
 describe('regional rehome target selection', () => {
   it('never selects a target without connection headroom, even at lowest load', async () => {
     const context = await setup()
-    await context.beat(source, 1, 1, {
+    await context.beat(source, 1, 2, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: 0
     })
     // Lowest load but the connection hard cap is exhausted.
-    await context.beat(noHeadroom, 2, 1, {
+    await context.beat(noHeadroom, 2, 2, {
       observedRequests: 0,
       enforcedConnections: 999,
       sqlFailures: 0
     })
-    await context.beat(unclean, 3, 1, {
+    await context.beat(unclean, 3, 2, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: UNCLEAN
     })
-    await context.beat(highLoad, 4, 1, {
+    await context.beat(highLoad, 4, 2, {
       observedRequests: 50,
       enforcedConnections: 0,
       sqlFailures: 0
     })
-    await context.beat(lowLoad, 5, 1, {
+    await context.beat(lowLoad, 5, 2, {
       observedRequests: 10,
       enforcedConnections: 0,
       sqlFailures: 0
@@ -130,27 +151,27 @@ describe('regional rehome target selection', () => {
 
   it('falls to the next clean target when the load winner goes unclean', async () => {
     const context = await setup()
-    await context.beat(source, 1, 1, {
+    await context.beat(source, 1, 2, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: 0
     })
-    await context.beat(noHeadroom, 2, 1, {
+    await context.beat(noHeadroom, 2, 2, {
       observedRequests: 0,
       enforcedConnections: 999,
       sqlFailures: 0
     })
-    await context.beat(unclean, 3, 1, {
+    await context.beat(unclean, 3, 2, {
       observedRequests: 0,
       enforcedConnections: 0,
       sqlFailures: UNCLEAN
     })
-    await context.beat(highLoad, 4, 1, {
+    await context.beat(highLoad, 4, 2, {
       observedRequests: 50,
       enforcedConnections: 0,
       sqlFailures: 0
     })
-    await context.beat(lowLoad, 5, 1, {
+    await context.beat(lowLoad, 5, 2, {
       observedRequests: 10,
       enforcedConnections: 0,
       sqlFailures: UNCLEAN

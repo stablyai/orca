@@ -94,7 +94,7 @@ export function startCellHeartbeat(
               cellId: config.cellId,
               cellIncarnation,
               regionalRehomeProtocol:
-                config.rehomeAudience && config.rehomeDirectorServiceAccount ? 1 : 0,
+                config.rehomeAudience && config.rehomeDirectorServiceAccount ? 2 : 0,
               safety: options.regionalRehomeSafety()
             }),
             signal: AbortSignal.timeout(10_000)

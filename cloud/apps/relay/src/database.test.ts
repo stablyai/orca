@@ -54,6 +54,7 @@ describe('relay database', () => {
       'relay_confirm_results',
       'relay_confirmable_splices',
       'relay_connection_bases',
+      'relay_control_capabilities',
       'relay_control_connection_reservations',
       'relay_devices',
       'relay_direct_authorizations',
@@ -62,9 +63,11 @@ describe('relay database', () => {
       'relay_migration_leases',
       'relay_post_drain_migration_pins',
       'relay_rate_windows',
+      'relay_region_decisions',
       'relay_region_rehome_attempts',
       'relay_region_rehome_control',
-      'relay_region_rehome_worker_state'
+      'relay_region_rehome_worker_state',
+      'relay_region_retentions'
     ])
     await database.close()
   })

@@ -5,7 +5,9 @@ vi.mock('./admin-token-verifier.js', () => ({
   createAdminTokenVerifier: () => async (token: string, route?: string) =>
     token === 'deploy-token' ||
     (token === 'monitor-token' &&
-      (!route || route === '/v1/admin/regional-rehome-control')),
+      (!route ||
+        route === '/v1/admin/regional-rehome-control' ||
+        route === '/v1/admin/regional-rehome-preview')),
   createReadOnlyAdminTokenVerifier: () => async () => false,
   createRegionalRehomeControlApplyTokenVerifier: () => async (token: string) =>
     token === 'deploy-token',
@@ -42,6 +44,37 @@ const request = {
 }
 
 describe('regional host drain endpoint', () => {
+  it('exposes aggregate preview to monitors without a mutation path', async () => {
+    const preview = { counts: { 'eligible:asia-east2-to-us-central1': 2 } }
+    const safety = { observedAt: 100 }
+    const previewRegionalRehomeEligibility = vi.fn(async () => preview)
+    const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
+      store: {} as never,
+      assignments: {
+        previewRegionalRehomeEligibility,
+        regionCorrectionOutcomes: async () => []
+      } as never,
+      regionalRehomeSafetySnapshot: () => safety as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+    const path = '/v1/admin/regional-rehome-preview'
+    expect((await app.request(path)).status).toBe(401)
+    expect(previewRegionalRehomeEligibility).not.toHaveBeenCalled()
+    const response = await app.request(path, { headers: { authorization: 'Bearer monitor-token' } })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ v: 1, preview, outcomes: [] })
+    expect(previewRegionalRehomeEligibility).toHaveBeenCalledExactlyOnceWith(safety)
+    expect(
+      (
+        await app.request(path, {
+          method: 'POST',
+          headers: { authorization: 'Bearer deploy-token' }
+        })
+      ).status
+    ).toBe(404)
+  })
+
   it('accepts only the dedicated identity and exact cell generation', async () => {
     const drainHost = vi.fn(() => 'accepted' as const)
     const app = createRelayApp(config(), {
@@ -60,12 +93,72 @@ describe('regional host drain endpoint', () => {
 
     expect((await post(app, 'deploy-token', request)).status).toBe(401)
     expect(
-      (await post(app, 'rehome-token', {
-        ...request,
-        sourceCellIncarnation: '33333333-3333-4333-8333-333333333333'
-      })).status
+      (
+        await post(app, 'rehome-token', {
+          ...request,
+          sourceCellIncarnation: '33333333-3333-4333-8333-333333333333'
+        })
+      ).status
     ).toBe(409)
     expect(drainHost).toHaveBeenCalledOnce()
+  })
+
+  it('waits for the first authorized retained grant before acknowledging', async () => {
+    let grant!: (value: 'accepted') => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const drainHost = vi.fn(() => {
+      entered()
+      return new Promise<'accepted'>((resolve) => {
+        grant = resolve
+      })
+    })
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {} as never,
+      drain: vi.fn(),
+      drainHost,
+      cellIncarnation,
+      ready: vi.fn(async () => true)
+    })
+    const pending = post(app, 'rehome-token', {
+      ...request,
+      retention: {
+        mode: 'finish-existing',
+        attemptId: request.attemptId,
+        sourceGeneration: 4,
+        sourceAssignmentEpoch: request.sourceAssignmentEpoch
+      }
+    })
+    let acknowledged = false
+    void pending.then(() => {
+      acknowledged = true
+    })
+    await started
+    await Promise.resolve()
+    expect(acknowledged).toBe(false)
+    grant('accepted')
+    const response = await pending
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ v: 1, outcome: 'accepted' })
+  })
+
+  it('rejects a failed asynchronous first grant instead of acknowledging it', async () => {
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {} as never,
+      drain: vi.fn(),
+      drainHost: async () => {
+        throw new Error('activity_cell_not_authoritative')
+      },
+      cellIncarnation,
+      ready: vi.fn(async () => true)
+    })
+    const response = await post(app, 'rehome-token', request)
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'activity_cell_not_authoritative' })
   })
 
   it('rejects malformed identities before touching the session registry', async () => {
@@ -224,7 +317,7 @@ describe('regional rehome director controls', () => {
       v: 1,
       cellId: 'production-gce-c7',
       cellIncarnation,
-      regionalRehomeProtocol: 1,
+      regionalRehomeProtocol: 2,
       safety: {
         observedAt: 100,
         sqlFailures: 0,
@@ -266,18 +359,13 @@ describe('regional rehome director controls', () => {
       v: 1,
       cellId: 'production-gce-c7',
       cellIncarnation,
-      regionalRehomeProtocol: 1,
+      regionalRehomeProtocol: 2,
       safety: {
         ...observability.regionalRehomeRuntimeSafety(),
         ...emptyPostgresPoolPressureCounts()
       }
     }
-    const response = await postPath(
-      app,
-      '/v1/admin/cell-rehome-status',
-      'runtime-token',
-      body
-    )
+    const response = await postPath(app, '/v1/admin/cell-rehome-status', 'runtime-token', body)
 
     expect(response.status).toBe(200)
     expect(recordCellRegionalRehomeStatus).toHaveBeenCalledWith(body)

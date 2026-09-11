@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { RegionalRetentionSchema } from './region-correction.js'
 import {
   Base6432ByteSchema,
   Base64Raw24ByteSchema,
@@ -51,8 +50,6 @@ export const RELAY_HOST_CAPABILITIES_HEADER = 'x-orca-host-capabilities'
 // The host accepts kind/relayDeviceId on a pendingConns entry. A host that does
 // not advertise this parses those entries strictly and would drop the whole ack.
 export const RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS = 'pending-conn-details'
-export const RELAY_HOST_CAPABILITY_FINISH_EXISTING_REGIONAL_REHOME =
-  'finish-existing-regional-rehome-v1'
 
 export function parseRelayHostCapabilities(
   header: string | string[] | undefined
@@ -124,24 +121,12 @@ export const DeviceRevokeSchema = z
   .object({ reqId: OpaqueIdSchema, relayDeviceId: OpaqueIdSchema })
   .strict()
 
-export const AuthRefreshSchema = z
-  .object({
-    relayJwt: z
-      .string()
-      .min(1)
-      .max(8 * 1024)
-  })
-  .strict()
+export const AuthRefreshSchema = z.object({ relayJwt: z.string().min(1).max(8 * 1024) }).strict()
 
 export const DrainSchema = z
   .object({
-    graceMs: z
-      .number()
-      .int()
-      .nonnegative()
-      .max(60 * 60 * 1000),
-    recovery: z.literal('resolve-director'),
-    retention: RegionalRetentionSchema.optional()
+    graceMs: z.number().int().nonnegative().max(60 * 60 * 1000),
+    recovery: z.literal('resolve-director')
   })
   .strict()
 

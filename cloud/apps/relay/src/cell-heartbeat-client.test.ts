@@ -92,7 +92,7 @@ describe('cell heartbeat client', () => {
     client.stop()
 
     expect(JSON.parse(String(requests[1]!.body))).toMatchObject({
-      regionalRehomeProtocol: 1,
+      regionalRehomeProtocol: 2,
       safety: {
         observedAt: 120,
         sqlFailures: 0,

@@ -59,34 +59,29 @@ export function startRegionalRehomeWorker(
       if (!attempt) return
       attemptId = attempt.attemptId
       const token = await tokenProvider(audience)
-      const response = await fetchImpl(
-        new URL('/v1/admin/host-drain', attempt.sourceCellUrl),
-        {
-          method: 'POST',
-          headers: {
-            authorization: `Bearer ${token}`,
-            'content-type': 'application/json'
-          },
-          body: JSON.stringify({
-            v: 1,
-            attemptId: attempt.attemptId,
-            userId: attempt.userId,
-            relayHostId: attempt.relayHostId,
-            sourceCellId: attempt.sourceCellId,
-            sourceCellIncarnation: attempt.sourceCellIncarnation,
-            sourceAssignmentEpoch: attempt.previousEpoch,
-            graceMs: attempt.drainGraceMs
-          }),
-          signal: AbortSignal.timeout(options.requestTimeoutMs ?? 10_000)
-        }
-      )
+      const response = await fetchImpl(new URL('/v1/admin/host-drain', attempt.sourceCellUrl), {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify({
+          v: 1,
+          attemptId: attempt.attemptId,
+          userId: attempt.userId,
+          relayHostId: attempt.relayHostId,
+          sourceCellId: attempt.sourceCellId,
+          sourceCellIncarnation: attempt.sourceCellIncarnation,
+          sourceAssignmentEpoch: attempt.previousEpoch,
+          graceMs: attempt.drainGraceMs,
+          ...(attempt.retention ? { retention: attempt.retention } : {})
+        }),
+        signal: AbortSignal.timeout(options.requestTimeoutMs ?? 10_000)
+      })
       if (!response.ok) throw new Error(`regional_rehome_source_${response.status}`)
       const body = RegionalHostDrainResponseSchema.safeParse(await response.json())
       if (!body.success) throw new Error('regional_rehome_source_invalid_response')
-      await assignments.recordRegionalRehomeDrainReceipt(
-        attempt.attemptId,
-        body.data.outcome
-      )
+      await assignments.recordRegionalRehomeDrainReceipt(attempt.attemptId, body.data.outcome)
       console.warn(
         JSON.stringify({
           event: 'orca_relay_regional_rehome_dispatched',

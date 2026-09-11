@@ -15,6 +15,9 @@ import {
   HostHelloSchema,
   InviteCreateSchema,
   RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS,
+  RELAY_HOST_CAPABILITY_FINISH_EXISTING_REGIONAL_REHOME,
+  type RegionalRetention,
+  type RegionRestored,
   RELAY_PROTOCOL_LIMITS,
   RELAY_CLOSE_CODE,
   type RelayHostCloseReason,
@@ -78,7 +81,7 @@ export type HostSession = {
   identity: RelayTokenClaims
   readonly relayHostId: string
   readonly generation: number
-  readonly assignmentEpoch: number
+  assignmentEpoch: number
   readonly controlActivityId: string | null
   readonly controlResumeSecret: string
   // Why: reconnect churn is only actionable once it can be pinned to a client build.
@@ -94,6 +97,7 @@ export type HostSession = {
   pendingPingAt: number | null
   controlRttSamplesMs: number[]
   controlRttLoggedAt: number | null
+  authorityRevision: number
   activityRenewalDueAt: number
   activityRenewalAttempt: number
   activityRenewalCompletedAttempt: number
@@ -103,15 +107,14 @@ export type HostSession = {
   // Why: relay-initiated teardown drains these maps before closing the control
   // socket, so the close handler would otherwise always report zero destroyed work.
   closingCounts: { splices: number; pending: number } | null
+  regionalRetention: RegionalRetention | null
+  regionalRestoration: RegionRestored | null
   regionalDrainAttemptId: string | null
   regionalDrainTimer: ReturnType<typeof setTimeout> | null
   regionalDrainExpiresAt: number | null
 }
 
-export type RegionalHostDrainOutcome =
-  | 'accepted'
-  | 'already-accepted'
-  | 'host-not-connected'
+export type RegionalHostDrainOutcome = 'accepted' | 'already-accepted' | 'host-not-connected'
 
 type PendingConnection = {
   connId: string
@@ -182,6 +185,10 @@ export class HostSessionRegistry {
   // later would otherwise find nothing to explain its rejection with.
   private readonly hostCloseReasons = new HostCloseReasonMemory(() => this.now())
   private readonly hostCapabilities = new WeakMap<WebSocket, ReadonlySet<string>>()
+  private readonly retentionAdoptions = new WeakMap<
+    HostSession,
+    Promise<RegionalHostDrainOutcome>
+  >()
   private draining = false
 
   constructor(
@@ -192,7 +199,8 @@ export class HostSessionRegistry {
     private readonly queuedByteBudget: ProcessQueuedByteBudget,
     private readonly observer: RelayRuntimeObserver,
     private readonly now: () => number = Date.now,
-    private readonly random: () => number = Math.random
+    private readonly random: () => number = Math.random,
+    private readonly cellIncarnation?: string
   ) {}
 
   // Uniform over [CONTROL_LEASE_MS - jitter, CONTROL_LEASE_MS + jitter).
@@ -295,6 +303,7 @@ export class HostSessionRegistry {
       this.rejectClient(socket, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
       return
     }
+    const admittingSocket = session.socket
     const connId = randomUUID()
     const connTicket = randomBytes(32).toString('base64url')
     const identity = { userId: reservation.userId, relayHostId: hostId }
@@ -322,6 +331,20 @@ export class HostSessionRegistry {
         if (credentialActivityId) this.releaseActivityBestEffort(identity, credentialActivityId)
       })
     ) {
+      return
+    }
+    // Admission may have crossed a drain or control replacement while persisting activity.
+    if (
+      this.draining ||
+      this.sessions.get(sessionKey) !== session ||
+      session.state !== 'active' ||
+      session.socket !== admittingSocket ||
+      admittingSocket.readyState !== admittingSocket.OPEN
+    ) {
+      capacityReservation?.release()
+      this.failReservationBestEffort(reservation)
+      if (credentialActivityId) this.releaseActivityBestEffort(identity, credentialActivityId)
+      this.rejectClient(socket, RELAY_CLOSE_CODE.WRONG_CELL)
       return
     }
     markStage('activity')
@@ -427,6 +450,27 @@ export class HostSessionRegistry {
       socket.close(RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'basis persistence failed')
       return false
     }
+    // Already admitted attachments may finish a regional drain, but never a retired generation.
+    if (
+      this.draining ||
+      this.sessions.get(this.key(identity.userId, identity.relayHostId)) !== session ||
+      this.get(identity)?.state === 'closed' ||
+      !session.activeConnIds.has(connId) ||
+      socket.readyState !== socket.OPEN ||
+      pending.client.readyState !== pending.client.OPEN
+    ) {
+      session.activeConnIds.delete(connId)
+      pending.capacityReservation?.release()
+      this.deactivateBasisBestEffort(connId)
+      this.failReservationBestEffort(pending.reservation)
+      if (spliceActivityId) this.releaseActivityBestEffort(identity, spliceActivityId)
+      if (pending.credentialActivityId) {
+        this.releaseActivityBestEffort(identity, pending.credentialActivityId)
+      }
+      this.rejectClient(pending.client, RELAY_CLOSE_CODE.DRAINING)
+      socket.close(RELAY_CLOSE_CODE.DRAINING, 'host retired during attachment')
+      return false
+    }
     const close = wireSplice({
       client: pending.client,
       host: socket,
@@ -505,12 +549,34 @@ export class HostSessionRegistry {
       JSON.stringify({
         event: 'orca_relay_client_accept_completed',
         ...this.logIdentity(),
+        ...this.sessionPlacementLogFields(session),
         credentialKind: pending.reservation.credentialKind,
         stageMs,
         totalMs,
         relayHostIdDigest: relayHostLogDigest(session.relayHostId)
       })
     )
+  }
+
+  private sessionPlacementLogFields(session: HostSession) {
+    const regional = session.regionalRetention ?? session.regionalRestoration
+    return {
+      assignmentEpoch: session.assignmentEpoch,
+      controlGeneration: session.generation,
+      drainMode: session.regionalRetention
+        ? 'finish-existing'
+        : session.regionalRestoration
+          ? 'restoring'
+          : session.regionalDrainAttemptId
+            ? 'deadline'
+            : 'none',
+      ...(regional
+        ? {
+            regionalAttemptId: regional.attemptId,
+            sourceAssignmentEpoch: regional.sourceAssignmentEpoch
+          }
+        : {})
+    }
   }
 
   // Matches the runtime metrics event so a log line and a metric point can be
@@ -549,6 +615,7 @@ export class HostSessionRegistry {
       JSON.stringify({
         event: 'orca_relay_host_control_rtt',
         ...this.logIdentity(),
+        ...this.sessionPlacementLogFields(session),
         relayHostIdDigest: relayHostLogDigest(session.relayHostId),
         rttMsMedian: percentile(samples, 0.5),
         sampleCount: samples.length
@@ -653,6 +720,7 @@ export class HostSessionRegistry {
     this.draining = true
     for (const session of this.sessions.values()) {
       if (session.state === 'closed') continue
+      session.authorityRevision += 1
       session.state = 'drain-only'
       if (session.socket) send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
       setTimeout(() => this.closeDrainedSession(session), graceMs)
@@ -665,9 +733,46 @@ export class HostSessionRegistry {
     relayHostId: string
     sourceAssignmentEpoch: number
     graceMs: number
-  }): RegionalHostDrainOutcome {
+    retention?: RegionalRetention
+    sourceCellIncarnation?: string
+  }): RegionalHostDrainOutcome | Promise<RegionalHostDrainOutcome> {
+    if (input.retention) {
+      const session = this.get(input)
+      const pending = session && this.retentionAdoptions.get(session)
+      if (
+        pending &&
+        session?.regionalRetention?.attemptId === input.attemptId &&
+        input.retention.attemptId === input.attemptId &&
+        input.sourceAssignmentEpoch === session.assignmentEpoch &&
+        input.retention.sourceAssignmentEpoch === session.assignmentEpoch &&
+        input.retention.sourceGeneration === session.generation &&
+        input.sourceCellIncarnation === this.cellIncarnation
+      ) {
+        return pending.then(() => 'already-accepted' as const)
+      }
+      const adoption = this.retainRegionalHost(
+        input as typeof input & { retention: RegionalRetention }
+      )
+      if (session) {
+        this.retentionAdoptions.set(session, adoption)
+        void adoption
+          .finally(() => {
+            if (this.retentionAdoptions.get(session) === adoption)
+              this.retentionAdoptions.delete(session)
+          })
+          .catch(() => undefined)
+      }
+      return adoption
+    }
     const session = this.get(input)
     if (!session || session.state === 'closed') return 'host-not-connected'
+    if (session.regionalRetention) {
+      return this.drainHost({
+        ...input,
+        retention: session.regionalRetention,
+        sourceCellIncarnation: this.cellIncarnation
+      })
+    }
     if (session.assignmentEpoch !== input.sourceAssignmentEpoch) {
       throw new Error('regional_rehome_assignment_epoch_mismatch')
     }
@@ -678,13 +783,75 @@ export class HostSessionRegistry {
       this.reassertRegionalDrain(session)
       return 'already-accepted'
     }
+    session.authorityRevision += 1
     session.regionalDrainAttemptId = input.attemptId
     session.regionalDrainExpiresAt = this.now() + input.graceMs
     this.reassertRegionalDrain(session)
-    session.regionalDrainTimer = setTimeout(
-      () => this.closeDrainedSession(session),
-      input.graceMs
+    session.regionalDrainTimer = setTimeout(() => this.closeDrainedSession(session), input.graceMs)
+    return 'accepted'
+  }
+
+  private async retainRegionalHost(input: {
+    attemptId: string
+    userId: string
+    relayHostId: string
+    sourceAssignmentEpoch: number
+    sourceCellIncarnation?: string
+    retention: RegionalRetention
+  }): Promise<RegionalHostDrainOutcome> {
+    const session = this.get(input)
+    if (!session || session.state === 'closed' || !session.socket) return 'host-not-connected'
+    const { retention } = input
+    if (
+      this.draining ||
+      !this.cellIncarnation ||
+      input.sourceCellIncarnation !== this.cellIncarnation ||
+      retention.attemptId !== input.attemptId ||
+      retention.sourceAssignmentEpoch !== input.sourceAssignmentEpoch ||
+      session.assignmentEpoch !== retention.sourceAssignmentEpoch ||
+      session.generation !== retention.sourceGeneration ||
+      !session.controlActivityId ||
+      !this.hostCapabilities
+        .get(session.socket)
+        ?.has(RELAY_HOST_CAPABILITY_FINISH_EXISTING_REGIONAL_REHOME)
     )
+      throw new Error('regional_rehome_retention_not_supported')
+    if (session.regionalRetention && session.regionalRetention.attemptId !== input.attemptId) {
+      throw new Error('regional_rehome_attempt_conflict')
+    }
+    if (session.regionalDrainAttemptId) {
+      if (!session.regionalRetention || session.regionalDrainAttemptId !== input.attemptId) {
+        throw new Error('regional_rehome_attempt_conflict')
+      }
+      this.reassertRegionalDrain(session)
+      return 'already-accepted'
+    }
+    session.regionalRestoration = null
+    session.regionalRetention = retention
+    const revision = ++session.authorityRevision
+    const socket = session.socket
+    const expiresAt = this.now() + CONTROL_ACTIVITY_LEASE_MS
+    await this.assignments.renewControlActivity(input, {
+      activityId: session.controlActivityId,
+      cellId: this.config.cellId,
+      cellIncarnation: this.cellIncarnation,
+      retention,
+      expiresAt
+    })
+    if (
+      this.get(input) !== session ||
+      session.socket !== socket ||
+      socket.readyState !== socket.OPEN ||
+      this.draining ||
+      session.authorityRevision !== revision ||
+      this.get(input)?.state === 'closed' ||
+      this.now() >= expiresAt
+    )
+      throw new Error('regional_rehome_retention_grant_obsolete')
+    session.leaseExpiresAt = Math.max(session.leaseExpiresAt, expiresAt)
+    session.regionalDrainAttemptId = input.attemptId
+    session.regionalDrainExpiresAt = null
+    this.reassertRegionalDrain(session)
     return 'accepted'
   }
 
@@ -742,7 +909,11 @@ export class HostSessionRegistry {
       existing &&
         hello.data.controlResumeSecret &&
         hello.data.controlResumeSecret === existing.controlResumeSecret &&
-        (existing.state === 'orphaned' || existing.state === 'active')
+        (existing.state === 'orphaned' ||
+          existing.state === 'active' ||
+          // Restored sources may enter drain-only after auth expiry while
+          // awaiting director corroboration; preserve their generation.
+          (existing.state === 'drain-only' && existing.regionalRestoration !== null))
     )
     const generation = rebind ? existing!.generation : (existing?.generation ?? 0) + 1
     const ephemeral = nacl.box.keyPair()
@@ -881,7 +1052,12 @@ export class HostSessionRegistry {
             cellId: this.config.cellId,
             assignmentEpoch,
             generation,
-            connectionInclusionWatermark
+            connectionInclusionWatermark,
+            finishExistingRegionalRehome:
+              this.hostCapabilities
+                .get(socket)
+                ?.has(RELAY_HOST_CAPABILITY_FINISH_EXISTING_REGIONAL_REHOME) ?? false,
+            cellIncarnation: this.cellIncarnation
           }
         )
         await this.assignments.markMigrationTargetRegistered(
@@ -913,19 +1089,27 @@ export class HostSessionRegistry {
       }
       return
     }
+    if (rebind && existing?.regionalDrainAttemptId && existing.regionalRetention) {
+      // The source may adopt retention while this earlier rebind is awaiting the store.
+      socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'source retained during control rebind')
+      return
+    }
     if (existing) this.observer.recordReconnect()
     if (rebind && existing) {
       const previousSocket = existing.socket
       if (existing.orphanTimer) clearTimeout(existing.orphanTimer)
       existing.orphanTimer = null
+      existing.authorityRevision += 1
+      existing.regionalRestoration = null
+      existing.regionalRetention = null
+      existing.assignmentEpoch = assignmentEpoch
       existing.socket = socket
       existing.state = existing.regionalDrainAttemptId ? 'drain-only' : 'active'
       existing.appVersion = appVersion
       existing.leaseExpiresAt = this.controlLeaseExpiresAt()
       existing.lastPongAt = this.now()
       existing.pendingPingAt = null
-      existing.activityRenewalDueAt =
-        this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
+      existing.activityRenewalDueAt = this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
       this.wireActiveControl(existing)
       this.sendHelloAck(existing)
       if (existing.regionalDrainAttemptId) this.reassertRegionalDrain(existing)
@@ -980,6 +1164,7 @@ export class HostSessionRegistry {
       pendingPingAt: null,
       controlRttSamplesMs: [],
       controlRttLoggedAt: null,
+      authorityRevision: 0,
       activityRenewalDueAt: this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs,
       activityRenewalAttempt: 0,
       activityRenewalCompletedAttempt: 0,
@@ -987,6 +1172,8 @@ export class HostSessionRegistry {
       activeSplices: new Map(),
       pendingConns: new Map(),
       closingCounts: null,
+      regionalRetention: null,
+      regionalRestoration: null,
       regionalDrainAttemptId: null,
       regionalDrainTimer: null,
       regionalDrainExpiresAt: null
@@ -1107,24 +1294,106 @@ export class HostSessionRegistry {
     if (controlActivityId && now >= session.activityRenewalDueAt) {
       const attempt = ++session.activityRenewalAttempt
       const startedAt = now
+      const socket = session.socket
+      const retention = session.regionalRetention
+      const restoration = session.regionalRestoration
+      const authorityRevision = session.authorityRevision
+      const current = (): boolean =>
+        this.sessions.get(key) === session &&
+        session.state !== 'closed' &&
+        session.socket === socket &&
+        socket.readyState === socket.OPEN &&
+        session.controlActivityId === controlActivityId &&
+        session.authorityRevision === authorityRevision &&
+        (!(retention || restoration) || !this.draining) &&
+        attempt > session.activityRenewalCompletedAttempt
       void this.assignments
         .renewControlActivity(
           { userId: session.identity.sub, relayHostId: session.relayHostId },
           {
             activityId: controlActivityId,
             cellId: this.config.cellId,
-            expiresAt: startedAt + CONTROL_ACTIVITY_LEASE_MS
+            expiresAt: startedAt + CONTROL_ACTIVITY_LEASE_MS,
+            ...(retention ? { retention, cellIncarnation: this.cellIncarnation } : {}),
+            ...(restoration ? { restoration, cellIncarnation: this.cellIncarnation } : {})
           }
         )
         .then(() => {
-          if (attempt <= session.activityRenewalCompletedAttempt) return
+          if (!current()) return
+          if (
+            ((retention && session.regionalDrainAttemptId) || restoration) &&
+            startedAt + CONTROL_ACTIVITY_LEASE_MS > this.now()
+          ) {
+            session.leaseExpiresAt = Math.max(
+              session.leaseExpiresAt,
+              startedAt + CONTROL_ACTIVITY_LEASE_MS
+            )
+            if (restoration) send(socket, 'region-restored', restoration)
+          }
           session.activityRenewalCompletedAttempt = attempt
           session.activityRenewalDueAt = startedAt + CONTROL_ACTIVITY_RENEWAL_INTERVAL_MS
         })
         .catch(async (error: unknown) => {
+          if (!current()) return
+          if (error instanceof Error && error.message === 'assignment_not_found') {
+            socket.close(RELAY_CLOSE_CODE.DRAINING, 'control assignment missing')
+            return
+          }
+          if (
+            retention &&
+            error instanceof Error &&
+            (error.message === 'activity_cell_not_authoritative' ||
+              error.message === 'control_activity_not_found' ||
+              error.message === 'control_activity_moved')
+          ) {
+            const expiresAt = this.now() + CONTROL_ACTIVITY_LEASE_MS
+            const restored = await this.assignments.regionalRetentionRollback(
+              { userId: session.identity.sub, relayHostId: session.relayHostId },
+              {
+                cellId: this.config.cellId,
+                cellIncarnation: this.cellIncarnation!,
+                activityId: controlActivityId,
+                retention,
+                expiresAt
+              }
+            )
+            if (!current()) return
+            if (
+              restored &&
+              expiresAt > this.now() &&
+              this.hostCapabilities
+                .get(socket)
+                ?.has(RELAY_HOST_CAPABILITY_FINISH_EXISTING_REGIONAL_REHOME)
+            ) {
+              session.authorityRevision += 1
+              session.assignmentEpoch = restored.assignmentEpoch
+              session.regionalRetention = null
+              session.regionalRestoration = restored
+              session.regionalDrainAttemptId = null
+              session.regionalDrainExpiresAt = null
+              if (session.regionalDrainTimer) clearTimeout(session.regionalDrainTimer)
+              session.regionalDrainTimer = null
+              session.leaseExpiresAt = Math.max(session.leaseExpiresAt, expiresAt)
+              session.activityRenewalDueAt = this.now() + CONTROL_ACTIVITY_RENEWAL_INTERVAL_MS
+              session.state = this.now() <= session.identity.exp * 1000 ? 'active' : 'drain-only'
+              send(socket, 'region-restored', restored)
+              return
+            }
+            socket.close(RELAY_CLOSE_CODE.DRAINING, 'control migration completed')
+            return
+          }
           if (error instanceof Error && error.message === 'activity_cell_not_authoritative') {
             // Completion fences a late drain-only heartbeat after all source work is gone.
             session.socket?.close(RELAY_CLOSE_CODE.DRAINING, 'control migration completed')
+            return
+          }
+          if (
+            restoration &&
+            error instanceof Error &&
+            (error.message === 'control_activity_not_found' ||
+              error.message === 'control_activity_moved')
+          ) {
+            socket.close(RELAY_CLOSE_CODE.DRAINING, 'restored control activity lost')
             return
           }
           if (error instanceof Error && error.message === 'control_activity_not_found') {
@@ -1144,8 +1413,22 @@ export class HostSessionRegistry {
                   cellId: this.config.cellId
                 }
               )
+              if (!current()) {
+                // A replaced activity must not remain leased after its owner disappears.
+                if (
+                  !this.sessions.get(key) ||
+                  this.sessions.get(key)?.controlActivityId !== controlActivityId
+                ) {
+                  this.releaseActivityBestEffort(
+                    { userId: session.identity.sub, relayHostId: session.relayHostId },
+                    controlActivityId
+                  )
+                }
+                return
+              }
               this.observer.recordControlActivityRecovery?.(true)
             } catch (acquireError: unknown) {
+              if (!current()) return
               this.observer.recordControlActivityRecovery?.(false)
               if (
                 acquireError instanceof Error &&
@@ -1218,6 +1501,21 @@ export class HostSessionRegistry {
 
   private closeDrainedSession(session: HostSession): void {
     if (session.state === 'closed') return
+    const forcedConnections = session.activeConnIds.size + session.pendingConns.size
+    if (forcedConnections > 0) {
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_host_drain_forced_close',
+          ...this.logIdentity(),
+          ...this.sessionPlacementLogFields(session),
+          relayHostIdDigest: relayHostLogDigest(session.relayHostId),
+          reason: this.draining ? 'emergency' : 'regional-deadline',
+          forcedConnections,
+          splices: session.activeSplices.size,
+          pending: session.pendingConns.size
+        })
+      )
+    }
     if (session.heartbeatTimer) clearInterval(session.heartbeatTimer)
     if (session.orphanTimer) clearTimeout(session.orphanTimer)
     if (session.regionalDrainTimer) clearTimeout(session.regionalDrainTimer)
@@ -1266,7 +1564,8 @@ export class HostSessionRegistry {
     if (!session.socket) return
     send(session.socket, 'drain', {
       graceMs: Math.max(0, (session.regionalDrainExpiresAt ?? this.now()) - this.now()),
-      recovery: 'resolve-director'
+      recovery: 'resolve-director',
+      ...(session.regionalRetention ? { retention: session.regionalRetention } : {})
     })
   }
 

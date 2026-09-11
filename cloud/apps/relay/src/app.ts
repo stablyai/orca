@@ -1,5 +1,8 @@
 import {
   AssignmentRequestSchema,
+  RegionalRetentionSchema,
+  type RegionalRetention,
+  type RegionCorrectionResponse,
   isRelayCellConnectionHardCap,
   RELAY_ADMISSION_BUDGETS,
   RELAY_DEFAULT_REGION,
@@ -39,7 +42,7 @@ import {
   type AssignmentAdmissionRejection
 } from './public-assignment-admission.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
-import type { RelayRuntimeCounts } from './relay-observability.js'
+import type { RegionalRehomeSafetySnapshot, RelayRuntimeCounts } from './relay-observability.js'
 import {
   isRegionalRehomeTrustProbe,
   probeRegionalRehomeTrust
@@ -73,16 +76,20 @@ export function createRelayApp(
       userId: string
       relayHostId: string
       sourceAssignmentEpoch: number
+      sourceCellIncarnation: string
       graceMs: number
-    }) => 'accepted' | 'already-accepted' | 'host-not-connected'
+      retention?: RegionalRetention
+    }) =>
+      | 'accepted'
+      | 'already-accepted'
+      | 'host-not-connected'
+      | Promise<'accepted' | 'already-accepted' | 'host-not-connected'>
     regionalRehomeIdentityToken?: (audience: string) => Promise<string>
     regionalRehomeFetch?: typeof fetch
-    regionalRehomeTrustProbeHostExists?: (input: {
-      userId: string
-      relayHostId: string
-    }) => boolean
+    regionalRehomeTrustProbeHostExists?: (input: { userId: string; relayHostId: string }) => boolean
     cellIncarnation?: string
     isDraining?: () => boolean
+    regionalRehomeSafetySnapshot?: () => RegionalRehomeSafetySnapshot
     runtimeCounts?: () => RelayRuntimeCounts
     ready: () => Promise<boolean>
     recordAssignmentAdmission?: (
@@ -226,7 +233,8 @@ export function createRelayApp(
       return context.json({ error: 'host_identity_mismatch' }, 403)
     }
     const identity = { userId: claims.sub, relayHostId: claims.relayHostId }
-    const requestedRegion = body.data.preferredRegion
+    const requestedRegion =
+      body.data.regionCorrection?.action === 'report' ? undefined : body.data.preferredRegion
     const targetRegion =
       config.regionalPlacementEnabled !== false && requestedRegion
         ? requestedRegion
@@ -295,10 +303,30 @@ export function createRelayApp(
       }
     }
     let assignment: RelayAssignment
+    let regionCorrection: RegionCorrectionResponse | undefined
     try {
-      assignment = requestedRegion
-        ? await operations.assignments.assign(identity, requestedRegion, targetRegion)
-        : await operations.assignments.assign(identity)
+      if (body.data.regionCorrection?.action === 'report') {
+        const current = await operations.assignments.resolve(identity)
+        if (!current) return context.json({ error: 'assignment_not_found' }, 409)
+        assignment = current
+      } else {
+        assignment = requestedRegion
+          ? await operations.assignments.assign(identity, requestedRegion, targetRegion)
+          : await operations.assignments.assign(identity)
+      }
+      if (body.data.regionCorrection) {
+        try {
+          regionCorrection = await operations.assignments.exchangeRegionCorrection(
+            identity,
+            body.data.regionCorrection,
+            assignment.assignmentEpoch
+          )
+        } catch (error) {
+          if (body.data.regionCorrection.action === 'report') throw error
+          // Optional measurement setup must not discard an otherwise valid placement.
+          console.warn(JSON.stringify({ event: 'orca_relay_region_window_unavailable' }))
+        }
+      }
     } catch (error) {
       if (isRelayAssignmentCapacityError(error) || isRelayDatabaseTransientError(error)) {
         logAssignmentRejection({
@@ -353,13 +381,16 @@ export function createRelayApp(
       v: 1,
       cellUrl: assignment.cellUrl,
       assignmentEpoch: assignment.assignmentEpoch,
-      lease
+      lease,
+      ...(regionCorrection ? { regionCorrection } : {})
     })
   })
   app.post('/v1/resolve', async (context) => {
     if (config.role === 'cell') return context.json({ error: 'director_only' }, 404)
     if (!config.publicAssignmentsEnabled) return rejectPublicAssignment(context)
-    if (Number(context.req.header('content-length') ?? 0) > RELAY_PROTOCOL_LIMITS.maxHttpBodyBytes) {
+    if (
+      Number(context.req.header('content-length') ?? 0) > RELAY_PROTOCOL_LIMITS.maxHttpBodyBytes
+    ) {
       return context.json({ error: 'request_too_large' }, 413)
     }
     const body = ResolveRequestSchema.safeParse(await context.req.json().catch(() => null))
@@ -474,7 +505,7 @@ export function createRelayApp(
         }
         sharedRuntimeIdentityRejected = true
       }
-      const outcome = operations.drainHost(body.data)
+      const outcome = await operations.drainHost(body.data)
       return context.json({
         v: 1,
         outcome,
@@ -502,8 +533,7 @@ export function createRelayApp(
       region: config.region ?? RELAY_DEFAULT_REGION,
       imageDigest: config.imageDigest ?? null,
       draining: operations.isDraining?.() ?? false,
-      regionalRehomeProtocol:
-        config.rehomeAudience && config.rehomeDirectorServiceAccount ? 1 : 0,
+      regionalRehomeProtocol: config.rehomeAudience && config.rehomeDirectorServiceAccount ? 2 : 0,
       connectionCapacity:
         config.connectionHardCap === undefined
           ? null
@@ -558,6 +588,18 @@ export function createRelayApp(
     } catch (error) {
       return context.json({ error: operationError(error) }, 409)
     }
+  })
+  app.get('/v1/admin/regional-rehome-preview', async (context) => {
+    if (config.role !== 'director') return context.json({ error: 'director_only' }, 404)
+    const bearer = readBearer(context.req.header('authorization'))
+    if (!bearer || !(await verifyAdminToken(bearer, context.req.path))) {
+      return context.json({ error: 'invalid_token' }, 401)
+    }
+    const preview = await operations.assignments.previewRegionalRehomeEligibility(
+      operations.regionalRehomeSafetySnapshot?.()
+    )
+    const outcomes = await operations.assignments.regionCorrectionOutcomes()
+    return context.json({ v: 1, preview, outcomes })
   })
   app.post('/v1/admin/regional-rehome-control', async (context) => {
     if (config.role !== 'director') return context.json({ error: 'director_only' }, 404)
@@ -1394,45 +1436,48 @@ const CellRegionalRehomeStatusSchema = z
     v: z.literal(1),
     cellId: z.string().min(1).max(128),
     cellIncarnation: z.string().uuid(),
-    regionalRehomeProtocol: z.number().int().min(0).max(1),
+    regionalRehomeProtocol: z.number().int().min(0).max(2),
     safety: RegionalRehomeSafetySchema
   })
   .strict()
 
-const RegionalRehomeControlSchema = z.discriminatedUnion('action', [
-  z.object({ v: z.literal(1), action: z.literal('inspect') }).strict(),
-  z.object({
-    v: z.literal(1),
-    action: z.literal('apply'),
-    expectedGeneration: z.number().int().nonnegative(),
-    enabled: z.boolean(),
-    notBefore: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    ratePerMinute: z.number().int().min(1).max(120),
-    preferenceMaxAgeMs: z
-      .number()
-      .int()
-      .min(60_000)
-      .max(30 * 24 * 60 * 60_000),
-    hostCooldownMs: z
-      .number()
-      .int()
-      .min(60_000)
-      .max(30 * 24 * 60 * 60_000),
-    drainGraceMs: z.number().int().min(60_000).max(60 * 60_000),
-    confirmation: z.enum([
-      'ENABLE_REGIONAL_REHOMING',
-      'DISABLE_REGIONAL_REHOMING'
-    ])
-  }).strict()
-]).superRefine((value, context) => {
-  if (value.action !== 'apply') return
-  const expected = value.enabled
-    ? 'ENABLE_REGIONAL_REHOMING'
-    : 'DISABLE_REGIONAL_REHOMING'
-  if (value.confirmation !== expected) {
-    context.addIssue({ code: 'custom', message: 'confirmation does not match state' })
-  }
-})
+const RegionalRehomeControlSchema = z
+  .discriminatedUnion('action', [
+    z.object({ v: z.literal(1), action: z.literal('inspect') }).strict(),
+    z
+      .object({
+        v: z.literal(1),
+        action: z.literal('apply'),
+        expectedGeneration: z.number().int().nonnegative(),
+        enabled: z.boolean(),
+        notBefore: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+        ratePerMinute: z.number().int().min(1).max(120),
+        preferenceMaxAgeMs: z
+          .number()
+          .int()
+          .min(60_000)
+          .max(30 * 24 * 60 * 60_000),
+        hostCooldownMs: z
+          .number()
+          .int()
+          .min(60_000)
+          .max(30 * 24 * 60 * 60_000),
+        drainGraceMs: z
+          .number()
+          .int()
+          .min(60_000)
+          .max(60 * 60_000),
+        confirmation: z.enum(['ENABLE_REGIONAL_REHOMING', 'DISABLE_REGIONAL_REHOMING'])
+      })
+      .strict()
+  ])
+  .superRefine((value, context) => {
+    if (value.action !== 'apply') return
+    const expected = value.enabled ? 'ENABLE_REGIONAL_REHOMING' : 'DISABLE_REGIONAL_REHOMING'
+    if (value.confirmation !== expected) {
+      context.addIssue({ code: 'custom', message: 'confirmation does not match state' })
+    }
+  })
 
 const RegionalRehomeTrustProbeSchema = z
   .object({
@@ -1776,7 +1821,12 @@ const RegionalHostDrainSchema = z
     sourceCellId: z.string().min(1).max(128),
     sourceCellIncarnation: z.string().uuid(),
     sourceAssignmentEpoch: z.number().int().positive(),
-    graceMs: z.number().int().nonnegative().max(60 * 60 * 1000)
+    retention: RegionalRetentionSchema.optional(),
+    graceMs: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(60 * 60 * 1000)
   })
   .strict()
 
