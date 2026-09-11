@@ -10,7 +10,8 @@ let nextRequestId = 0
 export async function requestPierreFileDiff(
   input: PierreDiffInput,
   signal: AbortSignal,
-  blockOnHighlight = false
+  blockOnHighlight = false,
+  onHighlightError?: (error: unknown) => void
 ) {
   const identity = getPierreDiffCacheIdentity(
     JSON.stringify([
@@ -32,7 +33,13 @@ export async function requestPierreFileDiff(
   if (blockOnHighlight) {
     await highlight
   } else {
-    highlight.catch(() => {})
+    // Why report rather than swallow: a dead worker pool used to reject this call, which gave the
+    // user the retry affordance. Detaching it must not cost that -- only an abort is silent.
+    highlight.catch((error: unknown) => {
+      if (!signal.aborted && !(error instanceof DOMException && error.name === 'AbortError')) {
+        onHighlightError?.(error)
+      }
+    })
   }
   return diff
 }

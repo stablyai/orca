@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileDiffMetadata } from '@pierre/diffs'
 import type { PierreDiffInput } from './pierre-diff-metadata'
 import { requestPierreFileDiff } from './pierre-diff-parse-client'
+import { preparePierreDiffHighlight } from './pierre-diff-highlight'
 
 type DiffSnapshot = { input: PierreDiffInput; diff: FileDiffMetadata | null; error: string | null }
 
@@ -15,6 +16,10 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
   const renderedScopeRef = useRef<string | null>(null)
   const pendingRequest = useRef<AbortController | null>(null)
   const markEdited = useCallback(() => pendingRequest.current?.abort(), [])
+  // Why a ref: flipping editability must not re-parse the file, but the next request still has to
+  // read the current value (an editable surface blocks on the highlight).
+  const editableRef = useRef(editable)
+  editableRef.current = editable
 
   useEffect(() => {
     if (!input) {
@@ -25,7 +30,17 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
     // Edits already paint through Pierre; coalesce parent echoes before recomputing.
     const timer = setTimeout(
       () => {
-        void requestPierreFileDiff(input, controller.signal, editable).then(
+        void requestPierreFileDiff(
+          input,
+          controller.signal,
+          editableRef.current,
+          (error: unknown) =>
+            setSnapshot((previous) =>
+              previous && previous.input === input
+                ? { ...previous, error: error instanceof Error ? error.message : String(error) }
+                : previous
+            )
+        ).then(
           (diff) => {
             if (!controller.signal.aborted) {
               renderedScopeRef.current = JSON.stringify([input.cacheKey, input.path])
@@ -57,7 +72,19 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
       clearTimeout(timer)
       controller.abort()
     }
-  }, [input, attempt, editable])
+  }, [input, attempt])
+
+  // Why: staging or unstaging flips a row's editability without changing its content. Priming here
+  // keeps the guarantee the blocking path gives a surface that mounted editable -- entering edit
+  // mode with an unprimed AST makes Pierre highlight the whole file synchronously.
+  useEffect(() => {
+    if (!editable || !fileDiff) {
+      return
+    }
+    const controller = new AbortController()
+    preparePierreDiffHighlight(fileDiff, controller.signal).catch(() => {})
+    return () => controller.abort()
+  }, [editable, fileDiff])
 
   return { fileDiff, error: snapshot?.input === input ? snapshot.error : null, retry, markEdited }
 }

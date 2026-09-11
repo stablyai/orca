@@ -7,6 +7,8 @@ import { usePierreFileDiff } from './use-pierre-file-diff'
 import { requestPierreFileDiff } from './pierre-diff-parse-client'
 
 vi.mock('./pierre-diff-parse-client', () => ({ requestPierreFileDiff: vi.fn() }))
+const prepareHighlight = vi.hoisted(() => vi.fn())
+vi.mock('./pierre-diff-highlight', () => ({ preparePierreDiffHighlight: prepareHighlight }))
 const input: PierreDiffInput = {
   path: 'file',
   cacheKey: 'scope:file',
@@ -110,4 +112,36 @@ it('keeps the last good diff when a later recompute fails', async () => {
   await act(async () => vi.runOnlyPendingTimers())
   expect(result.current.fileDiff).toBe(diff)
   expect(result.current.error).toBe('worker unavailable')
+})
+
+it('surfaces a detached highlight failure so the retry affordance still appears', async () => {
+  // Why: a read-only diff no longer blocks on the highlight, but a dead worker pool used to
+  // reject the request and give the user a way to recover.
+  let reportError: ((error: unknown) => void) | undefined
+  vi.mocked(requestPierreFileDiff).mockImplementation(async (_input, _signal, _block, onError) => {
+    reportError = onError
+    return diff
+  })
+  const { result } = renderHook(() => usePierreFileDiff(input))
+  await act(async () => vi.runOnlyPendingTimers())
+  expect(result.current.error).toBeNull()
+  await act(async () => reportError?.(new Error('worker died')))
+  expect(result.current.error).toBe('worker died')
+  expect(result.current.fileDiff).toBe(diff)
+})
+
+it('does not re-parse when only editability flips, but primes the highlight', async () => {
+  vi.mocked(requestPierreFileDiff).mockResolvedValue(diff)
+  prepareHighlight.mockResolvedValue(undefined)
+  const { rerender } = renderHook(({ editable }) => usePierreFileDiff(input, editable), {
+    initialProps: { editable: false }
+  })
+  await act(async () => vi.runOnlyPendingTimers())
+  expect(requestPierreFileDiff).toHaveBeenCalledTimes(1)
+  expect(prepareHighlight).not.toHaveBeenCalled()
+  await act(async () => rerender({ editable: true }))
+  // Staging/unstaging must not refetch identical content, but edit mode must not find an
+  // unprimed AST either -- Pierre would highlight the whole file synchronously.
+  expect(requestPierreFileDiff).toHaveBeenCalledTimes(1)
+  expect(prepareHighlight).toHaveBeenCalledWith(diff, expect.anything())
 })
