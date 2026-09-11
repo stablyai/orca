@@ -4,12 +4,12 @@ import {
 } from './pi-configured-default-model-state'
 import {
   projectSourceControlAiToLegacyCommitMessageAi,
-  mergeLegacyCommitMessageAiIntoSourceControlAi
+  mergeLegacyCommitMessageAiIntoSourceControlAi,
+  resolveSourceControlAiForOperation
 } from './source-control-ai'
 import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration } from './commit-message-plan'
 import { getDefaultSettings } from './constants'
-import { resolveSourceControlAiForOperation } from './source-control-ai'
 import type { SourceControlAiOperation } from './source-control-ai-types'
 import type { GlobalSettings } from './global-settings-types'
 
