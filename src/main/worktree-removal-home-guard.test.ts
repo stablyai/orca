@@ -73,6 +73,20 @@ describe('path-shape home detection', () => {
   ])('WSL UNC %s -> %s', (worktreePath, expected) => {
     expect(isHome(worktreePath, CLIENT_REMOVAL_HOME)).toBe(expected)
   })
+
+  it.each([
+    // `/mnt/<letter>` is the distro's drvfs view of a Windows volume, so this is
+    // `C:\Users\bob` wearing a Linux spelling, not a directory in the distro.
+    ['\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\bob', true],
+    ['\\\\wsl$\\Ubuntu\\mnt\\c\\Users', true],
+    ['\\\\wsl.localhost\\Ubuntu\\mnt\\c\\Users\\bob\\ws\\wt', false],
+    // `/MNT` is an ordinary case-sensitive Linux directory, never the automount.
+    ['\\\\wsl.localhost\\Ubuntu\\MNT\\c\\Users\\bob', false]
+  ])('WSL drvfs %s -> %s', (worktreePath, expected) => {
+    expect(withProcessPlatform('darwin', () => isHome(worktreePath, CLIENT_REMOVAL_HOME))).toBe(
+      expected
+    )
+  })
 })
 
 describe('whose home the guard consults', () => {
