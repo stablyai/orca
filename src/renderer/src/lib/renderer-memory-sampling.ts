@@ -52,8 +52,10 @@ type HeapMetrics = BrowserPerformanceMemory & {
 }
 
 /** Mark -> monotonic time it last emitted a census. */
-const emittedHighwaterRatios = new Map<number, number>()
-const emittedPrivateHighwaterMarks = new Map<number, number>()
+/** First crossing is kept separately: a refresh replaces the crumb's own `createdAt`. */
+type HighwaterMarkState = { firstCrossedAtMs: number; lastEmittedAtMs: number }
+const emittedHighwaterRatios = new Map<number, HighwaterMarkState>()
+const emittedPrivateHighwaterMarks = new Map<number, HighwaterMarkState>()
 let lastProcessFootprint: RendererProcessMemory | null = null
 let processFootprintReadGeneration = 0
 let processFootprintReadInFlight = false
@@ -212,10 +214,11 @@ function recordRendererMemoryHighwater(
       if (!isHighwaterCensusDue(emittedHighwaterRatios, threshold, nowMs, ratio)) {
         continue
       }
-      emittedHighwaterRatios.set(threshold, nowMs)
+      const aboveMarkMinutes = stampHighwaterMark(emittedHighwaterRatios, threshold, nowMs)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
-        thresholdPct: Math.round(threshold * 100)
+        thresholdPct: Math.round(threshold * 100),
+        aboveMarkMinutes
       })
     }
   }
@@ -224,10 +227,11 @@ function recordRendererMemoryHighwater(
       if (!isHighwaterCensusDue(emittedPrivateHighwaterMarks, mark, nowMs, privateMB)) {
         continue
       }
-      emittedPrivateHighwaterMarks.set(mark, nowMs)
+      const aboveMarkMinutes = stampHighwaterMark(emittedPrivateHighwaterMarks, mark, nowMs)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
-        thresholdPrivateMB: mark
+        thresholdPrivateMB: mark,
+        aboveMarkMinutes
       })
     }
   }
@@ -242,13 +246,28 @@ function recordRendererMemoryHighwater(
  * would lose the census taken at its peak. Why monotonic: a wall-clock correction must not
  * stretch or collapse the window.
  */
+/**
+ * Records this emission and returns minutes since the mark was first crossed. Why carry it in the
+ * payload: a refresh replaces the retained crumb's `createdAt`, so without this "how long has the
+ * renderer been over the mark" — the axis that identified the stale census — becomes unrecoverable.
+ */
+function stampHighwaterMark(
+  emitted: Map<number, HighwaterMarkState>,
+  mark: number,
+  nowMs: number
+): number {
+  const firstCrossedAtMs = emitted.get(mark)?.firstCrossedAtMs ?? nowMs
+  emitted.set(mark, { firstCrossedAtMs, lastEmittedAtMs: nowMs })
+  return Math.round((nowMs - firstCrossedAtMs) / 60_000)
+}
+
 function isHighwaterCensusDue(
-  emitted: Map<number, number>,
+  emitted: Map<number, HighwaterMarkState>,
   mark: number,
   nowMs: number,
   value: number
 ): boolean {
-  const lastEmittedAtMs = emitted.get(mark)
+  const lastEmittedAtMs = emitted.get(mark)?.lastEmittedAtMs
   if (lastEmittedAtMs === undefined) {
     return value >= mark
   }

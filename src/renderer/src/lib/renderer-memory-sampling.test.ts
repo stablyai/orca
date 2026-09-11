@@ -172,6 +172,24 @@ describe('renderer memory highwater census re-arming', () => {
     expect(censuses().map((c) => c.privateMB)).toEqual([1200, 1200])
   })
 
+  // A refresh replaces the retained crumb's own createdAt, so the census must carry how long the
+  // renderer has been over the mark — that is the axis that identified the 21h-stale census.
+  it('reports minutes above the mark across refreshes', async () => {
+    stubFootprint(658)
+    await tick()
+    await tick()
+    expect(censuses().at(-1)).toMatchObject({ thresholdPrivateMB: 600, aboveMarkMinutes: 0 })
+
+    stubFootprint(577)
+    for (let minute = 0; minute < 120; minute += 1) {
+      await tick()
+    }
+
+    // Still over the band, so it refreshed — and it says how long it has been up there.
+    expect(censuses().length).toBeGreaterThan(1)
+    expect(censuses().at(-1)).toMatchObject({ thresholdPrivateMB: 600, aboveMarkMinutes: 120 })
+  })
+
   it('emits at most one census per mark while a renderer oscillates around it', async () => {
     stubFootprint(601)
     await tick()
