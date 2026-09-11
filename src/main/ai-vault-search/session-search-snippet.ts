@@ -90,37 +90,82 @@ export function sessionSearchSnippet(
       return EMPTY_SNIPPET
     }
     // A snippet with nothing highlighted tells the user nothing; omit it.
-    const marked = columns
-      .map((_column, index) => row[`c${index}`])
-      .find((text, index) => text !== undefined && text !== row[`p${index}`])
-    return marked === undefined ? EMPTY_SNIPPET : publicMarks(truncateSnippet(marked))
+    const index = columns.findIndex(
+      (_column, at) => row[`c${at}`] !== undefined && row[`c${at}`] !== row[`p${at}`]
+    )
+    if (index === -1) {
+      return EMPTY_SNIPPET
+    }
+    const pieces = splitMarks(row[`c${index}`]!, row[`p${index}`]!)
+    return pieces === null ? EMPTY_SNIPPET : renderSnippet(pieces)
   } catch {
     return EMPTY_SNIPPET
   }
 }
 
-/** The internal marks, swapped for the ones a caller sees, once and at the end. */
-function publicMarks(snippet: SessionSearchSnippet): SessionSearchSnippet {
-  return {
-    ...snippet,
-    text: snippet.text
-      .replaceAll(MARK_OPEN, SESSION_SEARCH_SNIPPET_MARK_OPEN)
-      .replaceAll(MARK_CLOSE, SESSION_SEARCH_SNIPPET_MARK_CLOSE)
+/** One run of the snippet's own text, or one mark FTS5 put between two runs. */
+type SnippetPiece = { kind: 'text'; value: string } | { kind: 'mark'; value: string }
+
+/**
+ * The marked rendering as its text and the marks FTS5 inserted into it.
+ *
+ * A mark is a private-use character the marked rendering has where the plain one
+ * has something else, so a Nerd Font glyph the transcript itself wrote stays
+ * text — replacing every private-use character would hand the renderer a
+ * highlight the content forged. Null when the two renderings differ for any
+ * other reason, which is not a difference this can attribute.
+ */
+function splitMarks(marked: string, plain: string): SnippetPiece[] | null {
+  const pieces: SnippetPiece[] = []
+  const rest = [...plain]
+  let at = 0
+  let run = ''
+  for (const point of marked) {
+    if (point === rest[at]) {
+      run += point
+      at++
+      continue
+    }
+    if (point !== MARK_OPEN && point !== MARK_CLOSE) {
+      return null
+    }
+    pieces.push({ kind: 'text', value: run }, { kind: 'mark', value: point })
+    run = ''
   }
+  if (at !== rest.length) {
+    return null
+  }
+  pieces.push({ kind: 'text', value: run })
+  return pieces
 }
 
-/** Cut on a code-point boundary, and never between a mark and its close. */
-export function truncateSnippet(text: string): SessionSearchSnippet {
-  if (text.length <= SNIPPET_MAX_CHARS) {
-    return { text, truncated: false }
+/**
+ * The public marks, and the character ceiling.
+ *
+ * Cut on a code-point boundary, and never between a mark and its close: an open
+ * mark with no close hands the renderer something it can never close. The
+ * ceiling counts the snippet's own characters, so the marks cost the caller
+ * nothing and a transcript's own private-use character costs it one.
+ */
+function renderSnippet(pieces: SnippetPiece[]): SessionSearchSnippet {
+  let text = ''
+  let shown = 0
+  let openedAt: number | null = null
+  for (const piece of pieces) {
+    if (piece.kind === 'mark') {
+      const open = piece.value === MARK_OPEN
+      openedAt = open ? text.length : null
+      text += open ? SESSION_SEARCH_SNIPPET_MARK_OPEN : SESSION_SEARCH_SNIPPET_MARK_CLOSE
+      continue
+    }
+    const points = [...piece.value]
+    if (shown + points.length <= SNIPPET_MAX_CHARS) {
+      shown += points.length
+      text += piece.value
+      continue
+    }
+    text += points.slice(0, SNIPPET_MAX_CHARS - shown).join('')
+    return { text: openedAt === null ? text : text.slice(0, openedAt), truncated: true }
   }
-  const points = [...text]
-  if (points.length <= SNIPPET_MAX_CHARS) {
-    return { text, truncated: false }
-  }
-  const cut = points.slice(0, SNIPPET_MAX_CHARS).join('')
-  const opened = cut.lastIndexOf(MARK_OPEN)
-  // An open mark with no close hands the renderer something it can never close.
-  const balanced = opened !== -1 && !cut.includes(MARK_CLOSE, opened) ? cut.slice(0, opened) : cut
-  return { text: balanced, truncated: true }
+  return { text, truncated: false }
 }

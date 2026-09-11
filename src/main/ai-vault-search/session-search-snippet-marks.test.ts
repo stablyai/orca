@@ -110,3 +110,35 @@ it('truncates on the last real mark, not on a bracket the transcript wrote', asy
   // bracket survives up to it.
   expect(snippet).toContain('qqqqq')
 })
+
+it('marks only what FTS5 marked, so a glyph in the text stays a glyph', async () => {
+  // The marked and plain renderings are compared character by character, so a
+  // private-use code point the transcript wrote has a counterpart in both and
+  // is text; replacing every one of them would show it as a highlight.
+  harness = await openSessionSearchHarness('ss-snippet-marks-literal-private-use')
+  addSyntheticSession(harness.db, { id: 1, text: 'a \uE000 glyph then zebrafish and \uE001 after' })
+
+  const snippet = harness.engine.search({ query: 'zebrafish' }).hits[0]?.evidence?.snippet ?? ''
+  expect(snippet).toContain(
+    `${SESSION_SEARCH_SNIPPET_MARK_OPEN}zebrafish${SESSION_SEARCH_SNIPPET_MARK_CLOSE}`
+  )
+  expect(snippet).toContain('a \uE000 glyph')
+  expect(snippet).toContain('\uE001 after')
+  // One highlight, and only one: the literals are not a second pair.
+  expect(snippet.split(SESSION_SEARCH_SNIPPET_MARK_OPEN)).toHaveLength(2)
+})
+
+it('does not cut a snippet at a private-use code point the transcript wrote', async () => {
+  // The balance check looks for the last open mark, and a content glyph is not
+  // one; treating it as one throws away every character after it.
+  harness = await openSessionSearchHarness('ss-snippet-marks-literal-truncation')
+  const long = (letter: string): string =>
+    Array.from({ length: 5 }, () => `${letter.repeat(55)}/tail`).join(' ')
+  addSyntheticSession(harness.db, { id: 1, text: `zebrafish ${long('p')} \uE000 ${long('q')}` })
+
+  const snippet = harness.engine.search({ query: 'zebrafish' }).hits[0]?.evidence?.snippet ?? ''
+  expect(snippet).toContain(
+    `${SESSION_SEARCH_SNIPPET_MARK_OPEN}zebrafish${SESSION_SEARCH_SNIPPET_MARK_CLOSE}`
+  )
+  expect(snippet).toContain('qqqqq')
+})
