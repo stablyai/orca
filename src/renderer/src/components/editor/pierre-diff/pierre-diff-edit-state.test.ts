@@ -74,7 +74,7 @@ it('reuses matching dormant document history and view state', () => {
   editor.finish()
 })
 
-it('yields selection restore to the native layer for a deletions-side selection', () => {
+it('yields selection restore to the native layer whenever it saved one', () => {
   const state = stored()
   states.set('native-owned', state)
   nativeViews.set('native-owned', { selection: { side: 'deletions' } })

@@ -71,9 +71,10 @@ export const createPierreEditor: EditorFactory<PierreDiffAnnotationData, undefin
   // Pierre resumes an edited document only from a complete EditState; dropping diffSession
   // makes it rebuild and drop the restored selection. Keep it when the old side is unchanged,
   // otherwise fall back to fresh worker-computed hunks.
-  // Only one layer may drive selection. A saved deletions-side selection is restored natively,
-  // so hand the editor a rebuilt session there instead of letting it reassert its own.
-  const nativeOwnsSelection = getPierreNativeView(key)?.selection?.side === 'deletions'
+  // Only one layer may drive selection. The native layer saves exactly the selections it intends
+  // to restore (it skips the editable additions side), so any saved selection means it owns the
+  // restore and the editor must get a rebuilt session rather than reassert its own.
+  const nativeOwnsSelection = getPierreNativeView(key)?.selection != null
   const matchesOldSide =
     matchesContent &&
     !nativeOwnsSelection &&
