@@ -337,6 +337,7 @@ module.exports = {
     // Node cannot load cross-arch. `Arch` enum: ia32=0, x64=1, armv7l=2,
     // arm64=3, universal=4 (universal contains the host slice, so run it).
     const archEnumByNodeArch = { ia32: 0, x64: 1, armv7l: 2, arm64: 3 }
+    const nodeArchByArchEnum = { 0: 'ia32', 1: 'x64', 2: 'armv7l', 3: 'arm64' }
     const hostArchEnum = archEnumByNodeArch[process.arch]
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
     if (context.electronPlatformName === 'win32') {
@@ -347,7 +348,10 @@ module.exports = {
         // MSYS breakaway marker is a file read, and skipping it is how a
         // cross-host Windows release could ship the orphan bug.
         console.log('[verify-packaged-node-pty] skipped cross-platform or cross-arch package')
-        verifyPackagedConptyBreakawayMarker(resourcesDir)
+        // The arch names the prebuild directory the loader would fall through to.
+        verifyPackagedConptyBreakawayMarker(resourcesDir, {
+          arch: nodeArchByArchEnum[context.arch]
+        })
       }
     }
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
