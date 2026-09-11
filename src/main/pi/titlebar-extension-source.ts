@@ -1,53 +1,12 @@
 import { getPiTitlebarLifetimeSourceLines } from './titlebar-extension-lifetime-source'
+import { getPiTitlebarBackgroundActivitySourceLines } from './titlebar-extension-background-activity-source'
+import { getPiTitlebarPromptSourceLines } from './titlebar-extension-prompt-source'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getPiOmpRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
 
 export const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
 
 export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
-  // Why: OMP reports input waits through its own approval events, which the status
-  // extension already maps, and it writes this same marker natively. The runtime check
-  // matters as well as the kind: a bare-shell OMP launch runs inside a pi-kind pane.
-  const uiPromptHandlers =
-    kind === 'pi'
-      ? [
-          "  on('ui_prompt_start', async (_event, ctx) => {",
-          '    if (isOmpRuntime() || !ownsMarker) return',
-          '    promptDepth++',
-          '    // Why: retry on every open rather than only the outermost, so an outer ctx',
-          '    // that could not paint cannot decide the whole stack stays unmarked.',
-          '    if (markerPainted) return',
-          '    const painter = resolvePainter(ctx)',
-          '    // Why: only hold the spinner off once the marker is actually up, or a ctx',
-          '    // that cannot paint would freeze the title on its last working frame.',
-          "    if (!paintTitle(painter, () => getMarkedTitle(pi, '!'))) return",
-          '    markerPainted = true',
-          '    promptCtx = painter',
-          '    startMarkerReassert(painter)',
-          '  })',
-          '',
-          "  on('ui_prompt_end', async (_event, ctx) => {",
-          '    if (isOmpRuntime() || !ownsMarker || promptDepth === 0) return',
-          '    promptDepth--',
-          '    if (promptDepth > 0) return',
-          '    // Why: the opening ctx already painted once, so a close whose own ctx is stale',
-          '    // does not leave the needs-input marker up until the next turn.',
-          '    const painter = resolvePainter(ctx) ?? promptCtx',
-          '    markerPainted = false',
-          '    promptCtx = null',
-          '    stopMarkerReassert()',
-          '    // Why: a still-live turn resumes its spinner in place; otherwise the pane is idle',
-          '    // and must drop the needs-input marker rather than keep asking for attention.',
-          '    if (timer) {',
-          '      renderFrame(painter)',
-          '      return',
-          '    }',
-          '    paintTitle(painter, () => getBaseTitle(pi))',
-          '  })',
-          ''
-        ]
-      : []
-
   return [
     ...(kind === 'pi' ? [...getPiOmpRuntimeDetectionSourceLines(`/hook/${kind}`), ''] : []),
     'const BRAILLE_FRAMES = [',
@@ -113,6 +72,7 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
       : []),
 
     ...getPiTitlebarLifetimeSourceLines(),
+    ...getPiTitlebarBackgroundActivitySourceLines(),
     '  let timer = null',
     '  let frameIndex = 0',
     '  // Why: only idle maintenance owns a spinner of its own. A threshold compaction runs',
@@ -131,6 +91,7 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     '  let pendingAgentEndCheck = null',
     '  let pendingAgentEndContext = null',
     '  let agentEndIdleRecheckMs = AGENT_END_IDLE_RECHECK_MS',
+    '  let lastContext = null',
     '',
     '// Why: buildTitle runs inside the try because it is not safe either — getSessionName()',
     '// calls assertActive() and process.cwd() throws ENOENT once the worktree is deleted.',
@@ -230,7 +191,7 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     '    try {',
     '      if (ctx.isIdle()) {',
     '        pendingAgentEndContext = null',
-    '        stopAnimation(ctx)',
+    '        settleLeadAgent(ctx)',
     '        return',
     '      }',
     '    } catch {',
@@ -243,6 +204,10 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     '  }',
     '',
     "  on('agent_start', async (_event, ctx) => {",
+    '    lastContext = ctx',
+    '    restoreBackgroundActivity(ctx, true)',
+    '    clearDeferredCompletion()',
+    '    backgroundActivity.leadAgentActive = true',
     '    resetPromptState()',
     '    startAnimation(ctx)',
     '  })',
@@ -250,24 +215,32 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     '  // Why: pi drops an open dialog through resetExtensionUI without resolving its promise,',
     '  // so a replaced or reloaded session never sends the matching close. Both boundaries',
     '  // prove no dialog from the old session is still on screen.',
-    "  on('session_start', async () => {",
+    "  on('session_start', async (event, ctx) => {",
+    '    lastContext = ctx || lastContext',
     '    clearOwnedTimers()',
     '    resetPromptState()',
+    "    if (event?.reason === 'reload' || event?.reason === 'resume') {",
+    '      restoreBackgroundActivity(ctx, true)',
+    '      if (isEffectivelyWorking()) startAnimation(ctx)',
+    '      return',
+    '    }',
+    '    restoreBackgroundActivity(ctx, false)',
     '  })',
     '',
     '  // Why: modern Pi/OMP emit agent_end mid-run and only settle later, so settlement is the',
     '  // authoritative completion boundary. Legacy runtimes never emit it, so agent_end stays.',
     "  on('agent_settled', async (_event, ctx) => {",
-    '    stopAnimation(ctx)',
+    '    settleLeadAgent(ctx)',
     '  })',
     '',
     "  on('agent_end', async (event, ctx) => {",
+    '    lastContext = ctx || lastContext',
     '    if (event?.willContinue === true) {',
     '      clearPendingAgentEndCheck()',
     '      return',
     '    }',
     "    if (!ctx || typeof ctx.isIdle !== 'function') {",
-    '      stopAnimation(ctx)',
+    '      settleLeadAgent(ctx)',
     '      return',
     '    }',
     '    clearPendingAgentEndCheck()',
@@ -277,7 +250,7 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     "    if (typeof pendingAgentEndCheck.unref === 'function') pendingAgentEndCheck.unref()",
     '  })',
     '',
-    ...uiPromptHandlers,
+    ...getPiTitlebarPromptSourceLines(kind),
     "  on('auto_compaction_start', async (event, ctx) => {",
     "    if (event?.reason !== 'idle') return",
     '    // Why: the idle worker can fire against a turn that just started, and reason alone does',
@@ -295,6 +268,7 @@ export function getPiTitlebarExtensionSource(kind: PiAgentKind = 'pi'): string {
     '',
     "  on('session_shutdown', async (_event, ctx) => {",
     '    resetPromptState()',
+    '    clearDeferredCompletion()',
     '    stopAnimation(ctx)',
     '  })',
     '}',

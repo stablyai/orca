@@ -12,6 +12,7 @@ const BRAILLE_RE = /[⠀-⣿]/
 type TitlebarContext = {
   ui: { setTitle: (title: string) => void }
   isIdle?: () => boolean
+  sessionManager?: { getSessionId: () => string; getSessionFile: () => string }
 }
 type HookHandler = (event?: unknown, context?: TitlebarContext) => Promise<void> | void
 
@@ -20,6 +21,7 @@ type Harness = {
   titles: string[]
   lastTitle: () => string | undefined
   callHook: (name: string, event?: unknown) => Promise<void>
+  emitEvent: (name: string, payload?: unknown) => void
 }
 
 const CWD = '/repo/orca-app'
@@ -38,6 +40,8 @@ function createHarness(
     setTitle?: (title: string) => void
     globals?: Record<string | symbol, unknown>
     env?: Record<string, string>
+    sessionId?: string
+    sessionFile?: string
   } = {}
 ): Harness {
   const titles: string[] = []
@@ -48,7 +52,11 @@ function createHarness(
         titles.push(title)
       }
     },
-    isIdle: options.isIdle
+    isIdle: options.isIdle,
+    sessionManager: {
+      getSessionId: () => options.sessionId ?? SESSION,
+      getSessionFile: () => options.sessionFile ?? `/sessions/${options.sessionId ?? SESSION}.jsonl`
+    }
   }
 
   const module = {
@@ -56,6 +64,9 @@ function createHarness(
       default?: (pi: {
         on: (name: string, handler: HookHandler) => void
         getSessionName: () => string
+        events: {
+          on: (name: string, handler: (payload?: unknown) => void) => () => void
+        }
       }) => void
     }
   }
@@ -91,11 +102,20 @@ function createHarness(
   }
 
   const handlers: Record<string, HookHandler> = {}
+  const eventHandlers = new Map<string, Set<(payload?: unknown) => void>>()
   register({
     on(name: string, handler: HookHandler) {
       handlers[name] = handler
     },
-    getSessionName: options.sessionNameImpl ?? (() => SESSION)
+    getSessionName: options.sessionNameImpl ?? (() => SESSION),
+    events: {
+      on(name: string, handler: (payload?: unknown) => void) {
+        const listeners = eventHandlers.get(name) ?? new Set()
+        listeners.add(handler)
+        eventHandlers.set(name, listeners)
+        return () => listeners.delete(handler)
+      }
+    }
   })
 
   return {
@@ -108,6 +128,11 @@ function createHarness(
         throw new Error(`no handler registered for ${name}`)
       }
       await handler(event, ctx)
+    },
+    emitEvent: (name, payload) => {
+      for (const handler of eventHandlers.get(name) ?? []) {
+        handler(payload)
+      }
     }
   }
 }
@@ -734,5 +759,35 @@ describe('getPiTitlebarExtensionSource', () => {
     await harness.callHook('agent_start')
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
     expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it('keeps the titlebar spinner until the final async child completes', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('agent_start')
+    harness.emitEvent('subagent:async-started', { id: 'run-1' })
+    await harness.callHook('agent_settled')
+    expect(vi.getTimerCount()).toBe(1)
+
+    harness.emitEvent('subagent:async-complete', { runId: 'run-1' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
+  })
+
+  it('does not consume a completion from a different resumed session', async () => {
+    const globals = {}
+    const sessionA = createHarness({ globals, sessionId: 'session-a' })
+    await sessionA.callHook('agent_start')
+    sessionA.emitEvent('subagent:async-started', { id: 'run-a' })
+    await sessionA.callHook('agent_settled')
+
+    const sessionB = createHarness({ globals, sessionId: 'session-b' })
+    await sessionB.callHook('session_start', { reason: 'resume' })
+    sessionA.emitEvent('subagent:async-complete', { runId: 'run-a' })
+    sessionB.emitEvent('subagent:async-complete', { runId: 'run-a' })
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(sessionB.lastTitle()).not.toBe(IDLE_TITLE)
   })
 })

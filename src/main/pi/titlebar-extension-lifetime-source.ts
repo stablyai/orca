@@ -7,6 +7,7 @@ export function getPiTitlebarLifetimeSourceLines(): string[] {
     '  owners.get(paneKey)?.()',
     '  let disposed = false',
     '  function clearOwnedTimers() {',
+    '    clearDeferredCompletion()',
     '    clearPendingAgentEndCheck()',
     '    clearAnimation()',
     '    stopMarkerReassert()',
