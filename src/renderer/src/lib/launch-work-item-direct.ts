@@ -231,14 +231,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       sidebarRevealBehavior: 'auto',
       setup: result.setup,
       defaultTabs: result.defaultTabs,
-      ...(!launchPreparation.structuredLaunch
-        ? buildDirectWorkItemStartupOpts(
+      ...(launchPreparation.structuredLaunch
+        ? { providesInitialSurface: true }
+        : buildDirectWorkItemStartupOpts(
             effectiveAgent,
             startupPlan,
             launchSource,
             promptDelivery === 'draft' ? draftContent : undefined
-          )
-        : {})
+          ))
     })
     if (!activation) {
       // Worktree vanished between create and activate — extremely unlikely but

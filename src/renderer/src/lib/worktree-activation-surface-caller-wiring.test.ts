@@ -16,7 +16,9 @@ const SURFACE_PROVIDING_CALLERS = [
   'src/renderer/src/lib/fix-checks-agent-launch.ts',
   'src/renderer/src/lib/workspace-port-actions.ts',
   'src/renderer/src/lib/launch-agent-session.ts',
-  'src/renderer/src/lib/launch-agent-session-terminal.ts'
+  'src/renderer/src/lib/launch-agent-session-terminal.ts',
+  'src/renderer/src/lib/launch-work-item-direct.ts',
+  'src/renderer/src/hooks/composer-state/full-creation-execution.ts'
 ]
 
 // The activation seam itself: declares the option and forwards it into the tombstone gate.

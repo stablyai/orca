@@ -224,7 +224,8 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         defaultTabs: result.defaultTabs,
         issueCommand,
         ...(backendSpawnedStartup ? { backendStartupTerminalSpawned: true } : {}),
-        ...(!structuredLaunch && startup ? { startup } : {})
+        ...(!structuredLaunch && startup ? { startup } : {}),
+        ...(structuredLaunch ? { providesInitialSurface: true } : {})
         // The structured launcher owns the agent surface; keep setup/default tabs and issue
         // command activation here before it selects the published chat tab.
       })
