@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { toPreflightDetectAgentsParams } from './web-preflight-detect-params'
+import {
+  isPreflightRepairRequired,
+  toPreflightDetectAgentsParams
+} from './web-preflight-detect-params'
 
 describe('web preflight detect params', () => {
   it('sends the named distro so a paired client probes inside WSL', () => {
@@ -37,7 +40,7 @@ describe('web preflight detect params', () => {
     ).toEqual({ wslDistro: 'Ubuntu-24.04' })
   })
 
-  it('treats a non-WSL or repair-required project runtime as host-local', () => {
+  it('treats a resolved non-WSL project runtime as host-local', () => {
     expect(
       toPreflightDetectAgentsParams({
         projectRuntime: {
@@ -52,8 +55,11 @@ describe('web preflight detect params', () => {
         }
       })
     ).toBeUndefined()
+  })
+
+  it('flags a repair-required runtime so no probe falls back to the host', () => {
     expect(
-      toPreflightDetectAgentsParams({
+      isPreflightRepairRequired({
         wslDistro: 'Ubuntu-24.04',
         projectRuntime: {
           status: 'repair-required',
@@ -66,6 +72,8 @@ describe('web preflight detect params', () => {
           }
         }
       })
-    ).toBeUndefined()
+    ).toBe(true)
+    expect(isPreflightRepairRequired({ wslDistro: 'Ubuntu-24.04' })).toBe(false)
+    expect(isPreflightRepairRequired(undefined)).toBe(false)
   })
 })
