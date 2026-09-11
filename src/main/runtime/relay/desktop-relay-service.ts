@@ -49,6 +49,8 @@ export class DesktopRelayService {
   private demandExpiryTimer: ReturnType<typeof setTimeout> | null = null
   private livenessTimer: ReturnType<typeof setInterval> | null = null
   private stopped = false
+  // Cleared only by an explicit re-arm (start/authMutated); see fenceAndCloseNow.
+  private fenced = false
 
   constructor(options: DesktopRelayServiceOptions) {
     const keypair = options.runtimeRpc.getE2EEKeypair()
@@ -60,6 +62,7 @@ export class DesktopRelayService {
     const revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
     this.revokeFlusher = new RelayRevokeOutboxFlusher({
       outbox: revokeOutbox,
+      isHalted: () => this.stopped || this.fenced,
       onDrained: () => this.refreshDemand()
     })
     this.hostMobilePairingConnectionMode = options.hostMobilePairingConnectionMode
@@ -98,28 +101,31 @@ export class DesktopRelayService {
   }
 
   start(): void {
+    this.fenced = false
     this.refreshDemand()
   }
 
   // Safe to call from any wake signal (power resume, network change).
   ensureLive(): void {
-    if (!this.stopped) {
+    if (!this.stopped && !this.fenced) {
       this.coordinator.ensureLive()
     }
   }
 
   authMutated(): void {
+    this.fenced = false
     this.refreshDemand()
   }
 
+  // The re-armable fence: sign-out and relaunch, which want the next auth
+  // mutation to bring Relay back. Quit wants stop() instead — it is terminal.
   fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
-    // Why: a fence must be hard — a surviving liveness tick could catch the
-    // window between the pre-sign-out fence and the profile wipe and briefly
-    // resurrect a broker. The next auth mutation re-arms via refreshDemand.
-    if (this.livenessTimer) {
-      clearInterval(this.livenessTimer)
-      this.livenessTimer = null
-    }
+    // Why a latch rather than just clearing the timers: clearing only covered
+    // the liveness tick, and everything else outliving the fence lands in
+    // refreshDemand and re-arms it — a settling mint's finally, a pending
+    // invite-expiry wake, a power-resume ensureLive.
+    this.fenced = true
+    this.clearTimers()
     this.coordinator.fenceAndCloseNow(hostCloseReason)
   }
 
@@ -221,8 +227,14 @@ export class DesktopRelayService {
     this.refreshDemand({ skipLinger: true })
   }
 
+  // Terminal: no door re-arms this, which is what quit needs.
   stop(): void {
     this.stopped = true
+    this.clearTimers()
+    this.coordinator.stop()
+  }
+
+  private clearTimers(): void {
     if (this.demandExpiryTimer) {
       clearTimeout(this.demandExpiryTimer)
       this.demandExpiryTimer = null
@@ -231,7 +243,6 @@ export class DesktopRelayService {
       clearInterval(this.livenessTimer)
       this.livenessTimer = null
     }
-    this.coordinator.stop()
   }
 
   private requireMobileDevice(deviceId: string): void {
@@ -308,7 +319,7 @@ export class DesktopRelayService {
   }
 
   private refreshDemand(options?: { skipLinger?: boolean }): void {
-    if (this.stopped) {
+    if (this.stopped || this.fenced) {
       return
     }
     if (!this.livenessTimer) {

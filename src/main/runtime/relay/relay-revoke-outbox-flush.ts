@@ -8,6 +8,8 @@ type RevokingBroker = {
 
 type RelayRevokeOutboxFlushOptions = {
   outbox: RelayRevokeOutbox
+  /** True once the service is fenced or stopped; re-read between items. */
+  isHalted: () => boolean
   /** Removing an item can retire the demand holding the broker open. */
   onDrained: () => void
 }
@@ -25,6 +27,12 @@ export class RelayRevokeOutboxFlusher {
 
   async flushAll(broker: RevokingBroker): Promise<void> {
     for (const item of this.options.outbox.pendingFor(broker.ownerIdentityKey, broker.hostId)) {
+      // Re-checked per item: a fence can land between two revokes. The outbox is
+      // durable, so deferring to the next launch beats pushing control frames
+      // through a fence that was supposed to end this session.
+      if (this.options.isHalted()) {
+        return
+      }
       await this.flushItem(broker, item)
     }
   }
