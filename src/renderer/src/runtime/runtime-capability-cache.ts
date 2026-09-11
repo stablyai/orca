@@ -3,6 +3,8 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-result'
+import { resolveStructuredChatHostVerdict } from './structured-chat-host-verdict'
+import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
 
 const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
 const RECENT_RUNTIME_COMPATIBILITY_FAILURE_TTL_MS = 60_000
@@ -19,6 +21,42 @@ type RuntimeCompatibilityCacheEntry = {
 }
 
 const runtimeCompatibilityChecks = new Map<string, RuntimeCompatibilityCacheEntry>()
+
+type PublishedRuntimeHostStatusReader = () => ReadonlyMap<string, RuntimeEnvironmentStatus>
+
+let readPublishedRuntimeHostStatus: PublishedRuntimeHostStatusReader | null = null
+
+/** Wires in the renderer's published host-status map; without it capability reads still probe. */
+export function registerPublishedRuntimeHostStatusReader(
+  read: PublishedRuntimeHostStatusReader
+): void {
+  readPublishedRuntimeHostStatus = read
+}
+
+export function clearPublishedRuntimeHostStatusReaderForTests(): void {
+  readPublishedRuntimeHostStatus = null
+}
+
+/**
+ * The published snapshot is the capability oracle; this module's cache only fills it in cold.
+ * Null means "no answer here", never "unsupported" — a disconnected or skewed host stays the
+ * probe's to refuse, so its callers keep seeing a throw instead of a fabricated `false`.
+ */
+function publishedCapabilityVerdict(
+  environmentId: string,
+  capability: RuntimeCapability
+): boolean | null {
+  const entry = readPublishedRuntimeHostStatus?.().get(environmentId)
+  if (!entry) {
+    return null
+  }
+  // Admission is structured-chat policy, not capability presence; a raw capability read has none.
+  const verdict = resolveStructuredChatHostVerdict({ entry, capability, admission: undefined })
+  if (verdict === 'supported') {
+    return true
+  }
+  return verdict === 'host-refuses-capability' ? false : null
+}
 
 export async function ensureRuntimeEnvironmentCompatible(
   environmentId: string,
@@ -212,6 +250,10 @@ export async function runtimeEnvironmentSupportsCapability(
   timeoutMs?: number
 ): Promise<boolean> {
   const trimmed = environmentId.trim()
+  const published = publishedCapabilityVerdict(trimmed, capability)
+  if (published !== null) {
+    return published
+  }
   const cached = runtimeCompatibilityChecks.get(trimmed)
   // Why: callRuntimeRpc re-probes after failed status checks by default. Capability
   // lookups must not pin to a rejected cache promise or they block recovery for

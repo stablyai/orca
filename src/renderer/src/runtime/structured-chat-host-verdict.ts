@@ -1,7 +1,7 @@
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { RuntimeEnvironmentStatus } from '../store/slices/runtime-status-types'
 
-/** Matches the async capability prober's status TTL in runtime-rpc-client.ts. */
+/** Matches the async capability prober's status TTL in runtime-capability-cache.ts. */
 export const STRUCTURED_CHAT_HOST_VERDICT_STALE_MS = 60_000
 
 /**

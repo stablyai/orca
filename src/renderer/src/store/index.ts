@@ -46,6 +46,7 @@ import { createTaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './slices/remote-server-updates'
 import { createTerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 import { e2eConfig } from '@/lib/e2e-config'
+import { registerPublishedRuntimeHostStatusReader } from '@/runtime/runtime-capability-cache'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session'
 import {
   registerHttpLinkStoreAccessor,
@@ -127,6 +128,10 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
   const { openWorkspaceBrowserTab } = await import('@/lib/workspace-browser-tab-open')
   await openWorkspaceBrowserTab(request)
 })
+
+// Why: one capability oracle. Without this the async prober keeps its own 60s verdict and can
+// refuse what the published snapshot already offers (and the reverse) for the length of a TTL.
+registerPublishedRuntimeHostStatusReader(() => useAppStore.getState().runtimeStatusByEnvironmentId)
 
 // Why: names the fattest store slices in renderer_memory_highwater breadcrumbs
 // so OOM crash reports identify what grew without a local repro.
