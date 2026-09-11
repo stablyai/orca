@@ -36,9 +36,6 @@ function terminalStartup(
     ...(request.promptDelivery === 'draft' && prepared.trimmedPrompt
       ? { launchDraftText: prepared.trimmedPrompt }
       : {}),
-    ...(prepared.pasteDraftAfterLaunch !== null
-      ? { draftPrompt: prepared.pasteDraftAfterLaunch }
-      : {}),
     ...(request.agent === 'command-code' && prepared.hasPrompt
       ? { initialAgentStatus: { agent: request.agent, prompt: prepared.trimmedPrompt } }
       : {}),
@@ -150,28 +147,30 @@ export async function launchTerminalSession(
   if (request.signal?.aborted) {
     return { tabId: null }
   }
-  const prepared = prepareAgentInNewTabLaunch({
-    agent: request.agent,
-    worktreeId: request.workspaceId,
-    ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
-    ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
-    ...(request.tuiCustomization?.agentArgs !== undefined
-      ? { agentArgs: request.tuiCustomization.agentArgs }
-      : {}),
-    ...(request.tuiCustomization?.cwd !== undefined
-      ? { initialCwd: request.tuiCustomization.cwd }
-      : {}),
-    ...(request.launchPlatform ? { launchPlatform: request.launchPlatform } : {}),
-    ...(request.initialSessionOptions
-      ? { initialSessionOptions: request.initialSessionOptions }
-      : {}),
-    launchSource: request.launchSource,
-    ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {})
-  })
-  if (!prepared) {
+  const prepared = request.terminalStartup
+    ? null
+    : prepareAgentInNewTabLaunch({
+        agent: request.agent,
+        worktreeId: request.workspaceId,
+        ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
+        ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
+        ...(request.tuiCustomization?.agentArgs !== undefined
+          ? { agentArgs: request.tuiCustomization.agentArgs }
+          : {}),
+        ...(request.tuiCustomization?.cwd !== undefined
+          ? { initialCwd: request.tuiCustomization.cwd }
+          : {}),
+        ...(request.launchPlatform ? { launchPlatform: request.launchPlatform } : {}),
+        ...(request.initialSessionOptions
+          ? { initialSessionOptions: request.initialSessionOptions }
+          : {}),
+        launchSource: request.launchSource,
+        ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {})
+      })
+  if (!prepared && !request.terminalStartup) {
     return { tabId: null, error: new Error('Could not build the agent startup command.') }
   }
-  const startup = terminalStartup(request, prepared)
+  const startup = request.terminalStartup ?? terminalStartup(request, prepared!)
   const state = useAppStore.getState()
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, request.workspaceId)
   let tabId: string | null = null
@@ -181,6 +180,7 @@ export async function launchTerminalSession(
       startup,
       agent: request.agent,
       cwd: request.tuiCustomization?.cwd,
+      targetGroupId: request.groupId,
       activate: request.visibility === 'reveal'
     })
     tabId = created?.hostTabId ?? null
@@ -188,6 +188,7 @@ export async function launchTerminalSession(
       activateAndRevealWorkspace(request.workspaceId, {
         revealInSidebar: true,
         sidebarRevealBehavior: 'auto',
+        ...(request.groupId ? { targetGroupId: request.groupId } : {}),
         providesInitialSurface: true
       })
     }
@@ -199,6 +200,7 @@ export async function launchTerminalSession(
       revealInSidebar: true,
       sidebarRevealBehavior: 'auto',
       createNewTerminalForStartup: true,
+      ...(request.groupId ? { targetGroupId: request.groupId } : {}),
       startup,
       providesInitialSurface: true,
       ...(request.tuiCustomization?.cwd ? { initialCwd: request.tuiCustomization.cwd } : {})
@@ -212,9 +214,15 @@ export async function launchTerminalSession(
       undefined,
       undefined,
       undefined,
-      { activateCreatedTabs: false, createNewTerminalForStartup: true }
+      {
+        activateCreatedTabs: false,
+        createNewTerminalForStartup: true,
+        ...(request.groupId ? { targetGroupId: request.groupId } : {})
+      }
     )
   }
-  const promptDeliveryResult = deliverTerminalPrompt(request, prepared, tabId)
+  const promptDeliveryResult = prepared
+    ? deliverTerminalPrompt(request, prepared, tabId)
+    : undefined
   return { tabId, ...(promptDeliveryResult ? { promptDeliveryResult } : {}) }
 }

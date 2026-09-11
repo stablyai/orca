@@ -5,6 +5,7 @@ import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import { launchAgentSession } from '@/lib/launch-agent-session'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
@@ -42,6 +43,18 @@ export async function launchStructuredWorktreeSession(
   if (!useAppStore.getState().pendingWorktreeCreations[args.creationId]) {
     return { ...settled, cancelled: true, activation, primaryTabId }
   }
+  const launchPlan = adoptAgentSessionLaunchVerdict({
+    route: args.agentLaunchRoute,
+    agent,
+    worktreeId: args.worktreeId,
+    ...(args.recoverUnknownLaunch
+      ? {}
+      : {
+          prompt: args.request.launchDraftPrompt ?? args.request.quickPrompt,
+          ...(args.request.promptDelivery ? { promptDelivery: args.request.promptDelivery } : {})
+        }),
+    ...(args.recoverUnknownLaunch ? { reconcileUnknownLaunch: args.recoverUnknownLaunch } : {})
+  })
   const abandoned = new AbortController()
   const unsubscribe = useAppStore.subscribe((state) => {
     if (!state.pendingWorktreeCreations[args.creationId]) {
@@ -61,6 +74,8 @@ export async function launchStructuredWorktreeSession(
           }),
       visibility: args.shouldActivateOnCompletion ? 'reveal' : 'background',
       launchSource: args.request.quickTelemetry?.launch_source ?? 'new_workspace_composer',
+      launchPlan,
+      ...(args.fallbackStartupOpt ? { terminalStartup: args.fallbackStartupOpt } : {}),
       pendingFirstAgentMessageRename: args.request.pendingFirstAgentMessageRename,
       reconcileUnknownLaunch: args.recoverUnknownLaunch,
       signal: abandoned.signal

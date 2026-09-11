@@ -148,6 +148,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
       ...(plan.promptDelivery ? { promptDelivery: plan.promptDelivery } : {}),
       ...(args.agentArgs !== undefined ? { tuiCustomization: { agentArgs: args.agentArgs } } : {}),
       ...(args.launchPlatform ? { launchPlatform: args.launchPlatform } : {}),
+      launchPlan: plan,
       visibility: 'reveal',
       launchSource: args.launchSource
     })
@@ -173,7 +174,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
         completed: false,
         structuredLaunch: false,
         visibilityUnknown: false,
-        failed: false,
+        failed: settlement.tabId === null,
         primaryTabId: settlement.tabId
       }
     case 'visibility-unknown':

@@ -62,6 +62,53 @@ describe('launchAgentSession', () => {
     expect(mocks.launchTerminalSession).toHaveBeenCalledWith(request)
   })
 
+  it('passes the requested split group through terminal fallback launches', async () => {
+    mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
+    mocks.launchTerminalSession.mockResolvedValue({ tabId: 'terminal-1' })
+
+    await launchAgentSession({} as never, { ...request, groupId: 'group-1' })
+
+    expect(mocks.launchTerminalSession).toHaveBeenCalledWith(
+      expect.objectContaining({ groupId: 'group-1' })
+    )
+  })
+
+  it('refuses to turn a structured resume into a fresh terminal launch', async () => {
+    mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
+
+    await expect(
+      launchAgentSession({} as never, {
+        ...request,
+        resumeFrom: { providerSessionId: 'provider-1' }
+      })
+    ).resolves.toMatchObject({
+      kind: 'failed',
+      error: expect.any(Error)
+    })
+    expect(mocks.launchTerminalSession).not.toHaveBeenCalled()
+  })
+
+  it('honors an explicit no-fallback request when structured support disappears', async () => {
+    mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
+
+    await expect(
+      launchAgentSession({} as never, { ...request, terminalFallback: false })
+    ).resolves.toMatchObject({ kind: 'failed', error: expect.any(Error) })
+    expect(mocks.launchTerminalSession).not.toHaveBeenCalled()
+  })
+
+  it('uses a caller-planned route and targets the created workspace', async () => {
+    const launch = vi.fn().mockResolvedValue({ kind: 'structured', sessionId: 'session-1' })
+    const launchPlan = { route: 'structured-native-chat', launch } as never
+
+    await expect(
+      launchAgentSession({} as never, { ...request, launchPlan })
+    ).resolves.toMatchObject({ kind: 'structured', sessionId: 'session-1' })
+
+    expect(mocks.planAgentSessionLaunch).not.toHaveBeenCalled()
+    expect(launch).toHaveBeenCalledWith(expect.anything(), { worktreeId: request.workspaceId })
+  })
+
   it('activates a folder workspace before selecting its structured chat', async () => {
     const order: string[] = []
     mocks.activateAndRevealWorkspace.mockImplementation(() => {
@@ -104,6 +151,26 @@ describe('launchAgentSession', () => {
       kind: 'terminal',
       tabId: 'fallback-1',
       viaRefusal: true
+    })
+  })
+
+  it('reports a terminal fallback error instead of accepting the refusal', async () => {
+    const launch = vi.fn(async (hooks) => {
+      await expect(hooks.legacyFallback()).rejects.toThrow('terminal failed')
+      return { kind: 'failed', error: new Error('terminal failed') }
+    })
+    mocks.planAgentSessionLaunch.mockReturnValue({
+      route: 'structured-native-chat',
+      launch
+    })
+    mocks.launchTerminalSession.mockResolvedValue({
+      tabId: null,
+      error: new Error('terminal failed')
+    })
+
+    await expect(launchAgentSession({} as never, request)).resolves.toMatchObject({
+      kind: 'failed',
+      error: expect.any(Error)
     })
   })
 

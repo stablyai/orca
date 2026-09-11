@@ -237,6 +237,8 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
             prompt: startupPlan?.draftPrompt ?? submitStartupPrompt,
             promptDelivery: startupPlan?.draftPrompt ? 'draft' : 'auto-submit',
             initialSessionOptions: startupPlan?.sessionOptions,
+            launchPlan,
+            ...(startup ? { terminalStartup: startup } : {}),
             visibility: 'reveal',
             launchSource:
               telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',

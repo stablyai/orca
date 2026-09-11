@@ -61,6 +61,8 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
 }
 
 export type InitialTerminalOptions = {
+  /** Prefer this existing split group when creating an explicit startup terminal. */
+  targetGroupId?: string
   activateCreatedTabs?: boolean
   backendStartupTerminalSpawned?: boolean
   /** Create a preserved fallback startup beside setup/default terminals. */

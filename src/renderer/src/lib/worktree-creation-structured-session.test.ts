@@ -91,7 +91,8 @@ describe('launchStructuredWorktreeSession', () => {
       launchSource: 'new_workspace_composer',
       pendingFirstAgentMessageRename: true,
       reconcileUnknownLaunch: undefined,
-      signal: expect.any(AbortSignal)
+      signal: expect.any(AbortSignal),
+      launchPlan: expect.objectContaining({ route: 'structured-native-chat' })
     })
   })
 

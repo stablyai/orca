@@ -54,7 +54,8 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
       prompt: 'Fix the route',
       promptDelivery: 'draft',
       visibility: 'reveal',
-      launchSource: 'task_page'
+      launchSource: 'task_page',
+      launchPlan: structuredPlan
     })
   })
 

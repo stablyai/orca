@@ -27,6 +27,7 @@ export async function spawnWebRuntimeAgentSurface(
     startup?: WorktreeStartupPayload
     agent?: TuiAgent | null
     cwd?: string | null
+    targetGroupId?: string
     activate?: boolean
   }
 ): Promise<CreatedWebRuntimeSessionTerminal | null> {
@@ -109,6 +110,7 @@ export async function spawnWebRuntimeAgentSurface(
           ? { agent: launchAgent }
           : {}),
       ...(opts?.cwd ? { cwd: opts.cwd } : {}),
+      ...(opts?.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
       activate: opts?.activate !== false,
       selectWorktree: false
     })

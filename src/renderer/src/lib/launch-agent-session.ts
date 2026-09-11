@@ -3,7 +3,7 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import { workspaceKindForWorktreeId, type AgentLaunchRouteStore } from './agent-launch-route-input'
-import { planAgentSessionLaunch } from './agent-session-launch-plan'
+import { planAgentSessionLaunch, type AgentSessionLaunchPlan } from './agent-session-launch-plan'
 import type { NativeChatLaunchPromptDelivery } from './native-chat-initial-view-mode'
 import { activateStructuredAgentSessionById } from './structured-agent-session-tab-activation'
 import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-prompt'
@@ -13,10 +13,13 @@ import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from './worktree-activation'
 import { launchTerminalSession } from './launch-agent-session-terminal'
+import type { WorktreeStartupPayload } from './worktree-startup-payload'
 
 export type AgentSessionLaunchRequest = {
   agent: TuiAgent
   workspaceId: string
+  /** Existing tab group for a quick-launch fallback; terminal creation must stay in that pane. */
+  groupId?: string
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
   tuiCustomization?: { cwd?: string | null; agentArgs?: string | null }
@@ -28,6 +31,10 @@ export type AgentSessionLaunchRequest = {
   signal?: AbortSignal
   launchSource: LaunchSource
   terminalFallback?: boolean
+  /** A launch decided before the workspace row existed. Reuse it instead of re-planning. */
+  launchPlan?: AgentSessionLaunchPlan
+  /** Startup payload already built by the caller for a terminal refusal fallback. */
+  terminalStartup?: WorktreeStartupPayload
   pendingFirstAgentMessageRename?: boolean
   reconcileUnknownLaunch?: boolean
 }
@@ -72,25 +79,40 @@ export async function launchAgentSession(
   store: AgentLaunchRouteStore,
   request: AgentSessionLaunchRequest
 ): Promise<AgentSessionLaunchOutcome> {
-  const plan = planAgentSessionLaunch(store, {
-    agent: request.agent,
-    workspace: {
-      kind: workspaceKindForWorktreeId(request.workspaceId),
-      worktreeId: request.workspaceId
-    },
-    ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
-    ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
-    ...(request.tuiCustomization ? { tuiCustomization: request.tuiCustomization } : {}),
-    ...(request.initialSessionOptions
-      ? { initialSessionOptions: request.initialSessionOptions }
-      : {}),
-    ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
-    ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
-    ...(request.terminalFallback === false ? { notifyFailure: false } : {}),
-    ...(request.reconcileUnknownLaunch !== undefined
-      ? { reconcileUnknownLaunch: request.reconcileUnknownLaunch }
-      : {})
-  })
+  const plan =
+    request.launchPlan ??
+    planAgentSessionLaunch(store, {
+      agent: request.agent,
+      workspace: {
+        kind: workspaceKindForWorktreeId(request.workspaceId),
+        worktreeId: request.workspaceId
+      },
+      ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
+      ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
+      ...(request.tuiCustomization ? { tuiCustomization: request.tuiCustomization } : {}),
+      ...(request.initialSessionOptions
+        ? { initialSessionOptions: request.initialSessionOptions }
+        : {}),
+      ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
+      ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
+      ...(request.terminalFallback === false ? { notifyFailure: false } : {}),
+      ...(request.reconcileUnknownLaunch !== undefined
+        ? { reconcileUnknownLaunch: request.reconcileUnknownLaunch }
+        : {})
+    })
+  if (
+    plan.route !== 'structured-native-chat' &&
+    (request.resumeFrom !== undefined || request.terminalFallback === false)
+  ) {
+    return {
+      kind: 'failed',
+      error: new Error(
+        request.resumeFrom
+          ? 'Resuming an agent session requires structured chat support.'
+          : 'Structured chat launch is unavailable for this workspace.'
+      )
+    }
+  }
   if (plan.route !== 'structured-native-chat') {
     try {
       const terminal = await launchTerminalSession(request)
@@ -113,39 +135,45 @@ export async function launchAgentSession(
   let viaRefusal = false
   let fallback: TerminalLaunchResult | null = null
   try {
-    const settlement = await plan.launch({
-      ...(request.terminalFallback === false
-        ? {}
-        : {
-            legacyFallback: async () => {
-              viaRefusal = true
-              fallback = await launchTerminalSession(request)
-              return {
-                primaryTabId: fallback.tabId,
-                ...(fallback.promptDeliveryResult
-                  ? { promptDeliveryResult: fallback.promptDeliveryResult }
-                  : {})
+    const settlement = await plan.launch(
+      {
+        ...(request.terminalFallback === false
+          ? {}
+          : {
+              legacyFallback: async () => {
+                viaRefusal = true
+                fallback = await launchTerminalSession(request)
+                if (fallback.error) {
+                  throw fallback.error
+                }
+                return {
+                  primaryTabId: fallback.tabId,
+                  ...(fallback.promptDeliveryResult
+                    ? { promptDeliveryResult: fallback.promptDeliveryResult }
+                    : {})
+                }
+              }
+            }),
+        ...(request.visibility === 'reveal'
+          ? {
+              onStructuredReady: (sessionId: string) => {
+                activateAndRevealWorkspace(request.workspaceId, {
+                  providesInitialSurface: true
+                })
+                activateStructuredAgentSessionById({ worktreeId: request.workspaceId, sessionId })
+                structuredTabId =
+                  useAppStore
+                    .getState()
+                    .unifiedTabsByWorktree[request.workspaceId]?.find(
+                      (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
+                    )?.id ?? `agent-session:${sessionId}`
               }
             }
-          }),
-      ...(request.visibility === 'reveal'
-        ? {
-            onStructuredReady: (sessionId: string) => {
-              activateAndRevealWorkspace(request.workspaceId, {
-                providesInitialSurface: true
-              })
-              activateStructuredAgentSessionById({ worktreeId: request.workspaceId, sessionId })
-              structuredTabId =
-                useAppStore
-                  .getState()
-                  .unifiedTabsByWorktree[request.workspaceId]?.find(
-                    (tab) => tab.contentType === 'agent-session' && tab.entityId === sessionId
-                  )?.id ?? `agent-session:${sessionId}`
-            }
-          }
-        : {}),
-      ...(request.signal ? { signal: request.signal } : {})
-    })
+          : {}),
+        ...(request.signal ? { signal: request.signal } : {})
+      },
+      request.launchPlan ? { worktreeId: request.workspaceId } : undefined
+    )
     if (!settlement) {
       return { kind: 'failed', error: new Error('Structured launch did not settle.') }
     }

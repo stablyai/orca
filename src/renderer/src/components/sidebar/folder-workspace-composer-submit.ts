@@ -216,6 +216,8 @@ export async function submitFolderWorkspaceCreate({
         tuiCustomization: { agentArgs },
         launchPlatform,
         initialSessionOptions: startupPlan?.sessionOptions,
+        ...(plan ? { launchPlan: plan } : {}),
+        ...(startup ? { terminalStartup: startup } : {}),
         visibility: 'reveal',
         launchSource,
         pendingFirstAgentMessageRename

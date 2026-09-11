@@ -145,11 +145,13 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     const structuredSettlement = launchAgentSession(store, {
       agent,
       workspaceId: worktreeId,
+      ...(groupId ? { groupId } : {}),
       prompt: trimmedPrompt,
       promptDelivery: viewModePromptDelivery,
       tuiCustomization: { cwd: initialCwd, agentArgs },
       initialSessionOptions: startupPlan.sessionOptions,
       onPromptDelivered,
+      launchPlan: plan,
       visibility: 'reveal',
       launchSource: launchSource ?? 'tab_bar_quick_launch'
     }).then((outcome) => {

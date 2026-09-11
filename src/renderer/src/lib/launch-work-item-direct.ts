@@ -280,6 +280,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     primaryTabId = structuredResult.primaryTabId
   }
 
+  if (structuredResult.failed) {
+    return false
+  }
+
   if (startupPlanFailed) {
     toast.error(agentLaunchCommandErrorMessage())
     return false

@@ -220,7 +220,8 @@ export async function executeWorktreeCreation(
       worktreeId: worktree.id,
       shouldActivateOnCompletion,
       activation,
-      primaryTabId
+      primaryTabId,
+      fallbackStartupOpt
     })
     structuredLaunchAccepted = structuredSession.accepted
     activation = structuredSession.activation

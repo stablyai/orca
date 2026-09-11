@@ -78,6 +78,8 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   await launchAgentSession(useAppStore.getState(), {
     agent: args.launch.agent,
     workspaceId: args.worktreeId,
+    ...(plan ? { launchPlan: plan } : {}),
+    ...(args.launch.fallbackStartup ? { terminalStartup: args.launch.fallbackStartup } : {}),
     initialSessionOptions: (args.launch.startup ?? args.launch.fallbackStartup)?.sessionOptions,
     visibility: 'reveal',
     launchSource: 'onboarding'
