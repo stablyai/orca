@@ -144,7 +144,8 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 <span className="truncate text-sm font-medium">
                   {translate('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')}
                 </span>
-                {systemClaudeActive ? (
+                {/* Why: a row cannot read as both selected-healthy and broken — the warning replaces Active, not joins it. */}
+                {systemClaudeActive && !systemClaudeNeedsSignIn ? (
                   <Badge
                     variant="outline"
                     className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
