@@ -59,14 +59,24 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
 
   useEffect(() => {
     let cancelled = false
-    void useAppStore
-      .getState()
-      .fetchOrcaProfileAuthStatus()
-      .then((status) => {
-        if (!cancelled && status != null) {
-          setAuthRefreshReady(true)
-        }
-      })
+    let attempts = 0
+    const refresh = (): void => {
+      attempts += 1
+      void useAppStore
+        .getState()
+        .fetchOrcaProfileAuthStatus()
+        .then((status) => {
+          if (cancelled) {
+            return
+          }
+          if (status != null) {
+            setAuthRefreshReady(true)
+          } else if (attempts < 3) {
+            window.setTimeout(refresh, 500)
+          }
+        })
+    }
+    refresh()
     return () => {
       cancelled = true
     }
