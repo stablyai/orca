@@ -1,4 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { getSettingsFocusedExecutionHostId } from '../../../shared/execution-host'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -38,10 +39,10 @@ const pendingProviderAccountsSnapshots = new Map<string, Promise<ProviderAccount
 function getProviderAccountsOwnerKey(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): string {
-  const target = getActiveRuntimeTarget(settings)
-  // Why: environment ids are user-controlled strings; prefix the target kind
-  // so a remote id such as “local” cannot share the desktop's pending read.
-  return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
+  // Why: the execution-host id is the identity every other owner-routed read
+  // keys on, and it already prefixes and URL-encodes the environment id so a
+  // remote id such as “local” cannot share the desktop's pending read.
+  return getSettingsFocusedExecutionHostId(settings)
 }
 
 export function hasRemoteProviderAccountOwner(
@@ -79,6 +80,13 @@ export function watchProviderAccounts(
   handlers: {
     onSnapshot: (snapshot: ProviderAccountsSnapshot) => void
     onError: (error: unknown) => void
+    /**
+     * Wall-clock budget for the first snapshot, or null to wait indefinitely.
+     * A pane needs the budget to stop showing a loading state forever; an
+     * app-lifetime stream must not, because elapsed time alone observes
+     * nothing about the host — only an error or a close does.
+     */
+    firstSnapshotTimeoutMs?: number | null
   }
 ): ProviderAccountsWatcher {
   const target = getActiveRuntimeTarget(settings)
@@ -140,11 +148,18 @@ export function watchProviderAccounts(
   let receivedSnapshot = false
   // Why: a subscription that never produces a first snapshot looks identical
   // to a loading state; surface it as an error so the pane can say so.
-  const firstSnapshotTimer = window.setTimeout(() => {
-    if (!closed && !receivedSnapshot) {
-      handlers.onError(new Error('Timed out waiting for remote provider accounts.'))
-    }
-  }, REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS)
+  const firstSnapshotBudgetMs =
+    handlers.firstSnapshotTimeoutMs === undefined
+      ? REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS
+      : handlers.firstSnapshotTimeoutMs
+  const firstSnapshotTimer =
+    firstSnapshotBudgetMs === null
+      ? null
+      : window.setTimeout(() => {
+          if (!closed && !receivedSnapshot) {
+            handlers.onError(new Error('Timed out waiting for remote provider accounts.'))
+          }
+        }, firstSnapshotBudgetMs)
 
   void window.api.runtimeEnvironments
     .subscribe(
@@ -196,7 +211,9 @@ export function watchProviderAccounts(
   return {
     close: () => {
       closed = true
-      window.clearTimeout(firstSnapshotTimer)
+      if (firstSnapshotTimer !== null) {
+        window.clearTimeout(firstSnapshotTimer)
+      }
       unsubscribe?.()
     }
   }
