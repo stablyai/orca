@@ -51,8 +51,16 @@ export async function diffTextSelectionPoints(code: Locator, text: string) {
     const right = Math.max(first.getBoundingClientRect().right, last.getBoundingClientRect().right)
     // Why measured and not a constant: the line-number column is sticky, so centering the glyph
     // in a narrow pane slides it under the gutter and every point hit-tests as a line number.
-    const gutterRight =
-      code.querySelector('[data-line-number-content]')?.getBoundingClientRect().right ?? 0
+    // Why a filtered max and not the first: a side-by-side pane stacks two sticky number columns,
+    // so the first alone leaves the glyph under the second -- but an unfiltered max picks up
+    // number cells scrolled far to the right and overshoots.
+    const gutterRight = [...code.querySelectorAll('[data-line-number-content]')].reduce(
+      (widest, node) => {
+        const box = node.getBoundingClientRect()
+        return box.right < viewport.left + viewport.width / 2 ? Math.max(widest, box.right) : widest
+      },
+      0
+    )
     const inset = Math.max(24, gutterRight > 0 ? gutterRight - viewport.left + 8 : 0)
     code.scrollLeft += left - viewport.left - Math.max(inset, (viewport.width - (right - left)) / 2)
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
@@ -63,7 +71,22 @@ export async function diffTextSelectionPoints(code: Locator, text: string) {
       const root = code.getRootNode() as ShadowRoot
       const hit = root.elementFromPoint(x, y)
       if (!hit || !content.contains(hit) || document.elementFromPoint(x, y) !== root.host) {
-        throw new Error('Selection endpoint is clipped or covered by another diff pane')
+        // Why the detail: this only reproduces on displays narrower than a dev machine, so the
+        // numbers have to come back from the runner rather than be guessed at locally.
+        const pane = code.getBoundingClientRect()
+        throw new Error(
+          `Selection endpoint is clipped or covered by another diff pane: ${JSON.stringify({
+            point: { x: Math.round(x), y: Math.round(y), isEnd: end },
+            glyph: { left: Math.round(rect.left), right: Math.round(rect.right) },
+            pane: { left: Math.round(pane.left), width: Math.round(pane.width) },
+            selectionWidth: Math.round(right - left),
+            inset: Math.round(inset),
+            scrollLeft: Math.round(code.scrollLeft),
+            window: { width: window.innerWidth, height: window.innerHeight },
+            hit: hit ? hit.tagName : null,
+            hitInContent: hit ? content.contains(hit) : false
+          })}`
+        )
       }
       return { x, y }
     }
