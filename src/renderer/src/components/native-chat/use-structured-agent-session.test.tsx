@@ -8,6 +8,9 @@ const mocks = vi.hoisted(() => ({
   operationId: vi.fn(),
   enqueueSettingsWrite: vi.fn()
 }))
+// Off is production: a paired host's session is read-only in this release. Cases about how a
+// write is ADDRESSED still need one to happen, so they turn it on for themselves.
+const remoteWrites = vi.hoisted(() => ({ enabled: false }))
 let fence = 3
 let sessionCommands: { name: string; kind: 'command' | 'skill' }[] | undefined
 let items: AgentJournalRenderItem[] = []
@@ -20,6 +23,10 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 // The paired host answers: without this the hold reads as unreachable and the pane stops writing.
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
+}))
+
+vi.mock('./structured-remote-session-writes', () => ({
+  structuredRemoteSessionWritesEnabled: () => remoteWrites.enabled
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -170,6 +177,7 @@ describe('useStructuredAgentSession working state', () => {
 describe('useStructuredAgentSession options', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    remoteWrites.enabled = false
     fence = 3
     submissions = []
     mocks.operationId
@@ -473,6 +481,7 @@ describe('useStructuredAgentSession options', () => {
   })
 
   it('writes through the session runtime target', async () => {
+    remoteWrites.enabled = true
     const remoteTarget = { kind: 'environment', environmentId: 'remote-1' } as const
     mocks.call.mockImplementation((_target, method) =>
       method === 'agentSession.options'
@@ -500,6 +509,31 @@ describe('useStructuredAgentSession options', () => {
       remoteTarget,
       expect.objectContaining({ type: 'apply-picks', agent: 'codex' })
     )
+  })
+
+  it('does not write a paired host\u2019s option, or reserve its session to try', async () => {
+    const remoteTarget = { kind: 'environment', environmentId: 'remote-1' } as const
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: remoteTarget,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(2))
+
+    await act(async () => {
+      expect(await result.current.setStructuredOption('effort', 'high')).toBe(false)
+    })
+
+    expect(result.current.remoteReadOnly).toBe(true)
+    expect(mocks.enqueueSettingsWrite).not.toHaveBeenCalled()
+    const methods = mocks.call.mock.calls.map(([, method]) => method)
+    // The options read still happened, so this is a refusal to write rather than a dead pane.
+    expect(methods).toContain('agentSession.options')
+    expect(methods).not.toContain('agentSession.setOption')
+    expect(methods).not.toContain('agentSession.hold')
   })
 
   it('pins the model an effort-only pick was made against', async () => {
