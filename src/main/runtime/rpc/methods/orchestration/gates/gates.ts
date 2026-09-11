@@ -1,47 +1,20 @@
-import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../../../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../../../schemas'
 import type { GateStatus } from '../../../../orchestration/db'
 import { Coordinator } from '../../../../orchestration/coordinator'
 import { resolveRunScope } from '../runs/run-scope'
 import { taskNotFoundError } from '../../../../orchestration/task-dispatch-refusal'
+import {
+  GateCreateParams,
+  GateListParams,
+  GateResolveParams,
+  RunParams,
+  RunStopParams
+} from '../../../../../../shared/rpc-contract/orchestration-gates-params'
 
 // Why: the coordinator instance is stored at module scope so orchestration.runStop
 // can signal it to halt. Only one coordinator can run at a time (enforced by
 // the DB's active-run check), so a single reference suffices.
 let activeCoordinator: Coordinator | null = null
-
-const RunParams = z.object({
-  spec: requiredString('Missing --spec'),
-  from: OptionalString,
-  pollIntervalMs: OptionalFiniteNumber,
-  maxConcurrent: OptionalFiniteNumber,
-  worktree: OptionalString
-})
-
-const RunStopParams = z.object({})
-
-const GateCreateParams = z.object({
-  task: requiredString('Missing --task'),
-  question: requiredString('Missing --question'),
-  options: OptionalString,
-  from: OptionalString,
-  run: OptionalString
-})
-
-const GateResolveParams = z.object({
-  id: requiredString('Missing --id'),
-  resolution: requiredString('Missing --resolution'),
-  from: OptionalString,
-  run: OptionalString
-})
-
-const GateListParams = z.object({
-  task: OptionalString,
-  status: z.enum(['pending', 'resolved', 'timeout']).optional(),
-  from: OptionalString,
-  run: OptionalString
-})
 
 export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
   // Why: Section 4.12 — orchestration.run returns immediately with a run ID.

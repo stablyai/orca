@@ -1,113 +1,28 @@
-import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
-import { createRepoUpdateSchema } from './repo-update-schema'
+import { RepoSelector } from './github-repo-target-schemas'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient
 } from '../repo-visibility-projection'
-
-const RepoSelector = z.object({
-  repo: requiredString('Missing repo selector')
-})
-
-const RepoPath = z.object({
-  path: requiredString('Missing repo path'),
-  kind: z.enum(['git', 'folder']).optional(),
-  displayName: OptionalString
-})
-
-const RepoCreate = z.object({
-  parentPath: requiredString('Missing parent path'),
-  name: requiredString('Missing repo name'),
-  kind: z.enum(['git', 'folder']).optional()
-})
-
-const RepoClone = z.object({
-  url: requiredString('Missing clone URL'),
-  destination: requiredString('Missing clone destination')
-})
-
-const RepoSetBaseRef = z.object({
-  repo: requiredString('Missing repo selector'),
-  ref: requiredString('Missing base ref')
-})
-
-const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
-
-const RepoSearchRefs = z.object({
-  repo: requiredString('Missing repo selector'),
-  query: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : undefined))
-    .pipe(z.string({ message: 'Missing query' })),
-  limit: OptionalFiniteNumber
-})
-
-const RepoReorder = z.object({
-  orderedIds: z.array(z.string())
-})
-
-const ProjectGroupCreate = z.object({
-  name: requiredString('Missing group name'),
-  parentPath: OptionalString,
-  connectionId: OptionalString.nullable().optional(),
-  parentGroupId: OptionalString.nullable().optional(),
-  createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
-})
-
-const ProjectGroupUpdate = z.object({
-  groupId: requiredString('Missing group id'),
-  updates: z.object({
-    name: OptionalString,
-    isCollapsed: z.boolean().optional(),
-    tabOrder: OptionalFiniteNumber,
-    color: OptionalString.nullable().optional()
-  })
-})
-
-const ProjectGroupSelector = z.object({
-  groupId: requiredString('Missing group id')
-})
-
-const ProjectGroupMoveProject = z.object({
-  repo: requiredString('Missing repo selector'),
-  groupId: OptionalString.nullable(),
-  order: OptionalFiniteNumber
-})
-
-const ProjectGroupScanNested = z.object({
-  path: requiredString('Missing folder path')
-})
-
-const ProjectGroupImportNested = z.discriminatedUnion('mode', [
-  z.object({
-    parentPath: requiredString('Missing parent path'),
-    groupName: z.string().optional().default(''),
-    projectPaths: z.array(z.string()),
-    mode: z.literal('group')
-  }),
-  z.object({
-    parentPath: requiredString('Missing parent path'),
-    // Why: blank group names fall back to the scanned folder basename; separate
-    // imports do not create a group but share the same renderer payload shape.
-    groupName: z.string().optional().default(''),
-    projectPaths: z.array(z.string()),
-    mode: z.literal('separate')
-  })
-])
-
-const RepoIssueCommandWrite = RepoSelector.extend({
-  content: z.string()
-})
-
-const RepoSparsePresetSave = RepoSelector.extend({
-  id: OptionalString,
-  name: requiredString('Missing preset name'),
-  directories: z.array(z.string())
-})
+import {
+  ProjectGroupCreate,
+  ProjectGroupImportNested,
+  ProjectGroupMoveProject,
+  ProjectGroupScanNested,
+  ProjectGroupSelector,
+  ProjectGroupUpdate,
+  RepoClone,
+  RepoCreate,
+  RepoIssueCommandWrite,
+  RepoPath,
+  RepoReorder,
+  RepoSearchRefs,
+  RepoSetBaseRef,
+  RepoSparsePresetSave,
+  RepoUpdate
+} from '../../../../shared/rpc-contract/repo-params'
 
 export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
