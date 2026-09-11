@@ -168,6 +168,9 @@ export function installMainWindowFocusLifecycle(args: {
   // Why: the reload can stall with a live window and no document — no did-fail-load fires, and the breaker counts
   // renderer deaths, so a load that never lands is invisible to every other observer on this path.
   const recoveryReloadWatchdog = createRendererRecoveryReloadWatchdog({
+    // Why live: a stall escalates up to 45s after its reload was issued, by which time more renderer
+    // deaths have registered — the issue-time snapshot understates what the breaker is holding.
+    getRecentRecoveryCount: () => rendererRecoveryCircuitBreaker.recentRecoveryCount(Date.now()),
     isRecoveryPending: () => rendererRecoveryTimer !== null,
     isWindowClosing,
     mainWindow,
