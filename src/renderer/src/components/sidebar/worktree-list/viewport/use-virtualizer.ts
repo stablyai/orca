@@ -12,6 +12,10 @@ import {
   getVirtualRowIndex,
   WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP
 } from './virtual-rows'
+import {
+  clampInitialVirtualScrollOffset,
+  estimateRenderRowsTotalSize
+} from './initial-scroll-offset'
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 import { WORKTREE_SIDEBAR_REVEAL_TOP_INSET } from '../../worktree-sidebar-reveal'
@@ -36,6 +40,10 @@ export function useWorktreeListVirtualizer(args: {
   const activeStickyHeaderIndexRef = useRef<number | null>(null)
   const activeStickyHostIndexRef = useRef<number | null>(null)
   const stickyRangeStartIndexRef = useRef(0)
+  const estimatedInitialTotalSize = useMemo(
+    () => estimateRenderRowsTotalSize(renderRows, firstHeaderIndex),
+    [firstHeaderIndex, renderRows]
+  )
 
   const getVirtualItemKey = useCallback(
     (index: number) => {
@@ -133,8 +141,14 @@ export function useWorktreeListVirtualizer(args: {
     isScrollingResetDelay: USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS,
     // Why: sync-flushing rich card renders in the scroll listener stalls wheel input; async + overscan keeps rows filled.
     useFlushSync: false,
-    // Why: seed scrollOffset from the ref (not 0) so the first getVirtualItems() after remount picks the right rows.
-    initialOffset: () => scrollOffsetRef.current,
+    // Why: retain reachable scroll on remount, but clamp stale offsets before
+    // TanStack selects a range that short all-collapsed content cannot correct.
+    initialOffset: () =>
+      clampInitialVirtualScrollOffset({
+        requestedOffset: scrollOffsetRef.current,
+        estimatedTotalSize: estimatedInitialTotalSize,
+        viewportHeight: scrollRef.current?.clientHeight ?? 0
+      }),
     getItemKey: getVirtualItemKey
   })
   // Why: TanStack's default correction writes scrollTop while cards remeasure mid-wheel, which feels like rubber-banding.

@@ -6,6 +6,9 @@ import type { RenderRow } from '../listing/render-row'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
 export const HOST_HEADER_ROW_HEIGHT = 32
+// Why: HostSectionHeader always wraps the h-8 card in pt-1; sticky drops only the
+// inter-group virtual-row spacer, not this inner padding (#12300).
+export const HOST_HEADER_INNER_TOP_PADDING = 4
 export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 6
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
@@ -65,6 +68,7 @@ export function estimateRenderRowSize(
   if (row?.type === 'host-header') {
     return (
       HOST_HEADER_ROW_HEIGHT +
+      HOST_HEADER_INNER_TOP_PADDING +
       (shouldUseHeaderTopSpacing({
         rows,
         index,
@@ -159,10 +163,12 @@ export function getStickyHeaderIndexes(rows: readonly RenderRow[]): number[] {
   return indexes
 }
 
-// Why: the pinned host card is h-8 (32px) inside a pt-1 (4px) wrapper; the
-// group tier pins one pixel up to sit flush beneath it. Keep in sync with
-// HostSectionHeader's layout.
-export const HOST_STICKY_PINNED_HEIGHT = 36
+// Why: sticky host keeps HostSectionHeader's inner pt-1 + h-8 card (36px) and
+// only drops the inter-group virtual-row spacer. Group tier pins flush under that.
+export const HOST_STICKY_PINNED_HEIGHT = HOST_HEADER_ROW_HEIGHT + HOST_HEADER_INNER_TOP_PADDING
+
+/** One pixel up under the pinned host so the group sticky sits flush. */
+export const HOST_STICKY_GROUP_TOP_PX = HOST_STICKY_PINNED_HEIGHT - 1
 
 export type ActiveStickyIndexes = {
   /** Pinned host card (tier 1), or null outside host sections. */
@@ -175,6 +181,13 @@ function getHostStickyIndexes(rows: readonly RenderRow[], sticky: readonly numbe
   return sticky.filter((index) => rows[index]?.type === 'host-header')
 }
 
+export function getVirtualRowIndexAtOffset(
+  items: readonly VirtualItem[],
+  offset: number
+): number | null {
+  return (items.findLast((item) => item.start <= offset) ?? items[0])?.index ?? null
+}
+
 /** Two-tier sticky resolution: the host card is the outer hierarchy level so
  *  it stays pinned for the whole section while group headers hand off beneath
  *  it. Without host sections this degrades to the original single-tier rules. */
@@ -184,7 +197,22 @@ export function getActiveStickyIndexesForScroll(args: {
   scrollOffset: number
   stickyHeaderIndexes: readonly number[]
   virtualItems: readonly VirtualItem[]
+  /** Largest offset the scroll element can reach (total size minus viewport height). */
+  maxScrollOffset?: number
+  /** Full-measurement row index at maxScrollOffset when it is outside the mounted window. */
+  rangeStartIndexAtMaxScrollOffset?: number
 }): ActiveStickyIndexes {
+  // Why: remounted short content may never emit the scroll event that corrects
+  // the previous view's offset, which otherwise pins the last host over the first.
+  let scrollOffset = args.scrollOffset
+  let rangeStartIndex = args.rangeStartIndex
+  if (args.maxScrollOffset !== undefined && scrollOffset > args.maxScrollOffset) {
+    scrollOffset = Math.max(0, args.maxScrollOffset)
+    rangeStartIndex =
+      args.rangeStartIndexAtMaxScrollOffset ??
+      getVirtualRowIndexAtOffset(args.virtualItems, scrollOffset) ??
+      0
+  }
   const hostIndexes = getHostStickyIndexes(args.rows, args.stickyHeaderIndexes)
 
   const resolveWithHandoff = (
@@ -192,7 +220,7 @@ export function getActiveStickyIndexesForScroll(args: {
     pinnedOffset: number,
     fallbackToCandidate: boolean
   ): number | null => {
-    const candidateIndex = getActiveStickyHeaderIndex(candidates, args.rangeStartIndex)
+    const candidateIndex = getActiveStickyHeaderIndex(candidates, rangeStartIndex)
     if (candidateIndex === null) {
       return null
     }
@@ -213,7 +241,7 @@ export function getActiveStickyIndexesForScroll(args: {
     }
     // Why: hand off the moment the incoming header reaches its pinned slot
     // (top of the viewport, or the bottom edge of the pinned host card).
-    if (args.scrollOffset + pinnedOffset >= candidate.start) {
+    if (scrollOffset + pinnedOffset >= candidate.start) {
       return candidateIndex
     }
     const previous = getPreviousStickyHeaderIndex(candidates, candidateIndex)

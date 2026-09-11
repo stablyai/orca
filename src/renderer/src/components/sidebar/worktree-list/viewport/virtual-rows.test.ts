@@ -2,13 +2,21 @@ import { describe, expect, it } from 'vitest'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
+  HOST_HEADER_INNER_TOP_PADDING,
+  HOST_STICKY_GROUP_TOP_PX,
   HOST_STICKY_PINNED_HEIGHT,
   buildLineageRowRekeyMap,
+  estimateRenderRowSize,
   extractWorktreeVirtualRowIndexes,
   getActiveStickyIndexesForScroll,
   getStickyHeaderIndexes,
+  getVirtualRowIndexAtOffset,
   pruneStaleVirtualRowElementCache
 } from './virtual-rows'
+import {
+  clampInitialVirtualScrollOffset,
+  estimateRenderRowsTotalSize
+} from './initial-scroll-offset'
 import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 
@@ -135,6 +143,60 @@ describe('getActiveStickyIndexesForScroll', () => {
     expect(after).toEqual({ hostIndex: 4, groupIndex: 5 })
   })
 
+  it('clamps stale remount offsets when collapsed hosts fit the viewport', () => {
+    const collapsedRows = Array.from({ length: 20 }, (_, index) => hostRow(`ssh:${index}`))
+    const measurements = collapsedRows.map((_, index) => virtualItem(index, index * 38))
+    // The stale end range omits row 0 even though the clamped offset is 0.
+    const mountedItems = measurements.slice(9)
+
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows: collapsedRows,
+        rangeStartIndex: 19,
+        scrollOffset: 500,
+        maxScrollOffset: 0,
+        stickyHeaderIndexes: getStickyHeaderIndexes(collapsedRows),
+        virtualItems: mountedItems,
+        rangeStartIndexAtMaxScrollOffset: 0
+      })
+    ).toEqual({ hostIndex: 0, groupIndex: null })
+  })
+
+  it('clamps the initial offset before TanStack selects a stale remount range', () => {
+    const collapsedRows = Array.from({ length: 20 }, (_, index) => hostRow(`ssh:${index}`))
+
+    expect(
+      clampInitialVirtualScrollOffset({
+        requestedOffset: 500,
+        estimatedTotalSize: estimateRenderRowsTotalSize(collapsedRows, 0),
+        viewportHeight: 1_000
+      })
+    ).toBe(0)
+  })
+
+  it('preserves a reachable initial remount offset', () => {
+    expect(
+      clampInitialVirtualScrollOffset({
+        requestedOffset: 250,
+        estimatedTotalSize: 1_000,
+        viewportHeight: 500
+      })
+    ).toBe(250)
+  })
+
+  it('leaves reachable offsets unchanged when a maximum is provided', () => {
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows,
+        rangeStartIndex: 2,
+        scrollOffset: 250,
+        maxScrollOffset: 600,
+        stickyHeaderIndexes,
+        virtualItems
+      })
+    ).toEqual({ hostIndex: 0, groupIndex: 1 })
+  })
+
   it('degrades to single-tier rules when no host sections exist', () => {
     const flatRows: RenderRow[] = [
       groupRow('g1'),
@@ -192,6 +254,125 @@ describe('getActiveStickyIndexesForScroll', () => {
     })
     expect(result.hostIndex).toBe(0)
     expect(result.groupIndex).toBe(1)
+  })
+
+  it('estimates host headers with HostSectionHeader inner padding so sticky geometry matches paint (#12300)', () => {
+    // Why: HostSectionHeader is always pt-1 + h-8. Under-estimating the first host
+    // by 4px pulled later group starts forward and made sticky tiers collide.
+    const multiGroupRows: RenderRow[] = [
+      hostRow('ssh:a'),
+      groupRow('a1'),
+      itemStub('wt-1'),
+      hostRow('ssh:b'),
+      groupRow('b1'),
+      itemStub('wt-2')
+    ]
+    expect(HOST_HEADER_INNER_TOP_PADDING).toBe(4)
+    expect(HOST_STICKY_PINNED_HEIGHT).toBe(36)
+    expect(estimateRenderRowSize(multiGroupRows, 0, 0, null)).toBe(36)
+    expect(estimateRenderRowSize(multiGroupRows, 3, 0, null)).toBe(40)
+    expect(HOST_STICKY_GROUP_TOP_PX).toBe(35)
+
+    const multiSticky = getStickyHeaderIndexes(multiGroupRows)
+    const gap = 6
+    const hostSize = estimateRenderRowSize(multiGroupRows, 0, 0, null)
+    const groupStart = hostSize + gap
+    const virtualItems = [
+      virtualItem(0, 0),
+      virtualItem(1, groupStart),
+      virtualItem(2, groupStart + 100),
+      virtualItem(3, groupStart + 200),
+      virtualItem(4, groupStart + 300),
+      virtualItem(5, groupStart + 400)
+    ]
+
+    // Cold first paint: host pin only; first group stays in flow.
+    const cold = getActiveStickyIndexesForScroll({
+      rows: multiGroupRows,
+      rangeStartIndex: 0,
+      scrollOffset: 0,
+      stickyHeaderIndexes: multiSticky,
+      virtualItems
+    })
+    expect(cold).toEqual({ hostIndex: 0, groupIndex: null })
+
+    // Group must not pin until scrollOffset + HOST_STICKY_PINNED_HEIGHT reaches start.
+    const earlyScroll = groupStart - HOST_STICKY_PINNED_HEIGHT - 1
+    const early = getActiveStickyIndexesForScroll({
+      rows: multiGroupRows,
+      rangeStartIndex: 1,
+      scrollOffset: earlyScroll,
+      stickyHeaderIndexes: multiSticky,
+      virtualItems
+    })
+    expect(early.groupIndex).toBeNull()
+
+    const onSlot = getActiveStickyIndexesForScroll({
+      rows: multiGroupRows,
+      rangeStartIndex: 1,
+      scrollOffset: groupStart - HOST_STICKY_PINNED_HEIGHT,
+      stickyHeaderIndexes: multiSticky,
+      virtualItems
+    })
+    expect(onSlot).toEqual({ hostIndex: 0, groupIndex: 1 })
+  })
+
+  it('keeps single-tier cold first render free of double group pins', () => {
+    const flatRows: RenderRow[] = [
+      groupRow('project-group:infra'),
+      itemStub('wt-1'),
+      groupRow('project-group:projects'),
+      itemStub('wt-2')
+    ]
+    const flatSticky = getStickyHeaderIndexes(flatRows)
+    const sizes = flatRows.map((_, index) => estimateRenderRowSize(flatRows, index, 0, null))
+    let start = 0
+    const flatItems = sizes.map((size, index) => {
+      const item = virtualItem(index, start)
+      start += size + 6
+      return item
+    })
+
+    const cold = getActiveStickyIndexesForScroll({
+      rows: flatRows,
+      rangeStartIndex: 0,
+      scrollOffset: 0,
+      stickyHeaderIndexes: flatSticky,
+      virtualItems: flatItems
+    })
+    expect(cold).toEqual({ hostIndex: null, groupIndex: 0 })
+
+    // Second group must not share the pin until it reaches the top.
+    const mid = getActiveStickyIndexesForScroll({
+      rows: flatRows,
+      rangeStartIndex: 1,
+      scrollOffset: flatItems[2].start - 1,
+      stickyHeaderIndexes: flatSticky,
+      virtualItems: flatItems
+    })
+    expect(mid.groupIndex).toBe(0)
+  })
+
+  it('scopes host-stamped project-group header keys so multi-host sections stay unique', () => {
+    expect(getRenderRowKey(groupRow('project-group:infra', 'local'))).toBe(
+      'hdr:local:project-group:infra'
+    )
+    expect(getRenderRowKey(groupRow('project-group:infra', 'ssh:builder'))).toBe(
+      'hdr:ssh:builder:project-group:infra'
+    )
+    expect(getRenderRowKey(groupRow('project-group:infra'))).toBe('hdr:project-group:infra')
+  })
+})
+
+describe('getVirtualRowIndexAtOffset', () => {
+  it('returns the last row at or before the offset', () => {
+    expect(getVirtualRowIndexAtOffset([virtualItem(2, 20), virtualItem(3, 60)], 60)).toBe(3)
+    expect(getVirtualRowIndexAtOffset([virtualItem(2, 20), virtualItem(3, 60)], 59)).toBe(2)
+  })
+
+  it('falls back to the first row when the offset precedes the mounted window', () => {
+    expect(getVirtualRowIndexAtOffset([virtualItem(9, 342), virtualItem(10, 380)], 0)).toBe(9)
+    expect(getVirtualRowIndexAtOffset([], 0)).toBeNull()
   })
 })
 
