@@ -3,12 +3,14 @@ import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { activateStructuredAgentSessionById } from '@/lib/structured-agent-session-tab-activation'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 /** Full-create dialog: the structured launch plus what this flow did before structured chat
  *  existed. Returns null when the plan's route is not structured. */
 export async function settleFullCreationStructuredLaunch(args: {
   /** Planned before the worktree existed; `worktreeId` names the one that was created. */
   plan: AgentSessionLaunchPlan
+  agent: TuiAgent
   worktreeId: string
   startup: WorktreeStartupPayload | undefined
   pendingFirstAgentMessageRename: boolean
@@ -27,6 +29,7 @@ export async function settleFullCreationStructuredLaunch(args: {
         }
         const activation = activateAndRevealWorktree(args.worktreeId, {
           sidebarRevealBehavior: 'auto',
+          agent: args.agent,
           createNewTerminalForStartup: true,
           ...(args.startup ? { startup: args.startup } : {})
         })

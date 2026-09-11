@@ -219,6 +219,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
 
       const initialActivation = activateAndRevealWorktree(worktree.id, {
         sidebarRevealBehavior: 'auto',
+        agent: tuiAgent,
         setup: result.setup,
         defaultTabs: result.defaultTabs,
         issueCommand,
@@ -229,6 +230,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
 
       const settlement = await settleFullCreationStructuredLaunch({
         plan: launchPlan,
+        agent: tuiAgent,
         worktreeId: worktree.id,
         startup,
         pendingFirstAgentMessageRename,

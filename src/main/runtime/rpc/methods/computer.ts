@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import {
   callComputerSidecarAction,
   callComputerSidecarCapabilities,
@@ -23,6 +22,10 @@ import {
   SetValue,
   TypeText
 } from './computer-schemas'
+import {
+  ComputerCapabilitiesParams,
+  ComputerPermissionsStatusParams
+} from '../../../../shared/rpc-contract/computer-params'
 
 export function resetComputerSessionsForTest(): void {
   resetComputerSidecarForTest()
@@ -31,7 +34,7 @@ export function resetComputerSessionsForTest(): void {
 export const COMPUTER_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'computer.capabilities',
-    params: z.object({}),
+    params: ComputerCapabilitiesParams,
     handler: async () => {
       return await callComputerSidecarCapabilities()
     }
@@ -54,7 +57,7 @@ export const COMPUTER_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'computer.permissionsStatus',
-    params: z.object({}),
+    params: ComputerPermissionsStatusParams,
     handler: async () => {
       const { getComputerUsePermissionStatus } =
         await import('../../../computer/macos-computer-use-permissions')

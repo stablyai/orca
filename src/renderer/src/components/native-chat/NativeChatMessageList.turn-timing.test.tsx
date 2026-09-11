@@ -3,11 +3,20 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
 afterEach(cleanup)
+
+let restoreViewport = (): void => {}
+
+beforeAll(() => {
+  restoreViewport = installNativeChatMessageListTestViewport()
+})
+
+afterAll(() => restoreViewport())
 
 const session: NativeChatLiveSession = {
   messages: [

@@ -19,7 +19,9 @@ describe('PushDispatcher', () => {
       ]
     })
 
-    harness.dispatcher.enqueue(notification())
+    harness.dispatcher.enqueue(
+      notification({ paneKey: 'tab-b:11111111-1111-4111-8111-111111111111' })
+    )
     await flush()
 
     expect(harness.sends).toHaveLength(1)
@@ -29,7 +31,8 @@ describe('PushDispatcher', () => {
       agentState: 'finished',
       notificationSeq: 7,
       notificationEpoch: 'epoch-1',
-      worktreeId: 'repo::wt1'
+      worktreeId: 'repo::wt1',
+      paneKey: 'tab-b:11111111-1111-4111-8111-111111111111'
     })
   })
 

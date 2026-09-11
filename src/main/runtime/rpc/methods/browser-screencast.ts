@@ -1,13 +1,9 @@
-import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { Screencast } from './browser-schemas'
 import { BrowserError } from '../../../browser/browser-error'
 import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../shared/runtime-types'
 import { runtimeBrowserCommandsFactoryIsAvailable } from '../../runtime-browser-commands-factory'
-
-const ScreencastUnsubscribe = z.object({
-  subscriptionId: z.string().min(1, 'Missing required --subscription-id')
-})
+import { ScreencastUnsubscribe } from '../../../../shared/rpc-contract/browser-screencast-params'
 
 export const BROWSER_SCREENCAST_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({

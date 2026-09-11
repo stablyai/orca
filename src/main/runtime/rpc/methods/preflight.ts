@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import {
   detectRemoteAgents,
@@ -7,16 +6,11 @@ import {
   refreshShellPathAndDetectAgents,
   runPreflightCheck
 } from '../../../preflight/agent-detection'
-
-const PreflightCheck = z.object({
-  force: z.boolean().optional()
-})
-const PreflightDetectRemoteAgents = z.object({
-  connectionId: z.string().min(1)
-})
-const PreflightDetectRemoteWindowsTerminalCapabilities = z.object({
-  connectionId: z.string().min(1)
-})
+import {
+  PreflightCheck,
+  PreflightDetectRemoteAgents,
+  PreflightDetectRemoteWindowsTerminalCapabilities
+} from '../../../../shared/rpc-contract/preflight-params'
 
 export const PREFLIGHT_METHODS: RpcMethod[] = [
   defineMethod({

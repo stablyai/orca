@@ -1,4 +1,3 @@
-import { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import {
@@ -18,6 +17,7 @@ import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement
 import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
+import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
 
 export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
@@ -181,11 +181,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   }),
   defineMethod({
     name: 'session.tabs.unsubscribeAll',
-    params: z
-      .object({
-        subscriptionId: z.string().min(1).optional()
-      })
-      .nullish(),
+    params: SessionTabsUnsubscribeAllParams,
     handler: async (params, { runtime, connectionId }) => {
       const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
       if (params?.subscriptionId) {

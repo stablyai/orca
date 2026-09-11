@@ -3,6 +3,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
+import { buildNativeChatPickerItems } from './native-chat-picker-items'
+import { sessionSlashCommandSuggestions } from '../../../../shared/native-chat-slash-commands'
 import type { ComposerAutocomplete } from './native-chat-composer-state'
 
 function autocomplete(
@@ -126,6 +128,45 @@ describe('NativeChatPickerMenu', () => {
       />
     )
     expect(screen.getAllByText('No matching commands')).toHaveLength(2)
+  })
+
+  it('shows the argument hint the provider reported beside the command token', () => {
+    render(
+      <NativeChatPickerMenu
+        autocomplete={autocomplete({
+          items: buildNativeChatPickerItems(
+            sessionSlashCommandSuggestions('claude', [
+              {
+                name: 'goal',
+                kind: 'command',
+                description: 'Set a goal and keep working until it is met',
+                argumentHint: '<objective>'
+              },
+              { name: 'clear', kind: 'command' },
+              { name: 'wordy', kind: 'command', argumentHint: `<${'a'.repeat(200)}>` }
+            ]),
+            [],
+            '',
+            '/'
+          )
+        })}
+        activeIndex={0}
+        listboxId="picker"
+        onChoose={vi.fn()}
+        onRetry={vi.fn()}
+      />
+    )
+    const goal = screen.getByRole('option', { name: /goal/i })
+    expect(goal.textContent).toContain('<objective>')
+    expect(goal.textContent).toContain('Set a goal and keep working until it is met')
+    // A command the report left hintless renders its row unchanged.
+    expect(screen.getByRole('option', { name: /clear/i }).textContent).toBe(
+      '/clearClear conversation history'
+    )
+    // A hint long enough to swamp the row is capped before it reaches the DOM.
+    expect(screen.getByRole('option', { name: /wordy/i }).textContent).toBe(
+      `/wordy<${'a'.repeat(79)}`
+    )
   })
 
   it('announces a successful empty skill result distinctly from loading', () => {

@@ -475,6 +475,7 @@ describe('notice projection for desktop and mobile consumers', () => {
 
 it('preserves optional tool annotations for desktop and mobile projection', () => {
   const metadata = {
+    callId: 'call-1',
     exitCode: 127,
     durationMs: 400,
     webSearchResults: [{ title: 'Docs', url: 'https://example.com' }]
