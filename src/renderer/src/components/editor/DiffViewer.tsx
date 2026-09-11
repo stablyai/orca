@@ -102,7 +102,7 @@ export default function DiffViewer({
     error: parseError,
     retry: retryParse,
     markEdited
-  } = usePierreFileDiff(diffInput)
+  } = usePierreFileDiff(diffInput, editable)
 
   const { registerDiffNavigator, unregisterDiffNavigator } = useDiffNavigatorRegistration()
   const changeTargets = useMemo(() => getPierreDiffChangeTargets(fileDiff), [fileDiff])

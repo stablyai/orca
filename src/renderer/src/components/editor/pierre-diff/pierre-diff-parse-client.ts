@@ -7,7 +7,11 @@ import { preparePierreDiffHighlight } from './pierre-diff-highlight'
 const scheduler = createPierreDiffParseScheduler(() => new PierreDiffParseWorker())
 let nextRequestId = 0
 
-export async function requestPierreFileDiff(input: PierreDiffInput, signal: AbortSignal) {
+export async function requestPierreFileDiff(
+  input: PierreDiffInput,
+  signal: AbortSignal,
+  blockOnHighlight = false
+) {
   const identity = getPierreDiffCacheIdentity(
     JSON.stringify([
       input.cacheKey,
@@ -20,8 +24,16 @@ export async function requestPierreFileDiff(input: PierreDiffInput, signal: Abor
     input.modifiedContent
   )
   const diff = await scheduler.request({ id: ++nextRequestId, identity, input }, signal)
-  // Entering Pierre edit mode otherwise highlights the entire file synchronously.
-  await preparePierreDiffHighlight(diff, signal)
+  // Why conditional: entering edit mode otherwise highlights the whole file synchronously, so an
+  // editable surface still waits. For a read-only diff, awaiting it put a whole-file AST
+  // structured-clone on the critical path -- Pierre paints a viewport-windowed plain AST first and
+  // upgrades when this resolves, so blocking here only delayed the first paint.
+  const highlight = preparePierreDiffHighlight(diff, signal)
+  if (blockOnHighlight) {
+    await highlight
+  } else {
+    highlight.catch(() => {})
+  }
   return diff
 }
 

@@ -132,7 +132,7 @@ export function DiffSectionItem({
     error: parseError,
     retry: retryParse,
     markEdited
-  } = usePierreFileDiff(diffInput)
+  } = usePierreFileDiff(diffInput, isEditable)
 
   // Why: virtualized rows unmount when scrolled away, so the draft must live in
   // section state rather than only inside the mounted editor.

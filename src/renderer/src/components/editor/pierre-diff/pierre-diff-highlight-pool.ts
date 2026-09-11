@@ -23,7 +23,10 @@ export function createDiffHighlightPool(): WorkerPoolManager {
   return getOrCreateWorkerPoolSingleton({
     poolOptions: {
       workerFactory: () => new PierreDiffHighlightWorker(),
-      poolSize: resolvePoolSize()
+      poolSize: resolvePoolSize(),
+      // Why: each entry is a whole-file per-line AST and a mounted row pins its own on top of
+      // this. Pierre's default of 100 retained ~63MB more than the Monaco path it replaced.
+      totalASTLRUCacheSize: 16
     },
     // Why: the pool owns `theme` for every component instance; per-file options are ignored.
     highlighterOptions: { theme: PIERRE_DIFF_THEMES, useTokenTransformer: true }

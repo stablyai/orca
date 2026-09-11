@@ -5,7 +5,7 @@ import { requestPierreFileDiff } from './pierre-diff-parse-client'
 
 type DiffSnapshot = { input: PierreDiffInput; diff: FileDiffMetadata | null; error: string | null }
 
-export function usePierreFileDiff(input: PierreDiffInput | null) {
+export function usePierreFileDiff(input: PierreDiffInput | null, editable = false) {
   const [snapshot, setSnapshot] = useState<DiffSnapshot | null>(null)
   const [attempt, setAttempt] = useState(0)
   const retry = useCallback(() => setAttempt((value) => value + 1), [])
@@ -25,7 +25,7 @@ export function usePierreFileDiff(input: PierreDiffInput | null) {
     // Edits already paint through Pierre; coalesce parent echoes before recomputing.
     const timer = setTimeout(
       () => {
-        void requestPierreFileDiff(input, controller.signal).then(
+        void requestPierreFileDiff(input, controller.signal, editable).then(
           (diff) => {
             if (!controller.signal.aborted) {
               renderedScopeRef.current = JSON.stringify([input.cacheKey, input.path])
@@ -57,7 +57,7 @@ export function usePierreFileDiff(input: PierreDiffInput | null) {
       clearTimeout(timer)
       controller.abort()
     }
-  }, [input, attempt])
+  }, [input, attempt, editable])
 
   return { fileDiff, error: snapshot?.input === input ? snapshot.error : null, retry, markEdited }
 }
