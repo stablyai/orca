@@ -374,9 +374,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     hook.unmount()
   })
 
-  it('does not bootstrap twice when global snapshots race active resume', async () => {
-    const pendingCreate = createDeferred<unknown>()
-    mocks.createTerminal.mockReturnValue(pendingCreate.promise)
+  it('keeps empty workspaces empty when global snapshots race active resume', async () => {
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
     const snapshot = makeEmptySnapshot()
@@ -389,7 +387,7 @@ describe('useWebSessionTabsSync window visibility', () => {
       type: 'snapshot',
       ...snapshot
     })
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+    expect(mocks.createTerminal).not.toHaveBeenCalled()
 
     act(() => {
       setDocumentVisibility('hidden')
@@ -407,10 +405,8 @@ describe('useWebSessionTabsSync window visibility', () => {
       type: 'snapshot',
       ...snapshot
     })
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+    expect(mocks.createTerminal).not.toHaveBeenCalled()
 
-    pendingCreate.resolve(undefined)
-    await act(settle)
     hook.unmount()
   })
 
@@ -882,7 +878,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     mocks.recoverSnapshot.mockImplementationOnce(() => deferredRecovery.promise)
     const hook = renderHook(() => useWebSessionTabsSync())
     await act(settle)
-    const snapshot = makeEmptySnapshot()
+    const snapshot = makeBrowserSnapshot()
 
     await publish(findSubscription('session.tabs.subscribe', ENV_A), {
       type: 'snapshot',
@@ -894,7 +890,7 @@ describe('useWebSessionTabsSync window visibility', () => {
     })
     deferredRecovery.resolve(snapshot)
     await act(settle)
-    expect(mocks.createTerminal).not.toHaveBeenCalled()
+    expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toBeUndefined()
 
     act(() => setDocumentVisibility('visible'))
     await act(settle)
@@ -902,7 +898,7 @@ describe('useWebSessionTabsSync window visibility', () => {
       type: 'snapshot',
       ...snapshot
     })
-    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().browserTabsByWorktree[WORKTREE]).toHaveLength(1)
     hook.unmount()
   })
 })

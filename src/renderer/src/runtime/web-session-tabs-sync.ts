@@ -26,8 +26,6 @@ export { resolveHostSessionTabIdForWebSessionTab } from './web-session-tabs-sync
 export {
   decideWebSessionTabsSnapshot,
   shouldApplyWebSessionTabsSnapshot,
-  shouldBootstrapInitialWebRuntimeTerminal,
-  shouldRespawnWebRuntimeTerminalAfterWake,
   shouldSyncAllRuntimeSessionTabs,
   shouldSyncRuntimeSessionTabs,
   WEB_SESSION_TABS_FRAME_OUTRANKED

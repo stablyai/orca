@@ -48,6 +48,7 @@ export type ActivateAndRevealResult = {
   primaryTabId: string | null
 }
 
+/** A caller-provided editor or browser surface suppresses terminal reseeding unless startup is explicit. */
 function ensureFolderWorkspaceInitialTerminal(
   folderWorkspace: FolderWorkspace,
   startup?: WorktreeStartupPayload,
@@ -70,6 +71,7 @@ function ensureFolderWorkspaceInitialTerminal(
   return primaryTabId
 }
 
+/** Gate inventory-based activation on both host RPC and PTY inventory support. */
 function canInspectAgentActivationInventory(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -78,6 +80,7 @@ function canInspectAgentActivationInventory(): boolean {
   )
 }
 
+/** Resolve folder host ownership before applying the same activation policy as git worktrees. */
 export function activateAndRevealFolderWorkspace(
   folderWorkspaceId: string,
   opts?: {
@@ -173,6 +176,7 @@ export function activateAndRevealFolderWorkspace(
   return { primaryTabId }
 }
 
+/** Coordinate host-owned startup and sidebar reveal without seeding an extra caller-owned surface. */
 export function activateAndRevealWorktree(
   worktreeId: string,
   opts?: {
@@ -188,11 +192,7 @@ export function activateAndRevealWorktree(
     backendStartupTerminalSpawned?: boolean
     /** Install a preserved fallback startup beside setup/default terminals already seeded. */
     createNewTerminalForStartup?: boolean
-    /** Set by callers that navigate here only to open their own non-terminal surface
-     *  (an editor file, a diff). Activation then leaves a closed-last-terminal workspace
-     *  empty instead of adding a shell the user never asked for. Caveat: on a
-     *  runtime-owned workspace with a live web session the host owns terminal creation,
-     *  so ensureWebRuntimeWorktreeTerminalAfterWake may still seed one (matches main). */
+    /** Keep an empty workspace empty when the caller is opening its own non-terminal surface. */
     providesInitialSurface?: boolean
     /** Keep sidebar filters intact when navigating to a hidden target. */
     clearSidebarFilters?: boolean

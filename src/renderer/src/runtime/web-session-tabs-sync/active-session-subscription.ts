@@ -10,12 +10,7 @@ import {
   recordReceivedWebSessionTabsSnapshot,
   shouldApplyRecoveredWebSessionTabsSnapshot
 } from './tracking'
-import {
-  decideWebSessionTabsSnapshot,
-  shouldBootstrapInitialWebRuntimeTerminal,
-  shouldRespawnWebRuntimeTerminalAfterWake,
-  shouldSyncRuntimeSessionTabs
-} from './tracking-decisions'
+import { decideWebSessionTabsSnapshot, shouldSyncRuntimeSessionTabs } from './tracking-decisions'
 import {
   acceptReplayedWebSessionTabsSnapshot,
   getWebSessionTabsTrackingGeneration
@@ -30,12 +25,6 @@ import {
   hostSessionMirrorSettleForPatchlessFrame,
   type HostSessionMirrorSettle
 } from './mirror-settle'
-import {
-  beginWebRuntimeWakeTerminalRespawn,
-  endWebRuntimeWakeTerminalRespawn,
-  shouldSkipWebRuntimeWakeTerminalRespawn
-} from '../web-runtime-wake-terminal-respawn'
-import { createWebRuntimeSessionTerminal } from '../web-runtime-session'
 import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
 import type { SessionTabsStreamEvent } from './state'
 
@@ -97,9 +86,8 @@ export function installActiveSessionTabsSubscription({
     return undefined
   }
   const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
-  let requestedInitialTerminal = false
-  let requestedRespawnAfterWake = false
 
+  /** Reject stale recovery results before mirroring host inventory; empty snapshots never create tabs. */
   const applyActiveSnapshot = async (
     event: RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' },
     response: RuntimeRpcResponse<unknown>,
@@ -133,30 +121,7 @@ export function installActiveSessionTabsSubscription({
     if (event.type === 'snapshot' || isRuntimeSubscriptionReplayResponse(response)) {
       acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
     }
-    const recoveredEvent: SessionTabsStreamEvent = { ...recovered, type: event.type }
     const decision = decideWebSessionTabsSnapshot(recovered, environmentId, runtimeId)
-    const syncState = useAppStore.getState()
-    const localTabs = syncState.tabsByWorktree[activeWorktreeId] ?? []
-    const localTerminalCount = localTabs.length
-    const hasLiveLocalPty = localTabs.some(
-      (tab) => (syncState.ptyIdsByTabId[tab.id] ?? []).length > 0
-    )
-    const bootstrap = shouldBootstrapInitialWebRuntimeTerminal({
-      event: recoveredEvent,
-      activeWorktreeId,
-      requestedInitialTerminal,
-      snapshotIsFresh: decision.apply,
-      localTerminalCount
-    })
-    const respawn = shouldRespawnWebRuntimeTerminalAfterWake({
-      event: recoveredEvent,
-      activeWorktreeId,
-      requestedRespawnAfterWake,
-      snapshotIsFresh: decision.apply,
-      localTerminalCount,
-      hasLiveLocalPty,
-      skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
-    })
     let settle: HostSessionMirrorSettle | null = decision.apply
       ? null
       : hostSessionMirrorSettleForPatchlessFrame(decision, environmentId, recovered.worktree, {
@@ -184,28 +149,6 @@ export function installActiveSessionTabsSubscription({
         event.type === 'updated' && !replayed
       )
       visibilitySnapshotAccepted.current(environmentId, recovered, receivedFrame, runtimeId)
-    }
-    try {
-      if (isCurrent() && bootstrap) {
-        requestedInitialTerminal = true
-        await createWebRuntimeSessionTerminal({
-          worktreeId: activeWorktreeId,
-          environmentId,
-          activate: true
-        })
-      } else if (isCurrent() && respawn && beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)) {
-        requestedRespawnAfterWake = true
-        await createWebRuntimeSessionTerminal({
-          worktreeId: activeWorktreeId,
-          environmentId,
-          activate: true,
-          selectWorktree: false
-        }).finally(() => endWebRuntimeWakeTerminalRespawn(activeWorktreeId))
-      }
-    } catch (error) {
-      if (isCurrent()) {
-        console.warn('[web-session-tabs-sync] snapshot follow-up failed:', error)
-      }
     }
     return settle
   }
