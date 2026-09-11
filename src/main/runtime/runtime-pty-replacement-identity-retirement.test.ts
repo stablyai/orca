@@ -285,6 +285,41 @@ describe('replaced PTY identity retirement', () => {
     expect(runtime['leaves'].get(leafKey)?.paneTitleUpdatedAt ?? null).toBeNull()
   })
 
+  it('keeps the retired-restore-seed fence through a recoverable SSH relay loss', () => {
+    const { runtime } = makeRuntime(makeSession(makeTerminalTab(), [LEAF_ID]), [])
+    const sshPtyId = 'ssh:conn-1@@relay-9'
+    runtime.registerPty(sshPtyId, WORKTREE_ID, 'conn-1')
+    runtime.onPtyData(
+      sshPtyId,
+      `\x1b]0;${AGENT_TITLE}\x07`,
+      1,
+      20,
+      false,
+      undefined,
+      undefined,
+      OLD_INCARNATION
+    )
+    runtime.registerPty(sshPtyId, WORKTREE_ID, 'conn-1', {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId: NEW_INCARNATION
+    })
+    const internals = runtime as unknown as {
+      retiredRestoreSeedIncarnationByPtyId: Map<string, string>
+      applySeededAgentStatus: (ptyId: string, title: string) => void
+    }
+    expect(internals.retiredRestoreSeedIncarnationByPtyId.get(sshPtyId)).toBe(NEW_INCARNATION)
+
+    // An abnormal SSH exit is loss of contact, not certified death: the pane keeps the
+    // predecessor's retained scrollback through the bounded reconnect grace.
+    runtime.onPtyExit(sshPtyId, -1)
+
+    expect(internals.retiredRestoreSeedIncarnationByPtyId.get(sshPtyId)).toBe(NEW_INCARNATION)
+    // ...so that scrollback still cannot seed this incarnation's identity either.
+    internals.applySeededAgentStatus(sshPtyId, AGENT_TITLE)
+    expect(runtime['ptysById'].get(sshPtyId)?.lastOscTitle).toBeNull()
+  })
+
   it('retires on a replacement proven by the predecessor live stream alone', () => {
     const { runtime, reconcileAgentStatusForEndedProcess } = makeRuntime(
       makeSession(makeTerminalTab(), [LEAF_ID])

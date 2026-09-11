@@ -34,7 +34,10 @@ export class BackgroundTransientFactRelay {
   private trackersBySessionId = new Map<string, TerminalTitleTracker>()
   // Why: shadow foreground bytes so a provisional subscribe survives either scan-authority handoff.
   private mode2031ReplyScanStateBySessionId = new Map<string, Mode2031ReplyScanState>()
-  private sourceIncarnations = new Map<string, string>()
+  // Absence means "never observed"; a present `undefined` value means "observed source that
+  // publishes no incarnation". Conflating the two let a delayed predecessor exit dispose this
+  // source's tracker.
+  private sourceIncarnations = new Map<string, string | undefined>()
   private emitFact: (sessionId: string, fact: DaemonTransientFact, incarnationId?: string) => void
 
   constructor(
@@ -153,17 +156,16 @@ export class BackgroundTransientFactRelay {
   }
 
   private observeSource(sessionId: string, incarnationId?: string): void {
-    if (this.sourceIncarnations.get(sessionId) === incarnationId) {
+    if (
+      this.sourceIncarnations.has(sessionId) &&
+      this.sourceIncarnations.get(sessionId) === incarnationId
+    ) {
       return
     }
     const background = this.isBackgrounded(sessionId)
     this.disposeTracker(sessionId)
     this.mode2031ReplyScanStateBySessionId.delete(sessionId)
-    if (incarnationId === undefined) {
-      this.sourceIncarnations.delete(sessionId)
-    } else {
-      this.sourceIncarnations.set(sessionId, incarnationId)
-    }
+    this.sourceIncarnations.set(sessionId, incarnationId)
     if (background) {
       this.setSessionBackground(sessionId, true)
     }

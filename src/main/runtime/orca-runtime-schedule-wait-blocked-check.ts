@@ -176,8 +176,16 @@ export class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntimeWithOnPt
     mode2031PendingSubscribe?: true,
     incarnationId?: PtyIncarnationId
   ): void {
-    const capsule = this.resolvePtyObservationCapsule(ptyId, incarnationId)
-    const entry = capsule ? capsule.entry : this.getOrCreatePtyTitleTrackerEntry(ptyId)
+    const observationRoute = this.resolvePtyObservationRoute(ptyId, incarnationId)
+    if (observationRoute.kind === 'refused') {
+      // Why: the marker hands scan authority for a refused source; the accepted source's own
+      // scanners keep running either way.
+      return
+    }
+    const entry =
+      observationRoute.kind === 'capsule'
+        ? observationRoute.capsule.entry
+        : this.getOrCreatePtyTitleTrackerEntry(ptyId)
     entry.tracker.setTransientFactScanningSuppressed(delegated)
     if (!delegated && scanSeedAnsi) {
       // Prime the freshly reset scanner carry with the emulator's dangling

@@ -397,11 +397,51 @@ describe('pushed remote snapshot replay grid', () => {
       expect(writes).not.toContain('\x1b[999;')
       expect(writes.join('')).not.toContain('STALE_ACK')
       expect(writes.join('')).toContain('LIVE_ACK')
-      expect(writes.findIndex((data) => data.includes('LIVE_ACK'))).toBeGreaterThan(
-        writes.indexOf('SUCCESSOR_FRAME')
-      )
+      // Why findIndex twice: indexOf reports -1 for a frame the write queue coalesced,
+      // which turned the ordering check below into a vacuous pass.
+      const successorWriteIndex = writes.findIndex((data) => data.includes('SUCCESSOR_FRAME'))
+      const liveAckWriteIndex = writes.findIndex((data) => data.includes('LIVE_ACK'))
+      expect(successorWriteIndex).toBeGreaterThanOrEqual(0)
+      expect(liveAckWriteIndex).toBeGreaterThan(successorWriteIndex)
       expect(session.pane.terminal.cols).toBe(PANE_COLS)
       expect(session.transport.resize).not.toHaveBeenCalledWith(2, 1)
+    } finally {
+      finishOldWrite?.()
+      session.dispose()
+    }
+  })
+
+  it('stops a predecessor replay whose pane is rebound mid-transaction', async () => {
+    // The predecessor named no incarnation, so the rebind below changes the pane's source
+    // without bumping the payload generation: only the incarnation check can stop the rest of
+    // the payload from being applied to the successor.
+    const session = await connectRemotePane('π - remote-session', null)
+    const write = session.pane.terminal.write.getMockImplementation()!
+    let finishOldWrite: (() => void) | undefined
+    session.pane.terminal.write.mockImplementation((data: string, callback?: () => void) => {
+      if (data === 'STALE_FRAME') {
+        write(data)
+        finishOldWrite = callback
+      } else {
+        write(data, callback)
+      }
+    })
+    try {
+      session.replay('STALE_FRAME', {
+        snapshotCols: 2,
+        snapshotRows: 1,
+        pendingEscapeTailAnsi: '\x1b[999;'
+      })
+      await flushAsyncTicks(10)
+      expect(finishOldWrite).toBeTypeOf('function')
+
+      session.rebind('inc-new')
+      finishOldWrite?.()
+      await flushAsyncTicks(30)
+
+      const writes = session.operations.filter((op) => op.kind === 'write').map((op) => op.value)
+      expect(writes).toContain('STALE_FRAME')
+      expect(writes).not.toContain('\x1b[999;')
     } finally {
       finishOldWrite?.()
       session.dispose()

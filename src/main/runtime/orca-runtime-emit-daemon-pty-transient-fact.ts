@@ -18,9 +18,14 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     fact: PtyTransientFact,
     incarnationId?: PtyIncarnationId
   ): void {
-    const capsule = this.resolvePtyObservationCapsule(ptyId, incarnationId)
-    if (capsule) {
-      this.observePtyObservationTransientFact(capsule, fact)
+    const observationRoute = this.resolvePtyObservationRoute(ptyId, incarnationId)
+    if (observationRoute.kind === 'refused') {
+      // Why: the source the candidate budget refused owns this fact; applying it to the accepted
+      // source would attribute a stranger's evidence to the pane's live process.
+      return
+    }
+    if (observationRoute.kind === 'capsule') {
+      this.observePtyObservationTransientFact(observationRoute.capsule, fact)
       return
     }
     switch (fact.kind) {
@@ -51,19 +56,20 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
    *  follows, and drop the mobile headless mirror — it rebuilds from the
    *  delivered tail / snapshot seeds instead of parsing a gapped stream. */
   notePtyDataGap(ptyId: string, droppedChars = 0, incarnationId?: PtyIncarnationId): void {
-    const capsule = this.resolvePtyObservationCapsule(ptyId, incarnationId)
-    if (capsule) {
-      // Source-local: the candidate's discontinuity resets its own carries and its
-      // sequence weight, and never drops the accepted source's parser or mirror.
+    const observationRoute = this.resolvePtyObservationRoute(ptyId, incarnationId)
+    if (observationRoute.kind !== 'live') {
+      // Source-local: neither the candidate's nor the refused source's discontinuity resets the
+      // accepted source's parser carries. Both sources' bytes DID reach the shared headless
+      // mirror and the shared byte domain, so both advance the drop and drop the mirror.
       if (droppedChars > 0) {
         this.ptyOutputSequenceById.set(
           ptyId,
           (this.ptyOutputSequenceById.get(ptyId) ?? 0) + droppedChars
         )
       }
-      this.resetPtyObservationParseCarry(capsule)
-      // The candidate's bytes DID reach the shared headless mirror, so it is now
-      // discontinuous; the accepted source's tail carries stay untouched.
+      if (observationRoute.kind === 'capsule') {
+        this.resetPtyObservationParseCarry(observationRoute.capsule)
+      }
       this.disposeHeadlessTerminal(ptyId)
       return
     }

@@ -131,7 +131,7 @@ function feedAgentTitle(runtime: OrcaRuntimeService, incarnationId: string): voi
   )
 }
 
-function seedPublishedSurface(runtime: OrcaRuntimeService, title: string): void {
+function seedPublishedSurface(runtime: OrcaRuntimeService, title: string, ptyId = PTY_ID): void {
   runtime['storeMobileSessionSnapshot'](WORKTREE_ID, {
     worktree: WORKTREE_ID,
     publicationEpoch: 'headless:test',
@@ -146,7 +146,7 @@ function seedPublishedSurface(runtime: OrcaRuntimeService, title: string): void 
         id: `${TAB_ID}::${LEAF_ID}`,
         parentTabId: TAB_ID,
         leafId: LEAF_ID,
-        ptyId: PTY_ID,
+        ptyId,
         title,
         isActive: false
       }
@@ -252,6 +252,25 @@ describe('retired pane evidence matching', () => {
       false
     )
   })
+
+  it('tells a same-millisecond successor row apart by its own observation', () => {
+    const observation = {
+      origin: 'hook' as const,
+      authorityId: 'main-agent-hooks:test',
+      incarnation: 0,
+      revision: 41,
+      observedAt: T0
+    }
+    const retired = { ...retiredRow(), observation }
+    const evidence = retiredPaneEvidenceFromRow(retired as AgentStatusIpcPayload)
+    expect(evidence).not.toBeNull()
+    // The same row instance is still the retired instance...
+    expect(isRetiredPaneEvidenceRow(retired as AgentStatusIpcPayload, evidence!)).toBe(true)
+    // ...while a successor row sharing the millisecond, the session and the agent type is its own
+    // later observation and must not be hidden.
+    const successor = { ...retired, observation: { ...observation, revision: 42 } }
+    expect(isRetiredPaneEvidenceRow(successor as AgentStatusIpcPayload, evidence!)).toBe(false)
+  })
 })
 
 describe('retired predecessor evidence on a replaced pane', () => {
@@ -330,6 +349,30 @@ describe('retired predecessor evidence on a replaced pane', () => {
     )
   })
 
+  it('keeps the successor own live row when it shares the retired row’s millisecond', async () => {
+    const runtime = makeRuntime(server)
+    ingestPiSession(server, PREDECESSOR_SESSION)
+    publishPredecessorPane(runtime)
+    advanceClock(100)
+    registerIncarnation(runtime, NEW_INCARNATION)
+
+    // A resumed successor reuses the provider session and its first event lands in the same
+    // millisecond stamp as the retired row: only its own observation can tell the rows apart.
+    vi.setSystemTime(T0)
+    ingestPiSession(server, PREDECESSOR_SESSION)
+
+    const live = await projectedPane(runtime)
+
+    expect(live?.agentStatus).toEqual(
+      expect.objectContaining({
+        agentType: 'pi',
+        providerSession: PREDECESSOR_SESSION,
+        terminalHandle: live?.terminal
+      })
+    )
+    expect(paneAgentIdentity(runtime)).toBe('pi')
+  })
+
   it('keeps the retired evidence while the successor owns the pane', async () => {
     const runtime = makeRuntime(server)
     ingestPiSession(server, PREDECESSOR_SESSION)
@@ -377,5 +420,82 @@ describe('retired predecessor evidence on a replaced pane', () => {
         })
       })
     )
+  })
+})
+
+// The sibling of the retired-restore-seed fence: an unconfirmed SSH exit is loss of contact, not
+// certified death, so the pane's retired-row fence must outlive the teardown with it. Otherwise the
+// replaced process's row re-projects onto a successor the host never proved dead.
+describe('retired predecessor evidence across a recoverable SSH relay loss', () => {
+  const SSH_PTY_ID = 'ssh:conn-1@@relay-9'
+  const SSH_CONNECTION_ID = 'conn-1'
+
+  function registerSshIncarnation(runtime: OrcaRuntimeService, incarnationId: string): void {
+    runtime.registerPty(SSH_PTY_ID, WORKTREE_ID, SSH_CONNECTION_ID, {
+      tabId: TAB_ID,
+      leafId: LEAF_ID,
+      incarnationId
+    })
+  }
+
+  function feedSshAgentTitle(runtime: OrcaRuntimeService, incarnationId: string): void {
+    runtime.onPtyData(
+      SSH_PTY_ID,
+      `\x1b]0;${AGENT_TITLE}\x07`,
+      1,
+      20,
+      false,
+      undefined,
+      undefined,
+      incarnationId
+    )
+  }
+
+  function retiredEvidenceOf(runtime: OrcaRuntimeService): unknown {
+    return (
+      runtime as unknown as { getRetiredPaneEvidence: (paneKey: string) => unknown }
+    ).getRetiredPaneEvidence(PANE_KEY)
+  }
+
+  /** The successor SSH PTY owns a pane whose predecessor row is still stored for resume. */
+  function replacedSshPane(runtime: OrcaRuntimeService): void {
+    advanceClock(100)
+    registerSshIncarnation(runtime, OLD_INCARNATION)
+    feedSshAgentTitle(runtime, OLD_INCARNATION)
+    seedPublishedSurface(runtime, AGENT_TITLE, SSH_PTY_ID)
+    advanceClock(100)
+    registerSshIncarnation(runtime, NEW_INCARNATION)
+  }
+
+  it('keeps the retired-row fence through an unconfirmed SSH exit', async () => {
+    const runtime = makeRuntime(server)
+    ingestPiSession(server, PREDECESSOR_SESSION)
+    replacedSshPane(runtime)
+    expect(retiredEvidenceOf(runtime)).not.toBeNull()
+
+    // No host-confirmed exit and an abnormal code: the pane keeps the successor's surface through
+    // the reconnect grace, so it must keep the fence that stops the replaced process's row
+    // projecting onto that surface.
+    runtime.onPtyExit(SSH_PTY_ID, -1)
+
+    // Soft so the red run also shows the consequence below, not just the lost record.
+    expect.soft(retiredEvidenceOf(runtime)).not.toBeNull()
+    const pane = await projectedPane(runtime)
+    expect(pane).toBeDefined()
+    expect(pane).not.toHaveProperty('agentStatus')
+    // The row itself is untouched: resume must still reach the retired process's session.
+    expect(paneHookRow(server)?.providerSession).toEqual(PREDECESSOR_SESSION)
+  })
+
+  it('releases the retired-row fence on a certified exit', () => {
+    const runtime = makeRuntime(server)
+    ingestPiSession(server, PREDECESSOR_SESSION)
+    replacedSshPane(runtime)
+    expect(retiredEvidenceOf(runtime)).not.toBeNull()
+
+    // A reported exit certifies the successor's death, so the pane no longer needs the fence.
+    runtime.onPtyExit(SSH_PTY_ID, 0)
+
+    expect(retiredEvidenceOf(runtime)).toBeNull()
   })
 })

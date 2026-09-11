@@ -400,6 +400,55 @@ describe('runtime PTY observation admission', () => {
     expect(record(runtime).lastOscTitle).toBe('Codex working')
   })
 
+  /** Spend the whole candidate budget so `inc-5` is refused outright, with `OLD` accepted. */
+  function refusedSourceOverAccepted(): {
+    runtime: AdmissionRuntime
+    batches: TerminalSideEffectBatch[]
+    token: string
+  } {
+    const { runtime, batches } = acceptedPredecessor()
+    const token = runtime.beginPtyObservationAdmission(PTY)
+    for (const incarnation of ['inc-1', 'inc-2', 'inc-3', 'inc-4']) {
+      feed(runtime, `\x1b]0;Attempt ${incarnation}\x07`, 101, incarnation)
+    }
+    feed(runtime, '\x1b]0;Refused frame\x07', 102, 'inc-5')
+    batches.length = 0
+    return { runtime, batches, token }
+  }
+
+  it('refuses an overflowed source’s transient facts instead of applying them to the accepted source', () => {
+    const { runtime, batches, token } = refusedSourceOverAccepted()
+
+    runtime.emitDaemonPtyTransientFact(PTY, { kind: 'bell' }, 'inc-5')
+    runtime.emitDaemonPtyTransientFact(PTY, { kind: 'command-finished', exitCode: 7 }, 'inc-5')
+
+    expect(batches.flatMap((batch) => batch.facts)).toEqual([])
+    expect(record(runtime)).toEqual({ lastOscTitle: 'Codex working', lastAgentStatus: 'working' })
+    runtime.cancelPtyObservationAdmission(token)
+  })
+
+  it('leaves the accepted source’s scanners running through a refused source’s handoff marker', () => {
+    const { runtime, batches, token } = refusedSourceOverAccepted()
+
+    runtime.setPtyTransientFactDelegation(PTY, true, undefined, undefined, 'inc-5')
+    feed(runtime, '\x07', 103, OLD)
+
+    expect(batches.flatMap((batch) => batch.facts)).toContainEqual({ kind: 'bell' })
+    runtime.cancelPtyObservationAdmission(token)
+  })
+
+  it('leaves the accepted source’s mid-escape carry through a refused source’s data gap', () => {
+    const { runtime, token } = refusedSourceOverAccepted()
+
+    feed(runtime, '\x1b[?25', 103, OLD)
+    expect(runtime['ptysById'].get(PTY)?.tailPendingAnsi).toBe('\x1b[?25')
+
+    runtime.notePtyDataGap(PTY, 40, 'inc-5')
+
+    expect(runtime['ptysById'].get(PTY)?.tailPendingAnsi).toBe('\x1b[?25')
+    runtime.cancelPtyObservationAdmission(token)
+  })
+
   it('transfers candidate ownership when the canonical PTY id differs', () => {
     const { runtime } = acceptedPredecessor()
     const token = runtime.beginPtyObservationAdmission('pty-requested')

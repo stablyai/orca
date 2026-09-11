@@ -18,6 +18,11 @@ import {
   type RuntimePtyObservationCapsule
 } from './runtime-pty-observation-capsule'
 
+export type PtyObservationRoute =
+  | { kind: 'live' }
+  | { kind: 'capsule'; capsule: RuntimePtyObservationCapsule }
+  | { kind: 'refused' }
+
 /**
  * Observation-source selection and capsule ingestion. Owns the candidate store
  * and the pending-admission bookkeeping; `OrcaRuntimeWithPtyObservationAdmission`
@@ -51,49 +56,29 @@ export class OrcaRuntimeWithPtyObservationRouting extends OrcaRuntimeWithGetPtyR
   // ---- source selection, before parsing ----
 
   /**
-   * Divert to a capsule only for a known source that differs from the PTY's
-   * currently admitted source while its admission is still pending. Legacy
-   * untagged streams, first-seen sources and same-source attaches keep the
-   * ordinary live path.
+   * Where one observation from `incarnationId` belongs. `refused` is a first-class outcome, not a
+   * missing capsule: a capacity-rejected source's evidence is dropped with it, never folded into
+   * the accepted source's state. Legacy untagged streams, first-seen sources and same-source
+   * attaches keep the ordinary live path.
    */
-  protected resolvePtyObservationCapsule(
+  protected resolvePtyObservationRoute(
     ptyId: string,
     incarnationId?: PtyIncarnationId
-  ): RuntimePtyObservationCapsule | null {
+  ): PtyObservationRoute {
     if (incarnationId === undefined || !this.hasPendingPtyObservationAdmission(ptyId)) {
-      return null
+      return { kind: 'live' }
     }
     const admitted = this.admittedPtyObservationSourceByPtyId.get(ptyId)
     if (admitted === undefined || admitted === null || admitted === incarnationId) {
-      return null
+      return { kind: 'live' }
     }
-    return this.getOrCreatePtyObservationCapsule(ptyId, incarnationId)
+    const capsule = this.getOrCreatePtyObservationCapsule(ptyId, incarnationId)
+    return capsule ? { kind: 'capsule', capsule } : { kind: 'refused' }
   }
 
   /** True when the live path may adopt this source as the PTY's accepted one. */
   protected canSeedAdmittedPtyObservationSource(ptyId: string): boolean {
     return !this.hasPendingPtyObservationAdmission(ptyId)
-  }
-
-  /**
-   * Capsule budget exhausted for a divertable source: its automatic evidence is
-   * refused outright rather than leaked onto the accepted state, and the
-   * matching admission preflight then fails closed.
-   */
-  protected shouldWithholdUnadmittedPtyObservation(
-    ptyId: string,
-    incarnationId?: PtyIncarnationId
-  ): boolean {
-    if (incarnationId === undefined) {
-      return false
-    }
-    const token = this.pendingPtyObservationAdmissionTokensByPtyId.get(ptyId)
-    const admission = token ? this.pendingPtyObservationAdmissionsByToken.get(token) : undefined
-    if (!admission?.overflowed) {
-      return false
-    }
-    const admitted = this.admittedPtyObservationSourceByPtyId.get(ptyId)
-    return admitted !== undefined && admitted !== null && admitted !== incarnationId
   }
 
   private getOrCreatePtyObservationCapsule(

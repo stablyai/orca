@@ -110,8 +110,12 @@ export function bindReplayDataDrain(session: ConnectPanePtySession): void {
         snapshotRows
       } = payload
       session.pendingReplayData = null
+      // Why also the incarnation: the loop's own guard ran before the first await, and a rebind
+      // that names a successor can land mid-write — the predecessor's remaining bytes (reset,
+      // escape tail, painted frame) must not be applied to the successor.
       const isCurrentPayload = (): boolean =>
         !session.disposed &&
+        session.remotePtyIncarnationId === expectedIncarnationId &&
         payload.generation === session.replayPayloadGeneration &&
         payload.streamGeneration === session.transportStreamGeneration &&
         session.transport.getPtyId() === payload.ptyId

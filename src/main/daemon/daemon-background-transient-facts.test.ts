@@ -136,6 +136,27 @@ describe('BackgroundTransientFactRelay source generations', () => {
     relay.dispose()
   })
 
+  it('keeps an id-less successor source fenced from a delayed predecessor exit', () => {
+    const { relay, emitted } = createRelay()
+    relay.setSessionBackground('s', true)
+    relay.onSessionData('s', 'predecessor\x07', 'old')
+    // The successor attaches without an incarnation id (legacy/unstamped source).
+    relay.onSessionData('s', 'successor\x07', undefined)
+    emitted.length = 0
+
+    // Delayed exit for the predecessor: the id-less source is still an observed source, so this
+    // exit names somebody the session no longer runs and must not dispose the successor's tracker.
+    relay.onSessionExit('s', 'old')
+
+    expect(relay.isBackgrounded('s')).toBe(true)
+    relay.onSessionData('s', 'successor still here\x07')
+    expect(emitted).toEqual([{ sessionId: 's', fact: { kind: 'bell' } }])
+    // The session's own untagged exit still retires it: absence is not conflated the other way.
+    relay.onSessionExit('s')
+    expect(relay.isBackgrounded('s')).toBe(false)
+    relay.dispose()
+  })
+
   it('keeps late facts with their observed source and bounds parser lifetime to one source per session', () => {
     vi.useFakeTimers()
     try {

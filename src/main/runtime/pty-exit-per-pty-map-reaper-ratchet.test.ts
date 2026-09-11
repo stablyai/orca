@@ -51,8 +51,10 @@ const PANE_KEYED_RELEASED: Record<
     module: PTY_REPLACEMENT_RETIREMENT_MODULE,
     // Released with the successor PTY the record is scoped to, by the reaper's own helper.
     releasedBy: 'this.retiredPaneEvidenceByPaneKey.delete(paneKey)',
-    // One record per pane whose live successor is registered, so the successor's own disposal
-    // is the bound.
+    // One record per pane, and its successor supersedes or releases it: a later proven
+    // replacement overwrites the pane's record, and the successor's own certified disposal runs
+    // the delete above. An unconfirmed SSH exit deliberately skips that release (the successor
+    // may still own the pane), so the successor PTY's later certified death or prune is the bound.
     boundedBy: 'evidence.successorPtyId === ptyId'
   }
 }
@@ -287,6 +289,22 @@ describe('pane-keyed replacement record retention (leak regression)', () => {
     runtime.onPtyExit(PTY, 0)
 
     // The successor's own teardown is the only thing that can release it: no later event will.
+    expect(retirementMaps(runtime).retiredPaneEvidenceByPaneKey.size).toBe(0)
+  })
+
+  it('releases the retired row evidence when a disconnected successor record is pruned', () => {
+    const runtime = retiredPaneRuntime()
+
+    registerSuccessor(runtime)
+    expect(retirementMaps(runtime).retiredPaneEvidenceByPaneKey.size).toBe(1)
+
+    // Pruning removes the record without the exit callback, so it must run the same release or
+    // the evidence map keeps one entry per pane this session ever replaced.
+    const internals = runtime as unknown as {
+      dropDisconnectedPtyRecord: (ptyId: string) => void
+    }
+    internals.dropDisconnectedPtyRecord(PTY)
+
     expect(retirementMaps(runtime).retiredPaneEvidenceByPaneKey.size).toBe(0)
   })
 

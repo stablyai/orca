@@ -290,13 +290,26 @@ export class OrcaRuntimeWithPtyObservationAdmission extends OrcaRuntimeWithPtyRe
   /**
    * PTY teardown. The pending admission token itself stays owned by the spawn
    * call that minted it, so its commit still resolves deterministically.
+   * `preserveRestoreSeedFence` keeps the retired-scrollback identity fence: an
+   * unreported SSH exit is loss of contact, not proof the process died, and the
+   * pane keeps the predecessor's retained scrollback through the reconnect grace.
+   * `preserveRetiredPaneEvidence` keeps the pane's retired-row fence for the same
+   * reason: the unconfirmed successor still owns the pane, so the predecessor
+   * remnant must stay unprojectable onto it.
    */
-  protected disposePtyObservationState(ptyId: string): void {
+  protected disposePtyObservationState(
+    ptyId: string,
+    options: { preserveRestoreSeedFence?: boolean; preserveRetiredPaneEvidence?: boolean } = {}
+  ): void {
     this.releasePtyObservationCandidates(ptyId)
     this.admittedPtyObservationSourceByPtyId.delete(ptyId)
     this.deferredPtyObservationGenerationResets.delete(ptyId)
-    this.retiredRestoreSeedIncarnationByPtyId.delete(ptyId)
-    this.forgetRetiredPtyRecordsForPty(ptyId)
+    if (options.preserveRestoreSeedFence !== true) {
+      this.retiredRestoreSeedIncarnationByPtyId.delete(ptyId)
+    }
+    this.forgetRetiredPtyRecordsForPty(ptyId, {
+      preserveRetiredPaneEvidence: options.preserveRetiredPaneEvidence === true
+    })
   }
 
   /** True while restored scrollback must not establish this PTY incarnation's identity. */

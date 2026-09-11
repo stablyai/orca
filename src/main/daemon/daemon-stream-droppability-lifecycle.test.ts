@@ -231,6 +231,34 @@ describe('daemon stream droppability lifecycle', () => {
     expect(lifecycle).toEqual(['refresh:client-1', 'marker:sessionBackgroundMarker'])
   })
 
+  it('attributes the reattach background marker to the attached session’s incarnation', async () => {
+    const harness = createServerHarness()
+    server = harness.server
+    const { daemon } = harness
+    addClient(daemon)
+    daemon.transientFactRelay.setSessionBackground('session-attach', true)
+    const enqueue = vi.spyOn(daemon.streamDataBatcher, 'enqueueControlEvent')
+
+    await daemon.requestRouter.route('client-1', {
+      id: 'attach',
+      type: 'createOrAttach',
+      payload: { sessionId: 'session-attach', cols: 80, rows: 24 }
+    })
+
+    // The marker hands scan authority for the session this attach just named, so main can scope
+    // it to that source instead of folding it into the pane's accepted source.
+    const incarnationId = daemon.host.getStreamScanState('session-attach').incarnationId
+    expect(incarnationId).toBeTruthy()
+    expect(enqueue).toHaveBeenCalledWith(
+      'client-1',
+      'session-attach',
+      expect.objectContaining({
+        event: 'sessionBackgroundMarker',
+        payload: { background: true, incarnationId }
+      })
+    )
+  })
+
   it('invalidates droppable membership for final output held behind a deep socket', async () => {
     const harness = createServerHarness()
     server = harness.server

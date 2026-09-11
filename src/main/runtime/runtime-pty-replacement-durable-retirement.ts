@@ -88,13 +88,21 @@ export class OrcaRuntimeWithPtyReplacementDurableRetirement extends OrcaRuntimeW
   /**
    * Drops the records this PTY owns: an unconsumed known-old created by its own exit, and the
    * predecessor evidence whose successor this PTY is. A pane that is closed instead of respawned
-   * has no later exit, which is what the insert bound covers above.
+   * has no later exit, which is what the insert bound covers above. `preserveRetiredPaneEvidence`
+   * keeps the evidence when the successor's own death is unconfirmed: loss of contact is not proof
+   * the pane stopped being that successor's, so the fence must outlive the teardown.
    */
-  protected forgetRetiredPtyRecordsForPty(ptyId: string): void {
+  protected forgetRetiredPtyRecordsForPty(
+    ptyId: string,
+    options: { preserveRetiredPaneEvidence?: boolean } = {}
+  ): void {
     for (const [paneKey, retired] of this.retiredPtyIncarnationByPaneKey) {
       if (retired.ptyId === ptyId) {
         this.retiredPtyIncarnationByPaneKey.delete(paneKey)
       }
+    }
+    if (options.preserveRetiredPaneEvidence === true) {
+      return
     }
     for (const [paneKey, evidence] of this.retiredPaneEvidenceByPaneKey) {
       if (evidence.successorPtyId === ptyId) {

@@ -145,7 +145,9 @@ export class DaemonTerminalAdmission {
         type: 'event',
         event: 'sessionBackgroundMarker',
         sessionId: routedSessionId,
-        payload: { background: true }
+        // Why the source: the marker describes this attach's session, so main can scope the
+        // scan-authority handoff to the source it names instead of the accepted one.
+        payload: { background: true, incarnationId: result.incarnationId }
       })
     }
     this.options.log.log(result.isNew ? 'session-created' : 'session-attached', {

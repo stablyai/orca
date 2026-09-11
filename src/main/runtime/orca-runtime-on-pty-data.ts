@@ -36,18 +36,15 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     // Source selection happens before any parsing: an unadmitted known source
     // parses into its own capsule while raw delivery, query ownership, model
     // receipts and sequence accounting continue unchanged.
-    const observationCapsule = this.resolvePtyObservationCapsule(ptyId, incarnationId)
-    if (
-      observationCapsule !== null ||
-      this.shouldWithholdUnadmittedPtyObservation(ptyId, incarnationId)
-    ) {
+    const observationRoute = this.resolvePtyObservationRoute(ptyId, incarnationId)
+    if (observationRoute.kind !== 'live') {
       const forwardQueryRepliesForCandidate = this.shouldAnswerQueriesForLiveChunk(ptyId)
       this.maybeHydrateHeadlessFromRenderer(ptyId)
       captureModelReceipt?.(
         this.trackHeadlessTerminalData(ptyId, data, outputSequence, forwardQueryRepliesForCandidate)
       )
-      if (observationCapsule) {
-        this.observePtyAutomaticData(observationCapsule, data)
+      if (observationRoute.kind === 'capsule') {
+        this.observePtyAutomaticData(observationRoute.capsule, data)
       }
       this.terminalStreamConsumers.publish(ptyId, data, () => ({
         seq: outputSequence,
