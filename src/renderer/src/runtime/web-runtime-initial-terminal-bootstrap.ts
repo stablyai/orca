@@ -21,8 +21,12 @@
  * answer either way (a row now exists and the predicate declines on its own, or the host genuinely
  * has no terminal and a retry is right), so that frame releases it. Without that release a create
  * whose frame never lands would suppress every later auto-seed until environment teardown.
+ *
+ * `creating-after-teardown` is a create whose tracking was torn down while its RPC was in flight. It
+ * still blocks, because the teardown and the re-armed closure happen in the same tick, but it can no
+ * longer park on a mirror frame that will never come.
  */
-type InitialTerminalBootstrapPhase = 'creating' | 'awaiting-mirror'
+type InitialTerminalBootstrapPhase = 'creating' | 'creating-after-teardown' | 'awaiting-mirror'
 
 const phaseByWorktreeByEnvironment = new Map<string, Map<string, InitialTerminalBootstrapPhase>>()
 
@@ -56,9 +60,17 @@ export function markWebRuntimeInitialTerminalBootstrapAwaitingMirror(
   worktreeId: string
 ): void {
   const phases = phaseByWorktreeByEnvironment.get(environmentId)
-  if (phases?.has(worktreeId)) {
-    phases.set(worktreeId, 'awaiting-mirror')
+  const phase = phases?.get(worktreeId)
+  if (!phases || !phase) {
+    return
   }
+  if (phase === 'creating-after-teardown') {
+    // Why: the subscription that would deliver the mirror's answer is gone, so parking here would
+    // hold the claim until something else tore the environment down again. Release instead.
+    endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+    return
+  }
+  phases.set(worktreeId, 'awaiting-mirror')
 }
 
 export function endWebRuntimeInitialTerminalBootstrap(
@@ -88,10 +100,42 @@ export function releaseWebRuntimeInitialTerminalBootstrapOnMirrorFrame(
   }
 }
 
+/**
+ * Teardown for one environment's worktree.
+ *
+ * A parked claim is dropped: nothing will answer it once its subscription is gone. A create still in
+ * flight is NOT dropped, it is only marked as having outlived its teardown. Every teardown of this
+ * machinery is triggered by something that re-installs the subscriptions in the same tick — a
+ * pairing-revision change clears the environment here and is a dependency of the active
+ * session-tabs effect — so freeing an in-flight claim hands it straight to a closure whose
+ * `requestedInitialTerminal` is false, and the next empty frame owns a second create (STA-6173).
+ * The create's own dispatch releases the claim on every exit it has, so nothing needs freeing here.
+ */
+export function releaseWebRuntimeInitialTerminalBootstrapOnTeardown(
+  environmentId: string,
+  worktreeId: string
+): void {
+  const phases = phaseByWorktreeByEnvironment.get(environmentId)
+  if (!phases) {
+    return
+  }
+  if (phases.get(worktreeId) === 'creating') {
+    phases.set(worktreeId, 'creating-after-teardown')
+    return
+  }
+  endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+}
+
 export function clearWebRuntimeInitialTerminalBootstrapsForEnvironment(
   environmentId: string
 ): void {
-  phaseByWorktreeByEnvironment.delete(environmentId)
+  const phases = phaseByWorktreeByEnvironment.get(environmentId)
+  if (!phases) {
+    return
+  }
+  for (const worktreeId of phases.keys()) {
+    releaseWebRuntimeInitialTerminalBootstrapOnTeardown(environmentId, worktreeId)
+  }
 }
 
 export function clearAllWebRuntimeInitialTerminalBootstraps(): void {

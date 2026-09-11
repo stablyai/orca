@@ -23,7 +23,7 @@ import {
   clearAllWebRuntimeWakeTerminalRespawn
 } from '../web-runtime-wake-terminal-respawn'
 import {
-  endWebRuntimeInitialTerminalBootstrap,
+  releaseWebRuntimeInitialTerminalBootstrapOnTeardown,
   clearWebRuntimeInitialTerminalBootstrapsForEnvironment
 } from '../web-runtime-initial-terminal-bootstrap'
 import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
@@ -143,7 +143,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   lastHostTerminalTabCountByWorktree.delete(key)
   sessionTabsInventoryOmissionsByWorktree.delete(key)
   clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
-  endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+  releaseWebRuntimeInitialTerminalBootstrapOnTeardown(environmentId, worktreeId)
   clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
   clearWebSessionCloseIntentsForWorktree({ environmentId }, worktreeId)
   clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)

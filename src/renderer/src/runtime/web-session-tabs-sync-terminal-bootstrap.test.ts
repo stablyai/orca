@@ -160,12 +160,32 @@ describe('applyWebSessionTabsSnapshot', () => {
     ).toBe(false)
   })
 
-  // Why: the shared latch outlives the subscription closures, so a create RPC that never settles
-  // during a disconnect would leave the per-worktree key set and suppress the next bootstrap after
-  // reconnect. Tracking teardown must release it, mirroring the wake-respawn latch.
-  it('releases the in-flight bootstrap latch when worktree tracking is cleared', () => {
+  // Why: teardown used to free an in-flight claim outright, to stop a create that never settles from
+  // suppressing the next bootstrap. It cannot happen — every RPC on the create path carries a 15s
+  // timeout, the placement settle a 10s deadline, and the whole body sits in a try/catch, so the
+  // create always settles and always releases its own claim. What the free DID do is hand the claim
+  // to the closure the same teardown re-armed: the next empty frame owned a second create. So the
+  // claim survives teardown, and the create's own settlement is what ends it.
+  it('keeps an in-flight bootstrap claim across worktree tracking teardown', () => {
     expect(beginWebRuntimeInitialTerminalBootstrap(ENV, WT)).toBe(true)
+
+    clearWebSessionTabsTrackingForWorktree(ENV, WT)
+
     expect(isWebRuntimeInitialTerminalBootstrapInFlight(ENV, WT)).toBe(true)
+    expect(beginWebRuntimeInitialTerminalBootstrap(ENV, WT)).toBe(false)
+
+    // The create settles without a mirrored row. Its subscription is gone, so no frame can answer a
+    // park; the claim is released instead of held to the next environment teardown.
+    markWebRuntimeInitialTerminalBootstrapAwaitingMirror(ENV, WT)
+    expect(isWebRuntimeInitialTerminalBootstrapInFlight(ENV, WT)).toBe(false)
+    expect(beginWebRuntimeInitialTerminalBootstrap(ENV, WT)).toBe(true)
+  })
+
+  // The other half: a claim that is already parked has nothing in flight to release it once its
+  // subscription is gone, so teardown must drop it or the worktree never bootstraps again.
+  it('drops a parked awaiting-mirror claim when worktree tracking is cleared', () => {
+    expect(beginWebRuntimeInitialTerminalBootstrap(ENV, WT)).toBe(true)
+    markWebRuntimeInitialTerminalBootstrapAwaitingMirror(ENV, WT)
 
     clearWebSessionTabsTrackingForWorktree(ENV, WT)
 
@@ -183,6 +203,13 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     clearWebSessionTabsTrackingForEnvironment(ENV)
 
+    // Both survive: ENV's own create is still in flight and releases itself, and the environment
+    // scope is what keeps the teardown off the sibling.
+    expect(isWebRuntimeInitialTerminalBootstrapInFlight(ENV, WT)).toBe(true)
+    expect(isWebRuntimeInitialTerminalBootstrapInFlight(OTHER_ENV, WT)).toBe(true)
+
+    // ENV's create settles; only ENV's claim goes, and the sibling is untouched.
+    endWebRuntimeInitialTerminalBootstrap(ENV, WT)
     expect(isWebRuntimeInitialTerminalBootstrapInFlight(ENV, WT)).toBe(false)
     expect(isWebRuntimeInitialTerminalBootstrapInFlight(OTHER_ENV, WT)).toBe(true)
 

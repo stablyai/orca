@@ -308,3 +308,78 @@ describe('useWebSessionTabsSync initial-terminal bootstrap across an effect re-r
     hook.unmount()
   })
 })
+
+// Adversarial pass 2 (concurrency), the fourth latch defect — this one inverts the sign of the
+// three already found. Every exit the dispatch helper owns is guarded, but the latch is also
+// released from OUTSIDE it: a pairing-revision change makes the global subscription run
+// `clearWebSessionTabsTrackingForEnvironment`, which drops the environment's whole latch map
+// regardless of phase. The same revision change is a dependency of the ACTIVE subscription effect,
+// so it re-installs a closure whose `requestedInitialTerminal` is false at the same moment. A
+// create still in flight therefore loses its claim and the very next empty frame owns a second
+// create — STA-6173 restored by a re-pair. A `creating` claim is always released by its own
+// dispatch (throw, returned failure, or resolve), so teardown never needs to release it early.
+const MIRROR_KEY_PAIRED = 'env-a\u0001runtime-a\u00011\u0001101'
+const MIRROR_KEY_REPAIRED = 'env-a\u0001runtime-a\u00011\u0001202'
+
+describe('useWebSessionTabsSync initial-terminal latch across a mid-create re-pair', () => {
+  beforeEach(() => {
+    subscriptions.length = 0
+    runtimeCall.mockClear()
+    runtimeSubscribe.mockClear()
+    mocks.createTerminal.mockReset()
+    mocks.recoverSnapshot.mockReset().mockImplementation(async (_state, snapshot) => snapshot)
+    mocks.getExplicitRuntimeEnvironmentIdForWorktree.mockReset().mockReturnValue(ENV)
+    mocks.runtimeSessionMirrorEnvironmentKey.mockReset().mockReturnValue(MIRROR_KEY_PAIRED)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
+    })
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    resetWebRuntimeInitialTerminalBootstrapForTests()
+    seedRemoteMirrorState(1)
+  })
+
+  afterEach(() => {
+    cleanup()
+    useAppStore.setState(initialState, true)
+    replaceRuntimeEnvironmentRevisions([])
+    resetWebSessionTabsSnapshotFreshnessForTests()
+    resetWebRuntimeInitialTerminalBootstrapForTests()
+    clearRuntimeEnvironmentConnectionGenerationsForTests()
+    resetStaleDocumentVisibilityForTesting()
+  })
+
+  it('does not seed a second terminal when a re-pair clears the environment mid-create', async () => {
+    const pendingCreate = createDeferred<unknown>()
+    mocks.createTerminal.mockReturnValue(pendingCreate.promise)
+
+    const hook = renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+
+    await publish(findActiveSubscription(0), { type: 'snapshot', ...emptyActiveSnapshot(1) })
+    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+
+    // Re-pair: the environment's pairing revision moves. The global effect clears the environment's
+    // tracking and the active effect installs a fresh closure, both while the create is unresolved.
+    mocks.runtimeSessionMirrorEnvironmentKey.mockReturnValue(MIRROR_KEY_REPAIRED)
+    const repairedEnvironments = [
+      { id: ENV, createdAt: 100, pairingRevision: 202 }
+    ] as PublicKnownRuntimeEnvironment[]
+    replaceRuntimeEnvironmentRevisions(repairedEnvironments)
+    act(() => {
+      useAppStore.setState({ runtimeEnvironments: repairedEnvironments })
+    })
+    await act(settle)
+
+    await publish(findActiveSubscription(1), {
+      type: 'snapshot',
+      ...emptyActiveSnapshot(1),
+      publicationEpoch: 'epoch-2'
+    })
+    expect(mocks.createTerminal).toHaveBeenCalledTimes(1)
+
+    pendingCreate.resolve({ status: 'created' })
+    await act(settle)
+    hook.unmount()
+  })
+})
