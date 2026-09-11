@@ -38,10 +38,13 @@ describe('normalizeAgentSessionConversationName', () => {
 })
 
 describe('isAgentSessionConversationName', () => {
-  it('accepts a bounded non-empty string and nothing else', () => {
+  it('accepts only bounded canonical names', () => {
     expect(isAgentSessionConversationName('Fix the probe')).toBe(true)
     expect(isAgentSessionConversationName('')).toBe(false)
     expect(isAgentSessionConversationName('a'.repeat(201))).toBe(false)
+    expect(isAgentSessionConversationName(' Fix the probe ')).toBe(false)
+    expect(isAgentSessionConversationName('Fix\nthe probe')).toBe(false)
+    expect(isAgentSessionConversationName('Fix\u202Egnp.exe probe')).toBe(false)
     expect(isAgentSessionConversationName(7)).toBe(false)
   })
 })

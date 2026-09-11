@@ -33,6 +33,18 @@ describe('agent session record conversationName validation', () => {
       false
     )
   })
+
+  it('rejects persisted names that bypassed canonical normalization', () => {
+    expect(
+      isAgentSessionRecord({
+        ...agentSessionRecordFixture(),
+        conversationName: 'Fix\u202Egnp.exe probe'
+      })
+    ).toBe(false)
+    expect(
+      isAgentSessionRecord({ ...agentSessionRecordFixture(), conversationName: 'Fix\nthe probe' })
+    ).toBe(false)
+  })
 })
 
 describe('setAgentSessionRecordConversationName', () => {
