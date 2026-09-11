@@ -1,14 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from './types'
 import {
-  isCodedRpcRefusal,
   isMethodNotFoundRefusal,
-  isRpcReplyWithBooleanOk,
   isStreamingOpenerReply,
   requireRpcResultOrThrowCodedError,
-  requireRpcResultOrThrowHostMessage,
-  rpcObjectResultOrNull,
-  rpcResultOrNull
+  rpcObjectResultOrNull
 } from './rpc-acceptance-policies'
 
 const meta = { runtimeId: 'runtime-1' }
@@ -56,33 +52,6 @@ describe('requireRpcResultOrThrowCodedError', () => {
     expect(() => requireRpcResultOrThrowCodedError(refusal('runtime_error', ''))).toThrow(
       'runtime_error: '
     )
-  })
-})
-
-describe('requireRpcResultOrThrowHostMessage', () => {
-  it.each(resultPartitions)('returns the %s untouched', (_label, result) => {
-    expect(requireRpcResultOrThrowHostMessage(success(result))).toEqual(result)
-  })
-
-  it('throws the host message without the code prefix', () => {
-    let thrown: unknown
-    try {
-      requireRpcResultOrThrowHostMessage(refusal('agent_busy', 'Agent is busy'))
-    } catch (error) {
-      thrown = error
-    }
-    expect((thrown as Error).message).toBe('Agent is busy')
-  })
-})
-
-describe('rpcResultOrNull', () => {
-  it.each(resultPartitions)('accepts the %s', (_label, result) => {
-    expect(rpcResultOrNull(success(result))).toEqual(result)
-  })
-
-  it('does not distinguish a null result from a refusal', () => {
-    expect(rpcResultOrNull(success(null))).toBeNull()
-    expect(rpcResultOrNull(refusal('runtime_error'))).toBeNull()
   })
 })
 
@@ -134,10 +103,6 @@ describe('a refusal carrying stray success fields', () => {
     expect(rpcObjectResultOrNull(strayRefusal)).toBeNull()
   })
 
-  it('is still recognised as a coded refusal', () => {
-    expect(isCodedRpcRefusal(strayRefusal)).toBe(true)
-  })
-
   it('is still recognised as method-not-found', () => {
     expect(isMethodNotFoundRefusal(strayRefusal)).toBe(true)
   })
@@ -152,7 +117,6 @@ describe('a refusal carrying stray success fields', () => {
       _meta: meta
     } as unknown as RpcResponse
     expect(isMethodNotFoundRefusal(straySuccess)).toBe(false)
-    expect(isCodedRpcRefusal(straySuccess)).toBe(false)
   })
 })
 
@@ -200,47 +164,5 @@ describe('isStreamingOpenerReply', () => {
       _meta: meta
     } as unknown as RpcResponse
     expect(isStreamingOpenerReply(response)).toBe(false)
-  })
-})
-
-describe('isRpcReplyWithBooleanOk', () => {
-  it('accepts a reply whose ok is boolean, with or without an id', () => {
-    expect(isRpcReplyWithBooleanOk({ ok: true, result: 1 })).toBe(true)
-    expect(isRpcReplyWithBooleanOk({ ok: false })).toBe(true)
-    expect(isRpcReplyWithBooleanOk(success(null))).toBe(true)
-  })
-
-  it.each([
-    ['a truthy non-boolean ok', { ok: 1 }],
-    ['a null ok', { ok: null }],
-    ['a missing ok', { result: 1 }],
-    ['null', null],
-    ['undefined', undefined],
-    ['a string', 'ok'],
-    ['an array', []]
-  ])('refuses %s', (_label, value) => {
-    expect(isRpcReplyWithBooleanOk(value)).toBe(false)
-  })
-})
-
-describe('isCodedRpcRefusal', () => {
-  it('accepts a refusal with a string code', () => {
-    expect(isCodedRpcRefusal(refusal('runtime_error'))).toBe(true)
-  })
-
-  it.each([
-    ['a missing error', undefined],
-    ['a null error', null],
-    ['a string error', 'boom'],
-    ['an error with no code', { message: 'boom' }],
-    ['an error with a numeric code', { code: 500, message: 'boom' }],
-    ['an error with a null code', { code: null, message: 'boom' }]
-  ])('refuses a failure carrying %s', (_label, error) => {
-    const response = { id: 'rpc-1', ok: false, error, _meta: meta } as unknown as RpcResponse
-    expect(isCodedRpcRefusal(response)).toBe(false)
-  })
-
-  it('never accepts a success', () => {
-    expect(isCodedRpcRefusal(success({ code: 'runtime_error' }))).toBe(false)
   })
 })

@@ -8,7 +8,6 @@ import {
   structuredAgentSessionPayloadFingerprint
 } from '../../../src/shared/structured-agent-session-mutation'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { requireRpcResultOrThrowHostMessage } from '../transport/rpc-acceptance-policies'
 import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-send'
@@ -44,7 +43,10 @@ export async function callAgentSession<TResult>(
     budgetSpansConnect: true,
     ...(options?.failWhenDisconnected ? { failWhenDisconnected: true } : {})
   })
-  return requireRpcResultOrThrowHostMessage(response) as TResult
+  if (!response.ok) {
+    throw new Error(response.error.message)
+  }
+  return response.result as TResult
 }
 
 /** React Native has no guaranteed `crypto.randomUUID`; the fallback keeps the same

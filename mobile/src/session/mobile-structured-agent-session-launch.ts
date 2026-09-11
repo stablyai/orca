@@ -12,7 +12,6 @@ import {
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
-import { isCodedRpcRefusal, isRpcReplyWithBooleanOk } from '../transport/rpc-acceptance-policies'
 import { structuredSessionRandomUuid } from './mobile-structured-agent-session-rpc'
 
 type StructuredCreateSupport = {
@@ -138,11 +137,14 @@ export async function createMobileStructuredAgentSession(
     }
   }
 
-  if (!isRpcReplyWithBooleanOk(response)) {
+  // Why: this path distrusts the declared RpcResponse type — a malformed reply must read as
+  // unconfirmed, not as a refusal we can classify.
+  if (!response || typeof response !== 'object' || typeof response.ok !== 'boolean') {
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
   if (!response.ok) {
-    if (!isCodedRpcRefusal(response)) {
+    const error = response.error as { code?: unknown } | null | undefined
+    if (!error || typeof error !== 'object' || typeof error.code !== 'string') {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
     return classifyCreateRefusal(agent, response.error.code, response.error.message)
