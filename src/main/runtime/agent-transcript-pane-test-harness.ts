@@ -19,9 +19,10 @@ export type TranscriptPaneOptions = {
 }
 
 export async function createTranscriptPane(
-  options: TranscriptPaneOptions
+  options: TranscriptPaneOptions,
+  runtimeDeps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
 ): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
-  const runtime = new OrcaRuntimeService(null)
+  const runtime = new OrcaRuntimeService(null, undefined, runtimeDeps)
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }
