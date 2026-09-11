@@ -777,20 +777,9 @@ describe('Jira client credential storage', () => {
     )
   })
 
-  it('sends a scoped Cloud token as Bearer when no email is given', async () => {
-    netFetchMock
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ cloudId: 'cloud-abc' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ accountId: 'account-alpha', displayName: 'Ada' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-      )
+  it('refuses a scoped Cloud token without an email instead of sending it as Bearer', async () => {
+    // Why: Atlassian API tokens, scoped or not, are only accepted as Basic auth
+    // (email:token); a Bearer request would 401 and clear the stored token.
     const jira = await loadClientModule()
 
     await expect(
@@ -800,9 +789,8 @@ describe('Jira client credential storage', () => {
         apiToken: 'scoped-token',
         authType: 'cloud-scoped'
       })
-    ).resolves.toMatchObject({ ok: true, viewer: { accountId: 'account-alpha' } })
-    const headers = netFetchMock.mock.calls[1]?.[1]?.headers as Headers
-    expect(headers.get('Authorization')).toBe('Bearer scoped-token')
+    ).resolves.toMatchObject({ ok: false, error: expect.stringContaining('Email') })
+    expect(netFetchMock).not.toHaveBeenCalled()
   })
 
   it('reports a scoped Cloud connection whose cloud id cannot be resolved', async () => {
@@ -812,7 +800,7 @@ describe('Jira client credential storage', () => {
     await expect(
       jira.connect({
         siteUrl: 'jira.example.com',
-        email: '',
+        email: 'ada@example.com',
         apiToken: 'scoped-token',
         authType: 'cloud-scoped'
       })
@@ -826,13 +814,13 @@ describe('Jira client credential storage', () => {
       site: {
         id: 'site-scoped',
         siteUrl: 'https://example.atlassian.net',
-        email: '',
+        email: 'ada@example.com',
         displayName: 'Ada',
         accountId: 'account-alpha',
         authType: 'cloud-scoped' as const,
         apiBaseUrl: 'https://api.atlassian.com/ex/jira/cloud-abc'
       },
-      authorization: 'Bearer scoped-token'
+      authorization: `Basic ${Buffer.from('ada@example.com:scoped-token').toString('base64')}`
     }
     netFetchMock.mockResolvedValueOnce(
       new Response(Uint8Array.from([1, 2, 3]), {

@@ -11296,7 +11296,9 @@
               "storageNote": "Stocké sur cette machine avec chiffrement quand le trousseau de l'OS est disponible. Les variables d'environnement ORCA_BITBUCKET_* ont toujours priorité sur ce que vous enregistrez ici.",
               "cancel": "Annuler",
               "verifying": "Vérification...",
-              "connect": "Se connecter"
+              "connect": "Se connecter",
+              "tokenHintScopes": "Les tokens d'accès de dépôt, projet et espace de travail se créent depuis la page de paramètres Bitbucket correspondante ; un token API Atlassian avec des scopes Bitbucket fonctionne aussi ici. La lecture nécessite read:pullrequest:bitbucket, la création de pull requests nécessite write:pullrequest:bitbucket.",
+              "basicHintScopes": "Créez un token API Atlassian pour votre compte et associez-le à l'adresse e-mail qui en est propriétaire. Un token avec scopes nécessite read:user:bitbucket, read:repository:bitbucket, read:pullrequest:bitbucket et write:pullrequest:bitbucket pour créer des pull requests."
             }
           },
           "integration": {

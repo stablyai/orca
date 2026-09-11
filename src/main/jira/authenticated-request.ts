@@ -41,9 +41,9 @@ export function authHeader(email: string, apiToken: string, authType?: JiraAuthT
   // Self-hosted with no username = a personal access token (Bearer); Basic auth
   // with a PAT in the password slot is what produces the 401s users report.
   // Self-hosted WITH a username is classic username+password Basic auth, which
-  // older Server/DC instances (predating PATs) require. Classic Cloud is always
-  // Basic; a scoped Cloud token is Basic with the email and Bearer without.
-  if ((authType === 'server' || authType === 'cloud-scoped') && !email) {
+  // older Server/DC instances (predating PATs) require. Cloud is always Basic:
+  // Atlassian API tokens, scoped or not, are never accepted as Bearer.
+  if (authType === 'server' && !email) {
     return `Bearer ${apiToken}`
   }
   return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`

@@ -16350,10 +16350,9 @@
             "70035652d7": "Password",
             "c50abbf340": "Jira account password",
             "d8737db691": "Use your Jira Server or Data Center account username and password.",
-            "8e851d7ba0": "Use a Jira Cloud site URL and a scoped API token; Orca calls the api.atlassian.com gateway on its behalf.",
+            "8e851d7ba0": "Use a Jira Cloud site URL, Atlassian email, and scoped API token; Orca calls the api.atlassian.com gateway on your behalf.",
             "4823d0100d": "Cloud token type",
             "327c8aeb62": "Scoped API token",
-            "b4303bfe5a": "Atlassian email (optional)",
             "8d9f6669a7": "Atlassian API token with scopes",
             "cc1ca58cd8": "Create a token with scopes in",
             "fbf2400a02": "and grant read:jira-work, write:jira-work, and read:jira-user."
