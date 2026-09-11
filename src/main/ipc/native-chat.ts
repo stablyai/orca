@@ -1,4 +1,7 @@
 import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
+import { readFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import type {
   AgentType,
   NativeChatMessage,
@@ -302,7 +305,21 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
   return count
 }
 
+/** Read the local Claude Code keybindings.json (CLAUDE_CONFIG_DIR || ~/.claude)
+ *  so the renderer can submit with the gesture the user bound to `chat:submit`
+ *  instead of a bare Enter they may have remapped to insert a newline. Null when
+ *  absent/unreadable — the renderer then defaults to Enter. */
+export async function readClaudeChatKeybindings(): Promise<string | null> {
+  const configDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
+  try {
+    return await readFile(join(configDir, 'keybindings.json'), 'utf8')
+  } catch {
+    return null
+  }
+}
+
 export function registerNativeChatHandlers(): void {
+  ipcMain.handle('nativeChat:readClaudeKeybindings', () => readClaudeChatKeybindings())
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
     readSession(args)
   )

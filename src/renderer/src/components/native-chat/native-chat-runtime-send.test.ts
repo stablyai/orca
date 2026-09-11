@@ -74,6 +74,16 @@ describe('sendNativeChatMessage', () => {
     ])
   })
 
+  it('submits with the provided submitBytes instead of a bare CR', () => {
+    sendNativeChatMessage(SETTINGS, PTY, 'hi', { submitBytes: '\x1b\r' })
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('hi'),
+      '\x1b\r'
+    ])
+  })
+
   it('cancels the delayed Enter and re-clears an unsubmitted body', () => {
     const handle = sendNativeChatMessage(SETTINGS, PTY, 'hi')
     handle.cancel()
