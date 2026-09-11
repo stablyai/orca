@@ -121,7 +121,10 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
   const spawnEnv = withCliRuntimeOnPath(codexCommand, {
     ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
     ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {}),
-    ...(wslCodex ? {} : proxyEnv)
+    // Why: both branches need the values — the local probe reads them directly, and the WSL
+    // branch carries them as the WSLENV import source (names alone import nothing). Neither
+    // path puts them in the command line (#19755).
+    ...proxyEnv
   })
   if (wslCodex && Object.keys(proxyEnv).length > 0) {
     addWslEnvKeys(spawnEnv, Object.keys(proxyEnv))
@@ -154,7 +157,7 @@ function resolvePtyCommand(options?: CodexRateLimitFetchOptions) {
     ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
     TERM: 'xterm-256color',
     ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {}),
-    ...(wslCodex ? {} : proxyEnv)
+    ...proxyEnv
   })
   if (wslCodex && Object.keys(proxyEnv).length > 0) {
     addWslEnvKeys(env, Object.keys(proxyEnv))

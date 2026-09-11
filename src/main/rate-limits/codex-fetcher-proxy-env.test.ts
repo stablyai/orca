@@ -130,6 +130,7 @@ describe('Codex probe proxy environment', () => {
       const commandText = Array.isArray(spawnArgs) ? (spawnArgs as string[]).join(' ') : ''
       expect(commandText).not.toContain('user:pass@127.0.0.1:7890')
       const spawnEnv = (spawnOptions as { env?: Record<string, string> })?.env ?? {}
+      expect(spawnEnv.HTTPS_PROXY).toBe('http://user:pass@127.0.0.1:7890')
       expect(spawnEnv.WSLENV ?? '').toContain('HTTPS_PROXY')
 
       rpcChild.emit('close')
