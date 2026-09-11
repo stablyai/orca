@@ -13,7 +13,13 @@ import type { WorkerStartInput } from './worker-start-schema'
  * placement → selector mapping. A refactor that probed the worker's target worktree
  * instead of the coordinator's would still dispatch, and still pass every RPC-level test.
  */
-function validationRuntime(): {
+function validationRuntime(
+  settings: {
+    agentCmdOverrides?: Record<string, string>
+    agentDefaultArgs?: Record<string, string>
+    agentDefaultEnv?: Record<string, Record<string, string>>
+  } = {}
+): {
   runtime: OrcaRuntimeService
   discover: ReturnType<typeof vi.fn>
   resolveHostKey: ReturnType<typeof vi.fn>
@@ -22,6 +28,7 @@ function validationRuntime(): {
   const discover = vi.fn(async () => ({ success: false, error: 'no CLI' }))
   const runtime = {
     validateOrchestrationAgentLauncher: vi.fn(),
+    getClientSettings: vi.fn(() => settings),
     showTerminal: vi.fn(async () => ({ worktreeId: 'wt_coordinator' })),
     getOrchestrationDispatchAuthority: vi.fn(() => null),
     resolveRuntimeCommitMessageDiscoveryHostKey: resolveHostKey,
@@ -164,6 +171,43 @@ describe('worker start placement to probe selector', () => {
     expect(runtime.showTerminal).not.toHaveBeenCalled()
     expect(resolveHostKey).not.toHaveBeenCalled()
     expect(discover).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { label: 'default arguments', settings: { agentDefaultArgs: { claude: '--settings corp' } } },
+    {
+      label: 'default environment',
+      settings: { agentDefaultEnv: { claude: { ANTHROPIC_BASE_URL: 'https://corp.invalid' } } }
+    }
+  ])('does not reject against a probe that omits the launch $label', async ({ settings }) => {
+    const { runtime, discover, resolveHostKey } = validationRuntime(settings)
+
+    const plan = await prepareLocalWorkerStart({
+      params: localParams({ model: 'gateway-only-model' }),
+      createsWorktree: false,
+      runtime
+    })
+
+    expect(plan.launch.preferences).toEqual({ model: 'gateway-only-model' })
+    expect(resolveHostKey).not.toHaveBeenCalled()
+    expect(discover).not.toHaveBeenCalled()
+  })
+
+  it('still probes through a configured command override, which discovery applies', async () => {
+    const { runtime, discover, resolveHostKey } = validationRuntime({
+      agentCmdOverrides: { claude: 'corp-claude' }
+    })
+
+    await prepareLocalWorkerStart({
+      params: localParams({}),
+      createsWorktree: false,
+      runtime
+    })
+
+    expect(resolveHostKey).toHaveBeenCalledWith('id:wt_coordinator')
+    expect(discover).toHaveBeenCalledWith('id:wt_coordinator', 'claude', {
+      agentCmdOverrides: { claude: 'corp-claude' }
+    })
   })
 
   it('probes the remote worktree a federated attachment names', async () => {

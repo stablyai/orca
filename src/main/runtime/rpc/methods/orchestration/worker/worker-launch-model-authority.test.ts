@@ -87,8 +87,11 @@ describe('worker launch model authority', () => {
 
     expect(authority).toEqual({
       source: 'live',
-      modelIds: ['opus[1m]', 'haiku', 'claude-opus-5[1m]', 'opus']
+      modelIds: ['opus[1m]', 'haiku', 'claude-opus-5[1m]', 'opus', 'default']
     })
+    expect(
+      resolveWorkerLaunchPreferences({ agent: 'claude', model: 'default', authority }).preferences
+    ).toEqual({ model: 'default' })
   })
 
   it('never asks an agent whose probe only extends the seed, and so refuses nothing', async () => {
@@ -307,6 +310,27 @@ describe('worker launch model authority', () => {
 
     expect(discover).toHaveBeenCalledTimes(1)
     expect(second.modelIds).toContain('opus[1m]')
+  })
+
+  it('does not reuse a catalog from a different agent command', async () => {
+    const { runtime, discover } = probeRuntime(() => probeSuccess([liveModel('opus[1m]')]))
+    const base = {
+      catalog: CLAUDE_CATALOG,
+      agent: 'claude' as const,
+      runtime,
+      worktreeSelector: 'id:wt_local'
+    }
+
+    await resolveWorkerLaunchModelAuthority({ ...base, agentCommandOverride: 'claude-stable' })
+    await resolveWorkerLaunchModelAuthority({ ...base, agentCommandOverride: 'claude-preview' })
+
+    expect(discover).toHaveBeenCalledTimes(2)
+    expect(discover).toHaveBeenNthCalledWith(1, 'id:wt_local', 'claude', {
+      agentCmdOverrides: { claude: 'claude-stable' }
+    })
+    expect(discover).toHaveBeenNthCalledWith(2, 'id:wt_local', 'claude', {
+      agentCmdOverrides: { claude: 'claude-preview' }
+    })
   })
 
   it('shares one in-flight probe across dispatches that race it', async () => {

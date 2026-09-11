@@ -58,6 +58,8 @@ export type CatalogModel = {
 export type AgentSessionOptionCatalog = {
   models: CatalogModel[]
   modelApply: CatalogOptionApply
+  /** Stable launch values intentionally omitted from picker membership. */
+  launchModelAliases?: readonly string[]
   /** Opts this agent into structured per-worker launch overrides. */
   supportsWorkerLaunchPreferences?: true
   /** Launch-safe options for opaque model ids that are absent from the static catalog. */

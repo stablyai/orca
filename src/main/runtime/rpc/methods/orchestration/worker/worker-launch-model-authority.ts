@@ -7,10 +7,13 @@
  * worktree selector. Dynamic membership is combined with stable CLI aliases: a picker need not
  * display an alias such as `opus`, but the launch flag still accepts it.
  *
- * Two things answer `seed`, which claims no membership at all and so refuses nothing.
+ * Several conditions answer `seed`, which claims no membership at all and so refuses nothing.
  *
  * A host that could not be listed: loss of contact is never evidence that a model does not exist
  * there (`docs/reference/ssh-execution-boundary.md`).
+ *
+ * A launch whose terminal-only arguments or environment are absent from the probe: that answer is
+ * not evidence about the CLI invocation that will actually run.
  *
  * And an agent whose probe only EXTENDS the seed rather than replacing it — the Codex catalog is
  * explicit that its seed is short and that unknown ids must pass through, so a list that merges
@@ -54,9 +57,9 @@ export const SEED_WORKER_LAUNCH_MODEL_AUTHORITY: WorkerLaunchModelAuthority = {
 
 type CachedModels = { expiresAt: number; models: readonly CommitMessageModelCapability[] }
 
-/** Keyed by executing host, not by caller: one machine's CLI list is one fact. */
-const cachedByHost = new Map<string, CachedModels>()
-const inFlightByHost = new Map<string, Promise<readonly CommitMessageModelCapability[] | null>>()
+/** Callers that share an agent, execution host, and resolved command share one CLI fact. */
+const cachedByScope = new Map<string, CachedModels>()
+const inFlightByScope = new Map<string, Promise<readonly CommitMessageModelCapability[] | null>>()
 
 function discoveredCatalogModel(model: CommitMessageModelCapability): CatalogModel {
   return {
@@ -89,7 +92,8 @@ function liveWorkerLaunchModelAuthority(args: {
       ...new Set([
         ...listedIds,
         ...args.models.flatMap(({ resolvedModel }) => (resolvedModel ? [resolvedModel] : [])),
-        ...listedAliases
+        ...listedAliases,
+        ...(args.catalog.launchModelAliases ?? [])
       ])
     ]
   }
@@ -98,10 +102,13 @@ function liveWorkerLaunchModelAuthority(args: {
 async function probeHostModels(
   runtime: WorkerLaunchModelDiscoveryRuntime,
   agent: TuiAgent,
-  target: WorkerLaunchModelDiscoveryTarget
+  target: WorkerLaunchModelDiscoveryTarget,
+  agentCommandOverride: string
 ): Promise<readonly CommitMessageModelCapability[] | null> {
   try {
-    const result = await runtime.discoverRuntimeCommitMessageModels(target, agent)
+    const result = await runtime.discoverRuntimeCommitMessageModels(target, agent, {
+      agentCmdOverrides: { [agent]: agentCommandOverride }
+    })
     // `catalogOrigin: 'spec'` is the probe falling back to Orca's own list, not a CLI answer.
     return result.success && result.catalogOrigin === 'probe' && result.models.length > 0
       ? result.models
@@ -136,12 +143,12 @@ function withDiscoveryDeadline<T>(
 
 function readCachedModels(scope: string): readonly CommitMessageModelCapability[] | null {
   const now = Date.now()
-  for (const [key, entry] of cachedByHost) {
+  for (const [key, entry] of cachedByScope) {
     if (entry.expiresAt <= now) {
-      cachedByHost.delete(key)
+      cachedByScope.delete(key)
     }
   }
-  return cachedByHost.get(scope)?.models ?? null
+  return cachedByScope.get(scope)?.models ?? null
 }
 
 /**
@@ -151,10 +158,12 @@ function readCachedModels(scope: string): readonly CommitMessageModelCapability[
 export async function resolveWorkerLaunchModelAuthority(args: {
   catalog: AgentSessionOptionCatalog
   agent: TuiAgent
+  agentCommandOverride?: string
   runtime: WorkerLaunchModelDiscoveryRuntime | null
   worktreeSelector: WorkerLaunchModelDiscoveryTarget | null
 }): Promise<WorkerLaunchModelAuthority> {
   const { catalog, agent, runtime, worktreeSelector: target } = args
+  const agentCommandOverride = args.agentCommandOverride?.trim() ?? ''
   // Why: for an agent whose probe only EXTENDS the seed, the host's list is known not to be
   // exhaustive, so it can refuse nothing — and there is correspondingly nothing to ask it.
   if (!discoveredModelsReplaceSeed(agent, catalog)) {
@@ -185,22 +194,22 @@ export async function resolveWorkerLaunchModelAuthority(args: {
     }
     return SEED_WORKER_LAUNCH_MODEL_AUTHORITY
   }
-  const scope = `${agent} ${hostKey}`
+  const scope = JSON.stringify([agent, hostKey, agentCommandOverride])
   const cached = readCachedModels(scope)
   if (cached) {
     return liveWorkerLaunchModelAuthority({ catalog, agent, models: cached })
   }
-  let pending = inFlightByHost.get(scope)
+  let pending = inFlightByScope.get(scope)
   if (!pending) {
     // Failures are never cached, so the next dispatch retries rather than inheriting a miss.
-    pending = probeHostModels(runtime, agent, target).then((models) => {
-      inFlightByHost.delete(scope)
+    pending = probeHostModels(runtime, agent, target, agentCommandOverride).then((models) => {
+      inFlightByScope.delete(scope)
       if (models) {
-        cachedByHost.set(scope, { expiresAt: Date.now() + DISCOVERY_TTL_MS, models })
+        cachedByScope.set(scope, { expiresAt: Date.now() + DISCOVERY_TTL_MS, models })
       }
       return models
     })
-    inFlightByHost.set(scope, pending)
+    inFlightByScope.set(scope, pending)
   }
   // A dispatch that gives up on the budget still leaves the probe running for the next one.
   const models = await withDiscoveryDeadline(pending, deadlineAt)
@@ -219,6 +228,6 @@ export function describeWorkerLaunchModelRejection(args: {
 }
 
 export function clearWorkerLaunchModelAuthorityCacheForTests(): void {
-  cachedByHost.clear()
-  inFlightByHost.clear()
+  cachedByScope.clear()
+  inFlightByScope.clear()
 }

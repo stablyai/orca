@@ -128,6 +128,8 @@ const CLAUDE_FAST_MODE: CatalogOption = {
 
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
+  // Why: list_models publishes `default`, but picker discovery drops that mirror row.
+  launchModelAliases: ['default'],
   // Why: these ids are Claude CLI aliases that resolve to the newest model of
   // each family on the host's CLI (`opus` is Opus 5 on current CLIs, older
   // Opus on older CLIs), so pinned version labels lie on part of the fleet.

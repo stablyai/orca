@@ -6,6 +6,7 @@ import {
   discoveredModelsReplaceSeed,
   getAgentSessionOptionCatalog
 } from '../../../../../../shared/agent-session-option-catalog'
+import { hasExplicitTuiLaunchCustomization } from '../../../../../../shared/tui-agent-launch-customization'
 import type { FederationAttachStartInput } from '../federation/federation-start-schema'
 import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
 import {
@@ -29,6 +30,27 @@ type WorkerStartAgentPlan = {
 }
 
 const COORDINATOR_HOSTED_PLACEMENTS = new Set(['current', 'new-child', 'new-top-level'])
+
+function modelProbeMissesLaunchCustomization(
+  settings: ReturnType<OrcaRuntimeService['getClientSettings']>,
+  agent: TuiAgent
+): boolean {
+  const { agentDefaultArgs, agentDefaultEnv } = settings
+  // Command overrides are part of model discovery. Terminal-only args and env are not, so their
+  // catalog cannot safely reject a value the actual launch may accept.
+  return hasExplicitTuiLaunchCustomization({ agentDefaultArgs, agentDefaultEnv }, agent)
+}
+
+function readWorkerLaunchSettings(
+  runtime: OrcaRuntimeService
+): ReturnType<OrcaRuntimeService['getClientSettings']> | null {
+  try {
+    return runtime.getClientSettings()
+  } catch {
+    // Missing settings cannot prove that discovery matches the eventual launch command.
+    return null
+  }
+}
 
 function canResolveWorkerLaunchModelAuthority(
   agent: string | undefined,
@@ -221,6 +243,10 @@ async function resolveWorkerStartAgent(args: {
     if (!catalog || !discoveredModelsReplaceSeed(agent, catalog)) {
       return { agent, launch }
     }
+    const settings = readWorkerLaunchSettings(args.runtime)
+    if (!settings || modelProbeMissesLaunchCustomization(settings, agent)) {
+      return { agent, launch }
+    }
     return {
       agent,
       launch: resolveWorkerLaunchPreferences({
@@ -230,6 +256,7 @@ async function resolveWorkerStartAgent(args: {
         authority: await resolveWorkerLaunchModelAuthority({
           catalog,
           agent,
+          agentCommandOverride: settings.agentCmdOverrides?.[agent],
           runtime: args.runtime,
           worktreeSelector: args.worktreeSelector
         })
