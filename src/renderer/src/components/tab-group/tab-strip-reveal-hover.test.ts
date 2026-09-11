@@ -26,6 +26,12 @@ describe('resolveTabStripRevealHover', () => {
     expect(hover(501, 45)).toBe(false)
   })
 
+  it('treats the right boundary as outside, where a split puts its resize handle', () => {
+    expect(hover(panelRect.left, 45)).toBe(true)
+    expect(hover(panelRect.right, 45)).toBe(false)
+    expect(hover(panelRect.right - 1, 45)).toBe(true)
+  })
+
   it('holds an open strip across its full height even past the zone', () => {
     // The zone is narrower than the 32px strip, so without hysteresis the row would close under the
     // pointer while it travels toward a tab.
