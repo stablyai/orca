@@ -70,7 +70,7 @@ describe('prepareAiVaultSessionForResume', () => {
     await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
   })
 
-  it('does not ask a remote host to repin a per-account session', async () => {
+  it('does not ask an SSH host to repin a per-account session', async () => {
     const prepareSessionResume = vi.fn()
     stubPreparation(prepareSessionResume)
     const current = session({
@@ -80,6 +80,31 @@ describe('prepareAiVaultSessionForResume', () => {
 
     await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
     expect(prepareSessionResume).not.toHaveBeenCalled()
+  })
+
+  it('asks the paired host that owns a per-account session, which reads its own selection', async () => {
+    // The repin answer belongs to whichever machine holds the account selection, and for a paired
+    // row that is the peer — the preparation RPC runs there, stamped with the row's own host.
+    const prepareSessionResume = vi.fn().mockResolvedValue({
+      useRealCodexHome: false,
+      substituteCodexHome: '/home/peer/.orca/codex-accounts/account-2/home'
+    })
+    stubPreparation(prepareSessionResume)
+    const current = session({
+      codexHome: '/home/peer/.orca/codex-accounts/account-1/home',
+      executionHostId: 'runtime:env-1' as AiVaultSession['executionHostId']
+    })
+
+    const prepared = await prepareAiVaultSessionForResume(current)
+
+    expect(prepared.codexHome).toBe('/home/peer/.orca/codex-accounts/account-2/home')
+    expect(prepareSessionResume).toHaveBeenCalledWith({
+      agent: 'codex',
+      sessionId: current.sessionId,
+      filePath: current.filePath,
+      codexHome: current.codexHome,
+      executionHostId: 'runtime:env-1'
+    })
   })
 })
 

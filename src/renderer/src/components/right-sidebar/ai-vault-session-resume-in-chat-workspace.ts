@@ -3,16 +3,15 @@ import {
   structuredAgentSessionLaunchFeasible,
   type AgentSessionStructuredFeasibilityRequest
 } from '@/lib/agent-session-launch-plan'
-import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 import { useAppStore } from '@/store'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
-import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { resolveAiVaultTargetWorkspacePath } from './ai-vault-session-launch-target'
 import {
   resolveAiVaultSessionResumeInChatEligibility,
   type AiVaultResumeInChatEligibility
 } from './ai-vault-session-resume-in-chat'
+import { resolveAiVaultSessionResumeInChatOwner } from './ai-vault-session-resume-in-chat-owner'
 import type {
   AiVaultSessionResumeState,
   AiVaultSessionResumeTargetState
@@ -31,23 +30,31 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
   const targetWorkspacePath = targetWorkspaceId
     ? resolveAiVaultTargetWorkspacePath(args.targetState, targetWorkspaceId)
     : null
+  // One synchronous store read for the whole row, so the owner, its capability answer and the
+  // route below all describe the same moment.
+  const store = useAppStore.getState()
+  const ownerVerdict = resolveAiVaultSessionResumeInChatOwner({
+    store,
+    sessionExecutionHostId: args.session.executionHostId,
+    sessionFilePath: args.session.filePath,
+    targetWorkspaceId
+  })
   return resolveAiVaultSessionResumeInChatEligibility({
     session: args.session,
     targetWorkspaceId,
     targetWorkspacePath,
+    targetExecutionHostId: ownerVerdict.executionHostId,
+    ownerSupportsResumeHistory: ownerVerdict.adoptable,
     structuredRouteAvailable:
       isAgentSessionHandleProvider(args.session.agent) &&
       targetWorkspaceId !== null &&
-      structuredAgentSessionLaunchFeasible(useAppStore.getState(), {
+      structuredAgentSessionLaunchFeasible(store, {
         agent: args.session.agent,
         workspace: {
           kind: workspaceKindForWorktreeId(targetWorkspaceId),
           worktreeId: targetWorkspaceId
         },
         settings: args.settings
-      }) &&
-      readLocalRuntimeCapabilities().includes(
-        STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
-      )
+      })
   })
 }

@@ -30,6 +30,8 @@ function eligibility(
     session: session(),
     targetWorkspaceId: 'repo-1::/repo/orca',
     targetWorkspacePath: WORKSPACE_PATH,
+    targetExecutionHostId: 'local',
+    ownerSupportsResumeHistory: true,
     structuredRouteAvailable: true,
     ...overrides
   })
@@ -62,10 +64,43 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
     ).toEqual({ available: false, reason: 'already-structured' })
   })
 
-  it('refuses a row recorded on a remote host', () => {
-    expect(eligibility({ session: session({ executionHostId: 'ssh:build-box' }) })).toEqual({
+  it('refuses a row recorded on an SSH host, which has no structured lane at all', () => {
+    expect(
+      eligibility({
+        session: session({ executionHostId: 'ssh:build-box' }),
+        targetExecutionHostId: 'ssh:build-box'
+      })
+    ).toEqual({ available: false, reason: 'remote' })
+  })
+
+  it('offers a row a paired host recorded when the workspace runs on that same host', () => {
+    expect(
+      eligibility({
+        session: session({ executionHostId: 'runtime:env-1' }),
+        targetExecutionHostId: 'runtime:env-1'
+      })
+    ).toEqual({ available: true, workspaceId: 'repo-1::/repo/orca' })
+  })
+
+  it.each([
+    ['runtime:env-1', 'runtime:env-2'],
+    ['runtime:env-1', 'local'],
+    ['local', 'runtime:env-1']
+  ])('refuses %s recorded against a %s workspace rather than re-homing it', (source, target) => {
+    expect(
+      eligibility({
+        session: session({ executionHostId: source as 'local' }),
+        targetExecutionHostId: target
+      })
+    ).toEqual({ available: false, reason: 'owner-mismatch' })
+  })
+
+  it('refuses when the owning host never advertised that it can adopt a conversation', () => {
+    // The old-host arm: `agentSession.create` would answer the unknown `resumeFrom` with a schema
+    // error the client reads as a refusal, so nothing is sent and the action is simply absent.
+    expect(eligibility({ ownerSupportsResumeHistory: false })).toEqual({
       available: false,
-      reason: 'remote'
+      reason: 'resume-history'
     })
   })
 
@@ -75,6 +110,18 @@ describe('resolveAiVaultSessionResumeInChatEligibility', () => {
         session: session({
           filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.claude/projects/p/session-1.jsonl'
         })
+      })
+    ).toEqual({ available: false, reason: 'remote' })
+  })
+
+  it('refuses a WSL-stored transcript even when both ends name the same paired host', () => {
+    expect(
+      eligibility({
+        session: session({
+          executionHostId: 'runtime:env-1',
+          filePath: '//wsl.localhost/Ubuntu-22.04/home/dev/.claude/projects/p/session-1.jsonl'
+        }),
+        targetExecutionHostId: 'runtime:env-1'
       })
     ).toEqual({ available: false, reason: 'remote' })
   })

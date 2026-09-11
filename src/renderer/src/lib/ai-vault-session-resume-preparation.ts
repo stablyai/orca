@@ -3,7 +3,7 @@ import {
   isLegacySharedCodexHome,
   isPerAccountManagedCodexHome
 } from '../../../shared/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 
 export async function prepareAiVaultSessionForResume(
   session: AiVaultSession
@@ -36,10 +36,16 @@ export function aiVaultSessionNeedsResumePreparation(
   if (isLegacySharedCodexHome(session.codexHome)) {
     return true
   }
-  // Why: per-account repinning reads the LOCAL account selection, so only
-  // local sessions ask; remote sessions keep their recorded home untouched.
-  return (
-    isPerAccountManagedCodexHome(session.codexHome) &&
-    (!session.executionHostId || session.executionHostId === LOCAL_EXECUTION_HOST_ID)
-  )
+  // Why: per-account repinning reads the account selection of the host that owns the row, and the
+  // preparation RPC runs there — this machine's for a local row, the peer's own for a paired one.
+  // An `ssh:` host has no such selection to read, so it keeps its recorded home untouched.
+  return isPerAccountManagedCodexHome(session.codexHome) && ownsCodexAccountSelection(session)
+}
+
+function ownsCodexAccountSelection(session: Pick<AiVaultSession, 'executionHostId'>): boolean {
+  if (!session.executionHostId) {
+    return true
+  }
+  const kind = parseExecutionHostId(session.executionHostId)?.kind
+  return kind === 'local' || kind === 'runtime'
 }

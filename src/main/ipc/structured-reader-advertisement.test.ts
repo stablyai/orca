@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES
+  STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES,
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
 } from '../../shared/protocol-version'
 import {
   electronRemoteRuntimeClientCapabilities,
@@ -42,6 +43,12 @@ describe('what this desktop advertises to a paired host', () => {
     expect(electronRemoteRuntimeClientCapabilities()).toContain(
       STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY
     )
+    // Adopting a paired host's history row is a create on that host, so it is advertised with the
+    // create-side terms — and withheld with them, since a client that stops reading a peer's chats
+    // has no row left to adopt.
+    expect(electronRemoteRuntimeClientCapabilities()).toContain(
+      STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
+    )
   })
 
   it('drops only the paired surface when the setting is off, so the retreat is not a new client', () => {
@@ -50,6 +57,7 @@ describe('what this desktop advertises to a paired host', () => {
     for (const capability of STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES) {
       expect(advertised, `${capability} is withheld`).not.toContain(capability)
     }
+    expect(advertised).not.toContain(STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY)
     // Everything else is untouched: a user retreating from structured reads must not also lose
     // page placement or the retirement-proof ledger and start looking like some other client.
     const withheld = new Set<string>(STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES)

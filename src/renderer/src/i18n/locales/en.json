@@ -13047,7 +13047,11 @@
             "sessionDeleteFailed": "Couldn't delete the session",
             "resumeInChatConflict": "Another chat is already holding this conversation.",
             "resumeInChatTranscriptMissing": "This conversation's history could not be loaded, so it cannot be resumed in chat.",
-            "resumeInChatFailed": "Could not resume this session in a new chat."
+            "resumeInChatFailed": "Could not resume this session in a new chat.",
+            "resumeInChatOwnerMismatch": "This conversation belongs to a different host. Open a workspace on that host to resume it.",
+            "resumeInChatHostTooOld": "This conversation's host cannot resume a past conversation in a chat. Update it and try again.",
+            "resumeInChatHostRepaired": "This conversation's host was reconnected while Orca was preparing the resume. Try again.",
+            "resumeInChatUnavailable": "This conversation cannot be resumed in a chat right now."
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",

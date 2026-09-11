@@ -232,8 +232,8 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
 // A host withholds structured session-tab rows and refuses the whole `agentSession.*` surface to a
 // client that advertises none of these, so adding them changes what this connection is published —
 // a wire change with no codec change. Each string is a separate promise about renderer behaviour
-// that is live NOW: reveal and resume-history stay out until the surfaces that answer for them
-// ship, because advertising one is what makes a host expect this client to drive it.
+// that is live NOW: reveal stays out until the surface that answers for it ships, because
+// advertising one is what makes a host expect this client to drive it.
 export const STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -245,9 +245,12 @@ export const STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES = [
 // with the per-user create switch: a client that stops holding must still be able to release what
 // it holds, and a capability is negotiated once per connection, so withdrawing it on a switch flip
 // would leave a live session on the peer that this client can no longer let go of.
+// Resume-history joins them: adopting a paired host's Agent Session History row is a create on that
+// host, so it belongs with the create-side terms rather than the read set, and retreats when they do.
 export const STRUCTURED_AGENT_SESSION_PAIRED_RUNTIME_CAPABILITIES = [
   ...STRUCTURED_AGENT_SESSION_READER_RUNTIME_CAPABILITIES,
-  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY
+  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY
 ] as const
 
 // Electron clients can decode client-hosted page placement; becoming a page

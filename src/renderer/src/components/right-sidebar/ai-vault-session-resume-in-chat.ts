@@ -6,7 +6,11 @@
 
 import { isWslStoredAiVaultSessionFile } from '@/lib/ai-vault-resume-target'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import {
   isAiVaultSessionResumableContent,
@@ -16,9 +20,19 @@ import {
 export type AiVaultResumeInChatBlockedReason =
   | 'agent'
   | 'remote'
+  /** Both ends could adopt, but they are not the same machine. */
+  | 'owner-mismatch'
+  /** The owning host predates `resumeFrom` on `agentSession.create`. */
+  | 'resume-history'
   | 'empty'
   | 'already-structured'
   | 'workspace'
+
+/** The subset that compares the row's owner with the workspace's. */
+export type AiVaultResumeInChatOwnerBlockedReason = Extract<
+  AiVaultResumeInChatBlockedReason,
+  'remote' | 'owner-mismatch'
+>
 
 export type AiVaultResumeInChatEligibility =
   | { available: true; workspaceId: string }
@@ -57,6 +71,39 @@ export function aiVaultSessionCwdMatchesWorkspace(
   )
 }
 
+/**
+ * A conversation lives in the transcript store of the machine that recorded it, and only that
+ * machine can adopt it: `agentSession.create` derives the transcript file and the account home
+ * itself, so a create aimed anywhere else would start a blank session under the adopted name.
+ *
+ * So the two owners must be the same host, and a mismatch is refused here rather than re-homed —
+ * moving a conversation between owners is a different flow with a different answer about the
+ * provider credentials it would run under. An `ssh:` host has no client RPC path to a structured
+ * session at all, and a WSL-stored transcript is reachable only through a shell into that distro,
+ * so both stay plain refusals.
+ */
+export function aiVaultSessionResumeInChatOwnerBlocker(args: {
+  sessionExecutionHostId: string | null | undefined
+  sessionFilePath: string | null | undefined
+  targetExecutionHostId: string | null | undefined
+}): AiVaultResumeInChatOwnerBlockedReason | null {
+  if (isWslStoredAiVaultSessionFile(args.sessionFilePath)) {
+    return 'remote'
+  }
+  const source = normalizeExecutionHostId(args.sessionExecutionHostId)
+  // Absent names this machine, the same default the workspace owner resolver answers with.
+  const target = normalizeExecutionHostId(args.targetExecutionHostId) ?? LOCAL_EXECUTION_HOST_ID
+  if (!source || !adoptableExecutionHost(source) || !adoptableExecutionHost(target)) {
+    return 'remote'
+  }
+  return source === target ? null : 'owner-mismatch'
+}
+
+function adoptableExecutionHost(executionHostId: string): boolean {
+  const kind = parseExecutionHostId(executionHostId)?.kind
+  return kind === 'local' || kind === 'runtime'
+}
+
 export function resolveAiVaultSessionResumeInChatEligibility(args: {
   session: Pick<
     AiVaultSession,
@@ -64,6 +111,10 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   > & { structuredSession?: AiVaultSession['structuredSession'] }
   targetWorkspaceId: string | null
   targetWorkspacePath: string | null
+  /** The host that would run the chat. Compared with the row's own owner rather than trusted. */
+  targetExecutionHostId: string | null
+  /** Whether that host's advertised capabilities include adopting a conversation on create. */
+  ownerSupportsResumeHistory: boolean
   /** The route the same (workspace, agent) pair would take for a fresh chat. Reused rather than
    *  re-derived: it already encodes the settings flag, host capability, platform refusals and the
    *  WSL/repair refusal, and a second copy of those conditions would drift from it. */
@@ -78,17 +129,24 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   if (session.structuredSession) {
     return { available: false, reason: 'already-structured' }
   }
-  if (
-    session.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
-    isWslStoredAiVaultSessionFile(session.filePath)
-  ) {
-    return { available: false, reason: 'remote' }
+  const ownerBlocker = aiVaultSessionResumeInChatOwnerBlocker({
+    sessionExecutionHostId: session.executionHostId,
+    sessionFilePath: session.filePath,
+    targetExecutionHostId: args.targetExecutionHostId
+  })
+  if (ownerBlocker) {
+    return { available: false, reason: ownerBlocker }
   }
   if (!isAiVaultSessionResumableContent(session)) {
     return { available: false, reason: 'empty' }
   }
   if (!args.targetWorkspaceId || !args.structuredRouteAvailable) {
     return { available: false, reason: 'workspace' }
+  }
+  // Negotiated, never probed: an older host rejects `resumeFrom` as a schema error a client reads
+  // as a refusal, so the action is absent rather than attempted.
+  if (!args.ownerSupportsResumeHistory) {
+    return { available: false, reason: 'resume-history' }
   }
   if (
     aiVaultSessionResumeInChatWorkspaceMatters(session.agent) &&

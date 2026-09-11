@@ -147,7 +147,7 @@ function readPublishedAdmission(
  * `runtime:` host is read from its own published snapshot; an `ssh:` host publishes none, and an
  * unanswerable host stays `null` rather than becoming a refusal.
  */
-function resolveHostCapabilityEvidence(
+export function resolveHostCapabilityEvidence(
   store: AgentLaunchRouteStore,
   executionHostId: string
 ): HostCapabilityEvidence {
