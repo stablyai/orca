@@ -30,13 +30,21 @@ export async function runLiveBrokerWait(
   budgetMs: number
 ): Promise<LiveBrokerWaitResult> {
   const deadline = Date.now() + budgetMs
+  let joinedReconcile = false
   while (!source.stopped()) {
     const broker = source.liveBroker()
     if (broker) {
       return { broker }
     }
+    // Why the budget applies only once a reconcile has been joined: the one open
+    // the waiter arrived on is never cut short, but a chain of superseding opens
+    // must not outlive the budget the caller asked for.
+    if (joinedReconcile && Date.now() >= deadline) {
+      return settledResult(source)
+    }
     const pending = source.reconcile()
     const superseded = source.authorityChange()
+    joinedReconcile = true
     // Why unbounded on `pending`: a reconcile always settles (opens carry HTTP
     // deadlines), and cutting a slow-but-succeeding open short would fail a
     // pairing that was about to work.
