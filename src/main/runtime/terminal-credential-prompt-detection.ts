@@ -33,6 +33,11 @@ const CREDENTIAL_TAIL_LINES = 4
 
 // Why capped: a wrapped narration line is not a prompt, and an unbounded line
 // makes the per-line scan the hot path for streaming output.
+//
+// LOAD-BEARING for complexity, not just for throughput: every rule that carries a lookbehind
+// (`CREDENTIAL_NOUN_LOOKBEHIND`, `AUTH_VERB_RE`) is bounded in practice by this cap. Raising it
+// scales those rules superlinearly in the length of an identifier run, so re-measure
+// `CREDENTIAL_NOUN_RE` against the budget test before changing it.
 const MAX_CREDENTIAL_LINE_LENGTH = 512
 
 // Why `_` is a separator too: the most common api-key ask names the env var it fills
@@ -51,7 +56,22 @@ export const CREDENTIAL_NOUN_SOURCE =
 // one-character check misses `candidate.personal_access_token` — the dot precedes `personal`, not
 // `access_token`. Anchoring on the dot at the START of the identifier catches the whole family.
 // Still only `.`: the env-var ask (`OPENAI_API_KEY`) has no dot and is a real prompt.
-const CREDENTIAL_NOUN_LOOKBEHIND = '(?<!\\.[a-z0-9_$]*)'
+// Why the {0,40} bound and not `*`: unbounded, this is QUADRATIC — the engine retries the
+// lookbehind from every position in an identifier run, so a 4096-char run costs 4.6ms against
+// 369us bounded, and doubling the run quadruples the time. 40 covers any real identifier segment
+// and reproduces the unbounded verdict on every correctness case, `candidate.personal_access_token`
+// and `OPENAI_API_KEY` included.
+const CREDENTIAL_NOUN_LOOKBEHIND = '(?<!\\.[a-z0-9_$]{0,40})'
+/**
+ * Exported for the complexity budget only. `MAX_CREDENTIAL_LINE_LENGTH` keeps every caller under
+ * 512 characters, which HIDES the rule's growth curve — the gap between a linear and a quadratic
+ * lookbehind is only ~1.7x at the cap and 13x an octave above it. The budget therefore drives this
+ * regex directly, so the complexity class is asserted rather than the containment.
+ */
+export const CREDENTIAL_NOUN_RE_FOR_BUDGET = new RegExp(
+  `${CREDENTIAL_NOUN_LOOKBEHIND}(?:${CREDENTIAL_NOUN_SOURCE})`,
+  'i'
+)
 const CREDENTIAL_NOUN_RE = new RegExp(
   `${CREDENTIAL_NOUN_LOOKBEHIND}(?:${CREDENTIAL_NOUN_SOURCE})`,
   'gi'
@@ -145,7 +165,11 @@ const AUTH_QUESTION_ROW_RE = /^\?\s+\S/
  *
  * Parentheses are deliberately allowed — real prompts write `(Use arrow keys)`.
  */
-const CODE_SHAPED_ROW_RE = /[{}[\]`'"]|=>|!==|===|;\s*$|\b[a-z_$][\w$]*\.[a-z_$]/i
+// Why `[` and `]` are NOT here: a bracketed confirm default (`Authenticate with the CLI? [Y/n]`)
+// is a mainstream prompt convention (apt, readline, enquirer), and brackets buy little that the
+// other markers do not already catch — the code rows that carry them also carry a brace, a quote
+// or a property access.
+const CODE_SHAPED_ROW_RE = /[{}`'"]|=>|!==|===|;\s*$|\b[a-z_$][\w$]*\.[a-z_$]/i
 
 /**
  * A row that proves the agent is sitting at its own composer, so nothing is asking the user

@@ -4,6 +4,7 @@
 // prompt into a credential field; a false positive only defers until the dialog is answered.
 import { describe, expect, it } from 'vitest'
 import {
+  CREDENTIAL_NOUN_RE_FOR_BUDGET,
   findCredentialPromptIndex,
   TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE
 } from './terminal-credential-prompt-detection'
@@ -116,6 +117,9 @@ const LIVE_CREDENTIAL_SURFACES: readonly (readonly [string, string[]])[] = [
     ]
   ],
   ['vendor-qualified indented api-key ask', ['  Enter your Antigravity API key:']],
+  // A bracketed confirm default is a mainstream prompt convention (apt, readline, enquirer).
+  ['bracketed confirm default', ['? Authenticate with the CLI? [Y/n]']],
+  ['bracketed sign-in confirm', ['? Sign in with GitHub? [y/N]']],
   // sudo translates its prompt but never its `[sudo]` tag, and the only thing it asks for is a
   // password. An English-only rule here misses every non-English desktop.
   ['sudo password on a German system', ['[sudo] Passwort für neil:']],
@@ -700,6 +704,25 @@ describe('findCredentialPromptIndex', () => {
       const matched = lines.some((line) => TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE.test(line))
       expect(matched, name).toBe(true)
     }
+  })
+
+  it('keeps the lookbehind-bearing rules linear, not just the sentinel', () => {
+    // The sentinel is built from the RAW noun source and carries no lookbehind, so a budget that
+    // only exercises it is blind to the rule that has one. Nor can this be measured through
+    // `findCredentialPromptIndex`: MAX_CREDENTIAL_LINE_LENGTH caps every row at 512, where a
+    // quadratic lookbehind is still only ~1.7x a linear one. Drive the regex and assert the class.
+    const cost = (length: number): number => {
+      const line = `const owner = candidate.${'a'.repeat(length)}`
+      const started = performance.now()
+      for (let run = 0; run < 200; run += 1) {
+        CREDENTIAL_NOUN_RE_FOR_BUDGET.test(line)
+      }
+      return (performance.now() - started) / 200
+    }
+    cost(512)
+    const base = cost(1024)
+    const quadrupled = cost(4096)
+    expect(quadrupled).toBeLessThan(base * 8)
   })
 
   it('keeps the sentinel linear on adversarial lines', () => {
