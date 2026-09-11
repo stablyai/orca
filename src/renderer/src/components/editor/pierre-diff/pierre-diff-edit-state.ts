@@ -2,6 +2,7 @@ import type { FileDiffMetadata } from '@pierre/diffs'
 import type { EditorFactory } from '@pierre/diffs/react'
 import { Editor, EditStateManager, type EditorOptions } from '@pierre/diffs/edit'
 import type { PierreDiffAnnotationData } from './pierre-diff-comment-annotations'
+import { getPierreNativeView } from './pierre-diff-native-view-state'
 
 type StateRequest = { scope: string; fileDiff: FileDiffMetadata }
 const requests = new WeakMap<object, StateRequest>()
@@ -67,8 +68,21 @@ export const createPierreEditor: EditorFactory<PierreDiffAnnotationData, undefin
   forgetDormant(key)
   const stored = EditStateManager.get('file-diff', key)
   const matchesContent = stored?.document.getText() === fileDiff.additionLines.join('')
-  // Preserve document history, but use the new worker-computed hunks and highlighting.
-  const restored = matchesContent ? { ...stored, diffSession: undefined } : undefined
+  // Pierre resumes an edited document only from a complete EditState; dropping diffSession
+  // makes it rebuild and drop the restored selection. Keep it when the old side is unchanged,
+  // otherwise fall back to fresh worker-computed hunks.
+  // Only one layer may drive selection. A saved deletions-side selection is restored natively,
+  // so hand the editor a rebuilt session there instead of letting it reassert its own.
+  const nativeOwnsSelection = getPierreNativeView(key)?.selection?.side === 'deletions'
+  const matchesOldSide =
+    matchesContent &&
+    !nativeOwnsSelection &&
+    (stored?.diffSession.oldFile?.lines ?? []).join('') === fileDiff.deletionLines.join('')
+  const restored = matchesOldSide
+    ? stored
+    : matchesContent
+      ? { ...stored, diffSession: undefined }
+      : undefined
   if (stored && !matchesContent) {
     EditStateManager.clear('file-diff', key)
   }

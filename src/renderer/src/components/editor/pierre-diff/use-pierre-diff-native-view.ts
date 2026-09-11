@@ -11,6 +11,11 @@ import {
   restorePierreNativeSelection
 } from './pierre-diff-native-view-state'
 
+// The editor reasserts its own selection on attach, which can land well after ours. Budget by
+// wall clock, not frames: under load a frame count expires long before the editor settles.
+// User interaction still cancels the pending restore, so this only bounds the quiet case.
+const RESTORE_DEADLINE_MS = 2_000
+
 export function usePierreDiffNativeView(
   key: string | undefined,
   fileDiff: FileDiffMetadata,
@@ -27,10 +32,11 @@ export function usePierreDiffNativeView(
   const [restoreSeed] = useState(() => (key ? getPierreNativeView(key) : undefined))
   const pending = useRef(restoreSeed)
   const frame = useRef<number | null>(null)
-  const attempts = useRef(0)
+  // Armed on attach; 0 until then so a stale ref can never keep a restore alive.
+  const deadline = useRef(0)
   const lastSnapshot = useRef<PierreNativeViewState | undefined>(undefined)
   const schedule = useCallback(() => {
-    if (frame.current !== null || !pending.current || attempts.current >= 8) {
+    if (frame.current !== null || !pending.current || Date.now() > deadline.current) {
       return
     }
     frame.current = requestAnimationFrame(() => {
@@ -41,7 +47,6 @@ export function usePierreDiffNativeView(
         return
       }
       if (latest.current.editable && !editorRef.current) {
-        attempts.current++
         schedule()
         return
       }
@@ -70,7 +75,6 @@ export function usePierreDiffNativeView(
         return
       }
       current.instance.setCodeScrollLeft(saved.scrollLeft)
-      attempts.current++
       if (
         !saved.selection ||
         restorePierreNativeSelection(
@@ -98,7 +102,10 @@ export function usePierreDiffNativeView(
       }
     })
   }, [editorRef])
-  useLayoutEffect(() => schedule(), [activeGroupId, schedule])
+  useLayoutEffect(() => {
+    deadline.current = Date.now() + RESTORE_DEADLINE_MS
+    schedule()
+  }, [activeGroupId, schedule])
   useLayoutEffect(() => {
     const container = containerRef.current
     const cancel = () => {
@@ -167,6 +174,8 @@ export function usePierreDiffNativeView(
     (host: HTMLElement, phase: PostRenderPhase, instance: PierreDiffInstance) => {
       if (phase !== 'unmount') {
         view.current = { host, instance }
+        // Re-arm on attach: the remount is the point a restore becomes possible.
+        deadline.current = Date.now() + RESTORE_DEADLINE_MS
         schedule()
       }
     },

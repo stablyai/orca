@@ -2,14 +2,19 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import type { FileDiffMetadata } from '@pierre/diffs'
 import { createPierreEditor, withPierreDiffEditState } from './pierre-diff-edit-state'
 
-const { states, clear, get } = vi.hoisted(() => {
+const { states, clear, get, nativeViews } = vi.hoisted(() => {
   const states = new Map<string, unknown>()
+  const nativeViews = new Map<string, { selection?: { side: string } }>()
   return {
     states,
+    nativeViews,
     get: vi.fn((_: string, key: string) => states.get(key)),
     clear: vi.fn((_: string, key: string) => states.delete(key))
   }
 })
+vi.mock('./pierre-diff-native-view-state', () => ({
+  getPierreNativeView: (key: string) => nativeViews.get(key)
+}))
 vi.mock('@pierre/diffs/edit', () => ({
   EditStateManager: { get, clear },
   Editor: class {
@@ -51,6 +56,7 @@ function create(scope: string, original = 'old\n', modified = 'new\n') {
 
 beforeEach(() => {
   states.clear()
+  nativeViews.clear()
   vi.clearAllMocks()
 })
 
@@ -61,6 +67,19 @@ it('reuses matching dormant document history and view state', () => {
   expect(clear).not.toHaveBeenCalled()
   expect(editor.key).toBe('same')
   expect(states.get('same')).toBe(state)
+  expect(editor.initialState?.document).toBe(state.document)
+  // Pierre resumes an edited document only from a complete EditState; keeping diffSession is
+  // what lets it restore the selection rather than rebuilding and dropping it.
+  expect(editor.initialState?.diffSession).toBe(state.diffSession)
+  editor.finish()
+})
+
+it('yields selection restore to the native layer for a deletions-side selection', () => {
+  const state = stored()
+  states.set('native-owned', state)
+  nativeViews.set('native-owned', { selection: { side: 'deletions' } })
+  const editor = create('native-owned')
+  // Only one layer may drive selection, so the editor gets a rebuilt session here.
   expect(editor.initialState?.document).toBe(state.document)
   expect(editor.initialState?.diffSession).toBeUndefined()
   editor.finish()
