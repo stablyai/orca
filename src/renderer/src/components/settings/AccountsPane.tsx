@@ -142,6 +142,7 @@ export function AccountsPane({
   const [codexAction, setCodexAction] = useState<CodexAccountAction>('idle')
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
+  const [claudeAccountsLoaded, setClaudeAccountsLoaded] = useState(false)
   const [claudeAction, setClaudeAction] = useState<ClaudeAccountAction>('idle')
   // Why: capture the account's runtime slot when the dialog opens; the roster
   // can change underneath an open dialog and lose the slot to diff for restarts.
@@ -214,12 +215,14 @@ export function AccountsPane({
   const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
   // Why: remote snapshots own their system-default login, but the desktop's
   // usage poll must not be misattributed to a remote account owner (#7973).
-  const systemClaudeNeedsSignIn = getClaudeSystemDefaultSignInWarning({
-    limits: isRemoteAccountScope ? null : claudeRateLimits,
-    target: claudeRateLimitTarget,
-    runtime: accountRuntime,
-    systemActive: systemClaudeActive
-  })
+  const systemClaudeNeedsSignIn =
+    claudeAccountsLoaded &&
+    getClaudeSystemDefaultSignInWarning({
+      limits: isRemoteAccountScope ? null : claudeRateLimits,
+      target: claudeRateLimitTarget,
+      runtime: accountRuntime,
+      systemActive: systemClaudeActive
+    })
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
 
@@ -251,6 +254,10 @@ export function AccountsPane({
   }, [])
 
   useEffect(() => {
+    // Why: a runtime switch replaces the roster underneath; keep the loaded
+    // gate shut until the new owner's snapshot arrives so empty-roster
+    // derivations (like the system-default warning) cannot flash stale state.
+    setClaudeAccountsLoaded(false)
     // Why: remote snapshots stream usage refreshes after the synchronous ready
     // message, so the watcher stays open for the pane's lifetime; the local
     // path resolves once and the close() is a no-op.
@@ -266,6 +273,7 @@ export function AccountsPane({
           }
           if (!snapshot.failedProviders?.includes('claude')) {
             setClaudeAccounts(snapshot.claude)
+            setClaudeAccountsLoaded(true)
           }
         },
         onError: (error) => {
@@ -301,6 +309,7 @@ export function AccountsPane({
     isRemoteAccountScope,
     claudeAccounts,
     setClaudeAccounts,
+    setClaudeAccountsLoaded,
     setClaudeAction,
     fetchSettings,
     recordFeatureInteraction
