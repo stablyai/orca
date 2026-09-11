@@ -198,7 +198,7 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
-  it('keeps a leading-dash Antigravity prompt bound to --print instead of the sandbox flag', () => {
+  it('keeps a leading-dash Antigravity prompt bound to --print instead of parsing as an option', () => {
     const result = planCommitMessageGeneration(
       { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
       '-fix: something'
