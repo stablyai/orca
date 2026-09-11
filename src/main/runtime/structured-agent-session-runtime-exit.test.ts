@@ -121,9 +121,13 @@ describe('structured session runtime provider-exit wiring', () => {
       })
     }
 
+    // `pending` is this send's real answer now, not a weaker one: admission settles
+    // when the transport takes the frame, and identity arrives later on the
+    // provider's echo. What proves the message reached the REACQUIRED provider is
+    // the turn it starts below, which is what this test exists to check.
     await expect(
       host.send({ callerKey: 'runtime-test' }, { envelope, body })
-    ).resolves.toMatchObject({ ok: true, value: { submission: { dispatchState: 'accepted' } } })
+    ).resolves.toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
     expect(turn).toBe(1)
   })
 

@@ -16,8 +16,14 @@ import type {
   openCodexAppServerConnection
 } from '../codex/codex-app-server-connection'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
-import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
+import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../shared/agent-session-journal-types'
 import type {
   AgentSessionHistoryResult,
   AgentSessionSubscribeEvent
@@ -43,10 +49,16 @@ const SESSION = 'session-integration-1'
 const THREAD = 'thread-integration'
 const TURN = 'turn-1'
 const WORKSPACE = 'workspace-1'
+// The capability set the desktop renderer advertises. Without the pending-send
+// one the host holds the reply until the send settles, which is a shim for
+// clients too old to render a pending bubble — not what this suite models.
 const CLIENT = {
   clientId: 'device-a',
   clientKind: 'runtime' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+  ]
 }
 
 // ─── the fake `codex app-server` ────────────────────────────────────────────
@@ -269,6 +281,17 @@ function textOf(item: AgentJournalRenderItem): string {
     : ''
 }
 
+/** The durable submission row, which settlement rewrites after the send returns. */
+function submissionOf(clientMessageId: string): AgentJournalSubmission | undefined {
+  const host = getStructuredAgentSessionHost() as unknown as {
+    sessions: Map<string, { journal: AgentSessionJournal }>
+  } | null
+  return host?.sessions
+    .get(SESSION)
+    ?.journal.submissions()
+    .find((entry) => entry.clientMessageId === clientMessageId)
+}
+
 async function historyPage(
   direction: 'tail' | 'before' | 'after',
   extra: Record<string, unknown> = {}
@@ -438,18 +461,25 @@ describe('a structured codex session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, created.fence),
       body
     })
-    expect(sent.submission).toMatchObject({
-      dispatchState: 'accepted',
-      providerItemId: `codex:${THREAD}:${TURN}:0`
-    })
+    // Admission, not identity. `turn/start` proves Codex owns the message, but a
+    // send coalesced into a running turn is answered with that turn's id, so
+    // which message landed where is knowable only from the echo.
+    expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
     expect(codex.live().calls.at(-1)).toMatchObject({
       method: 'turn/start',
       params: { threadId: THREAD, clientUserMessageId: sent.clientMessageId }
     })
 
     codex.notify('turn/started', { turn: { id: TURN } })
+    // Codex echoes the message back carrying the `clientId` it was sent under,
+    // which is the only thing that names which submission this row settles.
     codex.notify('item/completed', {
-      item: { type: 'userMessage', id: 'item-0', content: [{ type: 'text', text: 'hi' }] }
+      item: {
+        type: 'userMessage',
+        id: 'item-0',
+        clientId: sent.clientMessageId,
+        content: [{ type: 'text', text: 'hi' }]
+      }
     })
     codex.notify('item/started', { item: { type: 'agentMessage', id: 'item-1', text: '' } })
     codex.notify('item/agentMessage/delta', { itemId: 'item-1', delta: 'Hello.' })
@@ -459,6 +489,15 @@ describe('a structured codex session over agentSession.*', () => {
     await drainStreamedEvents()
 
     expect(itemsOf(stream).map(textOf).filter(Boolean)).toEqual(['hi', 'Hello.'])
+    // The echo is the first item of this turn, so the settled key is ordinal 0 —
+    // minted by the same `identityFor` a history replay computes with, rather
+    // than guessed from the turn/start response.
+    await vi.waitFor(() =>
+      expect(submissionOf(sent.clientMessageId)).toMatchObject({
+        dispatchState: 'accepted',
+        providerItemId: `codex:${THREAD}:${TURN}:0`
+      })
+    )
   })
 
   it('runs create → send → stream → approval → cancel → reconnect → page history', async () => {
@@ -513,12 +552,10 @@ describe('a structured codex session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, fence),
       body
     })
-    // Codex named the turn, so the submission is accepted rather than
-    // "delivery unconfirmed", and adopts the provider's own item identity.
-    expect(sent.submission).toMatchObject({
-      dispatchState: 'accepted',
-      providerItemId: `codex:${THREAD}:${TURN}:0`
-    })
+    // Codex took the message, so the submission is pending rather than
+    // "delivery unconfirmed" — it carries no identity yet, because the response
+    // to a coalesced send names the running turn rather than this message.
+    expect(sent.submission).toMatchObject({ dispatchState: 'pending', providerItemId: null })
     expect(codex.live().calls.at(-1)).toMatchObject({
       method: 'turn/start',
       params: {
@@ -531,14 +568,28 @@ describe('a structured codex session over agentSession.*', () => {
 
     // ── stream ──────────────────────────────────────────────────────────────
     codex.notify('turn/started', { turn: { id: TURN } })
-    // Codex echoes the user message back as ordinal 0 of the turn. That is the
-    // key the submission adopted, so the echo has to reconcile into the bubble
-    // the client already has rather than append a second copy of it.
+    // Codex echoes the user message back as ordinal 0 of the turn, carrying the
+    // `clientId` it was sent under. That echo settles the submission's identity,
+    // and has to reconcile into the bubble the client already has rather than
+    // append a second copy of it.
     codex.notify('item/completed', {
-      item: { type: 'userMessage', id: 'item-0', content: [{ type: 'text', text: 'list files' }] }
+      item: {
+        type: 'userMessage',
+        id: 'item-0',
+        clientId: sent.clientMessageId,
+        content: [{ type: 'text', text: 'list files' }]
+      }
     })
     await drainStreamedEvents()
     expect(itemsOf(stream).filter((item) => textOf(item) === 'list files')).toHaveLength(1)
+    // Settled from the echo's own journal identity, so it is by construction the
+    // key a replay recomputes for this row.
+    await vi.waitFor(() =>
+      expect(submissionOf(sent.clientMessageId)).toMatchObject({
+        dispatchState: 'accepted',
+        providerItemId: `codex:${THREAD}:${TURN}:0`
+      })
+    )
 
     codex.notify('item/started', { item: { type: 'agentMessage', id: 'item-1', text: '' } })
     codex.notify('item/agentMessage/delta', { itemId: 'item-1', delta: 'Two ' })
