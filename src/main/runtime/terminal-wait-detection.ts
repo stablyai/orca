@@ -4,6 +4,7 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
+import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import {
   isTerminalWaitWhitespace,
   startOfLastLines,
@@ -259,9 +260,11 @@ function findLastFxPermissionHeaderBefore(normalized: string, beforeIndex: numbe
   }
   const lineStart = normalized.lastIndexOf('\n', permissionIndex) + 1
   const linePrefix = normalized.slice(lineStart, permissionIndex)
+  const printablePrefix = stripAnsiEscapeSequences(linePrefix).trimEnd()
   const hasHeaderIndent =
-    linePrefix.trim() === '' ||
-    /^\s{2}$/.test(normalized.slice(permissionIndex - 2, permissionIndex))
+    (linePrefix.trim() === '' ||
+      /^\s{2}$/.test(normalized.slice(permissionIndex - 2, permissionIndex))) &&
+    !printablePrefix.endsWith('>')
   const hasHeaderSeparator = /^\s*·/.test(
     normalized.slice(permissionIndex + 'permission needed'.length, beforeIndex)
   )

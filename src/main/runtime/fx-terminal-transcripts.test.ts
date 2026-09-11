@@ -129,7 +129,7 @@ describe('fx terminal evidence', () => {
   it('does not treat a quoted structural fx dialog as live', async () => {
     const transcript = [
       '> ────────────────────────────────────────',
-      '> Permission needed · Choose one',
+      '>  Permission needed · Choose one',
       '> Would you like to run this command?',
       '> ❯ 1. Yes',
       '>   2. No',
