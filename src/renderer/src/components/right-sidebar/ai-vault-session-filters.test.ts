@@ -59,7 +59,8 @@ describe('filterAiVaultSessions', () => {
         scope: 'workspace',
         sort: 'updated',
         activeWorktreePaths: ['/Users/ada/repo'],
-        hideEmptySessions: true
+        hideEmptySessions: true,
+        searchScope: 'title'
       }).map((session) => session.id)
     ).toEqual(['claude:1'])
   })
@@ -213,7 +214,8 @@ describe('filterAiVaultSessions', () => {
           scope: 'all',
           sort: 'updated',
           activeWorktreePaths: [],
-          hideEmptySessions: true
+          hideEmptySessions: true,
+          searchScope: 'summary'
         }
       ).map((session) => session.id)
     ).toEqual(['claude:1'])
@@ -245,7 +247,8 @@ describe('filterAiVaultSessions', () => {
           scope: 'all',
           sort: 'updated',
           activeWorktreePaths: [],
-          hideEmptySessions: true
+          hideEmptySessions: true,
+          searchScope: 'summary'
         }
       )
     ).toEqual([])
@@ -705,7 +708,12 @@ describe('parseVaultQuery', () => {
     expect(parseVaultQuery('"resume picker" repo:orca path:src')).toEqual({
       terms: ['resume picker'],
       repoTerms: ['orca'],
-      pathTerms: ['src']
+      pathTerms: ['src'],
+      modelTerms: [],
+      branchTerms: [],
+      hostTerms: [],
+      afterMs: null,
+      beforeMs: null
     })
   })
 })

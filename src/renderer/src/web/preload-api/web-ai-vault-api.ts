@@ -70,7 +70,22 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
         agent: args.agent,
         reason: 'non-local-host' as const
       }),
-    onWindowFocused: () => noopUnsubscribe
+    onWindowFocused: () => noopUnsubscribe,
+    rankSessions: ({ cards }) =>
+      Promise.resolve({
+        ok: true as const,
+        rankedIds: cards.map((card) => card.id),
+        usedModel: false
+      }),
+    searchSessions: () =>
+      Promise.resolve({
+        matchedIds: [],
+        usedRg: false,
+        usedFts: false,
+        truncated: false,
+        degraded: false,
+        hits: []
+      })
   }
 }
 

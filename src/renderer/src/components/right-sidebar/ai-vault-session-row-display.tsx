@@ -149,7 +149,7 @@ function worktreeStatusLabel(status: AiVaultSessionWorktreeInfo['status']): stri
 }
 
 export function conversationRoleLabel(
-  role: AiVaultSession['previewMessages'][number]['role']
+  role: AiVaultSession['previewMessages'][number]['role'] | 'error'
 ): string {
   if (role === 'user') {
     return translate('auto.components.right.sidebar.AiVaultSessionRow.userRole', 'You')
@@ -162,6 +162,9 @@ export function conversationRoleLabel(
   }
   if (role === 'system') {
     return translate('auto.components.right.sidebar.AiVaultSessionRow.systemRole', 'System')
+  }
+  if (role === 'error') {
+    return translate('auto.components.right.sidebar.AiVaultSessionRow.errorRole', 'Error')
   }
   return translate('auto.components.right.sidebar.AiVaultSessionRow.sessionRole', 'Session')
 }

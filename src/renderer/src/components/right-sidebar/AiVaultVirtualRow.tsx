@@ -1,4 +1,5 @@
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AiVaultSessionMessageHit } from '../../../../shared/ai-vault-session-message-hit'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
@@ -44,6 +45,7 @@ export function AiVaultVirtualRow({
   getSessionResumeState,
   getSessionResumeActions,
   getSessionResumeInChat,
+  getSearchHit,
   onToggleGroup,
   onToggleSessionDetails,
   onJumpToOriginalPane,
@@ -57,7 +59,8 @@ export function AiVaultVirtualRow({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
-  onRequestDelete
+  onRequestDelete,
+  onJumpToHit
 }: {
   row: AiVaultListRow | undefined
   index: number
@@ -74,6 +77,7 @@ export function AiVaultVirtualRow({
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
   getSessionResumeInChat: (session: AiVaultSession) => AiVaultResumeInChatEligibility
+  getSearchHit?: (sessionId: string) => AiVaultSessionMessageHit | undefined
   onToggleGroup: (key: string) => void
   onToggleSessionDetails: (sessionId: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
@@ -88,6 +92,7 @@ export function AiVaultVirtualRow({
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
+  onJumpToHit?: (session: AiVaultSession, hit: AiVaultSessionMessageHit) => void
 }): React.JSX.Element | null {
   if (!row) {
     return null
@@ -106,6 +111,7 @@ export function AiVaultVirtualRow({
   const resumeState = row.type === 'session' ? getSessionResumeState(row.session) : null
   const resumeActions = row.type === 'session' ? getSessionResumeActions(row.session) : null
   const resumeInChat = row.type === 'session' ? getSessionResumeInChat(row.session) : null
+  const searchHit = row.type === 'session' ? getSearchHit?.(row.session.id) : undefined
   const continuationWorktreeId =
     row.type === 'session' &&
     canContinueAiVaultSessionInNewSession(row.session, resumeState?.worktreeId)
@@ -160,6 +166,10 @@ export function AiVaultVirtualRow({
               worktree: { worktreeId: null, disabled: true },
               newTab: { worktreeId: null, disabled: true }
             }
+          }
+          searchHit={searchHit}
+          onJumpToHit={
+            searchHit && onJumpToHit ? () => onJumpToHit(row.session, searchHit) : undefined
           }
           onToggleDetails={() => onToggleSessionDetails(row.session.id)}
           onJumpToOriginalPane={

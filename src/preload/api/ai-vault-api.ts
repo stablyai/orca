@@ -18,6 +18,14 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../shared/ai-vault-resume-preparation'
+import type {
+  AiVaultRankSessionsArgs,
+  AiVaultRankSessionsResult
+} from '../../shared/ai-vault-session-ai-query'
+import type {
+  AiVaultSearchSessionsArgs,
+  AiVaultSearchSessionsResult
+} from '../../shared/ai-vault-session-search-scope'
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
@@ -34,4 +42,8 @@ export type AiVaultApi = {
   deleteSession: (args: AiVaultDeleteSessionArgs) => Promise<AiVaultDeleteSessionResult>
   /** Fires when any app window regains OS focus; returns an unsubscribe. */
   onWindowFocused: (callback: () => void) => () => void
+  /** Rank currently shown Session History cards with Source Control AI. */
+  rankSessions: (args: AiVaultRankSessionsArgs) => Promise<AiVaultRankSessionsResult>
+  /** Message-level FTS5 trigram search, with rg fallback when the index is cold. */
+  searchSessions: (args: AiVaultSearchSessionsArgs) => Promise<AiVaultSearchSessionsResult>
 }

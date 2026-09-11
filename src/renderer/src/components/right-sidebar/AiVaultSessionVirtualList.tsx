@@ -1,6 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AiVaultSessionMessageHit } from '../../../../shared/ai-vault-session-message-hit'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { translate } from '@/i18n/i18n'
@@ -41,6 +42,7 @@ export function AiVaultSessionVirtualList({
   getSessionResumeState,
   getSessionResumeActions,
   getSessionResumeInChat,
+  getSearchHit,
   onToggleGroup,
   onJumpToOriginalPane,
   onJumpToWorktree,
@@ -53,7 +55,8 @@ export function AiVaultSessionVirtualList({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
-  onRequestDelete
+  onRequestDelete,
+  onJumpToHit
 }: {
   groups: readonly AiVaultSessionGroup[]
   collapsedGroups: ReadonlySet<string>
@@ -70,6 +73,7 @@ export function AiVaultSessionVirtualList({
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
   getSessionResumeInChat: (session: AiVaultSession) => AiVaultResumeInChatEligibility
+  getSearchHit?: (sessionId: string) => AiVaultSessionMessageHit | undefined
   onToggleGroup: (key: string) => void
   onJumpToOriginalPane: (session: AiVaultSession) => void
   onJumpToWorktree: (worktreeId: string) => void
@@ -83,6 +87,7 @@ export function AiVaultSessionVirtualList({
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
+  onJumpToHit?: (session: AiVaultSession, hit: AiVaultSessionMessageHit) => void
 }): React.JSX.Element {
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
@@ -208,6 +213,7 @@ export function AiVaultSessionVirtualList({
               getSessionResumeState={getSessionResumeState}
               getSessionResumeActions={getSessionResumeActions}
               getSessionResumeInChat={getSessionResumeInChat}
+              getSearchHit={getSearchHit}
               onToggleGroup={onToggleGroup}
               onToggleSessionDetails={toggleSessionDetails}
               onJumpToOriginalPane={onJumpToOriginalPane}
@@ -222,6 +228,7 @@ export function AiVaultSessionVirtualList({
               onRevealLog={onRevealLog}
               onOpenCwd={onOpenCwd}
               onRequestDelete={onRequestDelete}
+              onJumpToHit={onJumpToHit}
             />
           ))}
         </div>
