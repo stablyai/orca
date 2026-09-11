@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { isTerminalTabPresent } from './terminal-tab-retirement'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 const WORKTREE_ID = 'repo1::/path/wt1'
 
@@ -105,5 +107,73 @@ describe('isTerminalTabPresent as the recovery existence check', () => {
     store.getState().closeTab(tabId)
 
     expect(isTerminalTabPresent(store.getState(), tabId)).toBe(false)
+  })
+})
+
+// Not every workspace is a repository checkout. The ledger is keyed to the tab
+// ROW and resolved through locateTerminalTab, which scans every bucket in
+// tabsByWorktree — so a folder workspace and the floating-terminal bucket must
+// behave identically without a single branch for them. The predecessor kept the
+// budget in a module map keyed by tabId, and its row patcher made the caller
+// name the bucket, which is where a non-worktree key could go wrong.
+describe.each([
+  ['a repository worktree', WORKTREE_ID],
+  ['a folder workspace', folderWorkspaceKey('fw-1')],
+  ['the floating terminal bucket', FLOATING_TERMINAL_WORKTREE_ID]
+])('the recovery ledger on %s', (_label, bucketId) => {
+  function seedBucket(store: ReturnType<typeof createTestStore>): string {
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+    return store.getState().createTab(bucketId).id
+  }
+
+  const AUTOMATIC = { reason: 'write-stalled', trigger: 'automatic', now: 0 } as const
+
+  it('admits, observes and then refuses the same reason until a new trigger', () => {
+    const store = createTestStore()
+    const tabId = seedBucket(store)
+    const row = (): { recovery?: unknown } | undefined =>
+      store.getState().tabsByWorktree[bucketId]?.find((tab) => tab.id === tabId)
+
+    const first = store.getState().remountTerminalTabForRecovery(tabId, AUTOMATIC)
+    expect(first.remounted).toBe(true)
+    // The ledger landed on the row in this bucket, not in a worktree-keyed map.
+    expect(row()?.recovery).toMatchObject({ outcome: 'pending', reason: 'write-stalled' })
+
+    // Unsettled blocks the next automatic ask, even past the cooldown.
+    expect(
+      store.getState().remountTerminalTabForRecovery(tabId, { ...AUTOMATIC, now: 16_000 })
+    ).toEqual({ remounted: false, declinedBy: 'unsettled', retryInMs: 15_000 })
+
+    if (!first.remounted) {
+      throw new Error('unreachable: the first remount was admitted')
+    }
+    store.getState().settleTerminalTabRecovery(tabId, first.generation, 'failed')
+    expect(row()?.recovery).toMatchObject({ outcome: 'failed' })
+    expect(
+      store.getState().remountTerminalTabForRecovery(tabId, { ...AUTOMATIC, now: 600_000 })
+    ).toEqual({ remounted: false, declinedBy: 'settled-failure' })
+
+    // The user asking again is the new trigger the refusal waits for.
+    expect(
+      store
+        .getState()
+        .remountTerminalTabForRecovery(tabId, { ...AUTOMATIC, trigger: 'user', now: 600_000 })
+        .remounted
+    ).toBe(true)
+  })
+
+  it('drops the ledger with the row when the tab closes', () => {
+    const store = createTestStore()
+    const tabId = seedBucket(store)
+    store.getState().remountTerminalTabForRecovery(tabId, AUTOMATIC)
+
+    store.getState().closeTab(tabId)
+
+    expect(isTerminalTabPresent(store.getState(), tabId)).toBe(false)
+    expect(store.getState().tabsByWorktree[bucketId]?.some((tab) => tab.id === tabId)).toBeFalsy()
   })
 })

@@ -145,6 +145,72 @@ describe('terminal surface ownership', () => {
     ).resolves.toBe(true)
   })
 
+  // The upgrade population, driven through the real loader rather than a stub:
+  // a session an OLDER build wrote carries viewMode only on the unified tab,
+  // because terminalTabSchema did not declare it yet. Zod strips what it does
+  // not declare, so the reloaded ROW reads undefined while the reloaded UNIFIED
+  // TAB still says 'chat'. Only the second arm of the guard's disjunction can
+  // refuse this one — which is why the arm #19745 added was kept.
+  it('refuses a chat-owned tab an older build persisted without a row viewMode', async () => {
+    const loaded = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: WORKTREE_ID,
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        // Exactly what a pre-viewMode build wrote for the terminal row.
+        [WORKTREE_ID]: [
+          {
+            id: 'tab-1',
+            ptyId: null,
+            worktreeId: WORKTREE_ID,
+            title: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      unifiedTabs: {
+        [WORKTREE_ID]: [
+          {
+            id: 'tab-1',
+            entityId: 'terminal-1',
+            groupId: 'group-1',
+            worktreeId: WORKTREE_ID,
+            contentType: 'terminal',
+            label: 'Terminal 1',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            viewMode: 'chat'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+    expect(loaded.ok).toBe(true)
+    const session = loaded.ok ? loaded.value : null
+    const reloadedRow = session?.tabsByWorktree[WORKTREE_ID]?.[0]
+    const reloadedUnifiedTab = session?.unifiedTabs?.[WORKTREE_ID]?.[0]
+    // The premise: the load boundary really did drop the row's ownership.
+    expect(reloadedRow?.viewMode).toBeUndefined()
+    expect(reloadedUnifiedTab?.viewMode).toBe('chat')
+
+    setTerminalTabs([reloadedRow as StoredTerminalTab])
+    mocks.getTab.mockReturnValue(reloadedUnifiedTab as { viewMode?: 'terminal' | 'chat' })
+
+    await expect(
+      requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'write-stalled'
+      })
+    ).resolves.toBe(false)
+    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
+  })
+
   // The case a same-process test cannot reach: the row goes to disk and comes
   // back through the real Zod loader. A field the schema does not declare is
   // stripped there, silently, and every in-session assertion still passes.

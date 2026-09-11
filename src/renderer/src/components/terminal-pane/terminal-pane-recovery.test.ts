@@ -1,111 +1,34 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  createRemountTerminalTabForRecovery,
-  createSettleTerminalTabRecovery
-} from '@/store/slices/worktrees/session/worktree-slice-lookups'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import {
   _resetTerminalPaneRecoveryForTests,
   captureTerminalPaneRecoveryGeneration,
   registerTerminalPaneRecoveryInstance,
   requestTerminalPaneRecovery,
   settleTerminalPaneRecovery
 } from './terminal-pane-recovery'
+import { requestAndSettle, settleCurrentRecovery } from './terminal-recovery-ledger-test-driver'
+import {
+  recoveryLedgerMocks as mocks,
+  resetRecoveryLedgerStore,
+  setTerminalTabs,
+  terminalTabs
+} from './terminal-recovery-ledger-test-store'
 import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
-type StoredTerminalTab = Pick<TerminalTab, 'id' | 'viewMode' | 'generation' | 'recovery'>
+vi.mock('@/store', async () => {
+  const store = await import('./terminal-recovery-ledger-test-store')
+  return { useAppStore: { getState: () => store.recoveryLedgerStoreState() } }
+})
 
-const WORKTREE_ID = 'repo1::/path/wt1'
-
-// The store actions here are the REAL ones, driven over a minimal state bag.
-// The recovery budget is a field on the tab row now, so a fake that only
-// answered booleans could no longer express what this module reads.
-const mocks = vi.hoisted(() => ({
-  state: {
-    tabsByWorktree: {} as Record<string, unknown[]>,
-    terminalLayoutsByTabId: {} as Record<string, unknown>,
-    pendingStartupByTabId: {} as Record<string, unknown>
-  },
-  // Records tabIds the store ACTUALLY remounted, so every assertion below keeps
-  // meaning "a remount happened" rather than "a remount was asked for".
-  remountTerminalTabForRecovery: vi.fn<(tabId: string) => void>(),
-  getTab: vi.fn<() => { viewMode?: 'terminal' | 'chat' } | null>(() => ({})),
-  recordRendererCrashBreadcrumb: vi.fn(),
-  hasPty: vi.fn<(id: string) => Promise<boolean | null>>(async () => true)
-}))
-
-const storeSet = (updater: unknown): void => {
-  const patch =
-    typeof updater === 'function'
-      ? (updater as (state: unknown) => object)(mocks.state)
-      : (updater as object)
-  Object.assign(mocks.state, patch)
-}
-const storeGet = (): unknown => mocks.state
-const realRemount = createRemountTerminalTabForRecovery(storeSet as never, storeGet as never)
-const realSettle = createSettleTerminalTabRecovery(storeSet as never, storeGet as never)
-
-const remountTerminalTabForRecovery: typeof realRemount = (tabId, request) => {
-  const result = realRemount(tabId, request)
-  if (result.remounted) {
-    mocks.remountTerminalTabForRecovery(tabId)
-  }
-  return result
-}
-
-function terminalTabs(): StoredTerminalTab[] {
-  return (mocks.state.tabsByWorktree[WORKTREE_ID] ?? []) as StoredTerminalTab[]
-}
-
-function setTerminalTabs(tabs: StoredTerminalTab[]): void {
-  mocks.state.tabsByWorktree = { [WORKTREE_ID]: tabs }
-}
-
-/** What a mounted pane reports for the tab's current recovery attempt. */
-function settleCurrentRecovery(tabId: string, outcome: 'success' | 'failed' | 'timed-out'): void {
-  settleTerminalPaneRecovery(tabId, captureTerminalPaneRecoveryGeneration(tabId), outcome)
-}
-
-/** A full cycle: request, then the pane the remount mounted reports back.
- *  Recovery gates on an observed outcome, so a caller that never reports is
- *  refused — these are the callers that DO report. */
-async function requestAndSettle(
-  request: Parameters<typeof requestTerminalPaneRecovery>[0],
-  outcome: 'success' | 'failed' | 'timed-out' = 'success'
-): Promise<boolean> {
-  const recovered = await requestTerminalPaneRecovery(request)
-  if (recovered) {
-    settleCurrentRecovery(request.tabId, outcome)
-  }
-  return recovered
-}
-
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => ({
-      ...mocks.state,
-      remountTerminalTabForRecovery,
-      settleTerminalTabRecovery: realSettle,
-      getTab: mocks.getTab
-    })
-  }
-}))
-
-vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
-  recordRendererCrashBreadcrumb: mocks.recordRendererCrashBreadcrumb
-}))
+vi.mock('@/lib/crash-breadcrumb-recorder', async () => {
+  const store = await import('./terminal-recovery-ledger-test-store')
+  return { recordRendererCrashBreadcrumb: store.recoveryLedgerMocks.recordRendererCrashBreadcrumb }
+})
 
 beforeEach(() => {
   _resetTerminalPaneRecoveryForTests()
-  mocks.remountTerminalTabForRecovery.mockReset()
-  mocks.getTab.mockClear()
-  mocks.getTab.mockReturnValue({})
-  mocks.state.terminalLayoutsByTabId = {}
-  mocks.state.pendingStartupByTabId = {}
+  resetRecoveryLedgerStore()
   setTerminalTabs([{ id: 'tab-1' }, { id: 'tab-ssh' }])
-  mocks.recordRendererCrashBreadcrumb.mockClear()
-  mocks.hasPty.mockClear()
-  mocks.hasPty.mockResolvedValue(true)
   vi.stubGlobal('window', {
     api: { pty: { hasPty: mocks.hasPty } }
   })

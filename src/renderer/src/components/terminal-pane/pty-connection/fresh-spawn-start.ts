@@ -319,6 +319,14 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     session.armDirectSshPaneRetryTimeout(trackedPromise, session.directSshRetryAttempt)
     void trackedPromise.then((spawnedPtyId) => {
       if (spawnedPtyId) {
+        // The dual of settleSpawnThatLeftPaneUnbound below, and the only place a
+        // FRESH spawn can report an outcome: the pane it heals has no PTY to
+        // reattach to, so it never reaches the reattach handler that settles
+        // every other recovery reason. Without this the healed attempt sits
+        // 'pending' for the whole settlement bound and blocks the tab's next
+        // recovery. Generation-gated in the store, so a spawn with no recovery
+        // attempt in flight writes nothing.
+        session.settlePaneAttachAttempt?.(undefined, 'success')
         return
       }
       queueMicrotask(() => {
