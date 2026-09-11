@@ -14,6 +14,7 @@ import {
   AUTH_FLOW_SAMPLES,
   AUTH_VERB_SAMPLES,
   CORROBORATION_SEEKING_BOTTOM_ROWS,
+  identifierMatchableTerms,
   CREDENTIAL_NOUN_SAMPLES,
   NON_PROMPT_ROW_SHAPES
 } from './terminal-credential-vocabulary-shapes'
@@ -59,8 +60,12 @@ describe('credential vocabulary in non-prompt shapes', () => {
     // can be the ONLY thing that turns an otherwise-inert bottom row into a refusal. No composer
     // caret here, and the bottom row genuinely leads with an action phrase, so nothing else is
     // holding these clean.
+    // Only terms whose identifier form the vocabulary still matches can exercise the lookbehind;
+    // the rest would pass by never reaching it. Asserting the count keeps that visible.
+    const live = identifierMatchableTerms([...AUTH_VERB_SAMPLES, ...CREDENTIAL_NOUN_SAMPLES])
+    expect(live.length).toBeGreaterThanOrEqual(10)
     const refusals: string[] = []
-    for (const term of [...AUTH_VERB_SAMPLES, ...CREDENTIAL_NOUN_SAMPLES]) {
+    for (const term of live) {
       for (const bottomRow of CORROBORATION_SEEKING_BOTTOM_ROWS) {
         if (blocks([asPropertyAccess(term), bottomRow])) {
           refusals.push(`${asPropertyAccess(term)} / ${bottomRow}`)

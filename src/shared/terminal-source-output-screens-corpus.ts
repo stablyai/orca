@@ -145,6 +145,17 @@ export const AGENT_SOURCE_OUTPUT_SCREENS: readonly TerminalCredentialPromptCase[
       '    // Sign in with the provider console to continue'
     ]
   ],
+  // A ternary consequent with no punctuation at all: no quotes, braces, brackets or arrows, so the
+  // code-shape test cannot see it. The only thing holding it clean is that the agent's caret sits
+  // in the composer region -- above its model footer, not on the bottom row.
+  [
+    'bare identifier ternary above a codex caret and its model footer',
+    ['      ? login', '', '\u203a Ask Codex to do anything', '', '  gpt-6 medium \u00b7 ~/repo']
+  ],
+  [
+    'bare identifier ternary above an opencode caret and status bar',
+    ['      ? authorization', '', '\u276f ', 'opencode  anthropic/claude-opus-4  ~/repo']
+  ],
   // Prose that merely ENDS on a credential noun, which an unanchored ask verb read as a prompt.
   sourceRow(
     'wrapped comment ending on a credential noun',

@@ -80,6 +80,9 @@ export const AUTH_FLOW_SAMPLES: readonly string[] = [
   ...expand(AUTH_TOPIC_FLOW_SOURCE)
 ]
 
+/** Every auth verb the detector knows, as a plain phrase ("sign in", "authorization"). */
+export const AUTH_VERB_SAMPLES: readonly string[] = expand(AUTH_VERB_SOURCE)
+
 /**
  * Shapes a credential term appears in when it is OUTPUT rather than a prompt. Each takes the term
  * and returns the row as the grid would show it.
@@ -102,23 +105,51 @@ export const NON_PROMPT_ROW_SHAPES: readonly ((term: string) => string)[] = [
   (term) => `> Refactor the ${term} module`
 ]
 
-/** Composer chrome an idle agent leaves on the bottom rows. */
+/**
+ * Composer chrome as agents ACTUALLY draw it, footers included.
+ *
+ * These were hand-written ending on the caret, which is the mistake this file exists to stop:
+ * every real agent draws something UNDER its caret — Codex a model footer, OpenCode a status bar,
+ * droid a key-hint row — and a suppression keyed on the literal bottom row missed all of them.
+ */
 export const AGENT_COMPOSER_TAILS: readonly (readonly [string, string[]])[] = [
-  ['codex', ['› Ask Codex to do anything']],
-  ['claude', ['✳ Claude Code', '> ']],
-  ['opencode', ['❯ ']],
-  ['gemini', ['◇ ']]
+  ['codex', ['', '› Ask Codex to do anything', '', '  gpt-6 medium · ~/repo']],
+  ['codex-bare', ['', '› Ask Codex to do anything']],
+  ['claude', ['', '✳ Claude Code', '> ']],
+  ['claude-bare', ['', '> ']],
+  ['opencode', ['', '❯ ', 'opencode  anthropic/claude-opus-4  ~/repo']],
+  ['gemini', ['', '◇ ']],
+  ['droid', ['', '  droid · claude-opus-4 · ~/repo', '  ⏎ send  ⇧⏎ newline']],
+  ['command-code', ['', ':: done', '❯ Ask your question...']],
+  ['cursor-agent', ['', '  Cursor Agent', '  → ']],
+  ['antigravity', ['', 'Antigravity CLI', 'gemini 3 pro (high)', '>']],
+  ['crush', ['', '╭────╮', '│ > │', '╰────╯']],
+  ['aider', ['', 'Aider v0.86.1', '> ']],
+  ['grok', ['', '│ > ask grok anything │', '╰───╯ [stable]']]
 ]
-
-/** Every auth verb the detector knows, as a plain phrase ("sign in", "authorization"). */
-export const AUTH_VERB_SAMPLES: readonly string[] = expand(AUTH_VERB_SOURCE)
 
 /**
  * A term rendered as an identifier, which is what `\b` mistakes for the word itself: `user.login`
  * is a property access, not somebody logging in.
+ *
+ * Why `_` and not stripping spaces: the vocabulary spells most nouns with a separator
+ * (`access[ _-]tokens?`), so `accesstoken` matches nothing and the probe proves nothing about the
+ * lookbehind it claims to exercise. `access_token` is both the real identifier form and a string
+ * the vocabulary still matches.
  */
 export function asPropertyAccess(term: string): string {
-  return `    const owner = candidate.${term.replace(/ /g, '')}`
+  return `    const owner = candidate.${term.replace(/ /g, '_')}`
+}
+
+/**
+ * Terms whose identifier form the vocabulary can still match. A noun spelled with a literal space
+ * (`verification codes?`) cannot appear in an identifier at all, so a property access could never
+ * corroborate it and a probe using it would pass vacuously. Exported so the suite can assert how
+ * many terms are live rather than trusting that the loop ran.
+ */
+export function identifierMatchableTerms(terms: readonly string[]): string[] {
+  const vocabulary = new RegExp(`(?:${CREDENTIAL_NOUN_SOURCE}|${AUTH_VERB_SOURCE})`, 'i')
+  return terms.filter((term) => vocabulary.test(term.replace(/ /g, '_')))
 }
 
 /**
