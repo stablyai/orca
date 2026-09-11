@@ -9,6 +9,7 @@ export function getDshConsoleStatusPluginSource(): string {
 import { createRequire } from 'node:module';
 import { request as httpRequest } from 'node:http';
 const require = createRequire(import.meta.url);
+// Shared with OpenCode; references to its process below mean the DSH process here.
 ${getStatusPluginEndpointSource().join('\n')}
 ${String.raw`
 export const name = 'orca-dsh-console-status';

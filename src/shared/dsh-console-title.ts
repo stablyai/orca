@@ -6,14 +6,15 @@ export function isDshConsoleTitle(title: string): boolean {
 }
 
 export function getDshConsoleTitleStatus(title: string): 'working' | 'permission' | 'idle' | null {
-  if (!isDshConsoleTitle(title)) {
+  const normalizedTitle = title.trim()
+  if (!isDshConsoleTitle(normalizedTitle)) {
     return null
   }
-  if (/action required$/i.test(title)) {
+  if (/action required$/i.test(normalizedTitle)) {
     return 'permission'
   }
-  if (/^[\u2800-\u28ff]/.test(title.trim())) {
+  if (/^[\u2800-\u28ff]/.test(normalizedTitle)) {
     return 'working'
   }
-  return / ready$/i.test(title) ? 'idle' : null
+  return / ready$/i.test(normalizedTitle) ? 'idle' : null
 }

@@ -34,6 +34,46 @@ const launchEnv = root
 test.use({ launchEnv })
 test.skip(!root, 'Set ORCA_DSH_CONSOLE_ACCEPTANCE_ROOT to an isolated published-package fixture')
 
+test('Escape leaves a running DSH tool active until Ctrl+C aborts it', async ({
+  orcaPage
+}, testInfo) => {
+  test.setTimeout(120_000)
+  await waitForSessionReady(orcaPage)
+  const worktreeId = await waitForActiveWorktree(orcaPage)
+  const plan = buildAgentStartupPlan({
+    agent: 'dsh-console',
+    prompt: 'Use bash to run sleep 30 in the foreground. Do not run it in the background.',
+    cmdOverrides: {},
+    platform: process.platform
+  })!
+  const tabId = await launchPublishedDshPlan(orcaPage, worktreeId, plan)
+  const tab = orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${tabId}"]`)
+  await expect
+    .poll(async () => stripVTControlCharacters(await getTerminalContent(orcaPage, 100_000)), {
+      timeout: 30_000
+    })
+    .toMatch(/│\s*[⊶⊷]\s+sleep 30\s*│/)
+  await focusActiveTerminalInput(orcaPage)
+  await orcaPage.keyboard.press('Escape')
+  // Let Orca's 500 ms key-inference window elapse before checking the native DSH behavior.
+  await orcaPage.waitForTimeout(750)
+  await expect(tab).toHaveAttribute('data-agent-activity-status', 'working')
+  expect(stripVTControlCharacters(await getTerminalContent(orcaPage, 100_000))).toMatch(
+    /│\s*[⊶⊷]\s+sleep 30\s*│/
+  )
+  await orcaPage.screenshot({ path: testInfo.outputPath('dsh-console-escape-working.png') })
+  await orcaPage.keyboard.press('Control+c')
+  await expect(tab).toHaveAttribute('data-agent-activity-status', 'interrupted', {
+    timeout: 60_000
+  })
+  await expect
+    .poll(async () => stripVTControlCharacters(await getTerminalContent(orcaPage, 100_000)))
+    .toContain('Request cancelled.')
+  await orcaPage.screenshot({ path: testInfo.outputPath('dsh-console-ctrl-c-interrupted.png') })
+  await submitDshInput(orcaPage, '/quit')
+  await expect(tab).not.toHaveAttribute('data-tab-title', /DSH Console/, { timeout: 15_000 })
+})
+
 test('published DSH Console launches from the menu and completes multiple turns', async ({
   orcaPage
 }, testInfo) => {

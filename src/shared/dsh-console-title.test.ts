@@ -4,6 +4,7 @@ import {
   getAgentLabel,
   normalizeTerminalTitle
 } from './agent-detection'
+import { getDshConsoleTitleStatus } from './dsh-console-title'
 import { collectAgentTitleEvidence } from './agent-title-evidence'
 import {
   normalizeCompatibleAgentTitleForOwner,
@@ -33,4 +34,17 @@ describe('published DSH Console shared title glyphs', () => {
     expect(collectAgentTitleEvidence('DSH Console (workspace)').agent).toBe('dsh-console')
     expect(collectAgentTitleEvidence('review DSH Console integration').agent).toBeNull()
   })
+})
+
+it.each([
+  [' DSH Console ready ', 'idle'],
+  ['\tDSH Console ready\r\n', 'idle'],
+  [' DSH Console - action required ', 'permission'],
+  ['\tDSH Console - action required\r\n', 'permission'],
+  [' ⠋ DSH Console ', 'working'],
+  ['\t⠋ DSH Console\r\n', 'working'],
+  [' DSH Console (workspace) ', null],
+  [' review DSH Console ready ', null]
+] as const)('normalizes whitespace before classifying %j', (title, expected) => {
+  expect(getDshConsoleTitleStatus(title)).toBe(expected)
 })
