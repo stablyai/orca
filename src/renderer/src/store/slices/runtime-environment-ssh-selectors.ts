@@ -1,5 +1,9 @@
 import type { AppState } from '../types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import {
+  isConnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 
 type RuntimeAwareSshReadState = Pick<
   AppState,
@@ -11,8 +15,13 @@ type RuntimeAwareSshReadState = Pick<
 > &
   Partial<Pick<AppState, 'runtimeStatusByEnvironmentId'>>
 
+// Why the shared verdict and not `entry.status`: an unverifiable probe nulls it while the
+// transport is still up, and blanking the mirrored SSH rows of a host that never went away
+// reads as "the targets vanished" (docs/reference/ssh-execution-boundary.md).
 function isEnvironmentReachable(state: RuntimeAwareSshReadState, environmentId: string): boolean {
-  return Boolean(state.runtimeStatusByEnvironmentId?.get(environmentId)?.status)
+  return isConnectedRuntimeHostState(
+    runtimeHostConnectionStateForEntry(state.runtimeStatusByEnvironmentId?.get(environmentId))
+  )
 }
 
 export function selectRuntimeAwareSshStatus(
