@@ -3,7 +3,7 @@
 // `unknown` is never raised by elapsed time; what survives is a process fact that
 // ENDS THE WAIT without answering it. Nothing here proves a message reached a
 // provider, and nothing here proves it did not: a fact that proves non-delivery
-// is a rejection and lives in `journal-dispatch-rejection-reasons.ts`.
+// is a rejection and lives in `structured-agent-session-dispatch-rejection.ts`.
 //
 // That leaves the invariant this file exists to state: Orca NEVER re-delivers a
 // message under its own id on the strength of an `unknown`, whatever the reason
