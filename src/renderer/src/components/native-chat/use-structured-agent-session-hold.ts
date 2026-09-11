@@ -8,23 +8,71 @@
 //
 // The release CHAINS off the hold rather than racing it: an unmount during the hold's round trip
 // would otherwise release a hold that has not landed yet, and the late hold would never be undone.
+//
+// Neither call is swallowed. Hold is what reacquires a provider for a restored session, so its
+// outcome is the pane's state, and a release that failed is the one way a provider child outlives
+// every surface with nothing anywhere to say so.
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { structuredAgentSessionHolderId } from '../../../../shared/structured-agent-session-holder'
-import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  runtimeEnvironmentSupportsCapability,
+  type RuntimeClientTarget
+} from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import {
+  classifyStructuredAgentSessionHoldFailure,
+  type StructuredAgentSessionHoldOutcome,
+  type StructuredAgentSessionHoldState
+} from './structured-agent-session-hold-outcome'
+
+type HoldParams = { sessionId: string; holderId: string }
+
+async function acquireHold(
+  target: RuntimeClientTarget,
+  params: HoldParams
+): Promise<StructuredAgentSessionHoldOutcome> {
+  if (target.kind === 'environment') {
+    // Negotiated, never speculative: a refusal from a host that has no hold method is
+    // indistinguishable from a real one, and asking a host that never answered is a wake this
+    // pane has no reason to make.
+    try {
+      const supported = await runtimeEnvironmentSupportsCapability(
+        target.environmentId,
+        STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY
+      )
+      if (!supported) {
+        return { kind: 'unsupported' }
+      }
+    } catch {
+      return { kind: 'unreachable' }
+    }
+  }
+  try {
+    await callStructuredAgentSession(target, 'agentSession.hold', params)
+    return { kind: 'held' }
+  } catch (error) {
+    return classifyStructuredAgentSessionHoldFailure(
+      error,
+      target.kind === 'environment' ? 'paired' : 'local'
+    )
+  }
+}
 
 export function useStructuredAgentSessionHold(args: {
   sessionId: string
   target: RuntimeClientTarget
   surface: string
   enabled?: boolean
-}): void {
+}): { state: StructuredAgentSessionHoldState; retry: () => void } {
   const { enabled = true, sessionId, surface, target } = args
   // Keyed by VALUE, not identity: callers build the target inline, so an identity dependency would
   // release and re-take the hold on every render of the pane.
   const targetKey = target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
   const targetRef = useRef(target)
+  const [attempt, setAttempt] = useState(0)
+  const [state, setState] = useState<StructuredAgentSessionHoldState>({ kind: 'idle' })
   // Synced in an effect declared first (so it lands before the hold below) rather than in render:
   // a render React discards must not leak its target into the next commit.
   useEffect(() => {
@@ -32,22 +80,36 @@ export function useStructuredAgentSessionHold(args: {
   }, [target])
   useEffect(() => {
     if (!enabled) {
+      setState((current) => (current.kind === 'idle' ? current : { kind: 'idle' }))
       return
     }
     const runtimeTarget = targetRef.current
     const holderId = structuredAgentSessionHolderId(surface)
-    const held = callStructuredAgentSession(runtimeTarget, 'agentSession.hold', {
-      sessionId,
-      holderId
-      // An older host has no such method; the session still reads, it just is not held.
-    }).catch(() => undefined)
+    let mounted = true
+    setState({ kind: 'pending' })
+    const held = acquireHold(runtimeTarget, { sessionId, holderId })
+    void held.then((outcome) => {
+      if (mounted) {
+        setState(outcome)
+      }
+    })
     return () => {
-      void held.then(() =>
-        callStructuredAgentSession(runtimeTarget, 'agentSession.release', {
+      mounted = false
+      void held.then((outcome) => {
+        if (outcome.kind !== 'held') {
+          return
+        }
+        void callStructuredAgentSession(runtimeTarget, 'agentSession.release', {
           sessionId,
           holderId
-        }).catch(() => undefined)
-      )
+        }).catch((error) => {
+          // Nothing is on screen to tell by the time this runs; the log is the only witness that
+          // the host is still holding a provider child for a surface that is gone.
+          console.warn('[agent-session] release failed', sessionId, error)
+        })
+      })
     }
-  }, [enabled, sessionId, surface, targetKey])
+  }, [attempt, enabled, sessionId, surface, targetKey])
+  const retry = useCallback(() => setAttempt((current) => current + 1), [])
+  return { state, retry }
 }

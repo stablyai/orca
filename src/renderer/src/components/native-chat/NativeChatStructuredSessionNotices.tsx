@@ -7,6 +7,41 @@ import { RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { StructuredAgentSessionController } from './use-structured-agent-session'
+import type { StructuredAgentSessionHoldState } from './structured-agent-session-hold-outcome'
+
+// The only honest sentence about a structured session's lifetime: holds are connection-scoped and
+// the host's release grace is 15 seconds, so nothing runs on while the pane is away.
+function holdLifetimeNote(): string {
+  return translate(
+    'components.native-chat.structuredSessionHoldLifetime',
+    'The in-flight turn and its approvals survive going offline; idle sessions park after about 15 seconds and resume on demand.'
+  )
+}
+
+function holdRefusalNote(code: string): string {
+  if (code === 'execution_owner_reconciling') {
+    return translate(
+      'components.native-chat.structuredSessionHoldReconciling',
+      'Orca is still working out who owns this session on its host, so it is not reserved yet.'
+    )
+  }
+  if (code === 'agent_session_conflict') {
+    return translate(
+      'components.native-chat.structuredSessionHoldConflict',
+      'Another surface already holds this session on its host, so this pane did not reserve it.'
+    )
+  }
+  if (code === 'agent_session_ownership_unknown') {
+    return translate(
+      'components.native-chat.structuredSessionHoldOwnerUnknown',
+      'This session\u2019s host could not prove who owns it, so this pane did not reserve it.'
+    )
+  }
+  return translate(
+    'components.native-chat.structuredSessionHoldFailed',
+    'This session could not be reserved on its host.'
+  )
+}
 
 function NoticeRow({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -23,6 +58,53 @@ function RetryButton({ onClick }: { onClick: () => void }): React.JSX.Element {
       {translate('auto.components.native.chat.NativeChatStructuredSession.a5e7f14068', 'Retry')}
     </Button>
   )
+}
+
+/** The two degraded states stay apart: a host that answers and lacks the method is an update
+ *  prompt, never an error; a host that never answered is the read-only one. */
+function HoldNotice({
+  hold,
+  onRetry
+}: {
+  hold: StructuredAgentSessionHoldState
+  onRetry: () => void
+}): React.JSX.Element | null {
+  if (hold.kind === 'unsupported') {
+    return (
+      <NoticeRow>
+        <span data-native-chat-hold="unsupported">
+          {translate(
+            'components.native-chat.structuredSessionHoldUnsupported',
+            'This chat\u2019s host runs an older Orca server that cannot reserve this session. Update that server to keep it reserved.'
+          )}{' '}
+          {holdLifetimeNote()}
+        </span>
+      </NoticeRow>
+    )
+  }
+  if (hold.kind === 'unreachable') {
+    return (
+      <NoticeRow>
+        <span data-native-chat-hold="unreachable">
+          {translate(
+            'components.native-chat.structuredSessionHoldUnreachable',
+            'This chat\u2019s host has not answered, so this session is not reserved. Showing the last loaded transcript; sending is off.'
+          )}{' '}
+          {holdLifetimeNote()}
+        </span>
+        <RetryButton onClick={onRetry} />
+      </NoticeRow>
+    )
+  }
+  if (hold.kind === 'refused') {
+    return (
+      <NoticeRow>
+        <span data-native-chat-hold="refused">{holdRefusalNote(hold.code)}</span>
+        <RetryButton onClick={onRetry} />
+      </NoticeRow>
+    )
+  }
+  return null
 }
 
 export function NativeChatStructuredSessionNotices({
@@ -69,6 +151,7 @@ export function NativeChatStructuredSessionNotices({
           )}
         </p>
       ) : null}
+      <HoldNotice hold={controller.hold} onRetry={controller.retryHold} />
       {controller.error || composerError ? (
         <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-destructive">
           {controller.error ?? composerError}

@@ -62,7 +62,15 @@ export function useStructuredAgentSession(args: {
   const live = isVisible && !ownerPairingStale
   // Declared first: the hold is what gives a restored session its provider child back, and the
   // read below is useless for sending until it lands.
-  useStructuredAgentSessionHold({ sessionId, target, surface: 'desktop-chat', enabled: live })
+  const hold = useStructuredAgentSessionHold({
+    sessionId,
+    target,
+    surface: 'desktop-chat',
+    enabled: live
+  })
+  // A host that never answered cannot have taken the hold a restored session needs, so the pane is
+  // looking at the last transcript it read; a write would address a host it has no contact with.
+  const readOnly = ownerPairingStale || hold.state.kind === 'unreachable'
   const { state, loadingOlder, loadOlder } = useStructuredAgentSessionRead({
     ...args,
     isVisible: live
@@ -74,7 +82,7 @@ export function useStructuredAgentSession(args: {
     stateRef
   })
   const cachedMutate = useCallback(async () => null, [])
-  const mutate = ownerPairingStale ? (cachedMutate as StructuredAgentSessionMutate) : liveMutate
+  const mutate = readOnly ? (cachedMutate as StructuredAgentSessionMutate) : liveMutate
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
@@ -209,6 +217,10 @@ export function useStructuredAgentSession(args: {
   return {
     /** Read-only view of the last transcript: this pane's owner is no longer the host on that id. */
     cached: ownerPairingStale,
+    /** Every reason this pane refuses writes, re-paired owner or unreachable host alike. */
+    readOnly,
+    hold: hold.state,
+    retryHold: hold.retry,
     conversationCommands:
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : [],
     runConversationCommand: (command: AgentSessionConversationCommand) =>
@@ -234,7 +246,7 @@ export function useStructuredAgentSession(args: {
     outbox,
     blockedClientMessageId: outboxController.blockedClientMessageId,
     send: (...input: Parameters<typeof outboxController.send>) =>
-      !ownerPairingStale && !commandPending.current && outboxController.send(...input),
+      !readOnly && !commandPending.current && outboxController.send(...input),
     retry: outboxController.retry,
     isWorking,
     workingStartedAt: turnTiming.workingStartedAt,

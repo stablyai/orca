@@ -4,6 +4,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session-jo
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
+import type { StructuredAgentSessionHoldState } from './structured-agent-session-hold-outcome'
 
 // Why: a named spy type keeps the harness's inferred return type portable across the test files.
 type StructuredSessionSpy = Mock
@@ -30,6 +31,7 @@ export function createStructuredSessionMocks() {
       launchSeed?: NativeChatLaunchSeed
       structuredTransport?: Record<string, unknown>
       isWorking?: boolean
+      canSend?: boolean
     },
     questionCardProps: null as NativeChatQuestionCardProps | null,
     promptItems: [] as AgentJournalRenderItem[],
@@ -45,7 +47,9 @@ export function createStructuredSessionMocks() {
     supportsBackgroundTaskStopAll: true,
     backgroundTasks: [] as AgentSessionBackgroundTask[],
     settledBackgroundTasks: [] as AgentSessionBackgroundTask[],
-    stopBackgroundTask: vi.fn() as StructuredSessionSpy
+    stopBackgroundTask: vi.fn() as StructuredSessionSpy,
+    hold: { kind: 'held' } as StructuredAgentSessionHoldState,
+    retryHold: vi.fn() as StructuredSessionSpy
   }
 
   const moduleFactories = {
@@ -87,6 +91,10 @@ export function createStructuredSessionMocks() {
                   ]),
             status: mocks.status,
             error: outbox.error,
+            cached: false,
+            readOnly: false,
+            hold: mocks.hold,
+            retryHold: mocks.retryHold,
             hasOlder: false,
             loadingOlder: false,
             loadOlder: vi.fn() as StructuredSessionSpy,
@@ -202,6 +210,8 @@ export function createStructuredSessionMocks() {
     mocks.stopBackgroundTask.mockReset()
     mocks.backgroundTasks = []
     mocks.settledBackgroundTasks = []
+    mocks.hold = { kind: 'held' }
+    mocks.retryHold.mockReset()
   }
 
   return { mocks, moduleFactories, resetStructuredSessionMocks }

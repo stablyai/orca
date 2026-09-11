@@ -17,6 +17,11 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
 }))
 
+// The paired host answers: without this the hold reads as unreachable and the pane stops writing.
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
+}))
+
 vi.mock('./native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: mocks.enqueueSettingsWrite
 }))
