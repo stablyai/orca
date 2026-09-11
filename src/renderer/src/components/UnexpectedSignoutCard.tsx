@@ -62,8 +62,8 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
     void useAppStore
       .getState()
       .fetchOrcaProfileAuthStatus()
-      .finally(() => {
-        if (!cancelled) {
+      .then((status) => {
+        if (!cancelled && status != null) {
           setAuthRefreshReady(true)
         }
       })
@@ -104,7 +104,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
 
   // Observe recovery independently of visibility and asynchronous version/hydration reads.
   useEffect(() => {
-    if (preview) {
+    if (preview || !authRefreshReady) {
       return
     }
     if (authStatus?.state === 'reconnect-required' && authStatus.configured && authStatus.cloud) {
@@ -123,7 +123,15 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
     } else {
       reconnectingProfile.current = null
     }
-  }, [preview, authStatus, persistedUIReady, appVersion, dismissedVersion, dismissForVersion])
+  }, [
+    preview,
+    authRefreshReady,
+    authStatus,
+    persistedUIReady,
+    appVersion,
+    dismissedVersion,
+    dismissForVersion
+  ])
 
   if (!visible) {
     return null

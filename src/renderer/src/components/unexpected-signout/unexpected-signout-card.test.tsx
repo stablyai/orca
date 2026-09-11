@@ -37,7 +37,7 @@ beforeEach(() => {
   useAppStore.setState({
     orcaProfileAuthStatus: status,
     persistedUIReady: true,
-    fetchOrcaProfileAuthStatus: vi.fn().mockResolvedValue(undefined)
+    fetchOrcaProfileAuthStatus: vi.fn().mockResolvedValue(status)
   })
 })
 afterEach(() => {
