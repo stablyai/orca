@@ -75,6 +75,30 @@ async function statusEvidence(page: Page, environmentId?: string) {
   }, environmentId)
 }
 
+async function expectWorkspaceHostAppearance(
+  page: Page,
+  disconnected: boolean,
+  hostLabel?: string
+) {
+  const cards = page.locator('[data-worktree-card-surface="true"]')
+  const card = (
+    hostLabel ? cards.filter({ has: page.getByText(hostLabel, { exact: true }) }) : cards
+  ).first()
+  await expect(card).toBeVisible()
+  await expect(card).toHaveCSS('opacity', disconnected ? '0.6' : '1')
+  const icon = card.locator(disconnected ? 'svg.lucide-server-off' : 'svg.lucide-server').first()
+  await expect(icon).toBeVisible()
+  await expect(
+    card.locator(disconnected ? 'svg.lucide-server' : 'svg.lucide-server-off')
+  ).toHaveCount(0)
+  await expect(icon).toHaveClass(disconnected ? /text-destructive/ : /text-muted-foreground/)
+  await icon.hover()
+  await expect(
+    page.getByRole('tooltip', { name: disconnected ? /disconnected/i : /Project on/ })
+  ).toBeVisible()
+  await page.mouse.move(900, 600)
+}
+
 for (const topology of ['desktop', 'headless'] as const) {
   test(`connection-owned status recovers with a ${topology} host and independent viewers`, async ({
     electronApp,
@@ -122,12 +146,14 @@ for (const topology of ['desktop', 'headless'] as const) {
         .poll(() => statusEvidence(client!.page, offlineId), { timeout: 30_000 })
         .toMatchObject({ verification: 'verified', transport: 'ready' })
       const initial = await statusEvidence(client!.page, offlineId)
+      await expectWorkspaceHostAppearance(client.page, false, 'Recovering host')
       await expect(client.page.getByText('Recovering host', { exact: true }).first()).toBeVisible()
       await client.page.screenshot({ path: testInfo.outputPath(`${topology}-recovered.png`) })
       browser = await launchPairedWebClient(electronApp, proxy.offer)
       await expect
         .poll(() => statusEvidence(browser!.page), { timeout: 30_000 })
         .toMatchObject({ verification: 'verified', transport: 'ready' })
+      await expectWorkspaceHostAppearance(browser.page, false)
       proxy.setOnline(false)
       await expect
         .poll(() => statusEvidence(client!.page, offlineId))
@@ -139,6 +165,15 @@ for (const topology of ['desktop', 'headless'] as const) {
         verification: 'verified',
         transport: 'ready'
       })
+      await expectWorkspaceHostAppearance(client.page, false, 'Recovering host')
+      await expectWorkspaceHostAppearance(client.page, false, 'Direct host')
+      await expectWorkspaceHostAppearance(browser.page, false)
+      await client.page.screenshot({
+        path: testInfo.outputPath(`${topology}-sidebar-reconnecting.png`)
+      })
+      await browser.page.screenshot({
+        path: testInfo.outputPath(`${topology}-browser-reconnecting.png`)
+      })
       proxy.setOnline(true)
       await expect
         .poll(() => statusEvidence(client!.page, offlineId), { timeout: 30_000 })
@@ -149,6 +184,8 @@ for (const topology of ['desktop', 'headless'] as const) {
       expect((await statusEvidence(client!.page, offlineId))!.sequence).toBeGreaterThan(
         initial!.sequence
       )
+      await expectWorkspaceHostAppearance(client.page, false, 'Recovering host')
+      await expectWorkspaceHostAppearance(browser.page, false)
       await browser.page.screenshot({
         path: testInfo.outputPath(`${topology}-browser-recovered.png`)
       })
@@ -158,6 +195,22 @@ for (const topology of ['desktop', 'headless'] as const) {
       await expect
         .poll(() => statusEvidence(client!.page, offlineId))
         .toMatchObject({ verification: 'blocked', transport: 'disconnected' })
+      await expectWorkspaceHostAppearance(client.page, true, 'Recovering host')
+      await expectWorkspaceHostAppearance(client.page, false, 'Direct host')
+      await client.page.screenshot({
+        path: testInfo.outputPath(`${topology}-sidebar-disconnected.png`)
+      })
+      await client.page.evaluate(async (selector) => {
+        await window.api.runtimeEnvironments.connect({ selector })
+      }, offlineId)
+      await expect
+        .poll(() => statusEvidence(client!.page, offlineId), { timeout: 30_000 })
+        .toMatchObject({ verification: 'verified', transport: 'ready' })
+      await expectWorkspaceHostAppearance(client.page, false, 'Recovering host')
+      await expectWorkspaceHostAppearance(browser.page, false)
+      await client.page.screenshot({
+        path: testInfo.outputPath(`${topology}-sidebar-restored.png`)
+      })
     } finally {
       await browser?.dispose()
       await client?.dispose()
