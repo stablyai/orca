@@ -38,6 +38,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: {
     handle: handleMock,
@@ -52,18 +53,23 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-vi.mock('./runtime-environment-request-connections', () => ({
-  sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
-  sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
-  subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
-  getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
-  reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
-  retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
-  retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
-  ensureRemoteRuntimeSharedControlConnection: vi.fn(),
-  pauseRemoteRuntimeSharedControlRetry: vi.fn(),
-  closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
-}))
+vi.mock('./runtime-environment-request-connections', async () => {
+  const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+  return withRuntimeStatusOwners({
+    sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
+    sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
+    subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
+    getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
+    reconnectRemoteRuntimeSharedControlConnection:
+      reconnectRemoteRuntimeSharedControlConnectionMock,
+    retryRemoteRuntimeSharedControlConnectionsNow:
+      retryRemoteRuntimeSharedControlConnectionsNowMock,
+    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
+    ensureRemoteRuntimeSharedControlConnection: vi.fn(),
+    pauseRemoteRuntimeSharedControlRetry: vi.fn(),
+    closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
+  })
+})
 
 import {
   invalidateRuntimeEnvironmentTransport,

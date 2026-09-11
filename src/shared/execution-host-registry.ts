@@ -1,3 +1,4 @@
+import type { RuntimeHostStatusSnapshot } from './runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
@@ -49,6 +50,7 @@ type RuntimeEnvironmentSummary = {
 }
 
 type RuntimeHostStatus = {
+  snapshot?: RuntimeHostStatusSnapshot
   status?: RuntimeStatus | null
   remoteControl?: RuntimeStatus['remoteControl'] | null
   appVersion?: string | null
@@ -158,9 +160,21 @@ function addRuntimeHost(
   const hostId = toRuntimeExecutionHostId(environmentId)
   const runtimeStatus = statusByEnvironmentId?.get(environmentId)
   const status = runtimeStatus?.status
-  const compatibility = runtimeCompatibility(status)
+  const snapshot = runtimeStatus?.snapshot
+  const metadata = status ?? snapshot?.status
+  const compatibility = runtimeCompatibility(metadata)
   const remoteControl = runtimeStatus?.remoteControl ?? status?.remoteControl
-  const controlHealth = runtimeControlHealth(remoteControl)
+  const controlHealth = snapshot?.retired
+    ? 'disconnected'
+    : snapshot?.verification === 'blocked'
+      ? 'blocked'
+      : snapshot?.transport === 'disconnected' || snapshot?.transport === 'connecting'
+        ? 'connecting'
+        : snapshot?.transport === 'ready'
+          ? compatibility?.kind === 'blocked'
+            ? 'blocked'
+            : 'available'
+          : runtimeControlHealth(remoteControl)
   setHost(hosts, {
     id: hostId,
     kind: 'runtime',
@@ -168,12 +182,12 @@ function addRuntimeHost(
     detail: 'Orca server',
     health: controlHealth ?? runtimeHealth(status, compatibility, remoteControl),
     compatibility: compatibility ?? undefined,
-    capabilities: status?.capabilities,
-    appVersion: runtimeStatus?.appVersion ?? status?.appVersion ?? null,
-    protocolVersion: status?.runtimeProtocolVersion ?? status?.protocolVersion ?? null,
+    capabilities: metadata?.capabilities,
+    appVersion: runtimeStatus?.appVersion ?? metadata?.appVersion ?? null,
+    protocolVersion: metadata?.runtimeProtocolVersion ?? metadata?.protocolVersion ?? null,
     minCompatibleClientVersion:
-      status?.minCompatibleRuntimeClientVersion ?? status?.minCompatibleMobileVersion ?? null,
-    platform: status?.hostPlatform ?? null,
+      metadata?.minCompatibleRuntimeClientVersion ?? metadata?.minCompatibleMobileVersion ?? null,
+    platform: metadata?.hostPlatform ?? null,
     remoteControlState: remoteControl ?? null,
     ...(source ? { source } : {})
   })

@@ -15,6 +15,18 @@ export async function refreshRuntimeEnvironmentStatus(
       selector: environmentId,
       timeoutMs
     })
+    if (window.api.runtimeEnvironments.getStatusSnapshots) {
+      const snapshots = await window.api.runtimeEnvironments.getStatusSnapshots()
+      const snapshot = snapshots.find((entry) => entry.environmentId === environmentId)
+      if (snapshot) {
+        publish({
+          snapshot,
+          status: snapshot.verification === 'verified' ? snapshot.status : null,
+          checkedAt: snapshot.checkedAt
+        })
+      }
+      return response.ok
+    }
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentRevision) {
       return false
