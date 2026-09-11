@@ -1,20 +1,14 @@
-import type { MarkdownNode, MarkdownRenderHelpers } from '@tiptap/core'
+import type { JSONContent, MarkdownRendererHelpers, RenderContext } from '@tiptap/core'
 import { ListItem } from '@tiptap/extension-list'
 import { applyContinuationIndent } from './rich-markdown-list-continuation-indent'
-
-type RenderContext = {
-  parentType?: string
-  index?: number
-  meta?: { parentAttrs?: { start?: number } }
-}
 
 // Why: the serializer's indent helper prepends a fixed two spaces, which is the
 // marker width only for a bullet or a single-digit ordered item.
 const BASE_INDENT = 2
 
 const baseRenderMarkdown = ListItem.config.renderMarkdown as (
-  node: MarkdownNode,
-  helpers: MarkdownRenderHelpers,
+  node: JSONContent,
+  helpers: MarkdownRendererHelpers,
   context: RenderContext
 ) => string
 
@@ -22,7 +16,7 @@ function markerWidth(context: RenderContext): number {
   if (context?.parentType !== 'orderedList') {
     return '- '.length
   }
-  const start = context.meta?.parentAttrs?.start ?? 1
+  const start = Number(context.meta?.parentAttrs?.start ?? 1)
   return `${start + (context.index ?? 0)}. `.length
 }
 
@@ -32,7 +26,7 @@ function markerWidth(context: RenderContext): number {
  * two runs need different treatment and only the paragraph's own line count
  * separates them.
  */
-function paragraphLineCount(node: MarkdownNode): number {
+function paragraphLineCount(node: JSONContent): number {
   const first = Array.isArray(node.content) ? node.content[0] : undefined
   if ((first as { type?: string } | undefined)?.type !== 'paragraph') {
     return 1
@@ -43,7 +37,7 @@ function paragraphLineCount(node: MarkdownNode): number {
 }
 
 export const RichMarkdownListItem = ListItem.extend({
-  renderMarkdown: (node, helpers, context: RenderContext) => {
+  renderMarkdown: (node, helpers, context) => {
     const width = markerWidth(context)
     const lines = baseRenderMarkdown(node, helpers, context).split('\n')
     const blockStart = paragraphLineCount(node)
