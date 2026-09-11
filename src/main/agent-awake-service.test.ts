@@ -5,7 +5,8 @@ import type { AgentAwakeStatus } from './agent-awake-service'
 vi.mock('electron', () => ({
   powerMonitor: {
     on: vi.fn(),
-    off: vi.fn()
+    off: vi.fn(),
+    isOnBatteryPower: vi.fn(() => false)
   },
   powerSaveBlocker: {
     start: vi.fn(),
@@ -57,16 +58,18 @@ function createLinuxAssertion() {
 }
 
 function createPowerMonitor() {
-  const listeners = new Set<() => void>()
+  const listeners = new Map<'resume' | 'on-battery' | 'on-ac', Set<() => void>>()
   return {
-    on: vi.fn((_event: 'resume', listener: () => void) => {
-      listeners.add(listener)
+    on: vi.fn((event: 'resume' | 'on-battery' | 'on-ac', listener: () => void) => {
+      const eventListeners = listeners.get(event) ?? new Set<() => void>()
+      eventListeners.add(listener)
+      listeners.set(event, eventListeners)
     }),
-    off: vi.fn((_event: 'resume', listener: () => void) => {
-      listeners.delete(listener)
+    off: vi.fn((event: 'resume' | 'on-battery' | 'on-ac', listener: () => void) => {
+      listeners.get(event)?.delete(listener)
     }),
     emitResume: () => {
-      for (const listener of listeners) {
+      for (const listener of listeners.get('resume') ?? []) {
         listener()
       }
     }
