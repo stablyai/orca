@@ -1,5 +1,8 @@
 import { openPopupWithOriginBar, type PopupChildWindowOptions } from './popup-origin-bar-window'
-import { cleanElectronUserAgent } from './browser-session-ua'
+import {
+  cleanElectronUserAgent,
+  type BrowserSessionRequestUserAgentResolver
+} from './browser-session-ua'
 import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
 import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
@@ -11,6 +14,58 @@ import {
 import { BrowserManagerVisibility } from './browser-manager-visibility'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
+  /** Resolve the one legacy User-Agent value the session hook must enforce for this guest request. */
+  resolveBrowserGuestRequestUserAgent(
+    request: Parameters<BrowserSessionRequestUserAgentResolver>[0]
+  ): string {
+    const firefoxUa = googleAuthUserAgent()
+    const pendingNavigation =
+      request.webContentsId === undefined
+        ? undefined
+        : this.pendingNavigationByGuestId.get(request.webContentsId)
+    // A navigation on the auth document fans out to non-auth hosts. Its current request identity
+    // is authoritative for that flow and must not be replaced by the profile/mobile default.
+    if (
+      request.currentUserAgent === firefoxUa &&
+      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
+    ) {
+      return firefoxUa
+    }
+    const overrideState =
+      request.webContentsId === undefined
+        ? undefined
+        : this.authUserAgentOverrideStateByGuestId.get(request.webContentsId)
+    const currentOverride =
+      overrideState?.pending.at(-1) &&
+      overrideState.pending.at(-1)!.sequence > (overrideState.confirmed?.sequence ?? -1)
+        ? overrideState.pending.at(-1)
+        : overrideState?.confirmed
+    if (
+      !currentOverride &&
+      request.effectiveUserAgent === firefoxUa &&
+      (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
+    ) {
+      // Direct auth navigations use WebContents.setUserAgent, which Electron fails to carry onto
+      // image/XHR/fetch requests. Read that effective guest identity so those paths stay Firefox.
+      return firefoxUa
+    }
+    if (currentOverride?.userAgent === firefoxUa) {
+      return firefoxUa
+    }
+    const browserPageId =
+      request.webContentsId === undefined
+        ? undefined
+        : this.tabIdByWebContentsId.get(request.webContentsId)
+    const mobile = browserPageId
+      ? (this.viewportUaOverrideMobileByTabId.get(browserPageId) ?? false)
+      : false
+    return buildViewportUserAgentOverride({
+      url: request.url,
+      mobile,
+      baseUserAgent: cleanElectronUserAgent(request.baseUserAgent)
+    }).userAgent
+  }
+
   // Why: navigator.userAgent (read by Google's auth JS) reflects the WebContents UA,
   // not the request header, so the header-level Firefox switch in setupGoogleAuthUserAgentOverride
   // must be matched here per navigation or the two layers disagree — itself a bot tell.
