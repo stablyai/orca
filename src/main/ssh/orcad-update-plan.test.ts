@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { assessOrcadRollback, planOrcadUpdate } from './orcad-update-plan'
+import { assessOrcadRollback, planOrcadUpdate, type OrcadTerminalCensus } from './orcad-update-plan'
 import {
   emptyOrcadActivationRecord,
   type OrcadActivationRecord,
@@ -30,7 +30,7 @@ describe('planOrcadUpdate', () => {
     const plan = planOrcadUpdate({
       record: record(),
       candidateVersion: '0.2.0+bb01',
-      census: { liveSessions: 0, startedSinceActivation: 0 }
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 0 }
     })
     expect(plan).toMatchObject({ action: 'noop' })
   })
@@ -39,7 +39,7 @@ describe('planOrcadUpdate', () => {
     const plan = planOrcadUpdate({
       record: record(),
       candidateVersion: '0.3.0+cc01',
-      census: { liveSessions: 3, startedSinceActivation: 1 }
+      census: { liveSessions: 3, startedSinceActivation: 1, liveStructuredSessions: 0 }
     })
     expect(plan).toMatchObject({ action: 'defer', code: 'orcad_update_terminals_running' })
     expect(plan.action === 'defer' && plan.reason).toContain('would not kill them')
@@ -49,7 +49,7 @@ describe('planOrcadUpdate', () => {
     const plan = planOrcadUpdate({
       record: record(),
       candidateVersion: '0.3.0+cc01',
-      census: { liveSessions: null, startedSinceActivation: null }
+      census: { liveSessions: null, startedSinceActivation: null, liveStructuredSessions: 0 }
     })
     expect(plan).toMatchObject({
       action: 'defer',
@@ -61,7 +61,7 @@ describe('planOrcadUpdate', () => {
     const plan = planOrcadUpdate({
       record: record(),
       candidateVersion: '0.3.0+cc01',
-      census: { liveSessions: null, startedSinceActivation: null },
+      census: { liveSessions: null, startedSinceActivation: null, liveStructuredSessions: 0 },
       force: true
     })
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
@@ -71,7 +71,7 @@ describe('planOrcadUpdate', () => {
     const plan = planOrcadUpdate({
       record: record(),
       candidateVersion: '0.3.0+cc01',
-      census: { liveSessions: 2, startedSinceActivation: 0 },
+      census: { liveSessions: 2, startedSinceActivation: 0, liveStructuredSessions: 0 },
       force: true
     })
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
@@ -81,9 +81,88 @@ describe('planOrcadUpdate', () => {
     const plan = planOrcadUpdate({
       record: record(),
       candidateVersion: '0.3.0+cc01',
-      census: { liveSessions: 0, startedSinceActivation: 0 }
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 0 }
     })
     expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: false })
+  })
+
+  // The restart ends structured providers outright; the daemon that saves terminals saves none
+  // of them, so the census needs its own term and its own arm.
+  it('defers rather than restarting a host with live structured agent sessions', () => {
+    const plan = planOrcadUpdate({
+      record: record(),
+      candidateVersion: '0.3.0+cc01',
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 1 }
+    })
+    expect(plan).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_structured_sessions_running'
+    })
+    expect(plan.action === 'defer' && plan.reason).toContain('would end them')
+  })
+
+  it('defers when the structured session count cannot be established', () => {
+    const plan = planOrcadUpdate({
+      record: record(),
+      candidateVersion: '0.3.0+cc01',
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: null }
+    })
+    expect(plan).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_structured_census_unavailable'
+    })
+  })
+
+  // An incomplete census is unprobeable, not empty: a producer that never learned the term must
+  // not be read as having answered zero.
+  it('never reads a census missing the structured term as zero', () => {
+    const plan = planOrcadUpdate({
+      record: record(),
+      candidateVersion: '0.3.0+cc01',
+      census: { liveSessions: 0, startedSinceActivation: 0 } as OrcadTerminalCensus
+    })
+    expect(plan).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_structured_census_unavailable'
+    })
+  })
+
+  it('names the structured loss first when terminals are live too', () => {
+    const plan = planOrcadUpdate({
+      record: record(),
+      candidateVersion: '0.3.0+cc01',
+      census: { liveSessions: 3, startedSinceActivation: 1, liveStructuredSessions: 2 }
+    })
+    expect(plan).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_structured_sessions_running'
+    })
+  })
+
+  it('says what a forced update costs the structured sessions it is about to end', () => {
+    const plan = planOrcadUpdate({
+      record: record(),
+      candidateVersion: '0.3.0+cc01',
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 2 },
+      force: true
+    })
+    expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: false })
+    expect(plan.action === 'proceed' && plan.notes.join(' ')).toContain(
+      '2 live structured agent sessions'
+    )
+  })
+
+  it('says the same when a forced update cannot count the structured sessions', () => {
+    const plan = planOrcadUpdate({
+      record: record(),
+      candidateVersion: '0.3.0+cc01',
+      census: { liveSessions: null, startedSinceActivation: null, liveStructuredSessions: null },
+      force: true
+    })
+    expect(plan).toMatchObject({ action: 'proceed', preservesLiveDaemon: true })
+    expect(plan.action === 'proceed' && plan.notes.join(' ')).toContain(
+      'unverifiable structured session count'
+    )
   })
 })
 
@@ -92,7 +171,7 @@ describe('assessOrcadRollback', () => {
     const safety = assessOrcadRollback({
       record: record(),
       snapshotPresent: true,
-      census: { liveSessions: 0, startedSinceActivation: 0 },
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 0 },
       stateWritesSinceActivation: false
     })
     expect(safety).toMatchObject({ safety: 'clean', target: '0.1.0+aa01' })
@@ -102,7 +181,7 @@ describe('assessOrcadRollback', () => {
     const safety = assessOrcadRollback({
       record: record(),
       snapshotPresent: true,
-      census: { liveSessions: 1, startedSinceActivation: 0 },
+      census: { liveSessions: 1, startedSinceActivation: 0, liveStructuredSessions: 0 },
       stateWritesSinceActivation: true
     })
     expect(safety).toMatchObject({ safety: 'lossy', target: '0.1.0+aa01' })
@@ -113,7 +192,7 @@ describe('assessOrcadRollback', () => {
     const safety = assessOrcadRollback({
       record: record(),
       snapshotPresent: true,
-      census: { liveSessions: 0, startedSinceActivation: 0 },
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 0 },
       stateWritesSinceActivation: null
     })
     expect(safety).toMatchObject({ safety: 'lossy' })
@@ -124,7 +203,7 @@ describe('assessOrcadRollback', () => {
     const safety = assessOrcadRollback({
       record: record(),
       snapshotPresent: true,
-      census: { liveSessions: 4, startedSinceActivation: 1 },
+      census: { liveSessions: 4, startedSinceActivation: 1, liveStructuredSessions: 0 },
       stateWritesSinceActivation: true
     })
     expect(safety).toMatchObject({
@@ -138,7 +217,7 @@ describe('assessOrcadRollback', () => {
     const safety = assessOrcadRollback({
       record: record(),
       snapshotPresent: false,
-      census: { liveSessions: 0, startedSinceActivation: 0 },
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 0 },
       stateWritesSinceActivation: false
     })
     expect(safety).toMatchObject({ safety: 'unsafe', code: 'orcad_rollback_snapshot_missing' })
@@ -149,7 +228,7 @@ describe('assessOrcadRollback', () => {
     const safety = assessOrcadRollback({
       record: record({ snapshot: null }),
       snapshotPresent: true,
-      census: { liveSessions: 0, startedSinceActivation: 0 },
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 0 },
       stateWritesSinceActivation: false
     })
     expect(safety).toMatchObject({ safety: 'unsafe', code: 'orcad_rollback_snapshot_missing' })
@@ -159,7 +238,7 @@ describe('assessOrcadRollback', () => {
     const safety = assessOrcadRollback({
       record: record(),
       snapshotPresent: true,
-      census: { liveSessions: 2, startedSinceActivation: null },
+      census: { liveSessions: 2, startedSinceActivation: null, liveStructuredSessions: 0 },
       stateWritesSinceActivation: false
     })
     expect(safety).toMatchObject({ safety: 'unsafe', code: 'orcad_rollback_census_unavailable' })
@@ -169,7 +248,7 @@ describe('assessOrcadRollback', () => {
     const safety = assessOrcadRollback({
       record: record({ previous: null }),
       snapshotPresent: true,
-      census: { liveSessions: 0, startedSinceActivation: 0 },
+      census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 0 },
       stateWritesSinceActivation: false
     })
     expect(safety).toMatchObject({ safety: 'unsafe', code: 'orcad_rollback_no_target' })

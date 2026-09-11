@@ -1,7 +1,7 @@
 /**
  * When an update may restart orcad, and when going back is still sound.
  *
- * Two constraints shape everything here.
+ * Three constraints shape everything here.
  *
  * **The daemon must outlive the restart.** orcad forks the terminal daemon and deliberately
  * does not kill it on stop (`orcad-daemon-supervision.ts` uses `disconnectDaemon`, never
@@ -17,6 +17,11 @@
  * on load and rewrite in place. So "is the old version able to read what the new one wrote"
  * has no answer that can be computed. That is why rollback is defined against a
  * pre-activation snapshot rather than against a version comparison.
+ *
+ * **Structured agent sessions do NOT outlive the restart.** Their provider processes are
+ * children of the orcad runtime, which the update stops and replaces, not of the daemon it
+ * preserves. So the thing that makes a terminal safe to restart under does not apply to them,
+ * and they need their own term in the census rather than being covered by the daemon's count.
  */
 import type { OrcadActivationRecord } from './orcad-activation-record'
 
@@ -32,6 +37,13 @@ export type OrcadTerminalCensus = {
    * pre-activation snapshot does not describe.
    */
   startedSinceActivation: number | null
+  /**
+   * Structured agent sessions with a live provider child, read from the session record store of
+   * the host being updated. `null` carries the same meaning as above, for the same reason, and
+   * it is a separate term because these providers are children of the orcad runtime rather than
+   * of the terminal daemon — the restart ends them instead of carrying them across.
+   */
+  liveStructuredSessions: number | null
 }
 
 export type OrcadUpdateDecision =
@@ -47,6 +59,67 @@ export type OrcadUpdateDecision =
 export type OrcadUpdateDeferCode =
   | 'orcad_update_terminals_running'
   | 'orcad_update_terminal_census_unavailable'
+  | 'orcad_update_structured_sessions_running'
+  | 'orcad_update_structured_census_unavailable'
+
+type OrcadUpdateDeferral = Extract<OrcadUpdateDecision, { action: 'defer' }>
+
+/**
+ * The structured term, with an absent field read as unprobeable. A census assembled by a path
+ * that never learned this term is incomplete, and incomplete must not read as zero.
+ */
+function structuredSessionCount(census: OrcadTerminalCensus): number | null {
+  return census.liveStructuredSessions ?? null
+}
+
+/**
+ * Why structured sessions are the stricter of the two arms, and are decided first: their
+ * providers are children of the orcad runtime, not of the terminal daemon orcad deliberately
+ * preserves. The restart terminals survive kills them outright, mid-turn included, so when both
+ * are in play the operator should hear about the loss that has no way back.
+ */
+function deferForStructuredSessions(live: number | null): OrcadUpdateDeferral | null {
+  if (live === null) {
+    return {
+      action: 'defer',
+      code: 'orcad_update_structured_census_unavailable',
+      reason:
+        'The runtime did not answer how many structured agent sessions are live, so this update ' +
+        'cannot tell whether a turn is in flight. Unlike terminals, those sessions do not ' +
+        'survive the restart. Retry, or force the update knowing one may be mid-turn.'
+    }
+  }
+  if (live > 0) {
+    return {
+      action: 'defer',
+      code: 'orcad_update_structured_sessions_running',
+      reason:
+        `${live} structured agent session${live === 1 ? ' is' : 's are'} running on this host. ` +
+        'The restart would end them: their provider processes are children of orcad itself, not ' +
+        'of the daemon it preserves, so any turn in flight is lost. Update when the host is ' +
+        'idle, or force it.'
+    }
+  }
+  return null
+}
+
+/** What a forced update is choosing to lose, said plainly in the plan it returns. */
+function forcedStructuredNotes(live: number | null): string[] {
+  if (live === null) {
+    return [
+      'Forced with an unverifiable structured session count. Any live structured session is a ' +
+        'child of orcad and does not survive the restart, so a turn in flight would be lost.'
+    ]
+  }
+  if (live > 0) {
+    return [
+      `Forced with ${live} live structured agent session${live === 1 ? '' : 's'}. Unlike the ` +
+        'terminals they do not survive the restart — their providers are children of orcad — so ' +
+        'any turn in flight is lost.'
+    ]
+  }
+  return []
+}
 
 /**
  * Decide whether to restart orcad onto `candidateVersion`.
@@ -55,6 +128,9 @@ export type OrcadUpdateDeferCode =
  * non-destructive, but it leaves the host running a NEW orcad against an OLD daemon until
  * every one of those terminals exits — a mixed pair whose duration the operator, not the
  * deploy, should decide. `force` is how they decide it.
+ *
+ * Structured sessions are the harsher case — the restart ends them — so they are decided first
+ * and their loss is named in the notes whenever `force` overrides the deferral.
  */
 export function planOrcadUpdate(input: {
   record: OrcadActivationRecord
@@ -68,6 +144,14 @@ export function planOrcadUpdate(input: {
       reason: `${input.candidateVersion} is already the active version; nothing to restart.`
     }
   }
+  const structured = structuredSessionCount(input.census)
+  if (!input.force) {
+    const structuredDeferral = deferForStructuredSessions(structured)
+    if (structuredDeferral) {
+      return structuredDeferral
+    }
+  }
+  const structuredNotes = input.force ? forcedStructuredNotes(structured) : []
   const { liveSessions } = input.census
   if (liveSessions === null) {
     if (!input.force) {
@@ -88,7 +172,8 @@ export function planOrcadUpdate(input: {
       notes: [
         'Forced with an unverifiable session count. Planning as if terminals are live: the ' +
           'daemon will be preserved across the restart, and the outgoing version directory ' +
-          'stays pinned against GC.'
+          'stays pinned against GC.',
+        ...structuredNotes
       ]
     }
   }
@@ -111,7 +196,8 @@ export function planOrcadUpdate(input: {
       notes: [
         `Forced with ${liveSessions} live terminal${liveSessions === 1 ? '' : 's'}. They survive ` +
           'the restart on the existing daemon; the outgoing version directory stays pinned ' +
-          'against GC because that daemon was forked from it.'
+          'against GC because that daemon was forked from it.',
+        ...structuredNotes
       ]
     }
   }
@@ -121,7 +207,8 @@ export function planOrcadUpdate(input: {
     // daemon, so nothing is carried across and nothing is lost.
     preservesLiveDaemon: false,
     notes: [
-      'No terminals are running, so the daemon is replaced by one forked from the new bundle.'
+      'No terminals are running, so the daemon is replaced by one forked from the new bundle.',
+      ...structuredNotes
     ]
   }
 }

@@ -106,7 +106,7 @@ function options(overrides: Partial<OrcadRollbackOptions> = {}): OrcadRollbackOp
     userDataDir: '/home/u/.orca',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0 },
+    census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 0 },
     targetBuildHash: BUILD_HASH,
     readinessTimeoutMs: 50,
     sleep: async () => {},
@@ -134,7 +134,7 @@ describe('rollbackOrcad', () => {
     const log: string[] = []
     scriptHost(log)
     const result = await rollbackOrcad(
-      options({ census: { liveSessions: 3, startedSinceActivation: 2 } })
+      options({ census: { liveSessions: 3, startedSinceActivation: 2, liveStructuredSessions: 0 } })
     )
     expect(result).toMatchObject({
       outcome: 'refused',

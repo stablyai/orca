@@ -57,6 +57,7 @@ export type OrcadRollbackOptions = {
   userDataDir: string
   bindHost: string
   port: number
+  /** Live-work counts for this host, supplied by the caller; see `OrcadDeployOptions.census`. */
   census: OrcadTerminalCensus
   /** Expected build hash of the rollback target, from the client's copy of those bytes. */
   targetBuildHash: string

@@ -119,7 +119,7 @@ function options(overrides: Partial<OrcadDeployOptions> = {}): OrcadDeployOption
     userDataDir: '/home/u/.orca',
     bindHost: '127.0.0.1',
     port: 7777,
-    census: { liveSessions: 0, startedSinceActivation: 0 },
+    census: { liveSessions: 0, startedSinceActivation: 0, liveStructuredSessions: 0 },
     readinessTimeoutMs: 50,
     sleep: async () => {},
     now: () => new Date('2026-02-02T00:00:00.000Z'),
@@ -188,7 +188,7 @@ describe('deployOrcad', () => {
     }
     scriptHost(script)
     const result = await deployOrcad(
-      options({ census: { liveSessions: 2, startedSinceActivation: 0 } })
+      options({ census: { liveSessions: 2, startedSinceActivation: 0, liveStructuredSessions: 0 } })
     )
     expect(result).toMatchObject({
       outcome: 'installed-not-activated',

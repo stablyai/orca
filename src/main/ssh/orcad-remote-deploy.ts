@@ -66,9 +66,11 @@ export type OrcadDeployOptions = {
   bindHost: string
   port: number
   /**
-   * Live-terminal counts, supplied by the caller from the runtime it is already connected
-   * to. Not probed here: counting the daemon's sessions needs its protocol, and a deploy
-   * that guessed zero from silence would be the "loss of contact means death" mistake.
+   * Live-work counts for the host being updated, supplied by the caller from the runtime it is
+   * already connected to: the daemon's terminals, and the structured agent sessions in that
+   * runtime's session record store. Not probed here, because counting either needs a protocol
+   * this module does not speak — and a deploy that guessed zero from silence would be the
+   * "loss of contact means death" mistake. Every term a caller cannot establish is `null`.
    */
   census: OrcadTerminalCensus
   force?: boolean
