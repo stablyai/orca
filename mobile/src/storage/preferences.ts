@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
-const NOTIF_KEY = 'orca:pushNotificationsEnabled'
+// Consent to the push service is separate from the old socket notification choice.
+const NOTIF_KEY = 'orca:pushServiceNotificationsEnabled'
 
 export type PushNotificationsPreference = {
   readonly value: boolean | null
@@ -28,6 +29,43 @@ export async function loadPushNotificationsEnabled(): Promise<boolean> {
 
 export async function savePushNotificationsEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(NOTIF_KEY, String(enabled))
+}
+
+const REMOTE_PUSH_HOST_REGISTRATIONS_KEY = 'orca:remotePushHostRegistrations'
+
+// Why persisted: switching off while a host is offline leaves a token the gateway
+// would still push to. The pending list is the phone's side of the desktop's
+// unregister outbox — it survives a restart so the retry actually happens.
+export type RemotePushHostRegistrations = {
+  readonly registeredHostIds: readonly string[]
+  readonly pendingUnregisterHostIds: readonly string[]
+}
+
+const EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS: RemotePushHostRegistrations = {
+  registeredHostIds: [],
+  pendingUnregisterHostIds: []
+}
+
+export async function loadRemotePushHostRegistrations(): Promise<RemotePushHostRegistrations> {
+  try {
+    const raw = await AsyncStorage.getItem(REMOTE_PUSH_HOST_REGISTRATIONS_KEY)
+    if (!raw) {
+      return EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    return {
+      registeredHostIds: stringArray(parsed.registeredHostIds),
+      pendingUnregisterHostIds: stringArray(parsed.pendingUnregisterHostIds)
+    }
+  } catch {
+    return EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS
+  }
+}
+
+export async function saveRemotePushHostRegistrations(
+  value: RemotePushHostRegistrations
+): Promise<void> {
+  await AsyncStorage.setItem(REMOTE_PUSH_HOST_REGISTRATIONS_KEY, JSON.stringify(value))
 }
 
 const TEXT_SCALE_KEY = 'orca:terminalTextScale'
