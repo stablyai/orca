@@ -95,3 +95,19 @@ it('invalidates a pending result as soon as typing arrives, before the parent ec
   await act(async () => complete(diff))
   expect(result.current.fileDiff).toBeNull()
 })
+
+it('keeps the last good diff when a later recompute fails', async () => {
+  vi.mocked(requestPierreFileDiff).mockResolvedValueOnce(diff)
+  const { result, rerender } = renderHook(({ value }) => usePierreFileDiff(value), {
+    initialProps: { value: input }
+  })
+  await act(async () => vi.runOnlyPendingTimers())
+  expect(result.current.fileDiff).toBe(diff)
+
+  // A transient worker/queue failure must not unmount a live edit session.
+  vi.mocked(requestPierreFileDiff).mockRejectedValueOnce(new Error('worker unavailable'))
+  rerender({ value: { ...input, modifiedContent: 'edited' } })
+  await act(async () => vi.runOnlyPendingTimers())
+  expect(result.current.fileDiff).toBe(diff)
+  expect(result.current.error).toBe('worker unavailable')
+})

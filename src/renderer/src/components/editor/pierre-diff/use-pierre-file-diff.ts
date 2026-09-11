@@ -34,11 +34,19 @@ export function usePierreFileDiff(input: PierreDiffInput | null) {
           },
           (error: unknown) => {
             if (!controller.signal.aborted) {
-              setSnapshot({
+              setSnapshot((previous) => ({
                 input,
-                diff: null,
+                // Keep the last good render for this file. A transient worker or queue
+                // failure must not unmount a live edit session under the user's cursor;
+                // the error is surfaced alongside the still-rendered diff instead.
+                diff:
+                  previous &&
+                  previous.input.cacheKey === input.cacheKey &&
+                  previous.input.path === input.path
+                    ? previous.diff
+                    : null,
                 error: error instanceof Error ? error.message : String(error)
-              })
+              }))
             }
           }
         )

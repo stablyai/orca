@@ -299,7 +299,9 @@ export function PierreDiffSurface({
         boundaryId="editor.pierre-diff-surface"
         surface="page"
         compact
-        resetKey={fileDiff.name}
+        // Why: include the remount identity, not just the name — a caught render throw
+        // otherwise stays latched until the row unmounts, even after content changes.
+        resetKey={`${editStateKey ?? fileDiff.name}:${fileDiff.name}`}
         title={translate('editor.diff.renderFailed', 'This diff could not be rendered')}
         description={translate(
           'editor.diff.renderRetry',
