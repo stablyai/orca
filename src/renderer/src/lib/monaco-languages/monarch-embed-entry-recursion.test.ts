@@ -1,11 +1,15 @@
 import type * as Monaco from 'monaco-editor'
-import { compile } from 'monaco-editor/esm/vs/editor/standalone/common/monarch/monarchCompile.js'
-import { MonarchTokenizer } from 'monaco-editor/esm/vs/editor/standalone/common/monarch/monarchLexer.js'
 import { describe, expect, it } from 'vitest'
 import {
   EMBED_ENTRY_REST_OF_LINE_BUDGET,
   MAX_TOKENIZATION_LINE_LENGTH
 } from './monarch-embed-entry-budget'
+import {
+  createMonarchTokenizer,
+  endEmbeddedLanguages,
+  measureNestedDepth,
+  tokenizeLines
+} from './monarch-tokenizer-test-harness'
 import { astroMonarchLanguage } from './register-astro'
 import { svelteMonarchLanguage } from './register-svelte'
 import { vueMonarchLanguage } from './register-vue'
@@ -13,93 +17,15 @@ import { vueMonarchLanguage } from './register-vue'
 // Monarch tokenizes embedded languages by mutual recursion: `_nestedTokenize`
 // tail-calls `_myTokenize`, which tail-calls `_nestedTokenize` again for every
 // embed entered mid-line. V8 has no TCO, so each mid-line embed entry costs
-// real JS stack. Before the embed-entry budget, one 17_000-character line of
-// `<script></script>` (under Monaco's own 20_000 line cap) reached ~1743 nested
-// levels and died with `RangeError: Maximum call stack size exceeded` — the
-// renderer-side STATUS_STACK_OVERFLOW this suite guards.
-
-type MonarchEndState = { embeddedLanguageData?: { languageId: string } | null }
-
-type MonarchTokenizerInstance = {
-  getInitialState: () => unknown
-  tokenize: (line: string, hasEOL: boolean, state: unknown) => { endState: MonarchEndState }
-  _nestedTokenize: (...args: unknown[]) => unknown
-}
-
-function createMonarchTokenizer(
-  languageId: string,
-  language: Monaco.languages.IMonarchLanguage,
-  maxTokenizationLineLength = MAX_TOKENIZATION_LINE_LENGTH
-): MonarchTokenizerInstance {
-  // Nested languages stay unregistered: `_getNestedEmbeddedLanguageData` then
-  // hands back a null state, which changes what the embed *emits* but not
-  // whether monarch recurses into it — the depth measurement is unaffected.
-  const languageService = {
-    languageIdCodec: { encodeLanguageId: () => 1, decodeLanguageId: () => '' },
-    getLanguageIdByLanguageName: () => null,
-    getLanguageIdByMimeType: () => null,
-    isRegisteredLanguageId: () => false,
-    requestBasicLanguageFeatures: () => {}
-  }
-  const themeService = { getColorTheme: () => ({ tokenTheme: {} }) }
-  const configurationService = {
-    getValue: () => maxTokenizationLineLength,
-    onDidChangeConfiguration: () => ({ dispose: () => {} })
-  }
-
-  return new MonarchTokenizer(
-    languageService,
-    themeService,
-    languageId,
-    compile(languageId, language),
-    configurationService
-  ) as MonarchTokenizerInstance
-}
-
-type TokenizeMeasurement = { maxNestedDepth: number; error: Error | undefined }
-
-function measureNestedDepth(
-  tokenizer: MonarchTokenizerInstance,
-  lines: string[]
-): TokenizeMeasurement {
-  const nestedTokenize = tokenizer._nestedTokenize.bind(tokenizer)
-  let depth = 0
-  let maxNestedDepth = 0
-  tokenizer._nestedTokenize = (...args: unknown[]) => {
-    depth += 1
-    maxNestedDepth = Math.max(maxNestedDepth, depth)
-    try {
-      return nestedTokenize(...args)
-    } finally {
-      depth -= 1
-    }
-  }
-
-  let error: Error | undefined
-  let state = tokenizer.getInitialState()
-  try {
-    for (const line of lines) {
-      state = tokenizer.tokenize(line, true, state).endState
-    }
-  } catch (thrown) {
-    error = thrown as Error
-  }
-  return { maxNestedDepth, error }
-}
-
-// The embedded language each line *ends* in — `null` means the line left the
-// tokenizer with no embed, i.e. that region renders unhighlighted.
-function embeddedLanguagePerLine(
-  tokenizer: MonarchTokenizerInstance,
-  lines: string[]
-): (string | null)[] {
-  let state: unknown = tokenizer.getInitialState()
-  return lines.map((line) => {
-    const endState = tokenizer.tokenize(line, true, state).endState
-    state = endState
-    return endState.embeddedLanguageData?.languageId ?? null
-  })
-}
+// real JS stack. Embeds cannot nest (monarchLexer throws "cannot enter embedded
+// language from within an embedded language"), so these are sequential
+// enter/exit transitions on one line, each holding a frame until the line ends.
+//
+// Before the embed-entry budget, one 17_000-character line of `<script></script>`
+// (under Monaco's own 20_000 line cap) reached ~1743 frames and threw
+// `RangeError: Maximum call stack size exceeded`. Monaco's `safeTokenize` catches
+// that per line, so the visible failure is a line that silently loses all
+// highlighting; the frame count is what this suite bounds.
 
 // 6600 is the largest `{a}` count under Monaco's line cap (19_800 chars); the
 // filter below drops it for the longer chunk shapes, so the densest embed
@@ -127,7 +53,7 @@ const PATHOLOGICAL_LINES: [string, (count: number) => string][] = [
 describe.each([
   ['svelte', svelteMonarchLanguage],
   ['astro', astroMonarchLanguage]
-])('%s embedded-tokenizer recursion depth', (languageId, language) => {
+])('%s embed-entry recursion', (languageId, language) => {
   it.each(PATHOLOGICAL_LINES)(
     'stays within the embed budget for a line of %s',
     (_name, buildLine) => {
@@ -175,12 +101,14 @@ describe.each([
     // budget, so the body starts unembedded. Every following short line must
     // recover the embed (and the `lang=` language) instead of leaving the whole
     // block unhighlighted until the closing tag.
-    const embeds = embeddedLanguagePerLine(createMonarchTokenizer(languageId, language), [
-      `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
-      '  b',
-      '  c',
-      `</${tag}>`
-    ])
+    const embeds = endEmbeddedLanguages(
+      tokenizeLines(createMonarchTokenizer(languageId, language), [
+        `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
+        '  b',
+        '  c',
+        `</${tag}>`
+      ])
+    )
 
     expect(embeds).toEqual([null, embeddedLanguageId, embeddedLanguageId, null])
   })
@@ -199,9 +127,9 @@ describe.each([
 
 describe('unguarded embedded tokenizer', () => {
   // Control: the same markup/expression shape with no budget on embed entry.
-  // Depth then tracks the interpolation count one-for-one, which is what took
-  // the renderer down; ~1700 levels is already a RangeError in this runtime,
-  // so the ramp stops short of the overflow to stay deterministic.
+  // The frame count then tracks the interpolation count one-for-one; ~1700
+  // frames is already a RangeError in this runtime, so the ramp stops short of
+  // the overflow to stay deterministic.
   const perInterpolationEmbedLanguage: Monaco.languages.IMonarchLanguage = {
     defaultToken: '',
     tokenizer: {
@@ -225,7 +153,7 @@ describe('unguarded embedded tokenizer', () => {
   })
 })
 
-describe('vue embedded-tokenizer recursion depth', () => {
+describe('vue embed-entry recursion', () => {
   const templateLine = (count: number): string =>
     `<template><p>${'{{a}}'.repeat(count)}</p></template>`
 
@@ -252,11 +180,13 @@ describe('vue embedded-tokenizer recursion depth', () => {
     ['script', 'ts', 'typescript'],
     ['style', 'scss', 'scss']
   ])('re-embeds a %s body after an over-budget opening line', (tag, lang, embeddedLanguageId) => {
-    const embeds = embeddedLanguagePerLine(createMonarchTokenizer('vue', vueMonarchLanguage), [
-      `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
-      '  b',
-      `</${tag}>`
-    ])
+    const embeds = endEmbeddedLanguages(
+      tokenizeLines(createMonarchTokenizer('vue', vueMonarchLanguage), [
+        `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
+        '  b',
+        `</${tag}>`
+      ])
+    )
 
     expect(embeds).toEqual([null, embeddedLanguageId, null])
   })
