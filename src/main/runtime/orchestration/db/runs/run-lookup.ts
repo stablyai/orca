@@ -6,6 +6,7 @@ import {
   paneKeyMatchSuffix
 } from '../pane-key-match'
 import { isEquivalentPrincipal } from '../principal-match'
+import { parseOrchestrationPrincipal } from '../../../../../shared/orchestration-principal'
 import { exposeRunTimestamps } from '../utc-timestamp'
 import { encodeRunListCursor, decodeRunListCursor } from '../run-list-cursor'
 import type { RunListPage } from '../run-list-page'
@@ -23,11 +24,20 @@ const RUNS_BOUND_TO_PANE_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_pane_key IS NOT NULL AND legacy = 0
            AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
          ORDER BY rowid`
-// Why: NO suffix pre-filter here — the after-first-':' shape would exclude reminted tab halves
-// for `pane:` principals. runs is small; the hoisted statement still hits the SyncDatabase cache.
-const RUNS_BOUND_TO_PRINCIPAL_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
-         WHERE coordinator_principal IS NOT NULL AND legacy = 0
+// Why: exact principal lookup uses the principal index; pane principals also need the existing
+// pane-leaf index so a tab-half remint does not scan historical runs. The JS equivalence check
+// remains authoritative for cross-kind and malformed values.
+const RUN_COLUMN_LIST_WITH_MATCH_ROWID = `${RUN_COLUMN_LIST}, rowid AS principal_match_rowid`
+const RUNS_BOUND_TO_PRINCIPAL_EXACT_WITH_ROWID_SQL = `SELECT ${RUN_COLUMN_LIST_WITH_MATCH_ROWID} FROM runs
+         WHERE coordinator_principal = ? AND legacy = 0
          ORDER BY rowid`
+const RUNS_BOUND_TO_PRINCIPAL_PANE_SUFFIX_WITH_ROWID_SQL = `SELECT ${RUN_COLUMN_LIST_WITH_MATCH_ROWID} FROM runs
+         WHERE legacy = 0 AND coordinator_principal LIKE 'pane:%'
+           AND coordinator_pane_key IS NOT NULL
+           AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?
+         ORDER BY rowid`
+
+type PrincipalRunCandidate = RunRow & { principal_match_rowid: number }
 
 export function getRun(this: OrchestrationDb, id: string): RunRow | undefined {
   const run = this.getRunRaw(id)
@@ -133,11 +143,29 @@ export function getCurrentRunForPrincipal(
 }
 
 export function runsBoundToPrincipal(this: OrchestrationDb, principalId: string): RunRow[] {
-  return (this.db.prepare(RUNS_BOUND_TO_PRINCIPAL_SQL).all() as RunRow[]).filter(
-    (run) =>
-      run.coordinator_principal !== null &&
-      isEquivalentPrincipal(run.coordinator_principal, principalId)
-  )
+  const parsed = parseOrchestrationPrincipal(principalId)
+  const candidates = (
+    parsed?.kind === 'pane'
+      ? [
+          ...this.db.prepare(RUNS_BOUND_TO_PRINCIPAL_EXACT_WITH_ROWID_SQL).all(principalId),
+          ...this.db
+            .prepare(RUNS_BOUND_TO_PRINCIPAL_PANE_SUFFIX_WITH_ROWID_SQL)
+            .all(paneKeyMatchSuffix(parsed.paneKey))
+        ]
+      : this.db.prepare(RUNS_BOUND_TO_PRINCIPAL_EXACT_WITH_ROWID_SQL).all(principalId)
+  ) as PrincipalRunCandidate[]
+  const unique = new Map<string, PrincipalRunCandidate>()
+  for (const candidate of candidates) {
+    unique.set(candidate.id, candidate)
+  }
+  return [...unique.values()]
+    .sort((a, b) => a.principal_match_rowid - b.principal_match_rowid)
+    .map(({ principal_match_rowid: _rowid, ...run }) => run)
+    .filter(
+      (run) =>
+        run.coordinator_principal !== null &&
+        isEquivalentPrincipal(run.coordinator_principal, principalId)
+    )
 }
 
 export function getRunRaw(this: OrchestrationDb, id: string): RunRow | undefined {

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../../db'
+import { RUN_PANE_KEY_MATCH_SUFFIX_SQL } from '../pane-key-match'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = `tab_coord:${LEAF}`
@@ -108,5 +109,31 @@ describe('run coordinator principal binding', () => {
     const raw = d.getRunRaw(run.id)!
     expect(raw.coordinator_principal).toBe(SESSION_BINDING.principalId)
     expect(raw.coordinator_handle).toBe(SESSION_BINDING.terminalHandle)
+  })
+
+  it('keeps principal lookups on bounded indexes instead of scanning historical runs', () => {
+    const d = createDb()
+    const exactPlan = d.db
+      .prepare(
+        'EXPLAIN QUERY PLAN SELECT coordinator_principal FROM runs WHERE coordinator_principal = ? AND legacy = 0'
+      )
+      .all('session:missing') as { detail: string }[]
+    expect(exactPlan.some(({ detail }) => detail.includes('idx_runs_coordinator_principal'))).toBe(
+      true
+    )
+    expect(exactPlan.some(({ detail }) => detail.includes('SCAN runs'))).toBe(false)
+
+    const panePlan = d.db
+      .prepare(
+        `EXPLAIN QUERY PLAN SELECT coordinator_principal FROM runs
+         WHERE legacy = 0 AND coordinator_principal LIKE 'pane:%'
+           AND coordinator_pane_key IS NOT NULL
+           AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL} = ?`
+      )
+      .all(LEAF) as { detail: string }[]
+    expect(panePlan.some(({ detail }) => detail.includes('idx_runs_coordinator_pane_leaf'))).toBe(
+      true
+    )
+    expect(panePlan.some(({ detail }) => detail.includes('SCAN runs'))).toBe(false)
   })
 })

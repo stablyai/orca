@@ -30,6 +30,13 @@ const PRINCIPAL_COLUMN_TUPLES = [
  * identity from a credential.
  */
 export function backfillPrincipalColumns(db: Database.Database): void {
+  // Principal lookups run on every coordinator RPC; keep exact session/unknown matches indexed.
+  // This runs after migration has added the column and is idempotent for fresh and existing DBs.
+  db.exec(
+    `CREATE INDEX IF NOT EXISTS idx_runs_coordinator_principal
+       ON runs(coordinator_principal)
+       WHERE coordinator_principal IS NOT NULL AND legacy = 0`
+  )
   for (const { table, paneColumn, principalColumn } of PRINCIPAL_COLUMN_TUPLES) {
     // Zero rows on a healthy database, so the steady-state open cost is four cheap scans.
     const candidates = db

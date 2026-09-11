@@ -17,6 +17,7 @@ function revertToV40Shape(db: OrchestrationDb): void {
   db.db.exec(`
     DROP TRIGGER IF EXISTS trg_runs_remember_coordinator_insert;
     DROP TRIGGER IF EXISTS trg_runs_remember_coordinator_update;
+    DROP INDEX IF EXISTS idx_runs_coordinator_principal;
     ALTER TABLE runs DROP COLUMN coordinator_principal;
     ALTER TABLE dispatch_contexts DROP COLUMN assignee_principal;
     ALTER TABLE dispatch_contexts DROP COLUMN creator_principal;
