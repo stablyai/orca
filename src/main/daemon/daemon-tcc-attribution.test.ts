@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
@@ -124,6 +124,53 @@ describe('macOS daemon TCC attribution health', () => {
       writePidFile({ spawnerExecPath: spawnerPath, appVersion: '1.2.2' })
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
     })
+  })
+  it('reports severed when the running daemon binary is unlinked from disk', async () => {
+    if (process.platform !== 'darwin') {
+      return
+    }
+    const daemonBin = join(dir, 'daemon-node')
+    copyFileSync(process.execPath, daemonBin)
+    chmodSync(daemonBin, 0o755)
+
+    const child = spawn(
+      daemonBin,
+      [
+        '-e',
+        'setTimeout(() => {}, 30000)',
+        'daemon-entry',
+        '--socket',
+        socketPath,
+        '--token',
+        tokenPath
+      ],
+      { stdio: 'ignore' }
+    )
+    try {
+      const startedAtMs = await getStartedAtMs(child.pid)
+      if (startedAtMs === null || !child.pid) {
+        return
+      }
+      const spawnerPath = join(dir, 'Orca')
+      writeFileSync(spawnerPath, '', 'utf8')
+      writeFileSync(
+        getDaemonPidPath(dir),
+        JSON.stringify({
+          pid: child.pid,
+          startedAtMs,
+          spawnerExecPath: spawnerPath,
+          appVersion: '1.2.3'
+        }),
+        { mode: 0o600 }
+      )
+
+      // Unlink the running daemon binary (simulating second ShipIt update removing the parked bundle)
+      rmSync(daemonBin)
+
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('severed')
+    } finally {
+      child.kill('SIGKILL')
+    }
   })
 
   it('fails open without a recorded spawning binary', async () => {
