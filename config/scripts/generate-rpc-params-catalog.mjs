@@ -22,14 +22,20 @@ const repoPath = (absolute) => posix(path.relative(REPO_ROOT, absolute))
 // Every module the catalog may import from: the extracted params modules plus the
 // pre-existing src/shared schemas the RPC methods already bind directly.
 function indexableModules() {
-  const modules = new Set(globSync('*.ts', { cwd: CONTRACT_DIR }).map((name) => path.join(CONTRACT_DIR, name)))
+  const modules = new Set(
+    globSync('*.ts', { cwd: CONTRACT_DIR }).map((name) => path.join(CONTRACT_DIR, name))
+  )
   modules.delete(OUTPUT_PATH)
   for (const file of globSync('**/*.ts', { cwd: RPC_DIR })) {
-    if (/\.test\.ts$/.test(file)) continue
+    if (file.endsWith('.test.ts')) {
+      continue
+    }
     const source = readFileSync(path.join(RPC_DIR, file), 'utf8')
     for (const [, specifier] of source.matchAll(/from\s+'(\.[^']+)'/g)) {
       const resolved = `${path.resolve(path.dirname(path.join(RPC_DIR, file)), specifier)}.ts`
-      if (resolved.startsWith(`${SHARED_DIR}${path.sep}`) && existsSync(resolved)) modules.add(resolved)
+      if (resolved.startsWith(`${SHARED_DIR}${path.sep}`) && existsSync(resolved)) {
+        modules.add(resolved)
+      }
     }
   }
   return [...modules].sort()
@@ -47,7 +53,9 @@ function loadRegistryAndSchemas(modules) {
       [
         `export { ALL_RPC_METHODS } from ${importOf(REGISTRY_ENTRY)}`,
         'export const SCHEMA_MODULES = {',
-        ...modules.map((file) => `  ${JSON.stringify(repoPath(file))}: require(${importOf(file)}),`),
+        ...modules.map(
+          (file) => `  ${JSON.stringify(repoPath(file))}: require(${importOf(file)}),`
+        ),
         '}'
       ].join('\n')
     )
@@ -74,8 +82,12 @@ function buildSchemaIndex(schemaModules) {
   const index = new Map()
   for (const [modulePath, moduleExports] of Object.entries(schemaModules)) {
     for (const [exportName, value] of Object.entries(moduleExports)) {
-      if (!value || typeof value !== 'object' || typeof value.safeParse !== 'function') continue
-      if (index.has(value)) continue
+      if (!value || typeof value !== 'object' || typeof value.safeParse !== 'function') {
+        continue
+      }
+      if (index.has(value)) {
+        continue
+      }
       index.set(value, { modulePath, exportName })
     }
   }
@@ -83,7 +95,9 @@ function buildSchemaIndex(schemaModules) {
 }
 
 function localNameFor(origin, taken) {
-  if (!taken.has(origin.exportName)) return origin.exportName
+  if (!taken.has(origin.exportName)) {
+    return origin.exportName
+  }
   const hint = path
     .basename(origin.modulePath, '.ts')
     .split('-')
@@ -91,7 +105,9 @@ function localNameFor(origin, taken) {
     .join('')
   let candidate = `${origin.exportName}Of${hint}`
   let suffix = 2
-  while (taken.has(candidate)) candidate = `${origin.exportName}Of${hint}${suffix++}`
+  while (taken.has(candidate)) {
+    candidate = `${origin.exportName}Of${hint}${suffix++}`
+  }
   return candidate
 }
 
@@ -125,14 +141,21 @@ function render({ methods, schemaModules }) {
   const byModule = new Map()
   for (const [key, local] of imports) {
     const [modulePath, exportName] = key.split('#')
-    if (!byModule.has(modulePath)) byModule.set(modulePath, [])
+    if (!byModule.has(modulePath)) {
+      byModule.set(modulePath, [])
+    }
     byModule.get(modulePath).push(local === exportName ? exportName : `${exportName} as ${local}`)
   }
   const importLines = [...byModule]
     .sort(([left], [right]) => (left < right ? -1 : 1))
     .map(([modulePath, names]) => {
-      let specifier = posix(path.relative(CONTRACT_DIR, path.join(REPO_ROOT, modulePath))).replace(/\.ts$/, '')
-      if (!specifier.startsWith('.')) specifier = `./${specifier}`
+      let specifier = posix(path.relative(CONTRACT_DIR, path.join(REPO_ROOT, modulePath))).replace(
+        /\.ts$/,
+        ''
+      )
+      if (!specifier.startsWith('.')) {
+        specifier = `./${specifier}`
+      }
       return `import { ${names.sort().join(', ')} } from '${specifier}'`
     })
 
@@ -185,11 +208,15 @@ function main() {
   const generated = formatted(render(loadRegistryAndSchemas(indexableModules())))
   const current = existsSync(OUTPUT_PATH) ? readFileSync(OUTPUT_PATH, 'utf8') : null
   if (generated === current) {
-    if (!check) console.log(`rpc params catalog already up to date: ${repoPath(OUTPUT_PATH)}`)
+    if (!check) {
+      console.log(`rpc params catalog already up to date: ${repoPath(OUTPUT_PATH)}`)
+    }
     return
   }
   if (check) {
-    console.error(`${repoPath(OUTPUT_PATH)} is out of date. Run \`pnpm run generate:rpc-params-catalog\`.`)
+    console.error(
+      `${repoPath(OUTPUT_PATH)} is out of date. Run \`pnpm run generate:rpc-params-catalog\`.`
+    )
     process.exitCode = 1
     return
   }

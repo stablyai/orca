@@ -92,7 +92,9 @@ function probesFor(schema: ZodType): [string, unknown][] {
   const probes = [...AMBIENT_PROBES]
   for (const key of objectKeys(schema)) {
     for (const [label, value] of FIELD_VALUES) {
-      if (label === 'absent') continue
+      if (label === 'absent') {
+        continue
+      }
       probes.push([`${key}:${label}`, { [key]: value }])
     }
     probes.push([`${key}:absent-with-sibling`, { __orcaUnknownKey: 'x' }])
@@ -126,8 +128,9 @@ describe('RPC params parse parity', () => {
     for (const [method, schema] of Object.entries(RPC_PARAMS_BY_METHOD)) {
       const clientSchema = clientCatalog[method]
       if (schema === null) {
-        if (clientSchema !== null)
+        if (clientSchema !== null) {
           differences.push(`${method}|shape: host has no params, client does`)
+        }
         continue
       }
       if (!clientSchema) {
@@ -135,7 +138,9 @@ describe('RPC params parse parity', () => {
         continue
       }
       for (const [probe, input] of probesFor(schema as ZodType)) {
-        if (accepted.has(`${method}|${probe}`)) continue
+        if (accepted.has(`${method}|${probe}`)) {
+          continue
+        }
         const host = hostOutcome(schema as ZodType, input)
         const client = clientOutcome(clientSchema, input)
         if (host.kind !== client.kind) {

@@ -16,13 +16,17 @@ const sourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx'])
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name)
-    if (entry.isDirectory()) return entry.name === 'node_modules' ? [] : sourceFiles(path)
+    if (entry.isDirectory()) {
+      return entry.name === 'node_modules' ? [] : sourceFiles(path)
+    }
     return [path]
   })
 }
 
 function targetsContract(path: string, specifier: string): boolean {
-  if (!specifier.startsWith('.')) return false
+  if (!specifier.startsWith('.')) {
+    return false
+  }
   const resolved = resolve(path, '..', specifier)
   return resolved === contractRoot || resolved.startsWith(`${contractRoot}/`)
 }
@@ -53,7 +57,9 @@ export function contractValueImports(path: string, source: string): string[] {
             ts.isNamedImports(clause.namedBindings) &&
             clause.namedBindings.elements.every((element) => element.isTypeOnly))
         // A bare `import './x'` has no clause at all and still emits a require.
-        if (!everyNamedIsType) offenders.push(specifier)
+        if (!everyNamedIsType) {
+          offenders.push(specifier)
+        }
       }
     }
     if (
@@ -68,7 +74,9 @@ export function contractValueImports(path: string, source: string): string[] {
           (node.exportClause !== undefined &&
             ts.isNamedExports(node.exportClause) &&
             node.exportClause.elements.every((element) => element.isTypeOnly))
-        if (!everyNamedIsType) offenders.push(specifier)
+        if (!everyNamedIsType) {
+          offenders.push(specifier)
+        }
       }
     }
     if (ts.isCallExpression(node)) {
