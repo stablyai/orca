@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '@/runtime/web-session-tab-rpc-timeout'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 
 /**
  * Per-pane park for the frame between a host's tab rows and its PTY handles.
@@ -26,6 +27,8 @@ export const HOST_MIRROR_HANDLE_GAP_DEADLINE_MS = WEB_SESSION_TAB_RPC_TIMEOUT_MS
 type HandleGapWaiter = {
   worktreeId: string
   tabId: string
+  /** Identifies the pane this wait is about; see ExpiredHandleGapVerdict. */
+  paneBinding: string
   deadline: ReturnType<typeof setTimeout>
   run: () => void
 }
@@ -43,28 +46,66 @@ const waitersByPane = new Map<string, HandleGapWaiter>()
  * re-asks about the same pane, and without a recorded verdict it would park, expire and replay
  * forever. So it is NOT cleared when the pane's row is retracted.
  *
- * The cost of that, and the reason it is written down: the key is a tab id, and a tab id is not
- * guaranteed unique over a connection — `createTab` honours caller-supplied id hints and orphan
- * adoption re-keys rows. A pane republished under a retired pane's tab id inherits "your wait
- * already expired" and skips its own wait, which is the #19735 shape. Fixing it by clearing on
- * re-park would remove the loop-breaker, so it is pinned in
- * host-mirror-handle-gap-wait-retention.test.ts rather than traded away.
+ * Sticky is not the same as "applies to whatever later holds this tab id". The key is a tab id,
+ * which is NOT unique over a connection — `createTab` honours caller-supplied id hints and orphan
+ * adoption re-keys rows — so a pane republished under a retired pane's id used to inherit "your
+ * wait already expired" and skip its own wait. That is the #19735 direction, and it is the one
+ * gap on this map that is not conservative: every other one drops a verdict and re-parks, which
+ * only ever holds longer.
+ *
+ * It is closed by identifying the PANE the verdict was about rather than by pruning, so no new
+ * trigger is needed — which matters, because every trigger any owner of this map controls fires
+ * downstream of the moment this hazard needs. The verdict carries the environment-minted PTY
+ * binding the pane held when it parked, and only answers for a pane that still holds it:
+ *
+ *  - a republished pane binds a PTY the host newly minted, so the binding differs and it gets its
+ *    own wait;
+ *  - a genuinely reattached pane holding the same PTY inherits the verdict, which is correct — the
+ *    verdict follows the PTY, not the tab id;
+ *  - a transient rowless frame does not touch the binding, so the verdict survives it. That is the
+ *    case that makes a retraction-triggered prune unsafe and this read-time check safe.
  *
  * Bounded by the panes that have parked AND expired on each environment's current connection;
  * every environment's rows are retired on its own next reconnect, by any expiry anywhere.
  */
-const expiredGenerationByPane = new Map<string, number>()
+type ExpiredHandleGapVerdict = {
+  generation: number
+  /** Sorted environment-minted PTY ids the tab's leaves held at park time; '' when none. */
+  paneBinding: string
+}
+const expiredGenerationByPane = new Map<string, ExpiredHandleGapVerdict>()
 let unsubscribeStore: (() => void) | null = null
 
 function paneWaitKey(environmentId: string, tabId: string): string {
   return `${environmentId}\0${tabId}`
 }
 
-/** True once the deadline fired for this pane on the current connection. */
+/**
+ * The environment-minted PTY ids this tab's leaves are bound to, as one comparable string.
+ *
+ * Read from the layout, not `ptyIdsByTabId`: during the handle gap the published-handle map is
+ * empty by definition — that is the gap — while the layout binding is what
+ * `tabHoldsEnvironmentPtyBinding` already uses to call the pane unverifiable rather than dead.
+ */
+function paneBindingFor(tabId: string, environmentId: string): string {
+  const bindings = useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+  return Object.values(bindings)
+    .filter(
+      (ptyId): ptyId is string =>
+        typeof ptyId === 'string' && parseRemoteRuntimePtyId(ptyId)?.environmentId === environmentId
+    )
+    .sort()
+    .join('')
+}
+
+/** True once the deadline fired for THIS pane on the current connection. */
 export function hasHostMirrorHandleWaitExpired(environmentId: string, tabId: string): boolean {
+  const verdict = expiredGenerationByPane.get(paneWaitKey(environmentId, tabId))
   return (
-    expiredGenerationByPane.get(paneWaitKey(environmentId, tabId)) ===
-    getRuntimeEnvironmentConnectionGeneration(environmentId)
+    verdict !== undefined &&
+    verdict.generation === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
+    // Why this and not the key alone: the key is a tab id, and the pane behind it can be replaced.
+    verdict.paneBinding === paneBindingFor(tabId, environmentId)
   )
 }
 
@@ -74,13 +115,18 @@ function recordExpiredWait(environmentId: string, key: string): void {
   // removed environment, which by definition expires nothing again, retained its rows for the life
   // of the process. Each key names its own environment, so the generation it must be judged against
   // is readable from the key.
-  for (const [staleKey, staleGeneration] of expiredGenerationByPane) {
+  for (const [staleKey, stale] of expiredGenerationByPane) {
     const staleEnvironmentId = staleKey.slice(0, staleKey.indexOf('\0'))
-    if (getRuntimeEnvironmentConnectionGeneration(staleEnvironmentId) !== staleGeneration) {
+    if (getRuntimeEnvironmentConnectionGeneration(staleEnvironmentId) !== stale.generation) {
       expiredGenerationByPane.delete(staleKey)
     }
   }
-  expiredGenerationByPane.set(key, getRuntimeEnvironmentConnectionGeneration(environmentId))
+  // Why the waiter's park-time binding and not a fresh read: this verdict is about the pane whose
+  // wait just ran out, and re-reading here would attribute it to whatever holds the id now.
+  expiredGenerationByPane.set(key, {
+    generation: getRuntimeEnvironmentConnectionGeneration(environmentId),
+    paneBinding: waitersByPane.get(key)?.paneBinding ?? ''
+  })
 }
 
 function stopStoreSubscriptionIfIdle(): void {
@@ -163,7 +209,13 @@ export function parkUntilHostMirrorHandleLands(
     recordExpiredWait(environmentId, key)
     releaseWaiter(key)
   }, HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
-  waitersByPane.set(key, { worktreeId, tabId, deadline, run })
+  waitersByPane.set(key, {
+    worktreeId,
+    tabId,
+    paneBinding: paneBindingFor(tabId, environmentId),
+    deadline,
+    run
+  })
   startStoreSubscription()
 }
 

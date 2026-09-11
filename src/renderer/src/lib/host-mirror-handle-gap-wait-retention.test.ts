@@ -10,6 +10,7 @@ import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   setRuntimeEnvironmentConnectionGenerationForTests
 } from '@/store/slices/runtime-status'
+import { useAppStore } from '@/store'
 
 /**
  * What the expired-verdict map actually retains, as opposed to what its comment claimed.
@@ -26,6 +27,21 @@ describe('host-mirror handle-gap expired verdicts', () => {
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS + 1)
   }
 
+  /** The layout binding the liveness check reads — what identifies the pane behind a tab id. */
+  const bindPane = (tabId: string, leafId: string, ptyId: string): void => {
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        ...useAppStore.getState().terminalLayoutsByTabId,
+        [tabId]: {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: ptyId }
+        } as never
+      }
+    } as never)
+  }
+
   beforeEach(() => {
     vi.useFakeTimers()
     resetHostMirrorHandleGapWaitsForTests()
@@ -35,6 +51,7 @@ describe('host-mirror handle-gap expired verdicts', () => {
   afterEach(() => {
     resetHostMirrorHandleGapWaitsForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
+    useAppStore.setState({ terminalLayoutsByTabId: {} } as never)
     vi.useRealTimers()
   })
 
@@ -85,26 +102,52 @@ describe('host-mirror handle-gap expired verdicts', () => {
     expect(countExpiredHostMirrorHandleGapVerdictsForTests()).toBe(2)
   })
 
-  // The residual hazard, recorded rather than fixed: the verdict is keyed on a tab id and is
-  // deliberately sticky for the life of the connection, so a pane whose row is retracted keeps its
-  // verdict. If the host ever republishes that same tab id on the same connection, the new pane
-  // inherits "your wait already expired" and skips its own — which is the #19735 shape. Clearing on
-  // re-park would remove the loop-breaker, so this is pinned as behaviour, not changed.
+  // The verdict stays sticky across a retraction — that is the loop-breaker — but it answers for
+  // the PANE it was about, not for whatever later holds the tab id. Tab ids are not unique over a
+  // connection (`createTab` honours caller-supplied id hints, orphan adoption re-keys rows), and
+  // a republished pane inheriting "your wait already expired" skips its own wait, which is the
+  // #19735 direction and the one gap here that is not conservative.
   //
-  // The tab-death prune does NOT close this, which both its author and I initially assumed it did;
-  // they measured it and told us otherwise. The reason is the trigger, not the predicate: the prune
-  // runs only inside `recordExpiredWait`, so it fires on the next expiry IN THAT ENVIRONMENT. Reuse
-  // the id before then and the entry is never swept — and once the id is republished the predicate
-  // stops matching it at all, because the tab is live again. So it is not even eventually
-  // consistent for this case. Closing it needs a trigger that fires on row retraction itself.
-  // Do not delete this test on the strength of that prune landing.
-  it('keeps a retracted pane’s verdict, so a reused tab id inherits it', () => {
+  // No prune can close it, which is what makes the read-time check the right shape: every trigger
+  // on this map fires downstream of the moment it needs. The tab-death prune runs only inside
+  // `recordExpiredWait`, so it acts on the next expiry in that environment — reuse the id before
+  // then and it never fires, and once republished its predicate stops matching because the tab is
+  // live again. A retraction trigger is unsafe for a different reason: a transient rowless frame
+  // would drop a sibling's still-valid verdict.
+  it('answers for the pane it was about, not for a new pane under the same tab id', () => {
     setRuntimeEnvironmentConnectionGenerationForTests('env-a', 1)
+    bindPane('tab-a', 'leaf-1', 'remote:env-a@@term_1')
     parkUntilHostMirrorHandleLands('env-a', 'wt-1', 'tab-a', () => {})
     expire()
     expect(hasHostMirrorHandleWaitExpired('env-a', 'tab-a')).toBe(true)
 
-    parkUntilHostMirrorHandleLands('env-a', 'wt-1', 'tab-a', () => {})
+    // The host retracts that pane and republishes a different one under the same id: a PTY it
+    // newly minted. The verdict must not carry over — this pane has never waited.
+    bindPane('tab-a', 'leaf-1', 'remote:env-a@@term_2')
+    expect(hasHostMirrorHandleWaitExpired('env-a', 'tab-a')).toBe(false)
+
+    // A genuine reattach to the SAME pty inherits it, which is correct: the verdict follows the
+    // PTY, not the tab id, and re-waiting on a pane that already gave up reopens the replay loop.
+    bindPane('tab-a', 'leaf-1', 'remote:env-a@@term_1')
     expect(hasHostMirrorHandleWaitExpired('env-a', 'tab-a')).toBe(true)
+  })
+
+  // The narrow window the case above does not reach: the pane is replaced BETWEEN park and expiry.
+  // A layout rebind is not a release condition (`waiterIsReleased` watches the handle map and the
+  // rows, not the binding), so the original waiter runs to term and records a verdict — and the
+  // verdict has to name the pane that actually did the waiting. Reading the binding at expiry
+  // instead of at park time attributes it to whoever holds the id by then, which hands the new
+  // pane a wait it never served. Both are green without this case, so it is the one that pins
+  // WHICH moment the identity is captured at.
+  it('records the pane that waited, not whatever holds the tab id when the deadline fires', () => {
+    setRuntimeEnvironmentConnectionGenerationForTests('env-a', 1)
+    bindPane('tab-a', 'leaf-1', 'remote:env-a@@term_1')
+    parkUntilHostMirrorHandleLands('env-a', 'wt-1', 'tab-a', () => {})
+
+    // Replaced mid-wait; nothing releases the waiter, so it still expires.
+    bindPane('tab-a', 'leaf-1', 'remote:env-a@@term_2')
+    expire()
+
+    expect(hasHostMirrorHandleWaitExpired('env-a', 'tab-a')).toBe(false)
   })
 })
