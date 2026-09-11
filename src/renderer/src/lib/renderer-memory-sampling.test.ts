@@ -121,6 +121,57 @@ describe('renderer memory highwater census re-arming', () => {
     expect(censuses().length).toBeLessThanOrEqual(90)
   })
 
+  // The literal fb476b1c ending: crossed 600MB, then spent 21h BELOW the mark and died at 577MB.
+  // A re-census gated on the current value never fires here, which was the whole defect.
+  it('re-censuses a renderer that crossed a mark and then settled back below it', async () => {
+    stubFootprint(658)
+    await tick()
+    await tick()
+    expect(censuses()).toHaveLength(1)
+    const firstCensus = censuses()[0]
+
+    // New workload, permanently below the mark, for 21 hours.
+    stubFootprint(577)
+    heapStats.blinkAllocatedKB = 21 * KB
+    webviewProfile = { browserWebviewCount: 1, registeredBrowserGuestCount: 1 }
+    for (let minute = 0; minute < 1260; minute += 1) {
+      await tick()
+    }
+
+    expect(censuses().length).toBeGreaterThan(1)
+    expect(censuses().at(-1)).not.toBe(firstCensus)
+    expect(censuses().at(-1)).toMatchObject({
+      thresholdPrivateMB: 600,
+      privateMB: 577,
+      blinkAllocatedMB: 21,
+      browserWebviews: 1
+    })
+    expect(censuses().length).toBeLessThanOrEqual(90)
+  })
+
+  // The retained crumb is one slot per mark, so a refresh overwrites the peak census. A renderer
+  // that released its memory must keep the peak evidence rather than ship privateMB:50 under a
+  // thresholdPrivateMB:600 label.
+  it('keeps the peak census when a renderer releases its memory', async () => {
+    stubFootprint(1200)
+    heapStats.blinkAllocatedKB = 900 * KB
+    await tick()
+    await tick()
+    // 1200MB crosses both private marks, so both slots are censused at the peak.
+    expect(censuses()).toHaveLength(2)
+
+    // Leak released: 6 hours far below the mark.
+    stubFootprint(50)
+    heapStats.blinkAllocatedKB = 1 * KB
+    for (let minute = 0; minute < 360; minute += 1) {
+      await tick()
+    }
+
+    // No refresh fired, so the retained censuses still describe the peak.
+    expect(censuses()).toHaveLength(2)
+    expect(censuses().map((c) => c.privateMB)).toEqual([1200, 1200])
+  })
+
   it('emits at most one census per mark while a renderer oscillates around it', async () => {
     stubFootprint(601)
     await tick()

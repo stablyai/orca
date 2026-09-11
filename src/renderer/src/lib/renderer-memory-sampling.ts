@@ -31,6 +31,10 @@ const RENDERER_PRIVATE_HIGHWATER_MB = [600, 1000] as const
 // stale census. 15min = 1 census per 15 samples, and the store keys retained
 // highwater crumbs by mark, so a refresh replaces the stale one.
 const RENDERER_HIGHWATER_RECENSUS_MS = 15 * 60_000
+// Why 0.9 and not 0: the retained crumb is one slot per mark, so a refresh overwrites the census
+// taken at the peak. Refreshing only while the renderer is still near the mark keeps the peak
+// evidence for a renderer that released its memory, and still re-censuses one that stays large.
+const RENDERER_HIGHWATER_RECENSUS_BAND = 0.9
 
 export type RendererSurface = 'main' | 'dashboard-popout'
 
@@ -170,7 +174,7 @@ function recordRendererMemoryHighwater(
   let crossedThreshold = false
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
-      if (ratio >= threshold && isHighwaterMarkArmed(emittedHighwaterRatios, threshold, nowMs)) {
+      if (isHighwaterCensusDue(emittedHighwaterRatios, threshold, nowMs, ratio)) {
         crossedThreshold = true
         break
       }
@@ -178,7 +182,7 @@ function recordRendererMemoryHighwater(
   }
   if (privateMB !== null) {
     for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
-      if (privateMB >= mark && isHighwaterMarkArmed(emittedPrivateHighwaterMarks, mark, nowMs)) {
+      if (isHighwaterCensusDue(emittedPrivateHighwaterMarks, mark, nowMs, privateMB)) {
         crossedThreshold = true
         break
       }
@@ -205,7 +209,7 @@ function recordRendererMemoryHighwater(
   })
   if (ratio !== null) {
     for (const threshold of RENDERER_MEMORY_HIGHWATER_RATIOS) {
-      if (ratio < threshold || !isHighwaterMarkArmed(emittedHighwaterRatios, threshold, nowMs)) {
+      if (!isHighwaterCensusDue(emittedHighwaterRatios, threshold, nowMs, ratio)) {
         continue
       }
       emittedHighwaterRatios.set(threshold, nowMs)
@@ -217,7 +221,7 @@ function recordRendererMemoryHighwater(
   }
   if (privateMB !== null) {
     for (const mark of RENDERER_PRIVATE_HIGHWATER_MB) {
-      if (privateMB < mark || !isHighwaterMarkArmed(emittedPrivateHighwaterMarks, mark, nowMs)) {
+      if (!isHighwaterCensusDue(emittedPrivateHighwaterMarks, mark, nowMs, privateMB)) {
         continue
       }
       emittedPrivateHighwaterMarks.set(mark, nowMs)
@@ -229,10 +233,29 @@ function recordRendererMemoryHighwater(
   }
 }
 
-/** Why monotonic: a wall-clock correction must not stretch or collapse the window. */
-function isHighwaterMarkArmed(emitted: Map<number, number>, mark: number, nowMs: number): boolean {
+/**
+ * A mark is due on its first crossing, and thereafter every `RENDERER_HIGHWATER_RECENSUS_MS`
+ * while the renderer stays within `RENDERER_HIGHWATER_RECENSUS_BAND` of it. Why not a strict
+ * `value >= mark`: report fb476b1c crossed 600MB then died 21h later at 577MB, and a re-census
+ * gated on the mark never fires again — that is the stale-census bug. Why not value-independent
+ * either: the refresh overwrites the one retained slot, so a renderer that released its memory
+ * would lose the census taken at its peak. Why monotonic: a wall-clock correction must not
+ * stretch or collapse the window.
+ */
+function isHighwaterCensusDue(
+  emitted: Map<number, number>,
+  mark: number,
+  nowMs: number,
+  value: number
+): boolean {
   const lastEmittedAtMs = emitted.get(mark)
-  return lastEmittedAtMs === undefined || nowMs - lastEmittedAtMs >= RENDERER_HIGHWATER_RECENSUS_MS
+  if (lastEmittedAtMs === undefined) {
+    return value >= mark
+  }
+  return (
+    nowMs - lastEmittedAtMs >= RENDERER_HIGHWATER_RECENSUS_MS &&
+    value >= mark * RENDERER_HIGHWATER_RECENSUS_BAND
+  )
 }
 
 function isFiniteHeapBytes(value: number | undefined): value is number {
