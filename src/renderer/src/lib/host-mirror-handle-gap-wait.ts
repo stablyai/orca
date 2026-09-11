@@ -46,6 +46,10 @@ function paneWaitKey(environmentId: string, tabId: string): string {
   return `${environmentId}\0${tabId}`
 }
 
+function tabIdFromPaneWaitKey(key: string): string {
+  return key.slice(key.indexOf('\0') + 1)
+}
+
 /** True once the deadline fired for this pane on the current connection. */
 export function hasHostMirrorHandleWaitExpired(environmentId: string, tabId: string): boolean {
   return (
@@ -65,10 +69,33 @@ function recordExpiredWait(environmentId: string, key: string): void {
     }
   }
   expiredGenerationByPane.set(key, generation)
+  // Why the subscription outlives the waiter: the verdict below has to be retired when a handle
+  // lands, and by then the waiter is gone.
+  startStoreSubscription()
+}
+
+/**
+ * A landed handle retires the timeout verdict for its pane.
+ *
+ * Why this is needed at all: the module's own premise was "a reconnect bumps the connection
+ * generation and arms a fresh wait", and the #19647 change in this same stack stops recording
+ * `status: null` for an unreachable host — so `connectionChanged` no longer fires across an
+ * outage on the same runtime. Without this the first timeout stuck for the rest of the
+ * generation, and the NEXT handle gap on that pane got no wait at all: straight back to the
+ * #19735 fork, with the bounded wait removed rather than merely shortened. A published handle is
+ * positive host evidence and ends the gap episode the deadline was about.
+ */
+function retireExpiredWaitsWithLandedHandles(state: HandleGapStoreState): void {
+  // Deleting the current entry mid-iteration is defined for Map, so no snapshot is needed.
+  for (const key of expiredGenerationByPane.keys()) {
+    if ((state.ptyIdsByTabId[tabIdFromPaneWaitKey(key)]?.length ?? 0) > 0) {
+      expiredGenerationByPane.delete(key)
+    }
+  }
 }
 
 function stopStoreSubscriptionIfIdle(): void {
-  if (waitersByPane.size === 0 && unsubscribeStore) {
+  if (waitersByPane.size === 0 && expiredGenerationByPane.size === 0 && unsubscribeStore) {
     unsubscribeStore()
     unsubscribeStore = null
   }
@@ -130,7 +157,9 @@ function startStoreSubscription(): void {
       return
     }
     previous = state
+    retireExpiredWaitsWithLandedHandles(state)
     releaseDueWaiters(state)
+    stopStoreSubscriptionIfIdle()
   })
 }
 
@@ -149,6 +178,10 @@ export function parkUntilHostMirrorHandleLands(
   const existing = waitersByPane.get(key)
   if (existing) {
     existing.run = run
+    // Why the worktree moves with `run`: adopting an orphaned terminal re-keys `tabsByWorktree`
+    // without re-keying the record, so a live wait left on the old worktree released on evidence
+    // about a workspace it is no longer about.
+    existing.worktreeId = worktreeId
     return
   }
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)

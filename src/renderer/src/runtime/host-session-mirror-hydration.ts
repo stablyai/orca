@@ -53,7 +53,14 @@ function drainParkedWaiters(matches: (waiter: ParkedMirrorWaiter) => boolean): v
     const waiter = parkedWaitersByWorktree.get(key)
     if (waiter) {
       parkedWaitersByWorktree.delete(key)
-      waiter.run()
+      // Why contained: `run` is the whole worktree resume sweep, and this drains from the
+      // frame-apply path. A throw would strand every sibling waiter this hydration settled and
+      // escape into the caller mid-frame. The waiter is already removed, so nothing is held.
+      try {
+        waiter.run()
+      } catch (error) {
+        console.error(`[host-mirror] parked hydration replay failed for ${key}:`, error)
+      }
     }
   }
 }
