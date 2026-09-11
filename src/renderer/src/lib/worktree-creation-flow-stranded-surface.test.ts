@@ -52,7 +52,7 @@ const store = {
   setSidebarOpen: vi.fn(),
   updateWorktreeMeta: vi.fn(),
   createWorktree: vi.fn(),
-  tabsByWorktree: {} as Record<string, { id: string }[]>,
+  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string }[]>,
   unifiedTabsByWorktree: {}
 }
 
@@ -111,6 +111,7 @@ import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { prepareRequestForCreate } from '@/lib/ephemeral-vm-worktree-creation'
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
 import { runBackgroundWorktreeCreation } from './worktree-creation-flow'
@@ -174,9 +175,10 @@ beforeEach(() => {
 })
 
 describe('a throw after createWorktree succeeds no longer strands the creation surface', () => {
-  it('activating branch: a throw in activateAndRevealWorktree is contained and the create completes', async () => {
+  it('activating branch: a throw in activateAndRevealWorktree recovers a terminal and completes', async () => {
     const request = makeRequest()
     seedPendingCreation(request)
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('recovered-tab')
     vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
       throw new Error('activation exploded')
     })
@@ -188,6 +190,15 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       'wt-1',
       expect.any(Error)
     )
+    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {}
+    )
     // Contained: completion still tears the surface down.
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
       cleanupVm: false
@@ -195,8 +206,49 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(store.activePendingCreationId).toBeNull()
     expect(shouldShowWorktreeCreationSurface(surfaceInput('terminal'))).toBe(false)
-    // The activating branch never seeds through the background path.
+  })
+
+  it('activating branch: leaves existing default tabs untouched after a partial failure', async () => {
+    const request = makeRequest({ issueCommand: { command: 'echo setup' } })
+    seedPendingCreation(request)
+    store.tabsByWorktree = { 'wt-1': [{ id: 'existing-tab' }] }
+    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+      throw new Error('reveal exploded after tab creation')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
     expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
+      cleanupVm: false
+    })
+  })
+
+  it('activating branch: does not treat a default tab as the agent launch tab', async () => {
+    const request = makeRequest({
+      agent: 'codex',
+      startupPlan: {
+        agent: 'codex',
+        launchCommand: 'codex',
+        expectedProcess: 'codex',
+        followupPrompt: null,
+        launchConfig: { agentArgs: '', agentEnv: {} }
+      }
+    })
+    seedPendingCreation(request)
+    store.tabsByWorktree = {
+      'wt-1': [{ id: 'default-tab' }, { id: 'agent-tab', launchAgent: 'codex' }]
+    }
+    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+      throw new Error('reveal exploded after default tabs were created')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+    expect(ensureAgentStartupInTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryTabId: null })
+    )
   })
 
   it('background branch: a throw in after-wake seeding is contained after tabs are seeded', async () => {
@@ -286,24 +338,39 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     expect(shouldShowWorktreeCreationSurface(surfaceInput('terminal'))).toBe(false)
   })
 
-  it('backstop: a rejection that escapes the execute promise becomes a visible error, not a stuck panel', async () => {
+  it('backstop: a rejection that escapes the execute promise becomes a visible inline error', async () => {
     // Pre-create preparation runs before the in-function try/catch.
     vi.mocked(prepareRequestForCreate).mockRejectedValue(new Error('prepare exploded'))
 
     const creationId = runBackgroundWorktreeCreation(makeRequest())
 
     await vi.waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith('prepare exploded')
+      expect(store.pendingWorktreeCreations[creationId]).toMatchObject({
+        status: 'error',
+        error: 'prepare exploded'
+      })
     })
-    expect(store.pendingWorktreeCreations[creationId]).toMatchObject({
-      status: 'error',
-      error: 'prepare exploded'
-    })
+    expect(toast.error).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).not.toHaveBeenCalled()
     expect(console.error).toHaveBeenCalledWith(
       'worktree create: unhandled failure',
       creationId,
       expect.any(Error)
     )
+  })
+
+  it('backstop: a rejection after leaving the panel is announced with a toast', async () => {
+    store.activeView = 'tasks'
+    vi.mocked(prepareRequestForCreate).mockRejectedValue(new Error('prepare exploded'))
+
+    const creationId = runBackgroundWorktreeCreation(makeRequest())
+    // The pending surface is revealed synchronously; move away before the
+    // rejected preparation reaches the fire-and-forget backstop.
+    store.activeView = 'tasks'
+
+    await vi.waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('prepare exploded')
+    })
+    expect(store.pendingWorktreeCreations[creationId]).toMatchObject({ status: 'error' })
   })
 })

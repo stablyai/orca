@@ -183,10 +183,51 @@ export async function executeWorktreeCreation(
         ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
         ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
       })
+      primaryTabId = activation === false ? null : activation.primaryTabId
     } catch (error) {
       console.error('worktree create: activate-and-reveal failed', worktree.id, error)
+      // Activation can publish the worktree before a later step throws. Do not
+      // infer a primary tab from default-tab ordering; only a fresh seed may
+      // return one here.
+      const stateAfterActivationFailure = useAppStore.getState()
+      const existingTabs = stateAfterActivationFailure.tabsByWorktree[worktree.id] ?? []
+      if (existingTabs.length === 0) {
+        try {
+          primaryTabId = ensureWorktreeHasInitialTerminal(
+            useAppStore.getState(),
+            worktree.id,
+            startupOpt,
+            result.setup,
+            preparedRequest.issueCommand,
+            result.defaultTabs,
+            {
+              ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
+              ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+            }
+          )
+        } catch (recoveryError) {
+          console.error(
+            'worktree create: activation recovery seeding failed',
+            worktree.id,
+            recoveryError
+          )
+        }
+      }
+      if (!backendSpawned) {
+        try {
+          ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+            startup: startupOpt,
+            agent: preparedRequest.agent
+          })
+        } catch (recoveryError) {
+          console.error(
+            'worktree create: activation recovery after-wake seeding failed',
+            worktree.id,
+            recoveryError
+          )
+        }
+      }
     }
-    primaryTabId = activation === false ? null : activation.primaryTabId
   } else {
     // Keep chat creation on its pending surface until the session is ready.
     const hasExplicitTerminalWork = Boolean(

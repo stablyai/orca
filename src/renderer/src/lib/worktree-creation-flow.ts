@@ -32,7 +32,11 @@ function startWorktreeCreation(creationId: string, request: WorktreeCreationRequ
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
     store.updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
-    toast.error(message)
+    // Why: the panel renders this error inline while its surface is visible;
+    // only announce it separately after the user has navigated away.
+    if (!(store.activeView === 'terminal' && store.activePendingCreationId === creationId)) {
+      toast.error(message)
+    }
   })
 }
 
