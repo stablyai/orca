@@ -85,6 +85,8 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
+      case 'signed-out':
+        return translate('auto.components.status.bar.UsageRosterPanel.notSignedIn', 'not signed in')
       case 'deferred-by-live-session':
         return translate(
           'auto.components.status.bar.tooltip.0d8d7cfe15',

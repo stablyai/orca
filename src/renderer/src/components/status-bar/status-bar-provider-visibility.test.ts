@@ -259,6 +259,18 @@ describe('getVisibleUsageProvider', () => {
     ).toBe(unavailable)
   })
 
+  it('keeps a signed-out provider visible without any managed account', () => {
+    // Why: an emptied credential store reports status error (not unavailable)
+    // so the bar shows a sign-in state instead of vanishing with no affordance.
+    const signedOut = provider('error', {
+      provider: 'claude',
+      error: 'Claude sign-in expired',
+      usageMetadata: { failureKind: 'signed-out' }
+    })
+
+    expect(getVisibleUsageProvider('claude', signedOut, usageSettings())).toBe(signedOut)
+  })
+
   it('hides providers with no live data or durable configuration', () => {
     expect(getVisibleUsageProvider('codex', null, usageSettings())).toBe(null)
     expect(getVisibleUsageProvider('grok', undefined, usageSettings())).toBe(null)

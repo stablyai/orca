@@ -139,6 +139,7 @@ export async function fetchActiveClaudeRateLimits(
 
   const credentialClassification = classifyClaudeCredentialAbsence({
     hasRefreshableCredentials: oauthCredentials.hasRefreshableCredentials,
+    hasEmptyStoredEntry: oauthCredentials.hasEmptyStoredEntry,
     keychainUnavailable: oauthCredentials.keychainUnavailable,
     managedRefreshDeferredByLivePty: options?.authPreparation?.managedRefreshDeferredByLivePty
   })
@@ -235,6 +236,19 @@ export async function fetchActiveClaudeRateLimits(
     } catch (error) {
       warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, error)
     }
+  }
+
+  // Why: an emptied credential store means signed-out, not never-configured —
+  // surface it as an error so the status bar shows a sign-in state instead of hiding.
+  if (credentialClassification.failureKind === 'signed-out') {
+    return makeClaudeUsageResult('error', 'Claude sign-in expired', {
+      ...metadataForClaudeUsageAttempt({
+        attemptedSources: attempts.attemptedSources,
+        oauthCredentials,
+        authPreparation: options?.authPreparation,
+        failureKind: 'signed-out'
+      })
+    })
   }
 
   return makeClaudeUsageResult('unavailable', 'No subscription plan — API key billing', {
