@@ -23,6 +23,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     flushSurface,
     contentIndent,
     newCardStyle,
+    provisionalWorktreeCatalog,
     compactCards,
     isFolder,
     detachedHeadDisplay,
@@ -106,9 +107,14 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     cacheStartedAt != null ||
     showMetaRowDetails
   )
-  const hasMetaRow = compactCards
+  const baseHasMetaRow = compactCards
     ? hasMetadataBadge || cacheStartedAt != null
     : hasDetailedMetaRowContent
+  // Why: a provisional row has no branch identity yet; keep the settled silhouette and
+  // leave the identity slot blank so the scan only fills it in. #20119
+  const showProvisionalCardTreatment = provisionalWorktreeCatalog && newCardStyle && !isFolder
+  const reserveProvisionalIdentityRow = showProvisionalCardTreatment && !baseHasMetaRow
+  const hasMetaRow = baseHasMetaRow || reserveProvisionalIdentityRow
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
@@ -276,6 +282,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showMetaRowDetails,
     showTitleRowIndicators,
     hasMetaRow,
+    showProvisionalCardTreatment,
+    reserveProvisionalIdentityRow,
     showHeaderActions,
     showDeleteQuickAction,
     hoverBranchName,

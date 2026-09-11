@@ -86,7 +86,8 @@ export function WorktreeCardHeader({
     showDeleteQuickAction,
     showTitleRowIndicators,
     titleRowIndicators,
-    titleWrapper
+    titleWrapper,
+    showProvisionalCardTreatment
   } = presentation
 
   return (
@@ -172,7 +173,10 @@ export function WorktreeCardHeader({
           disabled={isDeleting || affiliateListMode}
           showUnreadEmphasis={showUnreadEmphasis}
           dimReadTitle={newCardStyle}
-          className="text-[13px] leading-5"
+          className={cn(
+            'text-[13px] leading-5',
+            showProvisionalCardTreatment && 'text-muted-foreground'
+          )}
           editingClassName="flex-1"
           titleWrapper={titleWrapper}
           onEditingChange={affiliateListMode ? undefined : setTitleRenaming}

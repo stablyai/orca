@@ -42,6 +42,12 @@ export function useWorktreeCardFoundation({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const compactCards = !newCardStyle && settings?.compactWorktreeCards === true
+  // Why: a non-authoritative catalog is a metadata fallback (remote/SSH before its scan
+  // lands), so its rows are placeholders, not settled answers. #20119
+  const provisionalWorktreeCatalog = useAppStore((s) => {
+    const detected = s.detectedWorktreesByRepo?.[worktree.repoId]
+    return detected?.authoritative === false && s.startupWorktreeRefreshCompleted !== true
+  })
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -209,6 +215,7 @@ export function useWorktreeCardFoundation({
     agentActivityDisplayMode,
     projectGroups,
     newCardStyle,
+    provisionalWorktreeCatalog,
     compactCards,
     handleEditIssue,
     handleEditComment,
