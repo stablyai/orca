@@ -1,5 +1,166 @@
 # Orca live lag investigation — September 5, 2026
 
+## Consolidated performance issue register — compiled 2026-09-11
+
+Every performance issue found across the four `debug-orca-performance` sessions,
+the `debug-orca-perf-issue` sessions (worktree since deleted, branch survives as
+`origin/debug-orca-perf-issue`), and the `improve-cmd-j-dialog-performance`
+session. Each row keeps the measurement it came from. Status is what the
+evidence supports today, not what is hoped for.
+
+Companion documents in this worktree:
+`orca-persistence-design-assessment.md` (implementation spec for P1–P8),
+`docs/reference/typing-latency-field-diagnosis-2026-09-10.md` (H1–H5, R1–R8),
+`docs/reference/renderer-agent-status-performance.md`,
+`docs/reference/spinner-rendering-performance.md`.
+
+### Summary
+
+| Group | Issues | Fixed | Open |
+| --- | ---: | ---: | ---: |
+| Persistence / main-thread state writes (P) | 11 | 4 | 7 |
+| Host and machine contention (H) | 5 | 0 (operational) | 5 |
+| Main process: git and subprocess load (G) | 8 | 0 | 8 |
+| Renderer and terminal rendering (R) | 8 | 0 | 8 |
+| Terminal daemon session leak (D) | 9 | 1 | 8 |
+| Cmd-J palette search (C) | 6 | 0 (spec only) | 6 |
+
+### P — Persistence and main-thread state writes
+
+Source: `debug-orca-performance` sessions `3dc15f5c`, `411b72f9`, `484eb712`.
+Live probe on the packaged app, PID 67676, build `1.4.198-adhoc.20260907185057`,
+9.0 MB profile under `profiles/local-default/`.
+
+| # | Issue | Measured | Status |
+| --- | --- | --- | --- |
+| P1 | Terminal reattach clones the whole workspace session and forces a whole-app synchronous flush even when the binding already matches | 4 calls in 30 s, 59.15–99.80 ms each; flush 48.37–84.38 ms; overlapping renderer→main IPC 142.6–232.9 ms | **Fixed** — fast lane in `pty-binding-fast-lane.ts`, early return in `pty-binding-persistence.ts` |
+| P2 | `writeToDiskSync` returns on a hash match without raising `lastDurableWriteGeneration`, while `flushOrThrow` has already bumped `writeGeneration` | Counter parks one generation behind after every no-op flush; the fast path would silently disable itself after its first fall-through | **Fixed** — `primary-state-writes.ts` raises the counter on the unforced hash-match return |
+| P3 | The unchanged-state hash comparison runs *after* `buildStateToSave()`, so a skipped disk write still pays full serialization, encoding and hashing on main | 12 `buildStateToSave` calls in 30 s, 34.88–43.94 ms each, 468.20 ms of synchronous serialization in the window; ~9.23 MB per call | Open — deferred fix 3 |
+| P4 | State document bloat: one terminal attach serializes megabytes of unrelated history | 9,372,404 bytes total: `workspaceSession` 4,486,512; `automationRuns` 3,380,645 (661 entries); `worktreeMeta` 637,426 | Open |
+| P5 | Split tabs ping-pong the tab row's PTY id: a tab row holds one `ptyId` while a tab holds several panes, and main overwrote it with whichever pane bound, contradicting the renderer's stated rule | Real profile: 1,424 tabs, 1,764 panes, 310 split tabs, 674 panes (38%) that could never reach the fast lane | **Fixed** — `terminal-tab-pty-ownership.ts`, shared by the write path and the predicate |
+| P6 | The durability check compared two *global* counters, so any unrelated dirty state held the fast lane shut | 9 of 17 reattaches missed on `not_durable` alone, 209 ms of the 337 ms spent flushing in that window (62%) | **Fixed** — per-pane durability records in `pty-binding-durability-records.ts` |
+| P7 | A reattach that cannot find its tab mints a duplicate tab and layout instead | 16 reattaches in one minute all missed on `tab_missing, layout_missing`; 16 new tabs titled "Terminal 1" in one worktree. Dev profile 116 tabs, real profile 1,424 — the likely source of the 9 MB document | **Open, not chased** — highest-leverage remaining lead |
+| P8 | The debounced autosave serializes the same ~9 MB on main roughly once a second while state is changing | Same 34.88–43.94 ms per serialization as P3 | Open — deferred fix 3, autosave-only scope |
+| P9 | Deferred fix 2 (small binding transactions) is blocked on four consumers of the single state document | Backup rotation, the orcad snapshot member set, profile transfer, and older builds that read the file directly | Deferred |
+| P10 | The binding-writer ratchet cannot see aliased writers: `ssh/ssh-target-id-migration.ts` rewrites `tab.ptyId` and `ptyIdsByLeafId` in place through a parameter named `record` | No correctness hole today — it bumps the generation through its caller's `scheduleSave` — but the regex is a tripwire, not a proof | Open by design; recorded in the writer table |
+| P11 | Five paths mutate durable state in place without bumping `writeGeneration` (`ssh-pty-binding-cleanup`, `ssh-pty-lease-operations`, `ssh-pty-lease-tombstone-retention`, `workspace-session-snapshot-publication`, `loaded-state-adaptation`) | Reviewed and cleared for *this* fix: none sets a binding to a requested value, and the equality check catches a cleared binding. An earlier claim that all five had to be fixed first was withdrawn | Open, low severity |
+
+Fix-3 constraint worth keeping: secret encryption needs Electron `safeStorage`
+on main, the worktree-meta projection depends on reference identity a worker
+boundary destroys, and `flushOrThrow` is a synchronous barrier a worker cannot
+provide. Fix 3 is scoped to the debounced autosave only.
+
+### H — Host and machine contention
+
+Source: `debug-orca-performance` session `3a100df6`, 2026-09-10, packaged
+`1.4.200-adhoc`, main PID 87050 / renderer 87163, 18-core Apple Silicon, 128 GB.
+
+| # | Issue | Measured | Status |
+| --- | --- | --- | --- |
+| H1 | Host fully saturated — this was the primary cause of the reported lag at that moment | CPU idle 0.27%, load 28–54; 124 of 128 GB RAM used with 66 GB in the compressor; swap 47.0 of 48 GB compressing at 32 MB/s; 2,345 processes | Operational |
+| H2 | Activity Monitor (PID 67969) leaked to a 99 GB footprint, all dirty malloc, after 7 days, burning 82–101% CPU | Killing it: swap 47.0→16 GB, RAM used 124→95 GB, free 3→31 GB, CPU idle 0.3%→20% | Resolved by SIGKILL |
+| H3 | A Codex-spawned `rg --hidden` scanning the whole home directory | PID 65656, 130–340% CPU for over 3 minutes, ~16k IOPS | Operational |
+| H4 | 179 agent CLI processes (93 codex, 65 claude, 11 agy, 10 opencode) plus four dev Orca instances, one renderer at 2.6 GB | 27 GB RSS, ~200% CPU combined | Operational |
+| H5 | Earlier (2026-09-05/07) skill-discovery scan storm from release agents: `find /Users/jinjingliang -path */SKILL.md` and `rg --hidden --glob SKILL.md` over the home directory | `rg` at 314%, 351% and 390% CPU; 18 CPUs, 3,075 processes, 33,750 threads, 73.86% system, 4.92% idle, load 17.13. Remediation is targeted skill-directory discovery and dedup across release workers | Open (agent-side) |
+
+Keystroke path context: every keystroke crosses six process hops (renderer,
+main, daemon, shell, back, GPU, WindowServer). Under H1 each hop competes with a
+runqueue of 30–50 threads, and any compressed page it touches must be
+decompressed first. Ghostty is one native process, which is why it stayed fast.
+
+### G — Main process: git and subprocess load
+
+| # | Issue | Measured | Status |
+| --- | --- | --- | --- |
+| G1 | Git subprocess storm on the main process event loop | 822 `git.exec` spans in 10 minutes, 97 s of git wall time, 407–614 spawns per 5 minutes for an hour; admission queue wait p95 25 ms, max 568 ms | Open |
+| G2 | The `orca` repo itself is pathological, making every spawn slow | 630 registered worktrees, 9,266 refs, 394 pack files plus 10 abandoned `tmp_pack_*`, 266,787 loose objects (6.3 GB); `git worktree list` 1.78 s, `git status --porcelain` 0.64 s (1.5 s sys) | Operational — `git worktree prune`, `git gc` |
+| G3 | `git worktree list` re-run instead of cached | 59 calls / 20 s in one 10-minute window, ~40 calls in 10 minutes at 1.78 s each | Open — follow-up 5 |
+| G4 | node-pty and `pty:write` live in the main process (`src/main/ipc/pty/ipc/write.ts:23`); every git/gh spawn is initiated synchronously on that same loop (`src/shared/child-process/run-process.ts:51`); git stdout is decoded and parsed in the main-thread data handler (`src/main/git/command-runner/git-stream-stdout.ts:184`). Admission caps limit concurrency, not spawn count (`git-admission-state.ts:4`) | Main-process main thread measured 25% busy, mostly `OnUvRead` of child stdout and PTY socket data | Open — architectural |
+| G5 | gh PR fanout: two `gh` processes per refresh (branch lookup then `gh pr view`), triggered per visible worktree row and by a 60 s per-card timer | Serialized and budgeted, so a lesser factor | Open — follow-up 6 |
+| G6 | `could not lock config file ~/.gitconfig` — concurrent agents racing on global git config | Observed in a terminal during the capture | Open |
+| G7 | Earlier `git show-ref` fan-out: `getPullRequestRemoteRefState` → `listExactRemoteBaseRefs` (`pull-request-remote-ref-probes.ts`) → `probeExactRefs` (`git/exact-ref-probe.ts`) builds a candidate per configured remote, concurrency eight | Bursts of 18 `show-ref` calls, 17 failing, 20–31 ms each; 550 calls in 10 minutes; 191 in a 3-minute window | Open |
+| G8 | Synchronous `uv_fs_access` on the main thread from a timer callback (2026-09-05, PID 99632) | 3,033 of 8,321 main-thread samples (36.45%); renderer 90.21% idle in the same window. JS caller and pathname never identified | Open, unreproduced since |
+
+### R — Renderer and terminal rendering
+
+| # | Issue | Measured | Status |
+| --- | --- | --- | --- |
+| R1 | Main parses every PTY chunk for agent status and titles and sends a `pty:sideEffect` IPC message to the renderer per chunk (`src/main/runtime/orca-runtime-on-pty-data.ts:36`). Titles are damped to one per 500 ms; agent status and bells are not | 200 live terminals feeding the renderer regardless of visibility; five agent TUIs redrawing heavily, one opencode at 86% CPU | Open — follow-up 1 |
+| R2 | The agent status reducer builds a new object per update (`agent-status-live-reducer.ts:87`), so every status ping re-runs every Zustand selector in the app | Renderer main thread 28% average, bursts to 32%, one 5 s sample 86% busy; time spent in JIT-compiled JS and IPC deserialization, not GC or rendering | Open — follow-up 2 |
+| R3 | 27–33 terminal pane managers mounted while one is visible; park-verdict churn pins tabs mounted for 60 s at a time (`terminal-park-verdict-flip-telemetry.ts:144`, issue #15136) | Mounted panes keep xterm buffers and per-pane 3 s pollers, and share one 8 ms drain budget with the visible pane | Open — follow-up 3 |
+| R4 | The hidden-pane output gate is per tab, so a hidden pane inside the visible tab's split still gets every byte written into xterm (`terminal-pane-pty-deps.ts:55`) | — | Open — follow-up 4 |
+| R5 | Every tab reveal clears the WebGL glyph atlas for all visible terminals and forces a repaint (`pane-reveal-repaint.ts:63`) | 88 times in the current log | Open — follow-up 7 |
+| R6 | Keystroke echo through a live Orca terminal | 180–460 ms, bounded rather than measured (the CLI read itself costs ~330 ms) | Open |
+| R7 | Renderer resource accumulation across a day: heap and private memory climb, then fall back after a restart | 197→347 MB JS heap and 772–1,517 MB private memory before a restart versus 71–144 MB and 207–221 MB after; 11,330 DOM nodes, 1,119 stored terminal layouts, ~26 MB serialized store; later census 727 worktrees, 1,111 terminal tabs / 1,630 unified tabs, ~4,900–5,000 store listeners, 178 stored agent rows | Open |
+| R8 | Terminal replay wedges: `terminal_replay_guard_wedged_release` breadcrumbs, plus an unhandled "no diff result available" rejection and a `terminal_park_verdict_churn` burst | Six breadcrumbs across two panes (three events per pane, not six failures); replay-guard waits 10 s to probe and another quiet 10 s before declaring a wedge | Open, never correlated with a keystroke |
+
+Measurement caveat carried forward: the 98.8 ms median / 520.2 ms maximum
+"parse → render" figure from the 2026-09-07 echo diagnostic is **not** valid as
+paint latency. xterm invokes the write callback before firing `onWriteParsed`,
+and Orca's foreground write callback can synchronously refresh the terminal, so
+the diagnostic attributes the *next* content render to the input. Do not use it
+to justify changing xterm scheduling, synchronized output, or GPU settings.
+
+### D — Terminal daemon session leak
+
+Source: `debug-orca-perf-issue` session `9565dd27` (worktree deleted; branch
+`origin/debug-orca-perf-issue`). Documented there in
+`docs/terminal-daemon-session-leak-investigation.md`.
+
+| # | Issue | Measured | Status |
+| --- | --- | --- | --- |
+| D1 | The terminal daemon held ~427 live login shells with ~1,900 descendant processes, and the main process pinned at 100% CPU draining their PTY output | Daemon PID 22100, 5 days old, survived the app restart; a 3-second `sample` showed the main thread almost entirely inside Node stream-read callbacks | Resolved operationally by a later restart (427→73 shells, 100%→0.6% CPU); underlying leak open |
+| D2 | Sessions leak because kills fail silently | 1,745 sessions created versus 927 exited; 151 `session-kill-failed`, 108 `shell-ready-timeout`. Per-day since Aug 14: 60–200 leaked/day, 3–126 kill failures/day, no step change | Open |
+| D3 | The kill path swallowed the error, so the log said a kill failed but never why (`daemon-request-router.ts:197-201`) | Payload carried only `{sessionId, immediate, clientId}` | **Fixed** — the payload now carries `errorName` and `error`; test in `daemon-server-kill-attribution.test.ts` |
+| D4 | Rejected hypothesis: `shell-ready-timeout` caused by the Aug 18 content-addressed wrapper change (#15285) | Overlap is 138 of 1,054 timeout sessions (13%); 1,145 leaked sessions never timed out; the Aug 20 onset is an artifact of that commit *adding the log line*; a 300 ms barrier timeout only releases held bytes and never alters the process tree | Not the cause |
+| D5 | The real leak shape is `created → killed → kill-failed` with no attach and no exit; the daemon reports the session killed, a later kill fails, and the shell is never seen exiting | Most common sequence in the log. Prime suspect is `SessionNotFoundError` from `getAliveSession`: the session is gone from the map while the shell still runs | Open — D3 is what makes the next occurrence self-diagnosing |
+| D6 | Stale-daemon adoption: the daemon protocol has not moved past v36, so new app versions keep adopting an old daemon and daemon-side fixes never land | Daemon from `1.4.191` (Aug 28) still serving app `1.4.197`, later `1.4.200` — 9 then 13 days old | Open — design question: replace the daemon on app-version change, not just protocol change |
+| D7 | No session-count backstop or age-based reap, so a silently failing kill path degrades into hundreds of live shells | — | Open |
+| D8 | Sidebar flashing is the same chokepoint: per-session status churn drives sidebar re-renders | One tab flipping park state 12 times in 42 s; 29 recent `sidebar_worktree_activate`; renderer heap swinging 200–480 MB per minute | Open (same root as R3) |
+| D9 | Secondary burst: the readiness-checklist automation ran `xargs -P 64` calling `orca orchestration worker-release` | 3,481 dispatches; it ended without CPU dropping, so it was not the root cause | Operational |
+
+### C — Cmd-J palette search
+
+Source: `improve-cmd-j-dialog-performance` session `90ab767d`, verified against
+`a899f92402`. Spec: `docs/reference/cmd-j-search-performance-design.md` in that
+worktree. No code changed.
+
+| # | Issue | Measured | Status |
+| --- | --- | --- | --- |
+| C1 | Document representation is the real memory cost: `atoms`, `words` and `components` are one object per token, each holding a sliced string, so retention is ~7× the text-plus-offset estimate | 204 MiB for an 800-document long-comment fixture. Fix is packed `Int32Array` boundary tables, not eviction | Spec |
+| C2 | The `documentPayloadMb` budget in `palette-match-budget.ts` undercounts retention by that same ~7× factor | Should be replaced with a retained-heap probe | Spec |
+| C3 | The draft's 32 MiB cache budget holds ~130 of 800 documents, so the motivating fixture re-normalizes ~85% of its corpus on every new query | — | Spec — budget rejected |
+| C4 | The most frequent live invalidation was missed: `worktree-unread-activity.ts` bumps `lastActivityAt` on terminal output, replacing one `Worktree`, which replaces `allWorktrees`, which rebuilds all 800 documents while the palette is open | — | Spec — reuse rule now handles it |
+| C5 | `workspace-kanban-search.ts` calls `buildWorktreePaletteDocuments` with `evidencePolicy: 'board'`, so a shared cache must key on policy or the palette and the board thrash each other | — | Spec |
+| C6 | Text match and ranking cannot be memoized apart today: `toWorktreePaletteSearchResult` and `baseResult` fold `preparePaletteActivity` into the match result, so a `nowMs` change forces a re-match | Steady-state work after a per-entity cache is O(changed entities) plus 30–50 ms of matching, which is why a worker was demoted to a gated option | Spec |
+
+Rollout note from the same review: CDP paint timings quantize to frame
+boundaries, so a 2 ms tolerance would block rollout on artifacts. Function-level
+timings keep the tight bound; paint-level timings get one frame.
+
+### What the fast-lane work actually bought
+
+Measured on the dev instance trace (`persistence.pty-binding` spans) and against
+the real profile. Full numbers are in the PR body.
+
+| Stage | Reattaches | Fast lane | Flushed | Main-thread ms |
+| --- | ---: | ---: | ---: | ---: |
+| Before any fix (22 calls) | 4 | 0 | 22 | 710 ms, 13–84 ms per call |
+| After tab-row fix (17 calls) | 13 | 2 (0 ms total) | 15 | 337 ms, of which 209 ms was `not_durable` alone |
+| After per-pane durability | — | expected to absorb that 209 ms | — | — |
+
+Real-profile eligibility: 1,078 of 1,764 panes (61%) before the tab-row fix, all
+1,764 after it, subject to the durability check.
+
+### Still unexplained
+
+The worst captured keystroke was queued **117.4 ms**; the binding call accounts
+for about **16 ms** of it. The remaining ~101 ms has never been attributed. No
+end-to-end typing-lag root cause is established. If lag persists after the
+persistence work, the next suspects in order are P7 (duplicate tab minting),
+R1/R2 (per-chunk side effects and the status reducer), and G1/G4 (git spawns on
+the keystroke loop) — not more persistence work.
+
 ## Pinpointed defect — September 7, 12:31–12:32 Phoenix
 
 **Terminal reattachment performs full-session cloning and whole-app synchronous persistence even when the terminal binding already matches.** This is now measured at the actual function boundaries, not inferred from CPU sample percentages. It is a confirmed source of main-thread stalls. A delayed real terminal keydown was captured in the same operation window; this does not assign every millisecond of its delay, or every historical lag report, exclusively to persistence.
