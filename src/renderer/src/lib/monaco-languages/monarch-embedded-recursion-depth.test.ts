@@ -15,9 +15,11 @@ import { vueMonarchLanguage } from './register-vue'
 // levels and died with `RangeError: Maximum call stack size exceeded` — the
 // renderer-side STATUS_STACK_OVERFLOW this suite guards.
 
+type MonarchEndState = { embeddedLanguageData?: { languageId: string } | null }
+
 type MonarchTokenizerInstance = {
   getInitialState: () => unknown
-  tokenize: (line: string, hasEOL: boolean, state: unknown) => { endState: unknown }
+  tokenize: (line: string, hasEOL: boolean, state: unknown) => { endState: MonarchEndState }
   _nestedTokenize: (...args: unknown[]) => unknown
 }
 
@@ -86,7 +88,24 @@ function measureNestedDepth(
   return { maxNestedDepth, error }
 }
 
-const RAMP = [50, 200, 500, 1000, 2500]
+// The embedded language each line *ends* in — `null` means the line left the
+// tokenizer with no embed, i.e. that region renders unhighlighted.
+function embeddedLanguagePerLine(
+  tokenizer: MonarchTokenizerInstance,
+  lines: string[]
+): (string | null)[] {
+  let state: unknown = tokenizer.getInitialState()
+  return lines.map((line) => {
+    const endState = tokenizer.tokenize(line, true, state).endState
+    state = endState
+    return endState.embeddedLanguageData?.languageId ?? null
+  })
+}
+
+// 6600 is the largest `{a}` count under Monaco's line cap (19_800 chars); the
+// filter below drops it for the longer chunk shapes, so the densest embed
+// shape is the one that gets driven at maximum length.
+const RAMP = [50, 200, 500, 1000, 2500, 6600]
 
 function interpolationLine(count: number): string {
   return `<p>${Array.from({ length: count }, (_, index) => `{a${index}}`).join('')}</p>`
@@ -151,6 +170,24 @@ describe.each([
     expect(measurement.maxNestedDepth).toBeGreaterThan(0)
   })
 
+  it.each([
+    ['script', 'ts', 'typescript'],
+    ['style', 'scss', 'scss']
+  ])('re-embeds a %s body after an over-budget opening line', (tag, lang, embeddedLanguageId) => {
+    // The opening tag plus code on the same line pushes the tag close past the
+    // budget, so the body starts unembedded. Every following short line must
+    // recover the embed (and the `lang=` language) instead of leaving the whole
+    // block unhighlighted until the closing tag.
+    const embeds = embeddedLanguagePerLine(createMonarchTokenizer(languageId, language), [
+      `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
+      '  b',
+      '  c',
+      `</${tag}>`
+    ])
+
+    expect(embeds).toEqual([null, embeddedLanguageId, embeddedLanguageId, null])
+  })
+
   it('keeps tokenizing after an over-budget line and re-embeds on the next one', () => {
     const overBudget = `<div class="${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}">{value}</div>`
     const measurement = measureNestedDepth(createMonarchTokenizer(languageId, language), [
@@ -196,7 +233,7 @@ describe('vue embedded-tokenizer recursion depth', () => {
     `<template><p>${'{{a}}'.repeat(count)}</p></template>`
 
   it('stays within the embed budget for a line of interpolations', () => {
-    const ramp = [50, 200, 1000, 2500].filter(
+    const ramp = [50, 200, 1000, 2500, 3900].filter(
       (count) => templateLine(count).length < DEFAULT_MAX_TOKENIZATION_LINE_LENGTH
     )
     expect(ramp.length).toBeGreaterThanOrEqual(3)
@@ -212,6 +249,19 @@ describe('vue embedded-tokenizer recursion depth', () => {
     expect(Math.max(...depths.map((measurement) => measurement.maxNestedDepth))).toBeLessThan(
       ramp.at(-1) as number
     )
+  })
+
+  it.each([
+    ['script', 'ts', 'typescript'],
+    ['style', 'scss', 'scss']
+  ])('re-embeds a %s body after an over-budget opening line', (tag, lang, embeddedLanguageId) => {
+    const embeds = embeddedLanguagePerLine(createMonarchTokenizer('vue', vueMonarchLanguage), [
+      `<${tag} lang="${lang}">a = "${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}"`,
+      '  b',
+      `</${tag}>`
+    ])
+
+    expect(embeds).toEqual([null, embeddedLanguageId, null])
   })
 
   it('tokenizes a template interpolation without dropping the embed', () => {

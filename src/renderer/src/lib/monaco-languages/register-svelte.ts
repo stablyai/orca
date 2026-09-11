@@ -164,7 +164,7 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
         tagCloseWithinEmbedBudget,
         { token: 'tag', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }
       ],
-      [/>/, { token: 'tag', switchTo: '@scriptBodyPlain' }],
+      [/>/, { token: 'tag', switchTo: '@scriptBodyPlain.$S2' }],
       [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@scriptLangBeforeEquals.$S2' }],
       { include: '@tagAttributes' }
     ],
@@ -194,9 +194,14 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     scriptBody: [
       [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],
-    // Same body, no embed: reached only past the budget.
+    // Over-budget mirror of the body: re-enters `$S2` as soon as the rest of
+    // the line fits, so a long opening line does not grey out the whole block.
     scriptBodyPlain: [
       [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }
+      ],
       [/[^<]+/, ''],
       [/./, '']
     ],
@@ -206,7 +211,7 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
         tagCloseWithinEmbedBudget,
         { token: 'tag', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }
       ],
-      [/>/, { token: 'tag', switchTo: '@styleBodyPlain' }],
+      [/>/, { token: 'tag', switchTo: '@styleBodyPlain.$S2' }],
       [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@styleLangBeforeEquals.$S2' }],
       { include: '@tagAttributes' }
     ],
@@ -238,6 +243,10 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     ],
     styleBodyPlain: [
       [/<\/style\s*>/, { token: 'tag', switchTo: '@markupReenter' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }
+      ],
       [/[^<]+/, ''],
       [/./, '']
     ],

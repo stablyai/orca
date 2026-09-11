@@ -12,12 +12,16 @@
 // colours instead of a dead renderer. Worst case measured at this budget is 341
 // levels (a whole line of `{a}`), against a ~1000-level ceiling in the same
 // runtime.
+//
+// Not safe to halve: at 256 a realistic ~430-character Tailwind class attribute
+// stops entering the html embed at every re-entry point, so ordinary markup
+// loses attribute-level highlighting. Measured A/B on real-shaped SFCs.
 export const EMBED_ENTRY_REST_OF_LINE_BUDGET = 512
 
-const restOfLineTooLong = `(?!.{${EMBED_ENTRY_REST_OF_LINE_BUDGET + 1}})`
+const restOfLineWithinBudget = `(?!.{${EMBED_ENTRY_REST_OF_LINE_BUDGET + 1}})`
 
 /** Zero-width: matches only while the rest of the line is within budget. */
-export const restOfLineWithinEmbedBudget = new RegExp(restOfLineTooLong)
+export const restOfLineWithinEmbedBudget = new RegExp(restOfLineWithinBudget)
 
 /** `>` (script/style tag close) followed by a within-budget rest of line. */
-export const tagCloseWithinEmbedBudget = new RegExp(`>${restOfLineTooLong}`)
+export const tagCloseWithinEmbedBudget = new RegExp(`>${restOfLineWithinBudget}`)
