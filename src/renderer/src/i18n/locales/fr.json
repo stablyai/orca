@@ -2201,8 +2201,6 @@
         "recentChatsTerminalsHeader": "Chats et terminaux récents",
         "27f10cca63": "Rechercher chats, terminaux, worktrees, paramètres et actions...",
         "2770f02910": "Rechercher chats, terminaux, worktrees, paramètres et actions",
-        "paletteOpenTabBranch": "Nom de branche",
-        "paletteOpenTabWorkspace": "Nom de l'espace de travail",
         "lastActiveTime": "Dernière activité il y a {{value0}}"
       },
       "github": {

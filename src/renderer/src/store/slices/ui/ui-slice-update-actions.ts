@@ -43,6 +43,18 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
     updateChangelog: null,
     updateUserInitiatedCycle: false,
     dismissedUpdateVersion: null,
+    dismissedUnexpectedSignoutVersion: null,
+    unexpectedSignoutDismissedVersions: [],
+    dismissUnexpectedSignoutCard: (version) => {
+      if (get().unexpectedSignoutDismissedVersions.includes(version)) {
+        return
+      }
+      set({
+        dismissedUnexpectedSignoutVersion: version,
+        unexpectedSignoutDismissedVersions: [...get().unexpectedSignoutDismissedVersions, version]
+      })
+      void window.api.ui.set({ dismissedUnexpectedSignoutVersion: version }).catch(console.error)
+    },
     clearDismissedUpdateVersion: () => {
       set({ dismissedUpdateVersion: null })
     },
