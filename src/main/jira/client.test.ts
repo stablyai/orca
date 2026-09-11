@@ -777,9 +777,20 @@ describe('Jira client credential storage', () => {
     )
   })
 
-  it('refuses a scoped Cloud token without an email instead of sending it as Bearer', async () => {
-    // Why: Atlassian API tokens, scoped or not, are only accepted as Basic auth
-    // (email:token); a Bearer request would 401 and clear the stored token.
+  it('sends a scoped Cloud token as Bearer when no email is given', async () => {
+    netFetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ cloudId: 'cloud-abc' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ accountId: 'account-alpha', displayName: 'Ada' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      )
     const jira = await loadClientModule()
 
     await expect(
@@ -789,8 +800,9 @@ describe('Jira client credential storage', () => {
         apiToken: 'scoped-token',
         authType: 'cloud-scoped'
       })
-    ).resolves.toMatchObject({ ok: false, error: expect.stringContaining('Email') })
-    expect(netFetchMock).not.toHaveBeenCalled()
+    ).resolves.toMatchObject({ ok: true, viewer: { accountId: 'account-alpha' } })
+    const headers = netFetchMock.mock.calls[1]?.[1]?.headers as Headers
+    expect(headers.get('Authorization')).toBe('Bearer scoped-token')
   })
 
   it('reports a scoped Cloud connection whose cloud id cannot be resolved', async () => {
@@ -800,7 +812,7 @@ describe('Jira client credential storage', () => {
     await expect(
       jira.connect({
         siteUrl: 'jira.example.com',
-        email: 'ada@example.com',
+        email: '',
         apiToken: 'scoped-token',
         authType: 'cloud-scoped'
       })
@@ -814,13 +826,13 @@ describe('Jira client credential storage', () => {
       site: {
         id: 'site-scoped',
         siteUrl: 'https://example.atlassian.net',
-        email: 'ada@example.com',
+        email: '',
         displayName: 'Ada',
         accountId: 'account-alpha',
         authType: 'cloud-scoped' as const,
         apiBaseUrl: 'https://api.atlassian.com/ex/jira/cloud-abc'
       },
-      authorization: `Basic ${Buffer.from('ada@example.com:scoped-token').toString('base64')}`
+      authorization: 'Bearer scoped-token'
     }
     netFetchMock.mockResolvedValueOnce(
       new Response(Uint8Array.from([1, 2, 3]), {
@@ -842,6 +854,58 @@ describe('Jira client credential storage', () => {
     await expect(
       jira.jiraRequestBinary(client, 'https://files.example.com/attachment.png')
     ).rejects.toThrow('configured site origin')
+    // Why: the gateway origin is shared by every tenant, so a URL under another
+    // cloud id must be refused before the token is attached.
+    await expect(
+      jira.jiraRequestBinary(
+        client,
+        'https://api.atlassian.com/ex/jira/other-cloud/rest/api/3/attachment/content/1'
+      )
+    ).rejects.toThrow('configured site origin')
+    await expect(
+      jira.jiraRequestBinary(
+        client,
+        'https://api.atlassian.com/ex/jira/cloud-abc-2/rest/api/3/attachment/content/1'
+      )
+    ).rejects.toThrow('configured site origin')
     expect(netFetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a stored scoped site whose gateway URL is not an api.atlassian.com cloud id', async () => {
+    // Why: apiBaseUrl decides where the scoped token is sent, so an edited
+    // jira-sites.json must not be able to point it at another host.
+    const orcaDir = join(tempHome, '.orca')
+    mkdirSync(join(orcaDir, 'jira-tokens'), { recursive: true })
+    const site = (id: string, apiBaseUrl: string) => ({
+      id,
+      siteUrl: 'https://example.atlassian.net',
+      email: '',
+      displayName: 'Ada',
+      accountId: 'account-alpha',
+      authType: 'cloud-scoped',
+      apiBaseUrl
+    })
+    writeFileSync(
+      join(orcaDir, 'jira-sites.json'),
+      JSON.stringify({
+        version: 1,
+        activeSiteId: 'site-ok',
+        selectedSiteId: 'site-ok',
+        sites: [
+          site('site-ok', 'https://api.atlassian.com/ex/jira/cloud-abc'),
+          site('site-host', 'https://evil.example.com/ex/jira/cloud-abc'),
+          site('site-port', 'https://api.atlassian.com:8443/ex/jira/cloud-abc'),
+          site('site-path', 'https://api.atlassian.com/ex/jira/cloud-abc/extra'),
+          site('site-http', 'http://api.atlassian.com/ex/jira/cloud-abc')
+        ]
+      }),
+      { encoding: 'utf-8' }
+    )
+    for (const id of ['site-ok', 'site-host', 'site-port', 'site-path', 'site-http']) {
+      writeFileSync(tokenPathForSite(id), 'scoped-token')
+    }
+    const jira = await loadClientModule()
+
+    expect(jira.getStatus().sites?.map((entry) => entry.id)).toEqual(['site-ok'])
   })
 })

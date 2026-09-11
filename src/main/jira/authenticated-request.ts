@@ -41,9 +41,9 @@ export function authHeader(email: string, apiToken: string, authType?: JiraAuthT
   // Self-hosted with no username = a personal access token (Bearer); Basic auth
   // with a PAT in the password slot is what produces the 401s users report.
   // Self-hosted WITH a username is classic username+password Basic auth, which
-  // older Server/DC instances (predating PATs) require. Cloud is always Basic:
-  // Atlassian API tokens, scoped or not, are never accepted as Bearer.
-  if (authType === 'server' && !email) {
+  // older Server/DC instances (predating PATs) require. Classic Cloud is always
+  // Basic; a scoped Cloud token is Basic with the email and Bearer without.
+  if ((authType === 'server' || authType === 'cloud-scoped') && !email) {
     return `Bearer ${apiToken}`
   }
   return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`
@@ -174,14 +174,17 @@ export async function jiraRequest<T>(
 // Why: attachment metadata is provider-controlled; never forward Jira
 // credentials if a malformed response points at another origin. Cloud reports
 // content URLs on the site host even when the token is only valid on the
-// gateway, so those are re-rooted onto the gateway instead of rejected.
+// gateway, so those are re-rooted onto the gateway instead of rejected. On the
+// gateway the whole `/ex/jira/<cloudId>` prefix must match: the origin is
+// shared by every Atlassian tenant, so an origin check alone would forward the
+// token to another cloud id.
 function resolveBinaryRequestUrl(site: JiraSite, pathOrUrl: string): URL {
   const siteUrl = new URL(site.siteUrl)
   const requestUrl = /^https?:\/\//i.test(pathOrUrl)
     ? new URL(pathOrUrl)
     : new URL(`${site.siteUrl}${pathOrUrl}`)
   if (site.apiBaseUrl) {
-    if (requestUrl.origin === new URL(site.apiBaseUrl).origin) {
+    if (requestUrl.href.startsWith(`${site.apiBaseUrl}/`)) {
       return requestUrl
     }
     if (requestUrl.origin === siteUrl.origin) {

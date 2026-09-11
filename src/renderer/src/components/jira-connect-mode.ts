@@ -26,9 +26,11 @@ export type JiraConnectModeShape = {
   isServerBasic: boolean
   isScopedCloud: boolean
   // The identity slot (Cloud email / Server username) keys and labels the stored
-  // site, so it is required whenever it is sent as part of Basic auth. Both
-  // Cloud token kinds are Basic, so only a self-hosted PAT goes without one.
+  // site, so it is required whenever it is sent as part of Basic auth.
   needsIdentity: boolean
+  // A scoped Cloud token shows the field but keeps it optional: Basic with an
+  // email, Bearer without.
+  showsIdentity: boolean
   authType: JiraAuthType
 }
 
@@ -36,11 +38,13 @@ export function describeJiraConnectMode(mode: JiraConnectMode): JiraConnectModeS
   const isServer = mode.instanceType === 'server'
   const isServerBasic = isServer && mode.serverAuthMethod === 'basic'
   const isScopedCloud = !isServer && mode.cloudTokenKind === 'scoped'
+  const needsIdentity = (!isServer && !isScopedCloud) || isServerBasic
   return {
     isServer,
     isServerBasic,
     isScopedCloud,
-    needsIdentity: !isServer || isServerBasic,
+    needsIdentity,
+    showsIdentity: needsIdentity || isScopedCloud,
     authType: isServer ? 'server' : isScopedCloud ? 'cloud-scoped' : 'cloud'
   }
 }
@@ -60,7 +64,7 @@ function describeMode(shape: JiraConnectModeShape): string {
   if (shape.isScopedCloud) {
     return translate(
       'auto.components.jira.connect.dialog.8e851d7ba0',
-      'Use a Jira Cloud site URL, Atlassian email, and scoped API token; Orca calls the api.atlassian.com gateway on your behalf.'
+      'Use a Jira Cloud site URL and a scoped API token; Orca calls the api.atlassian.com gateway on its behalf.'
     )
   }
   if (!shape.isServer) {
@@ -118,7 +122,9 @@ export function jiraConnectCopy(shape: JiraConnectModeShape): JiraConnectCopy {
         ),
     identityLabel: shape.isServerBasic
       ? translate('auto.components.jira.connect.dialog.8d1223fa5c', 'Username')
-      : translate('auto.components.jira.connect.dialog.2849ddb295', 'Atlassian email'),
+      : shape.isScopedCloud
+        ? translate('auto.components.jira.connect.dialog.b4303bfe5a', 'Atlassian email (optional)')
+        : translate('auto.components.jira.connect.dialog.2849ddb295', 'Atlassian email'),
     identityPlaceholder: shape.isServerBasic
       ? translate('auto.components.jira.connect.dialog.be9eba0a1b', 'username')
       : translate('auto.components.jira.connect.dialog.e91b9a4073', 'you@example.com'),

@@ -1,10 +1,5 @@
 import { JiraApiError, jiraFetch } from './authenticated-request'
-
-export const ATLASSIAN_GATEWAY_ORIGIN = 'https://api.atlassian.com'
-
-export function jiraGatewayBaseUrl(cloudId: string): string {
-  return `${ATLASSIAN_GATEWAY_ORIGIN}/ex/jira/${encodeURIComponent(cloudId)}`
-}
+import { jiraGatewayBaseUrl } from './gateway-base-url'
 
 /**
  * Scoped Atlassian API tokens only work on the api.atlassian.com gateway, which

@@ -330,7 +330,7 @@ export function BitbucketCredentialsDialog({
                 {isTokenMode
                   ? translate(
                       'auto.components.settings.bitbucket.credentials.dialog.tokenHintScopes',
-                      'Repository, project, and workspace access tokens are created from the matching Bitbucket settings page; an Atlassian API token with Bitbucket scopes works here too. Reading needs read:pullrequest:bitbucket, creating pull requests needs write:pullrequest:bitbucket.'
+                      'Repository, project, and workspace access tokens are created from the matching Bitbucket settings page; an Atlassian API token with Bitbucket scopes works here too. Give it read:user:bitbucket, read:repository:bitbucket, and read:pullrequest:bitbucket to verify and read, plus write:pullrequest:bitbucket to create pull requests.'
                     )
                   : translate(
                       'auto.components.settings.bitbucket.credentials.dialog.basicHintScopes',

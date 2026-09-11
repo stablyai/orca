@@ -97,8 +97,9 @@ export async function connect(
       }
     }
   } else if (authType === 'cloud-scoped') {
-    if (!email || !apiToken) {
-      return { ok: false, error: 'Email and scoped API token are required.' }
+    // The email is optional here: it only switches Bearer to Basic.
+    if (!apiToken) {
+      return { ok: false, error: 'Scoped API token is required.' }
     }
   } else if (!email || !apiToken) {
     return { ok: false, error: 'Email and API token are required.' }

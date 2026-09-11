@@ -75,7 +75,7 @@ export function JiraConnectDialog({
   }, [open])
 
   const shape = describeJiraConnectMode(mode)
-  const { isServer, isScopedCloud, needsIdentity } = shape
+  const { isServer, isScopedCloud, needsIdentity, showsIdentity } = shape
   const copy = jiraConnectCopy(shape)
   const canSubmit =
     Boolean(siteUrl.trim()) &&
@@ -129,7 +129,7 @@ export function JiraConnectDialog({
         siteUrl: trimmedSite,
         // Cloud sends the Atlassian email; self-hosted Basic sends the username;
         // PAT sends nothing, so a stale email can't key/label the stored site.
-        email: needsIdentity ? trimmedEmail : '',
+        email: showsIdentity ? trimmedEmail : '',
         apiToken: trimmedToken,
         authType: shape.authType
       })
@@ -198,7 +198,7 @@ export function JiraConnectDialog({
                 disabled={connectState === 'connecting'}
               />
             </div>
-            {needsIdentity ? (
+            {showsIdentity ? (
               <div className="space-y-2">
                 <Label htmlFor={emailId} className="text-xs">
                   {copy.identityLabel}
