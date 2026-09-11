@@ -175,6 +175,37 @@ describe('navigation Escape during an open tool call', () => {
     expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
   })
 
+  it('leaves OMP work running when Escape lands between approval and execution (#9208)', () => {
+    const server = new AgentHookServer()
+    ingest(server, {
+      source: 'omp',
+      hookEventName: 'tool_approval_resolved',
+      state: 'working',
+      prompt: 'refactor the parser',
+      agentType: 'omp',
+      toolName: 'bash'
+    })
+
+    vi.setSystemTime(1_200)
+    expect(pressInterruptKey(server, 'plain-escape')).toBe(false)
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
+  })
+
+  it('leaves Pi work running when its modal closes over a still-running tool', () => {
+    const server = new AgentHookServer()
+    ingest(server, {
+      source: 'pi',
+      hookEventName: 'ui_prompt_end',
+      state: 'working',
+      prompt: 'refactor the parser',
+      agentType: 'pi'
+    })
+
+    vi.setSystemTime(1_200)
+    expect(pressInterruptKey(server, 'plain-escape')).toBe(false)
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
+  })
+
   it('still infers a Claude Escape once the tool call has closed', () => {
     const server = new AgentHookServer()
     ingest(server, {
