@@ -98,7 +98,9 @@ async function runInstaller(
 // Why (#11549 aftermath): a CLI that falls off PATH keeps its user-wide config invoking
 // Orca's script, but the presence gate below then skips install() forever, freezing the
 // script at whatever Orca generated last. Existing scripts are Orca-owned, so bring them
-// current before any gating; creating new ones remains install()'s presence-gated job.
+// current before the presence gate; creating new ones remains install()'s presence-gated job.
+// The hooks-off guard above is the one gate that still wins: ~/.orca/agent-hooks/ is user-global,
+// so a profile that declined writes nothing there either, and a consenting profile refreshes it.
 async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
   const allowed = options.agents ? new Set(options.agents) : null
   for (const [agent, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {

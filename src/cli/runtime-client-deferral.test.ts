@@ -169,6 +169,9 @@ describe('RuntimeClient module-graph deferral', () => {
           `${argv.join(' ')} hook application`
         ).toHaveBeenCalledExactlyOnceWith(false, {
           agentCmdOverrides: {},
+          // Echoed back from the disk write so installManagedAgentHooks' own authorization guard
+          // reads the value the CLI just set instead of falling through to the default.
+          agentStatusHooksEnabled: false,
           disabledTuiAgents: []
         })
       } else {

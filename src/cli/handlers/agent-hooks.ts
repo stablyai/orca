@@ -125,7 +125,10 @@ async function readHookSettings(
 
 function updateEnabledOnDisk(enabled: boolean): {
   settingsPath: string
-  settings: Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  settings: Pick<
+    GlobalSettings,
+    'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'
+  >
 } {
   const dataPath = getDataPath()
   const state = readPersistedState(dataPath)
@@ -139,6 +142,9 @@ function updateEnabledOnDisk(enabled: boolean): {
     settingsPath: dataPath,
     settings: {
       agentCmdOverrides: state.settings.agentCmdOverrides ?? {},
+      // Why echoed back: installManagedAgentHooks reads its own authorization off this object, so
+      // omitting the field we just wrote would leave the offline install passing only by default.
+      agentStatusHooksEnabled: enabled,
       disabledTuiAgents: state.settings.disabledTuiAgents ?? []
     }
   }

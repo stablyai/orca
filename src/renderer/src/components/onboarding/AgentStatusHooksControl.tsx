@@ -75,7 +75,7 @@ export function AgentStatusHooksControl({
               <AffectedAgents affected={affected} isDetecting={isDetecting} />
               {translate(
                 'auto.components.onboarding.AgentStatusHooksControl.affectedScriptNote',
-                "Plus a small script in ~/.orca/agent-hooks/. Status is reported to Orca on your machine, it isn't uploaded anywhere."
+                "Plus a small script in ~/.orca/agent-hooks/. Status goes to Orca on this machine and to the devices you've paired with it."
               )}{' '}
               {translate(
                 'auto.components.onboarding.AgentStatusHooksControl.affectedApproximate',
