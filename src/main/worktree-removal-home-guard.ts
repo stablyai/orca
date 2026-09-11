@@ -17,7 +17,7 @@
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
-import { parseWslUncPath } from '../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslDrivePath } from '../shared/wsl-paths'
 
 export type PathOps = typeof posix
 
@@ -54,16 +54,24 @@ export function containsPath(parentPath: string, childPath: string, pathOps: Pat
 }
 
 /**
- * Whether removing `resolvedWorktreePath` would take a home directory with it.
+ * Whether removing `worktreePath` would take a home directory with it.
  *
  * True when the path is, or contains, the home of the machine that executes the
  * removal, or when its shape is a home directory on the filesystem it names.
+ *
+ * Why the ops are re-derived from `worktreePath` alone: whose home a path is, is
+ * a property of that path and nothing else. The caller's `getPathOps(worktreePath,
+ * repoPath)` lets the *repo* spelling vote, and a WSL project is registered as
+ * `\\wsl.localhost\<distro>\...` while git-in-the-distro answers in Linux paths
+ * (`toWslExecutionSpace`), so the pair picked win32 and every POSIX home shape
+ * went quiet — `/home/<user>` read back as an ordinary deletable directory.
  */
 export function isHomeDirectoryRemovalPath(
-  resolvedWorktreePath: string,
-  pathOps: PathOps,
+  worktreePath: string,
   home: WorktreeRemovalHomeAuthority
 ): boolean {
+  const pathOps = getPathOps(worktreePath)
+  const resolvedWorktreePath = pathOps.resolve(worktreePath)
   const homePath = resolveGuardHomePath(home, pathOps)
   if (!!homePath && containsPath(resolvedWorktreePath, pathOps.resolve(homePath), pathOps)) {
     return true
@@ -132,13 +140,26 @@ function isLikelyWindowsUserProfileDirectory(
 /**
  * WSL UNC aliases front a Linux filesystem, so POSIX home shapes — not
  * `<root>\Users` — are what protect `\\wsl.localhost\Ubuntu\home\alice`.
+ *
+ * Except under `/mnt/<letter>`: that tail is the distro's drvfs view of a Windows
+ * volume, so `\\wsl.localhost\Ubuntu\mnt\c\Users\bob` is the Windows profile with
+ * a Linux spelling. It takes the Windows rule on its drive form, which the UNC
+ * exclusion above would otherwise skip.
  */
 function isLikelyWslDistroHomeDirectory(resolvedWorktreePath: string, pathOps: PathOps): boolean {
   if (pathOps !== win32) {
     return false
   }
   const wsl = parseWslUncPath(resolvedWorktreePath)
-  return !!wsl && (wsl.linuxPath === '/' || isPosixHomeShape(trimTrailingSlash(wsl.linuxPath)))
+  if (!wsl) {
+    return false
+  }
+  const linuxPath = trimTrailingSlash(wsl.linuxPath)
+  const drivePath = toWindowsWslDrivePath(linuxPath)
+  if (drivePath) {
+    return isLikelyWindowsUserProfileDirectory(win32.resolve(drivePath), win32)
+  }
+  return wsl.linuxPath === '/' || isPosixHomeShape(linuxPath)
 }
 
 function isWslUncRemovalPath(resolvedWorktreePath: string): boolean {
