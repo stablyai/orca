@@ -152,12 +152,12 @@ export default function MobilePage(): React.JSX.Element {
     if (relayMintFailure == null) {
       return
     }
-    // Why: users share this payload — an address (selected or relay cell) would leak a LAN/Tailscale IP or hostname.
-    const payload = await collectMobileRelayDiagnosticsPayload({
-      connectionMode,
-      failure: relayMintFailure
-    })
     try {
+      // Why: users share this payload — an address (selected or relay cell) would leak a LAN/Tailscale IP or hostname.
+      const payload = await collectMobileRelayDiagnosticsPayload({
+        connectionMode,
+        failure: relayMintFailure
+      })
       await window.api.ui.writeClipboardText(JSON.stringify(payload, null, 2))
       if (mountedRef.current) {
         toast.success(
