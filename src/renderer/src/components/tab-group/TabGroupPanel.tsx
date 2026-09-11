@@ -14,6 +14,7 @@ import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDra
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { registerTabGroupBody } from './tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
+import { isAutoHideSingleTabStripEnabled } from './auto-hide-single-tab-strip-preference'
 import { resolveSingleTabStripVisibility } from './single-tab-strip-visibility'
 import { useTabStripRevealHover } from './tab-strip-reveal-hover'
 import { translate } from '@/i18n/i18n'
@@ -93,8 +94,8 @@ export default function TabGroupPanel({
   const clientHostedRows = ownsClientHostedRows
     ? worktreeClientHostedRows
     : EMPTY_CLIENT_HOSTED_ROWS
-  const autoHideSingleTabStrip = useAppStore(
-    (state) => state.settings?.autoHideSingleTabStrip === true
+  const autoHideSingleTabStrip = useAppStore((state) =>
+    isAutoHideSingleTabStripEnabled(state.settings)
   )
   const [stripHovered, setStripHovered] = useState(false)
   const { autoHidden: stripAutoHidden, revealed: stripRevealed } = resolveSingleTabStripVisibility({
