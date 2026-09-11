@@ -26,7 +26,11 @@ export const HOST_WORKING_CLIENT_BOUNDARY_LIMIT = 512
 
 export type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
-  | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: boolean }
+  | {
+      type: 'snapshots'
+      snapshots: RuntimeMobileSessionTabsResult[]
+      authoritative?: boolean
+    }
   | { type: 'end' }
 
 export type SessionTabsListAllResult = {
@@ -62,7 +66,13 @@ export type SessionTabsRuntimeHistory = RetiredValueHistory
  * of epochs that have already been superseded so those delayed frames cannot
  * roll the mirror back after the replacement epoch is accepted.
  */
-export type SessionTabsPublicationEpochHistory = RetiredValueHistory
+export type SessionTabsPublicationEpochHistory = RetiredValueHistory & {
+  /** Set by `noteSessionTabsPublicationEpoch` so eviction can release the key index. */
+  environmentId?: string
+  worktreeId?: string
+}
+/** Live worktrees refresh their entry on every accepted frame, so eviction reaches tombstones first. */
+export const MAX_SESSION_TABS_PUBLICATION_EPOCH_HISTORY = 512
 export type SessionTabsRecoveryState = { pendingCount: number }
 export type SessionTabsRemovalFence = {
   receivedFrame: number
@@ -142,8 +152,12 @@ export function resetReceivedSessionTabsFrameSequence(): void {
 }
 
 export type TerminalSurface = RuntimeMobileSessionTerminalClientTab
-export type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
-export type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & { browserPageId: string }
+export type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & {
+  status: 'ready'
+}
+export type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & {
+  browserPageId: string
+}
 export type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
 
 export type MirroredAgentTab = { hostTabId: string; unifiedTab: Tab }
@@ -164,7 +178,11 @@ export type MirroredBrowserTab = {
   hostTabId: string
   clientGroupId?: string
 }
-export type MirroredEditorTab = { file: OpenFile; unifiedTab: Tab; hostTabId: string }
+export type MirroredEditorTab = {
+  file: OpenFile
+  unifiedTab: Tab
+  hostTabId: string
+}
 
 export type WebSessionTabsSyncState = Pick<
   AppState,

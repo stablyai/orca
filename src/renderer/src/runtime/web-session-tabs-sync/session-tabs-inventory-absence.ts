@@ -10,10 +10,7 @@ import {
   type TrackedWebSessionTabsWorktree
 } from './state'
 import { sessionTabsFreshnessKey } from './tracking'
-
-function omissionKey(environmentId: string, worktreeId: string): string {
-  return `${environmentId}:${worktreeId}`
-}
+import { noteSessionTabsEnvironmentKeyedWorktree } from './session-tabs-environment-key-index'
 
 function trackedWorktreeOmissionFingerprint(
   trackedWorktree: TrackedWebSessionTabsWorktree
@@ -28,7 +25,7 @@ export function clearTrackedWebSessionTabsInventoryAbsence(
   environmentId: string,
   worktreeId: string
 ): void {
-  sessionTabsInventoryOmissionsByWorktree.delete(omissionKey(environmentId, worktreeId))
+  sessionTabsInventoryOmissionsByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
 }
 
 /**
@@ -41,11 +38,12 @@ export function confirmTrackedWebSessionTabsInventoryAbsence(
   environmentId: string,
   trackedWorktree: TrackedWebSessionTabsWorktree
 ): boolean {
-  const key = omissionKey(environmentId, trackedWorktree.worktree)
+  const key = sessionTabsFreshnessKey(environmentId, trackedWorktree.worktree)
   const fingerprint = trackedWorktreeOmissionFingerprint(trackedWorktree)
   const cached = sessionTabsInventoryOmissionsByWorktree.get(key)
   const observations = cached?.fingerprint === fingerprint ? cached.observations + 1 : 1
   sessionTabsInventoryOmissionsByWorktree.delete(key)
+  noteSessionTabsEnvironmentKeyedWorktree(environmentId, trackedWorktree.worktree)
   sessionTabsInventoryOmissionsByWorktree.set(key, {
     fingerprint,
     observations: Math.min(observations, 2)

@@ -22,6 +22,7 @@ import {
   noteSessionTabsPublicationEpoch,
   recordReceivedWebSessionTabsEnvironmentFrame
 } from './publisher-identity-fences'
+import { noteSessionTabsEnvironmentKeyedWorktree } from './session-tabs-environment-key-index'
 
 export function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -108,7 +109,8 @@ export function recordReceivedWebSessionTabsSnapshot(
     return frame
   }
   if (!history || history.current !== publicationEpoch) {
-    noteSessionTabsPublicationEpoch(key, publicationEpoch)
+    noteSessionTabsEnvironmentKeyedWorktree(environmentId, snapshot.worktree)
+    noteSessionTabsPublicationEpoch(environmentId, snapshot.worktree, key, publicationEpoch)
   }
   // Stream delivery order is the freshest evidence even when a host's version
   // counter briefly moves backwards (for example across a visibility resume).
@@ -121,6 +123,7 @@ export function recordReceivedWebSessionTabsSnapshot(
     snapshot.snapshotVersion > current.snapshotVersion ||
     (snapshot.snapshotVersion === current.snapshotVersion && current.receivedFrame <= frame)
   ) {
+    noteSessionTabsEnvironmentKeyedWorktree(environmentId, snapshot.worktree)
     latestReceivedSessionTabsSnapshotByWorktree.set(key, {
       receivedFrame: frame,
       publicationEpoch,
@@ -147,8 +150,11 @@ export function beginWebSessionTabsSnapshotRecovery(
   receivedFrame: number
 ): () => void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
-  const recoveryState = sessionTabsRecoveryStateByWorktree.get(key) ?? { pendingCount: 0 }
+  const recoveryState = sessionTabsRecoveryStateByWorktree.get(key) ?? {
+    pendingCount: 0
+  }
   recoveryState.pendingCount += 1
+  noteSessionTabsEnvironmentKeyedWorktree(environmentId, worktreeId)
   sessionTabsRecoveryStateByWorktree.set(key, recoveryState)
   let settled = false
   return () => {
@@ -191,6 +197,7 @@ export function recordReceivedWebSessionTabsRemoval(
     latestSessionTabsRemovalFenceByWorktree.delete(key)
     return
   }
+  noteSessionTabsEnvironmentKeyedWorktree(environmentId, worktreeId)
   latestSessionTabsRemovalFenceByWorktree.set(key, {
     receivedFrame,
     recoveryState,
@@ -244,6 +251,7 @@ export function recordAcceptedWebSessionTabsEnvironment(
     environments.delete(environmentId)
   }
   if (environments.size > 0) {
+    noteSessionTabsEnvironmentKeyedWorktree(environmentId, snapshot.worktree)
     sessionTabsEnvironmentsByWorktree.set(snapshot.worktree, environments)
   } else {
     sessionTabsEnvironmentsByWorktree.delete(snapshot.worktree)
@@ -266,5 +274,6 @@ export function rememberHostTerminalTabCount(
 ): void {
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   const terminalCount = snapshot.tabs.filter((tab) => tab.type === 'terminal').length
+  noteSessionTabsEnvironmentKeyedWorktree(environmentId, snapshot.worktree)
   lastHostTerminalTabCountByWorktree.set(key, terminalCount)
 }

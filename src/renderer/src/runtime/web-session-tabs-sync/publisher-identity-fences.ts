@@ -1,5 +1,7 @@
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import { releaseSessionTabsEnvironmentKeyedWorktree } from './session-tabs-environment-key-index'
 import {
+  MAX_SESSION_TABS_PUBLICATION_EPOCH_HISTORY,
   latestReceivedSessionTabsFrameByEnvironment,
   sessionTabsPublicationEpochHistoryByWorktree,
   sessionTabsRuntimeHistoryByEnvironment,
@@ -155,6 +157,8 @@ export function isHeadlessMergeSessionTabsPublication(publicationEpoch: string):
 }
 
 export function noteSessionTabsPublicationEpoch(
+  environmentId: string,
+  worktreeId: string,
   key: string,
   publicationEpoch: string
 ): SessionTabsPublicationEpochHistory {
@@ -162,7 +166,29 @@ export function noteSessionTabsPublicationEpoch(
     sessionTabsPublicationEpochHistoryByWorktree.get(key),
     publicationEpoch,
     SESSION_TABS_RETIRED_EPOCH_LIMIT
-  )
+  ) as SessionTabsPublicationEpochHistory
+  history.environmentId = environmentId
+  history.worktreeId = worktreeId
+  // Re-insert so map order is least-recently-noted first: every accepted frame
+  // renotes its epoch, so eviction reaches removed worktrees' tombstones first.
+  sessionTabsPublicationEpochHistoryByWorktree.delete(key)
   sessionTabsPublicationEpochHistoryByWorktree.set(key, history)
+  evictOldestSessionTabsPublicationEpochHistory()
   return history
+}
+
+function evictOldestSessionTabsPublicationEpochHistory(): void {
+  while (
+    sessionTabsPublicationEpochHistoryByWorktree.size > MAX_SESSION_TABS_PUBLICATION_EPOCH_HISTORY
+  ) {
+    const oldestKey = sessionTabsPublicationEpochHistoryByWorktree.keys().next().value
+    if (typeof oldestKey !== 'string') {
+      return
+    }
+    const oldest = sessionTabsPublicationEpochHistoryByWorktree.get(oldestKey)
+    sessionTabsPublicationEpochHistoryByWorktree.delete(oldestKey)
+    if (oldest?.environmentId !== undefined && oldest.worktreeId !== undefined) {
+      releaseSessionTabsEnvironmentKeyedWorktree(oldest.environmentId, oldest.worktreeId, oldestKey)
+    }
+  }
 }

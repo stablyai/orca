@@ -45,6 +45,12 @@ import { clearHostSessionMirrorHydration } from '../host-session-mirror-hydratio
 import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/host-mirror-handle-gap-wait'
 import { clearHostSessionTabIdMappings } from './tracking-mappings'
 import {
+  clearSessionTabsEnvironmentKeyIndex,
+  dropSessionTabsEnvironmentKeyIndex,
+  getSessionTabsEnvironmentKeyedWorktrees,
+  noteSessionTabsEnvironmentKeyedWorktree
+} from './session-tabs-environment-key-index'
+import {
   sessionTabsFreshnessKey,
   untrackWebSessionTabsWorktree,
   removeWebSessionTabsEnvironment
@@ -78,6 +84,7 @@ export function acceptReplayedWebSessionTabsSnapshot(
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   const current = latestSessionTabsSnapshotByWorktree.get(key)
   if (current) {
+    noteSessionTabsEnvironmentKeyedWorktree(environmentId, worktreeId)
     replayableSessionTabsSnapshotByWorktree.set(key, current)
   }
 }
@@ -99,6 +106,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
   hostWorkingClientBoundaryByPaneKey.clear()
+  clearSessionTabsEnvironmentKeyIndex()
   resetWebSessionBrowserPlacementsForTests()
 }
 
@@ -167,58 +175,29 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   if (!trimmedEnvironmentId) {
     return
   }
-  const keyPrefix = `${trimmedEnvironmentId}:`
   sessionTabsTrackingGenerationByEnvironment.set(
     trimmedEnvironmentId,
     (sessionTabsTrackingGenerationByEnvironment.get(trimmedEnvironmentId) ?? 0) + 1
   )
-  for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      latestSessionTabsSnapshotByWorktree.delete(key)
-    }
-  }
-  for (const key of replayableSessionTabsSnapshotByWorktree.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      replayableSessionTabsSnapshotByWorktree.delete(key)
-    }
-  }
-  for (const key of latestReceivedSessionTabsSnapshotByWorktree.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      latestReceivedSessionTabsSnapshotByWorktree.delete(key)
-    }
-  }
-  sessionTabsRuntimeHistoryByEnvironment.delete(trimmedEnvironmentId)
-  for (const key of sessionTabsPublicationEpochHistoryByWorktree.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      sessionTabsPublicationEpochHistoryByWorktree.delete(key)
-    }
-  }
-  latestReceivedSessionTabsFrameByEnvironment.delete(trimmedEnvironmentId)
-  latestReceivedSessionTabsInventoryFrameByEnvironment.delete(trimmedEnvironmentId)
-  for (const key of latestSessionTabsRemovalFenceByWorktree.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      latestSessionTabsRemovalFenceByWorktree.delete(key)
-    }
-  }
-  for (const key of sessionTabsRecoveryStateByWorktree.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      sessionTabsRecoveryStateByWorktree.delete(key)
-    }
-  }
-  trackedSessionTabsWorktreeIdsByEnvironment.delete(trimmedEnvironmentId)
-  for (const worktreeId of sessionTabsEnvironmentsByWorktree.keys()) {
+  // Why: a prefix scan of every per-worktree map costs O(all environments x all
+  // worktrees) per teardown, and teardown runs once per environment.
+  for (const worktreeId of getSessionTabsEnvironmentKeyedWorktrees(trimmedEnvironmentId)) {
+    const key = sessionTabsFreshnessKey(trimmedEnvironmentId, worktreeId)
+    latestSessionTabsSnapshotByWorktree.delete(key)
+    replayableSessionTabsSnapshotByWorktree.delete(key)
+    latestReceivedSessionTabsSnapshotByWorktree.delete(key)
+    sessionTabsPublicationEpochHistoryByWorktree.delete(key)
+    latestSessionTabsRemovalFenceByWorktree.delete(key)
+    sessionTabsRecoveryStateByWorktree.delete(key)
+    lastHostTerminalTabCountByWorktree.delete(key)
+    sessionTabsInventoryOmissionsByWorktree.delete(key)
     removeWebSessionTabsEnvironment(trimmedEnvironmentId, worktreeId)
   }
-  for (const key of lastHostTerminalTabCountByWorktree.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      lastHostTerminalTabCountByWorktree.delete(key)
-    }
-  }
-  for (const key of sessionTabsInventoryOmissionsByWorktree.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      sessionTabsInventoryOmissionsByWorktree.delete(key)
-    }
-  }
+  dropSessionTabsEnvironmentKeyIndex(trimmedEnvironmentId)
+  sessionTabsRuntimeHistoryByEnvironment.delete(trimmedEnvironmentId)
+  latestReceivedSessionTabsFrameByEnvironment.delete(trimmedEnvironmentId)
+  latestReceivedSessionTabsInventoryFrameByEnvironment.delete(trimmedEnvironmentId)
+  trackedSessionTabsWorktreeIdsByEnvironment.delete(trimmedEnvironmentId)
   const mappingKeysByWorktree =
     hostSessionTabMappingKeysByEnvironmentAndWorktree.get(trimmedEnvironmentId)
   if (mappingKeysByWorktree) {
