@@ -186,11 +186,10 @@ export function useMobileStructuredAgentSession(args: {
       if (commandOutcome !== null) {
         return commandOutcome
       }
-      const body = structuredAgentSessionSendBody(text, sendAttachments)
-      if (body.blocks.length === 0) {
+      const fields = { body: structuredAgentSessionSendBody(text, sendAttachments) }
+      if (fields.body.blocks.length === 0) {
         return 'rejected'
       }
-      const fields = { body }
       const key = `${sessionKey}:agentSession.send:${JSON.stringify(fields)}`
       const priorOperationId = operationIdsRef.current.get(key)
       const clientOperationId = retainOperationId(key, priorOperationId)
@@ -210,6 +209,7 @@ export function useMobileStructuredAgentSession(args: {
         return 'accepted'
       }
       if (result.status === 'unknown') {
+        operationIdsRef.current.delete(key)
         return 'unknown'
       }
       operationIdsRef.current.delete(key)

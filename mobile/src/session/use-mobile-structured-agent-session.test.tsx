@@ -673,7 +673,7 @@ describe('useMobileStructuredAgentSession', () => {
     expect(retryId).not.toBe(firstId)
   })
 
-  it('marks a retried send as retryUnknown after ambiguous delivery', async () => {
+  it('uses a fresh operation id when a send delivery is ambiguous', async () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -695,12 +695,12 @@ describe('useMobileStructuredAgentSession', () => {
     const calls = sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send')
     expect(calls).toHaveLength(2)
     expect(calls[0]![1]).not.toHaveProperty('retryUnknown')
-    expect(calls[1]![1]).toMatchObject({ retryUnknown: true })
+    expect(calls[1]![1]).not.toHaveProperty('retryUnknown')
     const firstId = (calls[0]![1] as { envelope: { clientOperationId: string } }).envelope
       .clientOperationId
     const retryId = (calls[1]![1] as { envelope: { clientOperationId: string } }).envelope
       .clientOperationId
-    expect(retryId).toBe(firstId)
+    expect(retryId).not.toBe(firstId)
   })
 
   it('keeps structured option changes dispatched after unknown delivery', async () => {
