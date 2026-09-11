@@ -152,6 +152,15 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+      if (target === 'fx') {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/fx\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
       if (target === 'cursor-agent') {
         return {
           environmentResolved: true,
@@ -164,7 +173,7 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'fx', 'cursor'])
   })
 
   it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
@@ -230,6 +239,15 @@ describe('preflight', () => {
           environmentResolved: true,
           code: 0,
           stdout: '/mock/windows/npm/claude.cmd\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      if (String(args[0]) === 'fx') {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/mock/windows/programs/fx.exe\n',
           stderr: '',
           timedOut: false
         }
@@ -475,17 +493,17 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
   })
 
-  it('detects agents from the selected WSL distro for a WSL workspace', async () => {
+  it('detects fx from the selected WSL distro for a WSL workspace', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
     })
     runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
-      if (script.includes("'claude'")) {
+      if (script.includes("'fx'")) {
         return {
           environmentResolved: true,
           code: 0,
-          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stdout: '__ORCA_AGENT_PATH__fx\t/home/test/.local/bin/fx\n',
           stderr: '',
           timedOut: false
         }
@@ -493,7 +511,7 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
+    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['fx'])
     expect(runWslProcessMock).toHaveBeenCalledTimes(1)
     // Why: the local fallback must not report host binaries as WSL binaries.
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()

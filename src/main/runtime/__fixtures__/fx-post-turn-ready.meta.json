@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T20:13:47.932Z",
+  "platform": "darwin",
+  "command": ["fx"],
+  "cols": 120,
+  "rows": 40,
+  "note": "fx 0.0.8; macOS arm64; completed turn returned to composer; account type not recorded",
+  "exitCode": 0
+}

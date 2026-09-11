@@ -8,6 +8,7 @@ import {
 describe('pickTuiAgent', () => {
   it('uses an installed preferred agent', () => {
     expect(pickTuiAgent('codex', ['claude', 'codex'])).toBe('codex')
+    expect(pickTuiAgent('fx', ['codex', 'fx'])).toBe('fx')
   })
 
   it('falls back in desktop catalog order when the preference is absent or stale', () => {

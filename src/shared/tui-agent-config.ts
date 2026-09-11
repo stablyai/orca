@@ -103,6 +103,11 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadyTimeoutMs: 20_000,
     submitRetryDelayMs: 1200
   },
+  fx: {
+    detectCmd: 'fx',
+    detectUnsupportedRuntimes: ['win32'],
+    promptInjectionMode: 'stdin-after-start'
+  },
   autohand: {
     detectCmd: 'autohand',
     promptInjectionMode: 'stdin-after-start'
