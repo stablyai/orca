@@ -9,7 +9,6 @@ import {
   RelayHostChallengeMessageSchema,
   RelayHostHelloAckMessageSchema,
   RelayPingMessageSchema,
-  RELAY_HOST_CAPABILITY_HEADERS,
   encodeRelayHostHello,
   parseRelayControlMessage,
   type RelayConnectionOpenMessage,
@@ -25,6 +24,7 @@ import {
   RelayControlSilenceWatchdog
 } from './relay-control-silence-watchdog'
 import { closeRelayControlSocket } from './relay-control-socket-close'
+import { createRelayControlSocket } from './relay-control-socket-factory'
 import { controlWebSocketUrl } from './relay-control-url'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
@@ -44,6 +44,9 @@ type RelayControlClientOptions = {
   onClose: (code: number) => void
   createSocket?: (url: string, relayJwt: string) => WebSocket
   connectDeadlineMs?: number
+  // Why: settable apart from connectDeadlineMs so a test can stall the connect
+  // phase alone and prove which of the two bounds fired.
+  handshakeTimeoutMs?: number
   silenceLimitMs?: number
 }
 
@@ -74,11 +77,13 @@ export class RelayControlClient {
     this.createSocket =
       options.createSocket ??
       ((url, token) =>
-        new WebSocket(url, {
-          headers: { authorization: `Bearer ${token}`, ...RELAY_HOST_CAPABILITY_HEADERS },
-          perMessageDeflate: false,
-          maxPayload: 64 * 1024
-        }))
+        createRelayControlSocket(
+          url,
+          token,
+          options.handshakeTimeoutMs ??
+            options.connectDeadlineMs ??
+            RELAY_CONTROL_CONNECT_DEADLINE_MS
+        ))
   }
 
   connect(): Promise<RelayHostHelloAckMessage> {
