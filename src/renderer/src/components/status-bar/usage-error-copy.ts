@@ -174,6 +174,10 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
           'auto.components.status.bar.tooltip.a7517cccb6',
           'Claude usage is unavailable right now.'
         )
+      // Why: the main-process 'Claude sign-in expired' string is intentionally
+      // pattern-safe (matches no auth-error rewrite), so it surfaces verbatim.
+      case 'signed-out':
+        return p.error ?? fallback
       case 'missing-credentials':
       case 'rate-limited':
       case 'unknown':
