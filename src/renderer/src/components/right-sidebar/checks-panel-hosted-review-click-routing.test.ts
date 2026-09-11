@@ -23,6 +23,7 @@ describe('checks panel hosted review click routing', () => {
     expect(isChecksPanelHostedReviewSystemBrowserModifier(event, true)).toBe(true)
     expect(resolveChecksPanelHostedReviewHttpOpenOptions(event, true, 'wt-1')).toEqual({
       worktreeId: 'wt-1',
+      allowRemoteInApp: true,
       modifierHeld: true
     })
   })
@@ -33,6 +34,7 @@ describe('checks panel hosted review click routing', () => {
     expect(isChecksPanelHostedReviewSystemBrowserModifier(event, false)).toBe(true)
     expect(resolveChecksPanelHostedReviewHttpOpenOptions(event, false, 'wt-1')).toEqual({
       worktreeId: 'wt-1',
+      allowRemoteInApp: true,
       modifierHeld: true
     })
   })
@@ -44,7 +46,7 @@ describe('checks panel hosted review click routing', () => {
         true,
         'wt-1'
       )
-    ).toEqual({ worktreeId: 'wt-1' })
+    ).toEqual({ worktreeId: 'wt-1', allowRemoteInApp: true })
   })
 
   it('opens hosted review URLs without the modifier on plain clicks', () => {
@@ -52,11 +54,13 @@ describe('checks panel hosted review click routing', () => {
       url: 'https://github.com/acme/widgets/pull/123',
       event: { metaKey: false, ctrlKey: false, shiftKey: false },
       isMac: true,
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true
     })
 
     expect(openHttpLinkMock).toHaveBeenCalledWith('https://github.com/acme/widgets/pull/123', {
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true
     })
   })
 
@@ -65,11 +69,13 @@ describe('checks panel hosted review click routing', () => {
       url: 'https://github.com/acme/widgets/pull/123',
       event: { metaKey: true, ctrlKey: false, shiftKey: true },
       isMac: true,
-      worktreeId: 'wt-1'
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true
     })
 
     expect(openHttpLinkMock).toHaveBeenCalledWith('https://github.com/acme/widgets/pull/123', {
       worktreeId: 'wt-1',
+      allowRemoteInApp: true,
       modifierHeld: true
     })
   })

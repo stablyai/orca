@@ -17,9 +17,9 @@ export function resolveChecksPanelHostedReviewHttpOpenOptions(
   // Why: same escape hatch as terminal and markdown links — openHttpLink resolves
   // whether it forces the system browser or inverts the Link Routing setting.
   if (isChecksPanelHostedReviewSystemBrowserModifier(event, isMac)) {
-    return { worktreeId, modifierHeld: true }
+    return { worktreeId, allowRemoteInApp: true, modifierHeld: true }
   }
-  return { worktreeId }
+  return { worktreeId, allowRemoteInApp: true }
 }
 
 /** Where a Shift+modifier click lands, or null when it lands where a plain click already does. */

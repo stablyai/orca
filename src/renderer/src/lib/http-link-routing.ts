@@ -127,7 +127,17 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
   }
   const state = storeAccessor?.()
   const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
-  const sourceIsLocal = sourceOwner ? sourceOwner.kind === 'local' : !remoteRuntimeActive
+  const effectiveSourceOwner =
+    sourceOwner ??
+    (allowRemoteInApp && remoteRuntimeActive
+      ? {
+          kind: 'runtime' as const,
+          runtimeEnvironmentId: state?.settings?.activeRuntimeEnvironmentId?.trim() ?? ''
+        }
+      : undefined)
+  const sourceIsLocal = effectiveSourceOwner
+    ? effectiveSourceOwner.kind === 'local'
+    : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
   const modifier = resolveModifierRouting(
     Boolean(modifierHeld),
@@ -144,16 +154,16 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     wantsOrca &&
     allowRemoteInApp &&
     worktreeId &&
-    (sourceOwner?.kind === 'runtime' || sourceOwner?.kind === 'ssh')
+    (effectiveSourceOwner?.kind === 'runtime' || effectiveSourceOwner?.kind === 'ssh')
   ) {
     if (workspaceHttpLinkBrowserOpener) {
       void workspaceHttpLinkBrowserOpener({
         workspaceId: worktreeId,
         url,
         intent: { kind: 'url' },
-        ...(sourceOwner.kind === 'runtime'
-          ? { expectedRuntimeEnvironmentId: sourceOwner.runtimeEnvironmentId }
-          : { expectedSshConnectionId: sourceOwner.connectionId })
+        ...(effectiveSourceOwner.kind === 'runtime'
+          ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
+          : { expectedSshConnectionId: effectiveSourceOwner.connectionId })
       }).catch((error) => {
         toast.error(
           error instanceof Error
