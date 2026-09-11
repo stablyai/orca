@@ -1,39 +1,19 @@
-import type WebSocket from 'ws'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { RelayControlOriginOptions } from './relay-control-origin-options'
 import { CloudRelayTransport } from '../rpc/relay-transport'
-import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
 import { RelayControlClient } from './relay-control-client'
 import { RELAY_HOST_ATTACH_DEADLINE_MS } from './relay-control-protocol'
 import type {
   RelayConnectionOpenMessage,
-  RelayDrainMessage,
   RelayHostHelloAckMessage,
   RelayPendingConnection
 } from './relay-control-protocol'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
-import type { RelayIdentity } from './relay-session-broker-contract'
 import type { RelayAssignment } from './relay-http-client'
 
 const OBSERVED_OPEN_LIMIT = 16
 
-type RelayControlOriginOptions = {
-  assignment: RelayAssignment
-  relayJwt: string
-  relayHostId: string
-  identity: RelayIdentity
-  keypair: E2EEKeypair
-  appVersion: string
-  mobileSocketWiring: MobileSocketWiring
-  createControlSocket?: (url: string, relayJwt: string) => WebSocket
-  createDataSocket?: (url: string) => WebSocket
-  onConnectionOwned: (connectionId: string, origin: RelayControlOrigin) => void
-  onConnectionReleased: (connectionId: string, origin: RelayControlOrigin) => void
-  onDrain: (origin: RelayControlOrigin, message: RelayDrainMessage) => void
-  onClose: (origin: RelayControlOrigin, code: number) => void
-}
-
 export class RelayControlOrigin {
-  readonly assignment: RelayAssignment
+  assignment: RelayAssignment
   readonly transport: CloudRelayTransport
   private readonly options: RelayControlOriginOptions
   private readonly controls = new Set<RelayControlClient>()
@@ -98,6 +78,17 @@ export class RelayControlOrigin {
     return this.leaseExpiresAt
   }
 
+  get controlGeneration(): number {
+    return this.generation
+  }
+
+  updateAssignment(assignment: RelayAssignment): void {
+    if (assignment.cellUrl !== this.cellUrl || assignment.assignmentEpoch < this.assignmentEpoch) {
+      throw new Error('relay_assignment_origin_mismatch')
+    }
+    this.assignment = assignment
+  }
+
   get pendingRequestCount(): number {
     let count = 0
     for (const control of this.controls) {
@@ -124,6 +115,7 @@ export class RelayControlOrigin {
       controlResumeSecret: this.controlResumeSecret
     })
     this.activate(control, ack)
+    this.updateAssignment(assignment)
     // Why: the resumed control owns the same server generation and splices;
     // the predecessor remains only long enough for any idempotent reply in flight.
     if (previous && previous.pendingRequestCount === 0) {
@@ -198,6 +190,17 @@ export class RelayControlOrigin {
         : {}),
       onConnectionOpen: (message) => this.openConnection(message),
       onDrain: (message) => this.options.onDrain(this, message),
+      onRegionRestored: (message) => {
+        if (control === this.activeControl && !this.closed) {
+          this.options.onRegionRestored?.(this, message)
+        }
+      },
+      onPendingChanged: () => {
+        if (control !== this.activeControl && control.pendingRequestCount === 0) {
+          this.closeRetiredControl(control)
+        }
+        this.options.onPendingChanged?.(this)
+      },
       onClose: (code) => {
         this.controls.delete(control)
         const timer = this.retiredControlTimers.get(control)

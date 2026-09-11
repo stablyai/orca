@@ -32,7 +32,7 @@ const ConnectionKindSchema = z.enum(['invite', 'resume'])
 // control upgrade rather than host-hello because the cell parses host-hello
 // strictly: a new hello key is refused by every already-deployed cell.
 export const RELAY_HOST_CAPABILITY_HEADERS = {
-  'x-orca-host-capabilities': 'pending-conn-details'
+  'x-orca-host-capabilities': 'pending-conn-details,finish-existing-regional-rehome-v1'
 } as const
 
 // Mirrors RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs in the relay contract: the
@@ -73,6 +73,27 @@ export const RelayConnectionOpenMessageSchema = z
   })
   .strict()
 
+export const RelayRegionRetentionSchema = z
+  .object({
+    mode: z.literal('finish-existing'),
+    attemptId: z.string().uuid(),
+    sourceGeneration: GenerationSchema.refine((value) => value > 0),
+    sourceAssignmentEpoch: GenerationSchema.refine((value) => value > 0)
+  })
+  .strict()
+
+export const RelayRegionRestoredMessageSchema = z
+  .object({
+    type: z.literal('region-restored'),
+    attemptId: z.string().uuid(),
+    sourceGeneration: GenerationSchema.refine((value) => value > 0),
+    sourceAssignmentEpoch: GenerationSchema.refine((value) => value > 0),
+    assignmentEpoch: GenerationSchema.refine((value) => value > 0)
+  })
+  .strict()
+
+export type RelayRegionRestoredMessage = z.infer<typeof RelayRegionRestoredMessageSchema>
+
 export const RelayDrainMessageSchema = z
   .object({
     type: z.literal('drain'),
@@ -81,7 +102,8 @@ export const RelayDrainMessageSchema = z
       .int()
       .nonnegative()
       .max(60 * 60 * 1000),
-    recovery: z.literal('resolve-director')
+    recovery: z.literal('resolve-director'),
+    retention: RelayRegionRetentionSchema.optional()
   })
   .strict()
 
@@ -142,6 +164,7 @@ export const RelayControlErrorMessageSchema = z
 export type RelayPendingConnection = z.infer<typeof PendingConnectionSchema>
 export type RelayHostHelloAckMessage = z.infer<typeof RelayHostHelloAckMessageSchema>
 export type RelayConnectionOpenMessage = z.infer<typeof RelayConnectionOpenMessageSchema>
+export type RelayRegionRetention = z.infer<typeof RelayRegionRetentionSchema>
 export type RelayDrainMessage = z.infer<typeof RelayDrainMessageSchema>
 export type RelayInviteCreatedMessage = z.infer<typeof RelayInviteCreatedMessageSchema>
 export type RelayDeviceCredentialInstalledMessage = z.infer<

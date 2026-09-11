@@ -221,7 +221,7 @@ describe('RelayControlClient', () => {
     expect(authorization).toBe('Bearer scoped-token')
     // Advertised on the upgrade, never in host-hello: a cell that predates the
     // capability parses host-hello strictly and would refuse the handshake.
-    expect(capabilities).toBe('pending-conn-details')
+    expect(capabilities).toBe('pending-conn-details,finish-existing-regional-rehome-v1')
     expect(path).toBe('/v1/host/control')
     const hello = await nextJson(socket)
     expect(hello).toMatchObject({

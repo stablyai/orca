@@ -2853,6 +2853,74 @@
       "demotionRule": "Keep experimental or demote if assignment calls overlap, duplicate drain events bypass backoff, Retry-After is ignored, close resurrects work, or mixed-version request rate exceeds the reviewed director budget."
     },
     {
+      "id": "desktop-relay.region-correction-retention",
+      "title": "Regional correction preserves existing physical relay connections",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "cell-desktop-real-websocket",
+      "surfaces": ["regional correction", "retained source rollback", "desktop relay connections"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["cloud-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["cloud-relay"],
+      "coverageNotes": "Real local WebSocket/control/proof/splice traffic and production SQLite store run with synthetic clock and synthetic token verification. Separate PostgreSQL16 suites validate SQL concurrency. This does not measure production network latency, physical phones, UI, or the production token issuer.",
+      "motivatingLinks": ["docs/relay-region-correction/RELAY-REGION-CORRECTION-PLAN.md"],
+      "invariant": "Optional regional correction retains existing physical data connections through the source past its original control lease. New connections use the target; failed-target rollback restores source authority without replacing preserved source generations or replaying a mutation.",
+      "oracle": "Two real local relay servers, actual desktop origin pool and WebSocket splices share SQLite. Advance heartbeat and active-control rotation callbacks through six hours thirty-one minutes, waiting for completed renewals. Exercise quiet and active phones, delayed once-only mutation, target orphan cleanup, durable rollback, first failed director corroboration, restored admission and traffic past the first restored short grant.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/relay-region-correction.unit.test.ts"
+      ],
+      "testFiles": ["tests/e2e/relay-region-correction.unit.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/relay-region-correction.unit.test.ts",
+          "assertions": [
+            "keeps quiet and active old connections while new connections use target, without replaying a mutation",
+            "restores the retained source after target failure despite the first failed director corroboration"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts tests/e2e/relay-region-correction.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 114.78,
+          "summary": "Both real-WebSocket scenarios passed with zero skips; real child execution and data connections survive migration/rollback. Pending restoration grants sustain the original control for150s of failed corroboration; subsequent ordinary rebind preserves generation and data splices."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "two local real-WebSocket scenarios including orphan cleanup and paced failed-corroboration requests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local implementation validation; no CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Focused ownership regression catches fresh-source generation replacement; baseline timer interruption evidence is archived separately. Complete cross-layer rollback counterfactual has not been run."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No extra periodic desktop control renewal protocol; source grants reuse cell heartbeat. One source and one target are exercised, with source retired after final owned work."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak.",
+        "Complete mixed-version and packaged-client validation.",
+        "Validate bounded rollout latency and reliability against reviewed numerical limits."
+      ],
+      "knownGaps": [
+        "Production authentication verifier is mocked.",
+        "Synthetic elapsed time invokes real callbacks; this is not a six-hour wall-clock soak.",
+        "Physical phone lifecycle, SSH execution and production network behavior are separate validation."
+      ],
+      "demotionRule": "Keep experimental or demote on any deliberate source deadline close, source generation replacement during rollback, replayed mutation, stale authority adoption, lost cleanup, or unbounded retained resources."
+    },
+    {
       "id": "git-worktree.refresh-event-semantics",
       "title": "Index-only Git metadata cannot trigger structural worktree refresh fanout",
       "maturity": "experimental",

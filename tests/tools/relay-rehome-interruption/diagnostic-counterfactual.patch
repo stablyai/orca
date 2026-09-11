@@ -1,0 +1,25 @@
+--- a/src/main/runtime/relay/relay-origin-pool.ts
++++ b/src/main/runtime/relay/relay-origin-pool.ts
+@@ -230,7 +230,7 @@
+     }
+     this.activeOrigin = target
+     this.assignment = assignment
+-    this.scheduleDrainDeadline(origin, graceMs)
++    // Diagnostic counterfactual only: let existing connection-release callbacks retire the source.
+     this.maybeCloseDrainedOrigin(origin)
+   }
+ 
+--- a/cloud/apps/relay/src/host-session-registry.ts
++++ b/cloud/apps/relay/src/host-session-registry.ts
+@@ -681,10 +681,7 @@
+     session.regionalDrainAttemptId = input.attemptId
+     session.regionalDrainExpiresAt = this.now() + input.graceMs
+     this.reassertRegionalDrain(session)
+-    session.regionalDrainTimer = setTimeout(
+-      () => this.closeDrainedSession(session),
+-      input.graceMs
+-    )
++    // Diagnostic counterfactual only: desktop retires the source after existing work ends.
+     return 'accepted'
+   }
+ 

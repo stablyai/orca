@@ -1,19 +1,18 @@
+import type { RelayControlClientOptions } from './relay-control-client-options'
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
-import type { E2EEKeypair } from '../e2ee-keypair'
 import {
   RelayConnectionOpenMessageSchema,
   RelayDrainMessageSchema,
   RelayHostChallengeMessageSchema,
   RelayHostHelloAckMessageSchema,
   RelayPingMessageSchema,
+  RelayRegionRestoredMessageSchema,
   RELAY_HOST_CAPABILITY_HEADERS,
   encodeRelayHostHello,
   parseRelayControlMessage,
-  type RelayConnectionOpenMessage,
-  type RelayDrainMessage,
   type RelayHostHelloAckMessage,
   type RelayInviteCreatedMessage
 } from './relay-control-protocol'
@@ -29,24 +28,6 @@ import { controlWebSocketUrl } from './relay-control-url'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
 
-type RelayControlClientOptions = {
-  cellUrl: string
-  relayJwt: string
-  relayHostId: string
-  assignmentEpoch: number
-  identity: { userId: string; profileId: string; organizationId: string }
-  keypair: E2EEKeypair
-  appVersion: string
-  previousGeneration?: number
-  controlResumeSecret?: string
-  onConnectionOpen: (message: RelayConnectionOpenMessage) => void
-  onDrain: (message: RelayDrainMessage) => void
-  onClose: (code: number) => void
-  createSocket?: (url: string, relayJwt: string) => WebSocket
-  connectDeadlineMs?: number
-  silenceLimitMs?: number
-}
-
 const RELAY_CONTROL_CONNECT_DEADLINE_MS = 15_000
 
 export class RelayControlClient {
@@ -54,7 +35,7 @@ export class RelayControlClient {
   private readonly relayOrigin: string
   private readonly controlUrl: string
   private readonly createSocket: NonNullable<RelayControlClientOptions['createSocket']>
-  private readonly requests = new RelayControlRequests()
+  private readonly requests: RelayControlRequests
   private socket: WebSocket | null = null
   private state: RelayControlState = 'idle'
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
@@ -64,6 +45,7 @@ export class RelayControlClient {
 
   constructor(options: RelayControlClientOptions) {
     this.options = options
+    this.requests = new RelayControlRequests(options.onPendingChanged)
     const endpoint = controlWebSocketUrl(options.cellUrl)
     this.relayOrigin = endpoint.origin
     this.controlUrl = endpoint.url
@@ -227,6 +209,12 @@ export class RelayControlClient {
     if (drain.success) {
       this.state = 'draining'
       this.options.onDrain(drain.data)
+      return
+    }
+    const restored = RelayRegionRestoredMessageSchema.safeParse(message)
+    if (restored.success) {
+      this.state = 'active'
+      this.options.onRegionRestored?.(restored.data)
       return
     }
     if (this.requests.resolveMessage(message)) {

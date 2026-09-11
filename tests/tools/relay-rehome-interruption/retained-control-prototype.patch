@@ -1,0 +1,42 @@
+--- a/cloud/apps/relay/src/host-session-registry.ts
++++ b/cloud/apps/relay/src/host-session-registry.ts
+@@ -104,6 +104,7 @@
+   // socket, so the close handler would otherwise always report zero destroyed work.
+   closingCounts: { splices: number; pending: number } | null
+   regionalDrainAttemptId: string | null
++  retainedSourceAttemptId?: string
+   regionalDrainTimer: ReturnType<typeof setTimeout> | null
+   regionalDrainExpiresAt: number | null
+ }
+@@ -1107,6 +1108,8 @@
+     if (controlActivityId && now >= session.activityRenewalDueAt) {
+       const attempt = ++session.activityRenewalAttempt
+       const startedAt = now
++      const renewalSocket = session.socket
++      const retainedAttemptId = session.retainedSourceAttemptId
+       void this.assignments
+         .renewControlActivity(
+           { userId: session.identity.sub, relayHostId: session.relayHostId },
+@@ -1120,6 +1123,22 @@
+           if (attempt <= session.activityRenewalCompletedAttempt) return
+           session.activityRenewalCompletedAttempt = attempt
+           session.activityRenewalDueAt = startedAt + CONTROL_ACTIVITY_RENEWAL_INTERVAL_MS
++          // Prototype: the production mode must be negotiated and durably fenced before setting this marker.
++          if (
++            retainedAttemptId &&
++            retainedAttemptId === session.retainedSourceAttemptId &&
++            retainedAttemptId === session.regionalDrainAttemptId &&
++            this.sessions.get(key) === session &&
++            session.socket === renewalSocket &&
++            renewalSocket.readyState === renewalSocket.OPEN &&
++            session.state === 'drain-only' &&
++            !this.draining
++          ) {
++            session.leaseExpiresAt = Math.max(
++              session.leaseExpiresAt,
++              startedAt + CONTROL_ACTIVITY_LEASE_MS
++            )
++          }
+         })
+         .catch(async (error: unknown) => {
+           if (error instanceof Error && error.message === 'activity_cell_not_authoritative') {

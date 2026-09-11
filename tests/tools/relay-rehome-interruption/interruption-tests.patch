@@ -1,0 +1,263 @@
+--- a/src/main/runtime/relay/relay-session-broker.test.ts
++++ b/src/main/runtime/relay/relay-session-broker.test.ts
+@@ -26,6 +26,7 @@
+     pendingRequestCount: number
+   }[],
+   transports: [] as {
++    options: { onConnectionClosed?: (connectionId: string) => void }
+     start: ReturnType<typeof vi.fn>
+     stop: ReturnType<typeof vi.fn>
+     setGeneration: ReturnType<typeof vi.fn>
+@@ -82,7 +83,7 @@
+     hasConnection = vi.fn(() => false)
+     openConnection = vi.fn().mockResolvedValue(undefined)
+ 
+-    constructor() {
++    constructor(readonly options: { onConnectionClosed?: (connectionId: string) => void }) {
+       fakes.transports.push(this)
+     }
+   }
+@@ -296,6 +297,106 @@
+       { mode: 'relay-basis', basisConnId: 'old-basis' }
+     )
+     expect(fakes.controls[0]!.installCredential).toHaveBeenCalledOnce()
++  })
++
++  it('repro: keep old work past the optimization deadline and close after its final connection ends', async () => {
++    vi.useFakeTimers()
++    vi.setSystemTime(0)
++    try {
++    const firstAck: RelayHostHelloAckMessage = {
++      type: 'host-hello-ack',
++      v: 1,
++      generation: 1,
++      controlResumeSecret: 'A'.repeat(43),
++      leaseExpiresAt: 1_000_000,
++      activeConnIds: [],
++      pendingConns: []
++    }
++    fakes.controlConnect.mockResolvedValueOnce(firstAck).mockResolvedValueOnce({
++      ...firstAck,
++      generation: 2,
++      controlResumeSecret: 'B'.repeat(43)
++    })
++    fakes.assign
++      .mockResolvedValueOnce({
++        cellUrl: 'https://relay-c1.example.test',
++        assignmentEpoch: 1,
++        leaseExpiresAt: 1_000_000
++      })
++      .mockResolvedValueOnce({
++        cellUrl: 'https://relay-c2.example.test',
++        assignmentEpoch: 2,
++        leaseExpiresAt: 2_000_000
++      })
++    const resolvePreferredRegion = vi
++      .fn()
++      .mockResolvedValueOnce('asia-east2')
++      .mockResolvedValueOnce('us-central1')
++    const broker = await RelaySessionBroker.connect(
++      brokerOptions({
++        onStatus: vi.fn(),
++        resolvePreferredRegion
++      })
++    )
++    expect(fakes.assign).toHaveBeenNthCalledWith(
++      1,
++      expect.objectContaining({
++        preferredRegion: 'asia-east2',
++        reconnect: true,
++        // Why: the rate-gate wait relies on this fencing to abort superseded
++        // callers; dropping the wiring must fail here, not only in the field.
++        isCurrent: expect.any(Function)
++      })
++    )
++    const wiredIsCurrent = (fakes.assign.mock.calls[0]![0] as { isCurrent: () => boolean })
++      .isCurrent
++    expect(wiredIsCurrent()).toBe(true)
++    fakes.controls[0]!.options.onConnectionOpen({
++      connId: 'old-basis',
++      connTicket: 'T'.repeat(43),
++      kind: 'resume',
++      relayDeviceId: 'device-1',
++      attachDeadlineMs: 1_000
++    })
++    expect(brokerBasisIds(broker)).toEqual(['old-basis'])
++    fakes.controls[0]!.options.onDrain({
++      type: 'drain',
++      graceMs: 30_000,
++      recovery: 'resolve-director'
++    })
++    await vi.waitFor(() => expect(fakes.controls).toHaveLength(2))
++
++    expect(fakes.assign).toHaveBeenNthCalledWith(
++      2,
++      expect.objectContaining({ preferredRegion: 'us-central1', reconnect: true })
++    )
++    expect(resolvePreferredRegion).toHaveBeenCalledTimes(2)
++
++    expect(broker.endpoint?.cellUrl).toBe('https://relay-c2.example.test')
++    expect(fakes.transports[0]!.openConnection).toHaveBeenCalledOnce()
++    expect(brokerBasisIds(broker)).toEqual(['old-basis'])
++    expect(fakes.controls[0]!.closeNow).not.toHaveBeenCalled()
++    expect(fakes.transports[0]!.stop).not.toHaveBeenCalled()
++    await broker.confirmResume('old-basis', 'confirm-1')
++    expect(fakes.controls[0]!.confirmResume).toHaveBeenCalledWith('old-basis', 'confirm-1')
++    await broker.installCredential(
++      'device-1',
++      { reqId: 'install-1', newResumeTokenHash: 'H'.repeat(43) },
++      { mode: 'relay-basis', basisConnId: 'old-basis' }
++    )
++    expect(fakes.controls[0]!.installCredential).toHaveBeenCalledOnce()
++    await vi.advanceTimersByTimeAsync(30_001)
++    expect(fakes.transports[0]!.stop).not.toHaveBeenCalled()
++    expect(fakes.controls[0]!.closeNow).not.toHaveBeenCalled()
++    expect(broker.endpoint?.cellUrl).toBe('https://relay-c2.example.test')
++    fakes.transports[0]!.options.onConnectionClosed?.('old-basis')
++    expect(fakes.transports[0]!.stop).toHaveBeenCalledOnce()
++    expect(fakes.controls[0]!.closeNow).toHaveBeenCalledOnce()
++    expect(fakes.transports[1]!.stop).not.toHaveBeenCalled()
++    broker.closeNow()
++    } finally {
++      vi.useRealTimers()
++    }
+   })
+ 
+   it('rebinds the same process generation with its control resume secret', async () => {
+--- a/cloud/apps/relay/src/host-session-registry.test.ts
++++ b/cloud/apps/relay/src/host-session-registry.test.ts
+@@ -421,6 +421,30 @@
+     expect(secondSocket.close).not.toHaveBeenCalled()
+   })
+ 
++  it('repro: keeps an active source splice beyond the optimization deadline', async () => {
++    const activateControl = vi.fn<RelayAssignmentStore['activateControl']>()
++      .mockResolvedValue('control:test-source:1')
++    const { registry, activate } = createRegistry(activateControl, {}, vi.fn(async () => identity))
++    const socket = new FakeSocket()
++    await activate(socket as unknown as WebSocket, identity, null, 1, false, 7)
++    const session = registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
++    const closeSplice = vi.fn()
++    session.activeSplices.set('active-test-stream', closeSplice)
++    const request = {
++      attemptId: '11111111-1111-4111-8111-111111111111',
++      userId: identity.sub, relayHostId: identity.relayHostId,
++      sourceAssignmentEpoch: 7, graceMs: 30_000
++    }
++    expect(registry.drainHost(request)).toBe('accepted')
++    expect(session.state).toBe('drain-only')
++    await vi.advanceTimersByTimeAsync(15_000)
++    socket.emit('message', Buffer.from(JSON.stringify({ type: 'pong' })), false)
++    await vi.advanceTimersByTimeAsync(15_001)
++    expect(closeSplice).not.toHaveBeenCalled()
++    expect(socket.close).not.toHaveBeenCalled()
++    expect(registry.runtimeCounts().splices).toBe(1)
++  })
++
+   it('refreshes the logged client build when a control rebinds', async () => {
+     const activateControl = vi
+       .fn<RelayAssignmentStore['activateControl']>()
+--- a/cloud/apps/relay/src/regional-rehome-store.test.ts
++++ b/cloud/apps/relay/src/regional-rehome-store.test.ts
+@@ -152,6 +152,37 @@
+     )).toEqual([{ completed_at: context.now(), aborted_at: null }])
+     expect(targetControl).toMatch(/^control:/)
+     await context.database.close()
++  })
++
++  it('repro: retains a registered migration for an hour of source activity and completes on release', async () => {
++    const context = await setup()
++    const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
++    try {
++      const sourceControl = await activatePreferredSource(context, identity)
++      const attempt = await context.store.claimRegionalRehome()
++      await context.store.recordRegionalRehomeDrainReceipt(attempt!.attemptId, 'accepted')
++      const targetControl = await context.store.activateControl(identity, {
++        cellId: target.id, assignmentEpoch: 2, generation: 1
++      })
++      await context.store.markMigrationTargetRegistered(identity, { cellId: target.id, assignmentEpoch: 2 })
++      for (let i = 0; i < 120; i++) {
++        context.advance(30_000)
++        await freshHeartbeats(context)
++        for (const [cellId, activityId] of [[source.id, sourceControl], [target.id, targetControl]]) {
++          await context.store.renewControlActivity(identity, { activityId, cellId, expiresAt: context.now() + 90_000 })
++        }
++        await context.store.refreshRegionalRehomeLeases()
++        expect(await context.store.abortExpiredRegionalRehomes()).toBe(0)
++        await context.store.releaseExpiredActivityLeases()
++        expect(await context.store.completeReadyRegionalRehomes()).toBe(0)
++      }
++      expect(await context.store.resolve(identity)).toMatchObject({ cellId: target.id })
++      await context.store.releaseActivity(identity, sourceControl)
++      expect(await context.store.completeReadyRegionalRehomes()).toBe(1)
++      expect(await context.store.inspectRegionalRehomeControl()).toMatchObject({ enabled: true })
++    } finally {
++      await context.database.close()
++    }
+   })
+ 
+   it('completes from durable activity when the drain response was lost', async () => {
+--- a/mobile/src/transport/mobile-relay-runtime-failover.test.ts
++++ b/mobile/src/transport/mobile-relay-runtime-failover.test.ts
+@@ -20,6 +20,12 @@
+ // relay whose direct LAN endpoint is unreachable (Tailscale off) dialed the
+ // LAN endpoint forever and never recovered a relay runtime session.
+ 
++vi.mock('./pairing-keychain', () => ({
++  readPairingKeychainItem: vi.fn(() => { throw new Error('unexpected keychain read') }),
++  writePairingKeychainItem: vi.fn(() => { throw new Error('unexpected keychain write') }),
++  deletePairingKeychainItem: vi.fn(() => { throw new Error('unexpected keychain delete') })
++}))
++
+ vi.mock('react-native', () => ({ Platform: { OS: 'android' } }))
+ vi.mock('expo-secure-store', () => ({
+   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked'
+@@ -254,6 +260,48 @@
+     vi.restoreAllMocks()
+   })
+ 
++  it('repro: a planned drain re-resolves the target and restores subscriptions without re-pairing', async () => {
++    const first = new FakeRelaySession('connected', new RelayOuterError(4503))
++    const replacement = new FakeRelaySession('connected')
++    const logical = createStableLogicalRpcClient(new FakeSession('disconnected'), 'lan')
++    const target = { ...relay, cellUrl: 'https://target.example.test', assignmentEpoch: relay.assignmentEpoch + 1 }
++    const openRelay = vi.fn()
++      .mockReturnValueOnce(first)
++      .mockImplementationOnce(() => {
++        const rejected = new FakeRelaySession('connecting', new RelayOuterError(4503))
++        setTimeout(() => rejected.publishState('disconnected'), 0)
++        return rejected
++      })
++      .mockReturnValueOnce(replacement)
++    const resolveRelay = vi.fn(async () => target)
++    const deps = dependencies({ openRelay, resolveRelay })
++    const supervisor = new MobileEndpointSupervisor(logical, { ...host }, deps)
++    try {
++      await supervisor.start()
++      await vi.advanceTimersByTimeAsync(0)
++      expect(logical.getState()).toBe('connected')
++      const off = logical.subscribe('session.tabs.subscribe', { worktree: 'test' }, () => {})
++      expect(first.subscribe).toHaveBeenCalledOnce()
++      const startedAt = Date.now()
++      first.publishState('disconnected')
++      await vi.advanceTimersByTimeAsync(249)
++      expect(openRelay).toHaveBeenCalledTimes(1)
++      await vi.advanceTimersByTimeAsync(2)
++      expect(logical.getState()).toBe('connected')
++      expect(Date.now() - startedAt).toBe(251)
++      expect(resolveRelay).toHaveBeenCalledOnce()
++      expect(openRelay).toHaveBeenCalledTimes(3)
++      expect(openRelay.mock.calls[2][0]).toMatchObject(target)
++      expect(openRelay.mock.calls[2][1]).toEqual(openRelay.mock.calls[0][1])
++      expect(replacement.subscribe).toHaveBeenCalledOnce()
++      expect(deps.saveHost).toHaveBeenCalledOnce()
++      off()
++    } finally {
++      supervisor.stop()
++      logical.close()
++    }
++  })
++
+   it('recovers from a rejected outer credential once a fresher bundle is durable', async () => {
+     const logical = new FakeLogicalClient('disconnected', 'lan')
+     const openRelay = vi
