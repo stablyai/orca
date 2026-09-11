@@ -138,7 +138,8 @@ describe('AccountsPane', () => {
     expect(markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)).toContain(
       'disabled=""'
     )
-    expect(markup).toContain('Add accounts on the remote server by running: orca account add')
+    expect(markup).toContain('orca account add --agent claude')
+    expect(markup).toContain('orca account add --agent codex')
   })
 
   it('omits the scope control on the web client, which cannot select Local desktop', () => {
@@ -174,6 +175,7 @@ describe('AccountsPane', () => {
     expect(
       markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)
     ).not.toContain('disabled=""')
-    expect(markup).not.toContain('Add accounts on the remote server by running: orca account add')
+    expect(markup).not.toContain('orca account add --agent claude')
+    expect(markup).not.toContain('orca account add --agent codex')
   })
 })

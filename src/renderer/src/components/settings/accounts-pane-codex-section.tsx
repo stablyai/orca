@@ -1,11 +1,10 @@
 import { AlertTriangle, Loader2, Plus } from 'lucide-react'
-import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { selectCodexProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { AccountsPaneRemoteActionWrapper } from './accounts-pane-remote-action-wrapper'
 import { OpenAIIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
 import { getAccountsCodexSearchEntries } from './accounts-search'
@@ -154,62 +153,19 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
                   )}
             </p>
           </div>
-          {isRemoteAccountScope ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    className="inline-flex cursor-not-allowed"
-                    onClick={() =>
-                      toast.info(
-                        translate(
-                          'auto.components.settings.AccountsPane.remoteAddCodexNotice',
-                          'Accounts on {{value0}} must be added in a terminal on that server. Run: orca account add --agent codex',
-                          { value0: accountRuntimeSentenceLabel }
-                        )
-                      )
-                    }
-                  >
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={() =>
-                        void runCodexAccountAction('adding', () =>
-                          window.api.codexAccounts.add({
-                            runtime: accountRuntime.runtime,
-                            wslDistro: accountRuntime.wslDistro
-                          })
-                        )
-                      }
-                      disabled={
-                        // Why: interactive `codex login` needs a desktop browser and
-                        // would authenticate against this device, not the server.
-                        isRemoteAccountScope ||
-                        codexAction !== 'idle' ||
-                        wslCapabilitiesLoading ||
-                        accountRuntimeUnavailable
-                      }
-                      className="gap-1.5"
-                    >
-                      {codexAction === 'adding' ? (
-                        <Loader2 className="size-3 animate-spin" />
-                      ) : (
-                        <Plus className="size-3" />
-                      )}
-                      {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
-                    </Button>
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {translate(
-                    'auto.components.settings.AccountsPane.remoteAddCodexTooltip',
-                    'Add accounts on {{value0}} by running: orca account add --agent codex',
-                    { value0: accountRuntimeSentenceLabel }
-                  )}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : (
+          <AccountsPaneRemoteActionWrapper
+            isRemote={isRemoteAccountScope}
+            notice={translate(
+              'auto.components.settings.AccountsPane.remoteAddCodexNotice',
+              'Accounts on {{value0}} must be added in a terminal on that server. Run: orca account add --agent codex',
+              { value0: accountRuntimeSentenceLabel }
+            )}
+            tooltip={translate(
+              'auto.components.settings.AccountsPane.remoteAddCodexTooltip',
+              'Add accounts on {{value0}} by running: orca account add --agent codex',
+              { value0: accountRuntimeSentenceLabel }
+            )}
+          >
             <Button
               variant="outline"
               size="xs"
@@ -238,7 +194,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               )}
               {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
             </Button>
-          )}
+          </AccountsPaneRemoteActionWrapper>
         </div>
         {remoteAccountScopeNotice}
 

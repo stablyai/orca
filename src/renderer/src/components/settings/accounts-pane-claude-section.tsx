@@ -1,11 +1,10 @@
 import { Loader2, Plus, RefreshCw, Trash2, X } from 'lucide-react'
-import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { selectClaudeProviderAccount } from '@/runtime/runtime-provider-accounts-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { AccountsPaneRemoteActionWrapper } from './accounts-pane-remote-action-wrapper'
 import { ClaudeIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
 import {
@@ -13,33 +12,6 @@ import {
   providerAccountIsActiveInView
 } from './provider-account-visibility'
 import { formatAccountTimestamp, getClaudeAccountRuntimeLabel } from './accounts-pane-runtime'
-function RemoteActionTooltipWrapper({
-  isRemote,
-  notice,
-  tooltip,
-  children
-}: {
-  isRemote: boolean
-  notice: string
-  tooltip: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  if (!isRemote) {
-    return <>{children}</>
-  }
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex cursor-not-allowed" onClick={() => toast.info(notice)}>
-            {children}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="top">{tooltip}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  )
-}
 
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 
@@ -104,7 +76,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <RemoteActionTooltipWrapper
+            <AccountsPaneRemoteActionWrapper
               isRemote={isRemoteAccountScope}
               notice={translate(
                 'auto.components.settings.AccountsPane.remoteAddClaudeNotice',
@@ -145,7 +117,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 )}
                 {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
               </Button>
-            </RemoteActionTooltipWrapper>
+            </AccountsPaneRemoteActionWrapper>
             {claudeAction === 'adding' ? (
               <Button
                 variant="ghost"
@@ -282,7 +254,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
-                      <RemoteActionTooltipWrapper
+                      <AccountsPaneRemoteActionWrapper
                         isRemote={isRemoteAccountScope}
                         notice={translate(
                           'auto.components.settings.AccountsPane.remoteReauthClaudeNotice',
@@ -322,7 +294,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                             'Re-authenticate'
                           )}
                         </Button>
-                      </RemoteActionTooltipWrapper>
+                      </AccountsPaneRemoteActionWrapper>
                       <Button
                         variant="ghost"
                         size="xs"
