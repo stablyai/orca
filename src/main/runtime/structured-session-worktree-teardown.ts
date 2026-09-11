@@ -33,12 +33,12 @@ import { retireSettledStructuredWorkerTab } from './structured-agent-session-tab
 import type { WorktreePtyHostFence } from './worktree-pty-host-fence'
 import type { OrcaRuntimeService } from './orca-runtime'
 
-export type LiveStructuredSessionInWorkspace = {
+export type StructuredSessionInWorkspace = {
   sessionId: string
   agent: 'claude' | 'codex'
 }
 
-export type UnclosedStructuredSession = LiveStructuredSessionInWorkspace & {
+export type UnclosedStructuredSession = StructuredSessionInWorkspace & {
   /** Read AFTER the close: `live` is a child watched stay attached, not merely one left unproven. */
   status: 'live' | 'unverifiable'
 }
@@ -83,36 +83,61 @@ export function structuredSessionTeardownHostId(
 }
 
 /**
- * Structured sessions with a proven-live child in this worktree, on the fenced host only.
+ * The workspace's structured sessions, split into what belongs to it and what is attached.
+ *
+ * MEMBERSHIP and LIVENESS answer different questions, and folding them into one list is what let
+ * a chat tab outlive its workspace. A provider child is scoped to a VISIBLE pane — the hold that
+ * keeps one is `enabled: isVisible && isWorktreeActive`, and dropping the last hold evicts the
+ * child after the release grace — so `live` really means "this chat is the visible pane in the
+ * active workspace, or was moments ago". Deleting a workspace from the sidebar while a different
+ * one is active makes every chat in the target non-live. Those are exactly the sessions a
+ * liveness-only list never saw.
+ */
+export type StructuredSessionsForWorktree = {
+  /** Every session bound to this workspace on the fenced host, attached or not. */
+  members: StructuredSessionInWorkspace[]
+  /** The subset with a proven-live provider child: what the sweep closes and may refuse over. */
+  live: StructuredSessionInWorkspace[]
+}
+
+/**
+ * Structured sessions in this worktree, on the fenced host only.
  *
  * An uninstalled host answers empty rather than throwing: no host in this generation means no
  * provider child was started by this process, and the three PTY sweeps fall through the same way
  * when their surface is unavailable. It is deliberately NOT read through the persisted store
  * directly — that would force-install the host, which is itself a side effect on a teardown path.
+ *
+ * One enumeration and one observation per member, because both answers are read by the same
+ * caller: re-deriving the live subset separately would run every liveness observation twice.
  */
-export function listLiveStructuredSessionsForWorktree(
+export function listStructuredSessionsForWorktree(
   worktreeId: string,
   fence: StructuredSessionHostFence
-): LiveStructuredSessionInWorkspace[] {
+): StructuredSessionsForWorktree {
   const host = getStructuredAgentSessionHost()
   if (!host) {
-    return []
+    return { members: [], live: [] }
   }
   let records: ReturnType<typeof host.deps.store.listRecords>
   try {
     records = host.deps.store.listRecords()
   } catch {
-    return []
+    return { members: [], live: [] }
   }
   const hostId = structuredSessionTeardownHostId(fence)
-  return records
+  const members = records
     .filter(
       (record) =>
-        record.location.workspaceId === worktreeId &&
-        record.location.executionHostId === hostId &&
-        observeStructuredWorker({ sessionId: record.sessionId }).status === 'live'
+        record.location.workspaceId === worktreeId && record.location.executionHostId === hostId
     )
     .map((record) => ({ sessionId: record.sessionId, agent: record.provider }))
+  return {
+    members,
+    live: members.filter(
+      (session) => observeStructuredWorker({ sessionId: session.sessionId }).status === 'live'
+    )
+  }
 }
 
 /**
@@ -166,7 +191,7 @@ export function describeUnclosedStructuredSessions(
  */
 export type StructuredSweepProgress = {
   /** The sessions this sweep closes, in the order the loop reaches them. */
-  readonly sessions: readonly LiveStructuredSessionInWorkspace[]
+  readonly sessions: readonly StructuredSessionInWorkspace[]
   /** Sessions no longer attached after their close — the count this sweep reports. */
   closed: number
   /** Attempted closes that did not settle, each carrying the verdict re-read after the attempt. */
@@ -176,7 +201,7 @@ export type StructuredSweepProgress = {
 }
 
 export function createStructuredSweepProgress(
-  sessions: readonly LiveStructuredSessionInWorkspace[]
+  sessions: readonly StructuredSessionInWorkspace[]
 ): StructuredSweepProgress {
   return { sessions, closed: 0, unstopped: [], settled: 0 }
 }
@@ -273,6 +298,35 @@ export async function closeStructuredSessionsForWorktree(
     // Advanced only once an outcome is recorded, so a close still in flight when the deadline
     // lands stays reported as unclosed instead of falling out of both counts.
     progress.settled += 1
+  }
+}
+
+/**
+ * Retires the chat tabs of every structured session in a workspace this removal is discarding.
+ *
+ * The close path already does this for a session it CLOSED. This is the complement: the members
+ * with no attached child, which the close list never contained and nothing else will hide. Their
+ * durable reference survives every purge a removal already performs: the renderer drops `unifiedTabsByWorktree` and the main
+ * process drops the workspace metadata, and neither touches `visibleSessionIds`. Startup replays
+ * that index, restores the session from it and republishes the tab, so the chat comes back at the
+ * next launch pointing at a workspace that is gone. Worktree ids are path-derived and can be
+ * recreated, so a later workspace at the same path inherits the tab — which is the hazard
+ * `removeWorktreeMetadataAndHistory` purges everything else to prevent.
+ *
+ * The caller owns WHEN: this must only be reached once the removal can no longer refuse, because
+ * a refusal leaves the workspace and its tabs in place. Same reasoning as the close's own
+ * `restoreTabOnUnprovenClose` gate, one level up.
+ *
+ * Serial, and structurally unable to fail the teardown: each step is a store transaction that
+ * serializes per session anyway, and a removal must not be turned back by tab bookkeeping.
+ */
+export async function retireStructuredSessionTabsForWorktree(
+  sessions: readonly StructuredSessionInWorkspace[],
+  runtime?: StructuredWorktreeSweepRuntime
+): Promise<void> {
+  for (const session of sessions) {
+    await dropDurableChatTabReference(session.sessionId)
+    retireSettledStructuredWorkerTab(session.sessionId, runtime)
   }
 }
 

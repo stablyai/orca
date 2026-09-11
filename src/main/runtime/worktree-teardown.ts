@@ -17,8 +17,10 @@ import {
   closeStructuredSessionsForWorktree,
   createStructuredSweepProgress,
   describeUnclosedStructuredSessions,
-  listLiveStructuredSessionsForWorktree,
-  unclosedStructuredSessions
+  listStructuredSessionsForWorktree,
+  retireStructuredSessionTabsForWorktree,
+  unclosedStructuredSessions,
+  type StructuredSessionInWorkspace
 } from './structured-session-worktree-teardown'
 import {
   createWorktreeSweepTracker,
@@ -208,7 +210,8 @@ export async function killAllProcessesForWorktree(
   for (const sweep of [runtimeSweep, providerSweep, registrySweep]) {
     void sweep.catch(() => undefined)
   }
-  const structuredStopped = await structuredSweep
+  const structured = await structuredSweep
+  const structuredStopped = structured.closed
   let runtimeResult: { stopped: number }
   let providerStopped: number
   let registryStopped: number
@@ -222,7 +225,9 @@ export async function killAllProcessesForWorktree(
     if (forced.incomplete) {
       // Carries the structured count out too: this early return skips the PTY verdict, not the
       // sweep that already closed a user's chats, and dropping it makes the log say `structured=0`
-      // for a removal that closed some.
+      // for a removal that closed some. Force deletes whatever the sweeps reported, so the chat
+      // tabs go with the workspace here as well.
+      await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
       return { ...forced.stopped, ...(structuredStopped > 0 ? { structuredStopped } : {}) }
     }
     runtimeResult = { stopped: forced.stopped.runtimeStopped }
@@ -284,6 +289,11 @@ export async function killAllProcessesForWorktree(
     }
   }
 
+  // Past every refusal, and only here. A removal that refuses — over an unclosed session above, a
+  // sweep that failed outright, or the unstopped-PTY gate just now — leaves the workspace and its
+  // chat tabs exactly where they were, so retiring a tab before this point would take the user's
+  // chat away on a delete that never happened.
+  await retireStructuredSessionTabsForWorktree(structured.retirable, deps.runtime)
   return {
     runtimeStopped: runtimeResult.stopped,
     providerStopped,
@@ -291,6 +301,23 @@ export async function killAllProcessesForWorktree(
     ...(structuredStopped > 0 ? { structuredStopped } : {})
   }
 }
+
+type StructuredSweepOutcome = {
+  /** Sessions this sweep proved closed — the count the removal log and result report. */
+  closed: number
+  /**
+   * The workspace's sessions the close loop never had anything to close: no attached child, so
+   * nothing hid their chat tab and nothing will. Exactly the complement of the close list, so each
+   * session's tab is handled once, by one mechanism.
+   *
+   * Carried out to the caller rather than acted on here, because this sweep is joined BEFORE the
+   * unstopped-PTY verdict: retiring a tab at the end of this function would still be ahead of a
+   * gate that can refuse the whole removal.
+   */
+  retirable: readonly StructuredSessionInWorkspace[]
+}
+
+const NO_STRUCTURED_SWEEP: StructuredSweepOutcome = { closed: 0, retirable: [] }
 
 /**
  * The fourth sweep: structured agent sessions bound to this worktree, on this host.
@@ -313,16 +340,22 @@ async function sweepStructuredSessions(
   deps: WorktreeTeardownDeps,
   deadline: number,
   sweeps: WorktreeSweepTracker
-): Promise<number> {
+): Promise<StructuredSweepOutcome> {
   if (!deps.requirePhysicalStop && !deps.closeStructuredSessions) {
-    return 0
+    return NO_STRUCTURED_SWEEP
   }
   // `deps` carries the same two host fields the PTY sweeps fence on, and a `repoId::path` id names
   // a different workspace on every host — so an unfenced list would close a live chat belonging to
-  // an SSH or paired-runtime copy of the id being removed here.
-  const live = listLiveStructuredSessionsForWorktree(worktreeId, deps)
+  // an SSH or paired-runtime copy of the id being removed here. The same fence carries the
+  // membership half: a tab retired for one host's workspace is a tab taken from another's.
+  const { members, live } = listStructuredSessionsForWorktree(worktreeId, deps)
+  const liveIds = new Set(live.map((session) => session.sessionId))
+  // A chat with no attached child is precisely the one this removal used to leave a durable tab
+  // reference for, and it is invisible to every list below — so it comes out even when the close
+  // loop below is skipped entirely, which is the common case for a delete from the sidebar.
+  const retirable = members.filter((session) => !liveIds.has(session.sessionId))
   if (live.length === 0) {
-    return 0
+    return { closed: 0, retirable }
   }
   // Raced against the same sweep budget every PTY surface is bounded by, because `host.close`
   // awaits a provider round trip whose own eviction steps are each bounded well past this budget.
@@ -352,7 +385,7 @@ async function sweepStructuredSessions(
   const closed = progress.closed
   const unstopped = unclosedStructuredSessions(progress)
   if (unstopped.length === 0) {
-    return closed
+    return { closed, retirable }
   }
   // Only a proof-requiring removal may refuse. A folder-workspace removal shares its root, so no
   // checkout disappears under the child — the harm is a session left pointing at a workspace Orca
@@ -372,5 +405,5 @@ async function sweepStructuredSessions(
   console.warn(
     `[worktree-teardown] forcing removal of ${worktreeId}${UNSTOPPED_PTY_DETAIL_SEPARATOR}${describeUnclosedStructuredSessions(unstopped)}`
   )
-  return closed
+  return { closed, retirable }
 }
