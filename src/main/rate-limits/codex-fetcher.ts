@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 
 import { getMainHttpClient } from '../network/http-client'
 import { buildConfiguredProxyEnv } from '../../shared/network-proxy'
+import { addWslEnvKeys } from '../../shared/wsl-env'
 import { isCodexAuthError } from '../../shared/codex-auth-errors'
 import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -52,8 +53,7 @@ export type FetchCodexRateLimitsOptions = CodexRateLimitFetchOptions
 function buildWslCodexCommand(
   codexHomePath: string,
   args: string[],
-  isolateRpcStdio: boolean,
-  proxyEnv: Record<string, string> = {}
+  isolateRpcStdio: boolean
 ): { command: string; args: string[] } | null {
   const wslInfo = parseWslUncPath(codexHomePath)
   if (process.platform !== 'win32' || !wslInfo) {
@@ -61,13 +61,7 @@ function buildWslCodexCommand(
   }
   const setupCommands = [
     ...getHiddenRateLimitWslCwdSetupCommands(),
-    `export CODEX_HOME=${quoteHiddenRateLimitShellValue(wslInfo.linuxPath)}`,
-    // Why: Windows-side env does not cross into the distro without WSLENV, so export the
-    // configured proxy inside the command for the inner codex — the same shape claude-pty.ts
-    // uses. Merging it into the wsl.exe env instead would be a silent no-op (#19755).
-    ...Object.entries(proxyEnv).map(
-      ([key, value]) => `export ${key}=${quoteHiddenRateLimitShellValue(value)}`
-    )
+    `export CODEX_HOME=${quoteHiddenRateLimitShellValue(wslInfo.linuxPath)}`
   ].join(' && ')
   const execSuffix = `${args.map(quoteHiddenRateLimitShellValue).join(' ')}${
     isolateRpcStdio ? ' <&3 >&4 3<&- 4>&-' : ''
@@ -112,27 +106,31 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
     return abortedCodexRateLimitResult()
   }
   const codexArgs = [...CODEX_READ_ONLY_APP_SERVER_ARGS]
-  // Why: a local probe reads the proxy from its own env, while the WSL branch cannot receive it
-  // that way and gets the same values to export inside the distro instead (#19755).
+  // Why: a local probe reads the proxy from its own env. The WSL branch instead names the
+  // values in WSLENV so the distro imports them — serializing them into the wsl.exe command
+  // line would expose proxy credentials to local process listings (the URL is a protected
+  // secret at rest), and merging them into the wsl.exe env alone would be inert (#19755).
   const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
   const wslCodex = options?.codexHomePath
-    ? buildWslCodexCommand(options.codexHomePath, codexArgs, true, proxyEnv)
+    ? buildWslCodexCommand(options.codexHomePath, codexArgs, true)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
   const { spawnCmd, spawnArgs } = wslCodex
     ? { spawnCmd: wslCodex.command, spawnArgs: wslCodex.args }
     : getSpawnArgsForWindows(codexCommand, codexArgs)
+  const spawnEnv = withCliRuntimeOnPath(codexCommand, {
+    ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
+    ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {}),
+    ...(wslCodex ? {} : proxyEnv)
+  })
+  if (wslCodex && Object.keys(proxyEnv).length > 0) {
+    addWslEnvKeys(spawnEnv, Object.keys(proxyEnv))
+  }
   const spawnOptions = {
     stdio: ['pipe', 'pipe', 'pipe'] as ['pipe', 'pipe', 'pipe'],
     cwd: resolveHiddenRateLimitPtyCwd(),
     windowsHide: true,
-    env: withCliRuntimeOnPath(codexCommand, {
-      ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
-      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {}),
-      // Why: only the local probe reads these from the env; the WSL command exports them
-      // in-distro instead, so adding them to the wsl.exe env would be inert (#19755).
-      ...(wslCodex ? {} : proxyEnv)
-    })
+    env: spawnEnv
   }
   const child = spawn(spawnCmd, spawnArgs, spawnOptions)
   return readCodexRateLimitsViaRpc({
@@ -148,20 +146,24 @@ async function fetchViaRpc(options?: CodexRateLimitFetchOptions): Promise<Provid
 function resolvePtyCommand(options?: CodexRateLimitFetchOptions) {
   const proxyEnv = buildConfiguredProxyEnv(options?.networkProxySettings)
   const wslCodex = options?.codexHomePath
-    ? buildWslCodexCommand(options.codexHomePath, [], false, proxyEnv)
+    ? buildWslCodexCommand(options.codexHomePath, [], false)
     : null
   const codexCommand = wslCodex ? 'codex' : resolveCodexCommand()
   const isWin32 = process.platform === 'win32'
+  const env = withCliRuntimeOnPath(codexCommand, {
+    ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
+    TERM: 'xterm-256color',
+    ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {}),
+    ...(wslCodex ? {} : proxyEnv)
+  })
+  if (wslCodex && Object.keys(proxyEnv).length > 0) {
+    addWslEnvKeys(env, Object.keys(proxyEnv))
+  }
   return {
     command: wslCodex ? wslCodex.command : isWin32 ? getCmdExePath() : codexCommand,
     args: wslCodex ? wslCodex.args : isWin32 ? ['/d', '/c', codexCommand] : [],
     cwd: resolveHiddenRateLimitPtyCwd(),
-    env: withCliRuntimeOnPath(codexCommand, {
-      ...(wslCodex ? processEnvWithoutCodexHome() : process.env),
-      TERM: 'xterm-256color',
-      ...(options?.codexHomePath && !wslCodex ? { CODEX_HOME: options.codexHomePath } : {}),
-      ...(wslCodex ? {} : proxyEnv)
-    })
+    env
   }
 }
 

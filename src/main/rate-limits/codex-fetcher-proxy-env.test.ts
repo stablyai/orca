@@ -107,4 +107,37 @@ describe('Codex probe proxy environment', () => {
     expect(spawnEnv.HTTPS_PROXY).toBe('http://127.0.0.1:7890')
     expect(spawnEnv.HTTP_PROXY).toBe('http://127.0.0.1:7890')
   })
+
+  // Why: a proxy URL may embed credentials (it is a protected secret at rest), and wsl.exe
+  // command lines are visible to local processes — so the values must cross via WSLENV names,
+  // never serialized into the command (CodeRabbit CWE-200 on #19931).
+  it('keeps proxy credentials out of the WSL command line and crosses them via WSLENV', async () => {
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      const rpcChild = makeRpcChild()
+      childSpawnMock.mockReturnValue(rpcChild)
+
+      const resultPromise = fetchCodexRateLimits({
+        allowPtyFallback: false,
+        codexHomePath: String.raw`\\wsl.localhost\Ubuntu\home\alice`,
+        networkProxySettings: { httpProxyUrl: 'http://user:pass@127.0.0.1:7890' }
+      })
+      await vi.advanceTimersByTimeAsync(0)
+
+      const [spawnCmd, spawnArgs, spawnOptions] = childSpawnMock.mock.calls[0] ?? []
+      expect(spawnCmd).toBe('wsl.exe')
+      const commandText = Array.isArray(spawnArgs) ? (spawnArgs as string[]).join(' ') : ''
+      expect(commandText).not.toContain('user:pass@127.0.0.1:7890')
+      const spawnEnv = (spawnOptions as { env?: Record<string, string> })?.env ?? {}
+      expect(spawnEnv.WSLENV ?? '').toContain('HTTPS_PROXY')
+
+      rpcChild.emit('close')
+      await resultPromise
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, 'platform', platformDescriptor)
+      }
+    }
+  })
 })
