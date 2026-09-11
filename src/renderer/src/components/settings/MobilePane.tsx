@@ -15,6 +15,7 @@ import { MobileAutoRestoreFitSection } from './MobileAutoRestoreFitSection'
 import { MobilePairingConnectionOptions } from './MobilePairingConnectionOptions'
 import { MobilePairingSetupSection } from './MobilePairingSetupSection'
 import { MobileRelayMintFailureNotice } from '../mobile/mobile-relay-mint-failure-notice'
+import { collectMobileRelayDiagnosticsPayload } from '../mobile/mobile-relay-diagnostics-payload'
 import { WindowsFirewallNotice } from '../mobile/WindowsFirewallNotice'
 import { translate } from '@/i18n/i18n'
 import {
@@ -300,20 +301,13 @@ export function MobilePane(): React.JSX.Element {
     if (relayMintFailure == null) {
       return
     }
+    // Why: users share this payload, so it carries no address (selected or relay cell).
+    const payload = await collectMobileRelayDiagnosticsPayload({
+      connectionMode,
+      failure: relayMintFailure
+    })
     try {
-      await window.api.ui.writeClipboardText(
-        JSON.stringify(
-          {
-            kind: 'mobile_pairing_relay_failure',
-            preferredConnectionMode: connectionMode,
-            failure: relayMintFailure,
-            selectedAddress: selectedAddress ?? null,
-            at: new Date().toISOString()
-          },
-          null,
-          2
-        )
-      )
+      await window.api.ui.writeClipboardText(JSON.stringify(payload, null, 2))
       if (mountedRef.current) {
         toast.success(
           translate('auto.components.settings.MobilePane.diagnosticsCopied', 'Diagnostics copied')
@@ -329,7 +323,7 @@ export function MobilePane(): React.JSX.Element {
         )
       }
     }
-  }, [connectionMode, mountedRef, relayMintFailure, selectedAddress])
+  }, [connectionMode, mountedRef, relayMintFailure])
 
   // Why: another window can persist a different path; the shared hook syncs
   // connectionMode here without routing through changeConnectionMode. Treat
