@@ -2,7 +2,8 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
   prefersStructuredNativeChatByDefault,
-  resolveStructuredNativeChatSupport
+  resolveStructuredNativeChatSupport,
+  type StructuredNativeChatHostStatusBlocker
 } from '../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
@@ -32,6 +33,8 @@ export type AgentLaunchRoutingInput = {
   executionHostId: string
   /** Capabilities of the target host; `null` = not yet established. */
   hostCapabilities: readonly string[] | null
+  /** A refusal the target host's own published status establishes; only `runtime:` hosts have one. */
+  hostStatusBlocker?: StructuredNativeChatHostStatusBlocker | null
   workspaceKind?: 'git-worktree' | 'folder' | 'floating'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   promptDelivery?: NativeChatLaunchPromptDelivery
@@ -75,6 +78,7 @@ export function structuredAgentLaunchSupported(
       agent: input.agent,
       executionHostId: input.executionHostId,
       hostCapabilities: input.hostCapabilities,
+      hostStatusBlocker: input.hostStatusBlocker,
       workspaceKind: input.workspaceKind,
       projectRuntime: input.projectRuntime,
       requiresTuiLaunchCustomization: input.requiresTuiLaunchCustomization

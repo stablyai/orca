@@ -31,6 +31,16 @@ export type StructuredNativeChatBlocker =
   /** The owning host has not answered yet. Distinct from `runtime-capability`, which is the
    *  host saying no: an unestablished answer must not read as a refusal. */
   | 'runtime-capability-unknown'
+  /** The host advertises the capability but its own structured-chat policy is off. */
+  | 'host-policy-disabled'
+  /** This client holds no live pairing with the host, so nothing can be created on it. */
+  | 'host-disconnected'
+
+/** The subset a client can establish from the owning host's published status alone. */
+export type StructuredNativeChatHostStatusBlocker = Extract<
+  StructuredNativeChatBlocker,
+  'host-policy-disabled' | 'host-disconnected'
+>
 
 export type StructuredNativeChatSupport =
   | { supported: true }
@@ -41,6 +51,9 @@ export type StructuredNativeChatSupportInput = {
   executionHostId: string
   /** Capabilities of the host this launch would run on. `null` = not yet established. */
   hostCapabilities: readonly string[] | null
+  /** A refusal the owning host's own published status already establishes. Only a `runtime:`
+   *  host produces one; a local or SSH host leaves it unset. */
+  hostStatusBlocker?: StructuredNativeChatHostStatusBlocker | null
   workspaceKind?: 'git-worktree' | 'folder' | 'floating'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   requiresTuiLaunchCustomization?: boolean
@@ -87,6 +100,11 @@ export function resolveStructuredNativeChatSupport(
   const projectRuntime = input.projectRuntime
   if (projectRuntime?.status === 'repair-required' || projectRuntime?.runtime.kind === 'wsl') {
     return { supported: false, blocker: 'project-runtime' }
+  }
+  // Read before the capability list: a host that is gone or has the feature switched off is
+  // answering about itself, and its advertised capabilities cannot overrule that.
+  if (input.hostStatusBlocker) {
+    return { supported: false, blocker: input.hostStatusBlocker }
   }
   if (input.hostCapabilities === null) {
     return { supported: false, blocker: 'runtime-capability-unknown' }

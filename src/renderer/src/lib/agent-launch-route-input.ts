@@ -4,6 +4,12 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host'
+import {
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  type RuntimeCapability
+} from '../../../shared/protocol-version'
+import type { StructuredNativeChatHostStatusBlocker } from '../../../shared/structured-native-chat-launch-route'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -25,6 +31,11 @@ import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-initial-v
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import {
+  resolveStructuredChatHostVerdict,
+  type StructuredChatHostAdmission
+} from '@/runtime/structured-chat-host-verdict'
+import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
 
 export type ProspectiveWorkspaceKind = NonNullable<AgentLaunchRoutingInput['workspaceKind']>
 
@@ -46,6 +57,8 @@ export type AgentLaunchRouteStore = Parameters<typeof getExecutionHostIdForWorkt
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[0] &
   Parameters<typeof getConnectionIdFromState>[0] & {
     settings?: AgentLaunchRoutingInput['settings']
+    /** Published host status. Absent before the runtime catalog hydrates, which reads as unknown. */
+    runtimeStatusByEnvironmentId?: ReadonlyMap<string, RuntimeEnvironmentStatus>
   }
 
 export type AgentLaunchRouteArgs = {
@@ -109,6 +122,64 @@ function resolveTranscriptIsLocalReadable(
   return host?.kind === 'ssh' ? isNativeChatTranscriptLocalReadable(host.targetId) : true
 }
 
+type HostCapabilityEvidence = {
+  hostCapabilities: readonly RuntimeCapability[] | null
+  hostStatusBlocker?: StructuredNativeChatHostStatusBlocker
+}
+
+/** The host publishes its effective structured-chat admission alongside its capabilities; one that
+ *  publishes none has unknown policy, which is not the same as policy off. */
+function readPublishedAdmission(
+  status: RuntimeStatus | null | undefined
+): StructuredChatHostAdmission {
+  const enabled = (status as { structuredSessionAdmission?: { enabled?: unknown } } | null)
+    ?.structuredSessionAdmission?.enabled
+  return typeof enabled === 'boolean' ? { enabled } : undefined
+}
+
+/**
+ * Capability evidence about the machine that would actually run the session. Reading the local
+ * cache for a remote launch would admit or refuse it on facts about the wrong machine, so a
+ * `runtime:` host is read from its own published snapshot; an `ssh:` host publishes none, and an
+ * unanswerable host stays `null` rather than becoming a refusal.
+ */
+function resolveHostCapabilityEvidence(
+  store: AgentLaunchRouteStore,
+  executionHostId: string
+): HostCapabilityEvidence {
+  const host = parseExecutionHostId(executionHostId)
+  if (host?.kind === 'local') {
+    return { hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown() }
+  }
+  if (host?.kind !== 'runtime') {
+    return { hostCapabilities: null }
+  }
+  const entry = store.runtimeStatusByEnvironmentId?.get(host.environmentId)
+  const capabilities = entry?.snapshot?.status?.capabilities ?? []
+  switch (
+    resolveStructuredChatHostVerdict({
+      entry,
+      capability: STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+      admission: readPublishedAdmission(entry?.snapshot?.status)
+    })
+  ) {
+    case 'supported':
+    case 'host-refuses-capability':
+      return { hostCapabilities: capabilities }
+    case 'host-policy-disabled':
+      return { hostCapabilities: capabilities, hostStatusBlocker: 'host-policy-disabled' }
+    case 'host-disconnected':
+      return { hostCapabilities: null, hostStatusBlocker: 'host-disconnected' }
+    // Skew is the absence of an answer too, alongside the ask-again verdicts: none is a refusal.
+    case 'version-or-auth-skew':
+    case 'unknown-checking':
+    case 'unknown-no-entry':
+    case 'unknown-stale':
+    case 'unknown-unavailable':
+      return { hostCapabilities: null }
+  }
+}
+
 /** The one place that gathers what a launch route decision needs; only the planner resolves on it. */
 export function buildAgentLaunchRouteInput(
   store: AgentLaunchRouteStore,
@@ -120,7 +191,7 @@ export function buildAgentLaunchRouteInput(
     agent,
     settings: store.settings,
     executionHostId,
-    hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
+    ...resolveHostCapabilityEvidence(store, executionHostId),
     workspaceKind: workspace.kind,
     projectRuntime: resolveProjectRuntime(store, workspace, executionHostId),
     promptDelivery: args.promptDelivery,

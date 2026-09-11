@@ -38,6 +38,8 @@ export type WorkerStartModeReason =
   | 'wsl_execution_runtime'
   | 'codex_on_windows'
   | 'structured_unsupported_on_host'
+  | 'host_structured_chat_disabled'
+  | 'host_disconnected'
 
 export type WorkerStartModeReceipt = {
   /** The mode the worker actually started in. */
@@ -76,7 +78,9 @@ const DOWNGRADE_DETAIL: Record<Exclude<WorkerStartModeReason, 'user_default'>, s
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  structured_unsupported_on_host: 'the execution host cannot create one here'
+  structured_unsupported_on_host: 'the execution host cannot create one here',
+  host_structured_chat_disabled: 'the execution host has structured chat turned off',
+  host_disconnected: 'this client is not connected to the execution host'
 }
 
 const BLOCKER_REASON: Record<
@@ -90,7 +94,9 @@ const BLOCKER_REASON: Record<
   'remote-execution-host': 'remote_execution_host',
   'project-runtime': 'wsl_execution_runtime',
   'runtime-capability': 'structured_sessions_unavailable',
-  'runtime-capability-unknown': 'structured_support_unknown'
+  'runtime-capability-unknown': 'structured_support_unknown',
+  'host-policy-disabled': 'host_structured_chat_disabled',
+  'host-disconnected': 'host_disconnected'
 }
 
 /** The host's own create-support verdict (`agentSession.createSupport`) in this vocabulary. */
@@ -121,7 +127,9 @@ export function decideWorkerStartMode(args: {
     agent,
     executionHostId: params.on ? `runtime:${params.on}` : 'local',
     reusesTerminal: Boolean(params.terminal),
-    hostCapabilities: RUNTIME_CAPABILITIES,
+    // This process's own capability list is evidence about this machine only; for `--on` the
+    // worker runs elsewhere, and that host's answer is not established here.
+    hostCapabilities: params.on ? null : RUNTIME_CAPABILITIES,
     // Orchestration resolves a managed worktree or folder workspace; a floating terminal is never
     // a worker placement. WSL is left to the executing host's own create-support probe, which
     // reads the resolved workspace rather than guessing from a client-side project runtime.
