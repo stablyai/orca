@@ -281,13 +281,22 @@ it('re-creates a fence something dropped, on the next search', async () => {
     throw error
   })
   try {
-    await indexOneTranscript(root, store)
+    const transcript = await indexOneTranscript(root, store)
     const engine = new SessionSearchEngine(db)
     db.exec('DROP TRIGGER search_generation_file_update')
     engine.search({ query: 'needle' })
 
+    expect(
+      db
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = ?")
+        .get('search_generation_file_update')
+    ).toEqual({ name: 'search_generation_file_update' })
+
+    // An UPDATE of the row that already exists, because that is the trigger
+    // this dropped: re-indexing a transcript also inserts and deletes, so it
+    // moves the generation whether or not the dropped one came back.
     const restored = readIndexGeneration(db)
-    await indexOneTranscript(root, store)
+    db.exec(`UPDATE files SET mtime_ms = mtime_ms + 1 WHERE path = '${transcript}'`)
     expect(readIndexGeneration(db)).toBeGreaterThan(restored)
   } finally {
     store.close()
