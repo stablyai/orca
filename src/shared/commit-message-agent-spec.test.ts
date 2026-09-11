@@ -573,10 +573,23 @@ describe('buildArgs (OpenCode)', () => {
 describe('buildArgs (Antigravity)', () => {
   const spec = getCommitMessageAgentSpec('antigravity')!
 
-  it('runs agy with --print, --sandbox, and --model flags', () => {
-    const args = spec.buildArgs({ prompt: '', model: 'Gemini 3.5 Flash (Medium)' })
-    expect(args).toEqual(['--print', '--sandbox', '--model', 'Gemini 3.5 Flash (Medium)'])
-    expect(spec.promptDelivery).toBe('stdin')
+  it('runs agy with the prompt attached to --print, then --sandbox and --model flags', () => {
+    const args = spec.buildArgs({
+      prompt: 'real commit prompt',
+      model: 'Gemini 3.5 Flash (Medium)'
+    })
+    expect(args).toEqual([
+      '--print=real commit prompt',
+      '--sandbox',
+      '--model',
+      'Gemini 3.5 Flash (Medium)'
+    ])
+    expect(spec.promptDelivery).toBe('argv')
+  })
+
+  it('binds a leading-dash prompt to --print instead of letting it parse as an option', () => {
+    const args = spec.buildArgs({ prompt: '--sandbox', model: 'Gemini 3.5 Flash (Medium)' })
+    expect(args[0]).toBe('--print=--sandbox')
   })
 
   it('uses dynamic model discovery via agy models', () => {

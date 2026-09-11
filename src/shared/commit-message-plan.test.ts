@@ -178,6 +178,98 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Antigravity generation with the prompt attached to --print, not stdin (#19539, #14059)', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'antigravity',
+        model: 'Gemini 3.5 Flash (Medium)'
+      },
+      'real commit prompt'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'agy',
+        args: ['--print=real commit prompt', '--sandbox', '--model', 'Gemini 3.5 Flash (Medium)'],
+        stdinPayload: null,
+        label: 'Antigravity'
+      }
+    })
+  })
+
+  it('keeps a leading-dash Antigravity prompt bound to --print instead of the sandbox flag', () => {
+    const result = planCommitMessageGeneration(
+      { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
+      '--sandbox'
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.plan.args.slice(0, 2)).toEqual(['--print=--sandbox', '--sandbox'])
+  })
+
+  // Why: agy has no documented stdin mode for --print (#19539's body: "--print ... is
+  // not a boolean flag that automatically reads from stdin; it expects the prompt
+  // string as its option argument"), so a large staged patch now rides on argv. This
+  // is the same unguarded argv delivery cursor/kimi/copilot already use (see the
+  // parity assertion below) — pinned here as a known property, not a regression.
+  it('puts a large Antigravity prompt on argv with no size guard, same as other argv-delivery agents', () => {
+    const bigPrompt = 'y'.repeat(70_000)
+    const result = planCommitMessageGeneration(
+      { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
+      bigPrompt
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.plan.args[0]).toBe(`--print=${bigPrompt}`)
+    expect(result.ok && result.plan.stdinPayload).toBeNull()
+
+    const cursorResult = planCommitMessageGeneration(
+      { agentId: 'cursor', model: 'auto' },
+      bigPrompt
+    )
+    expect(cursorResult.ok).toBe(true)
+    expect(cursorResult.ok && cursorResult.plan.args.at(-1)).toBe(bigPrompt)
+    expect(cursorResult.ok && cursorResult.plan.stdinPayload).toBeNull()
+  })
+
+  // Why: real #14059 reproduction config — CLI arguments field repeats --model and adds
+  // --add-dir/--effort/--dangerously-skip-permissions. Confirms none of it gets swallowed
+  // into the --print operand and the duplicate --model is deduped the same way every
+  // other spec's recipe args already are (DEFAULT_SINGLETON_OPTIONS, unaffected by
+  // argument order).
+  it('keeps #14059-style recipe CLI arguments intact and deduped around the print operand', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'antigravity',
+        model: 'Gemini 3.5 Flash (Medium)',
+        agentArgs:
+          '--add-dir . --model gemini-3.6-flash --effort low --dangerously-skip-permissions'
+      },
+      'Generate a concise git commit message for the currently staged changes.'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'agy',
+        args: [
+          '--print=Generate a concise git commit message for the currently staged changes.',
+          '--sandbox',
+          '--model',
+          'gemini-3.6-flash',
+          '--add-dir',
+          '.',
+          '--effort',
+          'low',
+          '--dangerously-skip-permissions'
+        ],
+        stdinPayload: null,
+        label: 'Antigravity'
+      }
+    })
+  })
+
   it('plans Codex exec as non-interactive read-only generation with the prompt on stdin only', () => {
     const result = planCommitMessageGeneration(
       {
