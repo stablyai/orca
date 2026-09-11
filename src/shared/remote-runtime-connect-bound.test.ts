@@ -1,6 +1,6 @@
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { createServer, type Server, type Socket } from 'node:net'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { generateKeyPair, publicKeyToBase64 } from './e2ee-crypto'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
@@ -14,6 +14,36 @@ import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
 
 const servers = new Set<Server>()
 const sockets = new Set<Socket>()
+
+const RELAY_CONTROL_SOCKET_FACTORY = join('relay', 'relay-control-socket-factory.ts')
+
+/**
+ * Files whose WebSocket construction must carry the connect bound. The shared
+ * remote-runtime transports are swept by prefix; sites outside this directory
+ * are listed explicitly so adding one is a deliberate act rather than a glob
+ * accident. Other WebSocket sites (relay data transport, emulator control)
+ * carry their own bounds and are deliberately not covered here.
+ */
+function coveredSocketSources(): string[] {
+  const shared = readdirSync(__dirname)
+    .filter(
+      (name) =>
+        name.startsWith('remote-runtime-') && name.endsWith('.ts') && !name.includes('.test.')
+    )
+    .map((name) => join(__dirname, name))
+  const relaySocketFactory = join(
+    __dirname,
+    '..',
+    'main',
+    'runtime',
+    'relay',
+    'relay-control-socket-factory.ts'
+  )
+  if (!existsSync(relaySocketFactory)) {
+    throw new Error(`connect-bound ratchet lost its relay site: ${relaySocketFactory}`)
+  }
+  return [...shared, relaySocketFactory]
+}
 
 afterEach(async () => {
   for (const socket of sockets) {
@@ -59,25 +89,26 @@ describe('remote runtime connect bound', () => {
 
   // Why: the bound only helps if every Node-side remote-runtime socket carries
   // it; a new transport that calls `new WebSocket` directly reintroduces #18191.
-  it('routes every shared remote-runtime WebSocket through the bounded options', () => {
-    const dir = join(__dirname)
+  it('routes every covered WebSocket construction through the bounded options', () => {
     const offenders: string[] = []
     let scannedConstructions = 0
-    for (const name of readdirSync(dir)) {
-      if (!name.startsWith('remote-runtime-') || !name.endsWith('.ts') || name.includes('.test.')) {
-        continue
-      }
-      const source = readFileSync(join(dir, name), 'utf8')
+    for (const path of coveredSocketSources()) {
+      const source = readFileSync(path, 'utf8')
       const constructions = source.split('new WebSocket(').length - 1
       const bounded = source.split('remoteRuntimeConnectOptions(').length - 1
       scannedConstructions += constructions
       if (constructions > bounded) {
-        offenders.push(`${name}: ${constructions} WebSocket(s), ${bounded} bounded`)
+        offenders.push(`${basename(path)}: ${constructions} WebSocket(s), ${bounded} bounded`)
       }
     }
     expect(offenders).toEqual([])
     // Guards against the scan silently matching nothing and passing vacuously.
     expect(scannedConstructions).toBeGreaterThan(0)
+    // Guards the relay site specifically: an allowlist that quietly stopped
+    // resolving a path would still satisfy the count above.
+    expect(
+      coveredSocketSources().some((path) => path.endsWith(RELAY_CONTROL_SOCKET_FACTORY))
+    ).toBe(true)
   })
 
   it('reports an unanswered host as unreachable rather than as an empty result', async () => {
