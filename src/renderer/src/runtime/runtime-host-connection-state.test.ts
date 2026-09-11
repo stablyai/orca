@@ -231,3 +231,20 @@ function remoteControl(
     lastError: null
   }
 }
+
+it('does not report reconnecting after verification is terminally blocked', () => {
+  expect(
+    runtimeHostConnectionStateForEntry({
+      status: null,
+      snapshot: {
+        environmentId: 'browser',
+        pairingRevision: 1,
+        sequence: 1,
+        checkedAt: 1,
+        status: null,
+        verification: 'blocked',
+        transport: 'disconnected'
+      }
+    })
+  ).toBe('disconnected')
+})

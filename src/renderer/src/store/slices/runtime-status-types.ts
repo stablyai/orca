@@ -11,10 +11,6 @@ export type RuntimeEnvironmentStatus = {
   connectionGeneration?: number
 }
 
-export type RuntimeStatusRefreshOptions = {
-  publishUnreachable?: boolean
-}
-
 export type RuntimeStatusSlice = {
   readRuntimeHostStatusSnapshots: () => Promise<void>
   applyRuntimeHostStatusSnapshot: (snapshot: RuntimeHostStatusSnapshot) => void
@@ -31,10 +27,6 @@ export type RuntimeStatusSlice = {
   ) => void
   clearRuntimeEnvironmentStatus: (environmentId: string) => void
   retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
-  refreshRuntimeEnvironmentStatus: (
-    environmentId: string,
-    timeoutMs?: number,
-    options?: RuntimeStatusRefreshOptions
-  ) => Promise<boolean>
+  refreshRuntimeEnvironmentStatus: (environmentId: string, timeoutMs?: number) => Promise<boolean>
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
 }

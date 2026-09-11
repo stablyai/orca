@@ -120,7 +120,7 @@ export function runtimeHostConnectionStateForEntry(
 ): RuntimeHostConnectionState {
   if (entry?.snapshot) {
     const snapshot = entry.snapshot
-    if (snapshot.retired) {
+    if (snapshot.retired || snapshot.verification === 'blocked') {
       return 'disconnected'
     }
     if (snapshot.transport === 'disconnected') {

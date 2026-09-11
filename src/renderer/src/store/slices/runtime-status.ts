@@ -1,11 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RuntimeStatusSlice } from './runtime-status-types'
-export type {
-  RuntimeEnvironmentStatus,
-  RuntimeStatusRefreshOptions,
-  RuntimeStatusSlice
-} from './runtime-status-types'
+export type { RuntimeEnvironmentStatus, RuntimeStatusSlice } from './runtime-status-types'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
 import {
   clearRecentRuntimeCompatibilityFailure,
@@ -290,14 +286,10 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     })
   },
 
-  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000, options) =>
+  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
     refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (entry) => {
       if (entry.snapshot) {
         get().applyRuntimeHostStatusSnapshot(entry.snapshot)
-        return
-      }
-      if (entry.status === null && options?.publishUnreachable === false) {
-        // Unverifiable, not exited: leave the cached verdict for the caller's retry to settle.
         return
       }
       // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
