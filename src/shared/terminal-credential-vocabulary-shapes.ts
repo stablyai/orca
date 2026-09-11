@@ -108,9 +108,20 @@ export const NON_PROMPT_ROW_SHAPES: readonly ((term: string) => string)[] = [
 /**
  * Composer chrome as agents ACTUALLY draw it, footers included.
  *
- * These were hand-written ending on the caret, which is the mistake this file exists to stop:
- * every real agent draws something UNDER its caret — Codex a model footer, OpenCode a status bar,
- * droid a key-hint row — and a suppression keyed on the literal bottom row missed all of them.
+ * READ THIS BEFORE ADDING OR EDITING A TAIL. Every row here must come from captured output or from
+ * the corpus modules. Do not write one from memory, however obvious it looks.
+ *
+ * Four rounds of review found a live false-positive class in the first three, and every one was
+ * the same mistake in a different place: idealised test input, never wrong reasoning about the
+ * detector. This array caused the third. It was hand-written ending on the caret — which is what a
+ * composer "obviously" looks like — when in fact every real agent draws something UNDER its caret:
+ * Codex a model footer, OpenCode a status bar, droid a key-hint row. A suppression keyed on the
+ * literal bottom row therefore missed all of them, and the suite could not see it because the
+ * suite's own tails had the same blind spot as the rule it was testing.
+ *
+ * A generative suite is only as good as the ground truth it generates against. Invented screens
+ * share the blind spots of whoever invented them, which is precisely the failure a generative
+ * suite is supposed to eliminate.
  */
 export const AGENT_COMPOSER_TAILS: readonly (readonly [string, string[]])[] = [
   ['codex', ['', '› Ask Codex to do anything', '', '  gpt-6 medium · ~/repo']],
