@@ -8,6 +8,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
+import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
 
@@ -69,5 +70,9 @@ export type StructuredAgentSessionHostDeps = {
     summary: AgentSessionStatusSummary,
     options: { replay: boolean }
   ) => void
+  /** The agent-status store every held session's projection is written to and, on close,
+   *  removed from. Both production hosts pass one — the desktop and headless `orcad`; absent,
+   *  every reader of that store simply lists no structured session. */
+  statusSink?: StructuredAgentSessionStatusSink
   handoffTransport?: StructuredAgentSessionHandoffTransport
 }

@@ -114,7 +114,7 @@ describe('structured agent session item retention', () => {
     )
     const older = reduceStructuredAgentSession(streamed, {
       type: 'older-page',
-      requestedEpoch: 'epoch-a',
+      requestedCursor: { epoch: 'epoch-a', sequence: streamed.items[0]?.sequence ?? 0 },
       page: page(
         Array.from({ length: 300 }, (_, index) => item(index + 700)),
         true
@@ -128,6 +128,48 @@ describe('structured agent session item retention', () => {
     expect(afterLive.items).toHaveLength(CAP + 300)
     expect(afterLive.items[0]?.sequence).toBe(701)
     expect(afterLive.items.some((entry) => entry.sequence === 800)).toBe(true)
+  })
+
+  it('drops an older page whose anchor a live batch trimmed past', () => {
+    const streamed = streamItems(
+      hydrate([item(0)], false),
+      Array.from({ length: CAP + 200 }, (_, index) => index + 1)
+    )
+    // The read captures this cursor, then a live batch trims three items off the head.
+    const anchor = oldestStructuredAgentSessionCursor(streamed)
+    const slid = streamItems(streamed, [CAP + 201, CAP + 202, CAP + 203])
+    expect(slid.items[0]?.sequence).toBeGreaterThan(anchor?.sequence ?? 0)
+
+    const merged = reduceStructuredAgentSession(slid, {
+      type: 'older-page',
+      requestedCursor: anchor ?? { epoch: 'epoch-a', sequence: 0 },
+      page: page(
+        Array.from({ length: 200 }, (_, index) => item((anchor?.sequence ?? 0) - 200 + index)),
+        true
+      )
+    })
+
+    // Merging would have left a hole between the page and the retained window.
+    expect(merged).toBe(slid)
+  })
+
+  it('accepts an older page whose anchor still matches the retained head', () => {
+    const streamed = streamItems(
+      hydrate([item(0)], false),
+      Array.from({ length: CAP + 200 }, (_, index) => index + 1)
+    )
+    const anchor = oldestStructuredAgentSessionCursor(streamed)
+    const merged = reduceStructuredAgentSession(streamed, {
+      type: 'older-page',
+      requestedCursor: anchor ?? { epoch: 'epoch-a', sequence: 0 },
+      page: page(
+        Array.from({ length: 200 }, (_, index) => item((anchor?.sequence ?? 0) - 200 + index)),
+        true
+      )
+    })
+
+    expect(merged.items).toHaveLength(CAP + 200)
+    expect(merged.items[0]?.sequence).toBe((anchor?.sequence ?? 0) - 200)
   })
 
   it('keeps item identity stable when a batch carries no journal change', () => {

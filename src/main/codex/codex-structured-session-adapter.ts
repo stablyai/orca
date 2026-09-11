@@ -30,9 +30,9 @@ import {
   type CodexStructuredSessionEvent
 } from './codex-structured-session-state'
 import {
-  deliverCodexNotification,
   deliverCodexServerRequest,
-  deliverCodexUnhandledFrame
+  deliverCodexUnhandledFrame,
+  translateCodexNotification
 } from './codex-structured-provider-events'
 import { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
@@ -55,8 +55,16 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
-      translate: (sessionId, session, method, params) =>
-        this.translateNotification(sessionId, session, method, params)
+      translate: (sessionId, session, method, params, observedAt) =>
+        translateCodexNotification({
+          sessionId,
+          session,
+          method,
+          params,
+          observedAt,
+          turnCancellation: this.turnCancellation,
+          emit: (current, event) => this.emit(current, event)
+        })
     })
     this.teardown = new CodexStructuredSessionTeardown({
       sessions: this.sessions,
@@ -74,7 +82,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       emit: (session, event) => {
         const admission = this.emit(session, event)
         if (!admission.accepted && event.type === 'notification') {
-          this.notificationRetries.handle(event.sessionId, event.method, event.params)
+          const { sessionId, method, params, observedAt } = event
+          this.notificationRetries.handle(sessionId, method, params, observedAt)
         }
         return admission
       }
@@ -118,21 +127,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       // notification; tear down the child so callers retry explicitly.
       void acquisition.connection?.close()
     }
-  }
-
-  private translateNotification(
-    sessionId: string,
-    session: CodexSession,
-    method: string,
-    params: unknown
-  ): CodexJournalTranslationAdmission {
-    codexRewind.observeCodexRewindActivity(session, method, params)
-    if (this.turnCancellation.handleNotification(sessionId, session, method, params)) {
-      return { accepted: true }
-    }
-    return deliverCodexNotification(sessionId, session, method, params, (current, event) =>
-      this.emit(current, event)
-    )
   }
 
   /** Journal first so observers never see an event ahead of its durable row. */

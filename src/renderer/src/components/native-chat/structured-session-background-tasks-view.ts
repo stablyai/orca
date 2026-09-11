@@ -1,8 +1,11 @@
 // The background-tasks strip's view of one session's wire state.
 //
-// The strip stands for work that OUTLIVES a turn. It stays mounted through a
-// running turn — a fan-out's children keep reporting long after the parent
-// settles — but only an idle session lets it animate or speak for itself.
+// The strip reports work that is IN FLIGHT, whether or not it outlived a turn:
+// a fan-out's children keep reporting long after the parent settles, and a
+// foreground fan-out is running work while the turn is still open. It stays
+// mounted through a running turn — turn state is not a filter on the rows,
+// because the producers publish only tasks they still have live evidence for.
+// Only an idle session lets it animate or speak for itself.
 
 import type {
   AgentSessionBackgroundTask,

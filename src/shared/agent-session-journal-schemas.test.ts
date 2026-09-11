@@ -67,6 +67,16 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
     text: 'turn',
     turnLifecycle: { turnId: 'turn-1', state: 'running' },
     providerFrame: { provider: 'codex', kind: 'raw', payload: PAYLOAD }
+  },
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: { turnId: 'turn-2', state: 'completed', startedAt: 1_000, completedAt: 188_000 }
+  },
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: { turnId: 'turn-3', state: 'unverifiable', startedAt: 1_000 }
   }
 ]
 

@@ -1,6 +1,8 @@
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
 import {
+  AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
@@ -58,6 +60,8 @@ export async function routeWebRuntimeConnectionFrame(
           type: 'e2ee_auth',
           deviceToken: context.pairingToken,
           clientCapabilities: [
+            AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+            AGENT_SESSION_TURN_ITEM_CAPABILITY,
             SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
             SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY,
             AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,

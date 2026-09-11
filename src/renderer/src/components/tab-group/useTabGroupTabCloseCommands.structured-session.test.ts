@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   closeStructuredAgentSession: vi.fn(),
   closeTerminalTab: vi.fn(),
   closeUnifiedTab: vi.fn(),
+  clearNativeChatLaunchDraft: vi.fn(),
   setActiveWorktree: vi.fn(),
   toastError: vi.fn()
 }))
@@ -20,6 +21,7 @@ const store = vi.hoisted(() => ({
   closeBrowserTab: mocks.closeBrowserTab,
   closeFile: mocks.closeFile,
   closeUnifiedTab: mocks.closeUnifiedTab,
+  clearNativeChatLaunchDraft: mocks.clearNativeChatLaunchDraft,
   openFiles: [],
   reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 })),
   setActiveWorktree: mocks.setActiveWorktree,
@@ -135,6 +137,32 @@ describe('structured agent-session close ordering', () => {
 
     await vi.waitFor(() => expect(order).toEqual(['agent-close', 'tab-close', 'local-remove']))
     expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledWith('wt-1', 'session-1')
+  })
+
+  it('drops an unadopted launch draft seed once the tab is removed', async () => {
+    const { closeItem } = useTabGroupTabCloseCommands({
+      worktreeId: 'wt-1',
+      groupTabs: [AGENT_TAB]
+    })
+    closeItem(AGENT_TAB.id)
+
+    await vi.waitFor(() => expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(AGENT_TAB.id))
+    expect(mocks.clearNativeChatLaunchDraft).toHaveBeenCalledWith(
+      'structured-agent-session-session-1'
+    )
+  })
+
+  it('keeps an unadopted launch draft seed when owner disposal fails', async () => {
+    mocks.closeStructuredAgentSession.mockRejectedValueOnce(new Error('owner unavailable'))
+
+    const { closeItem } = useTabGroupTabCloseCommands({
+      worktreeId: 'wt-1',
+      groupTabs: [AGENT_TAB]
+    })
+    closeItem(AGENT_TAB.id)
+    await vi.waitFor(() => expect(mocks.toastError).toHaveBeenCalled())
+
+    expect(mocks.clearNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
   it('keeps the tab available when owner disposal fails, so close can be retried', async () => {

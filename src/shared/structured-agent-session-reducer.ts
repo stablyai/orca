@@ -3,15 +3,23 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import {
-  agentSessionBackgroundTasksEqual,
-  type AgentSessionBackgroundTaskState,
-  type AgentSessionSlashCommand,
-  type AgentSessionHandoffStatus,
-  type AgentSessionHistoryPage,
-  type AgentSessionSubscribeEvent,
-  type AgentSessionTurnActivity
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionSlashCommand,
+  AgentSessionHandoffStatus,
+  AgentSessionHistoryPage,
+  AgentSessionSubscribeEvent,
+  AgentSessionTurnActivity
 } from './agent-session-wire'
+import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
+import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+
+/** The last host clock sample: `hostNow - receivedAt` is the client's skew from the host,
+ *  which is what lets a client attaching mid-turn anchor its live counter on the real start. */
+export type StructuredAgentHostClock = {
+  hostNow: number
+  receivedAt: number
+}
 
 export type StructuredAgentSessionState = {
   epoch: string | null
@@ -28,6 +36,8 @@ export type StructuredAgentSessionState = {
   backgroundTasks?: AgentSessionBackgroundTaskState | null
   commands?: AgentSessionSlashCommand[] | null
   activity?: AgentSessionTurnActivity | null
+  /** Absent until a frame from a host that stamps `hostNow` has been applied. */
+  hostClock?: StructuredAgentHostClock
 }
 
 export type StructuredAgentSessionAction =
@@ -36,7 +46,7 @@ export type StructuredAgentSessionAction =
   | { type: 'handoff'; handoff: AgentSessionHandoffStatus }
   | { type: 'event'; event: AgentSessionSubscribeEvent }
   | { type: 'tail-page'; page: AgentSessionHistoryPage }
-  | { type: 'older-page'; requestedEpoch: string; page: AgentSessionHistoryPage }
+  | { type: 'older-page'; requestedCursor: AgentJournalCursor; page: AgentSessionHistoryPage }
 
 const MAX_RETAINED_SUBMISSIONS = 256
 // Well above the renderer's initial read window (300) plus a page, so only genuinely
@@ -55,26 +65,14 @@ export const EMPTY_STRUCTURED_AGENT_SESSION: StructuredAgentSessionState = {
   handoff: null
 }
 
-function backgroundTaskStatesEqual(
-  left: AgentSessionBackgroundTaskState | null | undefined,
-  right: AgentSessionBackgroundTaskState | null | undefined
-): boolean {
-  if (left === right) {
-    return true
-  }
-  if (
-    !left ||
-    !right ||
-    left.state !== right.state ||
-    left.supportsTaskStop !== right.supportsTaskStop ||
-    left.supportsStopAll !== right.supportsStopAll
-  ) {
-    return false
-  }
-  return (
-    agentSessionBackgroundTasksEqual(left.tasks, right.tasks) &&
-    agentSessionBackgroundTasksEqual(left.settledTasks, right.settledTasks)
-  )
+/** A frame without `hostNow` (older host) leaves the previous sample in place. */
+function hostClockField(
+  hostNow: number | undefined,
+  receivedAt: number,
+  previous: StructuredAgentHostClock | undefined
+): { hostClock?: StructuredAgentHostClock } {
+  const hostClock = hostNow !== undefined ? { hostNow, receivedAt } : previous
+  return hostClock ? { hostClock } : {}
 }
 
 function replacePage(
@@ -130,20 +128,32 @@ function trimRetainedItems(
 
 function mergeSubmissions(
   current: readonly AgentJournalSubmission[],
-  incoming: readonly AgentJournalSubmission[]
+  incoming: readonly AgentJournalSubmission[],
+  items: readonly AgentJournalRenderItem[]
 ): AgentJournalSubmission[] {
   const byId = new Map(current.map((submission) => [submission.clientMessageId, submission]))
   for (const submission of incoming) {
     byId.set(submission.clientMessageId, submission)
   }
-  return [...byId.values()]
-    .sort((left, right) => left.submittedAt - right.submittedAt)
-    .slice(-MAX_RETAINED_SUBMISSIONS)
+  const sorted = [...byId.values()].sort((left, right) => left.submittedAt - right.submittedAt)
+  const itemIds = new Set(
+    items
+      .filter((item) => item.body.kind === 'message' && item.body.role === 'user')
+      .map((item) => item.itemId)
+  )
+  // Loaded user messages need their provider alias for durable turn attribution.
+  return sorted.filter(
+    (submission, index) =>
+      index >= sorted.length - MAX_RETAINED_SUBMISSIONS ||
+      itemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
+  )
 }
 
+/** `receivedAt` is the client clock at apply time; callers pass it so the reducer stays pure. */
 export function reduceStructuredAgentSession(
   state: StructuredAgentSessionState,
-  action: StructuredAgentSessionAction
+  action: StructuredAgentSessionAction,
+  receivedAt: number = Date.now()
 ): StructuredAgentSessionState {
   if (action.type === 'loading') {
     // Keep the last transcript visible while a reconnect rehydrates the stream.
@@ -178,6 +188,7 @@ export function reduceStructuredAgentSession(
           ...(action.page.backgroundTasks !== undefined
             ? { backgroundTasks: action.page.backgroundTasks }
             : {}),
+          ...hostClockField(action.page.hostNow, receivedAt, state.hostClock),
           status: 'ready',
           error: undefined
         }
@@ -191,7 +202,7 @@ export function reduceStructuredAgentSession(
       fence: action.page.fence ?? null,
       items: action.page.items,
       submissions: sameEpoch
-        ? mergeSubmissions(state.submissions, action.page.submissions)
+        ? mergeSubmissions(state.submissions, action.page.submissions, action.page.items)
         : action.page.submissions,
       retainedItemLimit: Math.max(MAX_RETAINED_ITEMS, action.page.items.length),
       hasOlder: action.page.hasOlder,
@@ -203,20 +214,30 @@ export function reduceStructuredAgentSession(
         ? { backgroundTasks: action.page.backgroundTasks }
         : state.backgroundTasks !== undefined
           ? { backgroundTasks: state.backgroundTasks }
-          : {})
+          : {}),
+      ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
   if (action.type === 'older-page') {
-    if (state.epoch !== action.requestedEpoch || action.page.epoch !== action.requestedEpoch) {
+    const requested = action.requestedCursor
+    if (state.epoch !== requested.epoch || action.page.epoch !== requested.epoch) {
       return state
     }
-    const paged = mergeItems(state.items, action.page.items, action.page.removedItemIds)
+    const head = state.items[0]
+    // A live batch head-trimmed past the anchor while this read was in flight, so the
+    // page no longer abuts the retained window; merging it would leave a silent hole.
+    // The caller re-anchors on the new head and asks again.
+    if (head && head.sequence > requested.sequence) {
+      return state
+    }
+    const items = mergeItems(state.items, action.page.items, action.page.removedItemIds)
     return {
       ...state,
-      items: paged,
-      retainedItemLimit: Math.max(state.retainedItemLimit, paged.length),
-      submissions: mergeSubmissions(state.submissions, action.page.submissions),
-      hasOlder: action.page.hasOlder
+      items,
+      retainedItemLimit: Math.max(state.retainedItemLimit, items.length),
+      submissions: mergeSubmissions(state.submissions, action.page.submissions, items),
+      hasOlder: action.page.hasOlder,
+      ...hostClockField(action.page.hostNow, receivedAt, state.hostClock)
     }
   }
   const event = action.event
@@ -226,7 +247,8 @@ export function reduceStructuredAgentSession(
   if (event.type === 'snapshot' || event.type === 'reset') {
     return {
       ...replacePage(event.page, event.fence, event.handoff, event.backgroundTasks, event.activity),
-      commands: event.commands
+      commands: event.commands,
+      ...hostClockField(event.hostNow, receivedAt, state.hostClock)
     }
   }
   if (state.epoch !== event.batch.cursor.epoch) {
@@ -267,15 +289,17 @@ export function reduceStructuredAgentSession(
     items,
     // A trim leaves older items behind the cursor, so paging must stay offered.
     hasOlder: items.length < merged.length ? true : state.hasOlder,
-    submissions: journalUnchanged
-      ? state.submissions
-      : mergeSubmissions(state.submissions, event.batch.submissions),
+    submissions:
+      event.batch.submissions.length === 0 && event.batch.removedItemIds.length === 0
+        ? state.submissions
+        : mergeSubmissions(state.submissions, event.batch.submissions, items),
     status: 'ready',
     error: undefined,
     handoff: event.handoff ?? state.handoff,
     commands: event.commands !== undefined ? event.commands : state.commands,
     ...(backgroundTasks !== undefined ? { backgroundTasks } : {}),
-    ...(activity !== undefined ? { activity } : {})
+    ...(activity !== undefined ? { activity } : {}),
+    ...hostClockField(event.hostNow, receivedAt, state.hostClock)
   }
 }
 

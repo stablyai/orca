@@ -5,7 +5,7 @@
  * desktop uses, installs a PTY controller via `registerHeadlessPtyRuntime`, and
  * serves runtime RPC. See docs/design/node-only-runtime-backend.html.
  *
- * Desktop UI surfaces stay uninstalled: no notifications, no renderer window. The
+ * Desktop UI surfaces stay uninstalled: no native notifications, no renderer window. The
  * renderer window is faked as a destroyed one because `registerPtyHandlers` takes a
  * non-null `BrowserWindow`. Browser automation is different — it is installed through
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
@@ -146,6 +146,11 @@ async function startOrcadRuntime(
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
+  // Why importable here: the store is an in-memory singleton whose module tree never reaches
+  // Electron, and its file paths come from `start()`, which orcad never calls.
+  const { agentHookServer } = await import('../agent-hooks/server')
+  const { DesktopPushService } = await import('../runtime/push/desktop-push-service')
+  const { resolvePushGatewayOrigin } = await import('../runtime/push/push-gateway-origin')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
@@ -180,7 +185,15 @@ async function startOrcadRuntime(
     // Why 'blocked': `'openable'` means a desktop window can be opened here, which is
     // what powers serve→desktop promotion. A Node host can never do that, and the
     // constructor's default would advertise it.
-    getDesktopWindowStatus: () => 'blocked'
+    getDesktopWindowStatus: () => 'blocked',
+    // Why here too and not only on the desktop: orcad serves `worktree.ps` and `agentSession.*`,
+    // so without these a headless host publishes its structured chats nowhere and lists no agents.
+    getAgentStatusSnapshot: () =>
+      agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    structuredAgentStatusSink: {
+      publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
+      forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
+    }
   })
 
   // Why the headless entry point rather than registerPtyHandlers directly: this is the
@@ -213,6 +226,13 @@ async function startOrcadRuntime(
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
   await rpc.start()
+  const pushService = DesktopPushService.create({
+    runtime,
+    runtimeRpc: rpc,
+    gatewayUrl: resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged())
+  })
+  pushService?.start()
+  getAppEnvironment().onWillQuit(() => pushService?.stop())
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 
   const boundEndpoint = rpc.getWebSocketEndpoint()

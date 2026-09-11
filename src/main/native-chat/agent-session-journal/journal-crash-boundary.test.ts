@@ -16,6 +16,10 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
+import {
+  DISPATCH_DOUBT_RETRY_IN_PROGRESS,
+  dispatchDoubtProvesUndelivered
+} from './journal-dispatch-doubt-reasons'
 import { digestPayload } from './journal-payload-bounds'
 import {
   reconcileSubmissions,
@@ -164,6 +168,58 @@ describe('crash between provider accept and journal commit', () => {
     const cursor = restarted.cursor()
     await restarted.markPendingSubmissionsUnknown(2)
     expect(restarted.cursor()).toEqual(cursor)
+  })
+
+  it('preserves a proven write failure while retiring its live dispatch', async () => {
+    const journal = await open()
+    await journal.appendSubmission({
+      clientMessageId: 'cm_write_failed',
+      payloadFingerprint: digestPayload('safe to retry'),
+      body: userMessage('safe to retry'),
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'cm_write_failed',
+      state: 'unknown',
+      reason: 'provider_write_failed: broken pipe',
+      fence: 1
+    })
+
+    const restarted = await open()
+    await restarted.markPendingSubmissionsUnknown(2)
+
+    expect(restarted.submissions()[0]).toMatchObject({
+      dispatchState: 'unknown',
+      reason: 'provider_write_failed: broken pipe',
+      recovered: true
+    })
+    expect(dispatchDoubtProvesUndelivered(restarted.submissions()[0]?.reason)).toBe(true)
+  })
+
+  it('turns an interrupted retry marker into recovery doubt', async () => {
+    const journal = await open()
+    await journal.appendSubmission({
+      clientMessageId: 'cm_retrying',
+      payloadFingerprint: digestPayload('retry interrupted'),
+      body: userMessage('retry interrupted'),
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'cm_retrying',
+      state: 'unknown',
+      reason: DISPATCH_DOUBT_RETRY_IN_PROGRESS,
+      fence: 1
+    })
+
+    const restarted = await open()
+    await restarted.markPendingSubmissionsUnknown(2, 'provider_exited_before_acknowledgement')
+
+    expect(restarted.submissions()[0]).toMatchObject({
+      dispatchState: 'unknown',
+      reason: 'provider_exited_before_acknowledgement',
+      recovered: true
+    })
+    expect(dispatchDoubtProvesUndelivered(restarted.submissions()[0]?.reason)).toBe(false)
   })
 
   it('reports a rejected submission as never delivered, and never re-sends it', async () => {

@@ -13,6 +13,7 @@ import {
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
 } from './agent-status-types'
 import { describeToolInput } from './native-chat-tool-summary'
+import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
 
@@ -106,7 +107,9 @@ function itemBlocks(item: AgentJournalRenderItem): {
       blocks: [{ type: 'text', text: `${body.question}\n${choices}`.trim() }]
     }
   }
-  if (body.turnLifecycle) {
+  // A turn record is timing, not content; a kind this build does not know is
+  // never painted as text either, so a newer host can add kinds freely.
+  if (body.kind !== 'status' || body.turnLifecycle) {
     return null
   }
   return {
@@ -160,9 +163,9 @@ export function activeStructuredAgentSessionTurnId(
   items: readonly AgentJournalRenderItem[]
 ): string | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
-    if (body?.kind === 'status' && body.turnLifecycle) {
-      return body.turnLifecycle.state === 'running' ? body.turnLifecycle.turnId : null
+    const turn = readAgentJournalTurn(items[index]?.body)
+    if (turn) {
+      return turn.state === 'running' ? turn.turnId : null
     }
   }
   return null
@@ -185,10 +188,9 @@ export function hasPersistedStructuredAgentSessionTurn(
  * on that echo to call a session working leaves the whole gap reading idle in the chat and in
  * every session list, so the send itself is the evidence.
  *
- * `unknown` still counts: it only means the ack budget elapsed, which happens on 30% of Claude
- * sends whose turn then arrives anyway, and delivery confidence is a separate question from
- * whether work is owed. A recovered `unknown` does not — that one outlived the host generation
- * that sent it, so there is nothing still running to report.
+ * A live `unknown` still counts because an ambiguous adapter reply does not prove the provider
+ * stopped. A recovered `unknown` does not — it outlived the host generation that sent it, so
+ * there is nothing still running to report.
  */
 export function hasUnansweredStructuredAgentSessionDispatch(
   submissions: readonly AgentJournalSubmission[],
@@ -276,7 +278,7 @@ export function activeStructuredAgentSessionToolCall(
 ): AgentJournalToolCallItem | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const body = items[index]?.body
-    if (body?.kind === 'status' && body.turnLifecycle) {
+    if (readAgentJournalTurn(body)) {
       return null
     }
     if (body?.kind === 'tool-call' && body.state === 'running') {

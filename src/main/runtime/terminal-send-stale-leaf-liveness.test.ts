@@ -386,6 +386,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
     runMailbox,
     markAsDelivered,
     markAsUndelivered,
+    releaseMailboxPointerEnter,
     stageMailboxPointerEnter,
     insert(subject: string, type: StoredMessageRow['type'] = 'status'): void {
       rows.push({
@@ -759,7 +760,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
       expect(stub.rows[0].delivered_at).toBeNull()
 
       // The replacement's own delivery starts a fresh flight and completes —
@@ -804,7 +805,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
       // No stray settle flushed the parked trigger into the dead pty.
       expect(write).toHaveBeenCalledTimes(1)
       expect(stub.rows.every((row) => row.delivered_at === null)).toBe(true)
@@ -835,7 +836,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(0)
       expect(stub.stageMailboxPointerEnter).toHaveBeenCalledOnce()
-      expect(stub.markAsUndelivered).toHaveBeenCalledOnce()
+      expect(stub.releaseMailboxPointerEnter).toHaveBeenCalledOnce()
       expect(stub.rows[0].delivered_at).toBeNull()
     } finally {
       vi.useRealTimers()

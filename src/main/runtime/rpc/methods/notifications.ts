@@ -1,4 +1,9 @@
 import { z } from 'zod'
+import { createNotificationStreamFilter } from './notification-stream-policy'
+import {
+  MOBILE_PUSH_APNS_ENVIRONMENTS,
+  MOBILE_PUSH_PLATFORMS
+} from '../../../../shared/mobile-push-contract'
 import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
 
 // Why: monotonically increasing per-process counter eliminates the
@@ -26,21 +31,53 @@ const NotificationUnsubscribeParams = z.object({
 // client that predates the field keeps the seq-only cut.
 const NotificationGetMissedSinceParams = z.object({
   lastSeenSeq: z.number().int().min(0, 'lastSeenSeq must be a non-negative integer'),
-  epoch: z.string().optional()
+  epoch: z.string().optional(),
+  includeDesktopSuppressed: z.boolean().optional(),
+  deliveredPushes: z
+    .array(
+      z.object({
+        notificationId: z.string().min(1).max(2048),
+        notificationEpoch: z.string().min(1).max(128),
+        notificationSeq: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER)
+      })
+    )
+    .max(256)
+    .optional()
 })
 
-// Why: notifications.subscribe streams desktop notification events to mobile
-// clients over WebSocket. The mobile client shows a local push notification
-// for each event. This avoids requiring Firebase/APNs — the existing
-// persistent WebSocket connection doubles as the push channel.
+const NotificationPushFilterParams = z.object({
+  onlyWhenDesktopAway: z.boolean().optional(),
+  sound: z.boolean().optional()
+})
+
+const NotificationRegisterPushParams = z
+  .object({
+    platform: z.enum(MOBILE_PUSH_PLATFORMS),
+    token: z.string().min(1).max(4096),
+    apnsEnvironment: z.enum(MOBILE_PUSH_APNS_ENVIRONMENTS).optional(),
+    filter: NotificationPushFilterParams
+  })
+  // Why strict: the device identity is added by the handler, so a caller-supplied
+  // `deviceId` must be an error, not a key silently dropped.
+  .strict()
+  // Why: an APNs token is only routable against the environment it was minted in,
+  // so a missing environment must fail loudly rather than default to production.
+  .refine((params) => params.platform !== 'ios' || params.apnsEnvironment !== undefined, {
+    message: 'apnsEnvironment is required for ios'
+  })
+
+// Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
 export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'notifications.subscribe',
-    params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
+    params: z.object({ includeDesktopSuppressed: z.boolean().optional() }).optional(),
+    handler: async (params, { runtime, connectionId }, emit) => {
+      const shouldEmit = createNotificationStreamFilter(params?.includeDesktopSuppressed)
       await new Promise<void>((resolve) => {
         const unsubscribe = runtime.onNotificationDispatched((event) => {
-          emit(event)
+          if (shouldEmit(event)) {
+            emit(event)
+          }
         })
 
         // Why: scope by per-ws connectionId + per-process counter so
@@ -79,7 +116,41 @@ export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
     // client missed while its socket was reaped.
     handler: async (params, { runtime }) => {
       const missed = runtime.getMissedNotificationsSince(params.lastSeenSeq, params.epoch)
-      return { notifications: missed, epoch: runtime.getMobileNotificationEpoch() }
+      return {
+        notifications: missed.filter(
+          createNotificationStreamFilter(params.includeDesktopSuppressed)
+        ),
+        epoch: runtime.getMobileNotificationEpoch(),
+        ...(params.deliveredPushes
+          ? { dismissedPushes: runtime.reconcileDismissedPushes(params.deliveredPushes) }
+          : {})
+      }
+    }
+  }),
+  defineMethod({
+    name: 'notifications.registerPush',
+    params: NotificationRegisterPushParams,
+    // Why: the registration is keyed by the revocable paired device identity, never
+    // by anything the caller can assert, so an in-process or CLI caller has no device
+    // to register and is refused outright.
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { registered: false, reason: 'not_mobile' }
+      }
+      // The paired identity is spread last so no parameter can ever override it.
+      return await runtime.registerMobilePushDevice({ ...params, deviceId: pairedDeviceId })
+    }
+  }),
+  defineMethod({
+    name: 'notifications.unregisterPush',
+    params: null,
+    // Deleting the gateway token is durable (outbox), so an offline gateway still
+    // reports success to the phone that asked to stop being pushed to.
+    handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { unregistered: false }
+      }
+      return await runtime.unregisterMobilePushDevice(pairedDeviceId)
     }
   })
 ]

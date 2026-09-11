@@ -62,6 +62,15 @@ function kindIconTone(kind: AgentSessionBackgroundTask['kind'], dimmed: boolean)
   return dimmed ? `${tone}/40` : tone
 }
 
+/** Absent means stoppable: a host predating the field published only rows its
+ *  stop could act on, so reading absence as "not stoppable" would hide a
+ *  working control. Only an explicit `false` withholds the button — Claude
+ *  marks its in-turn foreground rows that way, and a Stop on one of those
+ *  resolves to an empty target list and silently reports nothing cancelled. */
+function backgroundTaskStoppable(task: AgentSessionBackgroundTask): boolean {
+  return task.stoppable !== false
+}
+
 function BackgroundTaskRow(props: {
   entry: BackgroundRosterTask
   now: number
@@ -100,7 +109,7 @@ function BackgroundTaskRow(props: {
           {meta}
         </span>
       ) : null}
-      {!entry.settled && props.supportsTaskStop ? (
+      {!entry.settled && props.supportsTaskStop && backgroundTaskStoppable(entry.task) ? (
         <Button
           type="button"
           variant="ghost"
@@ -135,9 +144,16 @@ export function NativeChatBackgroundTasksStatus(props: {
    *  animated monitoring indicator. A running turn owns the voice. */
   indicatorActive: boolean
   isVisible: boolean
+  /** Owned by the parent. The strip is mounted on live work, so it disappears
+   *  and comes back whenever the roster momentarily empties between two pieces
+   *  of a sequential fan-out — settled rows are flushed at that same instant
+   *  and hold nothing open — and local state would collapse the list on every
+   *  such gap. */
+  expanded: boolean
+  onExpandedChange: (expanded: boolean) => void
   onStop: (taskId?: string) => void
 }): React.JSX.Element {
-  const [expanded, setExpanded] = useState(false)
+  const expanded = props.expanded
   const taskListId = useId()
   const stripRef = useRef<HTMLDivElement>(null)
   const narrow = useNarrowStrip(stripRef)
@@ -170,7 +186,7 @@ export function NativeChatBackgroundTasksStatus(props: {
             aria-expanded={expanded}
             aria-controls={taskListId}
             aria-label={headerText}
-            onClick={() => setExpanded((current) => !current)}
+            onClick={() => props.onExpandedChange(!expanded)}
           >
             <span className="min-w-0 truncate">
               {header.segments.map((segment, index) => {

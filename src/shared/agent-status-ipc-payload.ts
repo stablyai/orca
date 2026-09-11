@@ -3,6 +3,7 @@
 // (states, entries, normalization) and the transport envelopes live next to each
 // other. Re-exported from agent-status-types, so existing import sites are unchanged.
 
+import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
 import type {
@@ -49,6 +50,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   promptInteractionKey?: string
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** Present on rows the structured session host projects; `owned` keeps them fresh past the
+   *  staleness window because the host still runs the provider child. */
+  structuredHost?: StructuredHostStatus
 } & WithAgentStatusObservation
 
 /** Identity used by UI-only cleanup to evict exactly the status it cleared.

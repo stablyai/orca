@@ -46,10 +46,13 @@ export type AttachFlowInput = {
   callerKey: string
   params: AgentSessionAttachParams
   now: () => number
-  /** Publishes the journal before clients can send against the new owner. */
+  /** Publishes the journal before clients can send against the new owner. `acquiredOwner` is
+   *  true only when this attach spawned the provider child, so a re-attach to a live one is not
+   *  mistaken for a cold acquire. */
   onAttached: (
     attached: AttachedJournal,
-    acquisitionGeneration: string | null
+    acquisitionGeneration: string | null,
+    acquiredOwner: boolean
   ) => Promise<void> | void
   /** Host-owned provider sink, bound to the journal inside `onAttached`. */
   eventSink?: StructuredAgentSessionEventSink
@@ -84,6 +87,7 @@ export async function performAttach(
 
   let record: AgentSessionRecord
   let acquisitionGeneration: string | null = null
+  let acquiredOwner = false
   let reservedRecord: AgentSessionRecord | null = null
   let unsupportedReservationSettlementAttempted = false
   let replayed = false
@@ -139,6 +143,7 @@ export async function performAttach(
       const acquired = await acquireOwner(input, record)
       record = acquired.record
       acquisitionGeneration = acquired.acquisitionGeneration
+      acquiredOwner = true
     }
   } catch (error) {
     const spawnToken = reservedRecord?.lease.reservedSpawnToken
@@ -213,7 +218,7 @@ export async function performAttach(
       adapter: input.adapter
     })
     await importAdoptedTranscript(params, attached, record, preparedTranscript.items)
-    await input.onAttached(attached, acquisitionGeneration)
+    await input.onAttached(attached, acquisitionGeneration, acquiredOwner)
     await store.recordOperationOutcome({
       callerKey: input.callerKey,
       operationId: params.envelope.clientOperationId,

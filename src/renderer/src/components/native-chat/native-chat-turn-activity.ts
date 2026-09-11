@@ -1,3 +1,4 @@
+import { readAgentJournalTurn } from '../../../../shared/agent-session-turn-record'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionTurnActivity } from '../../../../shared/agent-session-wire'
 import { normalizePromptField } from '../../../../shared/agent-status-field-normalization'
@@ -77,12 +78,10 @@ export function selectStructuredAgentTurnActivity(
   if (!turnId) {
     return null
   }
-  const turnStartIndex = items.findLastIndex(
-    (item) =>
-      item.body.kind === 'status' &&
-      item.body.turnLifecycle?.turnId === turnId &&
-      item.body.turnLifecycle.state === 'running'
-  )
+  const turnStartIndex = items.findLastIndex((item) => {
+    const turn = readAgentJournalTurn(item.body)
+    return turn?.turnId === turnId && turn.state === 'running'
+  })
   const turnItems = items.slice(Math.max(0, turnStartIndex))
   const toolLabels = recentToolActivityLabels(turnItems)
   if (providerActivity?.turnId === turnId) {
@@ -93,7 +92,7 @@ export function selectStructuredAgentTurnActivity(
   }
   for (let index = turnItems.length - 1; index >= 0; index -= 1) {
     const body = turnItems[index]?.body
-    if (body?.kind !== 'status' || body.turnLifecycle || body.providerFrame) {
+    if (body?.kind !== 'status' || readAgentJournalTurn(body) || body.providerFrame) {
       continue
     }
     const text = activityLine(body.text)
