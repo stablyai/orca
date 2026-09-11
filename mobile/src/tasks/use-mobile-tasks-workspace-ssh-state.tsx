@@ -14,6 +14,7 @@ import {
   type SetupDecision,
   isSuccess
 } from './mobile-tasks-legacy-foundation'
+import { getWorkspaceDetectAgentsParams } from '../worktree/workspace-agent-detection-target'
 
 export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsModel) {
   const {
@@ -119,7 +120,10 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       ? client.sendRequest('preflight.detectRemoteAgents', {
           connectionId: workspaceCreateTargetRepo.connectionId
         })
-      : client.sendRequest('preflight.detectAgents')
+      : client.sendRequest(
+          'preflight.detectAgents',
+          getWorkspaceDetectAgentsParams(workspaceCreateTargetRepo.path)
+        )
     void request
       .then((response) => {
         if (stale) {

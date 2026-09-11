@@ -80,6 +80,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const executionTarget = useNewWorkspaceExecutionTarget({
     client,
     connectionId: selectedRepoConnectionId,
+    repoPath: selectedRepo?.path ?? null,
     visible
   })
   const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })

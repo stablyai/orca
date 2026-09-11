@@ -3,6 +3,7 @@ import type { SshConnectionState } from '../../../src/shared/ssh-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { deriveWorkspaceSshGate, type WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
+import { getWorkspaceDetectAgentsParams } from '../worktree/workspace-agent-detection-target'
 
 type DetectedAgentIdsState = {
   connectionId: string | null
@@ -20,13 +21,14 @@ function fallbackSshState(
 export function useNewWorkspaceExecutionTarget(args: {
   client: RpcClient | null
   connectionId: string | null
+  repoPath?: string | null
   visible: boolean
 }): {
   sshGate: WorkspaceSshGate
   detectedAgentIds: Set<string> | null
   connect: () => Promise<void>
 } {
-  const { client, connectionId, visible } = args
+  const { client, connectionId, repoPath = null, visible } = args
   const [sshState, setSshState] = useState<SshConnectionState | null>(null)
   const [connectingTargetId, setConnectingTargetId] = useState<string | null>(null)
   const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
@@ -85,7 +87,10 @@ export function useNewWorkspaceExecutionTarget(args: {
       try {
         const response = connectionId
           ? await client.sendRequest('preflight.detectRemoteAgents', { connectionId })
-          : await client.sendRequest('preflight.detectAgents')
+          : await client.sendRequest(
+              'preflight.detectAgents',
+              getWorkspaceDetectAgentsParams(repoPath)
+            )
         if (!stale) {
           setDetectedAgentIdsState({
             connectionId,
@@ -101,7 +106,7 @@ export function useNewWorkspaceExecutionTarget(args: {
     return () => {
       stale = true
     }
-  }, [client, connectionId, sshGate.status, visible])
+  }, [client, connectionId, repoPath, sshGate.status, visible])
 
   async function connect(): Promise<void> {
     if (!client || !connectionId) {

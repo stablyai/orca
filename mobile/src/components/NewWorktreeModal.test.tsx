@@ -302,7 +302,7 @@ describe('NewWorktreeModal project targets', () => {
     await flushUpdates()
 
     expect(renderer.root.findAll((node) => node.props.label === 'Workspace name')).toHaveLength(1)
-    expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents')
+    expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents', undefined)
     expect(sendRequest).not.toHaveBeenCalledWith('ssh.getState', expect.anything())
   })
 
