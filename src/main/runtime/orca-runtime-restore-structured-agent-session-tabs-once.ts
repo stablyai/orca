@@ -5,6 +5,10 @@ import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
 import type { ConversationReplacement } from '../native-chat/agent-session-wire/structured-conversation-command'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
+import {
+  refreshStructuredProviderSessions,
+  structuredAgentSessionProviderSessionId
+} from './structured-agent-session-provider-session-publication'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -87,6 +91,26 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
   }
 
+  /** A conversation proven after the tab was minted still has to reach the client, or the chat
+   *  keeps its generic name for the life of the session. */
+  private republishStructuredProviderSessions(
+    existing: RuntimeMobileSessionTabsSnapshot,
+    notify?: boolean
+  ): void {
+    const tabs = refreshStructuredProviderSessions(existing.tabs)
+    if (tabs === existing.tabs) {
+      return
+    }
+    const stored = this.storeMobileSessionSnapshot(existing.worktree, {
+      ...existing,
+      snapshotVersion: existing.snapshotVersion + 1,
+      tabs
+    })
+    if (notify !== false) {
+      this.emitMobileSessionTabsSnapshot(stored)
+    }
+  }
+
   async publishStructuredAgentSessionTab(input: {
     workspaceId: string
     sessionId: string
@@ -101,10 +125,12 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
+    const providerSessionId = structuredAgentSessionProviderSessionId(input.sessionId)
     if (existing?.tabs.some((tab) => tab.id === id)) {
       // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
       // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
       if (!input.activate) {
+        this.republishStructuredProviderSessions(existing, input.notify)
         return
       }
       const priorGroups = existing.tabGroups ?? []
@@ -122,7 +148,9 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         tabGroups: priorGroups.map((group) =>
           group.id === groupId ? { ...group, activeTabId: id } : group
         ),
-        tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
+        tabs: refreshStructuredProviderSessions(
+          existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
+        )
       }
       const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
       if (input.notify !== false) {
@@ -137,6 +165,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       sessionId: input.sessionId,
       ...(input.replacesSessionId ? { replacesSessionId: input.replacesSessionId } : {}),
       agent: input.agent,
+      ...(providerSessionId ? { providerSessionId } : {}),
       isActive: input.activate
     }
     const tabs = [...(existing?.tabs ?? [])].map((candidate) => ({
