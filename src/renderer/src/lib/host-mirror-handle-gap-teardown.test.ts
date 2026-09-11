@@ -29,11 +29,24 @@ function parkAndExpire(environmentId: string, tabId: string): void {
   // Rows ACCUMULATE. Replacing them would unpublish the panes parked earlier, and the tab-death
   // rule would then legitimately sweep their verdicts before teardown was ever reached — this
   // suite is about a class no recording-driven prune can reach, so every pane here stays live.
-  const published = useAppStore.getState().tabsByWorktree[WORKTREE_ID] ?? []
+  const state = useAppStore.getState()
+  const published = state.tabsByWorktree[WORKTREE_ID] ?? []
   useAppStore.setState({
     ptyIdsByTabId: {},
     tabsByWorktree: {
       [WORKTREE_ID]: [...published.filter((tab) => tab.id !== tabId), { id: tabId, title: tabId }]
+    },
+    // A verdict names its PANE by the environment-minted PTY held at park time, so a fixture with
+    // no layout binding records '' and the verdict refuses to answer. Bind per environment: one
+    // shared environment id would filter to '' for every other environment's pane.
+    terminalLayoutsByTabId: {
+      ...state.terminalLayoutsByTabId,
+      [tabId]: {
+        root: { type: 'leaf', leafId: `leaf-${tabId}` },
+        activeLeafId: `leaf-${tabId}`,
+        expandedLeafId: null,
+        ptyIdsByLeafId: { [`leaf-${tabId}`]: `remote:${environmentId}@@term_${tabId}` }
+      }
     }
   } as never)
   parkUntilHostMirrorHandleLands(environmentId, WORKTREE_ID, tabId, () => {})

@@ -24,6 +24,9 @@ const SECOND_TAB_ID = 'web-terminal-host-tab-2'
 const initialAppStoreState = useAppStore.getState()
 
 function seedRows(): void {
+  // Layout bindings are seeded because a verdict names the PANE by the environment-minted PTY it
+  // held at park time. A pane with no binding never reaches the park path in production, and its
+  // verdict deliberately refuses to answer, so a fixture without one models nothing real.
   useAppStore.setState({
     ptyIdsByTabId: {},
     tabsByWorktree: {
@@ -31,6 +34,20 @@ function seedRows(): void {
         { id: FIRST_TAB_ID, title: 'one' },
         { id: SECOND_TAB_ID, title: 'two' }
       ]
+    },
+    terminalLayoutsByTabId: {
+      [FIRST_TAB_ID]: {
+        root: { type: 'leaf', leafId: 'leaf-1' },
+        activeLeafId: 'leaf-1',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'leaf-1': `remote:${ENVIRONMENT_ID}@@term_1` }
+      },
+      [SECOND_TAB_ID]: {
+        root: { type: 'leaf', leafId: 'leaf-2' },
+        activeLeafId: 'leaf-2',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { 'leaf-2': `remote:${ENVIRONMENT_ID}@@term_2` }
+      }
     }
   } as never)
 }
