@@ -7,6 +7,7 @@ import {
 } from './session-tab-browser-placement-projection'
 import { projectSessionTabsForContext } from './session-tabs-inventory'
 import { ActivateTab, MoveTab, SetTabProps, UpdatePaneLayout } from './session-tabs-schemas'
+import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 
 export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
   defineMethod({
@@ -15,6 +16,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
     handler: async (params, context) => {
       const { runtime, clientKind, pairedDeviceId } = context
       if (clientKind) {
+        await restoreStructuredTabsIfSupported(context)
         const visible = projectSessionTabsForContext(
           await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
           context
@@ -46,6 +48,7 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
       const { runtime, pairedDeviceId, clientKind } = context
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
       if (clientKind) {
+        await restoreStructuredTabsIfSupported(context)
         const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
         const projected = projectSessionTabsForContext(raw, context)
         translated = translateProjectedSessionTabMove(raw, projected, params)
@@ -127,6 +130,7 @@ async function assertVisibleMutationTab(
   if (!clientKind) {
     return
   }
+  await restoreStructuredTabsIfSupported(context)
   const visible = projectSessionTabsForContext(
     await runtime.listMobileSessionTabs(worktree, pairedDeviceId),
     context

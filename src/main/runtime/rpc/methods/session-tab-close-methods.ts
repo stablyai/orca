@@ -5,6 +5,7 @@ import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
 import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
 import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
 import { projectSessionTabsForContext } from './session-tabs-inventory'
+import { restoreStructuredTabsIfSupported } from './structured-session-tab-restore'
 
 export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
   defineMethod({
@@ -12,6 +13,7 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
     params: CloseTab,
     handler: async (params, context) => {
       if (context.clientKind) {
+        await restoreStructuredTabsIfSupported(context)
         const raw = await context.runtime.listMobileSessionTabs(
           params.worktree,
           context.pairedDeviceId
@@ -84,6 +86,7 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
     params: CloseLifecycleTab,
     handler: async (params, context) => {
       if (context.clientKind) {
+        await restoreStructuredTabsIfSupported(context)
         const raw = await context.runtime.listMobileSessionTabs(
           params.worktree,
           context.pairedDeviceId
