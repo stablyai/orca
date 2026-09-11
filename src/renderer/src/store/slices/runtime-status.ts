@@ -294,24 +294,25 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   },
 
   refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
-    refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (entry) => {
-      if (entry.snapshot) {
-        get().applyRuntimeHostStatusSnapshot(entry.snapshot)
-        return
-      }
-      // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
-      // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
-      get().setRuntimeEnvironmentStatus(environmentId, entry)
-      if (entry.status) {
-        // Why here: hydration can ask before the environment is reachable, and a restored
-        // client-hosted page only comes back once this desktop attaches as its host.
-        void ensureBrowserClientHostsForRestoredPages(get())
-        // Why alongside: the same restart that hands those rows back also restores rows the user
-        // already closed while this environment was down, so the closes it never heard have to be
-        // replayed before its persisted records can put them on screen again.
-        void replayClientHostedBrowserCloseIntents(environmentId, get())
-      }
-    }),
+    refreshRuntimeEnvironmentStatus(
+      environmentId,
+      timeoutMs,
+      (entry) => {
+        // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
+        // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
+        get().setRuntimeEnvironmentStatus(environmentId, entry)
+        if (entry.status) {
+          // Why here: hydration can ask before the environment is reachable, and a restored
+          // client-hosted page only comes back once this desktop attaches as its host.
+          void ensureBrowserClientHostsForRestoredPages(get())
+          // Why alongside: the same restart that hands those rows back also restores rows the user
+          // already closed while this environment was down, so the closes it never heard have to be
+          // replayed before its persisted records can put them on screen again.
+          void replayClientHostedBrowserCloseIntents(environmentId, get())
+        }
+      },
+      (snapshot) => get().applyRuntimeHostStatusSnapshot(snapshot)
+    ),
 
   hydrateRuntimeEnvironmentStatuses: createRuntimeStatusHydration({
     listEnvironments: () => window.api.runtimeEnvironments.list(),

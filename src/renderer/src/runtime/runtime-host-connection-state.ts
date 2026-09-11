@@ -118,15 +118,15 @@ export function runtimeHostConnectionStateForEntry(
     | null
     | undefined
 ): RuntimeHostConnectionState {
-  if (entry?.snapshot) {
-    const snapshot = entry.snapshot
+  const snapshot = entry?.snapshot
+  if (snapshot) {
     if (snapshot.retired || snapshot.verification === 'blocked') {
       return 'disconnected'
     }
     if (snapshot.transport === 'disconnected') {
       return 'reconnecting'
     }
-    if (snapshot.verification === 'checking' && !entry.status) {
+    if (snapshot.verification === 'checking' && !entry?.status) {
       return 'checking'
     }
     if (snapshot.transport === 'ready' && snapshot.verification !== 'verified') {
@@ -136,6 +136,13 @@ export function runtimeHostConnectionStateForEntry(
   return runtimeHostConnectionState({
     hasStatusEntry: Boolean(entry),
     status: entry?.status ?? null,
+    // Why: 'connecting'/'unknown' used to fall through to the default 'disconnected' and
+    // report a host still establishing contact as down. Absence of transport evidence is
+    // unverifiable, not exited — docs/reference/ssh-execution-boundary.md.
+    // 'disconnected' already returned above, so 'ready' is the only connected transport left.
+    ...(snapshot
+      ? { transportStatus: snapshot.transport === 'ready' ? 'connected' : 'checking' }
+      : {}),
     remoteControl: entry?.remoteControl ?? entry?.status?.remoteControl ?? null
   })
 }

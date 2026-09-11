@@ -1,8 +1,14 @@
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
+
+type PairedRuntimeParkingCapability = { capabilities?: readonly string[] }
 
 type PairedRuntimeParkingCapabilityStatuses = ReadonlyMap<
   string,
-  { status: { capabilities?: readonly string[] } | null | undefined }
+  {
+    status: PairedRuntimeParkingCapability | null | undefined
+    snapshot?: { status: PairedRuntimeParkingCapability | null } | null
+  }
 >
 
 type PairedRuntimeParkingEnvironmentIdsCache = {
@@ -34,7 +40,10 @@ export function selectPairedRuntimeParkingEnvironmentIds(
 
   const capable = new Set<string>()
   for (const [environmentId, entry] of statuses) {
-    if (entry.status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
+    // Why last-verified: a capability is a fact about the host's build, so an unverifiable
+    // probe must not unpark its terminals. See docs/reference/ssh-execution-boundary.md.
+    const status = lastVerifiedRuntimeStatus<PairedRuntimeParkingCapability>(entry)
+    if (status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
       capable.add(environmentId)
     }
   }
