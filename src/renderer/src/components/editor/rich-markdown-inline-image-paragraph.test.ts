@@ -56,6 +56,9 @@ describe('rich markdown inline images inside a paragraph', () => {
     const editor = createRichMarkdownEditorFromSource(CRASH_SOURCE)
 
     try {
+      // Why: serialization never runs NodeType.checkContent, so the markdown
+      // matches byte-for-byte even when the document is schema-invalid.
+      expect(() => editor.state.doc.check()).not.toThrow()
       expect(editor.getMarkdown().trimEnd()).toBe(CRASH_SOURCE.trimEnd())
     } finally {
       editor.destroy()

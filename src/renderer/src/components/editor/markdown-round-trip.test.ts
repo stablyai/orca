@@ -16,6 +16,10 @@ function roundTripMarkdown(content: string): string {
   })
 
   try {
+    // Why: markdown serialization walks the document without running
+    // NodeType.checkContent, so it emits byte-identical output from a
+    // schema-invalid document that would crash on the user's next keystroke.
+    editor.state.doc.check()
     return editor.getMarkdown().trimEnd()
   } finally {
     editor.destroy()
@@ -46,6 +50,32 @@ function markdownAfterTextReplace(content: string, search: string, replacement: 
       throw new Error(`Missing text: ${search}`)
     }
     editor.view.dispatch(editor.state.tr.insertText(replacement, from, from + search.length))
+    return editor.getMarkdown().trimEnd()
+  } finally {
+    editor.destroy()
+  }
+}
+
+function markdownAfterTypingBesideImage(content: string, typed: string): string {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
+    contentType: 'markdown'
+  })
+
+  try {
+    let after = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (after === -1 && node.type.name === 'image') {
+        after = pos + node.nodeSize
+      }
+    })
+    if (after === -1) {
+      throw new Error('Missing image node')
+    }
+    editor.view.dispatch(editor.state.tr.insertText(typed, after, after))
     return editor.getMarkdown().trimEnd()
   } finally {
     editor.destroy()
@@ -336,6 +366,11 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('Intro\n\n![shot](shot.png)\n\nOutro\n')).toBe(
       'Intro\n\n![shot](shot.png)\n\nOutro'
     )
+    // Typing beside the image must join its paragraph instead of opening a new block,
+    // which only holds while the standalone image stays wrapped in a paragraph.
+    expect(markdownAfterTypingBesideImage('Intro\n\n![shot](shot.png)\n\nOutro\n', 'X')).toBe(
+      'Intro\n\n![shot](shot.png)X\n\nOutro'
+    )
   })
 
   it('preserves images nested in list items and table cells', () => {
@@ -343,6 +378,12 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('| a |\n| - |\n| ![shot](shot.png) |\n')).toContain(
       '![shot](shot.png)'
     )
+    expect(markdownAfterTextReplace('- step ![shot](shot.png)\n', 'step', 'stage')).toBe(
+      '- stage ![shot](shot.png)'
+    )
+    expect(
+      markdownAfterTextReplace('| a |\n| - |\n| b ![shot](shot.png) |\n', 'b ', 'c ')
+    ).toContain('![shot](shot.png)')
   })
 
   it('preserves links whose label is inline code', () => {
