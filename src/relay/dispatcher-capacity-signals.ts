@@ -55,7 +55,7 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
   }
 
   get legacyRetentionBelowLowWater(): boolean {
-    return this.publicationLedger.belowLowWater(this.activeClientKeys())
+    return this.publicationLedger.belowLowWater(() => this.activeClientKeys())
   }
 
   /**
@@ -138,7 +138,7 @@ export abstract class RelayDispatcherCapacitySignals extends RelayDispatcherClie
       this.deferredLegacyCapacity ||= !force
       return
     }
-    if (!force && !this.publicationLedger.belowLowWater(this.activeClientKeys())) {
+    if (!force && !this.publicationLedger.belowLowWater(() => this.activeClientKeys())) {
       return
     }
     for (const listener of this.legacyCapacityListeners) {

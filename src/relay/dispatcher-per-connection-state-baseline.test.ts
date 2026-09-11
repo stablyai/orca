@@ -12,7 +12,10 @@ type Probed = {
   clients: Map<number, unknown>
   requestHandlers: Map<string, unknown>
   notificationHandlers: Map<string, unknown>
-  requestAborts: { controllers: Map<string, unknown> }
+  requestAborts: {
+    byClient: Map<number, Map<number, AbortController>>
+    create: (clientId: number, requestId: number) => unknown
+  }
   publicationLedger: { clientBytes: Map<string, number>; aggregateBytes: number }
   pendingRelayRequests: Map<number, unknown>
   clientDetachListeners: Set<unknown>
@@ -26,12 +29,20 @@ type Probed = {
   dispose: () => void
 }
 
+function countAbortControllers(d: Probed): number {
+  let total = 0
+  for (const bucket of d.requestAborts.byClient.values()) {
+    total += bucket.size
+  }
+  return total
+}
+
 function census(d: Probed): Record<string, number | string> {
   return {
     clients: d.clients.size,
     requestHandlers: d.requestHandlers.size,
     notificationHandlers: d.notificationHandlers.size,
-    requestAbortControllers: d.requestAborts.controllers.size,
+    requestAbortControllers: countAbortControllers(d),
     ledgerClientBytes: d.publicationLedger.clientBytes.size,
     ledgerAggregateBytes: d.publicationLedger.aggregateBytes,
     pendingRelayRequests: d.pendingRelayRequests.size,
@@ -65,7 +76,7 @@ describe('relay dispatcher per-connection state', () => {
       }
       for (const id of ids) {
         d.onClientCapacity(id, () => {})
-        d.requestAborts.controllers.set(`${id}:1`, new AbortController())
+        d.requestAborts.create(id, 1)
       }
 
       // The census must be able to find things: these two are the containers that stay 0 unless
