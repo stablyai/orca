@@ -54,7 +54,7 @@ const waitersByPane = new Map<string, HandleGapWaiter>()
 /**
  * Connection generation whose wait already expired for the pane.
  *
- * THREE drains, with three different triggers. Getting the scopes right is the whole design; see
+ * FOUR drains, with four different triggers. Getting the scopes right is the whole design; see
  * `recordExpiredWait` for why the first two must NOT share a scope.
  *  - superseded generation: per key, EVERY environment. Runs on any recording, anywhere.
  *  - dead tab row: the recording environment ONLY. Runs on a recording in that environment.
@@ -62,6 +62,14 @@ const waitersByPane = new Map<string, HandleGapWaiter>()
  *    trigger that fires at all for an environment that will never record again. A row stranded
  *    there is inert — removal advances the generation, so it can never match — so that one is a
  *    leak fix, not a correctness fix.
+ *  - PUBLISHED HANDLE: `retireVerdictsWithLandedHandles`, from the store subscription. The gap a
+ *    verdict measured is over once its pane publishes a handle, so the NEXT gap must get its own
+ *    wait. The other three provably cannot reach this: the generation no longer moves across an
+ *    outage on one runtime (#19647, same stack), the row stays published the whole time — it is
+ *    the HANDLE that comes and goes — the environment is still here, and the read-time pane
+ *    identity below deliberately lets the same PTY inherit. It is the only drain that needs the
+ *    subscription to outlive the waiters, which is why `stopStoreSubscriptionIfIdle` counts
+ *    verdicts too.
  *
  * ONE CLASS IS STILL UNCOVERED, and unlike the rest it is NOT conservative: a retracted tab id
  * that is republished inherits the old pane's verdict and skips its own wait, which is the #19735
@@ -193,10 +201,29 @@ function recordExpiredWait(environmentId: string, key: string): void {
     generation,
     paneBinding: waitersByPane.get(key)?.paneBinding ?? ''
   })
+  // The landed-handle drain has to keep watching after this waiter is released.
+  startStoreSubscription()
+}
+
+/**
+ * Retires the verdict of any pane whose handle is now published.
+ *
+ * A published handle is the mirror having spoken for the pane, so the gap the verdict measured is
+ * over. Read from `ptyIdsByTabId`, deliberately NOT from the layout `paneBinding` — the binding is
+ * the pane's IDENTITY and holds across the gap by design, which is exactly why it cannot see this.
+ */
+function retireVerdictsWithLandedHandles(state: HandleGapStoreState): void {
+  for (const key of expiredGenerationByPane.keys()) {
+    const tabId = key.slice(key.indexOf('\0') + 1)
+    if ((state.ptyIdsByTabId[tabId]?.length ?? 0) > 0) {
+      expiredGenerationByPane.delete(key)
+    }
+  }
 }
 
 function stopStoreSubscriptionIfIdle(): void {
-  if (waitersByPane.size === 0 && unsubscribeStore) {
+  // Verdicts count: the landed-handle drain observes a transition no waiter is parked for.
+  if (waitersByPane.size === 0 && expiredGenerationByPane.size === 0 && unsubscribeStore) {
     unsubscribeStore()
     unsubscribeStore = null
   }
@@ -258,7 +285,9 @@ function startStoreSubscription(): void {
       return
     }
     previous = state
+    retireVerdictsWithLandedHandles(state)
     releaseDueWaiters(state)
+    stopStoreSubscriptionIfIdle()
   })
 }
 
@@ -277,6 +306,11 @@ export function parkUntilHostMirrorHandleLands(
   const existing = waitersByPane.get(key)
   if (existing) {
     existing.run = run
+    // Why the worktree moves with `run`: adopting an orphaned terminal re-keys `tabsByWorktree`
+    // without re-keying the record, so a live wait left on the old worktree released on retraction
+    // evidence about a workspace it is no longer about. The park-time `paneBinding` deliberately
+    // does NOT move — that is the pane's identity, and this is only where its rows are filed.
+    existing.worktreeId = worktreeId
     return
   }
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
@@ -331,6 +365,8 @@ export function clearHostMirrorHandleGapVerdictsForEnvironment(environmentId: st
       expiredGenerationByPane.delete(key)
     }
   }
+  // The landed-handle drain may have been the only thing holding the subscription open.
+  stopStoreSubscriptionIfIdle()
 }
 
 export function countHostMirrorHandleGapVerdictsForTests(): number {
