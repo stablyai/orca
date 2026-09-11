@@ -570,6 +570,32 @@ describe('isDangerousWorktreeRemovalPath on an execution host', () => {
       )
     ).toBe(true)
   })
+
+  // A WSL project is registered under its UNC spelling while git-in-the-distro
+  // answers in Linux paths, so this exact pair reaches the guard. The repo path
+  // must not get a vote in whose home the *worktree* path is: pairing them made
+  // `getPathOps` pick win32 and every POSIX home shape went quiet.
+  it.each([
+    ['/home/alice', '\\\\wsl.localhost\\Ubuntu\\srv\\repo'],
+    ['/home/alice', '//wsl.localhost/Ubuntu/srv/repo'],
+    ['/root', 'C:\\src\\repo'],
+    ['/Users/alice', 'C:/src/repo']
+  ])('still recognises %s when the repo path is spelled %s', (worktreePath, repoPath) => {
+    expect(
+      isDangerousWorktreeRemovalPath(worktreePath, repoPath, executionHostRemovalHome(null))
+    ).toBe(true)
+    expect(isDangerousWorktreeRemovalPath(worktreePath, repoPath, CLIENT_REMOVAL_HOME)).toBe(true)
+  })
+
+  it('keeps a linked WSL worktree deletable when the repo path is a UNC spelling', () => {
+    expect(
+      isDangerousWorktreeRemovalPath(
+        '/home/alice/workspaces/feature',
+        '\\\\wsl.localhost\\Ubuntu\\srv\\repo',
+        CLIENT_REMOVAL_HOME
+      )
+    ).toBe(false)
+  })
 })
 
 describe('canSafelyRemoveOrphanedWorktreeDirectory on an execution host', () => {
