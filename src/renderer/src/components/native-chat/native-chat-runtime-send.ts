@@ -82,7 +82,7 @@ export function sendNativeChatMessage(
         // Schedule from the actual body write: an overdue clear-confirm callback
         // must not collapse the required body-to-Enter gap after a renderer stall.
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+          sendRuntimePtyInput(ptyId, options?.submitBytes ?? NATIVE_CHAT_SUBMIT, 'driving')
           markSubmitted()
         })
       })

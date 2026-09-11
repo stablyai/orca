@@ -65,6 +65,9 @@ export type NativeChatApi = {
     limit?: number,
     transcriptPath?: string
   ) => Promise<NativeChatReadSessionResult>
+  /** Raw contents of the local Claude keybindings.json, or null if absent, so the
+   *  renderer can submit with the user's configured gesture rather than a bare CR. */
+  readClaudeKeybindings: () => Promise<string | null>
   /** Live-tail a transcript. The first frame is a bounded race-safe snapshot;
    *  later frames contain only newly appended messages. */
   subscribe: (
