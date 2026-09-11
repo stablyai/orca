@@ -37,6 +37,13 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     // Inside the frontmatter fence the typescript embed is active; only a
     // closing `---` on its own line pops it. Astro requires the closing
     // fence at column 0.
+    //
+    // The `^` here means "start of the region the embed covers", not start of
+    // line (monaco-editor#1127): `_findLeavingNestedLanguageOffset` slices the
+    // compiled `^(?:` prefix off the pop rule and tests `matchOnlyAtLineStart`
+    // against the substring `_myTokenize` handed it. Correct only because this
+    // embed always opens at end-of-line, so that substring is a whole line —
+    // do not reuse a `^`-anchored pop rule for an embed entered mid-line.
     frontmatter: [
       [/^---\s*$/, { token: 'keyword', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],

@@ -2,7 +2,10 @@ import type * as Monaco from 'monaco-editor'
 import { compile } from 'monaco-editor/esm/vs/editor/standalone/common/monarch/monarchCompile.js'
 import { MonarchTokenizer } from 'monaco-editor/esm/vs/editor/standalone/common/monarch/monarchLexer.js'
 import { describe, expect, it } from 'vitest'
-import { EMBED_ENTRY_REST_OF_LINE_BUDGET } from './monarch-embed-entry-budget'
+import {
+  EMBED_ENTRY_REST_OF_LINE_BUDGET,
+  MAX_TOKENIZATION_LINE_LENGTH
+} from './monarch-embed-entry-budget'
 import { astroMonarchLanguage } from './register-astro'
 import { svelteMonarchLanguage } from './register-svelte'
 import { vueMonarchLanguage } from './register-vue'
@@ -23,14 +26,10 @@ type MonarchTokenizerInstance = {
   _nestedTokenize: (...args: unknown[]) => unknown
 }
 
-// Monaco's default `editor.maxTokenizationLineLength`; lines at or above it are
-// never tokenized, so it caps how pathological a real line can get.
-const DEFAULT_MAX_TOKENIZATION_LINE_LENGTH = 20_000
-
 function createMonarchTokenizer(
   languageId: string,
   language: Monaco.languages.IMonarchLanguage,
-  maxTokenizationLineLength = DEFAULT_MAX_TOKENIZATION_LINE_LENGTH
+  maxTokenizationLineLength = MAX_TOKENIZATION_LINE_LENGTH
 ): MonarchTokenizerInstance {
   // Nested languages stay unregistered: `_getNestedEmbeddedLanguageData` then
   // hands back a null state, which changes what the embed *emits* but not
@@ -134,9 +133,7 @@ describe.each([
     (_name, buildLine) => {
       // Monaco refuses to tokenize at all past its line cap, so the ramp stops
       // where a real editor would.
-      const ramp = RAMP.filter(
-        (count) => buildLine(count).length < DEFAULT_MAX_TOKENIZATION_LINE_LENGTH
-      )
+      const ramp = RAMP.filter((count) => buildLine(count).length < MAX_TOKENIZATION_LINE_LENGTH)
       expect(ramp.length).toBeGreaterThanOrEqual(3)
 
       const depths = ramp.map((count) =>
@@ -234,7 +231,7 @@ describe('vue embedded-tokenizer recursion depth', () => {
 
   it('stays within the embed budget for a line of interpolations', () => {
     const ramp = [50, 200, 1000, 2500, 3900].filter(
-      (count) => templateLine(count).length < DEFAULT_MAX_TOKENIZATION_LINE_LENGTH
+      (count) => templateLine(count).length < MAX_TOKENIZATION_LINE_LENGTH
     )
     expect(ramp.length).toBeGreaterThanOrEqual(3)
 
