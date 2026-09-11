@@ -20,9 +20,12 @@ describe('resolveSingleTabStripVisibility', () => {
     })
   })
 
-  it('collapses a lone tab and an empty group', () => {
+  it('collapses a lone tab', () => {
     expect(resolveSingleTabStripVisibility(base).autoHidden).toBe(true)
-    expect(resolveSingleTabStripVisibility({ ...base, groupTabCount: 0 }).autoHidden).toBe(true)
+  })
+
+  it('keeps the strip for an empty group, which has no other way back to a tab', () => {
+    expect(resolveSingleTabStripVisibility({ ...base, groupTabCount: 0 }).autoHidden).toBe(false)
   })
 
   it('keeps the strip for a second tab', () => {
