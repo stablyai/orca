@@ -22,6 +22,15 @@ export type RateLimitOwnerUnavailable = {
   message: string
 }
 
+/**
+ * Contact with an owner that had already answered was lost. Per the execution
+ * boundary, that is `unverifiable`, not evidence the numbers changed — so the
+ * last reading stays on screen and this says it is no longer being confirmed.
+ */
+export type RateLimitOwnerContactLost = {
+  message: string
+}
+
 export type RateLimitOwnerUsage = {
   hostId: ExecutionHostId
   state: RateLimitState
@@ -30,6 +39,8 @@ export type RateLimitOwnerUsage = {
   codexAccountId: string | null
   /** null while this owner's usage is available. */
   unavailable: RateLimitOwnerUnavailable | null
+  /** null while the owner is still confirming the reading above. */
+  contactLost: RateLimitOwnerContactLost | null
   /** Bumped when this owner becomes active; a reply carrying an older value is stale. */
   generation: number
 }
@@ -43,6 +54,8 @@ export type OwnedRateLimitsReading =
       codexAccountId: string | null
     }
   | { kind: 'unavailable'; unavailable: RateLimitOwnerUnavailable }
+  /** The owner answered once and then went quiet; its last reading still stands. */
+  | { kind: 'contact-lost'; message: string }
 
 function unavailableProvider(
   provider: ProviderRateLimits['provider'],
@@ -85,6 +98,7 @@ export function createPendingRateLimitOwnerUsage(
     claudeAccountId: null,
     codexAccountId: null,
     unavailable: null,
+    contactLost: null,
     generation
   }
 }
@@ -92,8 +106,18 @@ export function createPendingRateLimitOwnerUsage(
 export function rateLimitOwnerUsageFromReading(
   hostId: ExecutionHostId,
   generation: number,
-  reading: OwnedRateLimitsReading
+  reading: OwnedRateLimitsReading,
+  previous: RateLimitOwnerUsage | undefined
 ): RateLimitOwnerUsage {
+  if (reading.kind === 'contact-lost') {
+    const last = previous ?? createPendingRateLimitOwnerUsage(hostId, generation)
+    return {
+      ...last,
+      hostId,
+      generation,
+      contactLost: { message: reading.message }
+    }
+  }
   if (reading.kind === 'unavailable') {
     return {
       hostId,
@@ -101,6 +125,7 @@ export function rateLimitOwnerUsageFromReading(
       claudeAccountId: null,
       codexAccountId: null,
       unavailable: reading.unavailable,
+      contactLost: null,
       generation
     }
   }
@@ -110,6 +135,7 @@ export function rateLimitOwnerUsageFromReading(
     claudeAccountId: reading.claudeAccountId,
     codexAccountId: reading.codexAccountId,
     unavailable: null,
+    contactLost: null,
     generation
   }
 }

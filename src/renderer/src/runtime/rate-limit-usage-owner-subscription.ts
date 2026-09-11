@@ -17,9 +17,6 @@ export function subscribeRateLimitUsageOwner(): () => void {
   let watcher: OwnedRateLimitsWatcher | null = null
 
   const follow = (): void => {
-    // Why: this runs on every store update, so compare the raw selection before
-    // deriving the host id — that derivation allocates an encoded string, and
-    // terminal output alone would churn one per frame.
     const environmentId =
       useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
     if (environmentId === followedEnvironmentId) {
@@ -46,7 +43,17 @@ export function subscribeRateLimitUsageOwner(): () => void {
   }
 
   follow()
-  const unsubscribe = useAppStore.subscribe(follow)
+  // Why: the listener runs on every store update, and terminal output alone
+  // drives many per frame. Compare the raw selection before any derivation.
+  const unsubscribe = useAppStore.subscribe((state, previousState) => {
+    if (
+      state.settings?.activeRuntimeEnvironmentId ===
+      previousState.settings?.activeRuntimeEnvironmentId
+    ) {
+      return
+    }
+    follow()
+  })
   return () => {
     unsubscribe()
     watcher?.close()

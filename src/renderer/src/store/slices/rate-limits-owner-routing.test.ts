@@ -230,6 +230,60 @@ describe('rate-limit usage ownership routing', () => {
     expect(store.getState().rateLimits.claude?.session?.usedPercent).toBe(90)
   })
 
+  it('keeps the last remote reading on screen when contact with the owner is lost', () => {
+    const store = createHarness('env-b')
+    store
+      .getState()
+      .applyOwnedRateLimits({ hostId: HOST_B, reading: usageReading(71, 'account-b') })
+
+    store.getState().applyOwnedRateLimits({
+      hostId: HOST_B,
+      reading: { kind: 'contact-lost', message: 'Lost contact with Remote B.' }
+    })
+
+    // Lost contact is `unverifiable`: the numbers stand, and the UI says they
+    // are no longer being confirmed.
+    expect(store.getState().rateLimits.claude?.session?.usedPercent).toBe(71)
+    expect(store.getState().rateLimitUsageContactLost?.message).toBe('Lost contact with Remote B.')
+    expect(store.getState().rateLimitUsageUnavailable).toBeNull()
+  })
+
+  it('clears the lost-contact marker when the owner answers again', () => {
+    const store = createHarness('env-b')
+    store
+      .getState()
+      .applyOwnedRateLimits({ hostId: HOST_B, reading: usageReading(71, 'account-b') })
+    store.getState().applyOwnedRateLimits({
+      hostId: HOST_B,
+      reading: { kind: 'contact-lost', message: 'Lost contact with Remote B.' }
+    })
+
+    store
+      .getState()
+      .applyOwnedRateLimits({ hostId: HOST_B, reading: usageReading(88, 'account-b') })
+
+    expect(store.getState().rateLimitUsageContactLost).toBeNull()
+    expect(store.getState().rateLimits.claude?.session?.usedPercent).toBe(88)
+  })
+
+  it('carries the lost-contact marker across an owner switch away and back', () => {
+    const store = createHarness('env-b')
+    store
+      .getState()
+      .applyOwnedRateLimits({ hostId: HOST_B, reading: usageReading(71, 'account-b') })
+    store.getState().applyOwnedRateLimits({
+      hostId: HOST_B,
+      reading: { kind: 'contact-lost', message: 'Lost contact with Remote B.' }
+    })
+
+    selectOwner(store, null)
+    expect(store.getState().rateLimitUsageContactLost).toBeNull()
+
+    selectOwner(store, 'env-b')
+    expect(store.getState().rateLimitUsageContactLost?.message).toBe('Lost contact with Remote B.')
+    expect(store.getState().rateLimits.claude?.session?.usedPercent).toBe(71)
+  })
+
   it('refuses a Codex reset credit against a remote owner', async () => {
     const store = createHarness('env-b')
 

@@ -81,6 +81,13 @@ export function watchProviderAccounts(
     onSnapshot: (snapshot: ProviderAccountsSnapshot) => void
     onError: (error: unknown) => void
     /**
+     * The stream closed after it had already delivered a snapshot. The reading
+     * it delivered is not refuted — it is simply no longer being confirmed.
+     * A close before any snapshot goes to `onError` instead, because there is
+     * nothing to keep.
+     */
+    onContactLost?: () => void
+    /**
      * Wall-clock budget for the first snapshot, or null to wait indefinitely.
      * A pane needs the budget to stop showing a loading state forever; an
      * app-lifetime stream must not, because elapsed time alone observes
@@ -190,9 +197,14 @@ export function watchProviderAccounts(
           }
         },
         onClose: () => {
-          if (!closed && !receivedSnapshot) {
-            handlers.onError(new Error('Remote provider account subscription closed.'))
+          if (closed) {
+            return
           }
+          if (!receivedSnapshot) {
+            handlers.onError(new Error('Remote provider account subscription closed.'))
+            return
+          }
+          handlers.onContactLost?.()
         }
       }
     )

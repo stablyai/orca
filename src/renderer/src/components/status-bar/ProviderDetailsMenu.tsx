@@ -47,6 +47,9 @@ export function ProviderDetailsMenu({
     useAppStore((s) => s.usagePercentageDisplay)
   )
   const menuFocusHandoff = useStatusBarMenuFocusHandoff()
+  // Why: the panel's "Updated Xm ago" is the owner's own timestamp, which says
+  // nothing about whether we can still reach it. Name that separately.
+  const usageContactLost = useAppStore((s) => s.rateLimitUsageContactLost)
 
   const handleOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
@@ -66,6 +69,9 @@ export function ProviderDetailsMenu({
           showResetCredits={!hidePanelResetCredits}
           usagePercentageDisplay={usagePercentageDisplay}
         />
+        {usageContactLost ? (
+          <p className="mt-2 text-xs text-muted-foreground">{usageContactLost.message}</p>
+        ) : null}
       </div>
       {children ? (
         <>

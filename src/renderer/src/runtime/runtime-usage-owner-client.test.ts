@@ -167,6 +167,47 @@ describe('watchOwnedRateLimits', () => {
     })
   })
 
+  // The owner answered, then the link dropped. Elapsed silence observes
+  // nothing about its quota, so the reading it gave stands — marked, not wiped.
+  it('keeps the last reading and marks it unconfirmed when contact is lost', () => {
+    let handlers: {
+      onSnapshot: (s: ProviderAccountsSnapshot) => void
+      onContactLost: () => void
+    } | null = null
+    watchProviderAccounts.mockImplementation((_settings, given) => {
+      handlers = given
+      return { close: vi.fn() }
+    })
+    const readings: { kind: string }[] = []
+
+    watchOwnedRateLimits('runtime:env-b', 'Remote B', (r) => readings.push(r as { kind: string }))
+    handlers!.onSnapshot(snapshot())
+    handlers!.onContactLost()
+
+    expect(readings.map((reading) => reading.kind)).toEqual(['usage', 'contact-lost'])
+    expect(readings[1]).toMatchObject({
+      message: 'Lost contact with Remote B. Showing the last usage it reported.'
+    })
+  })
+
+  it('reports a stream error after a snapshot as lost contact, not unavailable', () => {
+    let handlers: {
+      onSnapshot: (s: ProviderAccountsSnapshot) => void
+      onError: (error: unknown) => void
+    } | null = null
+    watchProviderAccounts.mockImplementation((_settings, given) => {
+      handlers = given
+      return { close: vi.fn() }
+    })
+    const readings: { kind: string }[] = []
+
+    watchOwnedRateLimits('runtime:env-b', 'Remote B', (r) => readings.push(r as { kind: string }))
+    handlers!.onSnapshot(snapshot())
+    handlers!.onError(new Error('socket closed'))
+
+    expect(readings[1]).toMatchObject({ kind: 'contact-lost' })
+  })
+
   it('does not open a remote subscription for the local owner', () => {
     watchOwnedRateLimits('local', 'This computer', vi.fn())
 

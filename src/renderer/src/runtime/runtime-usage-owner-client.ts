@@ -33,6 +33,16 @@ function unsupportedHost(hostLabel: string): OwnedRateLimitsReading {
   }
 }
 
+// Why: the owner already answered once. Losing the link observes nothing about
+// its quota, so the last reading stands and is marked as no longer confirmed —
+// `unverifiable`, not a wipe and not this machine's numbers.
+function contactLost(hostLabel: string): OwnedRateLimitsReading {
+  return {
+    kind: 'contact-lost',
+    message: `Lost contact with ${hostLabel}. Showing the last usage it reported.`
+  }
+}
+
 function unreachableHost(hostLabel: string, cause: unknown): OwnedRateLimitsReading {
   return {
     kind: 'unavailable',
@@ -80,13 +90,21 @@ export function watchOwnedRateLimits(
   if (parsed?.kind !== 'runtime') {
     return { close: () => {} }
   }
+  let answered = false
   const watcher = watchProviderAccounts(
     { activeRuntimeEnvironmentId: parsed.environmentId },
     {
-      onSnapshot: (snapshot) => onReading(readAccountsSnapshotUsage(snapshot, hostLabel)),
+      onSnapshot: (snapshot) => {
+        answered = true
+        onReading(readAccountsSnapshotUsage(snapshot, hostLabel))
+      },
       // Losing contact with the owner is never evidence about its usage, and
-      // never a reason to show this machine's.
-      onError: (error) => onReading(unreachableHost(hostLabel, error)),
+      // never a reason to show this machine's. Before the owner has answered
+      // there is nothing to keep, so say the usage is unavailable; afterwards
+      // keep what it reported and mark it unconfirmed.
+      onError: (error) =>
+        onReading(answered ? contactLost(hostLabel) : unreachableHost(hostLabel, error)),
+      onContactLost: () => onReading(contactLost(hostLabel)),
       // Why: this stream lives for the app, not a pane. Elapsed time observes
       // nothing about the host — only the subscription erroring or closing
       // does, and both already arrive on onError.

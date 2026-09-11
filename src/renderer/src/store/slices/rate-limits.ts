@@ -8,6 +8,7 @@ import {
   createPendingRateLimitOwnerUsage,
   rateLimitOwnerUsageFromReading,
   type OwnedRateLimitsReading,
+  type RateLimitOwnerContactLost,
   type RateLimitOwnerUnavailable,
   type RateLimitOwnerUsage
 } from '../../../../shared/rate-limit-owner-usage'
@@ -37,6 +38,11 @@ export type RateLimitSlice = {
   rateLimitUsageHostId: ExecutionHostId
   /** Why the active owner's usage is missing; null while it is available. */
   rateLimitUsageUnavailable: RateLimitOwnerUnavailable | null
+  /**
+   * Set while the active owner has stopped confirming the usage on screen. The
+   * numbers stay — losing the link is `unverifiable`, not a new reading.
+   */
+  rateLimitUsageContactLost: RateLimitOwnerContactLost | null
   rateLimitUsageByHost: Record<string, RateLimitOwnerUsage>
   setRateLimitUsageOwner: (hostId: ExecutionHostId) => void
   applyOwnedRateLimits: (update: OwnedRateLimitsUpdate) => void
@@ -151,6 +157,7 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
     rateLimits: initialLocalUsage.state,
     rateLimitUsageHostId: LOCAL_EXECUTION_HOST_ID,
     rateLimitUsageUnavailable: null,
+    rateLimitUsageContactLost: null,
     rateLimitUsageByHost: { [LOCAL_EXECUTION_HOST_ID]: initialLocalUsage },
 
     setRateLimitUsageOwner: (hostId) => {
@@ -170,7 +177,8 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
         rateLimitUsageHostId: hostId,
         rateLimitUsageByHost: { ...byHost, [hostId]: entry },
         rateLimits: entry.state,
-        rateLimitUsageUnavailable: entry.unavailable
+        rateLimitUsageUnavailable: entry.unavailable,
+        rateLimitUsageContactLost: entry.contactLost
       })
     },
 
@@ -185,7 +193,12 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
       if (generation !== undefined && generation < currentGeneration) {
         return
       }
-      const entry = rateLimitOwnerUsageFromReading(hostId, currentGeneration, reading)
+      const entry = rateLimitOwnerUsageFromReading(
+        hostId,
+        currentGeneration,
+        reading,
+        byHost[hostId]
+      )
       const nextByHost = { ...byHost, [hostId]: entry }
       // Why: a late reply from a PREVIOUS owner still updates that owner's own
       // slot, but can never reach the projection the user is looking at.
@@ -196,7 +209,8 @@ export const createRateLimitSlice: StateCreator<AppState, [], [], RateLimitSlice
       set({
         rateLimitUsageByHost: nextByHost,
         rateLimits: entry.state,
-        rateLimitUsageUnavailable: entry.unavailable
+        rateLimitUsageUnavailable: entry.unavailable,
+        rateLimitUsageContactLost: entry.contactLost
       })
     },
 

@@ -84,9 +84,7 @@ describe('runtime host catalog refresh on reposChanged', () => {
         } as Record<string, unknown>,
         { get: (target, prop: string) => target[prop] ?? autoStubNamespace }
       )
-      vi.stubGlobal('window', {
-        api
-      })
+      vi.stubGlobal('window', { api })
 
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
@@ -177,9 +175,7 @@ describe('runtime host catalog refresh on reposChanged', () => {
       const api = new Proxy({} as Record<string, unknown>, {
         get: (target, prop: string) => target[prop] ?? autoStubNamespace
       })
-      vi.stubGlobal('window', {
-        api
-      })
+      vi.stubGlobal('window', { api })
 
       const { useIpcEvents } = await import('./useIpcEvents')
       useIpcEvents()
@@ -253,9 +249,7 @@ describe('repo catalog refresh on repos:changed', () => {
       } as Record<string, unknown>,
       { get: (target, prop: string) => target[prop] ?? autoStubNamespace }
     )
-    vi.stubGlobal('window', {
-      api
-    })
+    vi.stubGlobal('window', { api })
 
     const { recordTerminalTabParkedOnUnresolvedHost, clearTerminalTabsParkedOnUnresolvedHost } =
       await import('@/lib/parked-terminal-host-hydration')
@@ -342,9 +336,7 @@ describe('parked terminal recovery on repos:changed', () => {
         get: (target, prop: string) => target[prop] ?? autoStubNamespace
       }
     )
-    vi.stubGlobal('window', {
-      api
-    })
+    vi.stubGlobal('window', { api })
 
     const { recordTerminalTabParkedOnUnresolvedHost, clearTerminalTabsParkedOnUnresolvedHost } =
       await import('@/lib/parked-terminal-host-hydration')
