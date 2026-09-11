@@ -73,11 +73,14 @@ export function usePierreDiffNativeView(
         latest.current.fileDiff,
         latest.current.editable
       )
-      // NOTE: do not pre-activate deleted-text mode here. Pierre's
-      // setDeletedTextSelectionActive(true) calls #updateSelections([]) internally, so calling it
-      // each iteration wipes the selection this loop is trying to restore and convergence can
-      // never be reached. restorePierreNativeSelection sets the mode immediately before it
-      // applies the range, which is the correct and only place it belongs.
+      // NOTE: do not pre-activate deleted-text mode here. setDeletedTextSelectionActive(true)
+      // calls #setEditorActiveLineSafe(null) -> InteractionManager.renderSelection(), and that
+      // re-render collapses the range this loop is restoring, so convergence is never reached.
+      // restorePierreNativeSelection activates the mode immediately before applying the range,
+      // which is the correct and only place it belongs.
+      // Convergence deliberately does not require deleted-text mode: a read-only surface has no
+      // Editor to set it, so checking it would spin until the deadline. Every path that can reach
+      // convergence with a deletions range has already run restore, which sets the mode.
       if (
         current.instance.getCodeScrollLeft() === saved.scrollLeft &&
         JSON.stringify(selected) === JSON.stringify(saved.selection)
