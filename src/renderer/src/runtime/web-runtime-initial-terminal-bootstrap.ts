@@ -145,3 +145,15 @@ export function clearAllWebRuntimeInitialTerminalBootstraps(): void {
 export function resetWebRuntimeInitialTerminalBootstrapForTests(): void {
   clearAllWebRuntimeInitialTerminalBootstraps()
 }
+
+export function countWebRuntimeInitialTerminalBootstrapEnvironmentsForTests(): number {
+  return phaseByWorktreeByEnvironment.size
+}
+
+export function countWebRuntimeInitialTerminalBootstrapEntriesForTests(): number {
+  let total = 0
+  for (const phases of phaseByWorktreeByEnvironment.values()) {
+    total += phases.size
+  }
+  return total
+}

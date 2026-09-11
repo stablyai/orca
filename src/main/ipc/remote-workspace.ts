@@ -230,6 +230,10 @@ export function registerRemoteWorkspaceHandlers(
         targets.map(async (target) => {
           // Why: each target has its own revision stream. Keep same-target
           // writes queued, but do not let one slow relay block others.
+          // `persistedSessionForTarget` reads inside this map on purpose: it merges the target's
+          // own `ssh:<targetId>` partition, so the result genuinely differs per target. Hoisting
+          // it back out re-publishes the local half as the whole session (#12723/#12721). The only
+          // repeated part is an O(1) property read, so there is nothing here worth optimising.
           const session = exportSessionForTarget(
             resolveWorktreeTarget,
             target.id,
