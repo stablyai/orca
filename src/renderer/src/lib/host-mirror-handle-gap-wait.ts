@@ -82,10 +82,18 @@ function recordExpiredWait(environmentId: string, key: string): void {
   const prefix = `${environmentId}\0`
   const liveTabs = liveTabIds()
   for (const [staleKey, staleGeneration] of expiredGenerationByPane) {
-    if (!staleKey.startsWith(prefix)) {
+    // Generation rule, judged per key across EVERY environment. A row whose generation has moved
+    // can never match — `hasHostMirrorHandleWaitExpired` compares against the current one — so
+    // retiring it cannot cost anybody a verdict, whoever owns it. Scoping this to the recording
+    // environment stranded rows belonging to an environment that reconnects and then goes quiet.
+    const staleEnvironmentId = staleKey.slice(0, staleKey.indexOf('\0'))
+    if (staleGeneration !== getRuntimeEnvironmentConnectionGeneration(staleEnvironmentId)) {
+      expiredGenerationByPane.delete(staleKey)
       continue
     }
-    if (!liveTabs.has(staleKey.slice(prefix.length)) || staleGeneration !== generation) {
+    // Tab-death rule, this environment ONLY. Unlike a generation, row absence is transient: a
+    // sibling environment mid-republish has no rows for a frame and would lose a live verdict.
+    if (staleKey.startsWith(prefix) && !liveTabs.has(staleKey.slice(prefix.length))) {
       expiredGenerationByPane.delete(staleKey)
     }
   }

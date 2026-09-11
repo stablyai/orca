@@ -115,6 +115,37 @@ describe('host mirror handle gap wait retention', () => {
     expect(hasHostMirrorHandleWaitExpired(ENV_B, 'tab-b')).toBe(true)
   })
 
+  it('retires a reconnected environment rows from any expiry, and keeps a live one', () => {
+    // THREE environments on purpose. With two at the same generation the two candidate rules are
+    // indistinguishable and a "judge everything against the RECORDING environment's generation"
+    // mutation survives. env-c is the discriminator: it never reconnects, so its stored generation
+    // still equals its own current one and its verdict is LIVE. Judging it against env-a's
+    // generation evicts it and costs env-c its loop-breaker.
+    const ENV_C = 'env-retention-c'
+    for (const [environmentId, tabId] of [
+      [ENV_A, 'tab-a'],
+      [ENV_B, 'tab-b'],
+      [ENV_C, 'tab-c']
+    ] as const) {
+      setRuntimeEnvironmentConnectionGenerationForTests(environmentId, 1)
+      setLiveTabs({ [WORKTREE]: ['tab-a', 'tab-b', 'tab-c', 'tab-a2'] })
+      parkAndExpire(environmentId, WORKTREE, tabId)
+    }
+    expect(countExpiredHostMirrorHandleGapVerdictsForTests()).toBe(3)
+
+    // a and b reconnect; c does not.
+    setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 2)
+    setRuntimeEnvironmentConnectionGenerationForTests(ENV_B, 2)
+    parkAndExpire(ENV_A, WORKTREE, 'tab-a2')
+
+    // One expiry in env-a retires env-b's superseded row too — that environment may never expire
+    // another pane itself, and a superseded row can never match anyone.
+    expect(hasHostMirrorHandleWaitExpired(ENV_B, 'tab-b')).toBe(false)
+    // env-c's row is live and must survive an unrelated environment's sweep.
+    expect(hasHostMirrorHandleWaitExpired(ENV_C, 'tab-c')).toBe(true)
+    expect(countExpiredHostMirrorHandleGapVerdictsForTests()).toBe(2)
+  })
+
   it('drops an environment verdict once that environment reconnects', () => {
     setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 1)
     setLiveTabs({ [WORKTREE]: ['tab-a', 'tab-b'] })
