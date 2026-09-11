@@ -59,8 +59,9 @@ export function useCombinedDiffSectionLoadRegistry(
   loadSchedulerRef.current ??= createCombinedDiffLoadScheduler({
     loadSection: (index) => loadSectionRef.current(index)
   })
-  // Why here and not in the effect below: child effects run before this parent's, so StrictMode's
-  // replayed mount would leave a window where the ref reads false while the viewer is live.
+  // Why in render AND in the effect below: child effects run before this parent's, so a
+  // render-only write covers that window; StrictMode replays setup -> cleanup -> setup with no
+  // render in between, so an effect-only write is needed to survive the replayed cleanup.
   registryLiveRef.current = true
 
   useEffect(() => {
@@ -68,6 +69,7 @@ export function useCombinedDiffSectionLoadRegistry(
     const scheduler = loadSchedulerRef.current
     const reloadTimers = reloadTimersRef.current
     scheduler.reset()
+    registryLiveRef.current = true
     return () => {
       registryLiveRef.current = false
       clearPendingSectionReloadTimers(reloadTimers)

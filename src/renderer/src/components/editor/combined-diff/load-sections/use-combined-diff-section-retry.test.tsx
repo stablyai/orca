@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useRef } from 'react'
+import { StrictMode, useRef } from 'react'
 import type { DiffSection } from '../../diff-section-types'
 import { useCombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
@@ -76,4 +76,26 @@ describe('deferred section reloads', () => {
     act(() => view.result.current.actions.requestSectionReload(0))
     expect(invalidate).not.toHaveBeenCalled()
   })
+})
+
+it('still reloads after StrictMode replays the registry effect', () => {
+  // Why: StrictMode runs setup -> cleanup -> setup with no render between the two setups, so a
+  // render-only live flag stays false for the life of the replayed mount.
+  const view = renderHook(
+    () => {
+      const sectionsRef = useRef([section()])
+      const registry = useCombinedDiffSectionLoadRegistry(sectionsRef)
+      const actions = useCombinedDiffSectionRetry({
+        invalidateViewStateCache: invalidate,
+        registry,
+        setSectionHeights: vi.fn(),
+        setSections: vi.fn()
+      })
+      registry.renderedIndicesRef.current.add(0)
+      return actions
+    },
+    { wrapper: StrictMode }
+  )
+  act(() => view.result.current.requestSectionReload(0))
+  expect(invalidate).toHaveBeenCalled()
 })
