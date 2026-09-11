@@ -110,7 +110,11 @@ export function usePierreDiffNativeView(
   }, [editorRef])
   useLayoutEffect(() => {
     const now = Date.now()
-    ceiling.current = now + RESTORE_CEILING_MS
+    // Arm once: the ceiling bounds this restore, not each mount. Re-arming per mount (or per
+    // activeGroupId change) would let an unmount/mount cycle extend it forever.
+    if (ceiling.current === 0) {
+      ceiling.current = now + RESTORE_CEILING_MS
+    }
     deadline.current = now + RESTORE_DEADLINE_MS
     schedule()
   }, [activeGroupId, schedule])
@@ -121,7 +125,8 @@ export function usePierreDiffNativeView(
     }
     const capture = (requireOwnership = false) => {
       const current = view.current
-      if (!key || !current) {
+      // Why: a detached host reads back an empty selection, which would overwrite a good snapshot.
+      if (!key || !current || !current.host.isConnected) {
         return
       }
       const selection = readPierreNativeSelection(
@@ -180,13 +185,17 @@ export function usePierreDiffNativeView(
   }, [key, containerRef])
   return useCallback(
     (host: HTMLElement, phase: PostRenderPhase, instance: PierreDiffInstance) => {
-      if (phase !== 'unmount') {
+      if (phase === 'unmount') {
+        // Why: keeping a detached host lets the teardown capture below read an empty selection
+        // and overwrite a good stored snapshot with `selection: undefined`.
+        view.current = null
+        return
+      }
+      {
         view.current = { host, instance }
+        // Extend while a restore is still pending, but never past the ceiling, and never re-arm
+        // the ceiling here: FileDiff emits 'mount' on every remount cycle.
         const now = Date.now()
-        if (phase === 'mount') {
-          ceiling.current = now + RESTORE_CEILING_MS
-        }
-        // Extend while a restore is still pending, but never past the ceiling.
         if (pending.current && now < ceiling.current) {
           deadline.current = Math.min(now + RESTORE_DEADLINE_MS, ceiling.current)
         }

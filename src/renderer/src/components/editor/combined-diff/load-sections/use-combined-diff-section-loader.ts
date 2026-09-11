@@ -155,8 +155,16 @@ export function useCombinedDiffSectionLoader({
       // from a fresh one. If the draft moved while this fetch was in flight, only commit when the
       // payload actually agrees with that draft — otherwise this reverts the user's saved text on
       // screen and wipes undo history when the remount finds mismatched content.
-      const liveDraft = sectionsRef.current[index]?.modifiedContent
-      if (liveDraft !== draftAtFetchStart && storedContent.modifiedContent !== liveDraft) {
+      const liveSection = sectionsRef.current[index]
+      const liveDraft = liveSection?.modifiedContent
+      const payloadMatchesLive =
+        storedContent.modifiedContent === liveDraft &&
+        storedContent.originalContent === liveSection?.originalContent
+      if (liveDraft !== draftAtFetchStart && !payloadMatchesLive) {
+        // Why: this index is already marked loaded, so drop that mark and re-drive the fetch —
+        // otherwise a rejected payload pins the section stale with no path back on its own.
+        loadedIndicesRef.current.delete(index)
+        requestSectionReloadRef.current(index)
         return
       }
       if (wasShowingContent) {
