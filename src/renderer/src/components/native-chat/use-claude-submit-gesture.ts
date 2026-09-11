@@ -1,8 +1,14 @@
 import { useCallback, useEffect } from 'react'
-import { getClaudeSubmitGesture, primeClaudeSubmit } from './native-chat-claude-submit-cache'
+import type { AgentType } from '../../../../shared/agent-status-types'
+import {
+  agentResolvesSubmitKeybinding,
+  getClaudeSubmitGesture,
+  primeClaudeSubmit,
+  primeComposerSubmitBytes
+} from './native-chat-claude-submit-cache'
 import { claudeSubmitGestureMatchesKeyboardEvent } from './native-chat-claude-submit-keybinding'
 
-type SubmitKeyEvent = {
+export type SubmitKeyEvent = {
   key: string
   altKey: boolean
   ctrlKey: boolean
@@ -22,5 +28,27 @@ export function useClaudeSubmitGestureMatch(): (event: SubmitKeyEvent) => boolea
     (event: SubmitKeyEvent) =>
       claudeSubmitGestureMatchesKeyboardEvent(getClaudeSubmitGesture(), event),
     []
+  )
+}
+
+/** Whether a chat composer keydown should submit. A local Claude pane mirrors the
+ *  user's resolved submit gesture (a remapped Enter inserts a newline); every
+ *  other pane keeps the default Enter, with Shift+Enter for a newline. Remote
+ *  panes stay on the default because their keybindings live on the host. */
+export function useComposerSubmitKeyMatch(
+  agent: AgentType,
+  isRemotePane: boolean
+): (event: SubmitKeyEvent) => boolean {
+  useEffect(() => {
+    primeComposerSubmitBytes(agent)
+  }, [agent])
+  return useCallback(
+    (event: SubmitKeyEvent) => {
+      if (agentResolvesSubmitKeybinding(agent) && !isRemotePane) {
+        return claudeSubmitGestureMatchesKeyboardEvent(getClaudeSubmitGesture(), event)
+      }
+      return event.key === 'Enter' && !event.shiftKey
+    },
+    [agent, isRemotePane]
   )
 }
