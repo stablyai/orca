@@ -341,8 +341,10 @@ export function enableMainProcessGpuFeatures(): void {
 
   const existingFeatures = app.commandLine.getSwitchValue('enable-features')
   const features = [
-    // Why: mirror VS Code's conservative GPU-channel flags instead of global Vulkan/SkiaGraphite/WebGPU; terminal accel is xterm WebGL.
-    ...(isLinuxWaylandSession ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
+    // Why: #20081 — On Linux (both X11 and Wayland), eager GPU channel establishment triggers
+    // SIGSEGV under Electron 43.6.0 with NVIDIA drivers. Drop early GPU channel flags completely
+    // on Linux so Chromium establishes the GPU channel lazily, matching VS Code and Chromium Linux behavior.
+    ...(process.platform === 'linux' ? [] : ['EarlyEstablishGpuChannel', 'EstablishGpuChannelAsync']),
     existingFeatures
   ]
     .filter(Boolean)

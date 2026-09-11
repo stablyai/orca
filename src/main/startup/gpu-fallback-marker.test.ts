@@ -89,7 +89,7 @@ describe('gpu-fallback-marker', () => {
     expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
   })
 
-  it('clears an active marker outside Windows', () => {
+  it('clears an active marker when the platform mismatches', () => {
     writeGpuFallbackMarker(
       userDataPath,
       { engagedAt: 1, crashesInWindow: 4, userConfirmed: false },
@@ -103,6 +103,28 @@ describe('gpu-fallback-marker', () => {
       })
     ).toBeNull()
     expect(existsSync(join(userDataPath, GPU_FALLBACK_MARKER_FILE))).toBe(false)
+  })
+
+  it('supports writing and reading active fallback markers on Linux (#20081)', () => {
+    const linuxEnvironment = {
+      ...environment,
+      platform: 'linux' as const
+    }
+    writeGpuFallbackMarker(
+      userDataPath,
+      { engagedAt: 1, crashesInWindow: 4, userConfirmed: false },
+      linuxEnvironment
+    )
+
+    expect(readActiveGpuFallbackMarker(userDataPath, linuxEnvironment)).toEqual({
+      schemeVersion: 3,
+      engagedAt: 1,
+      crashesInWindow: 4,
+      userConfirmed: false,
+      appVersion: '1.2.3',
+      electronVersion: '42.3.3',
+      platform: 'linux'
+    })
   })
 
   // Why: enableMainProcessGpuFeatures() is skipped while GPU fallback is active, and that function

@@ -19,6 +19,12 @@ export type GpuFallbackEnvironment = {
   platform: NodeJS.Platform
 }
 
+export type SupportedGpuFallbackPlatform = 'win32' | 'linux'
+
+export type SupportedGpuFallbackEnvironment = GpuFallbackEnvironment & {
+  platform: SupportedGpuFallbackPlatform
+}
+
 export type WindowsGpuFallbackEnvironment = GpuFallbackEnvironment & { platform: 'win32' }
 
 export type GpuFallbackMarker = {
@@ -28,7 +34,7 @@ export type GpuFallbackMarker = {
   userConfirmed: boolean
   appVersion: string
   electronVersion: string
-  platform: 'win32'
+  platform: SupportedGpuFallbackPlatform
 }
 
 function markerPath(userDataPath: string): string {
@@ -51,7 +57,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
       typeof parsed.userConfirmed !== 'boolean' ||
       typeof parsed.appVersion !== 'string' ||
       typeof parsed.electronVersion !== 'string' ||
-      parsed.platform !== 'win32'
+      (parsed.platform !== 'win32' && parsed.platform !== 'linux')
     ) {
       return null
     }
@@ -73,7 +79,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
 export function writeGpuFallbackMarker(
   userDataPath: string,
   info: { engagedAt: number; crashesInWindow: number; userConfirmed: boolean },
-  environment: WindowsGpuFallbackEnvironment
+  environment: SupportedGpuFallbackEnvironment
 ): void {
   const marker: GpuFallbackMarker = {
     schemeVersion: GPU_FALLBACK_SCHEME_VERSION,
@@ -82,7 +88,7 @@ export function writeGpuFallbackMarker(
     userConfirmed: info.userConfirmed,
     appVersion: environment.appVersion,
     electronVersion: environment.electronVersion,
-    platform: 'win32'
+    platform: environment.platform
   }
   writeFileSync(markerPath(userDataPath), JSON.stringify(marker))
 }
@@ -107,7 +113,7 @@ export function readActiveGpuFallbackMarker(
     return null
   }
   if (
-    environment.platform !== 'win32' ||
+    (environment.platform !== 'win32' && environment.platform !== 'linux') ||
     marker.platform !== environment.platform ||
     marker.appVersion !== environment.appVersion ||
     marker.electronVersion !== environment.electronVersion

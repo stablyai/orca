@@ -6,7 +6,7 @@ import {
   clearGpuFallbackMarker,
   readActiveGpuFallbackMarker,
   writeGpuFallbackMarker,
-  type WindowsGpuFallbackEnvironment
+  type SupportedGpuFallbackEnvironment
 } from './gpu-fallback-marker'
 import {
   handleGpuFallbackRecoveredLaunch,
@@ -37,9 +37,11 @@ export function updateGpuAccelerationAboutPanel(): void {
   )
 }
 
-function getWindowsGpuFallbackEnvironment(): WindowsGpuFallbackEnvironment | null {
+function getSupportedGpuFallbackEnvironment(): SupportedGpuFallbackEnvironment | null {
   const environment = gpuFallbackEnvironment()
-  return environment.platform === 'win32' ? { ...environment, platform: 'win32' } : null
+  return environment.platform === 'win32' || environment.platform === 'linux'
+    ? { ...environment, platform: environment.platform }
+    : null
 }
 
 // Writes both crash-time and post-recovery consent states through one build-scoped path.
@@ -47,7 +49,7 @@ function persistGpuFallbackMarker(
   userDataPath: string,
   info: { engagedAt: number; crashesInWindow: number; userConfirmed: boolean }
 ): boolean {
-  const environment = getWindowsGpuFallbackEnvironment()
+  const environment = getSupportedGpuFallbackEnvironment()
   if (!environment) {
     return false
   }
@@ -60,9 +62,9 @@ function persistGpuFallbackMarker(
   }
 }
 
-// Read before app.whenReady() so app.disableHardwareAcceleration() takes effect. Windows desktop only.
+// Read before app.whenReady() so app.disableHardwareAcceleration() takes effect. Windows and Linux desktop.
 export function maybeApplyGpuFallbackForThisLaunch(): void {
-  if (state.isServeMode || process.platform !== 'win32') {
+  if (state.isServeMode || (process.platform !== 'win32' && process.platform !== 'linux')) {
     return
   }
   const marker = readActiveGpuFallbackMarker(app.getPath('userData'), gpuFallbackEnvironment())

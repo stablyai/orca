@@ -18,9 +18,12 @@ const GPU_FALLBACK_COMMAND_LINE_SWITCHES = [
   'in-process-gpu'
 ] as const
 
-/** Software rendering is a Windows-only post-crash fallback; every other platform gets nothing. */
+/**
+ * Software rendering post-crash fallback for Windows and Linux (#20081);
+ * every other platform (such as macOS) gets nothing.
+ */
 function resolveGpuFallbackSwitches(platform: NodeJS.Platform): readonly string[] {
-  return platform === 'win32' ? GPU_FALLBACK_COMMAND_LINE_SWITCHES : []
+  return platform === 'win32' || platform === 'linux' ? GPU_FALLBACK_COMMAND_LINE_SWITCHES : []
 }
 
 export function applyGpuFallbackCommandLineSwitches(

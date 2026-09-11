@@ -613,10 +613,11 @@ describe('enableMainProcessGpuFeatures', () => {
     }
   })
 
-  it('appends VS Code-style GPU channel flags without unsafe WebGPU/Vulkan opt-ins', async () => {
+  it('appends VS Code-style GPU channel flags on non-Linux platforms without unsafe WebGPU/Vulkan opt-ins', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
+    setPlatform('win32')
     delete process.env.ORCA_E2E_USER_DATA_DIR
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     enableMainProcessGpuFeatures()
@@ -746,12 +747,61 @@ describe('enableMainProcessGpuFeatures', () => {
     }
 
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
-    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
       'enable-features',
-      'EarlyEstablishGpuChannel,EstablishGpuChannelAsync'
+      expect.stringContaining('EarlyEstablishGpuChannel')
+    )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EstablishGpuChannelAsync')
     )
   })
 
+  it('drops early GPU channel flags on Linux X11 to prevent NVIDIA SIGSEGV (#20081)', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    setPlatform('linux')
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    delete process.env.WAYLAND_DISPLAY
+    delete process.env.XDG_SESSION_TYPE
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('')
+
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-gpu-sandbox')
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EarlyEstablishGpuChannel')
+    )
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EstablishGpuChannelAsync')
+    )
+  })
+
+  it('preserves existing enable-features switches on Linux X11 without eager GPU channel flags (#20081)', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    setPlatform('linux')
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    delete process.env.WAYLAND_DISPLAY
+    delete process.env.XDG_SESSION_TYPE
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    vi.mocked(app.commandLine.getSwitchValue).mockImplementation((switchName: string) =>
+      switchName === 'enable-features' ? 'ExistingFeature' : ''
+    )
+
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('enable-features', 'ExistingFeature')
+    expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith(
+      'enable-features',
+      expect.stringContaining('EarlyEstablishGpuChannel')
+    )
+  })
   it('does not disable the GPU sandbox outside Linux Wayland', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
@@ -818,10 +868,11 @@ describe('enableMainProcessGpuFeatures', () => {
     )
   })
 
-  it('preserves existing enable-features switches', async () => {
+  it('preserves existing enable-features switches on non-Linux platforms', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
 
+    setPlatform('win32')
     delete process.env.ORCA_E2E_USER_DATA_DIR
     vi.mocked(app.commandLine.appendSwitch).mockClear()
     vi.mocked(app.commandLine.getSwitchValue).mockReturnValue('ExistingFeature')
