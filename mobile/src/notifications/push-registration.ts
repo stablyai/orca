@@ -229,6 +229,7 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
   const state = hostState(hostId)
   if (state.connection.client !== client) {
     state.capabilityProbeStop?.()
+    state.capabilityProbeStop = null
     state.connection.client = client
     state.supported = null
   }
@@ -240,6 +241,12 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
       state.capabilityProbeStop?.()
       state.capabilityProbeStop = null
       state.supported = null
+      const current = hostsById.get(hostId)
+      if (current && current !== state) {
+        current.capabilityProbeStop?.()
+        current.capabilityProbeStop = null
+        current.supported = null
+      }
     }
   }
 }
@@ -276,6 +283,10 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
   const state = hostsById.get(hostId)
   // Retire ownership before waiting for earlier RPCs to settle.
   hostsById.delete(hostId)
+  state?.capabilityProbeStop?.()
+  if (state) {
+    state.capabilityProbeStop = null
+  }
   await state?.chain
   if (state?.connection.client && state.supported !== false) {
     await sendUnregister(state.connection.client, REMOVAL_TIMEOUT_MS)
@@ -287,7 +298,7 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
   return () => {
     if (state && !hostsById.has(hostId)) {
       // Preserve disconnect ownership without reviving stale registration work.
-      hostsById.set(hostId, { ...state, supported: null })
+      hostsById.set(hostId, { ...state, supported: null, capabilityProbeStop: null })
       void enqueueReconcile(hostId)
     }
   }
