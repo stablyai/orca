@@ -4,6 +4,7 @@ const { join } = require('node:path')
 const {
   assertNodePtyJobOwnership,
   assertCygwinBreakawayDenied,
+  conptyTargetsArch,
   nodePtyAddonPath
 } = require('./node-pty-job-ownership.cjs')
 
@@ -66,7 +67,15 @@ function verifyPackagedConptyBreakawayMarker(resourcesDir, options = {}) {
   // closes.
   const exists = options.exists ?? existsSync
   const addonPath = (options.packagedConptyPath ?? packagedConptyPath)(resourcesDir)
-  if (!exists(addonPath)) {
+  // Why a wrong-arch addon counts as absent: the loader does not stop at build/Release, it stops
+  // at the first entry that LOADS. A cross-arch package can carry the host's patched addon there,
+  // which passes the marker read and is unloadable on the target -- so node-pty falls through to
+  // the prebuild and the check has certified a binary the app never runs. Measured on Windows 11:
+  // an arm64 slice with an x64 build/Release and the stock arm64 prebuild packaged clean.
+  const targetsArch = options.arch
+    ? (options.conptyTargetsArch ?? conptyTargetsArch)(addonPath, options.arch)
+    : null
+  if (!exists(addonPath) || targetsArch === false) {
     const fallbackPath = (options.prebuiltConptyPath ?? prebuiltConptyPath)(
       resourcesDir,
       options.arch
@@ -79,7 +88,7 @@ function verifyPackagedConptyBreakawayMarker(resourcesDir, options = {}) {
       return
     }
     console.warn(
-      `[verify-packaged-node-pty] no addon at ${addonPath}; could not check the MSYS ` +
+      `[verify-packaged-node-pty] no loadable addon at ${addonPath}; could not check the MSYS ` +
         'job-breakaway denial for this cross-host package.'
     )
     return
