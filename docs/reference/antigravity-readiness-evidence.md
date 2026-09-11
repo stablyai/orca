@@ -28,14 +28,16 @@ not `--version`, and must tolerate the two disagreeing.
 
 ## What the captures are
 
-| Fixture                                      | What it is                                               |
-| -------------------------------------------- | -------------------------------------------------------- |
-| `antigravity-ready-api-key-gemini-model.txt` | Ready screen, API-key identity, Gemini 3.7 Flash (Low)   |
-| `antigravity-ready-account-info-hidden.txt`  | The same ready screen with `AGY_CLI_HIDE_ACCOUNT_INFO=1` |
-| `antigravity-dialog-trust-workspace.txt`     | Workspace trust dialog, live and unanswered              |
-| `antigravity-dialog-model-picker.txt`        | `/model` picker, live and unanswered                     |
-| `antigravity-dialog-command-palette.txt`     | Slash-command palette, live and unanswered               |
-| `antigravity-dialog-dismissed.txt`           | `/model` picker dismissed with esc, then settled         |
+| Fixture                                      | What it is                                                |
+| -------------------------------------------- | --------------------------------------------------------- |
+| `antigravity-ready-api-key-gemini-model.txt` | Ready screen, API-key identity, Gemini 3.7 Flash (Low)    |
+| `antigravity-ready-account-info-hidden.txt`  | The same ready screen with `AGY_CLI_HIDE_ACCOUNT_INFO=1`  |
+| `antigravity-dialog-trust-workspace.txt`     | Workspace trust dialog, live and unanswered               |
+| `antigravity-dialog-model-picker.txt`        | `/model` picker, live and unanswered                      |
+| `antigravity-dialog-command-palette.txt`     | Slash-command palette, live and unanswered                |
+| `antigravity-dialog-dismissed.txt`           | `/model` picker dismissed with esc, then settled          |
+| `antigravity-busy-mid-turn.txt`              | A real turn, recording stopped while the spinner was live |
+| `antigravity-busy-turn-ended.txt`            | The same turn after it ended and the composer returned    |
 
 ## What could not be captured, and why
 
@@ -121,6 +123,55 @@ reprint the banner. The header stays where it was at startup.
 The status row is written with absolute and relative moves (`ESC[13;99H`, `ESC[83X ESC[83C`), so
 `? for shortcuts` and `Gemini 3.7 Flash · low` end up on one derived line. Any rule that assumes
 one screen row equals one `\n`-delimited line is reading a different document than the user sees.
+
+## 8. Busy frames park the caret exactly like idle frames — the spinner is what differs
+
+The frame that ends a turn-in-progress and the frame that ends an idle screen park the cursor with
+the **same bytes**. Only the hint row differs, and the park erases it:
+
+```
+idle:  ? for shortcuts ESC[83X ESC[83C Gemini 3.7 Flash · low  CR ESC[2A ESC[2C ESC[?25h
+busy:  esc to cancel   ESC[85X ESC[85C Gemini 3.7 Flash · low  CR ESC[2A ESC[2C ESC[?25h
+```
+
+So a rule that keys on "the caret is the last thing in the tail" cannot tell busy from idle **on the
+frame alone**. What saves it is what comes next. Each spinner tick is its own repaint with its own
+park, two rows higher than the frame's:
+
+```
+ESC[?25l CR ESC[2A ⣯  Generating    ESC[11D ESC[?25h
+ESC[?25l CR ESC[2A ⣟  Generating.   ESC[12D ESC[?25h
+```
+
+That second `CR ESC[2A` splices the composer row away, so the retained tail during a live turn ends
+on the spinner row, not on the caret. Measured on `antigravity-busy-mid-turn.txt`:
+
+| Capture                                      | last retained line | bare `>` line present |
+| -------------------------------------------- | ------------------ | --------------------- |
+| `antigravity-ready-api-key-gemini-model.txt` | `>`                | **yes**               |
+| `antigravity-busy-mid-turn.txt`              | `⣟  Generating...` | **no**                |
+
+**Consequence for a caret-based rule:** it already answers "not ready" for a real mid-turn capture,
+because there is no bare caret in the tail to match. A constructed input that keeps the park bytes
+and only edits the status text is not faithful to a live turn — a live turn has a spinner row
+repainting _below_ the composer.
+
+**The residual window, and the clause it implies.** Between a frame park and the next spinner tick
+the tail does end on the bare caret and is indistinguishable from idle. The gap is one tick
+interval. Any readiness path gated on sustained quiescence is safe, because ticks keep arriving and
+the pane is never quiet; a path that only inspects retained text is not. For those paths the
+evidence supports one clause, and only one:
+
+> **A braille glyph (U+2800–U+28FF) on the last visible line of the retained tail means working.**
+
+That predicate already exists in this file for cursor-agent (`CURSOR_BUSY_SPINNER_RE`) and should be
+reused rather than reinvented. It must be scoped to the **last visible line**, not the whole tail:
+a first-run transcript prints `⠾ Signing in...` during startup, which would otherwise pin a ready
+screen as busy forever.
+
+Nothing else in the capture distinguishes the two states. The hint row (`esc to cancel` versus
+`? for shortcuts`) is erased by the park in both cases, the park offsets are identical, and
+`ESC[?25l`/`ESC[?25h` fencing appears around every repaint, idle or busy.
 
 ## Confirmed / refuted, by attempt
 

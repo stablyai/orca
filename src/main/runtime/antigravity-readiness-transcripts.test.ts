@@ -96,6 +96,21 @@ const TRANSCRIPTS: readonly TranscriptCase[] = [
     expectReady: false
   },
   {
+    name: 'antigravity-busy-mid-turn',
+    capture: 'E',
+    what: 'mid-turn, spinner live — the pane is working, not waiting for a prompt',
+    expectReady: false
+  },
+  {
+    // Expected ready because the turn is over and the composer is back on screen. The captured
+    // turn ends in a backend error, which is the only ending this account's key can produce.
+    name: 'antigravity-busy-turn-ended',
+    capture: 'E',
+    what: 'the turn has ended and the composer has returned, process still alive',
+    expectReady: true,
+    knownDefect: 'refused: the retained tail ends on the error block, with no composer row in it'
+  },
+  {
     name: 'antigravity-dialog-dismissed',
     capture: 'D',
     what: 'the screen immediately after the model picker is dismissed',

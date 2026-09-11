@@ -162,9 +162,15 @@ ${String(error)}`
   })
 
   const sink = createWriteStream(outPath)
+  let recording = true
   term.onData((chunk) => {
     const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk
-    sink.write(bytes)
+    // Why recording stops before the kill: an agent repaints an idle frame on its way out, so
+    // a transcript that keeps writing through shutdown ends on that frame instead of on the
+    // state you stopped to capture. A mid-turn or dialog capture cannot survive that.
+    if (recording) {
+      sink.write(bytes)
+    }
     process.stdout.write(bytes)
   })
 
@@ -179,6 +185,7 @@ ${String(error)}`
       return
     }
     stopping = true
+    recording = false
     try {
       term.kill()
     } catch {
