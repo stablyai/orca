@@ -1,50 +1,43 @@
-import type WebSocket from 'ws'
-import type { E2EEKeypair } from '../e2ee-keypair'
-import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
+import { RelayOriginRetirement } from './relay-origin-retirement'
+import type { RelayOriginPoolOptions } from './relay-origin-pool-options'
 import { RelayControlOrigin } from './relay-control-origin'
 import type { RelayControlClient } from './relay-control-client'
 import type { RelayDrainMessage } from './relay-control-protocol'
 import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import { RelayDrainRetrySchedule } from './relay-drain-retry-schedule'
 import { RelayHttpError, requestRelayAssignment, type RelayAssignment } from './relay-http-client'
-import { relayRenewalDelayMs } from './relay-renewal-jitter'
-import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
-import type { RelayRegion } from './relay-region-preference'
-
-type RelayOriginPoolOptions = {
-  directorUrl: string
-  relayHostId: string
-  identity: RelayIdentity
-  keypair: E2EEKeypair
-  appVersion: string
-  mobileSocketWiring: MobileSocketWiring
-  isCurrent: () => boolean
-  onStatus: (status: RelayBrokerStatus) => void
-  resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
-  fetch?: typeof globalThis.fetch
-  createControlSocket?: (url: string, relayJwt: string) => WebSocket
-  createDataSocket?: (url: string) => WebSocket
-  random?: () => number
-  now?: () => number
-}
+import { RelayControlRotation } from './relay-control-rotation'
 
 export class RelayOriginPool {
-  private readonly options: RelayOriginPoolOptions
   private activeOrigin: RelayControlOrigin | null = null
   private readonly origins = new Set<RelayControlOrigin>()
-  private readonly drainingOrigins = new Set<RelayControlOrigin>()
-  private readonly basisOrigins = new Map<string, RelayControlOrigin>()
-  private readonly drainTimers = new Map<RelayControlOrigin, ReturnType<typeof setTimeout>>()
+  private readonly retirement = new RelayOriginRetirement(
+    () => this.activeOrigin,
+    (origin) => {
+      this.origins.delete(origin)
+    }
+  )
+  private readonly drainingOrigins = this.retirement.draining
+  private readonly basisOrigins = this.retirement.basis
+  private authorityVersion = 0
   private assignment: RelayAssignment | null = null
+  private deferredAssignment: RelayAssignment | null = null
   private relayJwt: string | null = null
-  private rotationTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly rotation: RelayControlRotation
   private rotationPromise: Promise<void> | null = null
   private readonly drainRetry: RelayDrainRetrySchedule
   private closed = false
 
-  constructor(options: RelayOriginPoolOptions) {
-    this.options = options
+  constructor(private readonly options: RelayOriginPoolOptions) {
     this.drainRetry = new RelayDrainRetrySchedule(options.random)
+    this.rotation = new RelayControlRotation({
+      ...options,
+      current: () => this.activeOrigin,
+      available: () => this.isCurrent(),
+      token: () => this.relayJwt,
+      assignment: () => this.assignment,
+      busy: () => Boolean(this.rotationPromise)
+    })
   }
 
   get activeAssignment(): RelayAssignment | null {
@@ -63,6 +56,28 @@ export class RelayOriginPool {
     return this.activeOrigin?.hasLiveControl() ?? false
   }
 
+  applyAssignmentMetadata(assignment: RelayAssignment): boolean {
+    const current = this.assignment
+    if (!this.isCurrent() || !current || assignment.assignmentEpoch < current.assignmentEpoch) {
+      return false
+    }
+    if (assignment.assignmentEpoch > current.assignmentEpoch || this.rotationPromise) {
+      if (
+        !this.deferredAssignment ||
+        assignment.assignmentEpoch >= this.deferredAssignment.assignmentEpoch
+      ) {
+        this.deferredAssignment = assignment
+      }
+      return true
+    }
+    if (assignment.cellUrl !== current.cellUrl) {
+      return false
+    }
+    this.assignment = assignment
+    this.activeOrigin?.updateAssignment(assignment)
+    return true
+  }
+
   async openInitial(assignment: RelayAssignment, relayJwt: string): Promise<void> {
     this.assignment = assignment
     this.relayJwt = relayJwt
@@ -71,7 +86,7 @@ export class RelayOriginPool {
     await origin.open()
     this.assertCurrent()
     this.activeOrigin = origin
-    this.scheduleControlRotation()
+    this.rotation.schedule()
   }
 
   refreshAuthorization(relayJwt: string): void {
@@ -86,35 +101,21 @@ export class RelayOriginPool {
       return
     }
     this.closed = true
-    if (this.rotationTimer) {
-      clearTimeout(this.rotationTimer)
-      this.rotationTimer = null
-    }
-    this.drainRetry.cancel()
-    for (const timer of this.drainTimers.values()) {
-      clearTimeout(timer)
-    }
-    this.drainTimers.clear()
+    this.rotation.cancel()
+    this.drainRetry.reset()
+    this.retirement.clear()
     for (const origin of this.origins) {
       origin.closeNow(hostCloseReason)
     }
     this.origins.clear()
-    this.drainingOrigins.clear()
-    this.basisOrigins.clear()
     this.activeOrigin = null
   }
 
   private createOrigin(assignment: RelayAssignment, relayJwt: string): RelayControlOrigin {
     return new RelayControlOrigin({
+      ...this.options,
       assignment,
       relayJwt,
-      relayHostId: this.options.relayHostId,
-      identity: this.options.identity,
-      keypair: this.options.keypair,
-      appVersion: this.options.appVersion,
-      mobileSocketWiring: this.options.mobileSocketWiring,
-      createControlSocket: this.options.createControlSocket,
-      createDataSocket: this.options.createDataSocket,
       onConnectionOwned: (connectionId, origin) => {
         if (this.isCurrent() && this.origins.has(origin)) {
           this.basisOrigins.set(connectionId, origin)
@@ -124,9 +125,10 @@ export class RelayOriginPool {
         if (this.basisOrigins.get(connectionId) === origin) {
           this.basisOrigins.delete(connectionId)
         }
-        this.maybeCloseDrainedOrigin(origin)
+        this.retirement.maybeClose(origin)
       },
       onDrain: (origin, message) => this.handleDrain(origin, message),
+      onPendingChanged: (origin) => this.retirement.maybeClose(origin),
       onClose: (origin) => {
         if (origin === this.activeOrigin && this.isCurrent()) {
           this.options.onStatus('offline')
@@ -141,10 +143,12 @@ export class RelayOriginPool {
   }
 
   private handleDrain(origin: RelayControlOrigin, message: RelayDrainMessage): void {
-    if (!this.isCurrent() || origin !== this.activeOrigin) {
+    if (!this.isCurrent() || !this.origins.has(origin)) {
       return
     }
-    this.drainingOrigins.add(origin)
+    if (!this.retirement.adopt(origin, message)) {
+      return
+    }
     this.options.onStatus('draining')
     if (!this.rotationPromise && !this.drainRetry.pending) {
       this.rotationPromise = this.resolveDrainTarget(origin, message).finally(() => {
@@ -157,6 +161,7 @@ export class RelayOriginPool {
     origin: RelayControlOrigin,
     message: RelayDrainMessage
   ): Promise<void> {
+    const authorityVersion = this.authorityVersion
     try {
       if (!this.relayJwt) {
         throw new Error('relay_authorization_unavailable')
@@ -164,7 +169,7 @@ export class RelayOriginPool {
       const preferredRegion = await this.options.resolvePreferredRegion?.().catch(() => undefined)
       this.assertCurrent()
       // Why: only the configured director can choose a migration target.
-      const assignment = await requestRelayAssignment({
+      let assignment = await requestRelayAssignment({
         directorUrl: this.options.directorUrl,
         relayToken: this.relayJwt,
         relayHostId: this.options.relayHostId,
@@ -176,15 +181,31 @@ export class RelayOriginPool {
         fetch: this.options.fetch
       })
       this.assertCurrent()
+      if (authorityVersion !== this.authorityVersion) {
+        return
+      }
+      if (
+        this.deferredAssignment &&
+        this.deferredAssignment.assignmentEpoch > assignment.assignmentEpoch
+      ) {
+        assignment = this.deferredAssignment
+      }
+      this.deferredAssignment = null
       if (assignment.cellUrl === origin.cellUrl) {
-        let rebound = false
+            let rebound = false
         try {
           await origin.rebind(this.relayJwt, assignment)
           rebound = true
         } catch {
           // Why: a restarted cell cannot know the prior process's resume secret;
           // after rebind fails, a fresh generation is the only recoverable path.
-          await this.activateTarget(origin, assignment, this.relayJwt, message.graceMs)
+          await this.activateTarget(
+            origin,
+            assignment,
+            this.relayJwt,
+            message.graceMs,
+            authorityVersion
+          )
         }
         if (rebound) {
           this.assertCurrent()
@@ -193,11 +214,17 @@ export class RelayOriginPool {
           this.drainingOrigins.delete(origin)
         }
       } else {
-        await this.activateTarget(origin, assignment, this.relayJwt, message.graceMs)
+        await this.activateTarget(
+          origin,
+          assignment,
+          this.relayJwt,
+          message.graceMs,
+          authorityVersion
+        )
       }
       this.options.onStatus('registered')
       this.drainRetry.reset()
-      this.scheduleControlRotation()
+      this.rotation.schedule()
     } catch (error) {
       if (this.isCurrent() && origin === this.activeOrigin) {
         // Why: this retry loop ran silently during the 2026-08 incident while
@@ -216,13 +243,17 @@ export class RelayOriginPool {
     origin: RelayControlOrigin,
     assignment: RelayAssignment,
     relayJwt: string,
-    graceMs: number
+    graceMs: number,
+    authorityVersion = this.authorityVersion
   ): Promise<void> {
     const target = this.createOrigin(assignment, relayJwt)
     this.origins.add(target)
     try {
       await target.open()
       this.assertCurrent()
+      if (authorityVersion !== this.authorityVersion) {
+        throw new Error('stale_relay_target')
+      }
     } catch (error) {
       this.origins.delete(target)
       target.closeNow()
@@ -230,89 +261,9 @@ export class RelayOriginPool {
     }
     this.activeOrigin = target
     this.assignment = assignment
-    this.scheduleDrainDeadline(origin, graceMs)
-    this.maybeCloseDrainedOrigin(origin)
+    this.retirement.schedule(origin, graceMs)
+    this.retirement.maybeClose(origin)
   }
-
-  private scheduleControlRotation(): void {
-    if (this.rotationTimer) {
-      clearTimeout(this.rotationTimer)
-    }
-    const origin = this.activeOrigin
-    if (!origin || this.closed) {
-      this.rotationTimer = null
-      return
-    }
-    const now = (this.options.now ?? Date.now)()
-    const random = this.options.random ?? Math.random
-    const delay = relayRenewalDelayMs(origin.controlLeaseExpiresAt, now, random)
-    this.rotationTimer = setTimeout(() => void this.rebindActiveControl(origin), delay)
-  }
-
-  private async rebindActiveControl(origin: RelayControlOrigin): Promise<void> {
-    this.rotationTimer = null
-    if (!this.isCurrent() || origin !== this.activeOrigin || this.rotationPromise) {
-      return
-    }
-    if (!this.relayJwt || !this.assignment) {
-      return
-    }
-    try {
-      await origin.rebind(this.relayJwt, this.assignment)
-      this.assertCurrent()
-      this.scheduleControlRotation()
-    } catch {
-      if (this.isCurrent() && origin === this.activeOrigin) {
-        const random = this.options.random ?? Math.random
-        this.rotationTimer = setTimeout(
-          () => void this.rebindActiveControl(origin),
-          5_000 + Math.floor(random() * 10_001)
-        )
-      }
-    }
-  }
-
-  private scheduleDrainDeadline(origin: RelayControlOrigin, graceMs: number): void {
-    const existing = this.drainTimers.get(origin)
-    if (existing) {
-      clearTimeout(existing)
-    }
-    this.drainTimers.set(
-      origin,
-      setTimeout(() => this.closeOrigin(origin), graceMs)
-    )
-  }
-
-  private maybeCloseDrainedOrigin(origin: RelayControlOrigin): void {
-    if (
-      !this.drainingOrigins.has(origin) ||
-      origin.pendingRequestCount > 0 ||
-      [...this.basisOrigins.values()].includes(origin)
-    ) {
-      return
-    }
-    this.closeOrigin(origin)
-  }
-
-  private closeOrigin(origin: RelayControlOrigin): void {
-    if (origin === this.activeOrigin) {
-      return
-    }
-    const timer = this.drainTimers.get(origin)
-    if (timer) {
-      clearTimeout(timer)
-      this.drainTimers.delete(origin)
-    }
-    for (const [connectionId, owner] of this.basisOrigins) {
-      if (owner === origin) {
-        this.basisOrigins.delete(connectionId)
-      }
-    }
-    this.drainingOrigins.delete(origin)
-    this.origins.delete(origin)
-    origin.closeNow()
-  }
-
   private assertCurrent(): void {
     if (!this.isCurrent()) {
       throw new Error('stale_relay_origin_pool')

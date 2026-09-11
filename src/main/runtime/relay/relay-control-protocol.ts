@@ -32,7 +32,7 @@ const ConnectionKindSchema = z.enum(['invite', 'resume'])
 // control upgrade rather than host-hello because the cell parses host-hello
 // strictly: a new hello key is refused by every already-deployed cell.
 export const RELAY_HOST_CAPABILITY_HEADERS = {
-  'x-orca-host-capabilities': 'pending-conn-details'
+  'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1'
 } as const
 
 // Mirrors RELAY_PROTOCOL_LIMITS.hostAttachDeadlineMs in the relay contract: the
@@ -76,11 +76,7 @@ export const RelayConnectionOpenMessageSchema = z
 export const RelayDrainMessageSchema = z
   .object({
     type: z.literal('drain'),
-    graceMs: z
-      .number()
-      .int()
-      .nonnegative()
-      .max(60 * 60 * 1000),
+    graceMs: z.number().int().nonnegative().max(60 * 60 * 1000),
     recovery: z.literal('resolve-director')
   })
   .strict()

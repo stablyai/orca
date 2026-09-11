@@ -2928,6 +2928,78 @@
       "demotionRule": "Keep experimental or demote if assignment calls overlap, duplicate drain events bypass backoff, Retry-After is ignored, close resurrects work, or mixed-version request rate exceeds the reviewed director budget."
     },
     {
+      "id": "desktop-relay.region-correction-idle-cutover",
+      "title": "Regional correction moves only an idle relay source",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "cell-desktop-real-websocket",
+      "surfaces": ["regional correction", "idle source cutover", "desktop relay reconnect"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["cloud-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["cloud-relay"],
+      "coverageNotes": "Real local WebSocket/control/proof/splice traffic and production SQLite store run with synthetic clock and synthetic token verification. Separate PostgreSQL16 suites validate SQL concurrency. This does not measure production network latency, physical phones, UI, or the production token issuer.",
+      "motivatingLinks": [
+        "docs/relay-region-correction/RELAY-REGION-CORRECTION-IDLE-CUTOVER-PLAN.md"
+      ],
+      "invariant": "Regional optimization never closes an established relay client. The source gates admissions only after actual work is idle, commits the exact assignment atomically, and releases its empty control. A failed target uses ordinary migration recovery; previously sent mutations are not replayed.",
+      "oracle": "Two real TCP WebSocket cells, the actual desktop origin pool, SQLite and an independent execution child verify busy phone/iPad deferral, idle movement, racing arrival rejection, definite-abort admission recovery and observed target-registration failure with ordinary rollback.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/relay-region-correction.unit.test.ts"
+      ],
+      "testFiles": ["tests/e2e/relay-region-correction.unit.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/relay-region-correction.unit.test.ts",
+          "assertions": [
+            "releases the empty source and recovers normally when the target never registers",
+            "rejects an arrival during cutover and restores admissions after a definite failed commit",
+            "defers for either connected device, then moves after both disconnect without replaying work"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/relay-region-correction.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 6.44,
+          "summary": "Three real TCP WebSocket cases passed after removing store retention. Log: .tmp/idle-cutover-review/transport-without-retention.log. Does not validate packaged or physical clients."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "three local real-WebSocket scenarios with synthetic elapsed time for ordinary recovery"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local implementation validation; no CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Registry admission accounting negative control and five conflicting operation-identity regressions fail before their fixes and pass afterward. Locked database reconciliation has separate red/green evidence. Full cross-layer counterfactual remains unverified."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No retained source lease or new mobile timer. Candidate selection is read-only; busy sources immediately defer. Idle cutover reuses normal desktop reconnect and existing migration recovery."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak.",
+        "Complete mixed-version and packaged-client validation.",
+        "Validate bounded rollout latency and reliability against reviewed numerical limits."
+      ],
+      "knownGaps": [
+        "Production authentication verifier is mocked.",
+        "Synthetic elapsed time is not a wall-clock soak.",
+        "Physical phone lifecycle, packaged mixed versions, SSH execution and production network behavior require separate validation."
+      ],
+      "demotionRule": "Keep experimental or demote if optimization closes an established client, a gate reopens on ambiguous authority, a mutation is replayed, cleanup is lost, or eligible idle hosts starve."
+    },
+
+    {
       "id": "git-worktree.refresh-event-semantics",
       "title": "Index-only Git metadata cannot trigger structural worktree refresh fanout",
       "maturity": "experimental",
