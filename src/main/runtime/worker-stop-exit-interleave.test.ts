@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
+import { eraseRpcMethods } from './rpc/core'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 
 const TAB = '11111111-1111-4111-8111-111111111111'
@@ -80,7 +81,7 @@ describe('intentional worker-stop with PTY exit during close', () => {
   afterEach(() => db.close())
 
   async function call(name: string) {
-    const method = ORCHESTRATION_METHODS.find((entry) => entry.name === name)!
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find((entry) => entry.name === name)!
     return method.handler(method.params!.parse({ dispatch: dispatchId }), { runtime })
   }
 

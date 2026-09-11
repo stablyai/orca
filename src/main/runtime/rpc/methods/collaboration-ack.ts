@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { requireLocalCollaborationDispatchAuthority } from '../../collaboration/collaboration-dispatch-authority'
 import { ackCollaborationCheckpoint } from '../../collaboration/collaboration-checkpoint-store'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { requiredString } from '../schemas'
 
 const CollaborationAckParams = z.object({
@@ -12,7 +12,7 @@ const CollaborationAckParams = z.object({
     .max(100, 'messageIds must contain at most 100 ids')
 })
 
-export const COLLABORATION_ACK_METHODS: RpcMethod[] = [
+export const COLLABORATION_ACK_METHODS = [
   defineMethod({
     name: 'orchestration.collaborationAck',
     params: CollaborationAckParams,

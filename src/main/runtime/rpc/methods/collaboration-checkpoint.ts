@@ -8,7 +8,7 @@ import {
   type CollaborationCheckpointResult
 } from '../../collaboration/collaboration-checkpoint-store'
 import { buildCollaborationTaskMailboxAddress } from '../../collaboration/collaboration-task-mailbox'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { requiredString } from '../schemas'
 
 const CollaborationCheckpointParams = z.object({
@@ -32,7 +32,7 @@ const DEFAULT_WAIT_TIMEOUT_MS = 60000
 
 // Why: task identity comes from the authenticated terminal's active Dispatch;
 // admission-filtered collaboration rows may be consumed during prepare.
-export const COLLABORATION_CHECKPOINT_METHODS: RpcMethod[] = [
+export const COLLABORATION_CHECKPOINT_METHODS = [
   defineMethod({
     name: 'orchestration.collaborationCheckpoint',
     params: CollaborationCheckpointParams,

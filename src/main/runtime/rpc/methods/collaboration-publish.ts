@@ -9,7 +9,7 @@ import {
   subscribersForTopic
 } from '../../collaboration/collaboration-topology'
 import { publishCollaborationMessage } from '../../collaboration/collaboration-publish-store'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { requiredString, requiredStringAllowingEmpty } from '../schemas'
 
 const CollaborationPublishParams = z.object({
@@ -20,7 +20,7 @@ const CollaborationPublishParams = z.object({
   body: requiredStringAllowingEmpty('Missing --body')
 })
 
-export const COLLABORATION_PUBLISH_METHODS: RpcMethod[] = [
+export const COLLABORATION_PUBLISH_METHODS = [
   defineMethod({
     name: 'orchestration.collaborationPublish',
     params: CollaborationPublishParams,
