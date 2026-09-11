@@ -263,7 +263,7 @@ export default function TabGroupPanel({
           : 'h-[32px] shrink-0 border-b border-border bg-card'
       }${unfocusedDimClassName}`}
       // Why: a drag region swallows renderer pointer events, so a revealed strip that kept one would lose the hover that holds it open.
-      // Why: collapsed, the hover wrapper carries the strip identity — pane-detach drops hit-test the topmost element, and a translated-away strip is never it.
+      // Why: collapsed, the hover wrapper carries the strip identity instead — the translated-away strip has no rect a drop could land in.
       {...(stripAutoHidden
         ? {}
         : {
@@ -338,10 +338,10 @@ export default function TabGroupPanel({
       onFocusCapture={commands.focusGroup}
     >
       {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
-      {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
+      {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row — except while auto-hide holds the row collapsed, which trades that drag surface away. */}
       {stripAutoHidden ? (
-        // Why: while collapsed this carries the strip's identity for pane-detach drops but stays
-        // click-through, so the pane keeps its own top rows until the strip actually reveals.
+        // Why: click-through while collapsed, so the pane keeps its own top rows. It still carries
+        // the strip identity, which pane-detach matches by rect since hit-testing skips this.
         <div
           className={`absolute inset-x-0 top-0 z-20 h-[32px] ${
             stripRevealed ? '' : 'pointer-events-none'
