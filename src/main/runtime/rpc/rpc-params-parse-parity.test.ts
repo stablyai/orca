@@ -147,6 +147,23 @@ describe('RPC params parse parity', () => {
           differences.push(`${method}|${probe}: host ${host.kind}, client ${client.kind}`)
           continue
         }
+        if (host.kind === 'accepted') {
+          // Why: RpcParams<M> is z.output, and it is only a safe send-side type if
+          // re-sending a parsed value parses back to itself. z.input cannot be used:
+          // requiredString is z.unknown().transform(...), so its input admits anything.
+          const roundTrip = hostOutcome(schema as ZodType, host.data)
+          if (roundTrip.kind !== 'accepted') {
+            differences.push(
+              `${method}|${probe}: parsed output is not re-parseable (${roundTrip.kind})`
+            )
+          } else {
+            try {
+              expect(roundTrip.data).toEqual(host.data)
+            } catch {
+              differences.push(`${method}|${probe}: parsed output is not idempotent`)
+            }
+          }
+        }
         if (host.kind === 'accepted' && client.kind === 'accepted') {
           try {
             expect(client.data).toEqual(host.data)
