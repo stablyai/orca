@@ -10,6 +10,7 @@ import { ActivityThreadListPane } from '@/components/activity/activity-thread-li
 import { useAgentPaneThreads } from '@/components/activity/use-agent-pane-threads'
 import { ActivityThreadOptionsMenu } from '@/components/activity/activity-thread-controls'
 import type { ActivityGroupBy, ThreadReadFilter } from '@/components/activity/activity-thread-types'
+import { useSidebarAgentIndexShortcut } from './use-sidebar-agent-index-shortcut'
 
 /**
  * The Activity thread list, hosted in the sidebar as a navigator: selecting a
@@ -93,6 +94,8 @@ export default function SidebarAgentsList({
     unacknowledgeAgents: storeData.unacknowledgeAgents,
     setSelectedPaneKey
   })
+
+  useSidebarAgentIndexShortcut(visibleThreadGroups, groupBy, selectThread)
 
   const canJumpToWorkspace = useCallback(
     (thread: Parameters<typeof hasActivityThreadWorkspace>[0]) =>
