@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
+import { isTerminalTabPresent } from './terminal-tab-retirement'
 
 const WORKTREE_ID = 'repo1::/path/wt1'
 
@@ -65,12 +66,12 @@ describe('remountTerminalTabForRecovery', () => {
 // Crash b5cfc6ca: recovery released its per-tab remount budget from getTab, which
 // reads unifiedTabsByWorktree. That index can drop a tab this one still holds, and
 // the release then erased the budget each remount had just consumed.
-describe('hasTerminalTabForRecovery', () => {
+describe('isTerminalTabPresent as the recovery existence check', () => {
   it('answers true for a tab remountTerminalTabForRecovery can still remount', () => {
     const store = createTestStore()
     const tabId = seedWorktreeWithTab(store)
 
-    expect(store.getState().hasTerminalTabForRecovery(tabId)).toBe(true)
+    expect(isTerminalTabPresent(store.getState(), tabId)).toBe(true)
     expect(store.getState().remountTerminalTabForRecovery(tabId)).toBe(true)
   })
 
@@ -80,7 +81,7 @@ describe('hasTerminalTabForRecovery', () => {
     store.setState({ unifiedTabsByWorktree: {} })
 
     expect(store.getState().getTab(tabId)).toBeNull()
-    expect(store.getState().hasTerminalTabForRecovery(tabId)).toBe(true)
+    expect(isTerminalTabPresent(store.getState(), tabId)).toBe(true)
   })
 
   it('answers false once the tab leaves the remount index', () => {
@@ -88,7 +89,7 @@ describe('hasTerminalTabForRecovery', () => {
     const tabId = seedWorktreeWithTab(store)
     store.setState({ tabsByWorktree: { [WORKTREE_ID]: [] } })
 
-    expect(store.getState().hasTerminalTabForRecovery(tabId)).toBe(false)
+    expect(isTerminalTabPresent(store.getState(), tabId)).toBe(false)
     expect(store.getState().remountTerminalTabForRecovery(tabId)).toBe(false)
   })
 
@@ -100,6 +101,6 @@ describe('hasTerminalTabForRecovery', () => {
 
     store.getState().closeTab(tabId)
 
-    expect(store.getState().hasTerminalTabForRecovery(tabId)).toBe(false)
+    expect(isTerminalTabPresent(store.getState(), tabId)).toBe(false)
   })
 })

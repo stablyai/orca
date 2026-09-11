@@ -313,13 +313,6 @@ export type WorktreeSlice = {
    * undeliverable while the PTY is alive. Returns false when the tab is gone.
    */
   remountTerminalTabForRecovery: (tabId: string) => boolean
-  /**
-   * True while `remountTerminalTabForRecovery` could still remount this tab —
-   * it answers from the same `tabsByWorktree` index that remount searches.
-   * Recovery uses it to decide a tab is really gone: the unified tab index can
-   * transiently lose a tab that is still mountable (crash b5cfc6ca).
-   */
-  hasTerminalTabForRecovery: (tabId: string) => boolean
   setActiveFolderWorkspace: (folderWorkspaceId: string, executionHostId?: ExecutionHostId) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]

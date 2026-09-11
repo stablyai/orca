@@ -1,10 +1,10 @@
-import type { TerminalTab } from '../../../../../../shared/terminal-tab-types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { getTerminalActivationSpawnSuppression } from '../../terminal-activation-spawn-suppression'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
+import { locateTerminalTab } from '../../../terminals/terminal-tab-location'
 
 export function createSetRenamingWorktreeId(
   set: WorktreeSliceSet,
@@ -17,23 +17,6 @@ export function createSetRenamingWorktreeId(
   }
 }
 
-// Why shared: the recovery cap only holds while remount and its budget release
-// answer from the SAME tab index. Releasing from a different one (getTab's
-// unifiedTabsByWorktree) erased the budget each remount had just consumed and
-// stormed the renderer to death (crash b5cfc6ca).
-function locateTerminalTabForRecovery(
-  tabsByWorktree: Readonly<Record<string, readonly TerminalTab[]>>,
-  tabId: string
-): { worktreeId: string; index: number } | null {
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const index = tabs.findIndex((tab) => tab.id === tabId)
-    if (index !== -1) {
-      return { worktreeId, index }
-    }
-  }
-  return null
-}
-
 export function createRemountTerminalTabForRecovery(
   set: WorktreeSliceSet,
   _get: WorktreeSliceGet
@@ -41,14 +24,12 @@ export function createRemountTerminalTabForRecovery(
   return (tabId) => {
     let remounted = false
     set((s) => {
-      const location = locateTerminalTabForRecovery(s.tabsByWorktree, tabId)
+      const location = locateTerminalTab(s.tabsByWorktree, tabId)
       if (!location) {
         return {}
       }
-      const { worktreeId, index } = location
-      const tabs = s.tabsByWorktree[worktreeId]
-      const tab = tabs[index]
-      const nextTabs = tabs.slice()
+      const { worktreeId, index, tab } = location
+      const nextTabs = s.tabsByWorktree[worktreeId].slice()
       const pendingStartup = s.pendingStartupByTabId[tabId]
       nextTabs[index] = {
         ...tab,
@@ -79,13 +60,6 @@ export function createRemountTerminalTabForRecovery(
     })
     return remounted
   }
-}
-
-export function createHasTerminalTabForRecovery(
-  _set: WorktreeSliceSet,
-  get: WorktreeSliceGet
-): WorktreeSlice['hasTerminalTabForRecovery'] {
-  return (tabId) => locateTerminalTabForRecovery(get().tabsByWorktree, tabId) !== null
 }
 
 export function createAllWorktrees(

@@ -50,7 +50,6 @@ import { createSetActiveFolderWorkspace } from './worktrees/session/set-active-f
 import {
   createAllWorktrees,
   createGetKnownWorktreeById,
-  createHasTerminalTabForRecovery,
   createPurgeWorktreeTerminalState,
   createRemountTerminalTabForRecovery,
   createSetRenamingWorktreeId
@@ -109,7 +108,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   seedActiveWorktreeLastVisitedIfMissing: createSeedActiveWorktreeLastVisitedIfMissing(set, get),
   setRenamingWorktreeId: createSetRenamingWorktreeId(set, get),
   remountTerminalTabForRecovery: createRemountTerminalTabForRecovery(set, get),
-  hasTerminalTabForRecovery: createHasTerminalTabForRecovery(set, get),
   setActiveWorktree: createSetActiveWorktree(set, get),
   setActiveFolderWorkspace: createSetActiveFolderWorkspace(set, get),
   allWorktrees: createAllWorktrees(set, get),

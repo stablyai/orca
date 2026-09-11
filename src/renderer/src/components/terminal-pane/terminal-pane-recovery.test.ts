@@ -7,10 +7,14 @@ import {
 } from './terminal-pane-recovery'
 import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
+type StoredTerminalTab = { id: string; viewMode?: 'terminal' | 'chat' }
+
 const mocks = vi.hoisted(() => ({
   remountTerminalTabForRecovery: vi.fn<(tabId: string) => boolean>(() => true),
   getTab: vi.fn<() => { viewMode?: 'terminal' | 'chat' } | null>(() => ({})),
-  hasTerminalTabForRecovery: vi.fn<(tabId: string) => boolean>(() => true),
+  // The remount index. Kept separate from getTab so a test can stage the
+  // drift between the two that crash b5cfc6ca rode in on.
+  terminalTabs: [] as StoredTerminalTab[],
   recordRendererCrashBreadcrumb: vi.fn(),
   hasPty: vi.fn<(id: string) => Promise<boolean | null>>(async () => true)
 }))
@@ -20,7 +24,7 @@ vi.mock('@/store', () => ({
     getState: () => ({
       remountTerminalTabForRecovery: mocks.remountTerminalTabForRecovery,
       getTab: mocks.getTab,
-      hasTerminalTabForRecovery: mocks.hasTerminalTabForRecovery
+      tabsByWorktree: { 'repo1::/path/wt1': mocks.terminalTabs }
     })
   }
 }))
@@ -35,8 +39,7 @@ beforeEach(() => {
   mocks.remountTerminalTabForRecovery.mockReturnValue(true)
   mocks.getTab.mockClear()
   mocks.getTab.mockReturnValue({})
-  mocks.hasTerminalTabForRecovery.mockClear()
-  mocks.hasTerminalTabForRecovery.mockReturnValue(true)
+  mocks.terminalTabs = [{ id: 'tab-1' }, { id: 'tab-ssh' }]
   mocks.recordRendererCrashBreadcrumb.mockClear()
   mocks.hasPty.mockClear()
   mocks.hasPty.mockResolvedValue(true)
@@ -55,6 +58,23 @@ afterEach(() => {
 describe('requestTerminalPaneRecovery', () => {
   it('does not remount a terminal surface hidden behind native chat', async () => {
     mocks.getTab.mockReturnValue({ viewMode: 'chat' })
+
+    await expect(
+      requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'input-undeliverable'
+      })
+    ).resolves.toBe(false)
+    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
+    expect(mocks.hasPty).not.toHaveBeenCalled()
+  })
+
+  it('does not remount a chat-owned tab the unified tab index has dropped', async () => {
+    // The drift crash b5cfc6ca documents: present in tabsByWorktree, gone from
+    // unifiedTabsByWorktree. getTab answers null, so the guard used to pass.
+    mocks.getTab.mockReturnValue(null)
+    mocks.terminalTabs = [{ id: 'tab-1', viewMode: 'chat' }]
 
     await expect(
       requestTerminalPaneRecovery({
@@ -168,13 +188,13 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
     expect(vi.getTimerCount()).toBe(1)
 
-    mocks.hasTerminalTabForRecovery.mockReturnValue(false)
+    mocks.terminalTabs = []
     mocks.getTab.mockReturnValue(null)
     instance.unregister()
 
     expect(captureTerminalPaneRecoveryGeneration('tab-1')).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
-    mocks.hasTerminalTabForRecovery.mockReturnValue(true)
+    mocks.terminalTabs = [{ id: 'tab-1' }]
     mocks.getTab.mockReturnValue({})
     expect(
       await requestTerminalPaneRecovery({
@@ -674,7 +694,6 @@ describe('requestTerminalPaneRecovery', () => {
   // present in one index and absent from the other remounts and then erases the
   // budget that remount just consumed.
   describe('unverifiable reattach remount storm (crash b5cfc6ca)', () => {
-    const RECOVERIES_PER_WINDOW_CAP = 3
     const STORM_CYCLES = 200
     const OBSERVED_MEDIAN_GAP_MS = 10
 
@@ -707,14 +726,6 @@ describe('requestTerminalPaneRecovery', () => {
       vi.setSystemTime(0)
     })
 
-    it('caps remounts while the tab stays visible to getTab', async () => {
-      await driveStorm('tab-ssh')
-
-      expect(mocks.remountTerminalTabForRecovery.mock.calls.length).toBeLessThanOrEqual(
-        RECOVERIES_PER_WINDOW_CAP
-      )
-    })
-
     it('caps remounts when the remounted tab is invisible to getTab', async () => {
       // remountTerminalTabForRecovery still succeeds — the tab is in
       // tabsByWorktree, which is what the 8878 remount breadcrumbs prove.
@@ -722,9 +733,9 @@ describe('requestTerminalPaneRecovery', () => {
 
       await driveStorm('tab-ssh')
 
-      expect(mocks.remountTerminalTabForRecovery.mock.calls.length).toBeLessThanOrEqual(
-        RECOVERIES_PER_WINDOW_CAP
-      )
+      // Pre-fix this ran one remount per cycle. The 15s cooldown — not the
+      // window cap — coalesces the whole 10ms-gap storm into the first.
+      expect(mocks.remountTerminalTabForRecovery.mock.calls.length).toBe(1)
     })
   })
 })
