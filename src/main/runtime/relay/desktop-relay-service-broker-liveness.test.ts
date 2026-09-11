@@ -73,6 +73,27 @@ function service(): DesktopRelayService {
 }
 
 describe('DesktopRelayService broker liveness', () => {
+  it('pairs after signing in without replacing the service created while signed out', async () => {
+    const relayService = service()
+    const signedIn = await fakes.readRelayAuthContext()
+    fakes.readRelayAuthContext.mockResolvedValue(null)
+    try {
+      relayService.start()
+      await expect(relayService.createPairingRelay('device-1')).rejects.toThrow(
+        'relay_control_not_active'
+      )
+      expect(fakes.brokers).toHaveLength(0)
+      fakes.readRelayAuthContext.mockResolvedValue(signedIn)
+      relayService.authMutated()
+      await expect(relayService.createPairingRelay('device-1')).resolves.toMatchObject({
+        binding: { relayDeviceId: 'device-1' }
+      })
+      expect(fakes.brokers).toHaveLength(1)
+    } finally {
+      relayService.stop()
+    }
+  })
+
   it('pairs through a replacement when the owned broker control died', async () => {
     // Why: ownership stays 'valid' after a control socket dies, so the stale
     // handle otherwise reaches create_pairing_relay and fails the pairing.

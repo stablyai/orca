@@ -13343,7 +13343,7 @@
           "unavailableTitle": "Orca Relay n'est pas disponible sur ce poste de bureau.",
           "title": "Impossible de créer un code d'appairage Relay.",
           "retryingBody": "Création d'un nouveau code d'appairage. Cela peut prendre un moment via une connexion distante.",
-          "unavailableBody": "Utilisez le LAN pour appairer via Tailscale ou le même Wi-Fi.",
+          "unavailableBody": "Réessayez Orca Relay. Si le problème persiste, redémarrez Orca ou utilisez le LAN via Tailscale ou le même Wi-Fi.",
           "body": "Réessayez, ou utilisez le LAN pour appairer via Tailscale ou le même Wi-Fi.",
           "useLan": "Utiliser le LAN",
           "retrying": "Nouvelle tentative…",

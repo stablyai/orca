@@ -65,7 +65,7 @@ export function MobileRelayMintFailureNotice({
     : providerMissing
       ? translate(
           'auto.components.mobile.MobileRelayMintFailureNotice.unavailableBody',
-          'Use LAN to pair over Tailscale or the same Wi‑Fi.'
+          'Retry Relay. If it still fails, restart Orca or use LAN over Tailscale or the same Wi‑Fi.'
         )
       : reconnectRequired
         ? translate(
@@ -105,7 +105,7 @@ export function MobileRelayMintFailureNotice({
           <Button type="button" size={compact ? 'xs' : 'sm'} onClick={onUseLan}>
             {translate('auto.components.mobile.MobileRelayMintFailureNotice.useLan', 'Use LAN')}
           </Button>
-          {!providerMissing && !reconnectRequired ? (
+          {!reconnectRequired ? (
             <Button
               type="button"
               size={compact ? 'xs' : 'sm'}

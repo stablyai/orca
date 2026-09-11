@@ -11,6 +11,79 @@
   },
   "gates": [
     {
+      "id": "desktop-relay.initialization-recovery",
+      "title": "Missing desktop Relay provider can recover without restart",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "main-unit",
+      "surfaces": ["desktop relay initialization", "mobile pairing"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["relay"],
+      "coverageNotes": "Injected startup and IPC contracts plus renderer interaction; no real cloud assignment.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/20005"],
+      "invariant": "A failed initialization remains retryable; successful recovery installs one provider and LAN and quit never trigger recovery.",
+      "oracle": "Fail construction and start, retry initialization, count installed providers and cleanup; verify automatic pairing and Retry invoke recovery before minting.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/startup/main-process-relay-startup.test.ts src/main/ipc/mobile-relay-recovery.test.ts src/main/ipc/mobile.test.ts src/renderer/src/components/mobile/MobileHero.test.tsx"
+      ],
+      "testFiles": [
+        "src/main/startup/main-process-relay-startup.test.ts",
+        "src/main/ipc/mobile-relay-recovery.test.ts",
+        "src/renderer/src/components/mobile/MobileHero.test.tsx"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/startup/main-process-relay-startup.test.ts",
+          "assertions": [
+            "failed construction recovers once",
+            "partial startup is cleaned up",
+            "quit prevents recovery"
+          ]
+        },
+        {
+          "file": "src/main/ipc/mobile-relay-recovery.test.ts",
+          "assertions": ["automatic pairing recovers before minting", "LAN skips recovery"]
+        },
+        {
+          "file": "src/renderer/src/components/mobile/MobileHero.test.tsx",
+          "assertions": ["missing-provider notice offers a working Retry button"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/startup/main-process-relay-startup.test.ts src/main/ipc/mobile-relay-recovery.test.ts src/main/ipc/mobile.test.ts src/renderer/src/components/mobile/MobileHero.test.tsx",
+          "result": "passed",
+          "durationSeconds": 6.01,
+          "summary": "60 tests passed across four files."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "focused unit tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local focused runs only."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "UI test fails before Retry is exposed; IPC recovery test fails with callback disabled. Startup recovery tests pass with injected constructor/start failures."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Synchronous idempotent initialization; no new timers or polling."
+      },
+      "promotionCriteria": ["Exercise startup recovery against real Relay in CI."],
+      "knownGaps": ["Live cloud assignment and physical mobile pairing not exercised."],
+      "demotionRule": "Demote on duplicate provider installation or post-quit recovery."
+    },
+    {
       "id": "mobile-push.headless-startup-and-policy",
       "title": "Headless push lifecycle and mobile delivery policy",
       "maturity": "experimental",
