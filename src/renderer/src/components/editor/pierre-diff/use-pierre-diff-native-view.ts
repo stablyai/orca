@@ -40,6 +40,9 @@ export function usePierreDiffNativeView(
   // Armed on attach; 0 until then so a stale ref can never keep a restore alive.
   const deadline = useRef(0)
   const ceiling = useRef(0)
+  // Why: this effect also runs on mount, where the ceiling must stay unarmed so first attach owns
+  // it — a window anchored at mount expires before a slow or remote view ever attaches.
+  const sawFirstGroupRun = useRef(false)
   const lastSnapshot = useRef<PierreNativeViewState | undefined>(undefined)
   const schedule = useCallback(() => {
     if (frame.current !== null || !pending.current || Date.now() > deadline.current) {
@@ -109,12 +112,18 @@ export function usePierreDiffNativeView(
     })
   }, [editorRef])
   useLayoutEffect(() => {
-    // Why: no window is granted here. The ceiling starts at the first view attach, not at
-    // component mount — a large or remote diff can attach many seconds later, and a window
-    // measured from mount would already be spent before the view ever exists.
+    // Why: switching back to this tab group is a fresh restore occasion, not render churn, so it
+    // gets a fresh ceiling. A background group deliberately defers its restore here (see the
+    // group check in schedule), and a switch back can be minutes later. The bound that matters is
+    // on render-driven re-arming, which stays capped by the ceiling armed at attach.
     const now = Date.now()
-    if (ceiling.current !== 0 && now < ceiling.current) {
-      deadline.current = Math.min(now + RESTORE_DEADLINE_MS, ceiling.current)
+    if (!sawFirstGroupRun.current) {
+      sawFirstGroupRun.current = true
+    } else if (pending.current) {
+      // A later group switch is a discrete user action and a fresh restore occasion, so it gets a
+      // fresh window; render-driven re-arming stays capped by the ceiling armed at attach.
+      ceiling.current = now + RESTORE_CEILING_MS
+      deadline.current = now + RESTORE_DEADLINE_MS
     }
     schedule()
   }, [activeGroupId, schedule])

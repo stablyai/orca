@@ -98,6 +98,24 @@ it('does not replace selection in another active split group', () => {
   expect(state.restore).toHaveBeenCalledOnce()
 })
 
+it('still restores when the user switches back to the group long after attach', () => {
+  const realNow = Date.now
+  try {
+    const { tick, rerender } = setup('right')
+    tick()
+    expect(state.restore).not.toHaveBeenCalled()
+    // Why: a tab-group switch is a discrete user action minutes later, not render churn. A
+    // ceiling anchored at first attach would have expired and dropped the restore entirely.
+    const later = realNow() + 120_000
+    Date.now = () => later
+    rerender({ activeGroup: 'left' })
+    tick()
+    expect(state.restore).toHaveBeenCalledOnce()
+  } finally {
+    Date.now = realNow
+  }
+})
+
 it('cancels delayed restoration when the user interacts elsewhere', () => {
   const { tick } = setup()
   document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }))
