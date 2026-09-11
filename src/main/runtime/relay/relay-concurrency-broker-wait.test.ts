@@ -229,4 +229,28 @@ describe('relay live-broker wait under interleaving', () => {
     expect(openBroker).toHaveBeenCalledTimes(1)
     coordinator.stop()
   })
+
+  it('keeps the budget over a chain of superseding reconciles, not just over armed retries', async () => {
+    // Every transient-demand acquire and release reconciles, so a busy host can
+    // supersede a waiter's reconcile faster than opens settle. The budget has to
+    // survive that or a caller rides the chain indefinitely holding its demand ref.
+    vi.useFakeTimers()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker: () =>
+        new Promise<CoordinatedRelayBroker>((_resolve, reject) =>
+          setTimeout(() => reject(new Error('slow open')), 400)
+        ),
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+    coordinator.reconcile()
+    const seen = observe(coordinator.waitForLiveBrokerResult(1_000))
+    const churn = setInterval(() => coordinator.reconcile(), 200)
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    clearInterval(churn)
+    expect(seen()).not.toBe('unsettled')
+    coordinator.stop()
+  })
 })
