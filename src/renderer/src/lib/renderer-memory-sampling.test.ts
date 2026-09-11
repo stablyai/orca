@@ -192,7 +192,7 @@ describe('renderer memory highwater census re-arming', () => {
 
   // Sawtooth (build, GC, build) is the ordinary shape of renderer memory. Two spikes hours apart
   // must not read as sustained pressure, or triage starts a leak hunt that has no leak.
-  it('re-anchors minutes-near-mark after a long observed spell below the band', async () => {
+  it('discounts a long observed spell below the band', async () => {
     stubFootprint(658)
     await tick()
     await tick()

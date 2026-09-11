@@ -51,8 +51,7 @@ type HeapMetrics = BrowserPerformanceMemory & {
   exact: boolean
 }
 
-/** Mark -> monotonic time it last emitted a census. */
-/** First crossing is kept separately: a refresh replaces the crumb's own `createdAt`. */
+/** Per-mark census bookkeeping. Monotonic times throughout; see `isHighwaterCensusDue`. */
 type HighwaterMarkState = {
   /** Accumulated, not derived from a start time: only samples actually seen in band count. */
   nearMarkMs: number
@@ -252,20 +251,7 @@ function recordRendererMemoryHighwater(
   }
 }
 
-/**
- * A mark is due on its first crossing, and thereafter every `RENDERER_HIGHWATER_RECENSUS_MS`
- * while the renderer stays within `RENDERER_HIGHWATER_RECENSUS_BAND` of it. Why not a strict
- * `value >= mark`: report fb476b1c crossed 600MB then died 21h later at 577MB, and a re-census
- * gated on the mark never fires again — that is the stale-census bug. Why not value-independent
- * either: the refresh overwrites the one retained slot, so a renderer that released its memory
- * would lose the census taken at its peak. Why monotonic: a wall-clock correction must not
- * stretch or collapse the window.
- */
-/**
- * Tracks whether the mark is still occupied. Why re-anchor after a gap: the census reports how
- * long the renderer has been heavy, and two spikes hours apart are not sustained pressure —
- * sawtooth (build, GC, build) is the ordinary shape of renderer memory.
- */
+/** Accrues in-band residency for one mark. Emits nothing; see the body for why it accumulates. */
 function noteHighwaterBandResidency(
   emitted: Map<number, HighwaterMarkState>,
   mark: number,
@@ -305,6 +291,15 @@ function stampHighwaterMark(
   return Math.round(nearMarkMs / 60_000)
 }
 
+/**
+ * A mark is due on its first crossing, and thereafter every `RENDERER_HIGHWATER_RECENSUS_MS`
+ * while the renderer stays within `RENDERER_HIGHWATER_RECENSUS_BAND` of it. Why not a strict
+ * `value >= mark`: report fb476b1c crossed 600MB then died 21h later at 577MB, and a re-census
+ * gated on the mark never fires again — that is the stale-census bug. Why not value-independent
+ * either: the refresh overwrites the one retained slot, so a renderer that released its memory
+ * would lose the census taken at its peak. Why monotonic: a wall-clock correction must not
+ * stretch or collapse the window.
+ */
 function isHighwaterCensusDue(
   emitted: Map<number, HighwaterMarkState>,
   mark: number,
