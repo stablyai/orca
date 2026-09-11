@@ -14,6 +14,7 @@ import type {
 } from '../../../src/shared/mobile-push-contract'
 import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import type { RpcClient } from '../transport/rpc-client'
+import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
 import {
   loadPushNotificationsEnabled,
   loadRemotePushHostRegistrations,
@@ -34,6 +35,7 @@ type HostPushState = {
   connection: { client: PushClient | null }
   // An unanswered probe is unknown, not unsupported.
   supported: boolean | null
+  capabilityProbeStop: (() => void) | null
   chain: Promise<void>
 }
 
@@ -48,7 +50,12 @@ let consentGeneration = 0
 function hostState(hostId: string): HostPushState {
   let state = hostsById.get(hostId)
   if (!state) {
-    state = { connection: { client: null }, supported: null, chain: Promise.resolve() }
+    state = {
+      connection: { client: null },
+      supported: null,
+      capabilityProbeStop: null,
+      chain: Promise.resolve()
+    }
     hostsById.set(hostId, state)
   }
   return state
@@ -87,28 +94,6 @@ async function currentToken(): Promise<MobilePushToken | null> {
     tokenPromise = pending
   }
   return tokenPromise
-}
-
-async function readRemotePushCapability(client: PushClient): Promise<boolean | null> {
-  try {
-    const response = await client.sendRequest('status.get', undefined, {
-      timeoutMs: REQUEST_TIMEOUT_MS,
-      failWhenDisconnected: true
-    })
-    if (!response.ok) {
-      return null
-    }
-    const result = response.result
-    if (!result || typeof result !== 'object') {
-      return false
-    }
-    const capabilities = (result as { capabilities?: unknown }).capabilities
-    return (
-      Array.isArray(capabilities) && capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
-    )
-  } catch {
-    return null
-  }
 }
 
 async function sendRegister(
@@ -168,14 +153,14 @@ async function reconcileHost(hostId: string): Promise<void> {
     }
   }
   if (state.supported == null) {
-    const probed = await readRemotePushCapability(client)
-    if (!isCurrent()) {
-      return
-    }
-    if (probed == null) {
-      return
-    }
-    state.supported = probed
+    state.capabilityProbeStop ??= startRuntimeCapabilityProbe(client, (capabilities) => {
+      if (state.connection.client !== client) {
+        return
+      }
+      state.supported = capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
+      void enqueueReconcile(hostId)
+    })
+    return
   }
   if (!state.supported || !isCurrent()) {
     return
@@ -243,6 +228,7 @@ async function reconcileAllHosts(): Promise<void> {
 export function attachPushRegistration(hostId: string, client: PushClient): () => void {
   const state = hostState(hostId)
   if (state.connection.client !== client) {
+    state.capabilityProbeStop?.()
     state.connection.client = client
     state.supported = null
   }
@@ -251,6 +237,9 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
   return () => {
     if (connection.client === client) {
       connection.client = null
+      state.capabilityProbeStop?.()
+      state.capabilityProbeStop = null
+      state.supported = null
     }
   }
 }

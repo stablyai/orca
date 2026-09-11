@@ -182,6 +182,7 @@ describe('push registration capability gating', () => {
   })
 
   it('re-probes a host whose first status.get never answered', async () => {
+    vi.useFakeTimers()
     const sent: string[] = []
     let probeFails = true
     const client = {
@@ -198,15 +199,17 @@ describe('push registration capability gating', () => {
     }
     await setRemotePushEnabled(true)
     attachPushRegistration('host-1', client)
-    await flush()
+    await vi.advanceTimersByTimeAsync(0)
     expect(sent).toEqual(['status.get'])
 
-    // A latched `false` would keep this host unregistered for the connection's life.
+    // A failed probe retries while the same connection remains active.
     probeFails = false
-    await setRemotePushEnabled(true)
-    await flush()
+    await vi.advanceTimersByTimeAsync(1_000)
+    await Promise.resolve()
+    await Promise.resolve()
 
     expect(sent).toEqual(['status.get', 'status.get', 'notifications.registerPush'])
+    vi.useRealTimers()
   })
 
   it('retries the device token on the next reconcile after the device had none', async () => {
