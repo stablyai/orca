@@ -1,8 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
+import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
 import { extractMobileAsyncAsk } from './mobile-native-chat-async-ask'
 
 const asyncInput = {
@@ -43,6 +45,7 @@ const completed: NativeChatMessage = {
 describe('mobile async Codex question visibility', () => {
   let renderer: ReactTestRenderer | null = null
   let prompts: ReturnType<typeof useMobileNativeChatPrompts>
+  let dismissal: ReturnType<typeof useMobileNativeChatAskDismiss>
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
@@ -50,23 +53,36 @@ describe('mobile async Codex question visibility', () => {
 
   function Harness({
     messages,
-    loading = false
+    loading = false,
+    status = null
   }: {
     messages: NativeChatMessage[]
     loading?: boolean
+    status?: Partial<AgentStatusEntry> | null
   }) {
     prompts = useMobileNativeChatPrompts({
       enabled: true,
-      status: null,
+      status: status as AgentStatusEntry | null,
       messages,
       transcriptLoading: loading
+    })
+    dismissal = useMobileNativeChatAskDismiss({
+      ask: prompts.ask,
+      detectedAsk: prompts.detectedAsk,
+      scopeKey: 'tab',
+      sessionKey: 'session',
+      observing: !loading
     })
     return null
   }
 
-  async function render(messages: NativeChatMessage[], loading = false) {
+  async function render(
+    messages: NativeChatMessage[],
+    loading = false,
+    status: Partial<AgentStatusEntry> | null = null
+  ) {
     await act(async () => {
-      const element = createElement(Harness, { messages, loading })
+      const element = createElement(Harness, { messages, loading, status })
       if (renderer) {
         renderer.update(element)
       } else {
@@ -74,6 +90,28 @@ describe('mobile async Codex question visibility', () => {
       }
     })
   }
+
+  it.each(['working', 'done'] as const)(
+    'dismisses the async card despite a sticky blocking prompt while %s',
+    async (state) => {
+      const status = {
+        state,
+        interactivePrompt: JSON.stringify({
+          questions: [{ question: 'Old blocking question', options: ['A', 'B'] }]
+        })
+      }
+      const history = [call, completed, accepted]
+      await render(history, false, status)
+      expect(prompts.ask?.questions[0].question).toBe('Which color?')
+      expect(dismissal.showAsk).toBe(true)
+      act(() => dismissal.dismissAsk())
+      expect(dismissal.showAsk).toBe(false)
+
+      await render(history, true, status)
+      await render(history, false, status)
+      expect(dismissal.showAsk).toBe(false)
+    }
+  )
 
   it('shows titles, choices and free text after immediate acceptance while the agent continues', async () => {
     await render([call, completed, accepted])

@@ -53,7 +53,9 @@ export function useMobileNativeChatPrompts(args: {
   )
   const askFromMessages = askFromStatus ? null : resolvedAsk
   const asyncAsk = useMemo(() => extractMobileAsyncAsk(messages), [messages])
-  const detectedAsk = askFromStatus ?? askFromMessages ?? asyncAsk
+  // A hidden sticky blocking prompt must not own a displayed async card's dismissal.
+  const detectedAsk =
+    (blocked ? askFromStatus : null) ?? askFromMessages ?? asyncAsk ?? askFromStatus
 
   return {
     permission,
