@@ -53,7 +53,7 @@ export function isStreamingOpenerReply(
  * in rpc-response-shape.ts, which also requires a string `id` and a validated error
  * shape — the one caller here accepts replies that carry no usable `id`.
  */
-export function isRpcReplyWithBooleanOk(value: unknown): value is RpcResponse {
+export function isRpcReplyWithBooleanOk(value: unknown): value is { ok: boolean } {
   return (
     Boolean(value) && typeof value === 'object' && typeof (value as RpcResponse).ok === 'boolean'
   )

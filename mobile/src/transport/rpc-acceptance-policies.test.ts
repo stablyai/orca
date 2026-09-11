@@ -135,7 +135,7 @@ describe('a refusal carrying stray success fields', () => {
   })
 
   it('is still recognised as a coded refusal', () => {
-    expect(isCodedRpcRefusal(strayRefusal, 'method_not_found')).toBe(true)
+    expect(isCodedRpcRefusal(strayRefusal)).toBe(true)
   })
 
   it('is still recognised as method-not-found', () => {
@@ -152,7 +152,7 @@ describe('a refusal carrying stray success fields', () => {
       _meta: meta
     } as unknown as RpcResponse
     expect(isMethodNotFoundRefusal(straySuccess)).toBe(false)
-    expect(isCodedRpcRefusal(straySuccess, 'method_not_found')).toBe(false)
+    expect(isCodedRpcRefusal(straySuccess)).toBe(false)
   })
 })
 
