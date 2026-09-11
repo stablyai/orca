@@ -34,9 +34,10 @@ export const RepoUpstream = z
   .nullable()
   .optional()
 
-export function createRepoUpdateSchema<T extends z.ZodRawShape>(
-  selectorShape: T
-): z.ZodObject<T & { updates: z.ZodObject<z.ZodRawShape> }> {
+// The return type is inferred on purpose: an explicit z.ZodObject<...z.ZodRawShape>
+// annotation widened `updates` to an open record, which erased all 24 named fields
+// from RpcParams<'repo.update'> for every typed caller.
+export function createRepoUpdateSchema<T extends z.ZodRawShape>(selectorShape: T) {
   return z.object({
     ...selectorShape,
     updates: z.object({
@@ -72,5 +73,5 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(
       projectGroupOrder: OptionalFiniteNumber,
       sourceControlAi: RepoSourceControlAiOverrides
     })
-  }) as z.ZodObject<T & { updates: z.ZodObject<z.ZodRawShape> }>
+  })
 }
