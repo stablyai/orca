@@ -221,13 +221,18 @@ describe('remoteWorkspace:setForConnectedTargets session fallback', () => {
     ])
   })
 
-  it('never replaces the host snapshot with an empty list for a worktree that has tabs', async () => {
-    // The deletion step itself: `replace-session` makes an exported empty list authoritative, so
-    // publishing one for a populated worktree is what destroyed the host's copy on every launch.
+  it('never retracts a populated worktree from the host snapshot, by emptying it or by omitting it', async () => {
+    // The deletion step itself: `replace-session` makes the exported projection authoritative in
+    // whole, so BOTH shapes destroy the host's copy — an empty list for the path, and no entry for
+    // the path at all. `not.toEqual([])` alone is satisfied by `undefined`, which is the second of
+    // those, so it named a guard it only half checked.
     const store = createStrandedStore()
 
     await publishToConnectedTarget(store)
 
-    expect(hostSnapshot.session.tabsByWorktreePath[WORKTREE_PATH]).not.toEqual([])
+    expect(Object.hasOwn(hostSnapshot.session.tabsByWorktreePath, WORKTREE_PATH)).toBe(true)
+    expect(hostSnapshot.session.tabsByWorktreePath[WORKTREE_PATH]?.map((tab) => tab.id)).toEqual([
+      'tab-runtime'
+    ])
   })
 })

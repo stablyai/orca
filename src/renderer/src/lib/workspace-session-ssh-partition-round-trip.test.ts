@@ -593,9 +593,18 @@ describe('ssh host partition and the closed-last-terminal tombstone', () => {
     ).toBe(false)
   })
 
-  it('does not adopt a stale populated ssh row over a tombstone in the owning partition', async () => {
-    // The collision stated directly. The tombstone is in `ssh:<targetId>` — where this build writes
-    // it — and adoption must neither hand stale tabs back nor read the row as a gap.
+  // Renamed from "does not adopt a stale populated ssh row over a tombstone in the owning
+  // partition". That name promised the one direction this code deliberately does NOT provide, and
+  // no fixture here could have caught it: the populated row would have to sit in the LEGACY `local`
+  // partition with the tombstone in `ssh:` — and in that state `workspacesTheBaseOwns` (which keys
+  // on `tabs.length > 0`) makes the workspace un-adoptable, so the legacy tabs win and the
+  // tombstone is dropped. That is a deliberate trade — a resurrected tab is recoverable, a deleted
+  // one is not — pinned in `src/shared/workspace-session-stranded-partition-adoption-tab-rows.test
+  // .ts`. Leaving the old name here would have read as a guarantee against exactly the data loss
+  // that trade accepts.
+  it('keeps a tombstone in the owning partition when the legacy partition names nothing', async () => {
+    // The tombstone is in `ssh:<targetId>` — where this build writes it — and with `local` silent
+    // adoption must neither hand stale tabs back nor read the row as a gap.
     const partitions = {
       local: session({ tabsByWorktree: {} }),
       [SSH_HOST_ID]: session({ tabsByWorktree: { [WORKTREE_ID]: [] } })
