@@ -149,7 +149,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     worktreeId &&
     (effectiveSourceOwner?.kind === 'runtime' ||
       effectiveSourceOwner?.kind === 'ssh' ||
-      remoteRuntimeActive)
+      (!effectiveSourceOwner && remoteRuntimeActive))
   ) {
     if (workspaceHttpLinkBrowserOpener) {
       void workspaceHttpLinkBrowserOpener({

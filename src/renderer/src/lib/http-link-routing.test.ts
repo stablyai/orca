@@ -139,6 +139,21 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
+  it('keeps explicitly local links local while a remote runtime is active', () => {
+    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'remote-1' }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      allowRemoteInApp: true,
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openRuntimeBrowserTabMock).not.toHaveBeenCalled()
+  })
+
   it('routes opted-in links without a source owner through the active runtime', () => {
     storeState.settings = {
       openLinksInApp: true,
