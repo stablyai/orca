@@ -52,12 +52,29 @@ export function hasHostMirrorHandleWaitExpired(environmentId: string, tabId: str
   )
 }
 
+function liveTabIds(): Set<string> {
+  const tabIds = new Set<string>()
+  for (const tabs of Object.values(useAppStore.getState().tabsByWorktree)) {
+    for (const tab of tabs) {
+      tabIds.add(tab.id)
+    }
+  }
+  return tabIds
+}
+
 function recordExpiredWait(environmentId: string, key: string): void {
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
-  // Why: a verdict from a previous connection is dead weight; drop it so the map
-  // stays bounded by the panes parked on the current connection.
+  // Why two prune rules: a verdict from a previous connection is dead weight, and so is
+  // one for a pane whose row is gone. Generation alone does not bound the map — a tab id
+  // is never reissued, so a connection that never drops (the ordinary case for a session
+  // left open for days) kept one entry for every pane that ever timed out.
   const prefix = `${environmentId}\0`
+  const liveTabs = liveTabIds()
   for (const [staleKey, staleGeneration] of expiredGenerationByPane) {
+    if (!liveTabs.has(staleKey.slice(staleKey.indexOf('\0') + 1))) {
+      expiredGenerationByPane.delete(staleKey)
+      continue
+    }
     if (staleKey.startsWith(prefix) && staleGeneration !== generation) {
       expiredGenerationByPane.delete(staleKey)
     }
@@ -151,6 +168,10 @@ export function parkUntilHostMirrorHandleLands(
 
 export function countParkedHostMirrorHandleGapPanesForTests(): number {
   return waitersByPane.size
+}
+
+export function countExpiredHostMirrorHandleGapVerdictsForTests(): number {
+  return expiredGenerationByPane.size
 }
 
 export function resetHostMirrorHandleGapWaitsForTests(): void {

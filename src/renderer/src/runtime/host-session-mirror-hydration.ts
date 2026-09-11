@@ -14,6 +14,10 @@ import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtim
 type ParkedMirrorWaiter = { environmentId: string; worktreeId: string; run: () => void }
 
 const hydratedGenerationByEnvironment = new Map<string, number>()
+/** Pruned only by `clearHostSessionMirrorHydration`, so a worktree deleted while its environment
+ *  stays connected keeps its entry — the same retention class as the handle-gap verdict map
+ *  (host-mirror-handle-gap-wait.ts), which prunes on tab death for exactly this reason. Bounded by
+ *  worktrees ever hydrated, not by tab churn, so it is a far smaller ceiling and left as-is. */
 const hydratedGenerationByWorktree = new Map<string, number>()
 const parkedWaitersByWorktree = new Map<string, ParkedMirrorWaiter>()
 
