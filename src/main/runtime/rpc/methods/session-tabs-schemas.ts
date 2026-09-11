@@ -140,6 +140,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
   envToDelete: z.array(z.string().min(1).max(256)).max(32).optional(),
   startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
   launchConfig: sleepingAgentLaunchConfigSchema,
+  resumesAgentSession: z.boolean().optional(),
   launchToken: z.string().min(1).max(128).optional(),
   agent: z
     .custom<TuiAgent>(isTuiAgent, {

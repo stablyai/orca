@@ -19,6 +19,8 @@ export type WorktreeStartupLaunch = {
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   launchAgent?: TuiAgent
+  /** True when this startup re-enters an existing provider transcript. */
+  resumesAgentSession?: boolean
   viewMode?: 'terminal' | 'chat'
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }

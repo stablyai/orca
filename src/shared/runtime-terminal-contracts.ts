@@ -255,6 +255,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** True when this startup re-enters an existing provider transcript. */
+  resumesAgentSession?: boolean
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'

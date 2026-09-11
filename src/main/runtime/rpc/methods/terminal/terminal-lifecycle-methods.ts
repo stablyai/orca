@@ -60,6 +60,9 @@ export const TERMINAL_LIFECYCLE_METHODS: RpcAnyMethod[] = [
               ...(params.resumeProviderSession
                 ? { resumeProviderSession: params.resumeProviderSession }
                 : {}),
+              ...(params.resumesAgentSession
+                ? { resumesAgentSession: params.resumesAgentSession }
+                : {}),
               ...(params.launchToken ? { launchToken: params.launchToken } : {}),
               ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
               ...(params.terminalColorQueryReplies

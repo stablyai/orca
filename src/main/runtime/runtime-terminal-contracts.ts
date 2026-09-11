@@ -28,6 +28,7 @@ export type TerminalCreateOptions = {
   envToDelete?: string[]
   launchConfig?: WorktreeStartupLaunch['launchConfig']
   resumeProviderSession?: AgentProviderSessionMetadata
+  resumesAgentSession?: WorktreeStartupLaunch['resumesAgentSession']
   launchToken?: string
   launchAgent?: TuiAgent
   startupAgent?: TuiAgent

@@ -46,6 +46,7 @@ export function launchAiVaultSessionInNewTab(args: {
       ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
       ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
       ...(args.providerSession ? { providerSession: args.providerSession } : {}),
+      resumesAgentSession: true,
       ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
       activate: true
     })

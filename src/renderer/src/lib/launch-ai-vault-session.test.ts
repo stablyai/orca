@@ -181,6 +181,7 @@ describe('launchAiVaultSessionInNewTab', () => {
         agentEnv: { CODEX_PROFILE: 'runtime' }
       },
       providerSession: { key: 'session_id', id: 'session-1' },
+      resumesAgentSession: true,
       agentArgs: '',
       activate: true
     })

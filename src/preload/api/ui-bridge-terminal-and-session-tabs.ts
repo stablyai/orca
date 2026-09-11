@@ -23,6 +23,7 @@ export const uiTerminalAndSessionTabsApi = {
       env?: Record<string, string>
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      resumesAgentSession?: boolean
       launchToken?: string
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
@@ -49,6 +50,7 @@ export const uiTerminalAndSessionTabsApi = {
         env?: Record<string, string>
         launchConfig?: SleepingAgentLaunchConfig
         resumeProviderSession?: AgentProviderSessionMetadata
+        resumesAgentSession?: boolean
         launchToken?: string
         launchAgent?: TuiAgent
         viewMode?: 'terminal' | 'chat'

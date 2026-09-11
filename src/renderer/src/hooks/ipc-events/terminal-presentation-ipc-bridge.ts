@@ -30,6 +30,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         env,
         launchConfig,
         resumeProviderSession,
+        resumesAgentSession,
         launchToken,
         launchAgent,
         viewMode,
@@ -207,6 +208,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
               ...(env ? { env } : {}),
               ...(launchConfig ? { launchConfig } : {}),
               ...(resumeProviderSession ? { resumeProviderSession } : {}),
+              ...(resumesAgentSession ? { resumesAgentSession } : {}),
               ...(launchToken ? { launchToken } : {}),
               ...(launchAgent ? { launchAgent } : {})
             })

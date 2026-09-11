@@ -166,6 +166,7 @@ export const TerminalCreateParams = z.object({
       transcriptPath: z.string().min(1).max(32_768).optional()
     })
     .optional(),
+  resumesAgentSession: z.boolean().optional(),
   launchToken: OptionalString,
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalColorQueryReplies: z

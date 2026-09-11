@@ -27,6 +27,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
       agent?: TuiAgent
       agentPrompt?: string
       launchConfig?: SleepingAgentLaunchConfig
+      resumesAgentSession?: boolean
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
       activate?: boolean
@@ -71,6 +72,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           launchConfig: startupCommand.launchConfig,
+          resumesAgentSession: opts.resumesAgentSession,
           signal: opts.signal
         }
       )
@@ -125,6 +127,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           ...(startupCommand.env ? { env: startupCommand.env } : {}),
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
+          ...(opts.resumesAgentSession ? { resumesAgentSession: opts.resumesAgentSession } : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
@@ -196,6 +199,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
             viewMode: opts.viewMode,
             targetGroupId: opts.targetGroupId,
             launchConfig: startupCommand.launchConfig,
+            resumesAgentSession: opts.resumesAgentSession,
             signal: opts.signal
           }
         )

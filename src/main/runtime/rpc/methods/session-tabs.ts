@@ -63,6 +63,7 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
         agent: params.agent,
         ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),
         ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
+        ...(params.resumesAgentSession ? { resumesAgentSession: params.resumesAgentSession } : {}),
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
         ...(params.viewMode ? { viewMode: params.viewMode } : {}),

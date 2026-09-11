@@ -6,10 +6,7 @@ import { createPtyOutputProcessor } from './pty-output-processor'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import {
-  beginPtySpawnOwnership,
-  finishPtySpawnOwnership
-} from './pty-connection/pty-spawn-ownership'
+import { createPtySpawnOwnershipTracker } from './pty-connection/pty-spawn-ownership-tracker'
 
 export {
   ensurePtyDispatcher,
@@ -108,9 +105,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       connected = false
       ptyId = null
       preconnectInputBuffer?.clear()
+      spawnOwnershipTracker.releaseAll()
     },
     onPtyExit
   })
+  const spawnOwnershipTracker = createPtySpawnOwnershipTracker(paneOwnershipKey)
   const bind = (id: string): void => {
     ptyId = id
     connected = true
@@ -142,7 +141,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   return {
     connect: async (options) => {
       const connectGeneration = advancePtyLifecycle()
-      const spawnOwnershipAttempt = beginPtySpawnOwnership(paneOwnershipKey)
+      // A reconnect supersedes this transport's previous accepted claim. The
+      // new attempt below becomes the only live handoff authority for the pane.
+      spawnOwnershipTracker.releaseAll()
+      const spawnOwnershipAttempt = spawnOwnershipTracker.begin()
       try {
         return await connectIpcPty(options, {
           transportOptions: opts,
@@ -161,7 +163,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           spawnOwnershipAttempt
         })
       } finally {
-        finishPtySpawnOwnership(spawnOwnershipAttempt)
+        spawnOwnershipTracker.finish(spawnOwnershipAttempt)
         if (lifecycleGeneration === connectGeneration) {
           await flushPreconnectInput()
         }
@@ -210,6 +212,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           storedCallbacks.onDisconnect?.()
         }
       }
+      spawnOwnershipTracker.releaseAll()
     },
 
     detach(options) {

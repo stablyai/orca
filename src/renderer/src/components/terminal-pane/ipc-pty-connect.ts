@@ -99,17 +99,17 @@ export async function connectIpcPty(
       // Resolve this attempt for concurrent siblings without granting it
       // ownership: every path below rejected the result before binding.
       publishPtySpawnOwnership(context.spawnOwnershipAttempt, spawnResult, { accepted: false })
+      // Reattach and cold-restore results are never retired here. Avoid waiting
+      // on a sibling for those paths; a stale reattach must settle immediately.
+      if (spawnResult.isReattach || spawnResult.coldRestore || context.ownsPtyId(spawnResult.id)) {
+        return
+      }
       // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
       const successorOwnsResult = await successorOwnsPtySpawnResult(
         context.spawnOwnershipAttempt,
         spawnResult
       )
-      if (
-        !spawnResult.isReattach &&
-        !spawnResult.coldRestore &&
-        !context.ownsPtyId(spawnResult.id) &&
-        !successorOwnsResult
-      ) {
+      if (!successorOwnsResult) {
         await window.api.pty.kill(spawnResult.id)
       }
     }

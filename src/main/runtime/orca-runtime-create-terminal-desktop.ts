@@ -59,6 +59,9 @@ export async function createDesktopTerminal(
       ...(launchOpts.resumeProviderSession
         ? { resumeProviderSession: launchOpts.resumeProviderSession }
         : {}),
+      ...(launchOpts.resumesAgentSession
+        ? { resumesAgentSession: launchOpts.resumesAgentSession }
+        : {}),
       ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
       ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
       ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),

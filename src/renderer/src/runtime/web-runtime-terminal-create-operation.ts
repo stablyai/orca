@@ -164,6 +164,9 @@ export async function createWebRuntimeSessionTerminalResult(
               ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
               startupCommandDelivery: args.startupCommandDelivery,
               ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+              ...(args.resumesAgentSession
+                ? { resumesAgentSession: args.resumesAgentSession }
+                : {}),
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),
@@ -217,6 +220,7 @@ export async function createWebRuntimeSessionTerminalResult(
           ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
           startupCommandDelivery: args.startupCommandDelivery,
           ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+          ...(args.resumesAgentSession ? { resumesAgentSession: args.resumesAgentSession } : {}),
           ...(args.launchToken ? { launchToken: args.launchToken } : {}),
           ...(args.viewMode ? { viewMode: args.viewMode } : {}),
           // Why: old hosts understand activate:false; new hosts use select/navigation for caller-local focus.

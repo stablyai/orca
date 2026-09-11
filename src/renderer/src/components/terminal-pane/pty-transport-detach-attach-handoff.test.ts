@@ -75,7 +75,7 @@ describe('createIpcPtyTransport', () => {
     }
     const predecessor = createIpcPtyTransport(options)
     const successor = createIpcPtyTransport(options)
-    const predecessorConnect = predecessor.connect({ url: '', callbacks: {} })
+    const predecessorConnect = Promise.resolve(predecessor.connect({ url: '', callbacks: {} }))
     predecessor.detach?.()
     const successorConnect = successor.connect({ url: '', callbacks: {} })
 
@@ -92,6 +92,42 @@ describe('createIpcPtyTransport', () => {
 
     expect(kill).not.toHaveBeenCalled()
     expect(successor.getPtyId()).toBe('late-live-pty')
+  })
+
+  it('does not wait on ownership handoff for a stale reattach result', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    let resolveOld!: (result: { id: string; isReattach: true }) => void
+    let resolveSuccessor!: (result: { id: string; isReattach: true }) => void
+    const oldSpawn = new Promise<{ id: string; isReattach: true }>((resolve) => {
+      resolveOld = resolve
+    })
+    const successorSpawn = new Promise<{ id: string; isReattach: true }>((resolve) => {
+      resolveSuccessor = resolve
+    })
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockReset().mockReturnValueOnce(oldSpawn).mockReturnValueOnce(successorSpawn)
+
+    const options = {
+      tabId: 'tab-reattach',
+      leafId: '55555555-5555-4555-8555-555555555555'
+    }
+    const predecessor = createIpcPtyTransport(options)
+    const successor = createIpcPtyTransport(options)
+    const predecessorConnect = Promise.resolve(predecessor.connect({ url: '', callbacks: {} }))
+    predecessor.detach?.()
+    const successorConnect = successor.connect({ url: '', callbacks: {} })
+
+    resolveOld({ id: 'existing-pty', isReattach: true })
+    let predecessorSettled = false
+    void predecessorConnect.then(() => {
+      predecessorSettled = true
+    })
+    await vi.waitFor(() => expect(predecessorSettled).toBe(true), { timeout: 100 })
+    expect(kill).not.toHaveBeenCalled()
+
+    resolveSuccessor({ id: 'existing-pty', isReattach: true })
+    await successorConnect
   })
 
   // Why: retained gauges would inflate every later high-water profile.

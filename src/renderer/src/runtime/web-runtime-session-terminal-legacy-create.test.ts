@@ -354,7 +354,8 @@ describe('createWebRuntimeSessionTerminal', () => {
           agentArgs: '',
           agentEnv: { CODEX_PROFILE: 'captured' }
         },
-        providerSession: { key: 'session_id', id: 'session-1' }
+        providerSession: { key: 'session_id', id: 'session-1' },
+        resumesAgentSession: true
       })
     ).resolves.toEqual({ status: 'created' })
 
@@ -374,6 +375,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           agentArgs: '',
           agentEnv: { CODEX_PROFILE: 'captured' }
         },
+        resumesAgentSession: true,
         launchAgent: 'codex',
         activate: false,
         select: true,

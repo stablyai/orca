@@ -32,6 +32,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
       launchConfig?: SleepingAgentLaunchConfig
+      resumesAgentSession?: boolean
       signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
@@ -48,6 +49,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       env: opts.env,
       envToDelete: opts.envToDelete,
       ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+      ...(opts.resumesAgentSession ? { resumesAgentSession: opts.resumesAgentSession } : {}),
       ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
       startupCommandDelivery: opts.startupCommandDelivery,

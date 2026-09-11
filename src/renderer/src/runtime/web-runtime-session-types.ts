@@ -35,6 +35,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
   providerSession?: AgentProviderSessionMetadata
+  /** True when this startup re-enters an existing provider transcript. */
+  resumesAgentSession?: boolean
   viewMode?: 'terminal' | 'chat'
   activate?: boolean
   selectWorktree?: boolean
