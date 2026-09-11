@@ -44,6 +44,7 @@ function isRelatedCrashEvent(anchor: CrashReportRecord, candidate: CrashReportRe
  * Applies an amend. A `null` value WITHDRAWS the key rather than storing it — see
  * `attachDetails`. Nothing emits a null detail as data, and `record` never routes
  * through here, so the initial write can still store one if a producer ever needs it.
+ * `undefined` is not a withdrawal: sanitize drops it and the stored key survives.
  */
 function mergeCrashReportDetails(
   details: Record<string, CrashReportDetailValue>,
