@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   HOST_MIRROR_HANDLE_GAP_DEADLINE_MS,
-  countExpiredHostMirrorHandleWaitsForTests,
+  countExpiredHostMirrorHandleGapVerdictsForTests,
   hasHostMirrorHandleWaitExpired,
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
@@ -50,7 +50,7 @@ describe('host-mirror handle-gap expired verdicts', () => {
     parkUntilHostMirrorHandleLands('env-b', 'wt-1', 'tab-b', () => {})
     parkUntilHostMirrorHandleLands('env-c', 'wt-1', 'tab-c', () => {})
     expire()
-    expect(countExpiredHostMirrorHandleWaitsForTests()).toBe(3)
+    expect(countExpiredHostMirrorHandleGapVerdictsForTests()).toBe(3)
 
     // env-a and env-b reconnect; env-c never does, so its verdict still describes a live connection.
     setRuntimeEnvironmentConnectionGenerationForTests('env-a', 2)
@@ -67,7 +67,7 @@ describe('host-mirror handle-gap expired verdicts', () => {
     // env-c is on its original, still-live connection. Judging it against env-a's generation would
     // evict it and let env-c's sweep re-park a pane it had already given up on.
     expect(hasHostMirrorHandleWaitExpired('env-c', 'tab-c')).toBe(true)
-    expect(countExpiredHostMirrorHandleWaitsForTests()).toBe(2)
+    expect(countExpiredHostMirrorHandleGapVerdictsForTests()).toBe(2)
   })
 
   it('keeps the verdict for a pane on its own live connection', () => {
@@ -82,7 +82,7 @@ describe('host-mirror handle-gap expired verdicts', () => {
     expire()
     expect(hasHostMirrorHandleWaitExpired('env-a', 'tab-a')).toBe(true)
     expect(hasHostMirrorHandleWaitExpired('env-a', 'tab-a2')).toBe(true)
-    expect(countExpiredHostMirrorHandleWaitsForTests()).toBe(2)
+    expect(countExpiredHostMirrorHandleGapVerdictsForTests()).toBe(2)
   })
 
   // The residual hazard, recorded rather than fixed: the verdict is keyed on a tab id and is
@@ -90,6 +90,14 @@ describe('host-mirror handle-gap expired verdicts', () => {
   // verdict. If the host ever republishes that same tab id on the same connection, the new pane
   // inherits "your wait already expired" and skips its own — which is the #19735 shape. Clearing on
   // re-park would remove the loop-breaker, so this is pinned as behaviour, not changed.
+  //
+  // The tab-death prune does NOT close this, which both its author and I initially assumed it did;
+  // they measured it and told us otherwise. The reason is the trigger, not the predicate: the prune
+  // runs only inside `recordExpiredWait`, so it fires on the next expiry IN THAT ENVIRONMENT. Reuse
+  // the id before then and the entry is never swept — and once the id is republished the predicate
+  // stops matching it at all, because the tab is live again. So it is not even eventually
+  // consistent for this case. Closing it needs a trigger that fires on row retraction itself.
+  // Do not delete this test on the strength of that prune landing.
   it('keeps a retracted pane’s verdict, so a reused tab id inherits it', () => {
     setRuntimeEnvironmentConnectionGenerationForTests('env-a', 1)
     parkUntilHostMirrorHandleLands('env-a', 'wt-1', 'tab-a', () => {})

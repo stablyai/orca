@@ -171,7 +171,7 @@ export function countParkedHostMirrorHandleGapPanesForTests(): number {
   return waitersByPane.size
 }
 
-export function countExpiredHostMirrorHandleWaitsForTests(): number {
+export function countExpiredHostMirrorHandleGapVerdictsForTests(): number {
   return expiredGenerationByPane.size
 }
 
