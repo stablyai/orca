@@ -16889,8 +16889,8 @@
       "UnexpectedSignoutCard": {
         "9f2c1a4b7d": "You've been signed out",
         "3e8f5c2a91": "Dismiss",
-        "7b4d9e1f2a": "Your Orca Cloud session for {{value0}} ended. Sign in again to restore cloud features.",
-        "5a1c8d3e6f": "Your Orca Cloud session ended. Sign in again to restore cloud features.",
+        "7b4d9e1f2a": "Sign in again as {{value0}} to restore Artifact sharing, Orca Relay, and skill sharing.",
+        "5a1c8d3e6f": "Sign in again to restore Artifact sharing, Orca Relay, and skill sharing.",
         "1f6b2c9d4e": "What you get back",
         "8d2e4f7a1b": "Artifact sharing",
         "2c9a5b6e8d": "Publish HTML and Markdown files and manage every shared link from Orca.",
