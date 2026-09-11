@@ -13,10 +13,36 @@ import {
 import { deleteExpiredSearchFiles, drainOrphanedMessages } from './session-search-retention-delete'
 import { openSessionSearchDatabase } from './session-search-schema'
 
-// A paused store keeps recording what it declined, so the set needs a ceiling.
-// Above it the oldest record goes and the drop is counted, because a re-read set
-// that silently forgets is worse than one that says it is incomplete.
-export const STALE_PATH_LIMIT = 20_000
+/**
+ * What a row still owes a reader.
+ *
+ * `current`: the rows match the file at the stat this row records.
+ * `due`: the index is behind on a span it cannot reach by appending, so the
+ * next pass must read the file whole.
+ * `failed`: the last read did not commit; `failCount` and `failedMtimeMs` are
+ * what stop it being retried for ever.
+ */
+export type SessionSearchFileState = 'current' | 'due' | 'failed'
+
+/**
+ * One row of the index's own file table.
+ *
+ * This is the indexer's whole memory between passes: what it holds, at what
+ * stat, and what each row still owes. Nothing it decides is answered from
+ * anywhere else, which is why a second connection can check its status.
+ */
+export type SessionSearchFileRow = {
+  path: string
+  identity: SessionSearchFileIdentity
+  mtimeMs: number
+  sizeBytes: number | null
+  state: SessionSearchFileState
+  failCount: number
+  failedMtimeMs: number | null
+}
+
+/** How many rows are in each state; the whole of the indexer's progress report. */
+export type SessionSearchStateCounts = { current: number; due: number; failed: number }
 
 /**
  * Owns the index database. PR 2 scope: the write half only — the transcript
@@ -27,12 +53,7 @@ export class SessionSearchStore {
   private readonly db: SyncDatabase
   private readonly writer: SessionSearchIndexWriter
   private closed = false
-  private acceptingWrites = true
   private retentionCutoffMs: number | null = null
-  // Files this index knows it is behind on. Filled by a declined or abandoned
-  // read; PR 3's indexer drains it. Nothing here schedules the re-read.
-  private readonly stale = new Map<string, SessionFileCandidate>()
-  private droppedStalePaths = 0
   // One drain at a time. A replace that commits while one is running asks for
   // another pass rather than starting a second walk of the same rows.
   private draining = false
@@ -104,23 +125,26 @@ export class SessionSearchStore {
     return this.db
   }
 
-  setAcceptingWrites(accept: boolean): void {
-    this.acceptingWrites = accept
-  }
-
   /** The oldest transcript mtime worth indexing; PR 3 derives it from the retention setting. */
   setRetentionCutoffMs(cutoffMs: number | null): void {
     this.retentionCutoffMs = cutoffMs
   }
 
-  /** Whether this candidate is new enough to be worth holding rows for at all. */
-  private withinRetention(candidate: SessionFileCandidate): boolean {
-    return this.retentionCutoffMs === null || candidate.file.mtimeMs >= this.retentionCutoffMs
+  /** The cutoff a caller's own decide step compares a candidate's mtime against. */
+  get retentionCutoff(): number | null {
+    return this.retentionCutoffMs
   }
 
-  /** Whether a write for this candidate may start right now. */
-  acceptsCandidate(candidate: SessionFileCandidate): boolean {
-    return !this.closed && this.acceptingWrites && this.withinRetention(candidate)
+  /**
+   * Whether this candidate is new enough to hold rows for.
+   *
+   * Enforced here as well as in the indexer's decide step, and not only there:
+   * the consumer observes every read the session list makes, not only the ones
+   * the index asked for, so a sidebar scan of a transcript outside the window
+   * would otherwise index rows the next purge deletes again.
+   */
+  private withinRetention(candidate: SessionFileCandidate): boolean {
+    return this.retentionCutoffMs === null || candidate.file.mtimeMs >= this.retentionCutoffMs
   }
 
   indexedFile(path: string, identity: SessionSearchFileIdentity): SessionSearchIndexedFile | null {
@@ -139,7 +163,7 @@ export class SessionSearchStore {
     previousByteOffset: number,
     identity?: () => TranscriptSessionIdentity | null
   ): SessionSearchFileWrite | null {
-    if (!this.acceptsCandidate(candidate)) {
+    if (this.closed || !this.withinRetention(candidate)) {
       return null
     }
     try {
@@ -150,10 +174,14 @@ export class SessionSearchStore {
     }
   }
 
+  /**
+   * A read that landed. Written after the commit rather than inside it: the
+   * transaction owns the rows and the cursor, and a crash between the two
+   * leaves a row that says `failed` over content that is in fact current, which
+   * the next pass fixes by reading a file it did not have to.
+   */
   writeCommitted(candidate: SessionFileCandidate): void {
-    // Why: a list scan queues every file the backfill has not reached yet; once
-    // one lands, a later pass must not re-read the whole queue.
-    this.stale.delete(candidate.file.path)
+    this.setFileState(candidate.file.path, 'current')
   }
 
   reportWriteFailure(error: unknown): void {
@@ -161,55 +189,89 @@ export class SessionSearchStore {
   }
 
   /**
-   * Records a file whose content the index is behind on, for a later whole
-   * re-read. Recorded while paused too: a pause is exactly the window in which
-   * reads are declined, so refusing to remember them would lose every file the
-   * pause covered.
-   */
-  markStale(candidate: SessionFileCandidate): void {
-    if (this.closed || !this.withinRetention(candidate)) {
-      return
-    }
-    // Re-inserting moves the path to the end, so the oldest record is the one
-    // dropped when a long pause overruns the bound.
-    this.stale.delete(candidate.file.path)
-    this.stale.set(candidate.file.path, candidate)
-    while (this.stale.size > STALE_PATH_LIMIT) {
-      const oldest = this.stale.keys().next()
-      if (oldest.done) {
-        break
-      }
-      this.stale.delete(oldest.value)
-      this.droppedStalePaths += 1
-    }
-  }
-
-  /**
-   * Files the index knew it was behind on and could not keep a record of. A
-   * non-zero count means the re-read set is incomplete, so coverage cannot be
-   * reported as whole until a full pass runs.
-   */
-  get droppedPendingFileCount(): number {
-    return this.droppedStalePaths
-  }
-
-  /**
-   * Hands the re-read set to its scheduler and clears it.
+   * Every row this index holds. The candidate list for retirement and the whole
+   * of the status, read in one query so that no pass has to carry either.
    *
-   * These paths are behind, not merely dirty: the index declined their last read
-   * because it covered a span the index never saw. Re-dispatching a scan is not
-   * enough on its own, because the reader picks `append` from the session list's
-   * resume point and the consumer will decline again. The caller must pass each
-   * path to `requestWholeTranscriptRead` first.
+   * The cursor is deliberately not here: whether a row can be continued is
+   * `indexedFile`'s question, and one spelling of the half-written sentinel is
+   * enough.
    */
-  takeStale(): SessionFileCandidate[] {
-    const candidates = [...this.stale.values()]
-    this.stale.clear()
-    return candidates
+  files(): SessionSearchFileRow[] {
+    return (
+      this.db
+        .prepare(
+          `SELECT path, dev, ino, mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
+                  state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
+           FROM files`
+        )
+        .all() as (Omit<SessionSearchFileRow, 'identity'> & {
+        dev: number | null
+        ino: number | null
+      })[]
+    ).map((row) => ({
+      path: row.path,
+      identity:
+        typeof row.dev === 'number' && typeof row.ino === 'number'
+          ? { dev: row.dev, ino: row.ino }
+          : null,
+      mtimeMs: row.mtimeMs,
+      sizeBytes: row.sizeBytes,
+      state: row.state,
+      failCount: row.failCount,
+      failedMtimeMs: row.failedMtimeMs
+    }))
   }
 
-  get pendingFileCount(): number {
-    return this.stale.size
+  /**
+   * Moves a row's read state.
+   *
+   * `failed` also counts the failure and records the stat it happened at, which
+   * is what lets the next pass tell "this file has never worked" from "this
+   * file has changed since it last failed". A path with no row is a no-op: the
+   * next pass reads it because the index holds nothing for it.
+   */
+  setFileState(path: string, state: SessionSearchFileState, atMtimeMs?: number): void {
+    try {
+      if (state === 'failed') {
+        // Inserted when there is no row, because the common unreadable file is
+        // one the index never managed to hold: a transcript behind the wrong
+        // mode bits fails on its very first read, and with nowhere to write the
+        // count it would be read again on every pass for the life of the
+        // process. The cursor is zero and there is no session, which is what
+        // "the index holds nothing for this file" already looks like.
+        this.db
+          .prepare(
+            `INSERT INTO files(path, byte_offset, mtime_ms, state, fail_count, failed_mtime_ms)
+             VALUES (?, 0, ?, 'failed', 1, ?)
+             ON CONFLICT(path) DO UPDATE SET
+               state = 'failed',
+               fail_count = files.fail_count + 1,
+               failed_mtime_ms = excluded.failed_mtime_ms`
+          )
+          .run(path, atMtimeMs ?? 0, atMtimeMs ?? null)
+        return
+      }
+      this.db
+        .prepare(
+          'UPDATE files SET state = ?, fail_count = 0, failed_mtime_ms = NULL WHERE path = ?'
+        )
+        .run(state, path)
+    } catch (error) {
+      this.onError(error)
+    }
+  }
+
+  /** Rows per state. The status is this query and the pass's own degraded roots. */
+  stateCounts(): SessionSearchStateCounts {
+    const rows = this.db.prepare('SELECT state, count(*) AS n FROM files GROUP BY state').all() as {
+      state: SessionSearchFileState
+      n: number
+    }[]
+    const counts: SessionSearchStateCounts = { current: 0, due: 0, failed: 0 }
+    for (const row of rows) {
+      counts[row.state] = Number(row.n)
+    }
+    return counts
   }
 
   /**
@@ -218,7 +280,6 @@ export class SessionSearchStore {
    * (docs/reference/ssh-execution-boundary.md).
    */
   removeFile(path: string): void {
-    this.stale.delete(path)
     try {
       this.writer.removeFile(path)
     } catch (error) {

@@ -1,5 +1,6 @@
 import { PTY_LIVE_NOTE, describeUnconfirmedStop } from '../shared/pty-liveness-verdict'
 import { structuredChatPtyWriteRefusalCopy } from '../shared/agent-session-pty-write-refusal-copy'
+import { describeTerminalWaitBlockedReason } from '../shared/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
   RuntimeTerminalClose,
@@ -118,7 +119,10 @@ function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
   if (!agentWait) {
     return 'none'
   }
-  return `${agentWait.reason ?? 'interactive prompt'} (via ${agentWait.source})`
+  if (!agentWait.reason) {
+    return `interactive prompt (via ${agentWait.source})`
+  }
+  return `${describeTerminalWaitBlockedReason(agentWait.reason)} (via ${agentWait.source})`
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
@@ -278,7 +282,7 @@ export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): strin
     `exitCode: ${result.wait.exitCode ?? 'null'}`
   ]
   if (result.wait.blockedReason) {
-    lines.push(`blockedReason: ${result.wait.blockedReason}`)
+    lines.push(`blockedReason: ${describeTerminalWaitBlockedReason(result.wait.blockedReason)}`)
   }
   return lines.join('\n')
 }

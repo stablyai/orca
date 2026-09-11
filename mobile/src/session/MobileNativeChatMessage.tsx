@@ -82,7 +82,7 @@ function MobileNativeChatMessageImpl({
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
   onOpenFile?: (relativePath: string) => void
-  /** This turn's status row, rendered under a user message (desktop parity). */
+  /** This settled turn's status row, rendered under its user message. */
   turnStatus?: NativeChatTurnStatus | null
   /** Whether the turn caret has disclosed this turn's activity. */
   turnExpanded?: boolean

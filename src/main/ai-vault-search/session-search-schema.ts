@@ -57,7 +57,18 @@ CREATE TABLE IF NOT EXISTS files(
   byte_offset INTEGER NOT NULL,
   mtime_ms REAL NOT NULL,
   size_bytes INTEGER,
-  session_row_id INTEGER
+  session_row_id INTEGER,
+  -- What this row still owes a reader, so that nothing has to be remembered
+  -- between passes. 'current': the rows match the file at the stat recorded
+  -- here. 'due': the index is behind on content it cannot reach by appending,
+  -- so the next pass reads the file whole. 'failed': the last read did not
+  -- commit, and the two columns below are what stop it being retried for ever.
+  state TEXT NOT NULL DEFAULT 'current',
+  fail_count INTEGER NOT NULL DEFAULT 0,
+  -- The mtime the failures were observed at. A file that fails at one stat is
+  -- left alone once it has failed enough times, and only a change to this stat
+  -- can mean the file itself changed, so it is the whole retry policy.
+  failed_mtime_ms REAL
 );
 -- Retention walks the expiring end of this column; without it that is a full scan and a sort.
 CREATE INDEX IF NOT EXISTS files_mtime ON files(mtime_ms);

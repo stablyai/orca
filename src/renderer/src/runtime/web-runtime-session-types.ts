@@ -28,6 +28,8 @@ export type CreateWebRuntimeSessionTerminalArgs = {
   launchToken?: string
   agent?: TuiAgent
   launchAgent?: TuiAgent
+  /** The command already encodes the complete agent startup and prompt-delivery plan. */
+  preparedAgentCommand?: boolean
   agentSessionKind?: 'fresh' | 'resume'
   prompt?: string
   promptDelivery?: AgentPromptDelivery

@@ -137,8 +137,11 @@ it('rolls a whole file back when a write throws part way through its transaction
   expect(matches(index.db, 'messages_fts', 'firstgeneration')).toBe(3)
   expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, null)?.byteOffset).toBe(40)
   expect(errors).toHaveLength(1)
-  // The file is owed a re-read, which is the only reason anything was lost.
-  expect(store.takeStale().map((candidate) => candidate.file.path)).toEqual([SYNTHETIC_TRANSCRIPT])
+  // The row itself says the read failed, which is the only reason anything was
+  // lost and the only record that outlives this read.
+  expect(
+    index.db.prepare('SELECT state, fail_count FROM files WHERE path = ?').get(SYNTHETIC_TRANSCRIPT)
+  ).toMatchObject({ state: 'failed', fail_count: 1 })
 
   // And the connection is usable again: a transaction left open by the failure
   // would take down every write after it, not just the one that threw.
@@ -590,10 +593,16 @@ it('writes nothing for an incomplete read and owes the file a whole re-read', ()
   expect(counts(index.db)).toMatchObject({
     sessions: 0,
     messages: 0,
-    files: 0,
     full: 0
   })
-  expect(store.pendingFileCount).toBe(1)
+  // One row, holding nothing but the failure: an incomplete read indexes no
+  // content, and the count of how often it has happened at this stat is the
+  // only thing that stops the file being read again on every pass.
+  expect(index.db.prepare('SELECT byte_offset, state, fail_count FROM files').get()).toMatchObject({
+    byte_offset: 0,
+    state: 'failed',
+    fail_count: 1
+  })
   expect(errors).toEqual([])
 })
 

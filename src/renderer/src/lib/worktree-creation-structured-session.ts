@@ -12,6 +12,7 @@ import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
@@ -92,17 +93,21 @@ async function openLegacyWorktreeSurface(
     })
     return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
   }
-  return {
-    primaryTabId: ensureWorktreeHasInitialTerminal(
-      useAppStore.getState(),
-      args.worktreeId,
-      args.fallbackStartupOpt,
-      undefined,
-      undefined,
-      undefined,
-      { activateCreatedTabs: false, createNewTerminalForStartup: true }
-    )
-  }
+  const primaryTabId = ensureWorktreeHasInitialTerminal(
+    useAppStore.getState(),
+    args.worktreeId,
+    args.fallbackStartupOpt,
+    undefined,
+    undefined,
+    undefined,
+    { activateCreatedTabs: false, createNewTerminalForStartup: true }
+  )
+  ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
+    startup: args.fallbackStartupOpt,
+    agent: args.request.agent,
+    activate: false
+  })
+  return { primaryTabId }
 }
 
 export async function launchStructuredWorktreeSession(

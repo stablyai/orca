@@ -17,6 +17,10 @@ import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-l
 import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
 
+// Why shared: only a mounted workspace can park a tab, and the watcher sync only reads
+// this set, so every other surface would otherwise allocate its own empty one per fire.
+const NO_PARKED_TAB_IDS: ReadonlySet<string> = new Set()
+
 export function useTerminalWatcherEffects(controller: TerminalColdActivationController): void {
   const {
     activationDeferredMountTabIdsByWorktreeRef,
@@ -58,9 +62,11 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
         continue
       }
       const tabs = tabsByWorktree[workspaceId] ?? []
-      const parkedTabIds = new Set<string>()
+      let parkedTabIds: ReadonlySet<string> = NO_PARKED_TAB_IDS
       let deferredTabIds: ReadonlySet<string> | null = null
       if (!anyMountedWorktreeHasLayout && mountedWorktreeIdsRef.current.has(workspaceId)) {
+        const mountedParkedTabIds = new Set<string>()
+        parkedTabIds = mountedParkedTabIds
         const isVisible = activeView === 'terminal' && workspaceId === renderedActiveWorktreeId
         const shouldMeasureHiddenWorktree =
           !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspaceId)
@@ -75,7 +81,7 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
               tabId: tab.id
             })
             if (!activityTerminalPortal && !evictionExemptTerminalTabIds.has(tab.id)) {
-              parkedTabIds.add(tab.id)
+              mountedParkedTabIds.add(tab.id)
             }
           }
         }
@@ -83,14 +89,14 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
         for (const tab of tabs) {
           if (
             deferredTabIds?.has(tab.id) &&
-            !parkedTabIds.has(tab.id) &&
+            !mountedParkedTabIds.has(tab.id) &&
             canWatcherCoverParkedTerminalTab(workspaceId, tab) &&
             !findActivityTerminalPortal(activityTerminalPortals, {
               worktreeId: workspaceId,
               tabId: tab.id
             })
           ) {
-            parkedTabIds.add(tab.id)
+            mountedParkedTabIds.add(tab.id)
           }
         }
       }

@@ -2,6 +2,29 @@ import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration, planAgentBinary } from './commit-message-plan'
 
 describe('planCommitMessageGeneration', () => {
+  it('keeps extension-provided Pi models available in generated Git text plans', () => {
+    const result = planCommitMessageGeneration(
+      { agentId: 'pi', model: 'local-extension/model' },
+      'Write a commit message'
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.plan.args).not.toContain('--no-extensions')
+    expect(result.plan.args).toEqual(
+      expect.arrayContaining([
+        '--no-session',
+        '--no-tools',
+        '--no-skills',
+        '--no-context-files',
+        '--model',
+        'local-extension/model'
+      ])
+    )
+    expect(result.plan.stdinPayload).toBe('Write a commit message')
+  })
+
   it('plans Claude non-interactive generation with the prompt on stdin only', () => {
     const result = planCommitMessageGeneration(
       {

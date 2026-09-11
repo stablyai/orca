@@ -22,6 +22,7 @@ import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-st
 import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structured-session'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { markStructuredWorktreeLaunchUnconfirmed } from '@/lib/worktree-creation-structured-recovery'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
 // Why: activePendingCreationId can outlive the terminal route when the user
 // switches app views; only the terminal route renders the creation panel.
@@ -168,6 +169,7 @@ export async function executeWorktreeCreation(
   if (shouldActivateOnCompletion && !structuredLaunch) {
     activation = activateAndRevealWorktree(worktree.id, {
       sidebarRevealBehavior: 'auto',
+      ...(preparedRequest.agent !== null ? { agent: preparedRequest.agent } : {}),
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),
@@ -181,7 +183,7 @@ export async function executeWorktreeCreation(
       startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
     )
     primaryTabId =
-      structuredLaunch && !hasExplicitTerminalWork
+      preparedRequest.agent !== null && !hasExplicitTerminalWork
         ? null
         : ensureWorktreeHasInitialTerminal(
             useAppStore.getState(),
@@ -192,10 +194,17 @@ export async function executeWorktreeCreation(
             result.defaultTabs,
             {
               activateCreatedTabs: false,
-              ...(structuredLaunch ? { callerProvidesSurface: true } : {}),
+              ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
               ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
             }
           )
+    if (!structuredLaunch && !backendSpawned) {
+      ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
+        startup: startupOpt,
+        agent: preparedRequest.agent,
+        activate: false
+      })
+    }
   }
 
   let structuredLaunchAccepted = structuredLaunch

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -9,8 +9,14 @@ import type {
 import { projectStructuredItemsToNativeChat } from '../../../../shared/structured-agent-session-projection'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
+import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
 const scrollTo = vi.fn()
+let restoreViewport = (): void => {}
+beforeAll(() => {
+  restoreViewport = installNativeChatMessageListTestViewport()
+})
+afterAll(() => restoreViewport())
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
