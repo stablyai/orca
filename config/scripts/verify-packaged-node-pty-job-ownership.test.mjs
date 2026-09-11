@@ -109,6 +109,62 @@ describe('verifyPackagedConptyBreakawayMarker', () => {
     warn.mockRestore()
   })
 
+  // node-pty falls through build/Release -> build/Debug -> prebuilds/<platform>-<arch>, so a
+  // package with no build/Release addon loads the prebuild. Warning there passes exactly the
+  // package that ships the bug.
+  it('fails when the only loadable addon is the unpatched prebuild', () => {
+    expect(() =>
+      verifyPackagedConptyBreakawayMarker('resources', {
+        arch: 'arm64',
+        packagedConptyPath: () => join(fixtureDir, 'absent.node'),
+        prebuiltConptyPath: () => PRE_MSYS_ADDON
+      })
+    ).toThrow(/predates the Cygwin\/MSYS job-breakaway denial/)
+  })
+
+  it('accepts a package whose only addon is a patched prebuild', () => {
+    expect(() =>
+      verifyPackagedConptyBreakawayMarker('resources', {
+        arch: 'arm64',
+        packagedConptyPath: () => join(fixtureDir, 'absent.node'),
+        prebuiltConptyPath: () => CURRENT_ADDON
+      })
+    ).not.toThrow()
+  })
+
+  it('still warns when neither the build output nor a prebuild is there', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(() =>
+      verifyPackagedConptyBreakawayMarker('resources', {
+        arch: 'arm64',
+        packagedConptyPath: () => join(fixtureDir, 'absent.node'),
+        prebuiltConptyPath: () => join(fixtureDir, 'also-absent.node')
+      })
+    ).not.toThrow()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('could not check the MSYS'))
+    warn.mockRestore()
+  })
+
+  it('looks where the loader would find the prebuild fallback', () => {
+    const exists = vi.fn().mockReturnValue(false)
+    verifyPackagedConptyBreakawayMarker(join('out', 'win-arm64-unpacked', 'resources'), {
+      arch: 'arm64',
+      exists
+    })
+    expect(exists).toHaveBeenCalledWith(
+      join(
+        'out',
+        'win-arm64-unpacked',
+        'resources',
+        'node_modules',
+        'node-pty',
+        'prebuilds',
+        'win32-arm64',
+        'conpty.node'
+      )
+    )
+  })
+
   it('looks where electron-builder actually lands the addon', () => {
     const exists = vi.fn().mockReturnValue(false)
     verifyPackagedConptyBreakawayMarker(join('out', 'win-unpacked', 'resources'), { exists })
