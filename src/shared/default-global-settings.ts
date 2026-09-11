@@ -134,6 +134,7 @@ export function buildDefaultSettings(args: {
     sourceControlGroupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,
+    autoHideSingleTabStrip: false,
     showTasksButton: true,
     showAutomationsButton: true,
     artifactsEnabled: true,

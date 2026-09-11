@@ -229,6 +229,8 @@ export type GlobalSettings = {
   sourceControlCompareAgainstUpstream: boolean
   /** Whether to show the Orca app name in the titlebar. */
   showTitlebarAppName: boolean
+  /** Collapse a tab group's strip while it holds a single tab; hovering the group's top edge reveals it. */
+  autoHideSingleTabStrip?: boolean
   /** Hides the Tasks sidebar button (also removes it from keyboard navigation). */
   showTasksButton: boolean
   /** Only toggles the sidebar shortcut; Automations stay reachable from Settings/View menu. */

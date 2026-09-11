@@ -4,25 +4,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const setTabGroupSplitRatioMock = vi.fn()
 const recordFeatureInteractionMock = vi.fn()
 const setDragRootNodeMock = vi.fn()
-const useAppStoreMock = vi.fn(
-  (
-    selector: (state: {
-      recordFeatureInteraction: typeof recordFeatureInteractionMock
-      setTabGroupSplitRatio: typeof setTabGroupSplitRatioMock
-    }) => unknown
-  ) =>
-    selector({
-      recordFeatureInteraction: recordFeatureInteractionMock,
-      setTabGroupSplitRatio: setTabGroupSplitRatioMock
-    })
+type MockStoreState = {
+  recordFeatureInteraction: typeof recordFeatureInteractionMock
+  setTabGroupSplitRatio: typeof setTabGroupSplitRatioMock
+  groupsByWorktree: Record<string, unknown[]>
+  unifiedTabsByWorktree: Record<string, unknown[]>
+  settings: Record<string, unknown>
+}
+const useAppStoreMock = vi.fn((selector: (state: MockStoreState) => unknown) =>
+  selector({
+    recordFeatureInteraction: recordFeatureInteractionMock,
+    setTabGroupSplitRatio: setTabGroupSplitRatioMock,
+    groupsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    settings: {}
+  })
 )
 vi.mock('../../store', () => ({
-  useAppStore: (
-    selector: (state: {
-      recordFeatureInteraction: typeof recordFeatureInteractionMock
-      setTabGroupSplitRatio: typeof setTabGroupSplitRatioMock
-    }) => unknown
-  ) => useAppStoreMock(selector)
+  useAppStore: (selector: (state: MockStoreState) => unknown) => useAppStoreMock(selector)
+}))
+
+vi.mock('@/lib/pane-manager/client-hosted-browser-row-state', () => ({
+  useClientHostedBrowserRows: () => []
 }))
 
 vi.mock('./TabGroupPanel', () => ({

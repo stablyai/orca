@@ -158,6 +158,32 @@ export function GeneralPane({
             }
           />
         </SearchableSetting>
+        <SearchableSetting
+          title={translate(
+            'auto.components.settings.GeneralPane.autoHideSingleTabStrip',
+            'Hide the tab bar when a pane has one tab'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralPane.autoHideSingleTabStripDescription',
+            'Collapse the tab bar until you hover the top edge of the pane.'
+          )}
+          keywords={['tab', 'tab bar', 'hide', 'auto hide', 'single', 'strip']}
+        >
+          <SettingsSwitchRow
+            label={translate(
+              'auto.components.settings.GeneralPane.autoHideSingleTabStrip',
+              'Hide the tab bar when a pane has one tab'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralPane.autoHideSingleTabStripDescription',
+              'Collapse the tab bar until you hover the top edge of the pane.'
+            )}
+            checked={settings.autoHideSingleTabStrip === true}
+            onChange={() =>
+              updateSettings({ autoHideSingleTabStrip: settings.autoHideSingleTabStrip !== true })
+            }
+          />
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
