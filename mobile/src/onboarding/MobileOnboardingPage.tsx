@@ -47,26 +47,16 @@ export function MobileOnboardingPage({
           )}
         </View>
         <Text style={styles.title}>
-          {isSessionView ? 'How should sessions open?' : 'Enable notifications'}
+          {isSessionView ? 'How should sessions open?' : 'Stay updated while away'}
         </Text>
         <Text style={styles.body}>
           {isSessionView
             ? 'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
-            : 'Get notified when an agent finishes a task or needs your input.'}
+            : 'Get notified on this device when an agent needs your input or finishes a task.'}
         </Text>
-        {!isSessionView ? (
-          <Text style={styles.body}>
-            By default, notifications arrive after your desktop has been idle for 3 minutes.
-          </Text>
-        ) : null}
       </View>
 
       <View style={styles.footer}>
-        {!isSessionView ? (
-          <Text style={styles.disclosure}>
-            Delivered through Orca’s push service. Change this anytime in Settings.
-          </Text>
-        ) : null}
         {error ? (
           <Text style={styles.error} accessibilityRole="alert">
             {error}

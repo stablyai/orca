@@ -3,7 +3,6 @@ import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
 export type MobileSessionRouteParams = {
   hostId: string
   worktreeId: string
-  paneKey?: string
   name?: string
 }
 
@@ -12,11 +11,10 @@ export type MobileSessionRouteParams = {
 export function mobileSessionRouteTarget({
   hostId,
   worktreeId,
-  name,
-  paneKey
+  name
 }: MobileSessionRouteParams): HostStackRouteTarget {
   return {
     name: '[hostId]/session/[worktreeId]',
-    params: { hostId, worktreeId, ...(name ? { name } : {}), ...(paneKey ? { paneKey } : {}) }
+    params: name ? { hostId, worktreeId, name } : { hostId, worktreeId }
   }
 }

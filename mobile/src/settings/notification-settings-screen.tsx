@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, type ReactNode } from 'react'
-import { AppState, View, Text, StyleSheet, Pressable, Switch, ScrollView } from 'react-native'
+import { useState, useCallback, useEffect } from 'react'
+import { AppState, View, Text, StyleSheet, Pressable, Switch } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
@@ -16,17 +16,12 @@ const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
 
 export default function NotificationsScreen({
   operations,
-  onBack,
-  description,
-  children
+  onBack
 }: {
   operations: NotificationSettingsOperations
   onBack: () => void
-  description?: string
-  children?: (enabled: boolean) => ReactNode
 }) {
   const insets = useSafeAreaInsets()
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pushEnabled, setPushEnabled] = useState(false)
   const [permissionState, setPermissionState] = useState(DEFAULT_PERMISSION_STATE)
@@ -62,7 +57,6 @@ export default function NotificationsScreen({
 
   const togglePush = async (value: boolean) => {
     setError(null)
-    setSaving(true)
     try {
       const permission = await operations.permission(value)
       setPermissionState(permission)
@@ -70,8 +64,6 @@ export default function NotificationsScreen({
       setPushEnabled(saved.enabled)
     } catch {
       setError('Could not save notification settings. Try again.')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -79,17 +71,10 @@ export default function NotificationsScreen({
   const notificationsBlocked = permissionState.status === 'denied'
   const hint = notificationsBlocked
     ? 'Notifications are disabled in system settings.'
-    : (description ??
-      'Get notified on this device when an agent needs your input or finishes a task.')
+    : 'Get notified on this device when an agent needs your input or finishes a task.'
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{
-        paddingTop: insets.top + spacing.sm,
-        paddingBottom: insets.bottom + spacing.xl
-      }}
-    >
+    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>
         <Pressable
           accessibilityRole="button"
@@ -109,12 +94,12 @@ export default function NotificationsScreen({
       )}
       <View style={styles.section}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Enable notifications</Text>
+          <Text style={styles.rowLabel}>Agent notifications</Text>
           <Switch
             value={switchEnabled}
             testID="notification-enabled"
-            accessibilityLabel="Enable notifications"
-            disabled={notificationsBlocked || saving}
+            accessibilityLabel="Agent notifications"
+            disabled={notificationsBlocked}
             onValueChange={(v) => void togglePush(v)}
             trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
             thumbColor={colors.textPrimary}
@@ -138,8 +123,7 @@ export default function NotificationsScreen({
           </Pressable>
         )}
       </View>
-      {children?.(switchEnabled && !saving)}
-    </ScrollView>
+    </View>
   )
 }
 

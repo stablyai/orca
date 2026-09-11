@@ -90,13 +90,6 @@ export const mobileOnboardingStyles = StyleSheet.create({
     alignSelf: 'center',
     paddingBottom: spacing.lg
   },
-  disclosure: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    lineHeight: 18,
-    textAlign: 'center',
-    marginBottom: spacing.lg
-  },
   primaryButton: {
     minHeight: 44,
     alignItems: 'center',

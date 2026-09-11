@@ -29,21 +29,3 @@ Pick a custom desktop notification sound per category under [Settings → Notifi
 Supported formats: MP3, WAV, OGG, M4A, AAC, FLAC. One file applies to all delivered desktop notifications.
 
 When you use a custom sound, set its playback volume from the same settings pane.
-
-## Notifications on your phone
-
-Turn on **Enable notifications** in the mobile app to receive agent alerts, including while the app is closed. Notifications are delivered through Orca’s push service and Apple or Google.
-
-The service receives the notification title and text, a native push token, and opaque host and device IDs. Notification text is not end-to-end encrypted. Turning notifications off or unpairing queues removal of the push registration; an offline desktop completes that removal when contact returns.
-
-Alert types always follow each paired desktop’s notification settings. **Notification sound** and **Suppress while focused** apply only to the phone; the latter skips alerts for the workspace currently open there.
-
-**Only when away from desktop** is on by default. Phone alerts are suppressed while the desktop has had keyboard or mouse activity within the last three minutes. Locking the desktop allows alerts immediately. This includes activity in other desktop apps. Suppressed events do not arrive later as a backlog. When desktop presence cannot be determined, alerts are allowed.
-
-Notifications pause after seven days without a foreground mobile registration renewal. Open the mobile app and reconnect to resume. Using desktop alone does not renew this phone’s registration. The app renews while it is open and connected, including periodically during longer visits.
-
-Phone notifications require an updated paired desktop with push support. This mobile version does not create notifications from the live connection to older desktops; update the desktop to receive phone alerts. Headless hosts cannot determine desktop presence and do not infer it from SSH activity; agent completion detection still requires the desktop app. Android background delivery requires Google Play services.
-
-The push service temporarily stores pending notification content for delivery, for up to five minutes
-plus cleanup time. Content is cleared after processing; delivery identifiers and outcomes are retained
-for 24 hours for retry and duplicate protection. Alerts expire after five minutes.

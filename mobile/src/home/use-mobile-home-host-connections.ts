@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { decodeAccountsSnapshot } from '../components/AccountUsage'
 import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
-import { attachPushRegistration } from '../notifications/push-registration'
 import { usePrimeHosts } from '../transport/client-context'
 import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
 import { selectHomeAutoConnectHostIds } from '../transport/home-host-auto-connect'
@@ -38,15 +37,11 @@ function wireMobileHomeHostSubscriptions(
 ): () => void {
   let unsubscribeNotifications: (() => void) | null = null
   let unsubscribeAccounts: (() => void) | null = null
-  let detachPushRegistration: (() => void) | null = null
   const refetchGate = createHostConnectRefetchGate()
   const wireState = (state: ConnectionState): void => {
     const reconnected = refetchGate.observe(state)
     if (state === 'connected') {
       unsubscribeNotifications ??= subscribeToDesktopNotifications(entry.client, entry.hostId)
-      // Why here: this is the one place a host is known to be authenticated, which is
-      // what registerPush needs; it no-ops on hosts without the push capability.
-      detachPushRegistration ??= attachPushRegistration(entry.hostId, entry.client)
       unsubscribeAccounts ??= entry.client.subscribe('accounts.subscribe', null, (payload) => {
         if (!payload || typeof payload !== 'object') {
           return
@@ -83,8 +78,6 @@ function wireMobileHomeHostSubscriptions(
     unsubscribeNotifications = null
     unsubscribeAccounts?.()
     unsubscribeAccounts = null
-    detachPushRegistration?.()
-    detachPushRegistration = null
   }
   wireState(entry.state)
   const unsubscribeState = entry.client.onStateChange(wireState)
@@ -92,7 +85,6 @@ function wireMobileHomeHostSubscriptions(
     unsubscribeState()
     unsubscribeNotifications?.()
     unsubscribeAccounts?.()
-    detachPushRegistration?.()
   }
 }
 
