@@ -25,6 +25,7 @@ import type {
   AgentHookAuthorityEvidence,
   AgentHookProviderSessionIdentity,
   AgentHookStatusChangeEntry,
+  AgentHookStatusFreshnessObservation,
   AgentPromptSentDedupeEntry,
   EnrichedAgentHookEventPayload,
   NormalizedLocalHook,
@@ -38,6 +39,7 @@ import type {
   ServerStatusLineListener,
   StatusChangeListener,
   StatusDropListener,
+  StatusFreshnessListener,
   StatusRowMutationListener
 } from './server-types'
 
@@ -54,8 +56,11 @@ export abstract class AgentHookServerState {
   protected paneStatusClearListeners = new Set<PaneStatusClearListener>()
   protected statusDropListeners = new Set<StatusDropListener>()
   protected statusChangeListeners = new Set<StatusChangeListener>()
+  protected statusFreshnessListeners = new Set<StatusFreshnessListener>()
   protected providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
   protected statusRowMutationListeners = new Set<StatusRowMutationListener>()
+  // Hydration and spool replay belong to the owner lifetime, not each transport bind attempt.
+  protected ownerStateInitialized = false
   // Runtime terminal handles are stable across pane remints, unlike tab/leaf keys. This index is
   // deliberately in-memory only and contains no rows of its own.
   protected paneKeyByTerminalHandle = new Map<string, string>()
@@ -122,6 +127,9 @@ export abstract class AgentHookServerState {
     providerSessions: AgentHookProviderSessionIdentity[]
   }
   protected abstract notifyStatusChangeListeners(): void
+  protected abstract emitStatusFreshnessObservation(
+    status: AgentHookStatusFreshnessObservation
+  ): void
   protected abstract markTabClosedForAgentStatus(tabId: string): void
   protected abstract getAgentStatusDisposition(
     paneKey: string,

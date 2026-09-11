@@ -52,9 +52,15 @@ export type PersistedAgentHookAuthorityCommitment = {
 }
 
 export type AgentHookStatusChangeEntry = {
+  paneKey: string
   state: AgentStatusState
   receivedAt: number
   observedInCurrentRuntime: boolean
+}
+
+export type AgentHookStatusFreshnessObservation = AgentHookStatusChangeEntry & {
+  worktreeId?: string
+  terminalHandle?: string
 }
 
 export type AgentHookProviderSessionIdentity = {
@@ -79,6 +85,7 @@ export type AgentHookAuthorityAttestation = Readonly<{
 }>
 
 export type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+export type StatusFreshnessListener = (status: AgentHookStatusFreshnessObservation) => void
 export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void

@@ -36,19 +36,22 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.token = randomUUID()
     this.endpointFileWritten = false
     this.lastWrittenJson = null
-    // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
-    if (this.lastStatusFilePath) {
-      this.hydrateLastStatusFromDisk()
-    }
-    this.captureHydratedAuthorityCommitments()
-    // Drain before binding the listener so replay cannot race a live hook during startup.
-    if (this.endpointDir) {
-      drainAgentHookSpool({
-        endpointDir: this.endpointDir,
-        getPersistedLaunchTokenHash: (paneKey) =>
-          this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
-        ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
-      })
+    if (!this.ownerStateInitialized) {
+      // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
+      if (this.lastStatusFilePath) {
+        this.hydrateLastStatusFromDisk()
+      }
+      this.captureHydratedAuthorityCommitments()
+      // Drain before binding the listener so replay cannot race a live hook during startup.
+      if (this.endpointDir) {
+        drainAgentHookSpool({
+          endpointDir: this.endpointDir,
+          getPersistedLaunchTokenHash: (paneKey) =>
+            this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
+          ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
+        })
+      }
+      this.ownerStateInitialized = true
     }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
@@ -156,18 +159,23 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
         this.server!.listen(0, '127.0.0.1', onListening)
       })
     } catch (error) {
-      this.stop()
+      this.rollbackTransportStart()
       throw error
     }
+  }
+
+  private rollbackTransportStart(): void {
+    this.server?.close()
+    this.server = null
+    this.port = 0
+    this.token = ''
+    this.endpointFileWritten = false
   }
 
   stop(): void {
     // Why: flush the pending debounced write before clearing the map, else a hook <250ms before quit is lost on relaunch.
     this.flushStatusPersistSync()
-    this.server?.close()
-    this.server = null
-    this.port = 0
-    this.token = ''
+    this.rollbackTransportStart()
     this.env = 'production'
     this.onAgentStatus = null
     this.onClaudeStatusLine = null
@@ -201,12 +209,14 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
     this.activeHookTurnCompletedAtByPaneKey.clear()
     this.legacyPaneKeyAliases.clear()
     this.paneKeyAliasPersistenceListener = null
+    this.ownerStateInitialized = false
     // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
     this.paneStatusClearListeners.clear()
     this.statusDropListeners.clear()
     this.statusChangeListeners.clear()
+    this.statusFreshnessListeners.clear()
     this.providerSessionChangeListeners.clear()
     this.enrichedStatusListeners.clear()
     this.statusRowMutationListeners.clear()

@@ -4,6 +4,7 @@ import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-statu
 type WiredRuntime = {
   getTerminalWorktreeIdForHandle(handle: string): string | null
   getTerminalWorktreeIdForPaneKey(paneKey: string): string | null
+  scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId: string): void
   touchMobileSessionTabsForWorktree(worktreeId: string): void
 }
 

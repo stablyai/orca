@@ -3,10 +3,11 @@ import type { AgentHookServer } from './server'
 type SessionTabsRepublisher = {
   getTerminalWorktreeIdForHandle(handle: string): string | null
   getTerminalWorktreeIdForPaneKey(paneKey: string): string | null
+  scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId: string): void
   touchMobileSessionTabsForWorktree(worktreeId: string): void
 }
 
-type StatusStore = Pick<AgentHookServer, 'subscribeStatusRowMutations'>
+type StatusStore = Pick<AgentHookServer, 'subscribeStatusFreshness' | 'subscribeStatusRowMutations'>
 
 /**
  * Republish `session.tabs` whenever a pane's status row changes.
@@ -20,7 +21,17 @@ export function installHookStatusSessionTabsRepublish(
   statusStore: StatusStore,
   getRuntime: () => SessionTabsRepublisher | null | undefined
 ): () => void {
-  return statusStore.subscribeStatusRowMutations((mutation) => {
+  const resolveWorktreeId = (
+    identity: { paneKey: string; worktreeId?: string; terminalHandle?: string },
+    runtime: SessionTabsRepublisher
+  ): string | null =>
+    identity.worktreeId ??
+    (identity.terminalHandle
+      ? runtime.getTerminalWorktreeIdForHandle(identity.terminalHandle)
+      : null) ??
+    runtime.getTerminalWorktreeIdForPaneKey(identity.paneKey)
+
+  const unsubscribeMutations = statusStore.subscribeStatusRowMutations((mutation) => {
     const runtime = getRuntime()
     if (!runtime) {
       return
@@ -30,12 +41,7 @@ export function installHookStatusSessionTabsRepublish(
       if (!identity) {
         continue
       }
-      const worktreeId =
-        identity.worktreeId ??
-        (identity.terminalHandle
-          ? runtime.getTerminalWorktreeIdForHandle(identity.terminalHandle)
-          : null) ??
-        runtime.getTerminalWorktreeIdForPaneKey(identity.paneKey)
+      const worktreeId = resolveWorktreeId(identity, runtime)
       if (worktreeId) {
         worktreeIds.add(worktreeId)
       }
@@ -44,4 +50,18 @@ export function installHookStatusSessionTabsRepublish(
       runtime.touchMobileSessionTabsForWorktree(worktreeId)
     }
   })
+  const unsubscribeFreshness = statusStore.subscribeStatusFreshness((status) => {
+    const runtime = getRuntime()
+    if (!runtime) {
+      return
+    }
+    const worktreeId = resolveWorktreeId(status, runtime)
+    if (worktreeId) {
+      runtime.scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId)
+    }
+  })
+  return () => {
+    unsubscribeMutations()
+    unsubscribeFreshness()
+  }
 }

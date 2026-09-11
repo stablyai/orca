@@ -263,6 +263,14 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (firstRuntimeObservation) {
       this.notifyStatusChangeListeners()
     }
+    this.emitStatusFreshnessObservation({
+      paneKey: refreshed.paneKey,
+      state: refreshed.payload.state,
+      receivedAt: refreshed.receivedAt,
+      observedInCurrentRuntime: true,
+      ...(refreshed.worktreeId ? { worktreeId: refreshed.worktreeId } : {}),
+      ...(refreshed.terminalHandle ? { terminalHandle: refreshed.terminalHandle } : {})
+    })
   }
 
   // Why: every status emit must reach plugins too, so a new early-return path

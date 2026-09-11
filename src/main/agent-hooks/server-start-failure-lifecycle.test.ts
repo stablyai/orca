@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as NodeHttp from 'node:http'
@@ -37,7 +37,7 @@ afterEach(() => {
 })
 
 describe('AgentHookServer startup failure lifecycle', () => {
-  it('cleans a failed hydrated start, retries, publishes hook env, and stops repeatedly', async () => {
+  it('rolls back only transport on bind failure and preserves owner state through retry', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-hook-start-failure-'))
     const persisted = new AgentHookServer()
     await persisted.start({ env: 'production', userDataPath })
@@ -51,6 +51,17 @@ describe('AgentHookServer startup failure lifecycle', () => {
       'ssh-lifecycle'
     )
     persisted.stop()
+    const server = new AgentHookServer()
+    const rendererListener = vi.fn()
+    const statusChanges = vi.fn()
+    const freshness = vi.fn()
+    const enrichedStatuses = vi.fn()
+    const rowMutations = vi.fn()
+    server.setListener(rendererListener)
+    server.subscribeStatusChanges(statusChanges)
+    server.subscribeStatusFreshness(freshness)
+    server.subscribeEnrichedStatus(enrichedStatuses)
+    server.subscribeStatusRowMutations(rowMutations)
 
     try {
       let startupErrorListener: ((error: Error) => void) | null = null
@@ -70,17 +81,49 @@ describe('AgentHookServer startup failure lifecycle', () => {
       }
       createServerMock.mockImplementationOnce(() => failedServer)
 
-      const server = new AgentHookServer()
       await expect(server.start({ env: 'production', userDataPath })).rejects.toThrow(
         'listener unavailable'
       )
       expect(failedServer.close).toHaveBeenCalledOnce()
       expect(server.buildPtyEnv()).toEqual({})
-      expect(server.getStatusSnapshot()).toEqual([])
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({ paneKey: PANE, prompt: 'surviving PTY' })
+      ])
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-lifecycle',
+          worktreeId: 'wt-lifecycle',
+          payload: { state: 'working', prompt: 'newer in-process state', agentType: 'codex' }
+        },
+        'ssh-lifecycle'
+      )
+      const duplicateOsc = {
+        paneKey: PANE,
+        tabId: 'tab-lifecycle',
+        worktreeId: 'wt-lifecycle',
+        connectionId: 'ssh-lifecycle',
+        payload: { state: 'working' as const, prompt: 'newer in-process state', agentType: 'codex' }
+      }
+      server.ingestTerminalStatus(duplicateOsc)
+
+      expect(rendererListener).toHaveBeenCalledTimes(1)
+      expect(enrichedStatuses).toHaveBeenCalledTimes(1)
+      expect(rowMutations).toHaveBeenCalledTimes(1)
+      expect(statusChanges).toHaveBeenCalledTimes(1)
+      expect(freshness).toHaveBeenCalledTimes(1)
+      expect(
+        JSON.parse(readFileSync(server.lastStatusPath!, 'utf8')).entries[PANE].payload.prompt
+      ).toBe('surviving PTY')
 
       await server.start({ env: 'production', userDataPath })
       expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({ paneKey: PANE, worktreeId: 'wt-lifecycle' })
+        expect.objectContaining({
+          paneKey: PANE,
+          worktreeId: 'wt-lifecycle',
+          prompt: 'newer in-process state'
+        })
       ])
       expect(server.buildPtyEnv()).toMatchObject({
         ORCA_AGENT_HOOK_ENV: 'production',
@@ -88,12 +131,35 @@ describe('AgentHookServer startup failure lifecycle', () => {
         ORCA_AGENT_HOOK_TOKEN: expect.any(String),
         ORCA_AGENT_HOOK_ENDPOINT: server.endpointFilePath
       })
+      server.ingestTerminalStatus(duplicateOsc)
+      expect(freshness).toHaveBeenCalledTimes(2)
+      expect(rendererListener).toHaveBeenCalledTimes(1)
+      expect(enrichedStatuses).toHaveBeenCalledTimes(1)
+      expect(rowMutations).toHaveBeenCalledTimes(1)
+      expect(statusChanges).toHaveBeenCalledTimes(1)
+
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-lifecycle',
+          worktreeId: 'wt-lifecycle',
+          payload: { state: 'done', prompt: 'newer in-process state', agentType: 'codex' }
+        },
+        'ssh-lifecycle'
+      )
+      expect(rendererListener).toHaveBeenCalledTimes(2)
+      expect(enrichedStatuses).toHaveBeenCalledTimes(2)
+      expect(rowMutations).toHaveBeenCalledTimes(2)
+      expect(statusChanges).toHaveBeenCalledTimes(2)
 
       server.stop()
       server.stop()
       expect(server.buildPtyEnv()).toEqual({})
       expect(server.getStatusSnapshot()).toEqual([])
+      expect(statusChanges).toHaveBeenCalledTimes(3)
+      expect(statusChanges).toHaveBeenLastCalledWith([])
     } finally {
+      server.stop()
       persisted.stop()
       rmSync(userDataPath, { recursive: true, force: true })
     }

@@ -13,6 +13,7 @@ export type {
   AgentHookProviderSessionIdentity,
   AgentHookStatusRowMutation,
   AgentHookStatusChangeEntry,
+  AgentHookStatusFreshnessObservation,
   EnrichedAgentHookEventPayload
 } from './server/server-types'
 export type { AgentHookSource }

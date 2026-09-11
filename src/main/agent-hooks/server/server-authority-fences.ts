@@ -1,8 +1,11 @@
 import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
-import type { RetiredPaneAlias, RetiredPaneFence } from './server-types'
-import type { EnrichedAgentHookEventPayload } from './server-types'
+import type {
+  EnrichedAgentHookEventPayload,
+  RetiredPaneAlias,
+  RetiredPaneFence
+} from './server-types'
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
   // Why: retirement fences a pane and every alias of it, then deletes those aliases.
