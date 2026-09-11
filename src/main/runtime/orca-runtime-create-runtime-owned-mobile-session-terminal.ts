@@ -32,6 +32,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       launchAgent?: TuiAgent
       viewMode?: 'terminal' | 'chat'
       targetGroupId?: string
+      supportsSplitGroupPlacement?: boolean
       launchConfig?: SleepingAgentLaunchConfig
       signal?: AbortSignal
     } = {}
@@ -113,7 +114,8 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
         isActive: activate ? false : candidate.isActive
       })),
       tab,
-      afterTabId
+      afterTabId,
+      { afterParentGroup: opts.supportsSplitGroupPlacement !== false }
     )
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { useMobileSessionTerminalCreateActions } from './use-mobile-session-terminal-create-actions'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 
 vi.mock('../platform/haptics', () => ({
   triggerSuccess: vi.fn(),
@@ -36,6 +37,7 @@ function createScope(client: RpcClient) {
   return {
     worktreeId: 'workspace-1',
     client,
+    hostCapabilities: [],
     connState: 'connected',
     setTerminals: vi.fn(),
     terminalsRef: { current: [] },
@@ -307,6 +309,7 @@ describe('optimistic placement of a created tab', () => {
 
   it('paints after the active split parent, matching headed host placement', async () => {
     const scope = createScope(clientReturning(terminalCreateResponse()))
+    scope.hostCapabilities = [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
     scope.activeSessionTabId = 'existing-tab::left'
     await createLegacyTerminal(scope)
 
@@ -317,6 +320,20 @@ describe('optimistic placement of a created tab', () => {
         { id: 'trailing-tab' }
       ])
     ).toEqual(['existing-tab::left', 'existing-tab::right', 'terminal-tab-1', 'trailing-tab'])
+  })
+
+  it('keeps legacy leaf placement for an older host', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    scope.activeSessionTabId = 'existing-tab::left'
+    await createLegacyTerminal(scope)
+
+    expect(
+      tabIdsAfterCreate(scope, [
+        { id: 'existing-tab::left', parentTabId: 'existing-tab' },
+        { id: 'existing-tab::right', parentTabId: 'existing-tab' },
+        { id: 'trailing-tab' }
+      ])
+    ).toEqual(['existing-tab::left', 'terminal-tab-1', 'existing-tab::right', 'trailing-tab'])
   })
 
   it('sends the same anchor it paints with', async () => {

@@ -14,6 +14,7 @@ import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { useLiveWorktreeName } from './use-live-worktree-name'
 import { useMissingWorktreeBounce } from './use-missing-worktree-bounce'
 import { hostRouteWithNotice } from '../host-route-notice'
+import { useHostProtocolGates } from '../components/HostProtocolGate'
 
 export function useMobileSessionFoundation() {
   const {
@@ -36,6 +37,7 @@ export function useMobileSessionFoundation() {
   const insets = useSafeAreaInsets()
   // Why: shared client per host owned by RpcClientProvider (docs/mobile-shared-client-per-host.md).
   const { client, clientId, state: connState } = useHostClient(hostId)
+  const { hostCapabilities } = useHostProtocolGates()
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
@@ -98,6 +100,7 @@ export function useMobileSessionFoundation() {
     client,
     clientId,
     connState,
+    hostCapabilities,
     reconnectAttempts,
     lastConnectedAt,
     forceReconnectHost,

@@ -13,11 +13,13 @@ import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachm
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
 import { placeCreatedSessionTab } from '../../../src/shared/session-tab-placement'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {
     worktreeId,
     client,
+    hostCapabilities,
     connState,
     setTerminals,
     terminalsRef,
@@ -127,7 +129,11 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           if (prev.some((tab) => tab.id === created.id)) {
             return prev
           }
-          return placeCreatedSessionTab(prev, { ...created, isActive: true }, afterTabId)
+          return placeCreatedSessionTab(prev, { ...created, isActive: true }, afterTabId, {
+            afterParentGroup: hostCapabilities?.includes(
+              SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
+            )
+          })
         })
         if (typeof created.terminal === 'string') {
           const createdHandle = created.terminal

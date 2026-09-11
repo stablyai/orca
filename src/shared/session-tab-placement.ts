@@ -1,8 +1,13 @@
-/** Places a created tab after the anchor's top-level terminal group, or appends when unanchored. */
+export type SessionTabPlacementOptions = {
+  afterParentGroup?: boolean
+}
+
+/** Places a created tab after the anchor, or after its parent group when enabled. */
 export function placeCreatedSessionTab<T extends { id: string; parentTabId?: string }>(
   tabs: readonly T[],
   created: T,
-  afterTabId: string | null | undefined
+  afterTabId: string | null | undefined,
+  options: SessionTabPlacementOptions = {}
 ): T[] {
   const next = tabs.filter((tab) => tab.id !== created.id)
   const anchor = afterTabId ? next.findIndex((tab) => tab.id === afterTabId) : -1
@@ -12,12 +17,11 @@ export function placeCreatedSessionTab<T extends { id: string; parentTabId?: str
   }
   let insertAfter = anchor
   const anchorParentTabId = next[anchor].parentTabId
-  if (anchorParentTabId) {
-    while (
-      insertAfter + 1 < next.length &&
-      next[insertAfter + 1].parentTabId === anchorParentTabId
-    ) {
-      insertAfter += 1
+  if (options.afterParentGroup && anchorParentTabId) {
+    for (let index = anchor + 1; index < next.length; index += 1) {
+      if (next[index].parentTabId === anchorParentTabId) {
+        insertAfter = index
+      }
     }
   }
   next.splice(insertAfter + 1, 0, created)
