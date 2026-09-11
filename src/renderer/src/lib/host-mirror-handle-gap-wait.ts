@@ -159,6 +159,11 @@ function recordExpiredWait(environmentId: string, key: string): void {
   // wait just ran out. Re-reading here would attribute it to whatever holds the id NOW, handing a
   // pane that replaced it mid-wait a verdict it never served. The caller must therefore record
   // BEFORE `releaseWaiter` deletes the entry; the union suite pins that ordering.
+  // The `?? ''` is unreachable solely because of the record-before-release ordering above it. The
+  // caller's generation gate LOOKS like a second guard on it and is not: drop the ordering and that
+  // gate stops recording anything at all rather than admitting ''. It pins a different property
+  // (reconnect-void, host-mirror-handle-gap-resume.test.ts). Both are load-bearing, for different
+  // reasons — do not collapse them as redundant.
   expiredGenerationByPane.set(key, {
     generation,
     paneBinding: waitersByPane.get(key)?.paneBinding ?? ''
