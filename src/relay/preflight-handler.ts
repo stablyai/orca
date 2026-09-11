@@ -8,6 +8,7 @@ import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
+import { IDENTITY_PROBED_TUI_AGENT_IDS } from '../shared/tui-agent-detection-commands'
 import {
   getTuiAgentIdentityProbeArgs,
   matchesTuiAgentIdentityProbe,
@@ -41,7 +42,6 @@ type AgentDetectionCommand = {
 const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
 const AGENT_PATH_PREFIX = '__ORCA_AGENT_PATH__'
-const IDENTITY_REQUIRED_AGENT_IDS = new Set(['fx'])
 
 export class PreflightHandler {
   private dispatcher: RelayDispatcher
@@ -107,7 +107,7 @@ export class PreflightHandler {
                 foundCommands.has(command.cmd) &&
                 (command.identityProbe
                   ? identityVerifiedCommands.has(command.cmd)
-                  : !IDENTITY_REQUIRED_AGENT_IDS.has(command.id)) &&
+                  : !IDENTITY_PROBED_TUI_AGENT_IDS.has(command.id)) &&
                 (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
             )
             .map(({ id }) => id)

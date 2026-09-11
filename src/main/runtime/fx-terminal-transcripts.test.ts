@@ -85,6 +85,49 @@ describe('fx terminal evidence', () => {
     await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
   })
 
+  it('matches a command dialog whose command body wraps across four lines', async () => {
+    const transcript = [
+      '────────────────────────────────────────',
+      '  Permission needed · Choose one',
+      '  Would you like to run the following command?',
+      '  $ # shell.run profile=clean shell=/bin/zsh',
+      '    pnpm exec vitest run',
+      '    --config config/vitest.config.ts',
+      '    src/main/runtime/fx-terminal-transcripts.test.ts',
+      '    --reporter=dot',
+      '  ❯ 1. Yes',
+      "    2. Yes, and don't ask again for this exact command",
+      '    3. No',
+      '────────────────────────────────────────',
+      '  1–3 Choose now    ↑↓ Options    Tab Amend    Enter Confirm    Esc Cancel'
+    ].join('\n')
+    const { runtime, handle } = await createFxTranscriptPane(transcript)
+
+    await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toMatchObject({
+      source: 'prompt-text',
+      reason: 'agent-approval-prompt'
+    })
+  })
+
+  it('does not treat an unpunctuated copied command dialog as live', async () => {
+    const transcript = [
+      'Permission needed Choose one',
+      'Would you like to run the following command',
+      '$ shellrun profileclean shellbinzsh',
+      'pnpm exec vitest run',
+      'config configvitestconfigts',
+      'srcmainruntimefxterminaltranscriptstestts',
+      'reporterdot',
+      '1 Yes',
+      '2 Yes and dont ask again for this exact command',
+      '3 No',
+      '1–3 Choose now ↑↓ Options Tab Amend Enter Confirm Esc Cancel'
+    ].join('\n')
+    const { runtime, handle } = await createFxTranscriptPane(transcript)
+
+    await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
+  })
+
   it('does not treat quoted or narrated approval wording as a live dialog', async () => {
     const transcript = [
       'The earlier dialog was headed "Permission needed".',

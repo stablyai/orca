@@ -120,8 +120,8 @@ describe('preflight', () => {
     })
   })
 
-  it('sends agent detection commands through the SSH remote preflight path', async () => {
-    const request = vi.fn().mockResolvedValue({ agents: ['openclaude', 'fx'], identityProbes: 1 })
+  it('accepts newer identity-probe attestation through the SSH remote preflight path', async () => {
+    const request = vi.fn().mockResolvedValue({ agents: ['openclaude', 'fx'], identityProbes: 2 })
     getActiveMultiplexerMock.mockReturnValue({
       isDisposed: () => false,
       request

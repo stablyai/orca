@@ -44,6 +44,7 @@ import {
 import {
   getTuiAgentDetectionProbeCommands,
   getTuiAgentIdentityProbeArgs,
+  IDENTITY_PROBED_TUI_AGENT_IDS,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   matchesTuiAgentIdentityProbe,
   resolveDetectedTuiAgentIds,
@@ -145,26 +146,39 @@ async function detectCommandRuntime(
   return { installed: false }
 }
 
+type IdentityProbeOutcome = 'match' | 'mismatch' | 'unavailable'
+
+async function runIdentityProbe(
+  command: TuiAgentDetectionCommand,
+  runProbe: (command: TuiAgentDetectionCommand) => Promise<string>
+): Promise<IdentityProbeOutcome> {
+  try {
+    const output = await runProbe(command)
+    return command.identityProbe && matchesTuiAgentIdentityProbe(command.identityProbe, output)
+      ? 'match'
+      : 'mismatch'
+  } catch {
+    return 'unavailable'
+  }
+}
+
 async function verifyDetectedCommandIdentities(
   foundCommands: ReadonlySet<string>,
   runProbe: (command: TuiAgentDetectionCommand) => Promise<string>
 ): Promise<Set<string>> {
-  const verified = new Set<string>()
-  await Promise.all(
+  const outcomes = await Promise.all(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter(
       (command) => command.identityProbe && foundCommands.has(command.cmd)
-    ).map(async (command) => {
-      try {
-        const output = await runProbe(command)
-        if (command.identityProbe && matchesTuiAgentIdentityProbe(command.identityProbe, output)) {
-          verified.add(command.cmd)
-        }
-      } catch {
-        // Identity failure withholds the ambiguous executable from automatic detection.
-      }
-    })
+    ).map(async (command) => ({
+      command,
+      outcome: await runIdentityProbe(command, runProbe)
+    }))
   )
-  return verified
+  // Probe execution failures stay fail-closed for this call but are not retained,
+  // so a later detection call can retry instead of treating them as a mismatch.
+  return new Set(
+    outcomes.filter(({ outcome }) => outcome === 'match').map(({ command }) => command.cmd)
+  )
 }
 
 function buildWslIdentityProbeCommand(command: TuiAgentDetectionCommand): string {
@@ -300,12 +314,6 @@ export async function refreshShellPathAndDetectAgents(
   }
 }
 
-const IDENTITY_PROBED_AGENT_IDS = new Set<string>(
-  KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) => command.identityProbe).map(
-    (command) => command.id
-  )
-)
-
 export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
   const mux = getActiveMultiplexer(args.connectionId)
   if (!mux || mux.isDisposed()) {
@@ -319,8 +327,8 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
   const agents = Array.isArray(result.agents)
     ? uniqueAgentIds(result.agents.filter((agent): agent is string => typeof agent === 'string'))
     : []
-  if (result.identityProbes !== 1) {
-    return agents.filter((agent) => !IDENTITY_PROBED_AGENT_IDS.has(agent))
+  if (typeof result.identityProbes !== 'number' || result.identityProbes < 1) {
+    return agents.filter((agent) => !IDENTITY_PROBED_TUI_AGENT_IDS.has(agent))
   }
   return agents
 }

@@ -17,6 +17,7 @@ const {
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   detectCommandsInInstallDirsMock,
+  isCommandOnLocalPathMock,
   mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
@@ -30,6 +31,7 @@ const {
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   detectCommandsInInstallDirsMock: vi.fn(),
+  isCommandOnLocalPathMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn()
 }))
@@ -49,6 +51,7 @@ vi.mock('../startup/hydrate-shell-path', () => ({
 }))
 
 vi.mock('./ssh', () => ({ getActiveMultiplexer: getActiveMultiplexerMock }))
+vi.mock('./command-path-resolver', () => ({ isCommandOnLocalPath: isCommandOnLocalPathMock }))
 vi.mock('../bitbucket/client', () => ({ getBitbucketAuthStatus: getBitbucketAuthStatusMock }))
 vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsAuthStatus: getAzureDevOpsAuthStatusMock
@@ -85,6 +88,8 @@ describe('#9297: local agent detection spawns zero where/which subprocesses', ()
     })
     detectCommandsInInstallDirsMock.mockReset()
     detectCommandsInInstallDirsMock.mockReturnValue(new Set<string>())
+    isCommandOnLocalPathMock.mockReset()
+    isCommandOnLocalPathMock.mockResolvedValue(false)
     // Empty PATH -> deterministic "no agents found" regardless of the host's
     // real installed CLIs, so the assertion is stable on any dev machine.
     process.env.PATH = ''
@@ -117,4 +122,21 @@ describe('#9297: local agent detection spawns zero where/which subprocesses', ()
       expect(agents).toEqual([])
     })
   }
+
+  it('permits only the bounded identity probe when fx is present', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    isCommandOnLocalPathMock.mockImplementation(async (command: string) => command === 'fx')
+    execFileAsyncMock.mockResolvedValue({
+      stdout: '𝒇x v0.0.8\nFast, native coding agent for the terminal.\n',
+      stderr: ''
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['fx'])
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      expect.stringMatching(/(?:^|\/)fx$/),
+      ['--help'],
+      expect.objectContaining({ timeout: 5000, windowsHide: true })
+    )
+  })
 })

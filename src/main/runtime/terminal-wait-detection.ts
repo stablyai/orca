@@ -216,34 +216,70 @@ function findTerminalWaitBlockedSignal(
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const windowStart = startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
   const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
-  // Why: one combined negative scan avoids a dozen searches when no prompt can match.
-  if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
-    return null
+  const liveWindowSignal = TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)
+    ? findBlockedSignalInLiveWindow(normalized)
+    : null
+  const genericSignal =
+    liveWindowSignal === null
+      ? null
+      : { reason: liveWindowSignal.reason, index: liveWindowSignal.index + windowStart }
+  // fx command bodies can wrap beyond the generic bounded window. Its structural
+  // footer and dialog boundaries keep the full-tail scan tied to the live screen.
+  const fxApprovalIndex = findFxApprovalPromptIndex(fullTail)
+  const fxSignal =
+    fxApprovalIndex === null
+      ? null
+      : ({ reason: 'agent-approval-prompt', index: fxApprovalIndex } as const)
+  if (genericSignal === null) {
+    return fxSignal
   }
-  const signal = findBlockedSignalInLiveWindow(normalized)
-  // Why: callers compare this index against ready-header indexes found over the full tail.
-  return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
+  return fxSignal !== null && fxSignal.index > genericSignal.index ? fxSignal : genericSignal
 }
 
-const FX_APPROVAL_TAIL_LINES = 10
+const FX_DIALOG_BOUNDARY_RE = /[─━═╌╍┄┅┈┉]{3,}/g
+const FX_SELECTABLE_CHOICE_RE = /(?:^|\n)\s*\d+(?:\.|\s)\s*\S|❯\s*\d+(?:\.|\s)\s*\S/
+
+type FxDialogBoundary = { index: number; end: number }
+
+function findLastFxDialogBoundaryBefore(
+  normalized: string,
+  beforeIndex: number
+): FxDialogBoundary | null {
+  let lastBoundary: FxDialogBoundary | null = null
+  for (const match of normalized.slice(0, beforeIndex).matchAll(FX_DIALOG_BOUNDARY_RE)) {
+    lastBoundary = { index: match.index, end: match.index + match[0].length }
+  }
+  return lastBoundary
+}
 
 function findFxApprovalPromptIndex(normalized: string): number | null {
-  const windowStart = startOfLastNonBlankLines(normalized, FX_APPROVAL_TAIL_LINES)
-  const tail = normalized.slice(windowStart)
-  const permissionIndex = tail.lastIndexOf('permission needed')
-  if (permissionIndex === -1) {
+  const liveTail = normalized.trimEnd()
+  const cancelIndex = liveTail.lastIndexOf('esc cancel')
+  if (cancelIndex === -1 || cancelIndex + 'esc cancel'.length !== liveTail.length) {
     return null
   }
-  const footer = tail.slice(permissionIndex).trimEnd().split('\n').at(-1) ?? ''
-  const chooseIndex = footer.indexOf('choose now')
-  const confirmIndex = footer.indexOf('enter confirm')
-  const cancelIndex = footer.indexOf('esc cancel')
-  return chooseIndex !== -1 &&
-    confirmIndex > chooseIndex &&
-    cancelIndex > confirmIndex &&
-    cancelIndex + 'esc cancel'.length === footer.length
-    ? windowStart + permissionIndex
-    : null
+  const confirmIndex = liveTail.lastIndexOf('enter confirm', cancelIndex)
+  const chooseIndex = liveTail.lastIndexOf('choose now', confirmIndex)
+  if (chooseIndex === -1 || confirmIndex === -1) {
+    return null
+  }
+  const footerBoundary = findLastFxDialogBoundaryBefore(liveTail, chooseIndex)
+  if (footerBoundary === null) {
+    return null
+  }
+  const dialogBoundary = findLastFxDialogBoundaryBefore(liveTail, footerBoundary.index)
+  if (dialogBoundary === null) {
+    return null
+  }
+  const permissionIndex = liveTail.lastIndexOf('permission needed', footerBoundary.index)
+  if (permissionIndex < dialogBoundary.end) {
+    return null
+  }
+  const dialogBody = liveTail.slice(
+    permissionIndex + 'permission needed'.length,
+    footerBoundary.index
+  )
+  return FX_SELECTABLE_CHOICE_RE.test(dialogBody) ? permissionIndex : null
 }
 
 function findBlockedSignalInLiveWindow(
@@ -318,10 +354,6 @@ function findBlockedSignalInLiveWindow(
   const cursorApprovalIndex = findCursorApprovalPromptIndex(normalized)
   if (cursorApprovalIndex !== null) {
     candidates.push({ reason: 'agent-approval-prompt', index: cursorApprovalIndex })
-  }
-  const fxApprovalIndex = findFxApprovalPromptIndex(normalized)
-  if (fxApprovalIndex !== null) {
-    candidates.push({ reason: 'agent-approval-prompt', index: fxApprovalIndex })
   }
   const permissionPromptIndex = Math.max(
     normalized.lastIndexOf('permission required'),

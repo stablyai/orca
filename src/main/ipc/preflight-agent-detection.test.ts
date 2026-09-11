@@ -216,6 +216,30 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual([])
   })
 
+  it('retries a transient fx identity-probe failure on the next detection call', async () => {
+    let probeAttempts = 0
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'fx') {
+        probeAttempts += 1
+        if (probeAttempts === 1) {
+          throw Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })
+        }
+        return {
+          stdout: '𝒇x v0.0.8\nFast, native coding agent for the terminal.\n',
+          stderr: ''
+        }
+      }
+      if (command === 'which' && String(args[0]) === 'fx') {
+        return { stdout: '/Users/test/.local/bin/fx\n', stderr: '' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+    await expect(detectInstalledAgents()).resolves.toEqual(['fx'])
+    expect(probeAttempts).toBe(2)
+  })
+
   it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {

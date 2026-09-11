@@ -20,6 +20,11 @@ export type TuiAgentDetectionCommand = {
 }
 
 export const KNOWN_TUI_AGENT_DETECTION_COMMANDS = buildTuiAgentDetectionCommands()
+export const IDENTITY_PROBED_TUI_AGENT_IDS: ReadonlySet<string> = new Set(
+  KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) => command.identityProbe).map(
+    (command) => command.id
+  )
+)
 
 function buildTuiAgentDetectionCommands(): TuiAgentDetectionCommand[] {
   return Object.entries(TUI_AGENT_CONFIG).flatMap(([id, config]) =>

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   getTuiAgentDetectionProbeCommands,
+  getTuiAgentIdentityProbeArgs,
+  IDENTITY_PROBED_TUI_AGENT_IDS,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
   matchesTuiAgentIdentityProbe,
   resolveDetectedTuiAgentIds
@@ -37,6 +39,23 @@ describe('fx terminal agent host registration', () => {
     ])
     expect(resolveDetectedTuiAgentIds(commands, new Set(['fx']), 'win32', new Set(['fx']))).toEqual(
       []
+    )
+  })
+
+  it('derives identity-required agent IDs from the detection catalog', () => {
+    const catalogIds = new Set(
+      KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) => command.identityProbe).map(
+        (command) => command.id
+      )
+    )
+
+    expect(IDENTITY_PROBED_TUI_AGENT_IDS).toEqual(catalogIds)
+    expect(catalogIds).toContain('fx')
+  })
+
+  it('rejects unknown identity probes before constructing an interactive command', () => {
+    expect(() => getTuiAgentIdentityProbeArgs('future-probe' as never)).toThrow(
+      'Unsupported TUI agent identity probe: future-probe'
     )
   })
 
