@@ -347,6 +347,7 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'agent-hooks-review-prompt'
   | 'agent-interactive-prompt'
   | 'agent-approval-prompt'
+  | 'agent-credential-prompt'
 
 export type RuntimeTerminalWait = {
   handle: string

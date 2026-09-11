@@ -50,10 +50,17 @@ describe('describeTerminalWaitBlockedReason', () => {
     )
   })
 
-  it.each(['agent-trust-workspace', 'codex-model-migration-prompt'] as const)(
-    'renders %s unannotated',
-    (reason) => {
-      expect(describeTerminalWaitBlockedReason(reason)).toBe(reason)
-    }
-  )
+  it.each([
+    'agent-trust-workspace',
+    'codex-model-migration-prompt',
+    // Why pinned: this reason was born neutral, so it has no older spelling to annotate. An alias
+    // entry for it would invent one and print it at all four render sites.
+    'agent-credential-prompt'
+  ] as const)('renders %s unannotated', (reason) => {
+    expect(describeTerminalWaitBlockedReason(reason)).toBe(reason)
+  })
+
+  it('has no legacy alias for the credential prompt', () => {
+    expect(agentNeutralTerminalWaitBlockedReason('agent-credential-prompt')).toBeNull()
+  })
 })

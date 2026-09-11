@@ -4,11 +4,10 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import {
-  isTerminalWaitWhitespace,
-  startOfLastLines,
-  startOfLastNonBlankLines
-} from './terminal-wait-tail-window'
+import { isTerminalWaitWhitespace, startOfLastNonBlankLines } from './terminal-wait-tail-window'
+import { findCursorApprovalPromptIndex } from './terminal-cursor-approval-detection'
+import { findCredentialPromptIndex } from './terminal-credential-prompt-detection'
+import { mayContainTerminalWaitBlockedSentinel } from './terminal-wait-blocked-sentinel'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
@@ -42,10 +41,28 @@ export function isKnownReadyPromptPreview(preview: string): boolean {
     return false
   }
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
-  if (blockedSignal !== null && blockedSignal.index > readyIndex) {
-    return false
+  if (blockedSignal === null) {
+    return true
   }
-  return true
+  // Why index-independent for these two: an unconditional reason is one a ready caret must not
+  // vouch for, and a dialog drawn over ready chrome can share the caret's offset (#19749).
+  return (
+    !isUnconditionalTerminalWaitBlockedReason(blockedSignal.reason) &&
+    blockedSignal.index <= readyIndex
+  )
+}
+
+/**
+ * Reasons a live non-permission title must not clear.
+ *
+ * `agent-approval-prompt`: cursor-agent never reports idle via OSC title.
+ * `agent-credential-prompt`: a readiness verdict is exactly what is wrong when a
+ * sign-in dialog is on screen, so it cannot be the thing that overrides this.
+ */
+export function isUnconditionalTerminalWaitBlockedReason(
+  reason: RuntimeTerminalWaitBlockedReason | null
+): boolean {
+  return reason === 'agent-approval-prompt' || reason === 'agent-credential-prompt'
 }
 
 export function detectTerminalWaitBlockedReason(
@@ -61,6 +78,12 @@ export function findActionableTerminalWaitBlockedSignal(
   const blockedSignal = findTerminalWaitBlockedSignal(normalized)
   if (blockedSignal === null) {
     return null
+  }
+  // Why never dismissible: a ready caret elsewhere on the screen is not evidence
+  // that a live credential prompt was answered, and mistaking one for the other
+  // submits the task prompt as a credential.
+  if (blockedSignal.reason === 'agent-credential-prompt') {
+    return blockedSignal
   }
   const dismissedModalIndex = findDismissedStartupModalIndex(normalized)
   // Why: a live prompt after the modal means it was dismissed → signal no longer actionable, even mid-run (Cursor never reports idle via OSC title).
@@ -158,54 +181,6 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
   return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
 }
 
-export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
-
-// Why text at all: cursor-agent has no approval hook, so the key-bound menu is the only authority.
-const CURSOR_APPROVAL_CHOICE_MARKERS = [
-  'run (once)',
-  'to allowlist?',
-  'run everything',
-  'skip & tell the agent'
-]
-// Why bounded: an answered menu remains in scrollback; only a dialog owning the screen bottom is live.
-const CURSOR_APPROVAL_TAIL_LINES = 8
-
-function findCursorApprovalPromptIndex(normalized: string): number | null {
-  const windowStart = startOfLastLines(normalized, CURSOR_APPROVAL_TAIL_LINES)
-  const tail = normalized.slice(windowStart)
-  if (!tail.includes('run this command?')) {
-    return null
-  }
-  const lines = tail.split('\n')
-  while (lines.length > 0 && lines.at(-1)?.trim() === '') {
-    lines.pop()
-  }
-  let matchedLines = 0
-  let lastChoiceLine = -1
-  for (let index = 0; index < lines.length; index += 1) {
-    if (!isCursorApprovalChoiceLine(lines[index])) {
-      continue
-    }
-    matchedLines += 1
-    lastChoiceLine = index
-  }
-  return matchedLines >= 2 && lastChoiceLine === lines.length - 1
-    ? windowStart + tail.lastIndexOf('run this command?')
-    : null
-}
-
-// Why the trailing key: narration can repeat the menu wording, but it does not end in a selectable key.
-const CURSOR_APPROVAL_CHOICE_KEY_RE =
-  /\((?:shift\+tab|ctrl\+[a-z]|esc(?: or [a-z])*|tab|enter|return|space|[a-z]|[\u21b5\u21e7\u21b9\u238b\u23ce]{1,3})\)\s*$/
-
-function isCursorApprovalChoiceLine(line: string): boolean {
-  return (
-    CURSOR_APPROVAL_CHOICE_KEY_RE.test(line) &&
-    CURSOR_APPROVAL_CHOICE_MARKERS.some((marker) => line.includes(marker))
-  )
-}
-
 // Why bounded: answered dialogs and quoted prompt wording (agents grep this file and its specs) stay in the
 // retained tail; only a dialog owning the screen bottom is live. Real Codex dialogs (trust, hooks review,
 // update, exec approval) are 4-8 lines; the slack covers a wrapped command or a longer hook list.
@@ -217,7 +192,7 @@ function findTerminalWaitBlockedSignal(
   const windowStart = startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
   const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
   // Why: one combined negative scan avoids a dozen searches when no prompt can match.
-  if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
+  if (!mayContainTerminalWaitBlockedSentinel(normalized)) {
     return null
   }
   const signal = findBlockedSignalInLiveWindow(normalized)
@@ -228,7 +203,10 @@ function findTerminalWaitBlockedSignal(
 function findBlockedSignalInLiveWindow(
   normalized: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
-  const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
+  const candidates: {
+    reason: RuntimeTerminalWaitBlockedReason
+    index: number
+  }[] = []
   const updateIndex = normalized.lastIndexOf('update available')
   if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {
     candidates.push({ reason: 'agent-update-prompt', index: updateIndex })
@@ -242,7 +220,10 @@ function findBlockedSignalInLiveWindow(
     modelMigrationIndex !== -1 &&
     normalized.includes('press enter to continue', modelMigrationIndex)
   ) {
-    candidates.push({ reason: 'codex-model-migration-prompt', index: modelMigrationIndex })
+    candidates.push({
+      reason: 'codex-model-migration-prompt',
+      index: modelMigrationIndex
+    })
   }
   const hooksIndex = normalized.lastIndexOf('hooks need review')
   if (hooksIndex !== -1 && normalized.includes('press enter to confirm', hooksIndex)) {
@@ -294,9 +275,19 @@ function findBlockedSignalInLiveWindow(
       candidates.push({ reason: 'agent-interactive-prompt', index: interactivePromptIndex })
     }
   }
+  const credentialPromptIndex = findCredentialPromptIndex(normalized)
+  if (credentialPromptIndex !== null) {
+    candidates.push({
+      reason: 'agent-credential-prompt',
+      index: credentialPromptIndex
+    })
+  }
   const cursorApprovalIndex = findCursorApprovalPromptIndex(normalized)
   if (cursorApprovalIndex !== null) {
-    candidates.push({ reason: 'agent-approval-prompt', index: cursorApprovalIndex })
+    candidates.push({
+      reason: 'agent-approval-prompt',
+      index: cursorApprovalIndex
+    })
   }
   const permissionPromptIndex = Math.max(
     normalized.lastIndexOf('permission required'),
@@ -317,9 +308,14 @@ function findBlockedSignalInLiveWindow(
       candidates.push({ reason: 'agent-interactive-prompt', index: permissionPromptIndex })
     }
   }
-  return candidates.length > 0
-    ? candidates.reduce((latest, candidate) =>
-        candidate.index > latest.index ? candidate : latest
-      )
-    : null
+  if (candidates.length === 0) {
+    return null
+  }
+  // Why it outranks a later signal: every other reason can be cleared by a ready
+  // caret, so a credential prompt losing the index race would lose the block too.
+  const credential = candidates.find((candidate) => candidate.reason === 'agent-credential-prompt')
+  return (
+    credential ??
+    candidates.reduce((latest, candidate) => (candidate.index > latest.index ? candidate : latest))
+  )
 }
