@@ -46,7 +46,8 @@ export function sendPlan(params: {
   const clientMessageId = params.envelope.clientOperationId
   return {
     method: 'agentSession.send',
-    // A control signal is not payload; only the matching durable unknown unlocks redispatch.
+    // A control signal is not payload; only a matching durable unknown permits the
+    // ledger to re-enter the plan and preserve its recorded outcome.
     fields: { body: params.body },
     ...(params.beforeRun ? { beforeRun: params.beforeRun } : {}),
     rerunWhenReplayMissing: (ctx) =>
