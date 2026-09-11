@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
+import { CodexJournalGoals } from './codex-structured-journal-goals'
 
 const THREAD = '01a08cc2-f96e-76d0-bb74-88b9bc0b03fc'
 
@@ -23,7 +24,10 @@ function goalFrame(goal: Record<string, unknown>): Record<string, unknown> {
   }
 }
 
-function frames(): { rows: AgentJournalItemBody[]; frames: CodexJournalGenericFrames } {
+function frames(): {
+  rows: AgentJournalItemBody[]
+  frames: Pick<CodexJournalGenericFrames, 'appendUnhandled'>
+} {
   const rows: AgentJournalItemBody[] = []
   const sink = {
     appendItem: (_identity: unknown, body: AgentJournalItemBody) => {
@@ -31,7 +35,20 @@ function frames(): { rows: AgentJournalItemBody[]; frames: CodexJournalGenericFr
     },
     publish: vi.fn()
   } as unknown as StructuredAgentSessionEventSink
-  return { rows, frames: new CodexJournalGenericFrames({ sink }, () => null) }
+  const goals = new CodexJournalGoals(sink)
+  const generic = new CodexJournalGenericFrames({ sink }, () => null)
+  return {
+    rows,
+    frames: {
+      appendUnhandled: (kind, payload, threadId = 'session') => {
+        const method = kind.startsWith('notification:') ? kind.slice('notification:'.length) : kind
+        return (
+          goals.handle({ threadId, method, params: payload }) ??
+          generic.appendUnhandled(kind, payload, threadId)
+        )
+      }
+    }
+  }
 }
 
 function texts(rows: AgentJournalItemBody[]): string[] {
@@ -106,14 +123,14 @@ describe('codex goal frames as journal rows', () => {
     generic.appendUnhandled('notification:thread/goal/cleared', { threadId: THREAD }, THREAD)
     generic.appendUnhandled(
       'notification:thread/goal/updated',
-      goalFrame({ objective: 'Ship the parser.' }),
+      goalFrame({ createdAt: 1789067989, updatedAt: 1789067989 }),
       THREAD
     )
 
     expect(texts(rows)).toEqual([
       'Goal set: Keep the current scratch directory tidy.',
       'Goal cleared',
-      'Goal set: Ship the parser.'
+      'Goal set: Keep the current scratch directory tidy.'
     ])
   })
 

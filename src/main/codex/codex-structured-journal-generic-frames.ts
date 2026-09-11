@@ -11,7 +11,6 @@ import {
   MAX_CODEX_GENERIC_ROWS_PER_TURN,
   MAX_CODEX_GENERIC_TURN_BUCKETS
 } from './codex-structured-journal-limits'
-import { codexGoalRowSignature } from './codex-goal-journal-rows'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 
 const OVERFLOW_BUCKET = '__codex-generic-overflow__'
@@ -44,7 +43,6 @@ export class CodexJournalGenericFrames {
   private readonly genericRowsByTurn = new Map<string, number>()
   private readonly suppressedRowsByTurn = new Map<string, SuppressedSummary>()
   private readonly bucketOrder = new Map<string, number>()
-  private readonly lastGoalRowByThread = new Map<string, string>()
   private readonly schedule: NonNullable<CodexJournalTranslatorDeps['schedule']>
   private readonly suppressionCoalesceMs: number
   private nextBucketOrder = 0
@@ -69,9 +67,6 @@ export class CodexJournalGenericFrames {
     // A frame the classifier declines is deliberately not journaled, which is success.
     // Failing admission here force-closes the provider through the retry queue.
     if (!translated) {
-      return CODEX_JOURNAL_ADMITTED
-    }
-    if (this.repeatsLastGoalRow(kind, payload, threadId)) {
       return CODEX_JOURNAL_ADMITTED
     }
     const turnId = readCodexTurnId(payload) ?? this.activeTurn(threadId) ?? 'outside-turn'
@@ -184,24 +179,6 @@ export class CodexJournalGenericFrames {
       this.cancelSuppressionFlush = null
       this.flush()
     }, this.suppressionCoalesceMs)
-  }
-
-  /** Codex re-sends the goal on every turn as its token and time counters climb. Only a
-   *  change a reader would notice earns a second row. */
-  private repeatsLastGoalRow(kind: string, payload: unknown, threadId: string): boolean {
-    const method = kind.startsWith('notification:') ? kind.slice('notification:'.length) : kind
-    const signature = codexGoalRowSignature(method, payload)
-    if (signature === null) {
-      return false
-    }
-    if (this.lastGoalRowByThread.get(threadId) === signature) {
-      return true
-    }
-    if (this.lastGoalRowByThread.size >= MAX_CODEX_GENERIC_TURN_BUCKETS) {
-      this.lastGoalRowByThread.clear()
-    }
-    this.lastGoalRowByThread.set(threadId, signature)
-    return false
   }
 
   private bucketFor(threadId: string, turnId: string): string {

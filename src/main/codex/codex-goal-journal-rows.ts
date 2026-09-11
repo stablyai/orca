@@ -68,3 +68,9 @@ export function codexGoalRowSignature(method: string, payload: unknown): string 
   const budget = typeof goal?.tokenBudget === 'number' ? String(goal.tokenBudget) : ''
   return `${GOAL_UPDATED_METHOD}\u0000${status}\u0000${budget}\u0000${objective}`
 }
+
+/** Provider-owned goal generation, stable while accounting counters change. */
+export function codexGoalGeneration(payload: unknown): string | null {
+  const createdAt = goalRecord(payload)?.createdAt
+  return typeof createdAt === 'number' && Number.isFinite(createdAt) ? String(createdAt) : null
+}
