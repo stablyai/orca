@@ -3,17 +3,21 @@ import type { Locator } from '@playwright/test'
 export async function diffTextSelectionPoints(code: Locator, text: string) {
   return code.evaluate(async (code, text) => {
     const content = code.querySelector('[data-content]')!
-    const nodes: Text[] = []
-    for (const row of content.querySelectorAll('[data-line]')) {
-      if (nodes.length > 0 && !nodes.at(-1)!.data.endsWith('\n')) {
-        // Pierre renders line breaks as separate rows rather than text nodes.
-        nodes.push(document.createTextNode('\n'))
+    const collect = () => {
+      const found: Text[] = []
+      for (const row of content.querySelectorAll('[data-line]')) {
+        if (found.length > 0 && !found.at(-1)!.data.endsWith('\n')) {
+          // Pierre renders line breaks as separate rows rather than text nodes.
+          found.push(document.createTextNode('\n'))
+        }
+        const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
+        while (walker.nextNode()) {
+          found.push(walker.currentNode as Text)
+        }
       }
-      const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT)
-      while (walker.nextNode()) {
-        nodes.push(walker.currentNode as Text)
-      }
+      return found
     }
+    let nodes = collect()
     const contents = nodes.map((node) => node.data).join('')
     const start = contents.indexOf(text)
     if (start === -1) {
@@ -35,8 +39,32 @@ export async function diffTextSelectionPoints(code: Locator, text: string) {
       range.setEnd(point.node, point.offset + 1)
       return range
     }
-    const first = glyph(start)
-    const last = glyph(start + text.length - 1)
+    let first = glyph(start)
+    let last = glyph(start + text.length - 1)
+    // Why re-collected until both glyphs have a layout box: the syntax-highlight upgrade replaces
+    // a row's nodes after first paint, so nodes walked a frame earlier can already be detached
+    // when they are measured, and a detached node reports an all-zero rect.
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      if (
+        first.getBoundingClientRect().width > 0 &&
+        last.getBoundingClientRect().width > 0 &&
+        code.contains(first.startContainer) &&
+        code.contains(last.startContainer)
+      ) {
+        break
+      }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+      nodes = collect()
+      const reindexed = nodes
+        .map((node) => node.data)
+        .join('')
+        .indexOf(text)
+      if (reindexed === -1) {
+        continue
+      }
+      first = glyph(reindexed)
+      last = glyph(reindexed + text.length - 1)
+    }
     // Why: a short viewport (CI runs smaller than a dev window) can leave the target rows below
     // the fold, so the computed points hit whatever covers them instead of the diff.
     const rowOf = (range: Range) =>
