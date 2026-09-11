@@ -1,5 +1,7 @@
 import {
   CUSTOM_AGENT_ID,
+  PI_DEFAULT_MODEL_ID,
+  PI_RETIRED_COPILOT_DEFAULT_MODEL_ID,
   getCommitMessageAgentCapability,
   isCustomAgentId
 } from '../../../../../../shared/commit-message-agent-spec'
@@ -41,6 +43,10 @@ export function buildCommitMessageGenerationParams(args: {
       ? args.baseParams.model
       : (capability.models.find((model) => model.id === capability.defaultModelId)?.id ??
         capability.defaultModelId)
+  const useConfiguredDefaultModel =
+    args.agentId === 'pi' &&
+    (modelId === PI_DEFAULT_MODEL_ID ||
+      (sameResolvedAgent && args.baseParams?.useConfiguredDefaultModel === true))
   const model = capability.models.find((candidate) => candidate.id === modelId)
   const thinkingLevel =
     sameResolvedAgent && args.baseParams?.thinkingLevel
@@ -50,10 +56,8 @@ export function buildCommitMessageGenerationParams(args: {
   const customAgentCommand = args.baseParams?.customAgentCommand ?? args.customAgentCommand
   return {
     agentId: args.agentId,
-    model: modelId,
-    ...(sameResolvedAgent && args.baseParams?.useConfiguredDefaultModel
-      ? { useConfiguredDefaultModel: true }
-      : {}),
+    model: useConfiguredDefaultModel ? PI_RETIRED_COPILOT_DEFAULT_MODEL_ID : modelId,
+    ...(useConfiguredDefaultModel ? { useConfiguredDefaultModel: true } : {}),
     ...(thinkingLevel ? { thinkingLevel } : {}),
     commandInputTemplate: args.commandTemplate,
     ...(args.agentArgs !== undefined ? { agentArgs: args.agentArgs } : {}),

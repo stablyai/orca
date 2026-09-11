@@ -220,7 +220,7 @@ export function resolveSourceControlAiForOperation(
   const model =
     spec.models.find((candidate) => candidate.id === persistedModelId) ??
     discoveredModels.find((candidate) => candidate.id === persistedModelId) ??
-    (spec.modelSource === 'dynamic' && persistedModelId
+    (spec.id === 'pi' && persistedModelId
       ? { id: persistedModelId, label: persistedModelId }
       : undefined) ??
     getCommitMessageModel(resolvedAgent, spec.defaultModelId)

@@ -134,7 +134,6 @@ export function normalizeLoadedGlobalSettings(
     // Why: rollback builds still read commitMessageAi, so refresh the legacy projection from sourceControlAi for compat.
     commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(
       migratedSourceControlAi,
-      piConfiguredDefaultModelState,
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
     ),
     voice: {
