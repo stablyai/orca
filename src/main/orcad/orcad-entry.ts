@@ -157,7 +157,6 @@ async function startOrcadRuntime(
   let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
   let uninstallHookStatusRepublish = (): void => {}
   let uninstallObservedStatusIdentity = (): void => {}
-  let daemonStarted = false
   registerCleanup(async () => {
     try {
       await rpc?.stop()
@@ -165,9 +164,7 @@ async function startOrcadRuntime(
       try {
         // Why disconnect and not shut down: the daemon must outlive this process, or an
         // orcad restart goes back to killing every running terminal.
-        if (daemonStarted) {
-          await stopOrcadDaemon()
-        }
+        await stopOrcadDaemon()
       } finally {
         uninstallObservedStatusIdentity()
         uninstallHookStatusRepublish()
@@ -200,7 +197,6 @@ async function startOrcadRuntime(
   // adapter as THE local provider, and the registry's contract is that it lands before
   // registerPtyHandlers so the IPC layer routes through the daemon from the first call.
   await startOrcadDaemon()
-  daemonStarted = true
 
   const runtime = new OrcaRuntimeService(store, undefined, {
     // Why lazy: a daemon swap replaces the provider after construction, so an eager
