@@ -190,6 +190,28 @@ describe('renderer memory highwater census re-arming', () => {
     expect(censuses().at(-1)).toMatchObject({ thresholdPrivateMB: 600, aboveMarkMinutes: 120 })
   })
 
+  // Sawtooth (build, GC, build) is the ordinary shape of renderer memory. Two spikes hours apart
+  // must not read as sustained pressure, or triage starts a leak hunt that has no leak.
+  it('re-anchors minutes-above-mark after a long spell below the band', async () => {
+    stubFootprint(658)
+    await tick()
+    await tick()
+    expect(censuses().at(-1)).toMatchObject({ aboveMarkMinutes: 0 })
+
+    // 10 hours far below the band, then back up.
+    stubFootprint(100)
+    for (let minute = 0; minute < 600; minute += 1) {
+      await tick()
+    }
+    stubFootprint(700)
+    await tick()
+    await tick()
+
+    // Not 602: the renderer spent those 600 minutes at 100MB.
+    expect(censuses().at(-1)).toMatchObject({ thresholdPrivateMB: 600 })
+    expect(censuses().at(-1)?.aboveMarkMinutes).toBeLessThanOrEqual(2)
+  })
+
   it('emits at most one census per mark while a renderer oscillates around it', async () => {
     stubFootprint(601)
     await tick()
