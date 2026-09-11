@@ -9,7 +9,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
+import { clientWorkspaceSessionWritePartitionHostId } from '../../../shared/workspace-session-partition-owner'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
@@ -193,7 +193,9 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
     if (!repoHostId) {
       return LOCAL_EXECUTION_HOST_ID
     }
-    return workspaceSessionPartitionHostId(repoHostId)
+    // Release N writes SSH state to 'local', where every shipped build looks for it, while the read
+    // path above already reunites `ssh:<targetId>`. N+1 flips this to the real owner partition.
+    return clientWorkspaceSessionWritePartitionHostId(repoHostId)
   }
   return { hostIdByWorktreeId, claims }
 }
@@ -228,6 +230,13 @@ export function patchWorkspaceSessionByHost(
   const localWrite = api.patch(local)
   for (const [hostId, slice] of nonLocalHostSessionEntries(slices)) {
     // Why: a failed runtime-partition write must not reject the local chain.
+    //
+    // Known asymmetry, and it grows in N+1: the local patch above is the write that REMOVES these
+    // rows from `local`, and it is awaited, while the partition write that is supposed to receive
+    // them is swallowed. Today that only risks `runtime:*` rows; once SSH state routes here too,
+    // a swallowed rejection loses that workspace's tabs and unsaved drafts outright. Closing it
+    // needs the local write to be conditional on the partition write, which the debounced hot path
+    // cannot express as-is.
     void api.patch(slice as WorkspaceSessionPatch, hostId).catch((err) => {
       console.warn(`[session] host partition patch failed for ${hostId}:`, err)
     })

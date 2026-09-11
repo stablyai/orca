@@ -23,3 +23,31 @@ export function workspaceSessionPartitionHostId(
 ): ExecutionHostId {
   return parseExecutionHostId(executionHostId)?.id ?? LOCAL_EXECUTION_HOST_ID
 }
+
+/**
+ * Release N of the SSH partition move: where the CLIENT writes a worktree's session.
+ *
+ * `workspaceSessionPartitionHostId` above is the destination this is converging on, and the READ
+ * side already uses it — boot hydration enumerates `ssh:<targetId>` and
+ * `adoptStrandedHostPartitionSession` reunites it with `local`. Moving the WRITE in the same
+ * release is the part a downgrade cannot survive. Every shipped build reads SSH session state out
+ * of `local` alone, so a client that has moved it looks empty to the previous version, and that
+ * version's publish then OMITS the workspace — which the relay applies as a wholesale
+ * `replace-session` snapshot overwrite (src/relay/workspace-session-handler.ts), so the host
+ * forgets it too.
+ *
+ * Exposure is launch-and-quit, not "use an SSH workspace": routing reads the persisted repo
+ * catalog, so an offline target with no multiplexer still moves on the quit checkpoint.
+ *
+ * Shipping the read alone is not a half-fix. Reading both partitions IS the repair for #12721 —
+ * the merge can only refuse to delete tabs this client actually holds, and hydrating them is what
+ * arms that defence. Moving the write collapses the #12723 double-ownership, which is cleanup.
+ *
+ * N+1 deletes this function and its two call sites; see docs/reference/ssh-session-partition-move.md.
+ */
+export function clientWorkspaceSessionWritePartitionHostId(
+  executionHostId: string | null | undefined
+): ExecutionHostId {
+  const partition = workspaceSessionPartitionHostId(executionHostId)
+  return parseExecutionHostId(partition)?.kind === 'ssh' ? LOCAL_EXECUTION_HOST_ID : partition
+}

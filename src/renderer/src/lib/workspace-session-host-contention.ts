@@ -7,7 +7,7 @@ import {
 } from '../../../shared/execution-host'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../shared/workspace-session-host-field-ownership'
-import { workspaceSessionPartitionHostId } from '../../../shared/workspace-session-partition-owner'
+import { clientWorkspaceSessionWritePartitionHostId } from '../../../shared/workspace-session-partition-owner'
 import {
   isWorkspaceSessionRecord,
   type WorkspaceSessionRecord
@@ -90,9 +90,12 @@ export function indexWorktreeHostClaims(
   return claims
 }
 
-/** The partition a host's session rows live in: every non-'local' host owns its own. */
+/** The partition a host's session rows live in, from the client's point of view. Release N: every
+ *  `runtime:*` host owns its own, and `local` + every `ssh:*` host still share one blob — which is
+ *  why `contestedPartitionHosts` below can say a claimant set collapsing to one partition is not
+ *  separable. N+1 flips this to `workspaceSessionPartitionHostId`. */
 export function sessionPartitionHostFor(hostId: ExecutionHostId): ExecutionHostId {
-  return workspaceSessionPartitionHostId(hostId)
+  return clientWorkspaceSessionWritePartitionHostId(hostId)
 }
 
 /** Distinct partitions a set of claimants spans. Fewer than two means persistence cannot tell the
