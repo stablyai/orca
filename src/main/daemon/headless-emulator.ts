@@ -25,6 +25,7 @@ import type { TerminalSnapshot, TerminalModes } from './types'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalCursorContext } from '../../shared/terminal-composer-draft'
 import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
+import { readTerminalVisibleLines } from '../../shared/terminal-visible-screen-projection'
 
 export type HeadlessEmulatorOptions = {
   cols: number
@@ -305,12 +306,7 @@ export class HeadlessEmulator {
   }
 
   getVisibleLines(): string[] {
-    const buffer = this.terminal.buffer.active
-    const lines: string[] = []
-    for (let row = buffer.viewportY; row < buffer.viewportY + this.terminal.rows; row += 1) {
-      lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
-    }
-    return lines
+    return readTerminalVisibleLines(this.terminal)
   }
 
   getVisibleBufferRange(): { start: number; endExclusive: number; totalLength: number } {

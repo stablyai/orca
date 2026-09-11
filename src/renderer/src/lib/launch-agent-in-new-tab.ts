@@ -276,7 +276,7 @@ function launchAgentInNewTabInternal(
       agent,
       submit: submitPastedPrompt,
       forcePaste: promptDelivery === 'submit-after-ready',
-      onTimeout: timeoutNotice.onTimeout
+      onUndelivered: timeoutNotice.onTimeout
     }).then((delivered) => {
       if (delivered) {
         if (agent === 'command-code' && submitPastedPrompt) {

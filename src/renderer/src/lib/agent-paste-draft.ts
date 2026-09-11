@@ -18,6 +18,11 @@ import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
+import {
+  isAgentPasteBlockedByCredentialPrompt,
+  type AgentDraftDeliveryFailure,
+  type AgentDraftPasteOutcome
+} from './agent-paste-credential-prompt-guard'
 export {
   AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES,
   AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES,
@@ -61,9 +66,9 @@ export function getSettingsForAgentTabRuntimeOwner(
  * then bracketed-paste `content` into its input buffer. By default the
  * draft stays editable; `submit: true` appends Enter after the paste.
  *
- * Returns true when the paste was issued, false on timeout or missing
- * PTY. `onTimeout` lets the caller surface a UI hint (e.g. toast) when
- * the agent doesn't reach a ready state. `timeoutMs` overrides the
+ * Returns true when the paste was issued, false on timeout, missing PTY, or a live
+ * credential prompt owning the pane. `onUndelivered` lets the caller surface a UI hint
+ * (e.g. toast) with the reason nothing was delivered. `timeoutMs` overrides the
  * readiness budget only; waiting for the PTY to spawn keeps its own budget.
  *
  * Readiness combines DECSET 2004 with one agent-specific follow-up signal:
@@ -80,9 +85,9 @@ export async function pasteDraftWhenAgentReady(args: {
   submit?: boolean
   forcePaste?: boolean
   timeoutMs?: number
-  onTimeout?: () => void
+  onUndelivered?: (failure: AgentDraftDeliveryFailure) => void
 }): Promise<boolean> {
-  const { tabId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
+  const { tabId, content, agent, submit, forcePaste, timeoutMs, onUndelivered } = args
 
   const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
 
@@ -106,7 +111,7 @@ export async function pasteDraftWhenAgentReady(args: {
     settings
   })
   if (!readiness) {
-    onTimeout?.()
+    onUndelivered?.('readiness-timeout')
     return false
   }
 
@@ -120,18 +125,15 @@ export async function pasteDraftWhenAgentReady(args: {
       ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
       : { ready: false }
     if (!fallbackReady.ready) {
-      onTimeout?.()
+      onUndelivered?.('readiness-timeout')
       return false
     }
   }
 
-  return await sendBracketedPasteToAgent({
-    settings,
-    ptyId,
-    content,
-    submit: submit === true,
-    agent
-  })
+  return await deliverBracketedPaste(
+    { settings, ptyId, content, submit: submit === true, agent },
+    onUndelivered
+  )
 }
 
 export async function pasteDraftToAgentPtyWhenReady(args: {
@@ -142,9 +144,9 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   submit?: boolean
   forcePaste?: boolean
   timeoutMs?: number
-  onTimeout?: () => void
+  onUndelivered?: (failure: AgentDraftDeliveryFailure) => void
 }): Promise<boolean> {
-  const { tabId, ptyId, content, agent, submit, forcePaste, timeoutMs, onTimeout } = args
+  const { tabId, ptyId, content, agent, submit, forcePaste, timeoutMs, onUndelivered } = args
   const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
 
   if (agentDeliversDraftViaNativePrefill(agent, forcePaste)) {
@@ -160,18 +162,27 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
       ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000, settings)
       : false
     if (!fallbackReady) {
-      onTimeout?.()
+      onUndelivered?.('readiness-timeout')
       return false
     }
   }
 
-  return await sendBracketedPasteToAgent({
-    settings,
-    ptyId,
-    content,
-    submit: submit === true,
-    agent
-  })
+  return await deliverBracketedPaste(
+    { settings, ptyId, content, submit: submit === true, agent },
+    onUndelivered
+  )
+}
+
+/** Refusing a paste into a credential prompt is worthless if the caller can't tell the user. */
+async function deliverBracketedPaste(
+  args: Parameters<typeof sendBracketedPasteToAgent>[0],
+  onUndelivered: ((failure: AgentDraftDeliveryFailure) => void) | undefined
+): Promise<boolean> {
+  const outcome = await sendBracketedPasteToAgent(args)
+  if (outcome === 'credential-prompt') {
+    onUndelivered?.('credential-prompt')
+  }
+  return outcome === 'delivered'
 }
 
 export async function submitPromptToAgentPty(args: {
@@ -179,19 +190,27 @@ export async function submitPromptToAgentPty(args: {
   ptyId: string
   content: string
 }): Promise<boolean> {
-  return await sendBracketedPasteToAgent({
-    settings: getSettingsForAgentTabRuntimeOwner(args.tabId),
-    ptyId: args.ptyId,
-    content: args.content,
-    submit: true
-  })
+  return (
+    (await sendBracketedPasteToAgent({
+      settings: getSettingsForAgentTabRuntimeOwner(args.tabId),
+      ptyId: args.ptyId,
+      content: args.content,
+      submit: true
+    })) === 'delivered'
+  )
 }
 
 export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string
 }): Promise<boolean> {
-  return await sendBracketedPasteToAgent({ ptyId: args.ptyId, content: args.content, submit: true })
+  return (
+    (await sendBracketedPasteToAgent({
+      ptyId: args.ptyId,
+      content: args.content,
+      submit: true
+    })) === 'delivered'
+  )
 }
 
 async function sendBracketedPasteToAgent(args: {
@@ -200,13 +219,18 @@ async function sendBracketedPasteToAgent(args: {
   content: string
   submit: boolean
   agent?: TuiAgent
-}): Promise<boolean> {
+}): Promise<AgentDraftPasteOutcome> {
   const { settings = useAppStore.getState().settings, ptyId, content, submit, agent } = args
   const submitRetryDelayMs = agent ? TUI_AGENT_CONFIG[agent]?.submitRetryDelayMs : undefined
+  // Why here: this is the single site in the lane that reaches window.api.pty.write, which
+  // bypasses OrcaRuntimeService and therefore never meets the agent_prompt_blocked fence.
+  if (isAgentPasteBlockedByCredentialPrompt(ptyId)) {
+    return 'credential-prompt'
+  }
   try {
     // Why: paste + Enter (+ retry Enter) must be one transaction, or a concurrent
     // paste on this PTY can slip between them and submit a half-written prompt.
-    return await runTerminalPtyInputTransaction(ptyId, async () => {
+    const delivered = await runTerminalPtyInputTransaction(ptyId, async () => {
       const pasted = await sendAgentDraftPasteContentNow(settings, ptyId, content)
       if (!pasted || !submit) {
         return pasted
@@ -231,8 +255,9 @@ async function sendBracketedPasteToAgent(args: {
 
       return submitted
     })
+    return delivered ? 'delivered' : 'not-delivered'
   } catch {
-    return false
+    return 'not-delivered'
   }
 }
 

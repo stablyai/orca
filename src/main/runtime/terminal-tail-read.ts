@@ -132,10 +132,6 @@ export function shouldFallbackToVisibleTerminalSnapshot(
   return hasSubstantialBlankTail && read.tail.every((line) => line.trim().length === 0)
 }
 
-export function visibleNonBlankTerminalLines(lines: string[]): string[] {
-  return lines.map((line) => line.trimEnd()).filter((line) => line.trim().length > 0)
-}
-
 export function buildVisibleSnapshotReadFallback(
   read: RuntimeTerminalRead,
   visibleLines: string[],

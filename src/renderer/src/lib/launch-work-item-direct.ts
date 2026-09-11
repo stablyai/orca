@@ -25,6 +25,7 @@ import {
   buildDirectWorkItemStartupOpts,
   notifyDirectWorkItemAgentStartTimeout
 } from '@/lib/launch-work-item-direct-agent'
+import { showAgentPasteCredentialPromptToast } from '@/lib/agent-paste-credential-prompt-notice'
 import { getDirectWorkItemDraftContent } from '@/lib/launch-work-item-direct-draft'
 import {
   resolveDirectPrStartPoint,
@@ -304,7 +305,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       content: draftContent,
       submit,
       forcePaste: submit,
-      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
+      onUndelivered: (failure) =>
+        failure === 'credential-prompt'
+          ? showAgentPasteCredentialPromptToast(agent, submit)
+          : notifyDirectWorkItemAgentStartTimeout(agent, submit)
     })
   }
   return true

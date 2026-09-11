@@ -1,4 +1,4 @@
-import { TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE } from './terminal-credential-prompt-detection'
+import { TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE } from '../../shared/terminal-credential-prompt-detection'
 
 /** Cheap negative scan run per retained tail line, so only candidate-bearing tails parse in full. */
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =

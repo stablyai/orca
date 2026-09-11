@@ -4,6 +4,7 @@ import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft
 import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../shared/tui-agent'
+import type { AgentDraftDeliveryFailure } from '@/lib/agent-paste-credential-prompt-guard'
 
 /** Seed the chat-composer copy of launch context that reaches only the TUI
  *  input (argv prefill or startup paste). No-op for agents without a
@@ -32,9 +33,9 @@ export function deliverLaunchPromptToAgentTab(args: {
   submit: boolean
   forcePaste: boolean
   timeoutMs?: number
-  onTimeout?: () => void
+  onUndelivered?: (failure: AgentDraftDeliveryFailure) => void
 }): Promise<boolean> {
-  const { tabId, agent, content, submit, forcePaste, timeoutMs, onTimeout } = args
+  const { tabId, agent, content, submit, forcePaste, timeoutMs, onUndelivered } = args
   const shouldSeed =
     submit === true && content.trim().length > 0 && isNativeChatSupportedAgent(agent)
 
@@ -63,7 +64,7 @@ export function deliverLaunchPromptToAgentTab(args: {
     submit,
     forcePaste,
     timeoutMs,
-    onTimeout
+    onUndelivered
   }).then(
     (delivered) => {
       if (shouldSeed && !delivered && !deliversViaNativePrefill) {

@@ -92,7 +92,7 @@ describe('deliverLaunchPromptToAgentTab', () => {
       submit: true,
       forcePaste: true,
       timeoutMs: undefined,
-      onTimeout: undefined
+      onUndelivered: undefined
     })
   })
 
@@ -269,7 +269,7 @@ describe('deliverLaunchPromptToAgentTab', () => {
   })
 
   it('passes timeout options through to the paste transport', async () => {
-    const onTimeout = vi.fn()
+    const onUndelivered = vi.fn()
 
     await deliverLaunchPromptToAgentTab({
       tabId: 'tab-1',
@@ -278,11 +278,11 @@ describe('deliverLaunchPromptToAgentTab', () => {
       submit: true,
       forcePaste: true,
       timeoutMs: 123,
-      onTimeout
+      onUndelivered
     })
 
     expect(mocks.pasteDraftWhenAgentReady).toHaveBeenCalledWith(
-      expect.objectContaining({ timeoutMs: 123, onTimeout })
+      expect.objectContaining({ timeoutMs: 123, onUndelivered })
     )
   })
 })

@@ -1,6 +1,7 @@
 import { serializeWithAbsoluteCursor } from '../../../../../shared/terminal-serialize-absolute-cursor'
 import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-write-pipeline-health'
 import { registerPtySerializer, registerPtyTitleSource } from '../pty-buffer-serializer'
+import { registerPtyVisibleScreen } from '../pty-visible-screen-registry'
 import {
   discardTerminalOutput,
   waitForTerminalOutputParsed
@@ -79,10 +80,14 @@ export function bindRegisterPaneSerializer(session: ConnectPanePtySession): void
     const unregisterTitleSource = registerPtyTitleSource(ptyId, (handler) =>
       session.pane.terminal.onTitleChange(handler)
     )
+    // Why here: the paste lane must read this pane's live screen before writing a prompt into
+    // it, and this is the one place a ptyId and its xterm instance are bound together.
+    const unregisterVisibleScreen = registerPtyVisibleScreen(ptyId, session.pane.terminal)
     const origOnDataDisposableDispose = session.onDataDisposable.dispose.bind(
       session.onDataDisposable
     )
     session.onDataDisposable.dispose = () => {
+      unregisterVisibleScreen()
       unregisterTitleSource()
       unregisterSerializer()
       origOnDataDisposableDispose()

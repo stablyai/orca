@@ -24,11 +24,11 @@ the structured-session mapping and nothing else.
 An audit on 2026-09-09 found six producers and three consumers, and three
 separate copies of the same row inside the main process alone:
 
-| Main-process copy                      | Keyed by  | Owned by                                                   | Persisted           | Evicted                       |
-| -------------------------------------- | --------- | ---------------------------------------------------------- | ------------------- | ----------------------------- |
-| hook server `lastStatusByPaneKey`      | paneKey   | `src/main/agent-hooks/server.ts`                           | `last-status.json`  | tab close, pty exit, hydrate  |
-| runtime `RuntimeAgentRowStore`         | paneKey   | `src/main/runtime/runtime-agent-row-store.ts`              | no                  | pty exit only                 |
-| structured feed `published`            | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no  | never (a broadcast cache)     |
+| Main-process copy                 | Keyed by  | Owned by                                                                          | Persisted          | Evicted                      |
+| --------------------------------- | --------- | --------------------------------------------------------------------------------- | ------------------ | ---------------------------- |
+| hook server `lastStatusByPaneKey` | paneKey   | `src/main/agent-hooks/server.ts`                                                  | `last-status.json` | tab close, pty exit, hydrate |
+| runtime `RuntimeAgentRowStore`    | paneKey   | `src/main/runtime/runtime-agent-row-store.ts`                                     | no                 | pty exit only                |
+| structured feed `published`       | sessionId | `src/main/native-chat/agent-session-wire/structured-agent-session-status-feed.ts` | no                 | never (a broadcast cache)    |
 
 The second copy is a duplicate write: the OSC status parsed in main is
 forwarded to the hook server _and_ retained in the runtime store from the same
@@ -92,14 +92,14 @@ The structured feed keeps its job of projecting a session's journal into a
 summary and streaming it to subscribers. On every publish it additionally
 ingests the summary into the hook server as a status row:
 
-| Row field         | From                                                          |
-| ----------------- | ------------------------------------------------------------- |
-| `paneKey`         | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it |
-| `tabId`           | `structuredAgentSessionTabId(sessionId)`                      |
-| `worktreeId`      | `summary.workspaceId` (a folder workspace id is a valid value) |
-| `state`           | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared |
-| `structuredHost`  | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it |
-| prompt, tool, last message, model, provider session | the summary's fields    |
+| Row field                                           | From                                                                                                                                            |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `paneKey`                                           | `structuredAgentSessionPaneKey(tabId, sessionId)`, the key the renderer already uses; its leaf is UUID-shaped so pane-key validation accepts it |
+| `tabId`                                             | `structuredAgentSessionTabId(sessionId)`                                                                                                        |
+| `worktreeId`                                        | `summary.workspaceId` (a folder workspace id is a valid value)                                                                                  |
+| `state`                                             | `structuredAgentSessionStatusState(summary.status)`, the mapping #19217 shared                                                                  |
+| `structuredHost`                                    | `'owned'` while `summary.hostExecutionOwned` is set, otherwise `'held'`; `worktree ps` derives its row's `structuredHostOwned` from it          |
+| prompt, tool, last message, model, provider session | the summary's fields                                                                                                                            |
 
 Sessions with no persisted turn (`status === null`) produce no row, matching
 what the chat shows. When the host revokes live ownership the row is re-set
@@ -211,14 +211,14 @@ unmount cleanup becomes a tab-close signal to the host. The IPC applicator is
 the single writer for observed status. The 2026-09-09 audit sorted the other
 writers:
 
-| Writer                                                          | Disposition                                        |
-| --------------------------------------------------------------- | -------------------------------------------------- |
-| Command Code output seeds, parked-pane seeds, pty-exit removal  | delete; main already emits the same facts          |
-| structured bridge status writes                                 | delete; main now publishes the row                 |
-| launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later |
-| dismissal, acknowledgement, unmount                             | keep; user facts and component lifecycle           |
-| remote-runtime OSC parse (bytes never transit local main)       | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |
-| web-session mirror receipt clock                                | keep; the decay rule needs both clocks from one machine |
+| Writer                                                            | Disposition                                                                                              |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Command Code output seeds, parked-pane seeds, pty-exit removal    | delete; main already emits the same facts                                                                |
+| structured bridge status writes                                   | delete; main now publishes the row                                                                       |
+| launch placeholder seeds (a user launched an agent with a prompt) | keep for now; main holds the launch config and can seed later                                            |
+| dismissal, acknowledgement, unmount                               | keep; user facts and component lifecycle                                                                 |
+| remote-runtime OSC parse (bytes never transit local main)         | keep, fenced behind the host's published row once the host is new enough; rule 3 of the wire doc applies |
+| web-session mirror receipt clock                                  | keep; the decay rule needs both clocks from one machine                                                  |
 
 The Command Code done-settle window is renderer policy with no main
 equivalent. PR 2 either moves it into main's detector or leaves it, and says

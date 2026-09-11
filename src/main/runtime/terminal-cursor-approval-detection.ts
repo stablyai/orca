@@ -1,4 +1,4 @@
-import { startOfLastLines } from './terminal-wait-tail-window'
+import { startOfLastLines } from '../../shared/terminal-wait-tail-window'
 
 /** cursor-agent's key-bound exec-approval menu, which no hook reports. */
 // Why text at all: cursor-agent has no approval hook, so the key-bound menu is the only authority.

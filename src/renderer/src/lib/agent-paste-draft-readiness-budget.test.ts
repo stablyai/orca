@@ -72,14 +72,14 @@ describe('pty-bound agent draft readiness budget', () => {
   })
 
   it('keeps the 8s readiness deadline for non-Codex agents', async () => {
-    const onTimeout = vi.fn()
+    const onUndelivered = vi.fn()
     const promise = pasteDraftToAgentPtyWhenReady({
       tabId: 'tab-1',
       ptyId: 'pty-1',
       content: 'draft',
       agent: 'opencode',
       forcePaste: true,
-      onTimeout
+      onUndelivered
     })
 
     await vi.advanceTimersByTimeAsync(9000)
@@ -91,7 +91,7 @@ describe('pty-bound agent draft readiness budget', () => {
       'render-cursor-after-bracketed-paste',
       {}
     )
-    expect(onTimeout).toHaveBeenCalledTimes(1)
+    expect(onUndelivered).toHaveBeenCalledTimes(1)
     expect(testState.sendInput).not.toHaveBeenCalled()
   })
 })
