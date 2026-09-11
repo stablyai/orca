@@ -1,0 +1,63 @@
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import type {
+  CoordinatedRelayBroker,
+  LiveBrokerWaitResult
+} from './relay-auth-coordinator-contract'
+import type { RelayOfflineReason } from './relay-offline-reason'
+
+// Why 20s: bounds only how long a waiter sits through armed retries and
+// superseded opens, never the open it arrived on. It spans the first few rungs
+// of the backoff ladder and stays inside the phone's 30s request budget, so a
+// sustained outage fails the caller with its cause instead of parking the
+// demand ref.
+export const LIVE_BROKER_WAIT_BUDGET_MS = 20_000
+
+// Every member is a function because the wait re-reads all of it after each
+// await; a snapshot would answer for a coordinator state that is already gone.
+export type LiveBrokerWaitSource = {
+  stopped: () => boolean
+  liveBroker: () => CoordinatedRelayBroker | null
+  reconcile: () => Promise<void>
+  // Resolves when a fresh reconcile or a fence turns the authority over, so a
+  // waiter is not left parked on a reconcile whose result is already discarded.
+  authorityChange: () => Promise<void>
+  armedRetry: () => Promise<void> | null
+  offlineReason: () => RelayOfflineReason | null
+}
+
+export async function runLiveBrokerWait(
+  source: LiveBrokerWaitSource,
+  budgetMs: number
+): Promise<LiveBrokerWaitResult> {
+  const deadline = Date.now() + budgetMs
+  while (!source.stopped()) {
+    const broker = source.liveBroker()
+    if (broker) {
+      return { broker }
+    }
+    const pending = source.reconcile()
+    const superseded = source.authorityChange()
+    // Why unbounded on `pending`: a reconcile always settles (opens carry HTTP
+    // deadlines), and cutting a slow-but-succeeding open short would fail a
+    // pairing that was about to work.
+    await Promise.race([pending, superseded])
+    if (pending !== source.reconcile()) {
+      continue
+    }
+    // Why: a reconcile that failed transiently has already armed its own retry;
+    // returning now would surface a hiccup fixed moments later. A terminal
+    // outcome (signed out, unentitled, rejected) arms nothing, so its cause
+    // returns without waiting.
+    const armed = source.armedRetry()
+    if (!armed || Date.now() >= deadline) {
+      return settledResult(source)
+    }
+    await withTimeout(armed, deadline - Date.now(), undefined)
+  }
+  return settledResult(source)
+}
+
+function settledResult(source: LiveBrokerWaitSource): LiveBrokerWaitResult {
+  const broker = source.liveBroker()
+  return broker ? { broker } : { broker: null, offlineReason: source.offlineReason() }
+}
