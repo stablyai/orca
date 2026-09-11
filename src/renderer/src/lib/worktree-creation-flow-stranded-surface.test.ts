@@ -224,7 +224,7 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     })
   })
 
-  it('activating branch: does not treat a default tab as the agent launch tab', async () => {
+  it('activating branch: routes draft and follow-up delivery to the stamped agent tab', async () => {
     const request = makeRequest({
       agent: 'codex',
       startupPlan: {
