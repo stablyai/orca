@@ -256,6 +256,32 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).toHaveBeenCalledWith('a')
   })
 
+  it('keeps large ANSI redraws after captured shortcut input on the immediate path', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-1')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-1'
+    })
+    transportFactoryQueue.push(transport)
+
+    const binding = connectPanePty(
+      pane as never,
+      createManager(1) as never,
+      createDeps() as never
+    ) as unknown as { markShortcutTerminalInputSent: () => void }
+    await flushAsyncTicks()
+    binding.markShortcutTerminalInputSent()
+
+    const redraw = `\x1b[2J\x1b[H${'pi composer redraw '.repeat(200)}`
+    expect(redraw.length).toBeGreaterThan(2_048)
+    capturedDataCallback.current?.(redraw)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
+  })
+
   it('does not let OpenTUI-style small ANSI redraw bursts monopolize foreground writes', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const pane = createPane(1)

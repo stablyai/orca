@@ -4,6 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from './rpc-client'
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
 
+const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+
+vi.mock('./host-app-version-store', () => ({
+  normalizeHostAppVersion: (value: unknown) => (typeof value === 'string' ? value : null),
+  recordHostAppVersion: (...args: unknown[]) => recordHostAppVersionMock(...args)
+}))
+
 describe('useHostStatusGates', () => {
   it('clears every prior-host gate and ignores its late response while the client is replaced', async () => {
     let resolveOldStatus: ((response: unknown) => void) | null = null
@@ -76,6 +83,7 @@ describe('useHostStatusGates', () => {
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,
       result: {
+        appVersion: '1.4.191',
         capabilities: ['browser.screencast.v1'],
         floatingWorkspaceEnabled: true
       }
@@ -95,11 +103,13 @@ describe('useHostStatusGates', () => {
         await Promise.resolve()
       })
       expect(gates).toMatchObject({
+        desktopAppVersion: '1.4.191',
         hostCapabilities: ['browser.screencast.v1'],
         floatingWorkspaceEnabled: true
       })
 
       expect(sendRequest).toHaveBeenCalledOnce()
+      expect(recordHostAppVersionMock).toHaveBeenCalledWith('host-1', '1.4.191')
     } finally {
       renderer?.unmount()
     }

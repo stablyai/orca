@@ -515,6 +515,12 @@ describe('AgentHookServer listener replay', () => {
   // Why: closedAgentStatusTabIds is LRU-bounded, so the tab fence is not permanent.
   // If restoring a sibling key lifted the closed tab's PANE fence too, eviction of the
   // tab id would leave nothing at all holding that pane shut.
+  //
+  // Why a non-boundary event: a genuine new turn deliberately lifts the pane fence
+  // (STA-3386), so it cannot be used to prove the fence exists. Measured on the pre-fix
+  // tree, `claude` + `UserPromptSubmit` already revived this pane; this case only ever
+  // passed with `before_agent_start` because the gate matched two raw literals and did not
+  // recognize pi's boundary. The control below keeps it from passing for that reason again.
   it('leaves a closed tab pane fenced once its tab id is evicted', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -545,10 +551,18 @@ describe('AgentHookServer listener replay', () => {
       }
 
       await postHook(
-        { hook_event_name: 'before_agent_start', prompt: 'after eviction' },
+        { hook_event_name: 'agent_end', prompt: 'after eviction' },
         { paneKey: detachedPane, tabId: 'tab-2' }
       )
       expect(server.getStatusSnapshot()).toEqual([])
+
+      // Why: proves the empty snapshot above came from the fence and not from an inert
+      // event — the same post on an unfenced pane must produce a row.
+      await postHook(
+        { hook_event_name: 'agent_end', prompt: 'unfenced control' },
+        { paneKey: makePaneKey('tab-9', LEAF_3), tabId: 'tab-9' }
+      )
+      expect(server.getStatusSnapshot()).toHaveLength(1)
     } finally {
       server.stop()
     }

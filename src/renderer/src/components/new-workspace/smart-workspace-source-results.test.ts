@@ -7,6 +7,7 @@ import {
   getVisibleBranchResults,
   getVisibleHeldProviderResults,
   isBlockingJiraUrlIntent,
+  isBlockingTaskUrlResolution,
   shouldHoldSourceResultsForQuery
 } from './smart-workspace-source-results'
 import {
@@ -681,6 +682,38 @@ describe('Linear issue source input', () => {
 
     expect(parseBoundedSmartWorkspaceLinearIssueInput(oversized)).toBeNull()
     expect(isBlockingLinearUrlIntent('smart', oversized)).toBe(false)
+  })
+})
+
+describe('Task URL Enter protection', () => {
+  it('blocks Enter while a pasted GitHub or GitLab URL is resolving', () => {
+    expect(
+      isBlockingTaskUrlResolution({
+        sourceIntent: 'github',
+        isQueryStale: true,
+        githubLoading: false,
+        gitlabLoading: false
+      })
+    ).toBe(true)
+    expect(
+      isBlockingTaskUrlResolution({
+        sourceIntent: 'gitlab',
+        isQueryStale: false,
+        githubLoading: false,
+        gitlabLoading: true
+      })
+    ).toBe(true)
+  })
+
+  it('keeps the workspace-name fallback after lookup settles without a match', () => {
+    expect(
+      isBlockingTaskUrlResolution({
+        sourceIntent: 'github',
+        isQueryStale: false,
+        githubLoading: false,
+        gitlabLoading: false
+      })
+    ).toBe(false)
   })
 })
 

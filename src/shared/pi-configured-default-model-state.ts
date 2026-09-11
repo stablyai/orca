@@ -10,11 +10,7 @@ export type PiConfiguredDefaultModelState = NonNullable<
   GlobalSettings['piConfiguredDefaultModelState']
 >
 
-function normalizeModelId(modelId: string | undefined): string | undefined {
-  return modelId === PI_DEFAULT_MODEL_ID ? PI_RETIRED_COPILOT_DEFAULT_MODEL_ID : modelId
-}
-
-function normalizeChoice(choice: {
+export function normalizePiConfiguredDefaultForLegacy(choice: {
   selectedModelByAgent?: Partial<Record<string, string>>
   selectedModelByAgentByHost?: Partial<Record<string, Partial<Record<string, string>>>>
 }): boolean {
@@ -38,58 +34,29 @@ export function migratePiConfiguredDefaultModelState(args: {
   persistedState: GlobalSettings['piConfiguredDefaultModelState']
 }): { state: PiConfiguredDefaultModelState; changed: boolean } {
   const { sourceControlAi, commitMessageAi } = args
-  let changed = normalizeChoice(sourceControlAi)
-  if (commitMessageAi) {
-    changed = normalizeChoice(commitMessageAi) || changed
-  }
-  for (const choice of Object.values(sourceControlAi.modelOverridesByOperation ?? {})) {
-    if (choice) {
-      changed = normalizeChoice(choice) || changed
-    }
-  }
-
   const state: PiConfiguredDefaultModelState =
     args.persistedState?.version === 1
       ? structuredClone(args.persistedState)
       : { version: 1, defaultsByHost: {}, commitMessageSeedByHost: {} }
-  if (!args.persistedState) {
-    const localModel =
-      sourceControlAi.selectedModelByAgentByHost?.local?.pi ??
-      sourceControlAi.selectedModelByAgent.pi
-    if (normalizeModelId(localModel) === PI_RETIRED_COPILOT_DEFAULT_MODEL_ID) {
-      state.defaultsByHost.local = true
+  let changed = !args.persistedState
+  // Historical Copilot selections have no provenance; preserve them as explicit choices.
+  for (const [choice, marks] of [
+    [sourceControlAi, state.defaultsByHost],
+    [sourceControlAi.modelOverridesByOperation?.commitMessage, state.commitMessageSeedByHost]
+  ] as const) {
+    if (!choice) {
+      continue
     }
-    for (const [hostKey, models] of Object.entries(
-      sourceControlAi.selectedModelByAgentByHost ?? {}
-    )) {
-      if (normalizeModelId(models?.pi) === PI_RETIRED_COPILOT_DEFAULT_MODEL_ID) {
-        state.defaultsByHost[hostKey] = true
+    const hostKeys = new Set(['local', ...Object.keys(choice.selectedModelByAgentByHost ?? {})])
+    for (const hostKey of hostKeys) {
+      if (modelForHost(choice, hostKey) === PI_DEFAULT_MODEL_ID) {
+        marks[hostKey] = true
+        changed = true
       }
     }
-    const commitChoice = sourceControlAi.modelOverridesByOperation?.commitMessage
-    const legacyLocal =
-      commitMessageAi?.selectedModelByAgentByHost?.local?.pi ??
-      commitMessageAi?.selectedModelByAgent.pi
-    const commitLocal =
-      commitChoice?.selectedModelByAgentByHost?.local?.pi ?? commitChoice?.selectedModelByAgent?.pi
-    if (
-      normalizeModelId(commitLocal) === PI_RETIRED_COPILOT_DEFAULT_MODEL_ID &&
-      normalizeModelId(legacyLocal) === PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
-    ) {
-      state.commitMessageSeedByHost.local = true
-    }
-    for (const [hostKey, models] of Object.entries(
-      commitChoice?.selectedModelByAgentByHost ?? {}
-    )) {
-      if (
-        normalizeModelId(models?.pi) === PI_RETIRED_COPILOT_DEFAULT_MODEL_ID &&
-        normalizeModelId(commitMessageAi?.selectedModelByAgentByHost?.[hostKey]?.pi) ===
-          PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
-      ) {
-        state.commitMessageSeedByHost[hostKey] = true
-      }
-    }
-    changed = true
+  }
+  if (commitMessageAi) {
+    changed = normalizePiConfiguredDefaultForLegacy(commitMessageAi) || changed
   }
   return { state, changed }
 }
@@ -151,10 +118,6 @@ export function applyPiConfiguredDefaultSelectionUpdate(args: {
     } else {
       delete state.commitMessageSeedByHost[hostKey]
     }
-  }
-  normalizeChoice(args.next)
-  if (args.next.modelOverridesByOperation?.commitMessage) {
-    normalizeChoice(args.next.modelOverridesByOperation.commitMessage)
   }
   return state
 }

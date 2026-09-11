@@ -1,0 +1,53 @@
+import type { ChecksPanelControllerState } from './use-checks-panel-controller-state'
+import type { ChecksPanelContextState } from './use-checks-panel-context-state'
+import type { ChecksPanelPollingState } from './use-checks-panel-polling'
+import type { ChecksPanelComposerState } from './use-checks-panel-composer-state'
+
+export type ChecksPanelManualRefreshInput = Pick<
+  ChecksPanelControllerState,
+  | 'activeConnectionId'
+  | 'activeWorktreeId'
+  | 'activeWorktreePath'
+  | 'activeWorktreePushTarget'
+  | 'asyncResultKeyRef'
+  | 'branch'
+  | 'expireGitHubPRRefreshState'
+  | 'fetchHostedReviewForBranch'
+  | 'fetchPRChecks'
+  | 'fetchPRComments'
+  | 'fetchPRForBranch'
+  | 'gitStatusSnapshot'
+  | 'ownerSettings'
+  | 'panelContextKey'
+  | 'panelContextKeyRef'
+  | 'pollIntervalRef'
+  | 'prevChecksRef'
+  | 'refreshInFlightRef'
+  | 'refreshRequestKeyRef'
+  | 'repo'
+  | 'setChecks'
+  | 'setChecksLoading'
+  | 'setComments'
+  | 'setCommentsLoading'
+  | 'setEligibilityRefreshNonce'
+  | 'setGitStatusSnapshot'
+  | 'setIsRefreshing'
+  | 'updateWorktreeGitIdentity'
+> &
+  Pick<
+    ChecksPanelContextState,
+    | 'activeGitLabReview'
+    | 'fallbackGitHubPRNumber'
+    | 'isFolder'
+    | 'isGitLabReviewContext'
+    | 'linkedAzureDevOpsPR'
+    | 'linkedBitbucketPR'
+    | 'linkedGiteaPR'
+    | 'linkedGitLabMR'
+    | 'linkedPR'
+    | 'pr'
+    | 'prCacheKey'
+    | 'prNumber'
+  > &
+  Pick<ChecksPanelPollingState, 'fetchGitLabDetails'> &
+  Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'>

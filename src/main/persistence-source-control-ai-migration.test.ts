@@ -167,7 +167,7 @@ describe('Store', () => {
     expect(store.getSettings().commitMessageAi?.customPrompt).toBe('Use Conventional Commits.')
   })
 
-  it("marks Orca's released Pi seed without reinterpreting later concrete writes", async () => {
+  it('preserves ambiguous historical Pi Copilot selections', async () => {
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -189,12 +189,12 @@ describe('Store', () => {
 
     const store = await createStore()
 
-    expect(store.getSettings().piConfiguredDefaultModelState?.defaultsByHost.local).toBe(true)
+    expect(store.getSettings().piConfiguredDefaultModelState?.defaultsByHost.local).toBeUndefined()
     store.flush()
     expect((readDataFile() as PersistedState).settings.piConfiguredDefaultModelState).toMatchObject(
       {
         version: 1,
-        defaultsByHost: { local: true }
+        defaultsByHost: {}
       }
     )
   })

@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import {
-  cursorPositionCache,
+  editorSelectionCache,
   diffViewStateCache,
   pdfViewPositionCache,
   setWithLRU,
@@ -9,7 +9,7 @@ import {
 
 beforeEach(() => {
   scrollTopCache.clear()
-  cursorPositionCache.clear()
+  editorSelectionCache.clear()
   diffViewStateCache.clear()
   pdfViewPositionCache.clear()
 })
@@ -117,6 +117,29 @@ describe('scrollTopCache', () => {
     expect(scrollTopCache.get('/path/to/file.ts:preview')).toBe(200)
     expect(scrollTopCache.get('/path/to/file.ts:rich')).toBe(300)
     expect(scrollTopCache.size).toBe(3)
+  })
+})
+
+describe('editorSelectionCache', () => {
+  it('keeps each pane selection independent', () => {
+    const firstSelection = {
+      selectionStartLineNumber: 2,
+      selectionStartColumn: 3,
+      positionLineNumber: 4,
+      positionColumn: 5
+    }
+    const secondSelection = {
+      selectionStartLineNumber: 8,
+      selectionStartColumn: 2,
+      positionLineNumber: 6,
+      positionColumn: 1
+    }
+
+    setWithLRU(editorSelectionCache, '/path/to/file.ts', [firstSelection])
+    setWithLRU(editorSelectionCache, '/path/to/file.ts::tab-2', [secondSelection])
+
+    expect(editorSelectionCache.get('/path/to/file.ts')).toEqual([firstSelection])
+    expect(editorSelectionCache.get('/path/to/file.ts::tab-2')).toEqual([secondSelection])
   })
 })
 

@@ -11,7 +11,11 @@ import type { AgentType } from '../../shared/agent-status-types'
 import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
-import { resolveEnvironmentSkillProviderRoots } from './skill-provider-runtime-roots'
+import {
+  resolveDefaultHermesSkillsRoot,
+  resolveEnvironmentHermesSkillsRoot,
+  resolveEnvironmentSkillProviderRoots
+} from './skill-provider-runtime-roots'
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
 type SkillDiscoveryPathApi = Pick<typeof posix, 'basename' | 'join'>
@@ -43,12 +47,25 @@ export function sourceLabelForSkill(root: SkillScanRoot, sourceKind: SkillSource
   return sourceKind === 'bundled' ? `${root.label} bundled` : root.label
 }
 
-export function compareSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
-  return (
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
-    a.sourceLabel.localeCompare(b.sourceLabel, undefined, { sensitivity: 'base' }) ||
-    a.skillFilePath.localeCompare(b.skillFilePath)
+export function sortDiscoveredSkills(skills: DiscoveredSkill[]): DiscoveredSkill[] {
+  if (skills.length < 2) {
+    return skills
+  }
+  const compare = new Intl.Collator(undefined, { sensitivity: 'base' }).compare
+  return skills.sort(
+    (a, b) =>
+      compare(a.name, b.name) ||
+      compare(a.sourceLabel, b.sourceLabel) ||
+      a.skillFilePath.localeCompare(b.skillFilePath)
   )
+}
+
+export function sortSkillDiscoverySources(sources: SkillDiscoverySource[]): SkillDiscoverySource[] {
+  if (sources.length < 2) {
+    return sources
+  }
+  const compare = new Intl.Collator(undefined, { sensitivity: 'base' }).compare
+  return sources.sort((a, b) => compare(a.label, b.label))
 }
 
 function source(
@@ -77,6 +94,13 @@ export function buildSkillDiscoverySources(
   const cwd = args.cwd ?? process.cwd()
   const providerRootOverrides =
     args.providerRootOverrides ?? (args.pathApi ? {} : resolveEnvironmentSkillProviderRoots())
+  // Why: HERMES_HOME moves the whole profile tree, so the default home path
+  // finds nothing for `hermes -p <profile>`. Only this process's own host can
+  // read it — a custom pathApi means the home belongs to another host, whose
+  // Hermes install is POSIX-shaped even when this process runs on Windows.
+  const hermesSkillsRoot = args.pathApi
+    ? pathApi.join(home, '.hermes', 'skills')
+    : (resolveEnvironmentHermesSkillsRoot() ?? resolveDefaultHermesSkillsRoot({ homeDir: home }))
   const roots: SkillScanRoot[] = [
     source(
       'home-codex',
@@ -144,6 +168,7 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'omp'
     ),
+    source('home-hermes', 'Hermes home', hermesSkillsRoot, 'home', ['agent-skills'], 'hermes'),
     source(
       'home-prime-agent',
       'Prime Agent home',

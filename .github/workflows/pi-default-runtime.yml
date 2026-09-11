@@ -1,0 +1,28 @@
+name: Pi configured default verification
+on:
+  pull_request:
+    paths:
+      - 'src/shared/commit-message-agent-specs-primary.ts'
+      - 'tests/tools/pi-default-runtime-smoke.mjs'
+      - '.github/workflows/pi-default-runtime.yml'
+permissions:
+  contents: read
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Install pinned Pi runtime
+        run: npm install --prefix .cache/pi-default --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@0.84.2
+      - name: Verify configured default and explicit override before and after
+        run: node tests/tools/pi-default-runtime-smoke.mjs .cache/pi-default/node_modules/@earendil-works/pi-coding-agent/dist/cli.js

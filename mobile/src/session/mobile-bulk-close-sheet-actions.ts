@@ -16,7 +16,7 @@ type BulkCloseSheetDeps = {
 }
 
 /**
- * Builds the long-press bulk-close entries (Close Others / Left / Right) shared
+ * Builds the long-press bulk-close entries (Close Others / Left) shared
  * by every session tab sheet. Lives outside the session route to keep the
  * orchestration out of its max-lines budget; anchors are passed by tab id so
  * sheets never need the full tab object.

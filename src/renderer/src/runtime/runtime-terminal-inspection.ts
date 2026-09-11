@@ -1,23 +1,80 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey, type PaneKey } from '../../../shared/stable-pane-id'
 import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
 import { useAppStore } from '../store'
-import { RuntimeRpcCallError, callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
+import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
 } from './runtime-terminal-stream'
+import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
+import {
+  classifyTerminalProcessInspectionFailure,
+  clientOnlyUnverifiableInspection,
+  isClientOnlyUnverifiableInspection,
+  type TerminalProcessInspection
+} from '../../../shared/terminal-process-inspection'
 
-export type RuntimeTerminalProcessInspection = {
-  foregroundProcess: string | null
-  hasChildProcesses: boolean
-  // Why: callers must not treat a stale remote handle as authoritative idle evidence.
-  unavailable?: true
-}
+export type {
+  ClientOnlyUnverifiableInspection,
+  ClientOnlyUnverifiableReason
+} from '../../../shared/terminal-process-inspection'
+
+export type RuntimeTerminalProcessInspection = TerminalProcessInspection
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
+type TerminalLayoutsByTabId = ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
+type TerminalPaneOwner = {
+  tabId: string
+  leafId: string
+  paneKey: PaneKey
+}
+
+const paneOwnersByPtyIdByLayoutIdentity = new WeakMap<
+  TerminalLayoutsByTabId,
+  Map<string, TerminalPaneOwner>
+>()
+
+function resolvePaneKeyForPtyId(layouts: TerminalLayoutsByTabId, ptyId: string): PaneKey | null {
+  let paneOwnersByPtyId = paneOwnersByPtyIdByLayoutIdentity.get(layouts)
+  if (!paneOwnersByPtyId) {
+    paneOwnersByPtyId = new Map<string, TerminalPaneOwner>()
+    paneOwnersByPtyIdByLayoutIdentity.set(layouts, paneOwnersByPtyId)
+  }
+  const cachedOwner = paneOwnersByPtyId.get(ptyId)
+  if (cachedOwner) {
+    const layout = Object.prototype.propertyIsEnumerable.call(layouts, cachedOwner.tabId)
+      ? layouts[cachedOwner.tabId]
+      : undefined
+    const ptyIdsByLeafId = layout?.ptyIdsByLeafId
+    if (
+      ptyIdsByLeafId &&
+      Object.prototype.propertyIsEnumerable.call(ptyIdsByLeafId, cachedOwner.leafId) &&
+      ptyIdsByLeafId[cachedOwner.leafId] === ptyId
+    ) {
+      return cachedOwner.paneKey
+    }
+    paneOwnersByPtyId.delete(ptyId)
+  }
+  for (const [tabId, layout] of Object.entries(layouts)) {
+    for (const [leafId, leafPtyId] of Object.entries(layout?.ptyIdsByLeafId ?? {})) {
+      if (leafPtyId !== ptyId) {
+        continue
+      }
+      try {
+        const paneKey = makePaneKey(tabId, leafId)
+        paneOwnersByPtyId.set(ptyId, { tabId, leafId, paneKey })
+        return paneKey
+      } catch {
+        // Preserve first-match behavior for malformed legacy layout rows.
+        return null
+      }
+    }
+  }
+  return null
+}
 
 function isRuntimePtyInputTooLarge(data: string): boolean | Promise<boolean> {
   return isTerminalInputTooLargeWithDeferredMeasurement(data)
@@ -27,70 +84,104 @@ export function isRemoteRuntimePtyId(ptyId: string): boolean {
   return ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
 }
 
-function isTerminalGoneError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  const code =
-    error instanceof RuntimeRpcCallError
-      ? error.code
-      : error && typeof error === 'object' && 'code' in error
-        ? String((error as { code?: unknown }).code)
-        : ''
-  return (
-    code === 'no_connected_pty' ||
-    code === 'terminal_handle_stale' ||
-    code === 'terminal_exited' ||
-    code === 'terminal_gone' ||
-    message.includes('terminal_handle_stale') ||
-    message.includes('terminal_exited') ||
-    message.includes('terminal_gone') ||
-    message.includes('no_connected_pty')
-  )
+function isRemoteInspectionPtyId(ptyId: string): boolean {
+  return getRemoteRuntimePtyEnvironmentId(ptyId) !== null || parseAppSshPtyId(ptyId) !== null
+}
+
+function normalizeInspectionResult(
+  result: TerminalProcessInspection,
+  remote: boolean
+): RuntimeTerminalProcessInspection {
+  if (typeof result !== 'object' || result === null) {
+    return clientOnlyUnverifiableInspection(remote ? 'old_host' : 'terminal_gone')
+  }
+  // A client-only result may have crossed a mixed-version preload/runtime boundary.
+  if (isClientOnlyUnverifiableInspection(result)) {
+    return clientOnlyUnverifiableInspection(
+      typeof result.reason === 'string' ? result.reason : 'transport_loss'
+    )
+  }
+  // An old host has no evidence member. Its compatibility process name is not
+  // an observation and must never reach remote identity consumers.
+  if (remote && result.foregroundProcessEvidence === undefined) {
+    return clientOnlyUnverifiableInspection('old_host')
+  }
+  // Older main/preload pairs may still return the removed boolean. Normalize it
+  // at the boundary while those peers are being upgraded.
+  if (
+    result &&
+    typeof result === 'object' &&
+    'unavailable' in result &&
+    (result as { unavailable?: unknown }).unavailable === true
+  ) {
+    return clientOnlyUnverifiableInspection('terminal_gone')
+  }
+  return result
 }
 
 export function recordRuntimeTerminalInputForPtyId(ptyId: string, timestamp = Date.now()): void {
   const state = useAppStore.getState()
-  for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
-    for (const [leafId, leafPtyId] of Object.entries(layout?.ptyIdsByLeafId ?? {})) {
-      if (leafPtyId !== ptyId) {
-        continue
-      }
-      try {
-        // Why: paired/runtime sends can bypass xterm.onData, so hibernation
-        // needs the same user-input marker from the PTY-id route.
-        state.recordTerminalInput(makePaneKey(tabId, leafId), timestamp)
-      } catch {
-        // Ignore malformed legacy layout data; the planner will stay
-        // conservative when a live PTY cannot be matched to an eligible pane.
-      }
-      return
-    }
+  const paneKey = resolvePaneKeyForPtyId(state.terminalLayoutsByTabId, ptyId)
+  if (!paneKey) {
+    return
+  }
+  try {
+    // Why: paired/runtime sends can bypass xterm.onData, so hibernation
+    // needs the same user-input marker from the PTY-id route.
+    state.recordTerminalInput(paneKey, timestamp)
+  } catch {
+    // Ignore malformed legacy layout data; the planner will stay
+    // conservative when a live PTY cannot be matched to an eligible pane.
   }
 }
 
 export async function inspectRuntimeTerminalProcess(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  ptyId: string
+  ptyId: string,
+  options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean; steadyState?: boolean }
 ): Promise<RuntimeTerminalProcessInspection> {
   const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
   const target = ownerEnvironmentId
     ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
     : getActiveRuntimeTarget(settings)
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
+  const remote = isRemoteInspectionPtyId(ptyId)
   if (target.kind !== 'environment' || !terminal) {
-    return window.api.pty.inspectProcess(ptyId)
+    try {
+      const result = await (options
+        ? window.api.pty.inspectProcess(ptyId, options)
+        : window.api.pty.inspectProcess(ptyId))
+      return normalizeInspectionResult(result, remote)
+    } catch (error) {
+      const reason = classifyTerminalProcessInspectionFailure(error)
+      if (reason) {
+        return clientOnlyUnverifiableInspection(reason)
+      }
+      throw error
+    }
   }
 
   try {
     const result = await callRuntimeRpc<{ process: RuntimeTerminalProcessInspection }>(
       target,
       'terminal.inspectProcess',
-      { terminal },
+      {
+        terminal,
+        ...(options?.expectedIncarnationId
+          ? { expectedIncarnationId: options.expectedIncarnationId }
+          : {}),
+        // Why forwarded: the close guards pass this so the host pays for a real child-process read.
+        // Dropped here, the host declines to scan and answers `unverifiable`, which the guard reads
+        // as running work -- a confirmation dialog on every idle close of a remote Windows pane.
+        ...(options?.scanChildProcesses === true ? { scanChildProcesses: true } : {})
+      },
       { timeoutMs: 15_000 }
     )
-    return result.process
+    return normalizeInspectionResult(result.process, true)
   } catch (error) {
-    if (isTerminalGoneError(error)) {
-      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true }
+    const reason = classifyTerminalProcessInspectionFailure(error)
+    if (reason) {
+      return clientOnlyUnverifiableInspection(reason)
     }
     throw error
   }
@@ -220,7 +311,7 @@ export async function sendRuntimePtyInputVerified(
     }
     return false
   } catch (error) {
-    if (isTerminalGoneError(error)) {
+    if (classifyTerminalProcessInspectionFailure(error) === 'terminal_gone') {
       return false
     }
     throw error

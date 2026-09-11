@@ -6,6 +6,7 @@ import {
   advanceSourceTerminalEnd,
   cancelOpenSourceObligations,
   requireSourceSpan,
+  type SpanRecord,
   type TokenRecord
 } from './ssh-pty-source-obligation-state'
 
@@ -25,7 +26,7 @@ export function applySourceRecoveryCancellationProof(
 }
 
 export function transitionOpenSourceObligation(
-  spanOwners: ReadonlyMap<string, TokenRecord>,
+  spanOwners: ReadonlyMap<string, SpanRecord>,
   spanId: string,
   consumer: SshPtySourceConsumerId,
   next: SshPtySourceObligationState
@@ -40,7 +41,7 @@ export function transitionOpenSourceObligation(
 }
 
 export function commitSourceObligationTransfer(
-  spanOwners: ReadonlyMap<string, TokenRecord>,
+  spanOwners: ReadonlyMap<string, SpanRecord>,
   spanId: string,
   consumer: SshPtySourceConsumerId
 ): boolean {
@@ -58,7 +59,7 @@ export function commitSourceObligationTransfer(
 }
 
 export function cancelSourceObligationTransfer(
-  spanOwners: ReadonlyMap<string, TokenRecord>,
+  spanOwners: ReadonlyMap<string, SpanRecord>,
   spanId: string,
   consumer: SshPtySourceConsumerId,
   reason: string
@@ -73,7 +74,7 @@ export function cancelSourceObligationTransfer(
 }
 
 export function rollbackSourceObligationTransfer(
-  spanOwners: ReadonlyMap<string, TokenRecord>,
+  spanOwners: ReadonlyMap<string, SpanRecord>,
   spanId: string,
   consumer: SshPtySourceConsumerId
 ): boolean {

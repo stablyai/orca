@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   projectHostSetupProjectionFromRepos,
   getProjectHostSetupsForProject,
-  getProjectHostSetupWorktreeMeta,
   isGitHubBackedRepo,
   getProjectIdForProviderIdentity,
   isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
+import { getProjectHostSetupWorktreeMeta } from './project-host-setup-lookup'
 import type { Repo } from './repo-types'
 
 function repo(overrides: Partial<Repo> & Pick<Repo, 'id' | 'path' | 'displayName'>): Repo {
@@ -663,4 +663,54 @@ describe('derived project identity stability', () => {
     ])
     expect(projection.projects.map((project) => project.id)).toEqual(['github:acme/app'])
   })
+})
+
+describe('getProjectHostSetupWorktreeMeta host selection', () => {
+  it("picks the setup for the repo's own execution host when a repoId spans two hosts", () => {
+    const sshRepo = repo({
+      id: 'repo-shared',
+      path: '/remote/orca',
+      displayName: 'orca',
+      connectionId: 'build-box'
+    })
+    // Local first in the array: a repoId-only match would stamp the wrong host durably.
+    const setups = [
+      ...projectHostSetupProjectionFromRepos([
+        repo({ id: 'repo-shared', path: '/local/orca', displayName: 'orca' })
+      ]).setups,
+      ...projectHostSetupProjectionFromRepos([sshRepo]).setups
+    ]
+
+    expect(getProjectHostSetupWorktreeMeta(setups, sshRepo).hostId).toBe('ssh:build-box')
+  })
+})
+
+it('appends project source IDs without repeatedly copying an accumulating array', () => {
+  const repos = Array.from({ length: 2000 }, (_, i) =>
+    repo({
+      id: `source-${i}`,
+      path: `/repos/${i}`,
+      displayName: `Repo ${i}`,
+      upstream: { owner: 'acme', repo: 'project' }
+    })
+  )
+  let copied = 0
+  const iterator = Array.prototype[Symbol.iterator]
+  Array.prototype[Symbol.iterator] = function (this: unknown[]) {
+    if (this[0] === 'source-0') {
+      copied += this.length
+    }
+    return iterator.call(this)
+  }
+  let result: ReturnType<typeof projectHostSetupProjectionFromRepos>
+  try {
+    result = projectHostSetupProjectionFromRepos([...repos, repos[0]])
+  } finally {
+    Array.prototype[Symbol.iterator] = iterator
+  }
+  expect(copied).toBeLessThan(10_000)
+  expect(result.projects).toHaveLength(1)
+  expect(result.projects[0].sourceRepoIds).toEqual(repos.map((repo) => repo.id))
+  expect(result.setups).toHaveLength(2001)
+  expect(repos[0].displayName).toBe('Repo 0')
 })

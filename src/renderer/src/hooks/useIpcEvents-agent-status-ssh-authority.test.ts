@@ -19,13 +19,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('retires the exact sleeping record after adopted or exited legacy worker recovery', async () => {
     const clearSleepingAgentSession = vi.fn()
-    const setSleepingAgentAutomaticResumeBlocked = vi.fn()
     let listener:
       | ((data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void)
       | undefined
     const storeState = buildStoreState({
-      clearSleepingAgentSession,
-      setSleepingAgentAutomaticResumeBlocked
+      clearSleepingAgentSession
     })
 
     stubReactSyncEffect()
@@ -54,12 +52,10 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     listener?.({ paneKey: 'tab-adopted:leaf-adopted', resolution: 'adopted' })
     expect(clearSleepingAgentSession).toHaveBeenCalledWith('tab-adopted:leaf-adopted')
-    expect(setSleepingAgentAutomaticResumeBlocked).not.toHaveBeenCalled()
 
     clearSleepingAgentSession.mockClear()
     listener?.({ paneKey: 'tab-exited:leaf-exited', resolution: 'exited' })
     expect(clearSleepingAgentSession).toHaveBeenCalledWith('tab-exited:leaf-exited')
-    expect(setSleepingAgentAutomaticResumeBlocked).not.toHaveBeenCalled()
   })
 
   it.each([

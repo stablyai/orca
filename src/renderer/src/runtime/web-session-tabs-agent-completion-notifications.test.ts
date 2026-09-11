@@ -25,6 +25,7 @@ import {
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsStorePatch,
+  decideWebSessionTabsSnapshot,
   resetWebSessionTabsSnapshotFreshnessForTests
 } from './web-session-tabs-sync'
 
@@ -76,8 +77,10 @@ function makeAgentSnapshot(
 }
 
 function applySnapshot(snapshot: RuntimeMobileSessionTabsResult, live: boolean): void {
+  const decision = decideWebSessionTabsSnapshot(snapshot, ENVIRONMENT_ID)
   applyWebSessionTabsStorePatch(
     (state) => applyWebSessionTabsSnapshot(state, snapshot, ENVIRONMENT_ID, NOW),
+    { frames: [{ environmentId: ENVIRONMENT_ID, worktreeId: snapshot.worktree, decision }] },
     snapshot,
     live
   )

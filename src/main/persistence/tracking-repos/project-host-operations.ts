@@ -13,13 +13,13 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import { makeProjectHostSetupId } from './project-host-compatibility'
 import { repoGitUsernameCacheKey } from './repo-hydration'
 
 export type ProjectHostMutationOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   gitUsernameCache: Map<string, string>
+  bumpLocalWorktreeScanGeneration: (repoId: string) => void
   hydrateRepo: (repo: Repo) => Repo
   updateRepoBackedProjectHostSetup: (
     setup: ProjectHostSetup,
@@ -88,6 +88,9 @@ export class ProjectHostPersistenceOperations {
       return null
     }
     if ('localWindowsRuntimePreference' in updates) {
+      for (const repoId of project.sourceRepoIds) {
+        this.operations.bumpLocalWorktreeScanGeneration(repoId)
+      }
       if (updates.localWindowsRuntimePreference === undefined) {
         delete project.localWindowsRuntimePreference
       } else {

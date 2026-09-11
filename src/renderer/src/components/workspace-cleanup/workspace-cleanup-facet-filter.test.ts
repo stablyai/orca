@@ -26,6 +26,7 @@ import {
   queryWorkspaceCleanupCandidates
 } from './workspace-cleanup-query'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import { canQueueWorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 
 function filters(patch: (state: WorkspaceCleanupFilterState) => void): WorkspaceCleanupFilterState {
   const state = createDefaultWorkspaceCleanupFilterState()
@@ -100,7 +101,10 @@ describe('facet building', () => {
   it('keeps same-id worktrees and sizes isolated by host', () => {
     const candidates = [
       makeFacetCandidate({ executionHostId: 'local' }),
-      makeFacetCandidate({ executionHostId: 'ssh:builder', connectionId: 'builder' })
+      makeFacetCandidate({
+        executionHostId: 'ssh:builder',
+        connectionId: 'builder'
+      })
     ]
     const sizes = buildWorkspaceCleanupSizeIndex(
       [
@@ -130,7 +134,10 @@ describe('facet building', () => {
   it('does not apply a legacy size to duplicate candidate ids', () => {
     const candidates = [
       makeFacetCandidate({ executionHostId: 'local' }),
-      makeFacetCandidate({ executionHostId: 'ssh:builder', connectionId: 'builder' })
+      makeFacetCandidate({
+        executionHostId: 'ssh:builder',
+        connectionId: 'builder'
+      })
     ]
     const sizes = buildWorkspaceCleanupSizeIndex(
       [{ worktreeId: candidates[0]!.worktreeId, status: 'ok', sizeBytes: 10 }],
@@ -213,7 +220,9 @@ describe('activity filter', () => {
   })
 
   it('separates background activity from a real visit', () => {
-    const busyButUnopened = makeFacets({ candidate: { lastActivityAt: FACET_NOW } })
+    const busyButUnopened = makeFacets({
+      candidate: { lastActivityAt: FACET_NOW }
+    })
     const state = filters((s) => {
       s.safety.dismissed = 'any'
       s.activity.neverVisited = true
@@ -333,7 +342,9 @@ describe('agent, git, review, ticket, context, and location filters', () => {
 
   it('filters by git state, ahead counts, branch text, prunable and locked', () => {
     const unpushed = makeFacets({
-      candidate: { git: { clean: true, upstreamAhead: 3, upstreamBehind: 1, checkedAt: 1 } }
+      candidate: {
+        git: { clean: true, upstreamAhead: 3, upstreamBehind: 1, checkedAt: 1 }
+      }
     })
     expect(unpushed.gitState).toBe('unpushed')
     const state = filters((s) => {
@@ -366,7 +377,9 @@ describe('agent, git, review, ticket, context, and location filters', () => {
   })
 
   it('keeps review filtering provider-general and treats draft as a state', () => {
-    const draftMr = makeFacets({ review: { provider: 'gitlab', state: 'draft', label: 'MR #7' } })
+    const draftMr = makeFacets({
+      review: { provider: 'gitlab', state: 'draft', label: 'MR #7' }
+    })
     const state = filters((s) => {
       s.safety.dismissed = 'any'
       s.review.presence = 'some'
@@ -402,7 +415,10 @@ describe('agent, git, review, ticket, context, and location filters', () => {
   it('filters by local context and completely-empty', () => {
     const busy = makeFacets({
       candidate: {
-        localContext: { ...makeFacetCandidate().localContext, terminalTabCount: 2 }
+        localContext: {
+          ...makeFacetCandidate().localContext,
+          terminalTabCount: 2
+        }
       }
     })
     const hasContext = filters((s) => {
@@ -473,23 +489,90 @@ describe('safety filter', () => {
     expect(matchesWorkspaceCleanupFilters(dismissed, only, FACET_NOW)).toBe(true)
     expect(matchesWorkspaceCleanupFilters(makeFacets(), only, FACET_NOW)).toBe(false)
   })
-
-  it('restricts to rows the policy would actually let the user delete', () => {
-    const blocked = makeFacets({ candidate: { blockers: ['dirty-files'], tier: 'review' } })
-    const state = filters((s) => {
-      s.safety.dismissed = 'any'
-      s.safety.selectableOnly = true
-    })
-    expect(matchesWorkspaceCleanupFilters(blocked, state, FACET_NOW)).toBe(false)
-    expect(matchesWorkspaceCleanupFilters(makeFacets(), state, FACET_NOW)).toBe(true)
-  })
 })
 
 describe('query pipeline', () => {
+  it('bulk-selects label rows while preserving explicit exclusions', () => {
+    const candidates = [
+      makeFacetCandidate({
+        worktreeId: 'repo-1::/dirty',
+        blockers: ['dirty-files']
+      }),
+      makeFacetCandidate({
+        worktreeId: 'repo-1::/pinned',
+        blockers: ['pinned']
+      }),
+      makeFacetCandidate({
+        worktreeId: 'repo-1::/unknown',
+        git: {
+          clean: null,
+          upstreamAhead: null,
+          upstreamBehind: null,
+          checkedAt: null
+        }
+      }),
+      makeFacetCandidate({
+        worktreeId: 'repo-1::/active',
+        blockers: ['active-workspace']
+      }),
+      makeFacetCandidate({
+        worktreeId: 'repo-1::/agent',
+        blockers: ['live-agent']
+      }),
+      makeFacetCandidate({
+        worktreeId: 'repo-1::/ignored',
+        blockers: ['dismissed']
+      }),
+      makeFacetCandidate({
+        worktreeId: 'repo-1::/main',
+        blockers: ['main-worktree']
+      }),
+      makeFacetCandidate({
+        worktreeId: 'repo-1::/folder',
+        blockers: ['folder-repo']
+      }),
+      makeFacetCandidate({
+        worktreeId: 'repo-1::/remote',
+        blockers: ['ssh-disconnected']
+      })
+    ]
+    const result = queryWorkspaceCleanupCandidates(
+      candidates,
+      {
+        filters: createDefaultWorkspaceCleanupFilterState(),
+        sort: { field: 'name', direction: 'asc' }
+      },
+      {},
+      FACET_NOW
+    )
+    const selectableIds = result.rows
+      .filter((row) => result.selectableIdentities.includes(row.identity))
+      .map((row) => row.worktreeId)
+
+    expect(selectableIds).toEqual(
+      expect.arrayContaining(['repo-1::/dirty', 'repo-1::/pinned', 'repo-1::/unknown'])
+    )
+    expect(selectableIds).not.toEqual(
+      expect.arrayContaining([
+        'repo-1::/active',
+        'repo-1::/agent',
+        'repo-1::/ignored',
+        'repo-1::/main',
+        'repo-1::/folder',
+        'repo-1::/remote'
+      ])
+    )
+    expect(canQueueWorkspaceCleanupCandidate(candidates[3])).toBe(true)
+    expect(canQueueWorkspaceCleanupCandidate(candidates[4])).toBe(true)
+    expect(canQueueWorkspaceCleanupCandidate(candidates[5])).toBe(true)
+  })
+
   it('reports counts and selectable ids', () => {
     const rows = [
       makeNamedFacets('alpha'),
-      makeNamedFacets('beta', { candidate: { blockers: ['dirty-files'], tier: 'review' } })
+      makeNamedFacets('beta', {
+        candidate: { blockers: ['dirty-files'], tier: 'review' }
+      })
     ]
     expect(filterWorkspaceCleanupFacets(rows, ANY, FACET_NOW)).toHaveLength(2)
     const result = queryWorkspaceCleanupCandidates(

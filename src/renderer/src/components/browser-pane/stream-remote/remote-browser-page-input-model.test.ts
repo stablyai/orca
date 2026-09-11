@@ -4,7 +4,8 @@ import {
   getPositiveFiniteNumber,
   getRemoteBrowserMouseButton,
   readRemoteContextMenuResult,
-  readRemoteCssViewportSize
+  readRemoteCssViewportSize,
+  resolveRemoteBrowserCssViewport
 } from './remote-browser-page-input-model'
 
 describe('remote browser page input model', () => {
@@ -61,5 +62,52 @@ describe('remote browser page input model', () => {
       readRemoteCssViewportSize({ result: JSON.stringify({ width: 0, height: 600 }) })
     ).toBeNull()
     expect(readRemoteCssViewportSize({ result: 'not-json' })).toBeNull()
+  })
+
+  describe('resolveRemoteBrowserCssViewport', () => {
+    const naturalSize = { width: 2800, height: 1800 }
+
+    it('keeps the cached CSS viewport while frames report the size this pane requested', () => {
+      expect(
+        resolveRemoteBrowserCssViewport({
+          // Scrollbars make the page's own innerWidth differ from the requested size, which
+          // is the whole reason the cache is preferred over the frame metadata.
+          cssViewportSize: { width: 1385, height: 900 },
+          requestedViewportSize: { width: 1400, height: 900 },
+          frameMetadata: { deviceWidth: 1400, deviceHeight: 900 },
+          naturalSize
+        })
+      ).toEqual({ width: 1385, height: 900 })
+    })
+
+    it('falls back to the frame device size once another subscriber owns the viewport', () => {
+      expect(
+        resolveRemoteBrowserCssViewport({
+          cssViewportSize: { width: 1385, height: 900 },
+          requestedViewportSize: { width: 1400, height: 900 },
+          frameMetadata: { deviceWidth: 390, deviceHeight: 844 },
+          naturalSize
+        })
+      ).toEqual({ width: 390, height: 844 })
+    })
+
+    it('keeps the cache when frames carry no device size and falls back to natural size', () => {
+      expect(
+        resolveRemoteBrowserCssViewport({
+          cssViewportSize: { width: 1385, height: 900 },
+          requestedViewportSize: { width: 1400, height: 900 },
+          frameMetadata: null,
+          naturalSize
+        })
+      ).toEqual({ width: 1385, height: 900 })
+      expect(
+        resolveRemoteBrowserCssViewport({
+          cssViewportSize: null,
+          requestedViewportSize: null,
+          frameMetadata: null,
+          naturalSize
+        })
+      ).toEqual(naturalSize)
+    })
   })
 })

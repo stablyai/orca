@@ -16,6 +16,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   formatCrashReportText,
   isReactErrorBoundaryReport,
+  MAX_USER_NOTES_LENGTH,
   type CrashReportDiagnosticBundle,
   type CrashReportRecord
 } from '../../../../shared/crash-reporting'
@@ -277,13 +278,23 @@ export function CrashReportDialogSurface({
                   )}
             </div>
           )}
-          <textarea
-            value={notes}
-            onChange={(event) => setNotes(event.target.value)}
-            rows={4}
-            placeholder={getNotesPlaceholder(report)}
-            className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          />
+          <div className="space-y-1">
+            <textarea
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              rows={4}
+              // Keep the UI and formatter on the same input budget.
+              maxLength={MAX_USER_NOTES_LENGTH}
+              placeholder={getNotesPlaceholder(report)}
+              className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            <div
+              aria-hidden="true"
+              className="text-right text-[11px] tabular-nums text-muted-foreground"
+            >
+              {notes.length.toLocaleString()} / {MAX_USER_NOTES_LENGTH.toLocaleString()}
+            </div>
+          </div>
           <div className="flex items-start gap-2 rounded-md border border-border/70 bg-muted/20 p-3">
             <Checkbox
               id="crash-report-attach-diagnostics"

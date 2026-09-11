@@ -30,6 +30,11 @@ const {
   mergePersistedWindowsPathMock: vi.fn()
 }))
 
+const runWslProcessMock = vi.hoisted(() => vi.fn())
+// Why the runner and not child_process: WSL agent detection goes through
+// runWslProcess now, so a child_process mock never sees it.
+vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: handleMock
@@ -95,6 +100,7 @@ describe('preflight', () => {
   const handlers: HandlerMap = {}
 
   beforeEach(() => {
+    runWslProcessMock.mockReset()
     resetPreflightMocks(
       {
         handleMock,
@@ -129,13 +135,31 @@ describe('preflight', () => {
 
       const target = String(args[0])
       if (target === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (target === 'continue') {
-        return { stdout: 'continue: shell built-in command\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: 'continue: shell built-in command\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (target === 'cursor-agent') {
-        return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/cursor-agent\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -149,7 +173,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'orca') {
-        return { stdout: '/Applications/Orca.app/Contents/MacOS/orca\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Applications/Orca.app/Contents/MacOS/orca\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -163,10 +193,22 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (String(args[0]) === 'orca') {
-        return { stdout: '/Applications/Orca.app/Contents/MacOS/orca\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Applications/Orca.app/Contents/MacOS/orca\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -184,10 +226,22 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'claude') {
-        return { stdout: '/mock/windows/npm/claude.cmd\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/mock/windows/npm/claude.cmd\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (String(args[0]) === 'orca') {
-        return { stdout: '/mock/windows/programs/orca.cmd\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/mock/windows/programs/orca.cmd\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -233,7 +287,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'claude') {
-        return { stdout: '/Users/test/.local/bin/claude\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -267,10 +327,22 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'openclaude') {
-        return { stdout: '/Users/test/.local/bin/openclaude\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/openclaude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       if (String(args[0]) === 'cursor-agent') {
-        return { stdout: '/Users/test/.local/bin/cursor-agent\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/cursor-agent\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -297,7 +369,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'codex' && process.env.PATH?.startsWith('/home/test/.local/bin')) {
-        return { stdout: '/home/test/.local/bin/codex\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/home/test/.local/bin/codex\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -320,13 +398,15 @@ describe('preflight', () => {
       configurable: true,
       value: 'win32'
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'wsl.exe') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      const script = String(args[5])
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       if (script.includes("'claude'")) {
-        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -342,16 +422,18 @@ describe('preflight', () => {
       configurable: true,
       value: 'win32'
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'wsl.exe') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      const script = String(args[5])
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       expect(script).not.toContain("'orca'")
       expect(script).not.toContain("'orca-dev'")
       expect(script).not.toContain("'orca-ide'")
       if (script.includes("'claude'")) {
-        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -365,7 +447,13 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       if (String(args[0]) === 'vibe') {
-        return { stdout: '/home/test/.local/bin/vibe\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/home/test/.local/bin/vibe\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
@@ -392,32 +480,28 @@ describe('preflight', () => {
       configurable: true,
       value: 'win32'
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'wsl.exe') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      const script = String(args[5])
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       if (script.includes("'claude'")) {
-        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
 
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
-    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
     // Why: the local fallback must not report host binaries as WSL binaries.
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
-    expect(execFileAsyncMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      expect.arrayContaining([
-        '-d',
-        'Ubuntu',
-        '--exec',
-        'sh',
-        '-c',
-        expect.stringContaining("'claude'")
-      ]),
-      { encoding: 'utf-8', timeout: 10000 }
+    // Why assert the lane, not the argv: argv is the runner's contract and is
+    // pinned by its own tests. What this suite owns is that detection asks the
+    // right distro on the lane that carries the user's PATH.
+    expect(runWslProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ distro: 'Ubuntu', loginPath: 'preferred' })
     )
   })
 
@@ -426,25 +510,26 @@ describe('preflight', () => {
       configurable: true,
       value: 'win32'
     })
-    execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command !== 'wsl.exe') {
-        throw new Error(`unexpected command ${String(command)}`)
-      }
-      const script = String(args[3])
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
       if (script.includes("'codex'")) {
-        return { stdout: '__ORCA_AGENT_PATH__codex\t/home/test/.local/bin/codex\n' }
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__codex\t/home/test/.local/bin/codex\n',
+          stderr: '',
+          timedOut: false
+        }
       }
       throw new Error('not found')
     })
 
     await expect(detectInstalledAgents({ wslDefault: true })).resolves.toEqual(['codex'])
-    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
     // Why: the local fallback must not leak into WSL detection.
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
-    expect(execFileAsyncMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      expect.arrayContaining(['--exec', 'sh', '-c', expect.stringContaining("'codex'")]),
-      { encoding: 'utf-8', timeout: 10000 }
+    // No distro named: the runner resolves the default.
+    expect(runWslProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ distro: undefined, loginPath: 'preferred' })
     )
   })
 })

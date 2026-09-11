@@ -25,7 +25,7 @@ function CategoryRoot({
   onOpenField: (field: PaletteFilterField) => void
 }): React.JSX.Element {
   return (
-    <CommandList className="popover-scroll-content scrollbar-sleek max-h-[280px] py-1">
+    <CommandList className="scrollbar-sleek max-h-[280px] py-1">
       <CommandGroup>
         {groups.map((group) => {
           const selectedCount = group.selected.length
@@ -78,7 +78,7 @@ export default function PaletteFilterMenu({
 
   const groups = useMemo<PaletteFilterGroup[]>(() => {
     const entries: PaletteFilterGroup[] = []
-    // Why: a single host (or single project) is nothing to disambiguate between,
+    // Why: a single host (or single repository) is nothing to disambiguate between,
     // so that axis stays hidden rather than offering a no-op checkbox.
     if (model.hosts.length > 1) {
       entries.push({
@@ -88,16 +88,17 @@ export default function PaletteFilterMenu({
         selected: filter.hostIds
       })
     }
-    if (model.projects.length > 1) {
+    if (model.repositories.length > 1) {
       entries.push({
-        field: 'project',
+        field: 'repository',
+        // "Projects" is the user-facing term for repository-granular choices; see filter.emptySubtitle.
         heading: translate('worktreeJumpPalette.filter.projects', 'Projects'),
-        options: model.projects,
-        selected: filter.projectKeys
+        options: model.repositories,
+        selected: filter.repoIds
       })
     }
     return entries
-  }, [filter.hostIds, filter.projectKeys, model.hosts, model.projects])
+  }, [filter.hostIds, filter.repoIds, model.hosts, model.repositories])
 
   // Stale field falls back to root if its group disappeared mid-session.
   const activeGroup =
@@ -183,7 +184,7 @@ export default function PaletteFilterMenu({
         collisionBoundary={portalContainer ?? undefined}
         onKeyDown={handleKeyDown}
         onCloseAutoFocus={handleCloseAutoFocus}
-        className="w-[290px] p-0"
+        className="popover-wheel-scroll w-[290px] p-0"
       >
         <Command shouldFilter={false} className="bg-transparent">
           {activeGroup == null ? (

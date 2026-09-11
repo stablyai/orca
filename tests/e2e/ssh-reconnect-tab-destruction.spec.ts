@@ -85,12 +85,12 @@ test.describe('SSH reconnect tab destruction', () => {
       await openTerminalTabInActiveGroup(orcaPage)
       // Only that the tab exists in the store — no waiting for its manager or PTY. Every wait here
       // is time the debounced upload can use to land, which is what made this spec miss the bug.
-      const tabsBefore = await orcaPage.evaluate(() => {
+      const tabIdsBefore = await orcaPage.evaluate(() => {
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
-        return worktreeId ? (state?.tabsByWorktree?.[worktreeId]?.length ?? 0) : 0
+        return worktreeId ? (state?.tabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id) : []
       })
-      expect(tabsBefore).toBeGreaterThanOrEqual(2)
+      expect(tabIdsBefore.length).toBeGreaterThanOrEqual(2)
 
       // Deliberately NOTHING between creating the tab and reconnecting. The destruction only fires
       // while the tab's creation is still unuploaded, so idling here — as waiting for a TUI to draw
@@ -101,19 +101,26 @@ test.describe('SSH reconnect tab destruction', () => {
 
       // Checked BEFORE any paint assertion: survival and repaint are different failures, and this
       // order names which one broke instead of collapsing both into "no output".
-      const tabCounts = await orcaPage.evaluate(() => {
+      const tabState = await orcaPage.evaluate(() => {
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
         return {
-          inSlice: worktreeId ? (state?.tabsByWorktree?.[worktreeId]?.length ?? 0) : 0,
+          tabIds: worktreeId
+            ? (state?.tabsByWorktree?.[worktreeId] ?? []).map((tab) => tab.id)
+            : [],
           // __paneManagers is a Map. Object.keys on a Map silently returns [], which reads as
           // "nothing is mounted" regardless of the truth — that cost a full debugging cycle.
           paneManagers: window.__paneManagers?.size ?? 0
         }
       })
-      expect(tabCounts.inSlice, 'the reconnect destroyed the tab').toBeGreaterThanOrEqual(2)
+      // The exact set, not a lower bound: `>= 2` passes just as happily on a reconnect that ADDS a
+      // tab as on one that keeps it, so it could never fail on the accumulation half of this bug.
       expect(
-        tabCounts.paneManagers,
+        tabState.tabIds.slice().sort(),
+        'the reconnect changed the tab set: it destroyed a tab or spuriously added one'
+      ).toEqual(tabIdsBefore.slice().sort())
+      expect(
+        tabState.paneManagers,
         'the tab survived but its pane manager did not'
       ).toBeGreaterThanOrEqual(1)
 

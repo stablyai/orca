@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 describe('OrchestrationDb mutation and question state', () => {
   let db: OrchestrationDb | undefined
@@ -76,6 +77,7 @@ describe('OrchestrationDb mutation and question state', () => {
     it('accepts a question message in the fresh canonical schema', () => {
       const d = createDb()
       const message = d.insertMessage({
+        runId: 'run_legacy_local',
         from: 'worker',
         to: 'run:run_1',
         subject: 'Need input',
@@ -93,7 +95,7 @@ describe('OrchestrationDb mutation and question state', () => {
         coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
       })
       const task = d.createTask({ spec: 'ask', runId: run.id })
-      const dispatch = d.createDispatchContext(task.id, 'term_worker')
+      const dispatch = createRootDispatch(d, task.id, 'term_worker')
       const created = d.createQuestion({
         runId: run.id,
         dispatchId: dispatch.id,
@@ -144,7 +146,7 @@ describe('OrchestrationDb mutation and question state', () => {
         coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
       })
       const task = d.createTask({ spec: 'ask', runId: run.id })
-      const dispatch = d.createDispatchContext(task.id, 'term_worker')
+      const dispatch = createRootDispatch(d, task.id, 'term_worker')
       const created = d.createQuestion({
         runId: run.id,
         dispatchId: dispatch.id,

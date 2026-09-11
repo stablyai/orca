@@ -1,5 +1,5 @@
 import { CircleDashed } from 'lucide-react'
-import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
+import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel/check-presentation'
 import type { getCheckCounts } from '@/components/pr-check-counts'
 
 export function getChecksTabSummaryPresentation(counts: ReturnType<typeof getCheckCounts>): {

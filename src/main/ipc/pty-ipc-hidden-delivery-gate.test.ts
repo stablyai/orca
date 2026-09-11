@@ -198,7 +198,7 @@ describe('registerPtyHandlers', () => {
         })
         expect(warnSpy).toHaveBeenCalledWith(
           '[pty] hidden-delivery gate is dropping bytes for a visible/active pty',
-          expect.objectContaining({ id: result.id, visible: true })
+          expect.objectContaining({ id: redactPtyIdForDiagnostics(result.id), visible: true })
         )
 
         // Unhiding resolves the contradiction.

@@ -14,23 +14,25 @@ import {
   type HooksConfig
 } from '../agent-hooks/installer-utils'
 import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
+import { isGitBashAvailable } from '../git-bash'
 
 export type ClaudeCompatibleHookSettings = {
   configDirName: '.claude' | '.openclaude'
   scriptBaseName: 'claude-hook' | 'openclaude-hook'
-  usesWindowsPowerShellLauncher: boolean
+  usesWindowsCompatLauncher: boolean
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.claude',
   scriptBaseName: 'claude-hook',
-  usesWindowsPowerShellLauncher: true
+  usesWindowsCompatLauncher: true
 }
 
 export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.openclaude',
   scriptBaseName: 'openclaude-hook',
-  usesWindowsPowerShellLauncher: false
+  usesWindowsCompatLauncher: false
 }
 
 export const CLAUDE_EVENTS = [
@@ -88,6 +90,14 @@ export const CLAUDE_EVENTS = [
   {
     eventName: 'PermissionRequest',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  },
+  // Why: a manual /compact ends at an idle prompt without emitting Stop, so PostCompact is the only
+  // signal that can clear the pane (STA-2915). PreCompact is deliberately NOT registered: it fires
+  // before the compact is validated, and an aborted compact emits it alone — mapping it to 'working'
+  // would strand the pane exactly as this registration is meant to prevent (STA-4613).
+  {
+    eventName: 'PostCompact',
+    definition: { hooks: [{ type: 'command', command: '' }] }
   }
 ] as const
 
@@ -145,16 +155,31 @@ export function getManagedCommand(
 
 export function getManagedLifecycleHook(
   scriptPath: string,
-  settings = CLAUDE_HOOK_SETTINGS
+  settings = CLAUDE_HOOK_SETTINGS,
+  options: WindowsManagedLifecycleHookOptions = {}
 ): HookCommandConfig {
-  if (process.platform !== 'win32' || !settings.usesWindowsPowerShellLauncher) {
+  if (process.platform !== 'win32' || !settings.usesWindowsCompatLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
   }
-  return getWindowsManagedLifecycleHook(scriptPath)
+  return getWindowsManagedLifecycleHook(scriptPath, options)
 }
 
+export type WindowsManagedLifecycleHookOptions = { gitBashAvailable?: boolean }
+
 // Why: some Claude-compatible consumers ignore `args`, so the invocation must be self-contained.
-export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandConfig {
+export function getWindowsManagedLifecycleHook(
+  scriptPath: string,
+  options: WindowsManagedLifecycleHookOptions = {}
+): HookCommandConfig {
+  // Why (#18875): the encoded launcher cost a PowerShell start-up per hook event. Take the direct
+  // path only where the host can parse `||` — Git Bash can, Windows PowerShell 5.1 cannot.
+  const directCommand =
+    (options.gitBashAvailable ?? isGitBashAvailable())
+      ? wrapWindowsDirectCmdHookCommand(scriptPath)
+      : null
+  if (directCommand) {
+    return { type: 'command', command: directCommand, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
+  }
   const scriptFileName = win32.basename(scriptPath)
   // Why: runtime profile resolution keeps the managed entry portable across users (STA-3348).
   const quotedRelativePath = quotePowerShellString(`.orca\\agent-hooks\\${scriptFileName}`)

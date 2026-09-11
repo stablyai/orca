@@ -325,6 +325,27 @@ describe('per-account resume repin', () => {
     expect(result).toEqual({ useRealCodexHome: false })
   })
 
+  it('does not consult the host selection while resuming a WSL account session', async () => {
+    const wslHome =
+      '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\share\\orca\\codex-accounts\\account-1\\home'
+    const result = await prepareLegacySharedCodexSessionResume(
+      {
+        agent: 'codex',
+        filePath: `${wslHome}\\sessions\\2026\\07\\20\\rollout-session.jsonl`,
+        codexHome: wslHome,
+        executionHostId: 'local'
+      },
+      {
+        ...repinOptions(),
+        getSelectedHostAccountCodexHomePath: () => {
+          throw new Error('host lane must not be consulted')
+        }
+      }
+    )
+
+    expect(result).toEqual({ useRealCodexHome: false })
+  })
+
   it('declines a transcript outside the dated rollout layout', async () => {
     const straySessionPath = join(peerHome, 'sessions', 'stray.jsonl')
     writeFileSync(straySessionPath, '{"type":"session_meta"}\n', 'utf-8')

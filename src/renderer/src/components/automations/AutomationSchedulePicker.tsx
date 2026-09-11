@@ -7,17 +7,17 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import type { AutomationSchedulePreset } from '../../../../shared/automations-types'
-import {
-  buildAutomationCronSchedule,
-  isValidAutomationSchedule
-} from '../../../../shared/automation-schedules'
+import { buildAutomationCronSchedule } from '../../../../shared/automation-schedule-occurrences'
+import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationCustomCronPanel } from './AutomationCustomCronPanel'
 import { AutomationTimeField, parseAutomationTime } from './AutomationTimeField'
 import { Field } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
+import { getUiWeekdayNames } from '@/i18n/weekday-names'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
+const AUTOMATION_WEEKDAY_VALUES = ['0', '1', '2', '3', '4', '5', '6'] as const
 
 export const AUTOMATION_SCHEDULE_PRESET_OPTIONS = [
   ['hourly', 'Hourly', 'auto.components.automations.AutomationSchedulePicker.55b2ef82a4'],
@@ -34,16 +34,6 @@ export function getAutomationSchedulePresetLabel([, fallbackLabel, labelKey]: re
 ]): string {
   return translate(labelKey, fallbackLabel)
 }
-
-const DAY_OPTIONS = [
-  ['0', 'Sunday'],
-  ['1', 'Monday'],
-  ['2', 'Tuesday'],
-  ['3', 'Wednesday'],
-  ['4', 'Thursday'],
-  ['5', 'Friday'],
-  ['6', 'Saturday']
-] as const
 
 function buildCustomScheduleSeed(draft: AutomationDraft): string {
   const existing = draft.customSchedule.trim()
@@ -83,6 +73,7 @@ export function AutomationSchedulePicker({
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }): React.JSX.Element {
   const customSchedule = draft.customSchedule.trim()
+  const weekdayNames = getUiWeekdayNames()
   const customScheduleInvalid =
     draft.preset === 'custom' &&
     customSchedule.length > 0 &&
@@ -150,9 +141,9 @@ export function AutomationSchedulePicker({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent position="popper">
-                  {DAY_OPTIONS.map(([value, dayLabel]) => (
+                  {AUTOMATION_WEEKDAY_VALUES.map((value) => (
                     <SelectItem key={value} value={value}>
-                      {dayLabel}
+                      {weekdayNames[Number(value)]}
                     </SelectItem>
                   ))}
                 </SelectContent>

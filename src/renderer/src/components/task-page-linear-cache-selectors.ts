@@ -1,4 +1,4 @@
-import type { CacheEntry } from '@/store/slices/github'
+import type { CacheEntry } from '@/store/github/cache-model'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearCollectionResult } from '../../../shared/linear/workspace-types'
 import { sortedStrings } from './task-page-work-item-signatures'

@@ -1,5 +1,5 @@
 import { awaitsCodexRestartAnswer } from '@/components/codex-restart-notice-state'
-import type { CodexRestartNotice } from '@/store/slices/terminals'
+import type { CodexRestartNotice } from '@/store/terminals/terminal-contracts'
 
 type TabLookup = Record<string, { id: string }[]>
 

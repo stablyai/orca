@@ -14,7 +14,8 @@ import { meaningfulSshAlias, sshEndpointKey, type SshIdentityFields } from './ss
  * minted and nothing links the old workspaces to it. We bridge that gap using
  * removal-time tombstones ({ oldTargetId, configHost, host, username, port }):
  * on add/import we match the new target's identity to a tombstone and re-point
- * every repo/worktree from the old id to the new one.
+ * every repo/worktree from the old id to the new one, together with the stored
+ * automations and persisted host filter pinned to it.
  *
  * Matching is intentionally strict — configHost (alias) first, then the
  * host+username+port tuple — so we only auto-reattach on a confident identity
@@ -61,7 +62,7 @@ export function readoptOrphanedWorkspacesForTarget(
     // Why: a re-added target can't share the id of one that still exists, but
     // guard anyway so we never re-point a live target onto itself.
     if (tombstone.oldTargetId === newTarget.id) {
-      store.removeRemovedSshTargetTombstone(tombstone.oldTargetId)
+      store.releaseRemovedSshTargetTombstone(tombstone.oldTargetId)
       continue
     }
     if (!tombstoneMatches(tombstone, newTarget)) {
@@ -72,8 +73,9 @@ export function readoptOrphanedWorkspacesForTarget(
       readoptions.push({ oldTargetId: tombstone.oldTargetId, newTargetId: newTarget.id, repoIds })
     }
     // Consume the tombstone whether or not it re-pointed anything: the host has
-    // returned, so the record has served its purpose.
-    store.removeRemovedSshTargetTombstone(tombstone.oldTargetId)
+    // returned, so the record has served its purpose — unless an automation or the
+    // persisted filter still depends on that removal evidence, which retains it.
+    store.releaseRemovedSshTargetTombstone(tombstone.oldTargetId)
   }
   return readoptions
 }

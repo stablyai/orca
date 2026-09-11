@@ -1,8 +1,5 @@
-import {
-  clearPaneCacheState,
-  type AgentHookEventPayload,
-  type HookListenerState
-} from './agent-hook-listener'
+import { clearPaneCacheState, type HookListenerState } from './agent-hook-listener/listener-state'
+import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import { AGENT_STATUS_STALE_AFTER_MS } from './agent-status-types'
 
 export const MAX_AGENT_HOOK_STATUS_CACHE_PANES = 500

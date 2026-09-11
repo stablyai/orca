@@ -22,6 +22,7 @@ const COORDINATOR_PREFLIGHT_METHODS = new Set([
   'orchestration.gateCreate',
   'orchestration.gateResolve',
   'orchestration.runUse',
+  'orchestration.requestShow',
   'orchestration.send',
   'orchestration.check',
   'orchestration.reply'

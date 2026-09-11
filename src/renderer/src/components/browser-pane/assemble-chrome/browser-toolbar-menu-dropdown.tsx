@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import { useAppStore } from '@/store'
 import { BROWSER_FAMILY_LABELS } from '../../../../../shared/constants'
 import type {
@@ -131,6 +132,7 @@ export function BrowserToolbarMenuDropdown({
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
             <DropdownMenuSubContent>
+              <BrowserCookieImportMachineNotice />
               {detectedBrowsers.map((browser) =>
                 browser.profiles.length > 1 ? (
                   <DropdownMenuSub key={browser.family}>

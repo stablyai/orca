@@ -29,8 +29,17 @@ export function buildSubagentChildRows(args: {
     return []
   }
   return subagents.map((subagent) => {
-    const activeState = args.parentIsFresh && subagent.state !== 'idle' ? subagent.state : undefined
-    const state = activeState ?? 'idle'
+    const observation = args.parentEntry.subagentObservation
+    const fresh = observation === 'live' || (observation === undefined && args.parentIsFresh)
+    const activeState =
+      fresh && subagent.state !== 'idle' && subagent.state !== 'unverifiable'
+        ? subagent.state
+        : undefined
+    const state =
+      subagent.state === 'unverifiable' ||
+      (observation === 'unverifiable' && subagent.state !== 'idle')
+        ? 'unverifiable'
+        : (activeState ?? 'idle')
     const startedAt = subagent.startedAt > 0 ? subagent.startedAt : args.parentEntry.stateStartedAt
     const paneKey = subagentRowKey(args.parentEntry.paneKey, subagent.id)
     const entry: AgentStatusEntry = {

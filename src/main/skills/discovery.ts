@@ -10,7 +10,8 @@ import type {
 } from '../../shared/skills'
 import {
   buildSkillDiscoverySources,
-  compareSkills,
+  sortDiscoveredSkills,
+  sortSkillDiscoverySources,
   sourceKindForSkill,
   sourceLabelForSkill,
   stablePathId,
@@ -25,6 +26,7 @@ import {
   type SkillScanOutcome
 } from './skill-scan-coalescer'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
+import { skillDirectoryMaxDepth } from '../../shared/skill-discovery-depth'
 
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
@@ -34,11 +36,11 @@ const MAX_MARKDOWN_BYTES = 256 * 1024
 // them for a few seconds is what bounds that fan-out.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
 // Why: sized off the root formula, not a round number. One scan builds
-// `12 fixed home roots + 2 per local repo (+ cwd) + plugin roots`, so a bound
+// `17 fixed home roots + 7 per local repo (+ cwd) + plugin roots`, so a bound
 // smaller than a single scan's root count makes that scan evict its own earlier
 // entries and the cache degrades to a ~0% hit rate — exactly the walk this
 // exists to prevent. The live key space is the union across targets — the fixed
-// home roots plus two per repo plus two per distinct workspace cwd — so this holds
+// home roots plus seven per repo plus seven per distinct workspace cwd — so this holds
 // a few hundred repos with panes open, not an unbounded install. Past that the LRU
 // keeps the hot home roots and the repo roots thrash, which degrades rather than
 // breaks. Most repo roots do not exist, and a missing root caches as
@@ -136,7 +138,7 @@ async function readSkillSummary(skillFilePath: string): Promise<{
 type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 
 async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
-  const maxDepth = root.sourceKind === 'plugin' ? 9 : 4
+  const maxDepth = skillDirectoryMaxDepth(root.sourceKind)
   const skillFiles = await findSkillFiles(root.path, maxDepth, signal)
   // Why: a root can hold many packages and each one costs a summary read plus a
   // package walk. Unbounded fan-out here is what turned one scan into a burst of
@@ -291,7 +293,7 @@ export async function discoverSkills(args: {
       mergeScannedSkill(seen, skill)
     }
   }
-  const skills = Array.from(seen.values()).sort(compareSkills)
+  const skills = sortDiscoveredSkills(Array.from(seen.values()))
   // Why: root *ids* — a repo/plugin id is already a hash, while its label carries
   // the repo or plugin name and its path carries the user's directory names. A
   // fully cached scan did no filesystem work, so it stays silent rather than
@@ -308,9 +310,7 @@ export async function discoverSkills(args: {
   }
   return {
     skills,
-    sources: sources.sort((a, b) =>
-      a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
-    ),
+    sources: sortSkillDiscoverySources(sources),
     scannedAt: Date.now()
   }
 }

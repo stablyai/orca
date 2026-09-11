@@ -82,6 +82,35 @@ describe('SSH IPC handlers', () => {
     expect(result).toEqual({ target: withId, repoReadoptions: [] })
   })
 
+  it('ssh:addTarget strips a renderer-supplied registration generation', async () => {
+    const target = {
+      label: 'New Server',
+      host: 'new.example.com',
+      port: 22,
+      username: 'deploy',
+      generation: 999
+    }
+    mockSshStore.addTarget.mockReturnValue({ ...target, id: 'ssh-new', generation: 7 })
+
+    await handlers.get('ssh:addTarget')!(null, { target })
+
+    expect(mockSshStore.addTarget).toHaveBeenCalledWith({
+      label: 'New Server',
+      host: 'new.example.com',
+      port: 22,
+      username: 'deploy'
+    })
+  })
+
+  it('ssh:updateTarget strips a renderer-supplied registration generation', async () => {
+    await handlers.get('ssh:updateTarget')!(null, {
+      id: 'ssh-1',
+      updates: { label: 'Renamed', generation: 999 }
+    })
+
+    expect(mockSshStore.updateTarget).toHaveBeenCalledWith('ssh-1', { label: 'Renamed' })
+  })
+
   it('ssh:addTarget returns exact re-adoption evidence and refreshes repos', async () => {
     const target = {
       id: 'ssh-new',

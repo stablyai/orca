@@ -587,7 +587,9 @@ describe('setupGuestShortcutForwarding', () => {
     })
   })
 
-  it('does not broadcast browser Find without a registered workspace owner', () => {
+  // A client-hosted guest is registered by main's host runtime, whose wire command carries no
+  // workspace. Withholding the chord there suppressed Cmd+F in the guest and delivered nothing.
+  it('forwards browser Find by page alone when no workspace owner is registered', () => {
     setupGuestShortcutForwarding({
       browserTabId,
       guest: makeGuest(),
@@ -597,7 +599,10 @@ describe('setupGuestShortcutForwarding', () => {
     const preventDefault = triggerBeforeInput({ code: 'KeyF', key: 'f' })
 
     expect(preventDefault).toHaveBeenCalledOnce()
-    expect(rendererSendMock).not.toHaveBeenCalled()
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:findInBrowserPage', {
+      browserPageId: browserTabId,
+      browserWorkspaceId: undefined
+    })
   })
 
   it('forwards quick-command menu shortcuts from focused guest pages', () => {
@@ -621,6 +626,47 @@ describe('setupGuestShortcutForwarding', () => {
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(rendererSendMock).toHaveBeenCalledWith('ui:toggleQuickCommandsMenu')
+  })
+
+  it('forwards workspace delete shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'Backspace',
+      key: 'Backspace',
+      meta: isMac,
+      control: !isMac,
+      shift: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:deleteCurrentWorkspace')
+  })
+
+  it('consumes repeated workspace delete shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const isMac = process.platform === 'darwin'
+    const preventDefault = triggerBeforeInput({
+      code: 'Backspace',
+      key: 'Backspace',
+      meta: isMac,
+      control: !isMac,
+      shift: true,
+      isAutoRepeat: true
+    })
+
+    expect(preventDefault).toHaveBeenCalledOnce()
+    expect(rendererSendMock).not.toHaveBeenCalled()
   })
 
   it('consumes guest zoom shortcuts even when the renderer is unavailable', () => {
@@ -826,7 +872,9 @@ describe('setupGuestShortcutForwarding', () => {
       expect(rendererSendMock).toHaveBeenCalledWith('ui:closeFloatingItem', {
         sourceId: browserTabId
       })
-      expect(rendererSendMock).not.toHaveBeenCalledWith('ui:closeActiveTab')
+      expect(rendererSendMock.mock.calls.some(([channel]) => channel === 'ui:closeActiveTab')).toBe(
+        false
+      )
     })
 
     it('routes workspace/tab index chords to ui:selectFloatingIndex for a floating guest', () => {
@@ -857,7 +905,7 @@ describe('setupGuestShortcutForwarding', () => {
       triggerBeforeInput(closeInput)
       triggerBeforeInput(workspaceIndexInput)
 
-      expect(rendererSendMock).toHaveBeenCalledWith('ui:closeActiveTab')
+      expect(rendererSendMock).toHaveBeenCalledWith('ui:closeActiveTab', { sourceId: browserTabId })
       expect(rendererSendMock).toHaveBeenCalledWith('ui:jumpToWorktreeIndex', 0)
       expect(rendererSendMock).not.toHaveBeenCalledWith('ui:closeFloatingItem', expect.anything())
       expect(rendererSendMock).not.toHaveBeenCalledWith('ui:selectFloatingIndex', expect.anything())
@@ -872,7 +920,7 @@ describe('setupGuestShortcutForwarding', () => {
 
       triggerBeforeInput(closeInput)
 
-      expect(rendererSendMock).toHaveBeenCalledWith('ui:closeActiveTab')
+      expect(rendererSendMock).toHaveBeenCalledWith('ui:closeActiveTab', { sourceId: browserTabId })
       expect(rendererSendMock).not.toHaveBeenCalledWith('ui:closeFloatingItem', expect.anything())
     })
 

@@ -14,11 +14,22 @@ import { getBashShellReadyRcfileContent } from './local-pty-shell-ready-bash-rcf
 import { getZshShellReadyWrapperFile } from './local-pty-shell-ready-wrapper-generation'
 import { makeUserZdotdir } from '../zsh-user-config-dir-fixture'
 // Why resolved rather than hardcoded: the wrapper tree is content-addressed.
-import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
+import {
+  getRequiredShellReadyWrapperPaths,
+  getShellReadyWrapperRoot
+} from './local-pty-shell-ready-wrapper-root'
+import { buildLocalShellReadyWrapperFiles } from './local-pty-shell-ready-wrapper-fileset'
 
 restoreUserDataPathAfterEach()
 
 describe('ensureShellReadyWrappersAt', () => {
+  it('keeps required wrapper paths aligned with generated files', () => {
+    const root = '/tmp/orca-shell-ready'
+    expect(getRequiredShellReadyWrapperPaths(root)).toEqual(
+      buildLocalShellReadyWrapperFiles(root).map(([path]) => path)
+    )
+  })
+
   // Why: rewriting a byte-identical tree replaces a live file on the terminal
   // spawn path for no gain -- and on Windows that is precisely the collision an
   // indexer or antivirus turns into a failed write. The tree is

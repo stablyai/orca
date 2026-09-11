@@ -1,3 +1,4 @@
+import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
 import type {
   RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
@@ -6,8 +7,14 @@ import type {
   RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { PublicKnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
+import type {
+  BrowserClientHostPlacementPreparationRequest,
+  BrowserPageCreationPlacement
+} from '../../shared/browser-client-host-placement'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime-shared-control-types'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -21,6 +28,10 @@ export type RuntimeApi = {
     ) => Promise<RuntimeSyncWindowGraphResult>
     getStatus: () => Promise<RuntimeStatus>
     call: (args: { method: string; params?: unknown }) => Promise<RuntimeRpcResponse<unknown>>
+    subscribe: (
+      args: { method: string; params?: unknown },
+      callback: (response: RuntimeRpcResponse<unknown>) => void
+    ) => Promise<RuntimeEnvironmentSubscriptionHandle>
     getTerminalFitOverrides: () => Promise<
       { ptyId: string; mode: 'mobile-fit' | 'remote-desktop-fit'; cols: number; rows: number }[]
     >
@@ -36,6 +47,8 @@ export type RuntimeApi = {
         driver: RuntimeBrowserDriverState
       }[]
     >
+    getBrowserRemoteViewerPages?: () => Promise<string[]>
+    getClientHostedBrowserRows: () => Promise<ClientHostedBrowserRowsEvent[]>
     restoreTerminalFit: (ptyId: string) => Promise<{ restored: boolean }>
     reclaimBrowserForDesktop: (browserPageId: string) => Promise<{ reclaimed: boolean }>
     onTerminalFitOverrideChanged: (
@@ -55,8 +68,18 @@ export type RuntimeApi = {
     onBrowserDriverChanged: (
       callback: (event: { browserPageId: string; driver: RuntimeBrowserDriverState }) => void
     ) => () => void
+    // Why optional: matches onNativeChatLaunchDraftResolved — a renderer running against an older
+    // preload keeps working without the retention signal instead of throwing on every mount.
+    onBrowserRemoteViewersChanged?: (
+      callback: (event: { browserPageId: string; hasRemoteViewers: boolean }) => void
+    ) => () => void
+    onClientHostedBrowserRowsChanged: (
+      callback: (event: ClientHostedBrowserRowsEvent) => void
+    ) => () => void
   }
   runtimeEnvironments: {
+    getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
+    onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     list: () => Promise<PublicKnownRuntimeEnvironment[]>
     addFromPairingCode: (args: {
       name: string
@@ -79,7 +102,19 @@ export type RuntimeApi = {
     getStatus: (args: {
       selector: string
       timeoutMs?: number
+      observeOnly?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
+    retryControlConnection?: (args: { selector: string }) => Promise<void>
+    onSharedControlDiagnostics?: (
+      callback: (event: {
+        environmentId: string
+        transportGeneration: number
+        diagnostics: RemoteRuntimeSharedConnectionDiagnostics
+      }) => void
+    ) => () => void
+    prepareBrowserClientHostPlacement: (
+      args: BrowserClientHostPlacementPreparationRequest
+    ) => Promise<BrowserPageCreationPlacement>
     // Why: system resume / browser online advance pending shared-control reconnect timers only.
     retryConnectionsNow?: () => Promise<void>
     call: (args: {

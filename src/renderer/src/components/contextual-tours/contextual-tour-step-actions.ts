@@ -11,6 +11,7 @@ export function performContextualTourStepAction(args: {
   setSidebarOpen: (open: boolean) => void
   openTaskPage: () => void
   openModal: (modal: 'setup-guide', data?: Record<string, unknown>) => void
+  openClientHostedBrowserSettings: () => void
   openWorkspaceComposer: () => void
   dispatchTerminalPaneSplit: (detail: RequestActiveTerminalPaneSplitDetail) => void
   schedule: (callback: () => void) => void
@@ -58,6 +59,13 @@ export function performContextualTourStepAction(args: {
       args.finishTour()
       args.schedule(() => {
         args.openModal('setup-guide', { telemetrySource: 'contextual_tour' })
+      })
+      return
+    case 'open-client-hosted-browser-settings':
+      // Why: the settings page replaces the pane the tooltip is anchored to.
+      args.finishTour()
+      args.schedule(() => {
+        args.openClientHostedBrowserSettings()
       })
   }
 }

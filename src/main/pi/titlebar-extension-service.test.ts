@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import type * as osModule from 'node:os'
 import type * as fsModule from 'node:fs'
 import { join } from 'node:path'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 // The service calls app.getPath('userData') for its overlay root. Point that
 // at a real tmp dir so we can exercise the filesystem behavior end-to-end.
@@ -37,18 +38,8 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: (name: string) => {
-      if (name === 'userData') {
-        return userDataDir
-      }
-      throw new Error(`unexpected app.getPath(${name})`)
-    }
-  }
-}))
-
 import { PiTitlebarExtensionService, isSafeDescendCandidate } from './titlebar-extension-service'
+import { getPiTitlebarExtensionSource } from './titlebar-extension-source'
 
 function legacyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
   const rootDir = kind === 'pi' ? 'pi-agent-overlays' : 'omp-agent-overlays'
@@ -62,6 +53,17 @@ function legacySourceOverlayPath(kind: 'pi' | 'omp', sourceAgentDir: string): st
 }
 
 describe('PiTitlebarExtensionService', () => {
+  beforeEach(() => {
+    installFakeAppEnvironment({
+      getPath: (name) => {
+        if (name === 'userData') {
+          return userDataDir
+        }
+        throw new Error(`unexpected app.getPath(${name})`)
+      }
+    })
+  })
+
   let piHome: string
 
   beforeEach(() => {
@@ -455,6 +457,16 @@ describe('PiTitlebarExtensionService', () => {
     svc.buildPtyEnv('pty-3', piHome, 'pi')
     svc.buildPtyEnv('pty-3', piHome, 'pi')
     expectPiHomeIntact()
+  })
+
+  it('refreshes a managed spinner in an explicitly selected senpi home', () => {
+    const agentDir = join(userDataDir, '.omo', 'agent')
+    const extensionPath = join(agentDir, 'extensions', 'orca-titlebar-spinner.ts')
+    mkdirSync(join(agentDir, 'extensions'), { recursive: true })
+    writeFileSync(extensionPath, '// @orca-managed-pi-extension\nstale spinner')
+    const svc = new PiTitlebarExtensionService()
+    svc.buildPtyEnv('pty-senpi', agentDir, 'pi')
+    expect(readFileSync(extensionPath, 'utf8')).toContain(getPiTitlebarExtensionSource())
   })
 
   it('rebuilding updates Orca-owned extensions while preserving user files', () => {

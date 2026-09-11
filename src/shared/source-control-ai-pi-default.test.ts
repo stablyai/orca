@@ -1,3 +1,11 @@
+import {
+  migratePiConfiguredDefaultModelState,
+  applyPiConfiguredDefaultSelectionUpdate
+} from './pi-configured-default-model-state'
+import {
+  projectSourceControlAiToLegacyCommitMessageAi,
+  mergeLegacyCommitMessageAiIntoSourceControlAi
+} from './source-control-ai'
 import { describe, expect, it } from 'vitest'
 import { planCommitMessageGeneration } from './commit-message-plan'
 import { getDefaultSettings } from './constants'
@@ -131,6 +139,76 @@ describe('Pi source-control AI model resolution', () => {
         ok: true,
         plan: { args: expect.arrayContaining(['--model', EXPLICIT_MODEL_ID]) }
       })
+    }
+  )
+})
+
+describe('Pi configured default settings roundtrip', () => {
+  it.each(['local', 'ssh:fixture', 'wsl:Ubuntu'])(
+    'preserves explicit choices and default selection on %s',
+    (hostKey) => {
+      let settings = piSettings()
+      const explicit = structuredClone(settings.sourceControlAi!)
+      explicit.selectedModelByAgentByHost = { [hostKey]: { pi: COMPATIBILITY_MODEL_ID } }
+      const migration = migratePiConfiguredDefaultModelState({
+        sourceControlAi: explicit,
+        commitMessageAi: null,
+        persistedState: undefined
+      })
+      expect(migration.state.defaultsByHost[hostKey]).toBeUndefined()
+      const selectedDefault = structuredClone(explicit)
+      selectedDefault.selectedModelByAgentByHost![hostKey]!.pi = 'default'
+      let state = applyPiConfiguredDefaultSelectionUpdate({
+        previous: explicit,
+        next: selectedDefault,
+        state: migration.state
+      })
+      expect(selectedDefault.selectedModelByAgentByHost![hostKey]!.pi).toBe('default')
+      const legacy = projectSourceControlAiToLegacyCommitMessageAi(selectedDefault)
+      expect(legacy.selectedModelByAgentByHost![hostKey]!.pi).toBe(COMPATIBILITY_MODEL_ID)
+      const reloaded = mergeLegacyCommitMessageAiIntoSourceControlAi(selectedDefault, legacy)
+      settings = {
+        ...settings,
+        sourceControlAi: reloaded,
+        commitMessageAi: legacy,
+        piConfiguredDefaultModelState: state
+      }
+      for (const operation of ['commitMessage', 'pullRequest', 'branchName'] as const) {
+        const result = resolveSourceControlAiForOperation({
+          settings,
+          operation,
+          discoveryHostKey: hostKey
+        })
+        expect(result.ok && result.value.params.useConfiguredDefaultModel).toBe(true)
+      }
+      state = applyPiConfiguredDefaultSelectionUpdate({ previous: reloaded, next: explicit, state })
+      expect(state.defaultsByHost[hostKey]).toBeUndefined()
+      settings.sourceControlAi = explicit
+      settings.piConfiguredDefaultModelState = state
+      const result = resolveSourceControlAiForOperation({
+        settings,
+        operation: 'commitMessage',
+        discoveryHostKey: hostKey
+      })
+      expect(result.ok && result.value.params.useConfiguredDefaultModel).toBeUndefined()
+      expect(result.ok && result.value.params.model).toBe(COMPATIBILITY_MODEL_ID)
+    }
+  )
+  it.each(['commitMessage', 'pullRequest', 'branchName'] as const)(
+    'preserves operation default through reload for %s',
+    (operation) => {
+      const settings = piSettings()
+      settings.sourceControlAi!.modelOverridesByOperation = {
+        [operation]: { selectedModelByAgent: { pi: 'default' } }
+      }
+      const migration = migratePiConfiguredDefaultModelState({
+        sourceControlAi: settings.sourceControlAi!,
+        commitMessageAi: settings.commitMessageAi,
+        persistedState: undefined
+      })
+      settings.piConfiguredDefaultModelState = migration.state
+      const result = resolveSourceControlAiForOperation({ settings, operation })
+      expect(result.ok && result.value.params.useConfiguredDefaultModel).toBe(true)
     }
   )
 })

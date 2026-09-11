@@ -6,6 +6,12 @@ import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS } from './mobile-native-chat-send'
 import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 
+// Why mocked: the reporter is tested on its own; here Stop's escapes must be counted alone.
+const reportWorkerTerminalUserInput = vi.fn()
+vi.mock('../terminal/worker-terminal-takeover-report', () => ({
+  reportWorkerTerminalUserInput: (...args: unknown[]) => reportWorkerTerminalUserInput(...args)
+}))
+
 describe('useMobileNativeChatStop', () => {
   let renderer: ReactTestRenderer | null = null
   let stop: (() => void) | null = null
@@ -19,6 +25,7 @@ describe('useMobileNativeChatStop', () => {
       result: { send: { accepted: true } }
     })
     onSendError.mockReset()
+    reportWorkerTerminalUserInput.mockReset()
   })
 
   afterEach(() => {
@@ -183,5 +190,27 @@ describe('useMobileNativeChatStop', () => {
     })
 
     expect(onSendError).not.toHaveBeenCalled()
+  })
+
+  it('reports the takeover once an Escape is accepted', async () => {
+    await render(true, 'stream-1')
+
+    act(() => stop?.())
+    await act(async () => vi.runAllTimersAsync())
+
+    expect(reportWorkerTerminalUserInput).toHaveBeenCalledWith(
+      expect.objectContaining({ sendRequest }),
+      'terminal-1'
+    )
+  })
+
+  it('does not report a Stop the host rejected', async () => {
+    sendRequest.mockResolvedValue({ ok: true, result: { send: { accepted: false } } })
+    await render(true, 'stream-1')
+
+    act(() => stop?.())
+    await act(async () => vi.runAllTimersAsync())
+
+    expect(reportWorkerTerminalUserInput).not.toHaveBeenCalled()
   })
 })

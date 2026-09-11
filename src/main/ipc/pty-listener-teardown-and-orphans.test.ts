@@ -440,6 +440,7 @@ describe('registerPtyHandlers', () => {
 
     expect(killSpy).toHaveBeenCalled()
     expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1, spawnResult.incarnationId, {
+      providerExitObserved: true,
       cause: { kind: 'unknown', reason: 'stop_unverified' }
     })
     const listed = await getLocalPtyProvider().listProcesses()

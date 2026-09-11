@@ -77,6 +77,23 @@ describe('ProcessGoneDedupe', () => {
     ).toBe(true)
   })
 
+  it('does not suppress simultaneous crashes from different renderers', () => {
+    const dedupe = new ProcessGoneDedupe({ windowMs: 2_000 })
+
+    expect(
+      dedupe.shouldRecord(getProcessGoneDedupeKey('renderer', 'renderer', 'crashed', 5, 11), 1_000)
+    ).toBe(true)
+    expect(
+      dedupe.shouldRecord(getProcessGoneDedupeKey('renderer', 'renderer', 'crashed', 5, 22), 1_001)
+    ).toBe(true)
+    expect(
+      dedupe.shouldRecord(
+        getProcessGoneDedupeKey('renderer', 'renderer', 'oom', -536870904, 11),
+        1_002
+      )
+    ).toBe(false)
+  })
+
   it('keeps child process crash tuples distinct inside renderer burst windows', () => {
     const dedupe = new ProcessGoneDedupe({ windowMs: 2_000 })
 

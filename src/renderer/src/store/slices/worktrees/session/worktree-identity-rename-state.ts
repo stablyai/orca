@@ -1,6 +1,12 @@
 import type { AppState } from '../../../types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../../shared/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../../../../../shared/browser-page-doc-location'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getWorktreeIdFromVisitKey } from '@/lib/worktree-visit-recency'
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
@@ -41,7 +47,6 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'gitBranchCompareRequestStatusHeadByWorktree',
   'showDotfilesByWorktree',
   'expandedDirs',
-  'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId',
   'recentlyClosedTabKindsByWorktree'
 ] as const satisfies readonly (keyof AppState)[]
@@ -76,17 +81,34 @@ export function buildWorktreeRenameState(
   }
   const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
     value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
+  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
+  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
+  const withNewBrowserWorktreeId = <T extends BrowserPage | BrowserWorkspace>(value: T): T => {
+    const renamedValue = withNewWorktreeId(value)
+    return value.docLocation?.worktreeId === oldWorktreeId
+      ? {
+          ...renamedValue,
+          docLocation: remapBrowserPageDocLocation(
+            value.docLocation,
+            oldWorktreeId,
+            newWorktreeId,
+            oldWorktreePath,
+            newWorktreePath
+          )
+        }
+      : renamedValue
+  }
   const renameValueByKey: Partial<Record<(typeof WORKTREE_ID_KEYED_MAP_KEYS)[number], unknown>> = {
     tabsByWorktree: (tabs: { worktreeId: string }[]) => tabs.map(withNewWorktreeId),
-    browserTabsByWorktree: (workspaces: { worktreeId: string }[]) =>
-      workspaces.map(withNewWorktreeId),
+    browserTabsByWorktree: (workspaces: BrowserWorkspace[]) =>
+      workspaces.map(withNewBrowserWorktreeId),
     recentlyClosedBrowserTabsByWorktree: (
-      snapshots: { workspace: { worktreeId: string }; pages: { worktreeId: string }[] }[]
+      snapshots: { workspace: BrowserWorkspace; pages: BrowserPage[] }[]
     ) =>
       snapshots.map((snapshot) => ({
         ...snapshot,
-        workspace: withNewWorktreeId(snapshot.workspace),
-        pages: snapshot.pages.map(withNewWorktreeId)
+        workspace: withNewBrowserWorktreeId(snapshot.workspace),
+        pages: snapshot.pages.map(withNewBrowserWorktreeId)
       })),
     fileSearchStateByWorktree: (searchState: AppState['fileSearchStateByWorktree'][string]) => ({
       ...searchState,
@@ -98,13 +120,29 @@ export function buildWorktreeRenameState(
   for (const key of WORKTREE_ID_KEYED_MAP_KEYS) {
     renameKey(key, renameValueByKey[key] as ((value: unknown) => unknown) | undefined)
   }
+  // Recency keys may carry a host prefix. Preserve that prefix while moving
+  // the path-derived id so a rename cannot merge host twins.
+  const nextVisitRecency = { ...s.lastVisitedAtByWorktreeId }
+  let visitRecencyChanged = false
+  for (const [key, value] of Object.entries(s.lastVisitedAtByWorktreeId)) {
+    const rawId = getWorktreeIdFromVisitKey(key)
+    if (rawId !== oldWorktreeId) {
+      continue
+    }
+    const nextKey =
+      rawId === key ? newWorktreeId : `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
+    nextVisitRecency[nextKey] = value
+    delete nextVisitRecency[key]
+    visitRecencyChanged = true
+  }
+  if (visitRecencyChanged) {
+    renamed.lastVisitedAtByWorktreeId = nextVisitRecency
+  }
   // Re-key on rename so a renamed worktree keeps its editor-undo + push/pull state.
   renameKey('recentlyClosedEditorTabsByWorktree', (files: { worktreeId: string }[]) =>
     files.map(withNewWorktreeId)
   )
   // Why: terminal reopen snapshots hold absolute startupCwd paths under the old folder; remap or Cmd+Shift+T respawns into a directory that no longer exists after the rename.
-  const oldWorktreePath = splitWorktreeIdForFilesystem(oldWorktreeId)?.worktreePath
-  const newWorktreePath = splitWorktreeIdForFilesystem(newWorktreeId)?.worktreePath
   renameKey('recentlyClosedTerminalTabsByWorktree', (snapshots: ClosedTerminalTabSnapshot[]) =>
     oldWorktreePath && newWorktreePath
       ? remapClosedTerminalTabSnapshotCwds(snapshots, oldWorktreePath, newWorktreePath)
@@ -119,23 +157,29 @@ export function buildWorktreeRenameState(
     : s.openFiles
   const currentBrowserPagesByWorkspace = s.browserPagesByWorkspace ?? {}
   const browserPagesByWorkspace = Object.values(currentBrowserPagesByWorkspace).some((pages) =>
-    pages.some((page) => page.worktreeId === oldWorktreeId)
+    pages.some(
+      (page) => page.worktreeId === oldWorktreeId || page.docLocation?.worktreeId === oldWorktreeId
+    )
   )
     ? Object.fromEntries(
         Object.entries(currentBrowserPagesByWorkspace).map(([workspaceId, pages]) => [
           workspaceId,
-          pages.map(withNewWorktreeId)
+          pages.map(withNewBrowserWorktreeId)
         ])
       )
     : s.browserPagesByWorkspace
   const currentRecentlyClosedBrowserPagesByWorkspace = s.recentlyClosedBrowserPagesByWorkspace ?? {}
   const recentlyClosedBrowserPagesByWorkspace = Object.values(
     currentRecentlyClosedBrowserPagesByWorkspace
-  ).some((pages) => pages.some((page) => page.worktreeId === oldWorktreeId))
+  ).some((pages) =>
+    pages.some(
+      (page) => page.worktreeId === oldWorktreeId || page.docLocation?.worktreeId === oldWorktreeId
+    )
+  )
     ? Object.fromEntries(
         Object.entries(currentRecentlyClosedBrowserPagesByWorkspace).map(([workspaceId, pages]) => [
           workspaceId,
-          pages.map(withNewWorktreeId)
+          pages.map(withNewBrowserWorktreeId)
         ])
       )
     : s.recentlyClosedBrowserPagesByWorkspace

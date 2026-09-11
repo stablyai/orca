@@ -15,22 +15,35 @@ export type WorktreeForceDeleteReason =
   | 'orphan-directory'
   | 'missing-registration'
   | 'unstopped-pty'
+  | 'running-agent-session'
 
 // Why: everything before this separator is the worktree id — a user-chosen filesystem path.
 // Only the detail after it is Orca's own wording, so verdict matchers anchor on the boundary
 // rather than scanning the whole message and letting a path spell out a verdict.
 export const UNSTOPPED_PTY_DETAIL_SEPARATOR = ' — '
 
-// Why: verification distinguishes a PTY it watched stay alive from one it could not reach,
+// Why: verification distinguishes a process it watched stay alive from one it could not reach,
 // and the delete toast must not flatten the two — a user waiving "we could not confirm" is
-// making a different decision than one killing a terminal Orca just saw running. The marker
-// and its matcher stay together for the same reason the force hint does.
-export const UNSTOPPED_PTY_LIVE_DETAIL_PREFIX = 'still live:'
+// making a different decision than one killing something Orca just saw running. The marker
+// and its matcher stay together for the same reason the force hint does. Shared by the PTY
+// sweep and the structured-session sweep, which both re-observe after their stop.
+export const STILL_LIVE_DETAIL_PREFIX = 'still live:'
 
 // Why (#11960): a sweep that never answers wedges removal exactly like a stop that could not
 // be proven, and the waiver clears both — but this error carries different words, so without
 // its own matcher the force affordance stayed hidden for the very case it was added for.
 export const WORKTREE_TEARDOWN_TIMEOUT_PREFIX = 'Timed out waiting for physical PTY teardown:'
+
+// Why (#11960 again): a running agent SESSION blocks removal for the same reason an unstopped PTY
+// does, and it needs its own prefix for the same reason the timeout above needed one — the desktop
+// force affordance comes only from the classifier below, so a refusal with no matcher shows raw
+// CLI wording and hides the Force Delete button. Matcher and hint stay in this file together.
+export const RUNNING_AGENT_SESSION_REMOVAL_PREFIX =
+  'Refusing to remove worktree with running agent sessions:'
+
+export function isRunningAgentSessionRemovalError(error: string): boolean {
+  return error.includes(RUNNING_AGENT_SESSION_REMOVAL_PREFIX)
+}
 
 export function isUnstoppedPtyRemovalError(error: string): boolean {
   return (
@@ -42,7 +55,15 @@ export function isUnstoppedPtyRemovalError(error: string): boolean {
 export function isProvenLivePtyRemovalError(error: string): boolean {
   return (
     isUnstoppedPtyRemovalError(error) &&
-    error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${UNSTOPPED_PTY_LIVE_DETAIL_PREFIX}`)
+    error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${STILL_LIVE_DETAIL_PREFIX}`)
+  )
+}
+
+/** True only when the observation AFTER the close found the session still attached. */
+export function isProvenLiveStructuredSessionRemovalError(error: string): boolean {
+  return (
+    isRunningAgentSessionRemovalError(error) &&
+    error.includes(`${UNSTOPPED_PTY_DETAIL_SEPARATOR}${STILL_LIVE_DETAIL_PREFIX}`)
   )
 }
 
@@ -102,6 +123,12 @@ export function classifyWorktreeForceDeleteReason(
   // has already spent this escape hatch. Only the waiver itself is.
   if (isUnstoppedPtyRemovalError(error)) {
     return allowUnverifiedPtyStop ? null : 'unstopped-pty'
+  }
+  // Same placement and the same reason: decided BEFORE the `force` guard, because an ordinary
+  // desktop delete already passes force:true to skip the dirty-file prompt and that says nothing
+  // about whether the user has waived closing a live agent session. Only the waiver itself does.
+  if (isRunningAgentSessionRemovalError(error)) {
+    return allowUnverifiedPtyStop ? null : 'running-agent-session'
   }
   if (force) {
     return null

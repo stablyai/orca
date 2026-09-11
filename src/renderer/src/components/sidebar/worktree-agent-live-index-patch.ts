@@ -4,6 +4,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 export type LiveEntriesByWorktreeCache = {
   tabsByWorktree: AppState['tabsByWorktree']
+  unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] | undefined
   agentStatusByPaneKey: AppState['agentStatusByPaneKey']
   entriesByWorktree: Map<string, AgentStatusEntry[]>
 }

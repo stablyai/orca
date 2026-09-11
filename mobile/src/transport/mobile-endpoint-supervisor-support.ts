@@ -1,5 +1,6 @@
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
+import { ReplacementAuthenticationTimeoutError } from './replacement-session-authentication'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { HostProfile } from './types'
@@ -14,6 +15,16 @@ export function suspendRelayIfStillConnected(
   if (logical.getState() === 'connected') {
     controller.suspendActiveRelay(logical)
   }
+}
+
+export function liveRelayLeaseExpiry(
+  logical: StableLogicalRpcClient,
+  stopped: boolean,
+  expiry: number | null
+): number | null {
+  return !stopped && logical.getActivePath() === 'relay' && logical.getState() === 'connected'
+    ? expiry
+    : null
 }
 
 type RelayDialResult = { ok: true } | { ok: false; error: Error }
@@ -58,6 +69,11 @@ export async function dialRelayThroughDirectorFallback(args: {
 }
 
 export function isDirectorResolutionFailure(error: Error): boolean {
+  // Why: a cell that took relay-auth and went quiet is the right cell working slowly;
+  // re-resolving it just doubles the wait against the same contended window.
+  if (error instanceof ReplacementAuthenticationTimeoutError) {
+    return error.stage === null || error.stage === 'opening'
+  }
   return (
     !(error instanceof MobileE2EEAuthenticationError) &&
     (!(error instanceof RelayOuterError) || [4409, 4503, 1006].includes(error.code))

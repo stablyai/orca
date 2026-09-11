@@ -7,6 +7,7 @@ export type HandlerMap = Record<string, (_event?: unknown, args?: unknown) => Pr
 export type PreflightMocks = {
   handleMock: Mock
   execFileAsyncMock: Mock
+  runWslProcessMock?: Mock
   hydrateShellPathMock: Mock
   mergePathSegmentsMock: Mock
   getActiveMultiplexerMock: Mock
@@ -42,6 +43,7 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
   const {
     handleMock,
     execFileAsyncMock,
+    runWslProcessMock,
     hydrateShellPathMock,
     mergePathSegmentsMock,
     getActiveMultiplexerMock,
@@ -56,6 +58,7 @@ export function resetPreflightMocks(mocks: PreflightMocks, handlers: HandlerMap)
 
   handleMock.mockReset()
   execFileAsyncMock.mockReset()
+  runWslProcessMock?.mockReset()
   hydrateShellPathMock.mockReset()
   hydrateShellPathMock.mockResolvedValue({ segments: [], ok: false, failureReason: 'no_shell' })
   mergePathSegmentsMock.mockReset()

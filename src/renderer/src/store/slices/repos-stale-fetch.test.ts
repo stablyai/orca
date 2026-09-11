@@ -56,7 +56,14 @@ beforeEach(() => {
   reposList.mockReset()
   // Only repos.list is exercised here — the missing projects API makes
   // fetchProjectHostSetupCompatibility fall back to deriving from repos.
-  vi.stubGlobal('window', { api: { repos: { list: reposList } } })
+  vi.stubGlobal('window', {
+    api: {
+      repos: {
+        list: reposList,
+        remove: vi.fn().mockResolvedValue(undefined)
+      }
+    }
+  })
 })
 
 // A repos:changed burst (deleting a project group with contained projects) starts
@@ -103,6 +110,23 @@ describe('repos slice stale-fetch race (#7020)', () => {
     resolveStale([localRepo, remoteRepo])
     await stale
     expect(store.getState().repos).toEqual([])
+  })
+
+  it('reapplies an in-flight catalog after the repo is removed', async () => {
+    const { promise: catalog, resolve: resolveCatalog } = Promise.withResolvers<Repo[]>()
+    reposList.mockReturnValueOnce(catalog)
+    const store = createTestStore()
+    store.setState({ repos: [localRepo] })
+
+    const pending = store.getState().fetchRepos()
+    await store.getState().removeProject(localRepo.id)
+    expect(store.getState().repos).toEqual([])
+
+    resolveCatalog([localRepo])
+    await pending
+
+    // Current contract: removal does not claim a catalog generation, so the latest fetch can resurrect it.
+    expect(store.getState().repos).toEqual([{ ...localRepo, executionHostId: 'local' }])
   })
 
   it('waits for the superseding catalog fetch before startup hydration', async () => {

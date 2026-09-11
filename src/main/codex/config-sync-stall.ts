@@ -1,7 +1,10 @@
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { readAgentStateFileSync } from '../agent-state-file-reader'
+import { observeAgentStateFile } from './codex-path-observation'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import {
+  getCodexSettingsBaselinePath,
+  observeCodexSettingsBaseline
+} from './config-settings-baseline'
 import type { CodexSettingsPromotionHomes } from './config-settings-promotion'
 import type {
   CodexConfigSyncStallReason,
@@ -28,20 +31,42 @@ export function getCodexConfigSyncStatus(
   const runtimeConfigPath = join(homes.runtimeHomePath, 'config.toml')
   // Why: a stall only withholds settings once a managed runtime config exists;
   // without one the mirror seeds it and there is nothing yet to fall behind.
-  if (!existsSync(runtimeConfigPath)) {
+  // But `existsSync` never proved the config readable, so this function could
+  // report `synced` while the mirror refused its content read — telling the
+  // user their edits had been applied when nothing had run.
+  const runtimeConfigObservation = observeAgentStateFile(runtimeConfigPath)
+  if (runtimeConfigObservation.kind === 'absent') {
     return { state: 'synced', reason: null, systemConfigPath }
   }
-  if (!existsSync(systemConfigPath)) {
+  if (runtimeConfigObservation.kind === 'indeterminate') {
+    // Why: the managed home is what could not be read, so say that rather than
+    // borrowing a source-side reason and blaming the wrong path.
+    return {
+      state: 'stalled',
+      reason: 'managed-home-unavailable',
+      systemConfigPath,
+      managedStatePath: runtimeConfigPath
+    }
+  }
+  const baselineObservation = observeCodexSettingsBaseline(homes.runtimeHomePath)
+  if (baselineObservation.kind === 'indeterminate') {
+    return {
+      state: 'stalled',
+      reason: 'managed-home-unavailable',
+      systemConfigPath,
+      managedStatePath: getCodexSettingsBaselinePath(homes.runtimeHomePath)
+    }
+  }
+  const systemConfigObservation = observeAgentStateFile(systemConfigPath)
+  if (systemConfigObservation.kind === 'absent') {
     return { state: 'stalled', reason: 'missing-source', systemConfigPath }
   }
-  let rawSystemConfig: string
-  try {
-    rawSystemConfig = readAgentStateFileSync(systemConfigPath)
-  } catch {
+  if (systemConfigObservation.kind === 'indeterminate') {
     // Why: the mirror aborts on an unreadable source too, so report the stall
     // rather than claiming a sync that cannot happen.
     return { state: 'stalled', reason: 'unreadable-source', systemConfigPath }
   }
+  const rawSystemConfig = systemConfigObservation.value
   if (rawSystemConfig.trim() === '') {
     return { state: 'stalled', reason: 'blank-source', systemConfigPath }
   }
@@ -87,6 +112,13 @@ export function reportCodexConfigSyncOutcome(
     return
   }
   stalledHomes.set(runtimeHomePath, status.reason)
+  if (status.reason === 'managed-home-unavailable') {
+    const managedStatePath = status.managedStatePath ?? join(runtimeHomePath, 'config.toml')
+    console.warn(
+      `[codex-config] Config sync stalled (${status.reason}): ${managedStatePath} is unusable, so ${runtimeHomePath} keeps its last synced settings. The managed state must be readable before settings can sync.`
+    )
+    return
+  }
   console.warn(
     `[codex-config] Config sync stalled (${status.reason}): ${status.systemConfigPath} is unusable, so ${runtimeHomePath} keeps its last synced settings. Edits to the source will not apply until it is readable.`
   )

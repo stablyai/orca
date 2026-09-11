@@ -15,17 +15,32 @@ import type { MobileSessionTab } from './mobile-session-route-types'
  * Returns null when no agent is identified (plain shell / unknown), so the tab
  * keeps its text-only label.
  */
-export function resolveMobileTerminalTabAgentId(tab: {
+type MobileTerminalTabAgentIdentity = {
   title: string
-  agentStatus?: AgentStatusEntry | null
-  launchAgent?: TuiAgent
-}): string | null {
+  agentStatus?: { agentType?: AgentStatusEntry['agentType'] | null } | null
+  launchAgent?: TuiAgent | null
+}
+
+/** Agent identity Orca owns, excluding the display-only title fallback. */
+export function resolveMobileTerminalTabOwnedAgentId(
+  tab: MobileTerminalTabAgentIdentity
+): string | null {
   const hookAgentType = tab.agentStatus?.agentType?.trim()
   if (hookAgentType && hookAgentType !== 'unknown') {
     return hookAgentType
   }
   if (tab.launchAgent) {
     return tab.launchAgent
+  }
+  return null
+}
+
+export function resolveMobileTerminalTabAgentId(
+  tab: MobileTerminalTabAgentIdentity
+): string | null {
+  const ownedAgent = resolveMobileTerminalTabOwnedAgentId(tab)
+  if (ownedAgent) {
+    return ownedAgent
   }
   return resolveExplicitTerminalTitleAgentType(tab.title)
 }
@@ -46,6 +61,9 @@ export function getMobileSessionTabTitle(tab: MobileSessionTab): string {
   }
   if (tab.type === 'file') {
     return tab.title || 'File'
+  }
+  if (tab.type === 'agent-session') {
+    return tab.title || 'Chat'
   }
   // Why: strip the leading agent status glyph (✳ etc.) once the tab shows the
   // provider icon. Mobile falls back for glyph-only titles because iOS can

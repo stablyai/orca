@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveWebSessionVisibleTabId } from './web-session-focus-intent'
+import {
+  resolveWebSessionSiblingVisibleTabId,
+  resolveWebSessionVisibleTabId
+} from './web-session-focus-intent'
 import {
   toVisibleTabType,
   type Tab,
@@ -232,6 +235,33 @@ describe('resolveWebSessionVisibleTabId — no-group compatibility path', () => 
     })
 
     expect(resolveWebSessionVisibleTabId(state, WT)).toBeNull()
+  })
+})
+
+describe('resolveWebSessionSiblingVisibleTabId', () => {
+  it('returns the sibling whose active tab matches the remembered visible type', () => {
+    const editor = tab({ id: 'tab-editor', entityId: 'file-1', contentType: 'editor' })
+    const terminal = tab({
+      id: 'tab-terminal',
+      entityId: 'term-1',
+      contentType: 'terminal',
+      groupId: GROUP_B
+    })
+    const state = makeState({
+      unifiedTabsByWorktree: { [WT]: [editor, terminal] },
+      groupsByWorktree: {
+        [WT]: [
+          group({ id: GROUP_A, activeTabId: editor.id, tabOrder: [editor.id] }),
+          group({ id: GROUP_B, activeTabId: null, tabOrder: [] })
+        ]
+      },
+      activeGroupIdByWorktree: { [WT]: GROUP_B },
+      activeTabType: 'editor',
+      activeTabTypeByWorktree: { [WT]: 'editor' }
+    })
+
+    expect(resolveWebSessionVisibleTabId(state, WT)).toBeNull()
+    expect(resolveWebSessionSiblingVisibleTabId(state, WT)).toBe(editor.id)
   })
 })
 

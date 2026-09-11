@@ -299,7 +299,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
       })
 
       await expect(runtime.showTerminal(handle)).resolves.toMatchObject({
-        agentWait: { source: 'prompt-text', reason: 'codex-trust-workspace' }
+        agentWait: { source: 'prompt-text', reason: 'agent-trust-workspace' }
       })
     })
 

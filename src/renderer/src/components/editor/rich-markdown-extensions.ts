@@ -3,7 +3,6 @@ import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import { Code } from '@tiptap/extension-code'
 import Image from '@tiptap/extension-image'
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import Placeholder from '@tiptap/extension-placeholder'
 import TaskItem from '@tiptap/extension-task-item'
 import { Table } from '@tiptap/extension-table'
@@ -13,7 +12,11 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
 import { Markdown } from '@tiptap/markdown'
 import { createLowlight, common } from 'lowlight'
-import { loadLocalImageSrc, onImageCacheInvalidated } from './useLocalImageSrc'
+import {
+  acquireLocalImageSrcLease,
+  loadLocalImageSrc,
+  onImageCacheInvalidated
+} from './useLocalImageSrc'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   createRawMarkdownHtmlBlock,
@@ -27,14 +30,19 @@ import {
 import { createMarkdownDocLink } from './rich-markdown-doc-link'
 import { RichMarkdownCodeBlock } from './RichMarkdownCodeBlock'
 import { safeReactNodeViewRenderer } from './safe-react-node-view-renderer'
+import { positionStableNodeViewUpdate } from './position-stable-node-view-update'
 import { DragSelectionGuard } from './drag-selection-guard'
 import { createRichMarkdownAnnotationHighlightExtension } from './rich-markdown-annotation-highlight'
 import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLink } from './rich-markdown-html-superscript-link'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
+import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
+import { RichMarkdownParagraph } from './rich-markdown-paragraph'
+import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
+import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 
-const lowlight = createLowlight(common)
+const lowlight = createCachedLowlight(createLowlight(common))
 
 const RichMarkdownLink = Link.extend({
   // Why: link's priority must stay below code's default 100 so Markdown
@@ -69,12 +77,19 @@ export function createRichMarkdownExtensions({
     StarterKit.configure({
       link: false,
       code: false,
-      codeBlock: false
+      codeBlock: false,
+      orderedList: false,
+      paragraph: false
     }),
+    RichMarkdownParagraph,
     RichMarkdownCode,
-    CodeBlockLowlight.extend({
+    RichMarkdownCodeBlockLowlight.extend({
       addNodeView() {
-        return safeReactNodeViewRenderer(RichMarkdownCodeBlock)
+        // Why: RichMarkdownCodeBlock never reads getPos, so it must not re-render
+        // just because earlier edits shifted this block's document position.
+        return safeReactNodeViewRenderer(RichMarkdownCodeBlock, {
+          update: positionStableNodeViewUpdate
+        })
       }
     }).configure({
       lowlight,
@@ -104,8 +119,12 @@ export function createRichMarkdownExtensions({
           // native image drag (which sends image bytes) from conflicting with
           // ProseMirror's node-level drag (which serializes the schema node
           // for relocation within the document).
-          const dom = document.createElement('div')
+          const dom = document.createElement('span')
+          // Why: the wrapper sits in inline content, so it must not introduce a
+          // block box or the surrounding text would break onto its own line.
+          dom.style.display = 'inline-block'
           dom.style.lineHeight = '0'
+          dom.style.maxWidth = '100%'
 
           const img = document.createElement('img')
           img.draggable = false
@@ -118,14 +137,18 @@ export function createRichMarkdownExtensions({
 
           let currentSrc = node.attrs.src as string | undefined
           let currentContextVersion = getImageContextVersion(this.storage)
+          let releaseImageLease: (() => void) | undefined
 
           const loadImage = (src: string | undefined): void => {
+            releaseImageLease?.()
+            releaseImageLease = undefined
             const fp = this.storage.filePath as string
             const runtimeContext = this.storage.runtimeContext as
               | RuntimeFileOperationArgs
               | undefined
             const contextVersionAtLoad = getImageContextVersion(this.storage)
             if (src && fp) {
+              releaseImageLease = acquireLocalImageSrcLease(src, fp, undefined, runtimeContext)
               void loadLocalImageSrc(src, fp, undefined, runtimeContext).then((resolved) => {
                 if (currentSrc !== src || currentContextVersion !== contextVersionAtLoad) {
                   return
@@ -179,6 +202,7 @@ export function createRichMarkdownExtensions({
               return true
             },
             destroy: () => {
+              releaseImageLease?.()
               if (reloadListeners instanceof Set) {
                 reloadListeners.delete(reloadForContextChange)
               }
@@ -188,8 +212,13 @@ export function createRichMarkdownExtensions({
         }
       }
     }).configure({
-      allowBase64: true
+      allowBase64: true,
+      // Why: the markdown parser nests images inside paragraphs, so a block image
+      // node yields a schema-invalid document that only throws on the first edit
+      // that reassembles the paragraph.
+      inline: true
     }),
+    RichMarkdownOrderedList,
     RichMarkdownTaskList,
     TaskItem.configure({
       nested: true

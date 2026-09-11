@@ -38,7 +38,10 @@ type FakeClient = RpcClient & {
   closeMock: ReturnType<typeof vi.fn>
 }
 
-function makeFakeClient(initialState: ConnectionState): FakeClient {
+function makeFakeClient(
+  initialState: ConnectionState,
+  activePath: MobileConnectionPath = 'tailscale'
+): FakeClient {
   let state = initialState
   let pendingPath: MobileConnectionPath | null = null
   let pairingRejected = false
@@ -52,7 +55,7 @@ function makeFakeClient(initialState: ConnectionState): FakeClient {
     getState: () => state,
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => null,
-    getActivePath: () => 'tailscale',
+    getActivePath: () => activePath,
     getPendingPath: () => pendingPath,
     isPairingRejected: () => pairingRejected,
     onConnectionPathChange: (listener: () => void) => {
@@ -143,8 +146,8 @@ beforeEach(() => {
 })
 
 describe('useHostClient', () => {
-  it('rebinds when Expo reuses a screen between two connected cached hosts', async () => {
-    const host2 = { ...HOST, id: 'host-2', name: 'Host 2' }
+  it('rebinds the client and its authenticated identity together across cached hosts', async () => {
+    const host2 = { ...HOST, id: 'host-2', name: 'Host 2', deviceToken: 'token-2' }
     const client1 = makeFakeClient('connected')
     const client2 = makeFakeClient('connected')
     connectMock.mockReturnValueOnce(client1).mockReturnValueOnce(client2)
@@ -152,11 +155,13 @@ describe('useHostClient', () => {
 
     let selectedHostId = HOST.id
     let selectedClient: RpcClient | null = null
+    let selectedClientId: string | null = null
     let selectedState: ConnectionState = 'disconnected'
     let renderer: ReactTestRenderer | null = null
     function Probe(): null {
       const selected = useHostClient(selectedHostId)
       selectedClient = selected.client
+      selectedClientId = selected.clientId
       selectedState = selected.state
       useHostClient(host2.id)
       return null
@@ -168,16 +173,18 @@ describe('useHostClient', () => {
         await Promise.resolve()
       })
       expect(selectedClient).toBe(client1)
+      expect(selectedClientId).toBe(HOST.deviceToken)
       expect(selectedState).toBe('connected')
 
       selectedHostId = host2.id
-      client2.emitState('disconnected')
       await act(async () => {
+        client2.emitState('disconnected')
         renderer?.update(createElement(RpcClientProvider, null, createElement(Probe)))
         await Promise.resolve()
       })
 
       expect(selectedClient).toBe(client2)
+      expect(selectedClientId).toBe(host2.deviceToken)
       expect(selectedState).toBe('disconnected')
       expect(connectMock).toHaveBeenCalledTimes(2)
     } finally {
@@ -355,6 +362,70 @@ describe('useHostClient', () => {
     }
   })
 
+  it('nudges an existing Relay session instead of starting a fresh direct dial', async () => {
+    const relayClient = makeFakeClient('disconnected', 'relay')
+    connectMock.mockReturnValue(relayClient)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    let forceReconnect: ((hostId: string) => Promise<void>) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      forceReconnect = useForceReconnect()
+      useHostClient(HOST.id)
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+
+      await act(async () => {
+        await forceReconnect?.(HOST.id)
+      })
+
+      expect(relayClient.closeMock).not.toHaveBeenCalled()
+      expect(relayClient.notifyForeground).toHaveBeenCalledWith('app-resume')
+      expect(connectMock).toHaveBeenCalledOnce()
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
+  it('rebuilds a pairing-rejected Relay client so re-pairing credentials are re-read', async () => {
+    const rejectedRelayClient = makeFakeClient('disconnected', 'relay')
+    const replacement = makeFakeClient('connecting', 'tailscale')
+    connectMock.mockReturnValueOnce(rejectedRelayClient).mockReturnValueOnce(replacement)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    let forceReconnect: ((hostId: string) => Promise<void>) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      forceReconnect = useForceReconnect()
+      useHostClient(HOST.id)
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+      act(() => rejectedRelayClient.emitPairingRejected(true))
+
+      await act(async () => {
+        await forceReconnect?.(HOST.id)
+      })
+
+      expect(rejectedRelayClient.closeMock).toHaveBeenCalled()
+      expect(rejectedRelayClient.notifyForeground).not.toHaveBeenCalled()
+      expect(connectMock).toHaveBeenCalledTimes(2)
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
   it('does not open a client after the host is closed during an in-flight lookup', async () => {
     let resolveHosts: ((hosts: (typeof HOST)[]) => void) | null = null
     const hostLookup = new Promise<(typeof HOST)[]>((resolve) => {
@@ -462,12 +533,12 @@ describe('useAllHostClients', () => {
       await Promise.resolve()
     })
     act(() => client.emitPendingPath('relay'))
-    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: false })
+    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: false, hostSignedOut: false })
 
     // Why: the desktop refusing the credential is a status-only change — no
     // transport state moves, so only the connection-path signal can carry it.
     act(() => client.emitPairingRejected(true))
-    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: true })
+    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: true, hostSignedOut: false })
 
     act(() => renderer.unmount())
   })

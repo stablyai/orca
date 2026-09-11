@@ -16,6 +16,7 @@ import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
 import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
+import { WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD } from './hook-stdin-contract'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -118,14 +119,23 @@ export {
 
 export function wrapWindowsHookCommand(
   scriptPath: string,
-  env: Record<string, string> = {}
+  env: Record<string, string> = {},
+  // Why: POSIX wrap already answers missing-script with stdout; Windows must match so gate events cannot drift (#15462).
+  options: { fallbackStdout?: string } = {}
 ): string {
   // Why: the encoded launcher protects paths across Windows shells and drains stdin when the config points at a missing script.
   const quoted = quotePowerShellString(scriptPath)
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
     .join('')
-  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  const fallback =
+    options.fallbackStdout === undefined
+      ? ''
+      : `Write-Output ${quotePowerShellString(options.fallbackStdout)}; `
+  // Why the order: answer first (a gate event reads silence as deny), then the shared
+  // env guard, and only then own stdin — outside an Orca pane the caller may abandon the
+  // pipe, and ReadToEnd would strand the launcher there forever (#11549).
+  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${fallback}${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
   return wrapWindowsPowerShellEncodedCommand(command)
 }
 

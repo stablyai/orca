@@ -1,4 +1,5 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { removeTreeSync } from './windows-transient-lock-removal'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,7 +35,7 @@ const createdPaths: string[] = []
 afterEach(() => {
   openedPaths.length = 0
   for (const path of createdPaths.splice(0)) {
-    rmSync(path, { recursive: true, force: true })
+    removeTreeSync(path)
   }
 })
 

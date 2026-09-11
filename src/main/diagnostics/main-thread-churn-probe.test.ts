@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { writeStartupDiagnosticLineMock } = vi.hoisted(() => ({
+  writeStartupDiagnosticLineMock: vi.fn()
+}))
+vi.mock('../startup/startup-diagnostics', () => ({
+  writeStartupDiagnosticLine: writeStartupDiagnosticLineMock
+}))
+
 import {
   MAIN_THREAD_DIAGNOSTICS_ENV,
   classifySubprocessCommand,
   drainSubprocessSpawnStats,
   isMainThreadDiagnosticsEnabled,
-  recordSubprocessSpawn
+  recordSubprocessSpawn,
+  startMainThreadChurnProbe
 } from './main-thread-churn-probe'
 
 afterEach(() => {
@@ -85,5 +94,26 @@ describe('recordSubprocessSpawn', () => {
       'git rev-list': { count: 1, blockMsTotal: 1.5, blockMsMax: 1.5 }
     })
     expect(drainSubprocessSpawnStats()).toEqual({})
+  })
+})
+
+describe('startMainThreadChurnProbe', () => {
+  // Counters nothing reads are counters nobody can act on: the probe report is what makes
+  // "the diff cache never hit" visible outside a test run.
+  it('folds caller-contributed counters into the report line', async () => {
+    vi.stubEnv(MAIN_THREAD_DIAGNOSTICS_ENV, '1')
+    writeStartupDiagnosticLineMock.mockClear()
+    vi.useFakeTimers()
+    try {
+      startMainThreadChurnProbe({ extraStats: () => ({ diffCache: { hits: 3, misses: 1 } }) })
+      await vi.advanceTimersByTimeAsync(5_100)
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const line = String(writeStartupDiagnosticLineMock.mock.calls.at(-1)?.[0] ?? '')
+    expect(JSON.parse(line.replace('[main-thread] ', ''))).toMatchObject({
+      diffCache: { hits: 3, misses: 1 }
+    })
   })
 })

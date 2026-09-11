@@ -1,18 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  AUTOMATION_CRON_EXPRESSION_MAX_BYTES,
+  classifyAutomationCronSchedule,
+  describeAutomationSchedule,
+  formatAutomationSchedule
+} from './automation-schedules'
+import {
   buildAutomationCronSchedule,
   buildAutomationRrule,
-  classifyAutomationCronSchedule,
-  formatAutomationSchedule,
+  latestAutomationOccurrenceAtOrBefore,
+  nextAutomationOccurrenceAfter
+} from './automation-schedule-occurrences'
+import {
+  AUTOMATION_CRON_EXPRESSION_MAX_BYTES,
   getAutomationCronExpressionFields,
   isValidAutomationCronSchedule,
   isValidAutomationSchedule,
-  latestAutomationOccurrenceAtOrBefore,
-  nextAutomationOccurrenceAfter,
   parseAutomationRrule,
   tryParseAutomationRrule
-} from './automation-schedules'
+} from './automation-schedule-parsing'
 
 function formatTimeForTest(hour: number, minute: number): string {
   const date = new Date()
@@ -135,6 +140,54 @@ describe('automation schedules', () => {
     expect(
       buildAutomationCronSchedule({ preset: 'weekly', hour: 9, minute: 15, dayOfWeek: 0 })
     ).toBe('15 9 * * 0')
+  })
+
+  // Why: shared labels feed the CLI, so they must stay English on any OS locale (#14404).
+  it('formats schedule labels without reading the OS weekday names', () => {
+    const nativeDateTimeFormat = Intl.DateTimeFormat
+    const dateTimeFormat = vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(function (
+      ...args: ConstructorParameters<typeof Intl.DateTimeFormat>
+    ) {
+      return new nativeDateTimeFormat(...args)
+    } as unknown as typeof Intl.DateTimeFormat)
+    const weeklyRrule = buildAutomationRrule({ preset: 'weekly', hour: 9, minute: 0, dayOfWeek: 5 })
+
+    expect(formatAutomationSchedule('30 12 * * 7')).toBe(`Sundays at ${formatTimeForTest(12, 30)}`)
+    expect(formatAutomationSchedule(weeklyRrule)).toBe(`Fridays at ${formatTimeForTest(9, 0)}`)
+    expect(classifyAutomationCronSchedule('30 12 * * 7').label).toBe(
+      `Sundays at ${formatTimeForTest(12, 30)}`
+    )
+    expect(
+      dateTimeFormat.mock.calls.filter(([, options]) => options?.weekday !== undefined)
+    ).toHaveLength(0)
+  })
+
+  it('exposes a locale-free descriptor for callers that render their own copy', () => {
+    expect(describeAutomationSchedule('30 12 * * 7')).toEqual({
+      kind: 'weekly',
+      hour: 12,
+      minute: 30,
+      dayOfWeek: 0
+    })
+    expect(describeAutomationSchedule('5 * * * *')).toEqual({ kind: 'hourly', minute: 5 })
+    expect(describeAutomationSchedule('15 10 * * MON-FRI')).toEqual({
+      kind: 'weekdays',
+      hour: 10,
+      minute: 15
+    })
+    expect(describeAutomationSchedule('FREQ=DAILY;BYHOUR=9;BYMINUTE=0')).toEqual({
+      kind: 'daily',
+      hour: 9,
+      minute: 0
+    })
+    expect(describeAutomationSchedule('FREQ=WEEKLY;BYDAY=FR;BYHOUR=9;BYMINUTE=0')).toEqual({
+      kind: 'weekly',
+      hour: 9,
+      minute: 0,
+      dayOfWeek: 5
+    })
+    expect(describeAutomationSchedule('*/30 9-17 * * MON-FRI')).toEqual({ kind: 'custom' })
+    expect(describeAutomationSchedule('FREQ=YEARLY')).toEqual({ kind: 'invalid' })
   })
 
   it('formats simple cron schedules with friendly labels', () => {
