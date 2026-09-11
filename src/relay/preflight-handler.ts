@@ -237,9 +237,14 @@ export async function matchesCommandIdentityForRelay(
   }
   const env = options.env ?? process.env
   const specs = buildCommandLookupSpecs(command, platform, env, options.accountLoginShell)
+  let args: string
+  try {
+    args = getTuiAgentIdentityProbeArgs(probe).map(shellQuote).join(' ')
+  } catch {
+    return false
+  }
 
   for (const spec of specs) {
-    const args = getTuiAgentIdentityProbeArgs(probe).map(shellQuote).join(' ')
     const shellName = path.posix.basename(spec.file).toLowerCase()
     const script =
       shellName === 'fish'

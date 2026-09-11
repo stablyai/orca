@@ -72,12 +72,6 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/openai/codex'
   },
   {
-    id: 'fx',
-    label: translate('agent.catalog.fx.label', 'Vercel fx'),
-    cmd: 'fx',
-    homepageUrl: 'https://fx.sh'
-  },
-  {
     id: 'grok',
     label: translate('auto.lib.agent.catalog.0baad2d5d2', 'Grok'),
     cmd: 'grok',
@@ -312,6 +306,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'fx',
+    label: translate('agent.catalog.fx.label', 'Vercel fx'),
+    cmd: 'fx',
+    homepageUrl: 'https://fx.sh'
   }
 ])
 

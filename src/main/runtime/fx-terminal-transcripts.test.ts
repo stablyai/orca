@@ -85,7 +85,7 @@ describe('fx terminal evidence', () => {
     await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
   })
 
-  it('matches a command dialog whose command body wraps across four lines', async () => {
+  it('matches a wrapped command dialog with a horizontal rule inside its body', async () => {
     const transcript = [
       '────────────────────────────────────────',
       '  Permission needed · Choose one',
@@ -94,6 +94,7 @@ describe('fx terminal evidence', () => {
       '    pnpm exec vitest run',
       '    --config config/vitest.config.ts',
       '    src/main/runtime/fx-terminal-transcripts.test.ts',
+      '    ────────────────────────────────────',
       '    --reporter=dot',
       '  ❯ 1. Yes',
       "    2. Yes, and don't ask again for this exact command",
@@ -107,6 +108,37 @@ describe('fx terminal evidence', () => {
       source: 'prompt-text',
       reason: 'agent-approval-prompt'
     })
+  })
+
+  it('does not revive a structurally complete fx dialog left in scrollback', async () => {
+    const transcript = [
+      '────────────────────────────────────────',
+      '  Permission needed · Choose one',
+      '  Would you like to run this command?',
+      '  ❯ 1. Yes',
+      '    2. No',
+      '────────────────────────────────────────',
+      '  1–2 Choose now    Enter Confirm    Esc Cancel',
+      '  Generating'
+    ].join('\n')
+    const { runtime, handle } = await createFxTranscriptPane(transcript)
+
+    await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
+  })
+
+  it('does not treat a quoted structural fx dialog as live', async () => {
+    const transcript = [
+      '> ────────────────────────────────────────',
+      '> Permission needed · Choose one',
+      '> Would you like to run this command?',
+      '> ❯ 1. Yes',
+      '>   2. No',
+      '> ────────────────────────────────────────',
+      '> 1–2 Choose now    Enter Confirm    Esc Cancel'
+    ].join('\n')
+    const { runtime, handle } = await createFxTranscriptPane(transcript)
+
+    await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
   })
 
   it('does not treat an unpunctuated copied command dialog as live', async () => {

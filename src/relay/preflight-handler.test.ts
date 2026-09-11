@@ -313,6 +313,39 @@ describe('PreflightHandler', () => {
     ).resolves.toEqual({ agents: [], identityProbes: 1 })
   })
 
+  it('withholds an unknown identity probe without dropping other detected agents', async () => {
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      const script = String(args[1])
+      if (script.includes("'future-agent'")) {
+        return { stdout: '__ORCA_AGENT_PATH__/relay/path/future-agent\n' }
+      }
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__/relay/path/claude\n' }
+      }
+      throw new Error('not found')
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+
+    new PreflightHandler(dispatcher as never)
+    const handler = requestHandlers.get('preflight.detectAgents')
+    expect(handler).toBeDefined()
+    await expect(
+      handler!({
+        commands: [
+          { id: 'future-agent', cmd: 'future-agent', identityProbe: 'future-probe' },
+          { id: 'claude', cmd: 'claude' }
+        ]
+      })
+    ).resolves.toEqual({ agents: ['claude'], identityProbes: 1 })
+  })
+
   it('verifies fx for a new client and withholds it from an old-client request', async () => {
     execFileAsyncMock.mockImplementation(async (_file, args) => {
       const script = String(args[1])

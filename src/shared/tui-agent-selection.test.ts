@@ -16,10 +16,9 @@ describe('pickTuiAgent', () => {
     expect(pickTuiAgent(null, ['cursor', 'codex'])).toBe('codex')
     expect(pickTuiAgent('gemini', ['cursor', 'codex'])).toBe('codex')
     expect(pickTuiAgent(null, ['continue', 'command-code'])).toBe('command-code')
-    expect(pickTuiAgent(null, ['fx', 'cursor'])).toBe('fx')
-    expect(TUI_AGENT_AUTO_PICK_ORDER.indexOf('fx')).toBe(
-      TUI_AGENT_AUTO_PICK_ORDER.indexOf('codex') + 1
-    )
+    expect(pickTuiAgent(null, ['fx', 'cursor'])).toBe('cursor')
+    expect(pickTuiAgent(null, ['fx'])).toBe('fx')
+    expect(TUI_AGENT_AUTO_PICK_ORDER.at(-1)).toBe('fx')
   })
 
   it('respects the explicit blank terminal preference', () => {

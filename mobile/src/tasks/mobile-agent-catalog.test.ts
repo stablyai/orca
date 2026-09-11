@@ -11,6 +11,7 @@ describe('mobile agent catalog', () => {
     expect(new Set(MOBILE_AGENT_CATALOG.map((agent) => agent.id))).toEqual(
       new Set(Object.keys(TUI_AGENT_CONFIG))
     )
+    expect(MOBILE_AGENT_CATALOG.at(-1)?.id).toBe('fx')
   })
 
   it('labels every agent with the desktop display name', () => {

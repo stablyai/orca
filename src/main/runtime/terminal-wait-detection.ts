@@ -237,9 +237,9 @@ function findTerminalWaitBlockedSignal(
 }
 
 const FX_DIALOG_BOUNDARY_RE = /[─━═╌╍┄┅┈┉]{3,}/g
-const FX_SELECTABLE_CHOICE_RE = /(?:^|\n)\s*\d+(?:\.|\s)\s*\S|❯\s*\d+(?:\.|\s)\s*\S/
+const FX_SELECTABLE_CHOICE_RE = /(\d+)(?:\.|\s{2,})\s*\S/g
 
-type FxDialogBoundary = { index: number; end: number }
+type FxDialogBoundary = { index: number }
 
 function findLastFxDialogBoundaryBefore(
   normalized: string,
@@ -247,9 +247,25 @@ function findLastFxDialogBoundaryBefore(
 ): FxDialogBoundary | null {
   let lastBoundary: FxDialogBoundary | null = null
   for (const match of normalized.slice(0, beforeIndex).matchAll(FX_DIALOG_BOUNDARY_RE)) {
-    lastBoundary = { index: match.index, end: match.index + match[0].length }
+    lastBoundary = { index: match.index }
   }
   return lastBoundary
+}
+
+function findLastFxPermissionHeaderBefore(normalized: string, beforeIndex: number): number | null {
+  const permissionIndex = normalized.lastIndexOf('permission needed', beforeIndex)
+  if (permissionIndex === -1) {
+    return null
+  }
+  const lineStart = normalized.lastIndexOf('\n', permissionIndex) + 1
+  const linePrefix = normalized.slice(lineStart, permissionIndex)
+  const hasHeaderIndent =
+    linePrefix.trim() === '' ||
+    /^\s{2}$/.test(normalized.slice(permissionIndex - 2, permissionIndex))
+  const hasHeaderSeparator = /^\s*·/.test(
+    normalized.slice(permissionIndex + 'permission needed'.length, beforeIndex)
+  )
+  return hasHeaderIndent && hasHeaderSeparator ? permissionIndex : null
 }
 
 function findFxApprovalPromptIndex(normalized: string): number | null {
@@ -267,19 +283,22 @@ function findFxApprovalPromptIndex(normalized: string): number | null {
   if (footerBoundary === null) {
     return null
   }
-  const dialogBoundary = findLastFxDialogBoundaryBefore(liveTail, footerBoundary.index)
-  if (dialogBoundary === null) {
+  const permissionIndex = findLastFxPermissionHeaderBefore(liveTail, footerBoundary.index)
+  if (permissionIndex === null) {
     return null
   }
-  const permissionIndex = liveTail.lastIndexOf('permission needed', footerBoundary.index)
-  if (permissionIndex < dialogBoundary.end) {
+  const dialogBoundary = findLastFxDialogBoundaryBefore(liveTail, permissionIndex)
+  if (dialogBoundary === null) {
     return null
   }
   const dialogBody = liveTail.slice(
     permissionIndex + 'permission needed'.length,
     footerBoundary.index
   )
-  return FX_SELECTABLE_CHOICE_RE.test(dialogBody) ? permissionIndex : null
+  const choiceNumbers = new Set(
+    [...dialogBody.matchAll(FX_SELECTABLE_CHOICE_RE)].map((match) => Number(match[1]))
+  )
+  return choiceNumbers.has(1) && choiceNumbers.has(2) ? permissionIndex : null
 }
 
 function findBlockedSignalInLiveWindow(
