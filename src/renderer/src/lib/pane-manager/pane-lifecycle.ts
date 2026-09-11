@@ -8,6 +8,7 @@ import { clearPendingSplitScrollRestore } from './pane-split-scroll'
 import { cancelDeferredScrollRestore } from './pane-scroll'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
 import { attachTerminalMouseWheelMultiplier } from './pane-terminal-mouse-wheel'
+import { attachTerminalAlternateScrollModeTracking } from './terminal-alternate-scroll-mode'
 import { attachTerminalScrollIntentTracking } from './terminal-scroll-intent-dom-tracking'
 import {
   installTerminalLinkifierHoverResetOnMouseLeave,
@@ -35,6 +36,7 @@ export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false
     xtermContainer,
     linkTooltip,
     terminalTuiScrollSensitivity,
+    terminalAlternateScreenWheelSendsArrowKeys,
     fitAddon,
     searchAddon,
     serializeAddon,
@@ -54,8 +56,12 @@ export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
+  const alternateScrollMode = attachTerminalAlternateScrollModeTracking(terminal)
+  pane.alternateScrollModeDisposable = alternateScrollMode
   attachTerminalMouseWheelMultiplier(terminal, {
-    getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
+    getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity,
+    getAlternateScrollModeAppPreference: alternateScrollMode.appPreference,
+    getAlternateScrollModeDefault: terminalAlternateScreenWheelSendsArrowKeys
   })
   pane.terminalScrollIntentDisposable = attachTerminalScrollIntentTracking(
     terminal,
@@ -194,6 +200,8 @@ export function disposePane(
   pane.focusClassSyncCleanup = null
   pane.terminalScrollIntentDisposable?.dispose()
   pane.terminalScrollIntentDisposable = null
+  pane.alternateScrollModeDisposable?.dispose()
+  pane.alternateScrollModeDisposable = null
   pane.linkifierHoverResetDisposable?.dispose()
   pane.linkifierHoverResetDisposable = null
   pane.linkifierMouseLeaveResetDisposable?.dispose()

@@ -65,6 +65,7 @@ export type PaneManagerOptions = {
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   terminalLigaturesEnabled?: () => boolean
   terminalTuiScrollSensitivity?: () => number | undefined
+  terminalAlternateScreenWheelSendsArrowKeys?: () => boolean | undefined
   onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
   /** Resolved per hover so link-routing setting changes apply without recreating panes. */
   // Why: required so dropping the wiring is a compile error — an optional hint with a
@@ -147,6 +148,7 @@ export type ManagedPaneInternal = {
   xtermContainer: HTMLElement
   linkTooltip: HTMLElement
   terminalTuiScrollSensitivity?: () => number | undefined
+  terminalAlternateScreenWheelSendsArrowKeys?: () => boolean | undefined
   terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration']
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
@@ -189,6 +191,8 @@ export type ManagedPaneInternal = {
   focusClassSyncCleanup?: (() => void) | null
   // Stored so disposePane() can remove user-scroll intent listeners.
   terminalScrollIntentDisposable?: IDisposable | null
+  // Stored so disposePane() can detach DECSET 1007 tracking.
+  alternateScrollModeDisposable?: IDisposable | null
   // Stored so disposePane() can detach the streamed-output hover-cache reset
   // that keeps freshly printed links linkifiable without a scroll.
   linkifierHoverResetDisposable?: IDisposable | null

@@ -5,7 +5,8 @@ import {
   createTerminalTuiMouseWheelDistanceState,
   normalizeTerminalTuiMouseWheelMultiplier,
   resolveTerminalTuiMouseWheelReportCount,
-  shouldMultiplyTerminalMouseWheel
+  shouldMultiplyTerminalMouseWheel,
+  shouldSynthesizeTerminalWheelCursorKeys
 } from './pane-terminal-mouse-wheel'
 
 const DOM_DELTA_PIXEL = 0
@@ -393,6 +394,7 @@ describe('terminal mouse wheel multiplier', () => {
           handlers.push(handler)
         },
         element: target,
+        buffer: { active: { type: 'normal' as const } },
         modes: { mouseTrackingMode: 'any' },
         rows: 24
       },
@@ -434,6 +436,7 @@ describe('terminal mouse wheel multiplier', () => {
         handlers.push(handler)
       },
       element: target,
+      buffer: { active: { type: 'normal' as const } },
       modes: { mouseTrackingMode: 'none' as const },
       rows: 24
     }
@@ -471,6 +474,7 @@ describe('terminal mouse wheel multiplier', () => {
         handlers.push(handler)
       },
       element: target,
+      buffer: { active: { type: 'normal' as const } },
       modes: { mouseTrackingMode: 'any' as 'any' | 'none' },
       rows: 24
     }
@@ -510,6 +514,7 @@ describe('terminal mouse wheel multiplier', () => {
           handlers.push(handler)
         },
         element: target,
+        buffer: { active: { type: 'normal' as const } },
         modes: { mouseTrackingMode: 'any' },
         rows: 24
       },
@@ -563,6 +568,7 @@ describe('terminal mouse wheel multiplier', () => {
           handlers.push(handler)
         },
         element: target,
+        buffer: { active: { type: 'normal' as const } },
         modes: { mouseTrackingMode: 'any' },
         rows: 24
       },
@@ -598,6 +604,7 @@ describe('terminal mouse wheel multiplier', () => {
           handlers.push(handler)
         },
         element: target,
+        buffer: { active: { type: 'normal' as const } },
         modes: { mouseTrackingMode: 'any' },
         rows: 24
       },
@@ -641,5 +648,106 @@ describe('terminal mouse wheel multiplier', () => {
     expect(handlers[0]?.(secondEvent)).toBe(false)
     await Promise.resolve()
     expect(dispatched).toHaveLength(6)
+  })
+})
+
+type AlternateScrollWheelCase = {
+  bufferType: 'normal' | 'alternate'
+  appPreference?: boolean
+  settingDefault?: boolean
+}
+
+/** Captures the wheel handler for a terminal with no mouse reporting active. */
+function captureUnreportedWheelHandler(
+  testCase: AlternateScrollWheelCase
+): (event: WheelEvent) => boolean {
+  const handlers: ((event: WheelEvent) => boolean)[] = []
+  attachTerminalMouseWheelMultiplier(
+    {
+      attachCustomWheelEventHandler: (handler) => {
+        handlers.push(handler)
+      },
+      element: terminalElement(false),
+      buffer: { active: { type: testCase.bufferType } },
+      modes: { mouseTrackingMode: 'none' },
+      rows: 24
+    },
+    {
+      getAlternateScrollModeAppPreference: () => testCase.appPreference,
+      getAlternateScrollModeDefault: () => testCase.settingDefault
+    }
+  )
+  const handler = handlers[0]
+  if (!handler) {
+    throw new Error('wheel handler was not registered')
+  }
+  return handler
+}
+
+describe('alternate-screen wheel cursor keys', () => {
+  it('defaults to xterm cursor-key synthesis when nothing states a preference', () => {
+    expect(shouldSynthesizeTerminalWheelCursorKeys(undefined, undefined)).toBe(true)
+  })
+
+  it('lets the setting decide when the app never set DECSET 1007', () => {
+    expect(shouldSynthesizeTerminalWheelCursorKeys(undefined, false)).toBe(false)
+    expect(shouldSynthesizeTerminalWheelCursorKeys(undefined, true)).toBe(true)
+  })
+
+  it('lets an explicit DECSET 1007 from the app override the setting', () => {
+    expect(shouldSynthesizeTerminalWheelCursorKeys(true, false)).toBe(true)
+    expect(shouldSynthesizeTerminalWheelCursorKeys(false, true)).toBe(false)
+  })
+
+  it('leaves alternate-screen wheel input to xterm while the setting is on', () => {
+    const handler = captureUnreportedWheelHandler({
+      bufferType: 'alternate',
+      settingDefault: true
+    })
+    expect(handler(wheelEvent({ deltaY: -100 }))).toBe(true)
+  })
+
+  it('suppresses alternate-screen cursor keys once the setting is off', () => {
+    const handler = captureUnreportedWheelHandler({
+      bufferType: 'alternate',
+      settingDefault: false
+    })
+    expect(handler(wheelEvent({ deltaY: -100 }))).toBe(false)
+  })
+
+  it('keeps cursor keys for an app that asked for them with the setting off', () => {
+    const handler = captureUnreportedWheelHandler({
+      bufferType: 'alternate',
+      appPreference: true,
+      settingDefault: false
+    })
+    expect(handler(wheelEvent({ deltaY: -100 }))).toBe(true)
+  })
+
+  it('drops cursor keys for an app that turned DECSET 1007 off with the setting on', () => {
+    const handler = captureUnreportedWheelHandler({
+      bufferType: 'alternate',
+      appPreference: false,
+      settingDefault: true
+    })
+    expect(handler(wheelEvent({ deltaY: -100 }))).toBe(false)
+  })
+
+  it('never touches normal-buffer scrollback wheel input', () => {
+    const handler = captureUnreportedWheelHandler({
+      bufferType: 'normal',
+      appPreference: false,
+      settingDefault: false
+    })
+    expect(handler(wheelEvent({ deltaY: -100 }))).toBe(true)
+  })
+
+  it('leaves shift-wheel and horizontal wheel input to xterm', () => {
+    const handler = captureUnreportedWheelHandler({
+      bufferType: 'alternate',
+      settingDefault: false
+    })
+    expect(handler(wheelEvent({ deltaY: -100, shiftKey: true }))).toBe(true)
+    expect(handler(wheelEvent({ deltaY: 0 }))).toBe(true)
   })
 })

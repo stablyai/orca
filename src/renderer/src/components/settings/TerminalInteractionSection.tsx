@@ -5,6 +5,7 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
+import { TerminalAlternateScreenWheelSetting } from './TerminalAlternateScreenWheelSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getTerminalRightClickToPasteSearchEntry } from './terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
@@ -268,6 +269,8 @@ export function TerminalInteractionSection({
             />
           </SearchableSetting>
         ) : null}
+
+        <TerminalAlternateScreenWheelSetting settings={settings} updateSettings={updateSettings} />
 
         <SearchableSetting
           title={translate(

@@ -68,6 +68,10 @@ export function buildDefaultSettings(args: {
     terminalFastScrollSensitivity: 5,
     terminalTuiScrollSensitivity: 1,
     terminalTuiScrollSensitivityDefaultedToOne: true,
+    // Why true: preserves xterm's existing wheel-as-cursor-keys behaviour, which
+    // pagers and editors rely on. Users whose fullscreen agent maps arrows to
+    // input history turn it off.
+    terminalAlternateScreenWheelSendsArrowKeys: true,
     // Why: "auto" uses WebGL when supported, falling back to DOM on renderer failure or software/unknown GPU.
     terminalGpuAcceleration: 'auto',
     // Why 'auto': enable ligatures only for known ligature fonts, never forced. Resolver in shared/terminal-ligatures.ts.

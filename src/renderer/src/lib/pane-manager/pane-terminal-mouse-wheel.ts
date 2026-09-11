@@ -22,11 +22,16 @@ const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
 const DOM_DELTA_LINE = 1
 
 type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'> & {
+  buffer: { active: Pick<Terminal['buffer']['active'], 'type'> }
   modes: Pick<Terminal['modes'], 'mouseTrackingMode'>
 }
 
 type TerminalMouseWheelMultiplierOptions = {
   getTuiMouseWheelMultiplier?: () => number | undefined
+  /** App's DECSET 1007 state, undefined while it has never set the mode. */
+  getAlternateScrollModeAppPreference?: () => boolean | undefined
+  /** User setting applied when the app expressed no DECSET 1007 preference. */
+  getAlternateScrollModeDefault?: () => boolean | undefined
 }
 
 type ReplayedWheelEvent = WheelEvent & {
@@ -101,6 +106,23 @@ function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number |
     return undefined
   }
   return rect.height / terminal.rows
+}
+
+/**
+ * Whether xterm may turn a wheel event into cursor keys for this terminal.
+ *
+ * Why this gate exists: xterm decides purely on "the active buffer has no
+ * scrollback", so every alternate-screen app without mouse reporting gets
+ * Up/Down. That suits a pager, but an agent CLI or a multiplexer maps those to
+ * input history, so the wheel silently rewrites the user's prompt. DECSET 1007
+ * is the mode that distinguishes the two; the setting is the fallback for apps
+ * that never state a preference.
+ */
+export function shouldSynthesizeTerminalWheelCursorKeys(
+  appPreference: boolean | undefined,
+  settingDefault: boolean | undefined
+): boolean {
+  return appPreference ?? settingDefault ?? true
 }
 
 export function shouldMultiplyTerminalMouseWheel(
@@ -189,10 +211,24 @@ export function attachTerminalMouseWheelMultiplier(
 ): void {
   const replayState = createTerminalTuiMouseWheelReplayState()
   terminal.attachCustomWheelEventHandler((event) => {
-    if (
-      terminal.modes.mouseTrackingMode === 'none' ||
-      !shouldMultiplyTerminalMouseWheel(event, terminal.element)
-    ) {
+    if (terminal.modes.mouseTrackingMode === 'none') {
+      // Why only the alternate screen: it is the sole buffer xterm converts the
+      // wheel on, and returning false here is what suppresses that conversion.
+      if (
+        terminal.buffer.active.type === 'alternate' &&
+        event.deltaY !== 0 &&
+        !event.shiftKey &&
+        !shouldSynthesizeTerminalWheelCursorKeys(
+          options.getAlternateScrollModeAppPreference?.(),
+          options.getAlternateScrollModeDefault?.()
+        )
+      ) {
+        return false
+      }
+      return true
+    }
+
+    if (!shouldMultiplyTerminalMouseWheel(event, terminal.element)) {
       return true
     }
 

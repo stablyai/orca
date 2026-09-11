@@ -115,6 +115,10 @@ export type GlobalSettings = {
   terminalTuiScrollSensitivity: number
   /** One-shot migration guard for moving inherited TUI wheel reports from 3 to 1. */
   terminalTuiScrollSensitivityDefaultedToOne?: boolean
+  /** Fallback for DECSET 1007 when a fullscreen app never sets the mode: whether
+   *  the wheel sends arrow keys on the alternate screen. Apps that set 1007
+   *  explicitly win over this. */
+  terminalAlternateScreenWheelSendsArrowKeys: boolean
   /** Terminal renderer policy.
    *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
