@@ -56,26 +56,31 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: readonly RuntimeCapability[] | undefined,
   structuredNativeChatEnabled: boolean,
-  sessionVisibleWhenDisabled: (sessionId: string) => boolean = () => false
+  sessionVisibility: (sessionId: string, visibleByDefault: boolean) => boolean = (
+    _sessionId,
+    visibleByDefault
+  ) => visibleByDefault
 ): TPayload {
   const structuredVisible = structuredNativeChatProjectionEnabled({
     clientKind,
     clientCapabilities,
     structuredNativeChatEnabled
   })
-  let projected: TPayload
+  const visibleByDefault =
+    structuredVisible || (clientKind === 'mobile' && structuredNativeChatEnabled === true)
+  let projected = projectAgentSessionTabsOut(
+    payload,
+    (tab) => !sessionVisibility(tab.sessionId, visibleByDefault)
+  )
   if (clientKind === 'mobile' && structuredNativeChatEnabled === true) {
     // Why: deleting the row left the user hunting for a chat the desktop says exists; the row
     // survives with a title naming the fix. Nothing is removed, so no group/layout repair applies.
-    projected = projectUnsupportedAgentSessionTabTitles(payload, {
+    projected = projectUnsupportedAgentSessionTabTitles(projected, {
       clientKind,
       clientCapabilities,
       structuredNativeChatEnabled
     })
   } else {
-    projected = structuredVisible
-      ? payload
-      : projectAgentSessionTabsOut(payload, (tab) => !sessionVisibleWhenDisabled(tab.sessionId))
     // Why: a paired client renders only codex structured tabs unless it says otherwise
     // (mobile's resolveMobileNativeChat returns null for every other agent), so an
     // ungated row would list and select into a pane that shows neither chat nor terminal.

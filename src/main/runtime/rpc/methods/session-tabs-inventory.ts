@@ -6,7 +6,11 @@ import { projectSessionTabAgentStatus } from './session-tab-agent-status-project
 import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
-import { canAccessWorkItemStartStructuredSession } from './structured-agent-session-gate'
+import {
+  canAccessWorkItemStartStructuredSession,
+  isWorkItemStartStructuredSession
+} from './structured-agent-session-gate'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 type SessionTabsInventory = {
   snapshots: RuntimeMobileSessionTabsResult[]
@@ -31,7 +35,7 @@ export function projectSessionTabsForClient(
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2],
   structuredNativeChatEnabled: boolean,
-  sessionVisibleWhenDisabled?: (sessionId: string) => boolean
+  sessionVisibility?: (sessionId: string, visibleByDefault: boolean) => boolean
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabBrowserPlacements(
     projectSessionTabAgentStatus(
@@ -39,7 +43,7 @@ export function projectSessionTabsForClient(
       clientKind,
       clientCapabilities,
       structuredNativeChatEnabled,
-      sessionVisibleWhenDisabled
+      sessionVisibility
     ),
     clientCapabilities
   )
@@ -57,7 +61,10 @@ export function projectSessionTabsForContext(
     context.clientKind,
     context.clientCapabilities,
     isStructuredNativeChatEnabled(context.runtime),
-    (sessionId) => canAccessWorkItemStartStructuredSession(context, sessionId)
+    (sessionId, visibleByDefault) =>
+      isWorkItemStartStructuredSession(getStructuredAgentSessionHost(), sessionId)
+        ? canAccessWorkItemStartStructuredSession(context, sessionId)
+        : visibleByDefault
   )
 }
 

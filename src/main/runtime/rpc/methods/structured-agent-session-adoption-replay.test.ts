@@ -146,28 +146,17 @@ describe('committed adopting create RPC replay', () => {
     vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
       experimentalStructuredNativeChat: true
     } as ReturnType<OrcaRuntimeService['getClientSettings']>)
-    vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
-      supported: true
-    })
     const internal = runtime as unknown as {
-      resolveStructuredAgentSessionLocation: () => Promise<{
-        executionHostId: 'local'
-        wslDistro: null
-        workspaceId: string
-        workspaceKind: 'git-worktree'
+      resolveRuntimeFileTarget: () => Promise<{
+        executionHostId: string
+        worktree: { id: string; repoId: string; path: string }
       }>
-      resolveRuntimeFileTarget: () => Promise<{ worktree: { path: string } }>
       ensureStructuredAgentSessionHost: () => Promise<void>
       publishStructuredAgentSessionTab: () => Promise<void>
     }
-    internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
-      executionHostId: 'local' as const,
-      wslDistro: null,
-      workspaceId: WORKSPACE,
-      workspaceKind: 'git-worktree' as const
-    }))
     internal.resolveRuntimeFileTarget = vi.fn(async () => ({
-      worktree: { path: '/repos/workspace-1' }
+      executionHostId: 'local',
+      worktree: { id: WORKSPACE, repoId: 'repo-1', path: '/repos/workspace-1' }
     }))
     internal.ensureStructuredAgentSessionHost = vi.fn(async () => undefined)
     internal.publishStructuredAgentSessionTab = vi

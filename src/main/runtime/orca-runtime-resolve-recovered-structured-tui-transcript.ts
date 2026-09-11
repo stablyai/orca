@@ -24,6 +24,12 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  structuredAgentSessionCreateWorktreeTarget,
+  structuredAgentSessionCreateWorktreeTargetsEqual,
+  type ResolvedStructuredAgentSessionCreateTarget,
+  type StructuredAgentSessionCreateIntentInput
+} from './structured-agent-session-create-worktree-target'
 
 export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends OrcaRuntimeWithStopStructuredSessionProcess {
   protected async resolveRecoveredStructuredTuiTranscript(input: {
@@ -60,6 +66,13 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     agent: 'claude' | 'codex'
   ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
+    return this.getStructuredAgentSessionCreateSupportForLocation(location, agent)
+  }
+
+  protected getStructuredAgentSessionCreateSupportForLocation(
+    location,
+    agent: 'claude' | 'codex'
+  ): { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } {
     return resolveStructuredAgentSessionCreateSupport({
       agent,
       location,
@@ -96,7 +109,11 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
 
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
-    const repo = this.store?.getRepo(target.worktree.repoId)
+    return this.resolveStructuredAgentSessionLocationForTarget(target)
+  }
+
+  protected resolveStructuredAgentSessionLocationForTarget(target) {
+    const repo = this.store?.getRepo?.(target.worktree.repoId)
     const folderScope = parseWorkspaceKey(target.worktree.id)
     const folderWorkspace = folderScope?.type === 'folder'
     // WSL routing describes *this* machine; no remote or runtime host may inherit
@@ -122,48 +139,65 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     }
   }
 
-  async resolveStructuredAgentSessionCreateIntent(input: {
-    envelope: { sessionId: string; clientOperationId: string }
-    worktree: string
-    agent: 'claude' | 'codex'
-    callerKey?: string
-    resumeFrom?: { providerSessionId: string }
-  }): Promise<AgentSessionAttachParams> {
-    if (input.agent === 'claude') {
-      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) => {
-        return (
-          launchEnv.CLAUDE_CONFIG_DIR?.trim() ||
-          this.accounts
-            .getClaudeConfigDirectory(
-              location.wslDistro
-                ? { runtime: 'wsl', wslDistro: location.wslDistro }
-                : { runtime: 'host' }
-            )
-            ?.trim() ||
-          join(homedir(), '.claude')
-        )
-      })
-    }
-    return this.resolveStructuredAgentSessionIntent(input, async ({ workspacePath, launchEnv }) => {
-      // A create has no process yet, so the current selection is what it must follow.
-      const preparedHome = await this.prepareCodexStructuredLaunchFn?.({ workspacePath, launchEnv })
-      const configuredHome = launchEnv.CODEX_HOME
-      return (
-        preparedHome?.trim() ||
-        (this.prepareCodexStructuredLaunchFn ? getSystemCodexHomePath() : configuredHome?.trim()) ||
-        getSystemCodexHomePath()
+  async resolveStructuredAgentSessionCreateIntent(
+    input: StructuredAgentSessionCreateIntentInput
+  ): Promise<AgentSessionAttachParams> {
+    const target = await this.resolveRuntimeFileTarget(input.worktree)
+    if (
+      input.expectedWorktreeTarget &&
+      !structuredAgentSessionCreateWorktreeTargetsEqual(
+        input.expectedWorktreeTarget,
+        structuredAgentSessionCreateWorktreeTarget(target.worktree)
       )
-    })
+    ) {
+      throw new Error('structured_agent_session_unsupported')
+    }
+    const resolvedTarget = {
+      location: this.resolveStructuredAgentSessionLocationForTarget(target),
+      workspacePath: target.worktree.path
+    }
+    if (input.agent === 'claude') {
+      return this.resolveStructuredAgentSessionIntent(
+        input,
+        async ({ launchEnv, location }) => {
+          return (
+            launchEnv.CLAUDE_CONFIG_DIR?.trim() ||
+            this.accounts
+              .getClaudeConfigDirectory(
+                location.wslDistro
+                  ? { runtime: 'wsl', wslDistro: location.wslDistro }
+                  : { runtime: 'host' }
+              )
+              ?.trim() ||
+            join(homedir(), '.claude')
+          )
+        },
+        resolvedTarget
+      )
+    }
+    return this.resolveStructuredAgentSessionIntent(
+      input,
+      async ({ workspacePath, launchEnv }) => {
+        // A create has no process yet, so the current selection is what it must follow.
+        const preparedHome = await this.prepareCodexStructuredLaunchFn?.({
+          workspacePath,
+          launchEnv
+        })
+        const configuredHome = launchEnv.CODEX_HOME
+        return (
+          preparedHome?.trim() ||
+          (this.prepareCodexStructuredLaunchFn
+            ? getSystemCodexHomePath()
+            : configuredHome?.trim()) ||
+          getSystemCodexHomePath()
+        )
+      },
+      resolvedTarget
+    )
   }
 
   protected async resolveStructuredAgentSessionIntent(
-    input: {
-      envelope: { sessionId: string; clientOperationId: string }
-      worktree: string
-      agent: 'claude' | 'codex'
-      callerKey?: string
-      resumeFrom?: { providerSessionId: string }
-    },
+    input: StructuredAgentSessionCreateIntentInput,
     resolveAccountHomePath: (context: {
       workspacePath: string
       launchEnv: NodeJS.ProcessEnv
@@ -173,9 +207,11 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         workspaceId: string
         workspaceKind: 'folder' | 'git-worktree'
       }
-    }) => string | Promise<string>
+    }) => string | Promise<string>,
+    target: ResolvedStructuredAgentSessionCreateTarget
   ): Promise<AgentSessionAttachParams> {
-    const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
+    const { location, workspacePath } = target
+    const support = this.getStructuredAgentSessionCreateSupportForLocation(location, input.agent)
     if (!support.supported) {
       throw new Error('structured_agent_session_unsupported')
     }
@@ -185,8 +221,6 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
       settings.nativeChatSessionOptions,
       input.agent
     )
-    const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
-    const workspacePath = (await this.resolveRuntimeFileTarget(input.worktree)).worktree.path
     const host = getStructuredAgentSessionHost()
     const committedReplay = resolveCommittedStructuredAgentSessionAdoptionIntent({
       host,

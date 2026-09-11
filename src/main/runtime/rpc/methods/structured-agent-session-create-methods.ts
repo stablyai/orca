@@ -70,14 +70,14 @@ export const STRUCTURED_AGENT_SESSION_CREATE_METHODS: RpcAnyMethod[] = [
       if (existingRecord && !reconcilesDurableSession) {
         throw new Error('structured_agent_session_unsupported')
       }
-      const launchAuthority =
+      const scopedAdmission =
         params.launchOrigin &&
         !reconcilesDurableSession &&
         supportsWorkItemStartStructuredSessionCreate(ctx, params.launchOrigin)
           ? await resolveWorkItemStartStructuredCreateAuthority(ctx, params.worktree)
           : null
       const admitted = params.launchOrigin
-        ? launchAuthority !== null || reconcilesDurableSession
+        ? scopedAdmission !== null || reconcilesDurableSession
         : supportsStructuredSessions(ctx)
       if (!admitted) {
         throw new Error('structured_agent_session_unsupported')
@@ -85,7 +85,10 @@ export const STRUCTURED_AGENT_SESSION_CREATE_METHODS: RpcAnyMethod[] = [
       if (reconcilesDurableSession) {
         return { supported: true }
       }
-      return ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
+      return ctx.runtime.getStructuredAgentSessionCreateSupport(
+        scopedAdmission ? `id:${scopedAdmission.worktreeTarget.worktreeId}` : params.worktree,
+        params.agent
+      )
     }
   }),
   defineMethod({
@@ -109,7 +112,7 @@ export const STRUCTURED_AGENT_SESSION_CREATE_METHODS: RpcAnyMethod[] = [
       if (existingRecord && !reconcilesDurableSession) {
         throw new Error('structured_agent_session_unsupported')
       }
-      const createAuthority =
+      const scopedAdmission =
         'worktree' in params &&
         launchOrigin &&
         !reconcilesDurableSession &&
@@ -117,7 +120,7 @@ export const STRUCTURED_AGENT_SESSION_CREATE_METHODS: RpcAnyMethod[] = [
           ? await resolveWorkItemStartStructuredCreateAuthority(ctx, params.worktree)
           : null
       const admitted = launchOrigin
-        ? createAuthority !== null || reconcilesDurableSession
+        ? scopedAdmission !== null || reconcilesDurableSession
         : supportsStructuredSessions(ctx)
       if (!admitted) {
         throw new Error('structured_agent_session_unsupported')
@@ -163,8 +166,11 @@ export const STRUCTURED_AGENT_SESSION_CREATE_METHODS: RpcAnyMethod[] = [
             caller: structuredCallerFor(ctx),
             ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
             ...(params.launchOrigin ? { launchOrigin: params.launchOrigin } : {}),
-            ...(createAuthority
-              ? { launchAuthority: createAuthority }
+            ...(scopedAdmission
+              ? {
+                  launchAuthority: scopedAdmission.launchAuthority,
+                  expectedWorktreeTarget: scopedAdmission.worktreeTarget
+                }
               : persistedLaunchAuthority
                 ? { launchAuthority: persistedLaunchAuthority }
                 : {})

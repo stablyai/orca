@@ -179,8 +179,11 @@ export function hostStub(): StructuredAgentSessionHost {
     subscribe: vi.fn(() => () => undefined),
     // A real feed, so the snapshot this method hands back is a genuine projection rather
     // than a shape the stub restated.
-    subscribeStatus: vi.fn((subscriber: StructuredAgentSessionStatusSubscriber) =>
-      statusFeed().subscribe(subscriber)
+    subscribeStatus: vi.fn(
+      (
+        subscriber: StructuredAgentSessionStatusSubscriber,
+        includeSession?: (sessionId: string) => boolean
+      ) => statusFeed().subscribe(subscriber, includeSession)
     ),
     unsubscribe: vi.fn(),
     release: vi.fn()

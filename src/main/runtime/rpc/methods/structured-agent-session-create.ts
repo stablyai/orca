@@ -34,6 +34,10 @@ import {
   resolveUncommittedStructuredCreate,
   type StructuredCreateRefused
 } from './structured-agent-session-precommit-refusal'
+import {
+  structuredAgentSessionCreateLocationMatchesTarget,
+  type StructuredAgentSessionCreateWorktreeTarget
+} from '../../structured-agent-session-create-worktree-target'
 
 export type PreparedStructuredAgentSessionCreate = {
   host: StructuredAgentSessionHost
@@ -55,6 +59,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   resumeFrom?: StructuredAgentSessionResumeSource
   launchOrigin?: StructuredAgentSessionLaunchOrigin
   launchAuthority?: StructuredAgentSessionLaunchAuthority
+  expectedWorktreeTarget?: StructuredAgentSessionCreateWorktreeTarget
 }): Promise<PreparedStructuredAgentSessionCreate> {
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null
@@ -63,8 +68,18 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     worktree: args.worktree,
     agent: args.agent,
     callerKey: args.caller.callerKey,
+    ...(args.expectedWorktreeTarget ? { expectedWorktreeTarget: args.expectedWorktreeTarget } : {}),
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   })
+  if (
+    args.expectedWorktreeTarget &&
+    !structuredAgentSessionCreateLocationMatchesTarget(
+      args.expectedWorktreeTarget,
+      resolved.location
+    )
+  ) {
+    throw new Error('structured_agent_session_unsupported')
+  }
   const resolvedWithOrigin = {
     ...resolved,
     ...(args.launchOrigin ? { launchOrigin: args.launchOrigin } : {}),

@@ -15,6 +15,10 @@ import type { RpcContext } from '../core'
 import type { StructuredAgentSessionLaunchOrigin } from '../../../../shared/structured-agent-session-create'
 import type { StructuredAgentSessionLaunchAuthority } from '../../../../shared/structured-agent-session-create'
 import {
+  structuredAgentSessionCreateWorktreeTarget,
+  type StructuredAgentSessionCreateWorktreeTarget
+} from '../../structured-agent-session-create-worktree-target'
+import {
   structuredWorkItemStartCallerAuthority,
   supportsStructuredAgentSessionCapability,
   supportsStructuredAgentSessions,
@@ -62,16 +66,23 @@ export function canAccessWorkItemStartStructuredSession(
 export async function resolveWorkItemStartStructuredCreateAuthority(
   ctx: RpcContext,
   worktree: string
-): Promise<StructuredAgentSessionLaunchAuthority | null> {
-  const authority = structuredWorkItemStartCallerAuthority(ctx)
-  if (!authority || authority.kind === 'local-desktop') {
-    return authority
+): Promise<{
+  launchAuthority: StructuredAgentSessionLaunchAuthority
+  worktreeTarget: StructuredAgentSessionCreateWorktreeTarget
+} | null> {
+  const launchAuthority = structuredWorkItemStartCallerAuthority(ctx)
+  if (!launchAuthority) {
+    return null
   }
   const workspace = await ctx.runtime.showManagedWorktree(worktree)
-  return workspace.creatorProvenance?.kind === 'paired-device' &&
-    workspace.creatorProvenance.deviceId === authority.deviceId
-    ? authority
-    : null
+  const worktreeTarget = structuredAgentSessionCreateWorktreeTarget(workspace)
+  if (
+    launchAuthority.kind === 'paired-device' &&
+    worktreeTarget.creatorDeviceId !== launchAuthority.deviceId
+  ) {
+    return null
+  }
+  return { launchAuthority, worktreeTarget }
 }
 
 export function isWorkItemStartStructuredSession(
@@ -91,8 +102,9 @@ export function requireStructuredHost(
     throw new Error('structured_agent_session_unsupported')
   }
   if (
-    !supportsStructuredSessions(ctx) &&
-    (!sessionId || !canAccessWorkItemStartStructuredSession(ctx, sessionId))
+    sessionId && isWorkItemStartStructuredSession(host, sessionId)
+      ? !canAccessWorkItemStartStructuredSession(ctx, sessionId)
+      : !supportsStructuredSessions(ctx)
   ) {
     throw new Error('structured_agent_session_unsupported')
   }
