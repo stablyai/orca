@@ -24,6 +24,12 @@ lines, or normalise anything — the file is what the terminal received.
 - `--cols N --rows M` pin the PTY size (default: your terminal's). Wrapping is part of the
   evidence, so record the size — the sidecar does it for you.
 - `--duration S` stops unattended after S seconds, for a screen that needs no interaction.
+- `--send "<ms>:<text>"` types into the PTY at a fixed offset, repeatable, with `\r` `\n` `\t` `\e`
+  escapes. A dialog capture has to be driven, and an unattended run (CI, or an agent) has no TTY to
+  type into; the keystrokes ride the same PTY a human's would. For example, the committed
+  `antigravity-dialog-model-picker.txt` was recorded with
+  `--duration 24 --send "14000:/model" --send "16000:\r"`, which leaves the picker owning the
+  screen when the capture stops.
 - `--note "<text>"` records the account type, plan, model and CLI version in the sidecar.
 - `--out <path>` writes outside the fixture directory (use it for a first dry run).
 
@@ -98,6 +104,20 @@ text is tested on something no pane ever sees.
 `src/main/runtime/agent-transcript-pane-test-harness.ts` builds the pane;
 `src/main/runtime/terminal-interactive-wait-visibility.test.ts` (cursor-agent) and
 `src/main/runtime/antigravity-readiness-transcripts.test.ts` (Antigravity) are the two consumers.
+
+## Worked example: the Antigravity captures
+
+The six committed `antigravity-*.txt` fixtures were recorded this way on macOS against
+`agy` 1.1.25. Two points generalise:
+
+- **Reach a state without mutating the operator's config.** The ready-screen captures ran in a
+  directory the CLI already trusted, so no trust answer was written. Where a dialog could only be
+  reached by signing the operator out or deleting their settings, it was left uncaptured and
+  recorded as such rather than forced.
+- **An environment variable is a legitimate capture knob** where a setting is not.
+  `AGY_CLI_HIDE_ACCOUNT_INFO=1` produced a second ready screen with no account row, which is
+  evidence no amount of reasoning about the first screen could have supplied. It changes nothing
+  on disk.
 
 ## Known gap in the existing captures
 

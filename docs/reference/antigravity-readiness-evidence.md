@@ -1,151 +1,212 @@
-# Antigravity readiness: the evidence that is missing
+# Antigravity readiness: what the transcripts show
 
 `findAntigravityReadyPromptIndex` in `src/main/runtime/terminal-wait-detection.ts` decides whether
-an Antigravity pane is ready for a prompt. It has been written five times. Each version was tuned
+an Antigravity pane is ready for a prompt. It has been written five times, each version tuned
 against a five-line screen typed from memory into a `.spec.ts` fixture. Three of the first four
-were found to be worse than the bug they replaced, and the fifth was reverted after it turned out
-to (a) still return `ready=false` for the personal/API-key user it existed to unwedge and
-(b) flip all five silent startup dialogs to `ready=true` on a narration line containing `@` and
-`.`.
+were found worse than the bug they replaced, and the fifth was reverted.
 
-There is no Antigravity transcript in this repository. Every attempt was therefore a guess about
-what the CLI prints, tested against another guess. **Do not write a sixth detector before the
-captures below exist.** Capture them with
-[`agent-pty-transcript-capture.md`](./agent-pty-transcript-capture.md), scrub them, commit them,
-and `src/main/runtime/antigravity-readiness-transcripts.test.ts` starts asserting instead of
-skipping.
+Real transcripts now exist. They were recorded from a live `agy` on macOS with
+[`agent-pty-transcript-capture.md`](./agent-pty-transcript-capture.md) and are committed under
+`src/main/runtime/__fixtures__/`. `src/main/runtime/antigravity-readiness-transcripts.test.ts`
+replays them through the runtime.
 
-## The four captures
+**Headline: on real output the current detector is inverted.** It refuses a genuinely ready screen
+and accepts a live model picker. The five attempts argued about which extra condition to add; none
+of them had noticed that the condition they all shared — a line beginning with the model name —
+never matches a real Antigravity ready screen at all.
 
-Record each one with the recorder, in a throwaway workspace, on a real Antigravity install.
-Note the CLI version and account type in `--note`.
+## Versions
 
-### A — ready screen, Business account, non-Gemini model
+| Thing                     | Value                         |
+| ------------------------- | ----------------------------- |
+| `agy --version`           | `1.1.25`                      |
+| Banner printed by the TUI | `Antigravity CLI 1.2.0`       |
+| Captured                  | 2026-09-10, macOS, 120x40 PTY |
 
-`antigravity-ready-business-non-gemini.txt`
+The binary and its own banner disagree. Any rule keyed to a version string must read the banner,
+not `--version`, and must tolerate the two disagreeing.
 
-Preconditions: signed in with an **Antigravity Business** account; a **non-Gemini** model
-selected before the capture (switch with the model picker, then dismiss it, then start a fresh
-session so the ready screen is clean); workspace already trusted; no update pending.
+## What the captures are
 
-Sit at the ready screen, type nothing, stop with <kbd>Ctrl</kbd>+<kbd>]</kbd>.
+| Fixture                                      | What it is                                               |
+| -------------------------------------------- | -------------------------------------------------------- |
+| `antigravity-ready-api-key-gemini-model.txt` | Ready screen, API-key identity, Gemini 3.7 Flash (Low)   |
+| `antigravity-ready-account-info-hidden.txt`  | The same ready screen with `AGY_CLI_HIDE_ACCOUNT_INFO=1` |
+| `antigravity-dialog-trust-workspace.txt`     | Workspace trust dialog, live and unanswered              |
+| `antigravity-dialog-model-picker.txt`        | `/model` picker, live and unanswered                     |
+| `antigravity-dialog-command-palette.txt`     | Slash-command palette, live and unanswered               |
+| `antigravity-dialog-dismissed.txt`           | `/model` picker dismissed with esc, then settled         |
 
-Answers: does the account row print at all on a ready screen, and does a Business account row
-look different from a personal one?
+## What could not be captured, and why
 
-### B — ready screen, personal / API-key account, non-Gemini model — the decisive one
+Nothing below was faked. Each is a case the recorder could not reach without changing the
+operator's account state or configuration, which is out of bounds.
 
-`antigravity-ready-personal-non-gemini.txt`
+| Missing                                     | Why                                                                                                                                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `antigravity-ready-business-non-gemini.txt` | This machine has no OAuth session — the CLI prints _"You are currently not signed in"_ and authenticates from `GEMINI_API_KEY`. Reaching a Business ready screen means signing someone in. |
+| A non-Gemini model on any ready screen      | `agy models` offers 11 models, all Gemini, and `settings.json` pins `modelProvider: gemini`. A non-Gemini row is not reachable from this account.                                          |
+| `antigravity-dialog-sign-in.txt`            | Unsetting `GEMINI_API_KEY` does not reach the sign-in dialog; the CLI refuses to start because `modelProvider` is pinned. Reaching it means editing the operator's `settings.json`.        |
+| `antigravity-dialog-theme-picker.txt`       | There is no `/theme` command in 1.2.0 (`Unknown command: /theme`). The picker appears only in first-run onboarding, which means deleting the operator's config.                            |
+| `antigravity-dialog-privacy-notice.txt`     | First-run onboarding, as above.                                                                                                                                                            |
+| `antigravity-dialog-update-banner.txt`      | Cannot be forced; no update was pending during the session.                                                                                                                                |
 
-Preconditions: signed in with a **personal account or a raw API key** (not Business); a
-**non-Gemini** model; workspace trusted; no update pending. Otherwise identical to A.
+Each remains as a named, skipping case in the suite so it is visible rather than forgotten.
 
-Answers the question the whole exercise turns on: **is there an account row here?** If a
-personal/API-key ready screen prints no identifier, then any rule that requires an account row can
-never return `ready=true` for this user, and the reported wedge cannot be fixed that way — which
-is exactly what the fifth attempt did, unknowingly.
+## What the transcripts show
 
-### C — each startup dialog, live, while it owns the screen
+### 1. The ready screen's model row is not at the start of a line
 
-| Dialog         | Fixture                                 |
-| -------------- | --------------------------------------- |
-| Sign-in        | `antigravity-dialog-sign-in.txt`        |
-| Model picker   | `antigravity-dialog-model-picker.txt`   |
-| Theme picker   | `antigravity-dialog-theme-picker.txt`   |
-| Privacy notice | `antigravity-dialog-privacy-notice.txt` |
-| Update banner  | `antigravity-dialog-update-banner.txt`  |
+The ready screen prints a block-glyph logo down the left, and the identity, model and path rows are
+painted **on the same physical lines as the logo**. What Orca derives is:
 
-Preconditions per dialog: force it to appear (sign out for sign-in; a fresh config directory for
-theme and privacy; `/model` for the picker; an installed-but-not-applied update for the banner),
-then **stop the capture with <kbd>Ctrl</kbd>+<kbd>]</kbd> while the dialog is still up**. Do not
-answer it. A transcript of an answered dialog is capture D, not capture C.
+```
+▀▀▀▀▀▀       Gemini API key
+▀▀▀▀▀▀▀▀      Gemini 3.7 Flash (Low)
+▄▀▀    ▀▀▄     ~
+```
 
-Answers what all five attempts guessed at: what the caret and the surrounding chrome look like
-_while a dialog owns the screen_. Specifically — is the banner, model row, account row or caret
-still on screen underneath the dialog; does the dialog draw over them; is any of it in the
-alternate screen buffer.
+The detector requires `normalized.startsWith('gemini', trimmedStart)` on a trimmed line. The
+trimmed line starts with `▀`. It never matches. Measured three ways on the real screen:
 
-### D — a dialog immediately after dismissal
+| Input                                                  | `isKnownReadyPromptPreview` |
+| ------------------------------------------------------ | --------------------------- |
+| Real ready screen                                      | `false`                     |
+| The same screen with the logo glyphs stripped          | `true`                      |
+| Real ready screen followed by the live `/model` picker | `true`                      |
 
-`antigravity-dialog-dismissed.txt`
+So the logo — decoration, and suppressible with `AGY_CLI_HIDE_LOGO` — is what decides readiness
+today, and the live dialog is what supplies the model line the ready screen could not.
 
-Preconditions: start the same session as one C capture, answer the dialog, and stop the capture
-the moment the CLI settles — before typing a prompt.
+### 2. The dialog is what satisfies the model rule
 
-Answers whether the ready chrome is **reprinted** after dismissal. That single fact decides
-whether readiness may be anchored on `headerIndex` (only correct if the banner is reprinted, so a
-dialog above it cannot be mistaken for live chrome) or must be anchored on
-`max(modelIndex, caretIndex)` (correct if the banner is printed once and never again).
+`/model` prints its options one per line:
 
-## Falsifiable questions, by attempt
+```
+Gemini 3.8 Flash
+> Gemini 3.7 Flash (current)
+Gemini 3.1 Pro
+```
 
-Each row is a claim some version of the detector assumed. None has ever been checked against a
-transcript.
+Those lines _do_ begin with `Gemini`, and a bare `>` composer line sits earlier in the same tail
+from before the picker opened. Both halves of the rule are satisfied **while a dialog owns the
+screen**, and the pane reads ready. This is the false-ready hazard the last three attempts were
+each trying to close, reproduced from a real capture.
 
-### Attempt 1 — the shipped rule at HEAD
+### 3. `>` is the dialog selection marker, not only the composer caret
 
-`lastIndexOf('antigravity cli')`, then a line starting with `gemini`, then a line whose whole
-trimmed content is `>`.
+Every dialog uses `>` to mark the highlighted row: `> Yes, I trust this folder`,
+`> Gemini 3.7 Flash (current)`, `> /add-dir`. The idle composer is a line whose whole trimmed
+content is `>`. That distinction is the only thing separating them, which means the relaxation
+proposed in PRs #15840 and #15852 — accept any line _beginning_ with `>` — would make the trust
+dialog and the model picker read as ready. On 1.2.0 the idle composer is a bare `>`; those PRs'
+1.1.17 mode-banner claim could not be reproduced here and may be mode-specific.
 
-| #   | Claim                                                                                                           | Confirmed or refuted by                                                                                                           |
-| --- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 1.1 | A ready screen prints the literal banner `Antigravity CLI`, and its last occurrence in the tail is the live one | A, B, D                                                                                                                           |
-| 1.2 | The model row begins with the vendor word `Gemini`                                                              | **A and B** — the CLI is not Gemini-only; this is the reported wedge                                                              |
-| 1.3 | The caret line's entire trimmed content is a single `>`                                                         | A, B, D — PRs #15840 and #15852 claim 1.1.17 renders `> Accept-edits mode: …` instead, from a screenshot, never from a transcript |
-| 1.4 | A ready screen prints the workspace path on its own line                                                        | A, B                                                                                                                              |
+### 4. There is no email account row, and the row can be switched off entirely
 
-### Attempt 2 (review loop 1) — blacklist the model line
+For an API-key user the identity row reads literally `Gemini API key`. There is no `@`, no
+domain, nothing an account-row rule can key on. Separately, `AGY_CLI_HIDE_ACCOUNT_INFO=1` — a
+supported environment variable in the binary — removes the row from a fully ready screen, which
+`antigravity-ready-account-info-hidden.txt` captures.
 
-Reject a candidate model row whose text matches known dialog wording.
+### 5. Dialogs are drawn two different ways, and the banner is never reprinted
 
-| #   | Claim                                                                                      | Confirmed or refuted by                                                |
-| --- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| 2.1 | The set of strings that can occupy the model-row position on a dialog screen is enumerable | C — any dialog whose row text is outside the list refutes it           |
-| 2.2 | A dialog screen never reproduces a real model row                                          | C, especially the model picker, which prints model names by definition |
+The trust dialog and the sign-in splash take the **alternate screen** (`ESC[?1049h` … `ESC[?1049l`).
+The model picker and command palette are drawn **in place on the main screen** with erase-to-EOL.
+After dismissal the CLI prints `⎿ Exited /model command` and redraws the composer — it does **not**
+reprint the banner. The header stays where it was at startup.
 
-### Attempt 3 (review loop 2) — structural ordering on `headerIndex`
+### 6. Rows are positioned with cursor addressing, not newlines
 
-Require the ready chrome to appear _after_ the blocked signal, as the Codex and Cursor rules do.
+The status row is written with absolute and relative moves (`ESC[13;99H`, `ESC[83X ESC[83C`), so
+`? for shortcuts` and `Gemini 3.7 Flash · low` end up on one derived line. Any rule that assumes
+one screen row equals one `\n`-delimited line is reading a different document than the user sees.
 
-| #   | Claim                                                                                                                                                | Confirmed or refuted by                                                 |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| 3.1 | A live dialog is printed _below_ the ready chrome, never over it                                                                                     | C                                                                       |
-| 3.2 | The banner is reprinted when a dialog is dismissed, so `headerIndex` advances past the dialog                                                        | **D**                                                                   |
-| 3.3 | Antigravity does not use the alternate screen buffer for dialogs (if it does, the retained tail keeps pre-dialog content and ordering means nothing) | C, D — needs raw escapes, which is why a pasted screen cannot answer it |
-| 3.4 | The CLI does not fully repaint its banner on every keystroke or resize (a repaint moves `lastIndexOf`)                                               | C — type into the composer during one capture                           |
+## Confirmed / refuted, by attempt
 
-### Attempt 4 (review loop 3) — require a positive account row
+Evidence column names the fixture; all quoted text is from the committed transcripts.
 
-Require a line containing `@` and `.` between the banner and the caret.
+### Attempt 1 — the rule at HEAD
 
-| #   | Claim                                                                       | Confirmed or refuted by                                                                                      |
-| --- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| 4.1 | Every ready screen prints an account row                                    | **B** — if a personal/API-key screen prints none, this rule can never unwedge the reported user              |
-| 4.2 | A startup dialog screen never contains an `@`-and-`.` token                 | C — the revert showed all five dialogs flipping ready on a narration line; confirm which of them narrate one |
-| 4.3 | The account row is distinguishable from prose that merely contains an email | A, B, C                                                                                                      |
+| #    | Claim                                                    | Verdict                     | Evidence                                                                                                                                                 |
+| ---- | -------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.1  | A ready screen prints the banner `Antigravity CLI`       | **Confirmed**               | `Antigravity CLI 1.2.0` in both ready fixtures                                                                                                           |
+| 1.1b | …and its last occurrence in the tail is the live one     | **Refuted**                 | The trust dialog's own body says _"Antigravity CLI requires permission to read, edit, and execute files here"_, so `lastIndexOf` lands inside the dialog |
+| 1.2  | The model row begins with the vendor word `Gemini`       | **Refuted**                 | `▀▀▀▀▀▀▀▀      Gemini 3.7 Flash (Low)` — the logo precedes it; never at line start                                                                       |
+| 1.3  | The caret line's whole trimmed content is `>`            | **Confirmed** on 1.2.0 idle | bare `>` in both ready fixtures                                                                                                                          |
+| 1.3b | …and only the composer prints `>`                        | **Refuted**                 | `> Yes, I trust this folder`, `> Gemini 3.7 Flash (current)`, `> /add-dir`                                                                               |
+| 1.4  | A ready screen prints the workspace path on its own line | **Refuted**                 | the path shares its line with logo glyphs (`▄▀▀    ▀▀▄     ~`)                                                                                           |
 
-### Attempt 5 (PR #19749, reverted) — ordering plus account row plus neutral labels
+### Attempt 2 (loop 1) — blacklist the model line
 
-| #   | Claim                                                                    | Confirmed or refuted by                                                                                                    |
-| --- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| 5.1 | Ordering plus an account row is sufficient to separate ready from dialog | B + C together                                                                                                             |
-| 5.2 | Executing both builds is enough verification without a transcript        | Settled: it is not. The executed check used a hand-written screen as its input, so it reproduced the fixture's assumptions |
-| 5.3 | The wedge is a model-name problem rather than an account-row problem     | **B**                                                                                                                      |
+| #   | Claim                                      | Verdict     | Evidence                                                                                                         |
+| --- | ------------------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------------- |
+| 2.1 | Dialog model-row wording is enumerable     | **Refuted** | the palette lists 50+ commands with free-form descriptions; the picker prints whatever models the account offers |
+| 2.2 | A dialog never reproduces a real model row | **Refuted** | the `/model` picker prints four real model rows, one per line, at line start                                     |
 
-### Cross-cutting questions, worth answering from the same captures
+### Attempt 3 (loop 2) — structural ordering on `headerIndex`
 
-| #   | Question                                                                                                               | Why it decides the shape of attempt 6                                                                                                      |
-| --- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| X1  | Does Antigravity set an OSC title, and does it distinguish working from idle (as cursor-agent's braille spinner does)? | If yes, readiness may need no text rule at all — `detectExplicitIdleStatusFromTitle` already carries this for four other agents            |
-| X2  | Does the CLI repaint with bare `\r` and no `\n`?                                                                       | Orca's tail is line-split; a CR-only repaint collapses the screen into one enormous line and every line-based rule silently stops matching |
-| X3  | Does the caret line sit in the tail at all after Orca's tail normalisation, or is it erased by a redraw?               | The caret is the anchor of every attempt so far                                                                                            |
-| X4  | How many lines separate the banner from the caret on a real screen?                                                    | The tail window is bounded; a banner outside it is invisible to `lastIndexOf`                                                              |
-| X5  | What does the pane title look like on the trust screen versus when ready?                                              | The runtime already uses a live working title as staleness proof for startup modals                                                        |
+| #   | Claim                                              | Verdict                            | Evidence                                                                                             |
+| --- | -------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| 3.1 | A live dialog is printed below the ready chrome    | **Confirmed** for in-place dialogs | picker and palette append below the composer                                                         |
+| 3.2 | The banner is reprinted when a dialog is dismissed | **Refuted**                        | `antigravity-dialog-dismissed.txt` shows `⎿ Exited /model command` and a redrawn composer, no banner |
+| 3.3 | Antigravity does not use the alternate screen      | **Refuted**                        | `ESC[?1049h` opens the trust dialog and the sign-in splash                                           |
+| 3.4 | No full repaint per keystroke                      | **Partly refuted**                 | typing `/mod` repaints the palette region on each keystroke with `ESC[K`                             |
 
-## What to do with the answers
+Because of 3.2, `headerIndex` cannot be the anchor: it never advances. Ordering can only be
+expressed against the model/caret positions, which is what 1.2 and 1.3b just invalidated.
 
-1. Commit the transcripts (scrubbed) and their sidecars.
-2. Run `pnpm test src/main/runtime/antigravity-readiness-transcripts.test.ts`. The cases stop
-   skipping. Expect failures: they are the first real measurement of the current rule.
-3. Record the answer to every question above in the PR that follows, citing the fixture and line.
-4. Only then change `findAntigravityReadyPromptIndex`, and keep the transcripts as the test.
+### Attempt 4 (loop 3) — require a positive account row
+
+| #   | Claim                                                | Verdict                | Evidence                                                                                                                    |
+| --- | ---------------------------------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| 4.1 | Every ready screen prints an account row             | **Refuted, twice**     | API-key identity prints `Gemini API key` (no `@`); `AGY_CLI_HIDE_ACCOUNT_INFO=1` removes the row entirely                   |
+| 4.2 | A startup dialog never contains an `@`-and-`.` token | **Not reachable here** | none of the captured dialogs contains one, but the palette shows free-form skill descriptions, which are user-authored text |
+| 4.3 | The account row is distinguishable from prose        | **Refuted**            | the row is not a distinct line; it shares one with the logo                                                                 |
+
+### Attempt 5 (PR #19749, reverted) — ordering + account row
+
+| #   | Claim                                                    | Verdict     | Evidence                                                                                                                                                                                           |
+| --- | -------------------------------------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 5.1 | Ordering plus an account row separates ready from dialog | **Refuted** | the account row is optional (4.1) and the ordering anchor never moves (3.2)                                                                                                                        |
+| 5.2 | Executing both builds was sufficient verification        | **Refuted** | the executed input was the hand-written fixture, so the check reproduced the fixture's assumptions. The real screen disagrees with that fixture on the model row, the path row and the account row |
+| 5.3 | The wedge is a model-name problem                        | **Refuted** | it is a line-start problem. Even `Gemini 3.7 Flash (Low)` — a Gemini model — fails, because a logo glyph precedes it                                                                               |
+
+### Cross-cutting
+
+| #   | Question                                                   | Answer                                                                                                                          |
+| --- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| X1  | Does `agy` set an OSC title distinguishing busy from idle? | **No.** Not one OSC title sequence appears in any capture. Title-based readiness is unavailable for this agent                  |
+| X2  | Does it repaint with bare `\r`?                            | **Yes**, constantly, plus `ESC[K` and absolute cursor moves                                                                     |
+| X3  | Does the caret survive in the tail?                        | **Yes** — a bare `>` line is present in every ready capture                                                                     |
+| X4  | Banner-to-caret distance                                   | ~8 derived lines on a 120x40 PTY; the banner falls outside the 6-line preview window, so only the full retained tail can see it |
+| X5  | Pane title on the trust screen versus ready                | Identical: none                                                                                                                 |
+
+## Can attempt six be written?
+
+Yes — but not as a variation on any of the five. Every one of them refined a predicate over
+`\n`-delimited lines, and that is the layer where the evidence says the information is not.
+
+What the captures support:
+
+- **The one stable, dialog-free ready marker is a line whose entire trimmed content is `>`.** It is
+  present in every ready capture and absent from every dialog capture, because a dialog's `>` always
+  carries its selected row's label. This is a much narrower rule than any attempt used, and it is
+  the only one that survived contact with the transcripts.
+- **Drop the model-row requirement.** It matches dialogs and not ready screens. Keeping it inverted
+  the detector.
+- **Do not require an account row.** It is optional by environment variable and carries no email for
+  API-key users.
+- **Do not anchor on `headerIndex`.** The banner is printed once and never reprinted.
+- **The blocked-signal path already works** for the trust dialog: `antigravity-dialog-trust-workspace.txt`
+  is correctly refused today, by wording, not by structure.
+
+What is still unknown and should be captured before shipping: the sign-in, theme, privacy and
+update dialogs, and any ready screen where the composer is not idle (accept-edits and plan mode,
+which PRs #15840 and #15852 describe from a screenshot). A bare-`>` rule is only as good as the
+claim that those modes still end on a bare `>`; that claim is untested.
+
+The honest summary is that this is a screen-shaped problem being solved with line-shaped tools. A
+rule over the derived tail can be made much better than what ships today, but the durable fix is to
+ask the terminal emulator what the bottom row of the screen actually is, rather than inferring it
+from a byte stream that was written with cursor addressing.

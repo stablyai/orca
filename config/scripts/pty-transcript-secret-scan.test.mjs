@@ -37,6 +37,17 @@ describe('pty transcript secret scan', () => {
     expect(findings.some((finding) => finding.kind === 'local-username')).toBe(true)
   })
 
+  it('finds the resumable conversation id agy prints on exit', () => {
+    const findings = scanTranscriptForSecrets(
+      'Resume with -c (or command below):\nagy --conversation=26dc1986-9eec-456a-a534-d93e5c1076c2'
+    )
+    expect(findings).toHaveLength(1)
+    expect(findings[0].kind).toBe('uuid')
+    expect(placeholderFor('uuid', findings[0].match.length)).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    )
+  })
+
   it('reports a clean transcript as clean', () => {
     const findings = scanTranscriptForSecrets('Antigravity CLI 1.1.17\nSonnet 4.6 (High)\n> ')
     expect(findings).toEqual([])

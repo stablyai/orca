@@ -32,6 +32,7 @@ Options
   --out <path>           Write somewhere other than the fixture directory
   --cols <n> --rows <n>  Pin the PTY size (default: this terminal's size, else 120x40)
   --duration <seconds>   Stop unattended after N seconds
+  --send "<ms>:<text>"   Type <text> into the PTY at <ms> (repeatable; \\r \\n \\t \\e escapes)
   --note "<text>"        Recorded in the <name>.meta.json sidecar
   --scan <file...>       Scan existing transcripts for identifiers/credentials and exit
   --redact               With --scan: rewrite each finding as a same-length placeholder
@@ -40,7 +41,7 @@ Press Ctrl-] to end a capture. That key is consumed here, so the agent keeps wha
 dialog it is showing — which is the only way to capture a dialog that owns the screen.`
 
 function parseArgs(argv) {
-  const options = { cols: null, rows: null, duration: null, scan: [], redact: false }
+  const options = { cols: null, rows: null, duration: null, scan: [], sends: [], redact: false }
   const command = []
   let cursor = 0
   let afterSeparator = false
@@ -62,6 +63,9 @@ function parseArgs(argv) {
         cursor += 1
         options.scan.push(argv[cursor])
       }
+    } else if (arg === '--send') {
+      cursor += 1
+      options.sends.push(parseSend(argv[cursor]))
     } else if (arg.startsWith('--')) {
       const key = arg.slice(2)
       cursor += 1
@@ -73,6 +77,29 @@ function parseArgs(argv) {
     options[key] = options[key] == null ? null : Number(options[key])
   }
   return { options, command }
+}
+
+// String.fromCharCode, not a literal: the formatter rewrites an escape sequence into a raw
+// control byte in source, which is unreadable and survives badly in diffs.
+const ESC = String.fromCharCode(27)
+const SEND_ESCAPES = { r: '\r', n: '\n', t: '\t', e: ESC, '\\': '\\' }
+
+/** `"<ms>:<text>"` — a keystroke to deliver at a fixed offset, for an unattended dialog capture. */
+function parseSend(value) {
+  const separator = String(value ?? '').indexOf(':')
+  if (separator === -1) {
+    throw new Error(`--send expects "<ms>:<text>", got ${String(value)}`)
+  }
+  const atMs = Number(value.slice(0, separator))
+  if (!Number.isFinite(atMs)) {
+    throw new Error(
+      `--send delay must be a number of milliseconds, got ${value.slice(0, separator)}`
+    )
+  }
+  const text = value
+    .slice(separator + 1)
+    .replace(/\\(.)/g, (whole, code) => SEND_ESCAPES[code] ?? whole)
+  return { atMs, text }
 }
 
 function runScan(files, redact) {
@@ -165,11 +192,17 @@ ${String(error)}`
     }
     term.write(chunk.toString('binary'))
   })
+  // Why scripted input: a dialog capture has to be driven, and CI (or an agent) has no TTY to
+  // type into. The keystrokes ride the same PTY a human's would, so the capture is unchanged.
+  const sendTimers = options.sends.map((send) => setTimeout(() => term.write(send.text), send.atMs))
   const durationTimer = options.duration === null ? null : setTimeout(stop, options.duration * 1000)
 
   const exitCode = await new Promise((resolveExit) => {
     term.onExit(({ exitCode: code }) => resolveExit(code ?? 0))
   })
+  for (const timer of sendTimers) {
+    clearTimeout(timer)
+  }
   if (durationTimer !== null) {
     clearTimeout(durationTimer)
   }
