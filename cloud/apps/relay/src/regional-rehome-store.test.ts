@@ -1714,7 +1714,7 @@ function hookAfterCandidateScan(
   const decorate = (delegate: RelayDatabase): RelayDatabase => ({
     query: async (sql, params) => {
       const rows = await delegate.query(sql, params)
-      if (!fired && sql.includes('FROM relay_region_rehome_control policy')) {
+      if (!fired && sql.includes('SELECT a.user_id, a.relay_host_id')) {
         fired = true
         await hook(delegate)
       }

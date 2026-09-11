@@ -6601,6 +6601,7 @@ export class RelayAssignmentStore {
         })
         .catch((error: unknown): boolean => {
           // Expiry is durable; another director settling this row is not a failure.
+          // Invariant failures remain fatal so operators see corrupt migration state.
           if (!isDatabaseLockUnavailable(error)) throw error
           inventoryBusy++
           return false
