@@ -182,4 +182,32 @@ describe('the terminal handle a status row is stamped with', () => {
       vi.useRealTimers()
     }
   })
+
+  it('does not renew freshness from a provider-session-only dismissal remnant', () => {
+    const server = new AgentHookServer()
+    const freshness = vi.fn()
+    server.subscribeStatusFreshness(freshness)
+    ingest(server)
+    server.ingestRemote(
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-handle',
+        worktreeId: 'worktree',
+        providerSession: { key: 'session_id', id: 'resume-me' },
+        payload: { state: 'working', prompt: 'ship it', agentType: 'codex' }
+      },
+      null
+    )
+    server.dropStatusEntry(PANE_KEY)
+    freshness.mockClear()
+
+    ingest(server)
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      paneKey: PANE_KEY,
+      providerSessionOnly: true,
+      providerSession: { key: 'session_id', id: 'resume-me' }
+    })
+    expect(freshness).not.toHaveBeenCalled()
+  })
 })

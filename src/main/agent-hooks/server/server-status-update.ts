@@ -260,6 +260,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     this.state.lastStatusByPaneKey.set(refreshed.paneKey, refreshed)
     this.commitStatusRowMutation(mutationBefore ?? previous, refreshed)
     this.scheduleStatusPersist()
+    // A dismissed row may retain only provider resume identity. Its preserved payload can still
+    // read `working`, but it is deliberately hidden from live readers and must not renew awake or
+    // mobile freshness leases.
+    if (refreshed.providerSessionOnly === true) {
+      return
+    }
     if (firstRuntimeObservation) {
       this.notifyStatusChangeListeners()
     }
