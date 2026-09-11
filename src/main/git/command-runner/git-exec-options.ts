@@ -1,8 +1,10 @@
 // Why: cap execFile output to prevent an uncatchable V8 string overflow; match relay MAX_GIT_BUFFER.
 export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
-export type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+// Why: the admission tier is a wire value, so it is declared with its params schema.
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+
+export type { GitAdmissionTier }
 
 export type GitExecOptions = {
   cwd: string
