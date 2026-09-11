@@ -14,24 +14,17 @@ import {
 import { AGENT_STATUS_STALE_AFTER_MS, type AgentType } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
+import { OPEN_TOOL_CALL_HOOK_EVENTS } from './server-constants'
 import { AgentHookServerRowOwnership } from './server-row-ownership'
 
 // Why: these TUIs also close an overlay on a bare Escape (Claude's /btw composer, OMP/Pi's
 // focused-child and settings views), so one press cannot mean "interrupt" on its own (#13547, #9208).
+// Sibling policy for agents whose first Escape is a cancel lives in the double-Escape gate below.
 const ESCAPE_ALSO_NAVIGATES_AGENT_TYPES: ReadonlySet<AgentType> = new Set([
   'claude',
   'omp',
   'pi',
   'prime-agent'
-])
-
-// Why: hook events that OPEN a provider tool call. Their closing event (PostToolUse /
-// tool_execution_end) replaces the row, so a row still sitting on one of these means the tool
-// is running now.
-const OPEN_TOOL_CALL_HOOK_EVENTS: ReadonlySet<string> = new Set([
-  'PreToolUse',
-  'tool_call',
-  'tool_execution_start'
 ])
 
 /** Hook silence during an open tool call is evidence the tool is still running, not that the

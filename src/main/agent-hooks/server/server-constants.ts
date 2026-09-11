@@ -17,6 +17,18 @@ export const TOOL_PROGRESS_HOOK_EVENTS = new Set([
   'PostToolUse',
   'PostToolUseFailure'
 ])
+
+// Why: the events that OPEN a provider tool call, for the agent types whose TUI also binds a bare
+// Escape to navigation. A row still sitting on one of these has not seen its closing event
+// (PostToolUse / tool_execution_end), so hook silence there is the tool running, not an interrupt.
+// Closed by construction: Claude ships PreToolUse as its only tool-opening hook, and Orca itself
+// generates the pi/omp/prime-agent extension (main/pi/agent-status-handler-source.ts), so neither
+// provider can introduce an opener without a change here.
+export const OPEN_TOOL_CALL_HOOK_EVENTS: ReadonlySet<string> = new Set([
+  'PreToolUse',
+  'tool_call',
+  'tool_execution_start'
+])
 export const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
 // Why: bound file growth from PTYs that never re-attach; 7 days is the "still relevant?" horizon beyond which entries shouldn't resurrect on hydrate.

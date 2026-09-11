@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentInterruptInputIntent } from '../../shared/agent-interrupt-intent'
 import type { EnrichedAgentHookEventPayload } from './server/server-types'
 import { AgentHookServer, _internals } from './server'
-import { PANE } from './server.test-fixtures'
+import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -156,6 +156,25 @@ describe('navigation Escape during an open tool call', () => {
     })
   })
 
+  it.each([
+    ['pi', 'tool_call'],
+    ['prime-agent', 'tool_execution_start']
+  ])('leaves %s work running when Escape closes an overlay mid-%s', (agentType, hookEventName) => {
+    const server = new AgentHookServer()
+    ingest(server, {
+      source: agentType,
+      hookEventName,
+      state: 'working',
+      prompt: 'refactor the parser',
+      agentType,
+      toolName: 'shell'
+    })
+
+    vi.setSystemTime(1_200)
+    expect(pressInterruptKey(server, 'plain-escape')).toBe(false)
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
+  })
+
   it('still infers a Claude Escape once the tool call has closed', () => {
     const server = new AgentHookServer()
     ingest(server, {
@@ -304,4 +323,48 @@ describe('navigation Escape during an open tool call', () => {
       state: 'working'
     })
   })
+})
+
+/** The guard has to hold on the path a real agent CLI uses, not only on ingestRemote: the
+ *  loopback listener is what stamps `hookEventName` for a locally launched agent. */
+describe('navigation Escape over the loopback hook listener', () => {
+  it.each([
+    ['PreToolUse', false, 'working'],
+    ['PostToolUse', true, 'done']
+  ])(
+    'a Claude row last seen on %s answers %s to a single Escape',
+    async (hookEventName, expectedInference, expectedState) => {
+      vi.useRealTimers()
+      const server = new AgentHookServer()
+      await server.start({ env: 'production' })
+      try {
+        await postHookEvent(
+          server,
+          buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'migrate the schema' })
+        )
+        await postHookEvent(
+          server,
+          buildBody({
+            hook_event_name: 'PreToolUse',
+            tool_name: 'Bash',
+            tool_input: { command: 'pnpm migrate' }
+          })
+        )
+        if (hookEventName === 'PostToolUse') {
+          await postHookEvent(
+            server,
+            buildBody({ hook_event_name: 'PostToolUse', tool_name: 'Bash' })
+          )
+        }
+
+        expect(pressInterruptKey(server, 'plain-escape')).toBe(expectedInference)
+        expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
+          state: expectedState,
+          ...(expectedInference ? { interrupted: true } : {})
+        })
+      } finally {
+        server.stop()
+      }
+    }
+  )
 })
