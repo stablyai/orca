@@ -113,6 +113,7 @@ describe('persistent command retention', () => {
           sessionId: 'session',
           threadId: `thread-${thread}`,
           turnId: 'turn',
+          turnLifecycle: null,
           sink,
           streams: items.streams,
           activeItems: items.activeItems
@@ -207,6 +208,7 @@ describe('persistent command retention', () => {
         sessionId: 'session',
         threadId: 'root',
         turnId: 'turn',
+        turnLifecycle: null,
         sink,
         streams: items.streams,
         activeItems: items.activeItems

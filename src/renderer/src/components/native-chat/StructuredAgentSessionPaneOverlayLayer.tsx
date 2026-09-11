@@ -20,12 +20,14 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   tab,
   groupId,
   isActive,
+  isFocusedGroup,
   target,
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
   groupId: string | undefined
   isActive: boolean
+  isFocusedGroup: boolean
   target: RuntimeClientTarget
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element {
@@ -43,6 +45,7 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
         sessionId={tab.entityId}
         agent={tab.agentSessionAgent}
         isVisible={isActive}
+        isFocusedGroup={isFocusedGroup}
         target={target}
       />
     </RetainedPaneHost>
@@ -57,11 +60,12 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     worktreeId: string
     isWorktreeActive: boolean
   }): React.JSX.Element {
-    const { unifiedTabs, groups, runtimeEnvironmentId } = useAppStore(
+    const { unifiedTabs, groups, runtimeEnvironmentId, activeGroupId } = useAppStore(
       useShallow((state) => ({
         unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
         groups: state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS,
-        runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+        runtimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId),
+        activeGroupId: state.activeGroupIdByWorktree[worktreeId]
       }))
     )
     const focusGroup = useAppStore((state) => state.focusGroup)
@@ -95,6 +99,11 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
             tab={tab}
             groupId={tab.groupId}
             isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
+            isFocusedGroup={Boolean(
+              isWorktreeActive &&
+              groupActiveTabById.get(tab.groupId) === tab.id &&
+              tab.groupId === activeGroupId
+            )}
             target={target}
             onFocusOwningGroup={focusOwningGroup}
           />

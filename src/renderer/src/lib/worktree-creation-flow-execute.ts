@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { preflightAgentTrust as preflightWorkspaceAgentTrust } from '@/lib/agent-trust-preflight'
+import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import {
@@ -28,18 +28,6 @@ import { markStructuredWorktreeLaunchUnconfirmed } from '@/lib/worktree-creation
 function isPendingCreationSurfaceVisible(creationId: string): boolean {
   const state = useAppStore.getState()
   return state.activeView === 'terminal' && state.activePendingCreationId === creationId
-}
-
-async function preflightAgentTrust(
-  request: WorktreeCreationRequest,
-  path: string,
-  connectionId?: string | null
-): Promise<void> {
-  await preflightWorkspaceAgentTrust({
-    agent: request.agent,
-    workspacePath: path,
-    connectionId
-  })
 }
 
 export async function executeWorktreeCreation(
@@ -157,7 +145,11 @@ export async function executeWorktreeCreation(
   if (worktree.path && !structuredLaunch) {
     const repoConnectionId =
       useAppStore.getState().repos.find((repo) => repo.id === worktree.repoId)?.connectionId ?? null
-    await preflightAgentTrust(preparedRequest, worktree.path, repoConnectionId)
+    await preflightAgentTrust({
+      agent: preparedRequest.agent,
+      workspacePath: worktree.path,
+      connectionId: repoConnectionId
+    })
   }
 
   // `createWorktree` already inserted the real worktree row. Leaving for an app
@@ -207,10 +199,15 @@ export async function executeWorktreeCreation(
   }
 
   let structuredLaunchAccepted = structuredLaunch
-  if (structuredLaunch && isAgentSessionHandleProvider(preparedRequest.agent)) {
+  const { agentLaunchRoute } = preparedRequest
+  if (
+    agentLaunchRoute === 'structured-native-chat' &&
+    isAgentSessionHandleProvider(preparedRequest.agent)
+  ) {
     const structuredSession = await launchStructuredWorktreeSession({
       creationId,
       request: preparedRequest,
+      agentLaunchRoute,
       worktreeId: worktree.id,
       shouldActivateOnCompletion,
       fallbackStartupOpt,

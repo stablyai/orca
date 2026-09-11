@@ -19,6 +19,7 @@ import type { NativeChatTurnActivity } from './native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
   nativeChatTurnDiffs,
   type NativeChatDiffReveal,
@@ -45,6 +46,7 @@ export function NativeChatMessageList({
   onLinkClick,
   allowFileUriLinks = false,
   workingStartedAt,
+  settledTurns,
   failedDeliveryMessageIds,
   showTurnStatus = true,
   turnActivity,
@@ -58,6 +60,8 @@ export function NativeChatMessageList({
   /** Chat-only text multiplier (1 = default), driven by the zoom shortcuts. */
   fontScale: number
   workingStartedAt?: number | null
+  /** Host-recorded turn durations keyed by user message id (structured lane). */
+  settledTurns?: NativeChatSettledTurns
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
@@ -149,7 +153,8 @@ export function NativeChatMessageList({
     messages,
     latestUserIndex,
     isWorking: showTurnStatus && isWorking,
-    workingStartedAt: showTurnStatus ? workingStartedAt : null
+    workingStartedAt: showTurnStatus ? workingStartedAt : null,
+    settledTurns: showTurnStatus ? settledTurns : null
   })
 
   const prependAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)

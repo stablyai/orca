@@ -6,7 +6,7 @@ import {
   readRelayCloudSqlConnectionBudget
 } from './relay-cloud-sql-connection-budget.mjs'
 
-test('production plus three Asia pools preserves allowance and reserve below the ceiling', () => {
+test('production shared consumers keep allowance and reserve below the ceiling', () => {
   const report = readRelayCloudSqlConnectionBudget()
 
   assert.deepEqual(report.consumers, { cells: 230, directors: 15, auth: 20, api: 50 })
@@ -63,7 +63,11 @@ test('excludes fenced cell pools and reads per-cell pool overrides', () => {
           }
         }
       `,
-      terraformVariables: 'variable "relay_director_database_pool_max" { default = 3 }',
+      terraformVariables: [
+        'variable "relay_director_database_pool_max" { default = 3 }',
+        'variable "push_max_instances" { default = 1 }',
+        'variable "push_database_pool_max" { default = 2 }'
+      ].join('\n'),
       relayConfig: 'export const RELAY_DATABASE_POOL_MAX = 10'
     },
     maxConnections: 100,
@@ -74,6 +78,37 @@ test('excludes fenced cell pools and reads per-cell pool overrides', () => {
   assert.equal(report.consumers.cells, 14)
   assert.equal(report.operatingMaximum, 46)
   assert.equal(report.budgetedTotal, 47)
+})
+
+test('dedicated push scaling does not consume shared capacity', () => {
+  const report = readRelayCloudSqlConnectionBudget({
+    proposedAsiaCellCount: 1,
+    appConsumers: { authInstances: 1, authPoolMax: 10, apiInstances: 1, apiPoolMax: 5, maxConnections: 100 },
+    sources: {
+      productionTfvars: `
+        relay_max_instances = 1
+        push_max_instances  = 3
+        relay_gce_fenced_cells = []
+        relay_gce_cells = {
+          "production-gce-c2" = { database_pool_max = 4
+          }
+        }
+      `,
+      terraformVariables: [
+        'variable "relay_director_database_pool_max" { default = 3 }',
+        'variable "push_max_instances" { default = 1 }',
+        'variable "push_database_pool_max" { default = 2 }'
+      ].join('\n'),
+      relayConfig: 'export const RELAY_DATABASE_POOL_MAX = 10'
+    },
+    maxConnections: 100,
+    maintenanceAdminAllowance: 1,
+    explicitReserve: 1
+  })
+
+  assert.equal(report.consumers.push, undefined)
+  assert.equal(report.rolloutOverlap.pushCandidate, undefined)
+  assert.equal(report.operatingMaximum, 46)
 })
 
 test('requires strict headroom below the physical ceiling', () => {

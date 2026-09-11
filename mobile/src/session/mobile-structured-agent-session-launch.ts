@@ -137,18 +137,22 @@ export async function createMobileStructuredAgentSession(
     }
   }
 
+  // Why: this path distrusts the declared RpcResponse type — a malformed reply must read as
+  // unconfirmed, not as a refusal we can classify.
   if (!response || typeof response !== 'object' || typeof response.ok !== 'boolean') {
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
   if (!response.ok) {
+    const error = response.error as { code?: unknown; message?: unknown } | null | undefined
     if (
-      !response.error ||
-      typeof response.error !== 'object' ||
-      typeof response.error.code !== 'string'
+      !error ||
+      typeof error !== 'object' ||
+      typeof error.code !== 'string' ||
+      typeof error.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
-    return classifyCreateRefusal(agent, response.error.code, response.error.message)
+    return classifyCreateRefusal(agent, error.code, error.message)
   }
   const result = response.result as AgentSessionMutationResult<AgentSessionAttachResult>
   if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') {
@@ -158,7 +162,8 @@ export async function createMobileStructuredAgentSession(
     if (
       !result.refusal ||
       typeof result.refusal !== 'object' ||
-      typeof result.refusal.code !== 'string'
+      typeof result.refusal.code !== 'string' ||
+      typeof result.refusal.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }

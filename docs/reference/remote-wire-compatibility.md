@@ -180,6 +180,33 @@ An old client against a new host ignores the key, as Rule 1 allows. New members 
 `RuntimeTerminalWaitBlockedReason` are also Rule 1: no consumer switches exhaustively on it,
 and both the CLI and worker-start interpolate it as an opaque string.
 
+## Worked example: the `turn` journal item and its transitional downgrade
+
+The structured chat journal records a turn as a first-class item,
+`{ kind: 'turn', turnId, state, userItemId?, startedAt?, completedAt?, durationMs? }`, where it
+used to write `{ kind: 'status', text, turnLifecycle }`. Nothing in the codec moves, but it is
+Rule 3: a client that predates the item does not know the kind and renders it as a text bubble
+with no text. So the item is gated on a client capability, `agent-session.turn-item.v1`.
+
+The gate lives at the RPC boundary only, in
+`src/main/runtime/rpc/methods/structured-agent-session-turn-item-capability.ts`, composed
+around `agentSession.history` and `agentSession.subscribe` next to the background-task
+projection. A client that does not advertise the capability receives every `turn` item
+rewritten to the legacy status form with the full lifecycle under `turnLifecycle`; a client that
+advertises it, and any in-process caller, receives the canonical body. The journal, the status
+feed, and every host-side reader keep the `turn` item; `readAgentJournalTurn` in
+`src/shared/agent-session-turn-record.ts` reads either form, so a new client against an old
+host that still writes the status row also works.
+
+An old client against a new host sees the status row it always did. A new client against an old
+host advertises a capability the host ignores and reads the status row through the shared
+reader. The downgrade is transitional: once no supported release lacks the capability, delete
+the projection module and the capability check, and leave the reader.
+
+The cross-version suite derives the old client's list by removing this capability from the
+baseline's own list, per the rule above, so the downgrade stays exercised after a release ships
+it.
+
 ## Known debt: JSON-RPC errors drop Node's string code
 
 An error raised on an SSH host crosses the relay as JSON-RPC, and

@@ -30,11 +30,9 @@ describe('regional rehome worker', () => {
     }
     const claimRegionalRehome = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(attempt)
     const recordRegionalRehomeDrainReceipt = vi.fn().mockResolvedValue(true)
-    const recordRegionalRehomeWorkerFailure = vi.fn().mockResolvedValue(undefined)
     const assignments = {
       claimRegionalRehome,
-      recordRegionalRehomeDrainReceipt,
-      recordRegionalRehomeWorkerFailure
+      recordRegionalRehomeDrainReceipt
     } as unknown as RelayAssignmentStore
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -99,8 +97,7 @@ describe('regional rehome worker', () => {
     const claimRegionalRehome = vi.fn().mockResolvedValueOnce(null).mockResolvedValue(attempt)
     const assignments = {
       claimRegionalRehome,
-      recordRegionalRehomeDispatchFailure: vi.fn().mockResolvedValue(undefined),
-      recordRegionalRehomeWorkerFailure: vi.fn().mockResolvedValue(undefined)
+      recordRegionalRehomeDispatchFailure: vi.fn().mockResolvedValue(undefined)
     } as unknown as RelayAssignmentStore
     const worker = startRegionalRehomeWorker(config(), assignments, {
       now: () => now,
@@ -118,7 +115,36 @@ describe('regional rehome worker', () => {
     expect(assignments.recordRegionalRehomeDispatchFailure).toHaveBeenCalledWith(
       '11111111-1111-4111-8111-111111111111'
     )
-    expect(assignments.recordRegionalRehomeWorkerFailure).not.toHaveBeenCalled()
+  })
+
+  it('keeps a failed poll out of the durable dispatch-failure budget', async () => {
+    let now = 0
+    const claimRegionalRehome = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockRejectedValue(new Error('Connection terminated due to connection timeout'))
+    const recordRegionalRehomeDispatchFailure = vi.fn().mockResolvedValue(undefined)
+    const assignments = {
+      claimRegionalRehome,
+      recordRegionalRehomeDispatchFailure
+    } as unknown as RelayAssignmentStore
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const worker = startRegionalRehomeWorker(config(), assignments, {
+      now: () => now,
+      safetySnapshot: () => safety(now),
+      intervalMs: 60_000
+    })!
+    await settleWorker()
+    now = 1_000
+    await expect(worker.run()).resolves.toBeUndefined()
+    worker.stop()
+
+    // The poll never claimed an attempt, so nothing was drained and nothing may
+    // be charged to the budget that latches the durable control off.
+    expect(recordRegionalRehomeDispatchFailure).not.toHaveBeenCalled()
+    expect(warn.mock.calls.map((call) => JSON.parse(String(call[0])).event)).toEqual([
+      'orca_relay_regional_rehome_poll_failed'
+    ])
   })
 
   it('passes unsafe process telemetry to the durable claim gate', async () => {

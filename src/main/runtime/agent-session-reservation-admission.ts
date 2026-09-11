@@ -2,11 +2,15 @@
  * Reservation admission: what a reserve request means against the persisted state.
  *
  * Pure over a store snapshot so the compare-and-swap, the idempotency replay, and the
- * location-immutability check can be reasoned about without touching the disk. The store applies
- * the result inside one transaction; nothing here mutates.
+ * location-immutability check can be reasoned about without touching the disk.
+ *
+ * `commitAgentSessionReservation` is the one exception and the only writer here: it sequences
+ * those decisions and applies the winning one to the state it was handed. The store calls it
+ * inside a transaction, which is what makes the record and its operation row land together.
  */
 
 import {
+  agentSessionOperationKey,
   evaluateAgentSessionOperation,
   pruneAgentSessionOperationRows,
   type AgentSessionOperationDecision,
@@ -264,4 +268,33 @@ function createAgentSessionRecord(
       deathEvidence: null
     }
   }
+}
+
+/**
+ * Compare-and-swap reservation plus its client-operation row, committed together. A replayed
+ * operation returns the recorded outcome and never reaches the reservation.
+ */
+export function commitAgentSessionReservation(
+  state: AgentSessionStoreState,
+  request: AgentSessionReserveRequest,
+  leaseTtlMs: number
+): AgentSessionReserveResult {
+  const decision = evaluateAgentSessionReserveOperation(state, request)
+  if (decision.decision === 'refused') {
+    throw new Error(decision.code)
+  }
+  if (decision.decision === 'replay') {
+    let record = requireAgentSessionRecordForReplay(state, decision.row, request.sessionId)
+    if (decision.row.outcome.status === 'pending' && request.handoffOperationId !== null) {
+      record = admitPendingAgentSessionReservationReplay(record, request)
+    }
+    return { record, disposition: 'replayed' as const, operationRow: decision.row }
+  }
+  const result = applyAgentSessionReservation(state, request, leaseTtlMs)
+  state.operations.set(
+    agentSessionOperationKey(request.operation.callerKey, request.operation.operationId),
+    decision.row
+  )
+  state.records.set(result.record.sessionId, result.record)
+  return { ...result, operationRow: decision.row }
 }

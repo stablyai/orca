@@ -171,6 +171,7 @@ const UiUpdateFields = z
     usagePercentageDisplay: z.enum(['used', 'remaining']).optional(),
     statusBarUsageMode: z.enum(['verbose', 'compact']).optional(),
     dismissedUpdateVersion: NullableString.optional(),
+    dismissedUnexpectedSignoutVersion: NullableString.optional(),
     lastUpdateCheckAt: z.number().finite().nullable().optional(),
     pendingUpdateNudgeId: NullableString.optional(),
     dismissedUpdateNudgeId: NullableString.optional(),
