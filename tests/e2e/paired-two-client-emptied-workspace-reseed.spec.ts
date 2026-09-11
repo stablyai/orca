@@ -206,7 +206,7 @@ test('two paired clients stay in step with the host across an emptied workspace'
       })
     }
     await expect
-      .poll(() => readHostTerminalTabIds(clientA, worktreeId).then((ids) => ids.length), {
+      .poll(() => readHostTerminalTabIds(clientA!, worktreeId).then((ids) => ids.length), {
         timeout: MIRROR_BUDGET_MS,
         message: 'host still held terminals after client A closed them all'
       })
