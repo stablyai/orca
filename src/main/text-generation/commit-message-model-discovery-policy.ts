@@ -49,6 +49,9 @@ export function finalizeModelDiscoveryOutput(
   if (models.length === 0 && stderr.trim()) {
     models = spec.modelDiscovery?.parse(stderr) ?? []
   }
+  if (spec.id === 'pi') {
+    models = models.filter((model) => model.id !== PI_DEFAULT_MODEL_ID)
+  }
   if (models.length === 0) {
     if (spec.id === 'pi') {
       return staticModelDiscoveryResult(spec, [PI_COMPATIBILITY_MODEL], PI_COMPATIBILITY_MODEL.id)
@@ -61,7 +64,6 @@ export function finalizeModelDiscoveryOutput(
     }
     return { success: false, error: `${spec.label} returned no available models.` }
   }
-  models = models.filter((model) => model.id !== PI_DEFAULT_MODEL_ID)
   const defaultModelId = models.some((model) => model.id === spec.defaultModelId)
     ? spec.defaultModelId
     : models[0].id
