@@ -5,7 +5,8 @@ import {
 } from '../agent-hooks/installer-utils'
 import {
   buildPosixHookPayloadCapture,
-  buildPosixHookSpoolLines
+  buildPosixHookSpoolLines,
+  POSIX_HOOK_JSON_STDIN_READER
 } from '../agent-hooks/hook-stdin-contract'
 import {
   buildWindowsGrokHookScript,
@@ -35,7 +36,7 @@ export function getGrokManagedScript(target: 'local' | 'posix' = 'local'): strin
 
   return [
     '#!/bin/sh',
-    ...buildPosixHookPayloadCapture(),
+    ...buildPosixHookPayloadCapture('exit', POSIX_HOOK_JSON_STDIN_READER),
     ...buildPosixHookSpoolLines('grok'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
