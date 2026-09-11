@@ -162,15 +162,17 @@ export function useOnboardingFlow(
       linearStatusChecked
     })
 
-  // Why a ref: closing lifts the first-run hook deferral, and closeWith must stay stable.
-  const onboardingConsentRef = useRef({ agentStatusHooksEnabled })
-  onboardingConsentRef.current = { agentStatusHooksEnabled }
+  // Why memoized on the value: closing lifts the first-run hook deferral, so closeWith must carry
+  // the consent the user actually left set. Keying identity to the boolean re-creates closeWith
+  // only when the answer changes, which is what makes the Escape path carry the fresh value
+  // without a render-phase ref write.
+  const onboardingConsent = useMemo(() => ({ agentStatusHooksEnabled }), [agentStatusHooksEnabled])
 
   const closeWith = useCloseWith({
     onOnboardingChange,
     startTimeRef,
     setError,
-    consentRef: onboardingConsentRef
+    consent: onboardingConsent
   })
 
   const persistCurrentStep = usePersistCurrentStep({

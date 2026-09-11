@@ -56,7 +56,7 @@ function CloseWithProbe(props: {
     onOnboardingChange: vi.fn(),
     startTimeRef: { current: probeStartTime },
     setError: vi.fn(),
-    consentRef: { current: props.consent ?? {} }
+    consent: props.consent ?? {}
   })
   useEffect(() => props.onReady(closeWith), [closeWith, props])
   return null

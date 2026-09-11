@@ -84,23 +84,14 @@ export function useOnboardingSettingsDraft() {
     setTheme(value)
   }, [])
   // `fromCollapsedSection`: whether the picked agent lived under AgentStep's `<details>` disclosure — only that call site knows.
-  const detectedAgentIdsRef = useRef<readonly TuiAgent[]>(detectedAgentIds ?? [])
-  const isDetectingRef = useRef<boolean>(isDetectingAgents)
-  const selectedAgentRef = useRef(selectedAgent)
-  // Why: refs let the stable `setSelectedAgentInteractive` read the freshest hydration classification at click time.
-  const pathSourceRef = useRef(pathSource)
-  const pathFailureReasonRef = useRef(pathFailureReason)
-  // Why: keep these mirrors fresh so stable handlers read current values at click/async time.
-  selectedAgentRef.current = selectedAgent
-  detectedAgentIdsRef.current = detectedAgentIds ?? []
-  isDetectingRef.current = isDetectingAgents
-  pathSourceRef.current = pathSource
-  pathFailureReasonRef.current = pathFailureReason
+  // Why the values and not mirror refs: this reads the current hydration classification at click
+  // time, and depending on them directly keeps render pure. The identity churn is free — every
+  // dep here is already a prop of the step that renders this handler.
   const setSelectedAgentInteractive = useCallback(
     (value: TuiAgent | null, fromCollapsedSection = false) => {
       agentInteractedRef.current = true
       // Why: de-dup re-clicks on the current agent so telemetry counts mind-changes, not idle reselection.
-      const prev = selectedAgentRef.current
+      const prev = selectedAgent
       setSelectedAgent(value)
       if (value === null || value === prev) {
         return
@@ -110,15 +101,15 @@ export function useOnboardingSettingsDraft() {
         'onboarding_agent_picked',
         buildAgentPickedPayload({
           agent: value,
-          detectedAgentIds: detectedAgentIdsRef.current,
-          isDetecting: isDetectingRef.current,
+          detectedAgentIds: detectedAgentIds ?? [],
+          isDetecting: isDetectingAgents,
           fromCollapsedSection,
-          pathSource: pathSourceRef.current,
-          pathFailureReason: pathFailureReasonRef.current
+          pathSource,
+          pathFailureReason
         })
       )
     },
-    []
+    [detectedAgentIds, isDetectingAgents, pathFailureReason, pathSource, selectedAgent]
   )
   const setYoloPermissionsInteractive = useCallback((enabled: boolean) => {
     yoloPermissionsInteractedRef.current = true
@@ -145,11 +136,10 @@ export function useOnboardingSettingsDraft() {
     didAutoSelectRef.current = true
     // Why: re-read PATH on mount; the session cache can be poisoned by callers that ran before shell PATH hydration, giving a false "no agents" state.
     void refreshDetectedAgents().then((ids) => {
-      if (selectedAgentRef.current !== null) {
-        return
-      }
       const preferred = getAgentCatalog().find((agent) => ids.includes(agent.id))?.id ?? null
-      setSelectedAgent(preferred)
+      // Why a functional update: detection resolves async and the user may have picked while it
+      // was in flight. Reading previous state here is what the mirror ref used to do.
+      setSelectedAgent((current) => (current !== null ? current : preferred))
     })
   }, [refreshDetectedAgents])
 

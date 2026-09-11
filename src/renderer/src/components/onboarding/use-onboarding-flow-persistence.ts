@@ -45,7 +45,7 @@ type CloseWithDeps = {
   setError: (msg: string | null) => void
   // Why a ref: closing also lifts the first-run hook deferral, so the close write has to carry the
   // same consent the advance does — without re-identifying closeWith on every checkbox click.
-  consentRef: { current: OnboardingConsent }
+  consent: OnboardingConsent
 }
 
 export type DismissedExtras = {
@@ -79,7 +79,7 @@ export function useCloseWith({
   onOnboardingChange,
   startTimeRef,
   setError,
-  consentRef
+  consent
 }: CloseWithDeps) {
   // Why: onboarding closes exactly once. On the final notifications step both
   // the "Add your first project" handoff (completed) and a click-off/Escape
@@ -109,7 +109,7 @@ export function useCloseWith({
             lastCompletedStep: outcome === 'completed' ? ONBOARDING_FINAL_STEP : -1,
             checklist: { dismissed: outcome === 'dismissed' }
           },
-          consentRef.current
+          consent
         )
       } catch (err) {
         // Why: the persist failed, so onboarding did not actually close — clear
@@ -140,7 +140,7 @@ export function useCloseWith({
       }
       return true
     },
-    [consentRef, onOnboardingChange, startTimeRef, setError]
+    [consent, onOnboardingChange, startTimeRef, setError]
   )
 }
 
