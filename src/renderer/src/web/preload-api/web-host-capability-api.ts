@@ -12,6 +12,7 @@ import type { SkillDiscoveryResult } from '../../../../shared/skills'
 import type { SkillDeletePlan, SkillDeleteResult } from '../../../../shared/skill-delete-contract'
 import { SKILL_DELETE_CAPABILITY } from '../../../../shared/skill-install-capability'
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
+import { toPreflightDetectAgentsParams } from './web-preflight-detect-params'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { getBrowserPlatform } from './web-storage'
 
@@ -64,15 +65,18 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
       }
       return callRuntimeResult<PreflightStatus>('preflight.check', args)
     },
-    detectAgents: async () => {
+    detectAgents: async (args) => {
       if (!requireActiveEnvironmentOrNull()) {
         return []
       }
-      return callRuntimeResult<string[]>('preflight.detectAgents').catch(() => [])
+      return callRuntimeResult<string[]>(
+        'preflight.detectAgents',
+        toPreflightDetectAgentsParams(args)
+      ).catch(() => [])
     },
-    refreshAgents: () =>
+    refreshAgents: (args) =>
       requireActiveEnvironmentOrNull()
-        ? callRuntimeResult('preflight.refreshAgents')
+        ? callRuntimeResult('preflight.refreshAgents', toPreflightDetectAgentsParams(args))
             .then((result) => result as RefreshAgentsResult)
             .catch(() => fallbackRefreshAgents)
         : Promise.resolve(fallbackRefreshAgents),
