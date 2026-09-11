@@ -104,6 +104,9 @@ function deliverTerminalPrompt(
     }
     if (prepared.hasPrompt) {
       request.onPromptDelivered?.()
+      if (request.promptDelivery !== 'draft') {
+        return Promise.resolve({ delivered: true, failureNotified: false })
+      }
     }
     return undefined
   }

@@ -335,6 +335,31 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockToastError).not.toHaveBeenCalled()
   })
 
+  it('reports native argv prompt delivery when structured launch refuses', async () => {
+    const { StructuredAgentSessionCreateRefusalError } =
+      await import('./launch-structured-agent-session')
+    mockLaunchStructuredCodexSession.mockRejectedValueOnce(
+      new StructuredAgentSessionCreateRefusalError('provider unavailable')
+    )
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'start this task'
+    })
+
+    await expect(result?.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
+    await expect(result?.structuredSettlement).resolves.toMatchObject({
+      kind: 'terminal',
+      viaRefusal: true
+    })
+    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+  })
+
   it('logs a fallback that throws and never re-enters the terminal launch', async () => {
     const { StructuredAgentSessionCreateRefusalError } =
       await import('./launch-structured-agent-session')
