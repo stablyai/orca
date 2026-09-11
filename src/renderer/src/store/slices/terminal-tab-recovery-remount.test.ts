@@ -21,7 +21,7 @@ describe('remountTerminalTabForRecovery', () => {
 
     const remounted = store.getState().remountTerminalTabForRecovery(tabId)
 
-    expect(remounted).toBe(true)
+    expect(remounted.remounted).toBe(true)
     const after = store.getState().tabsByWorktree[WORKTREE_ID].find((tab) => tab.id === tabId)
     expect(after?.generation ?? 0).toBe((before?.generation ?? 0) + 1)
     // Recovery is not user interaction — the remount's PTY updates must not
@@ -36,7 +36,7 @@ describe('remountTerminalTabForRecovery', () => {
     store.getState().queueTabStartupCommand(tabId, startup)
     const before = store.getState().pendingStartupByTabId[tabId]
 
-    expect(store.getState().remountTerminalTabForRecovery(tabId)).toBe(true)
+    expect(store.getState().remountTerminalTabForRecovery(tabId).remounted).toBe(true)
 
     const after = store.getState().pendingStartupByTabId[tabId]
     expect(after).toEqual(before)
@@ -59,7 +59,10 @@ describe('remountTerminalTabForRecovery', () => {
     const store = createTestStore()
     seedWorktreeWithTab(store)
 
-    expect(store.getState().remountTerminalTabForRecovery('missing-tab')).toBe(false)
+    expect(store.getState().remountTerminalTabForRecovery('missing-tab')).toEqual({
+      remounted: false,
+      declinedBy: 'tab-missing'
+    })
   })
 })
 
@@ -72,7 +75,7 @@ describe('isTerminalTabPresent as the recovery existence check', () => {
     const tabId = seedWorktreeWithTab(store)
 
     expect(isTerminalTabPresent(store.getState(), tabId)).toBe(true)
-    expect(store.getState().remountTerminalTabForRecovery(tabId)).toBe(true)
+    expect(store.getState().remountTerminalTabForRecovery(tabId).remounted).toBe(true)
   })
 
   it('stays true when the tab is missing from the unified tab index', () => {
@@ -90,7 +93,7 @@ describe('isTerminalTabPresent as the recovery existence check', () => {
     store.setState({ tabsByWorktree: { [WORKTREE_ID]: [] } })
 
     expect(isTerminalTabPresent(store.getState(), tabId)).toBe(false)
-    expect(store.getState().remountTerminalTabForRecovery(tabId)).toBe(false)
+    expect(store.getState().remountTerminalTabForRecovery(tabId).remounted).toBe(false)
   })
 
   // The budget release still has to fire for a real close, or a closed tab's

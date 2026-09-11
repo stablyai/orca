@@ -45,6 +45,7 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'sampleVisiblePaneForegroundAgent'
     | 'scheduleReattachIdleAgentCursorReset'
     | 'serializeHiddenOutputSnapshot'
+    | 'settlePaneAttachAttempt'
     | 'setPanePtyFitBinding'
     | 'startFreshColdRestoreAgentResume'
     | 'structuralReplayCoordinator'
@@ -163,6 +164,10 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     if (!isCurrentReattachPayload()) {
       return false
     }
+    // The first authoritative attach of the pane a recovery remount produced —
+    // past the no-PTY-id and session-expired branches, which are failures and
+    // settle themselves. This is the observation the ledger was waiting for.
+    session.settlePaneAttachAttempt?.(undefined, 'success')
     // Strict precedence snapshot > replay > coldRestore: paint exactly one, else overlapping tails duplicate TUI output on worktree switch.
     const hasStructuralReplay = Boolean(
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore

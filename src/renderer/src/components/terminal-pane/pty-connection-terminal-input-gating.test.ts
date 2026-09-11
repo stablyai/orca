@@ -23,6 +23,10 @@ import {
   restoreTerminalTestGlobals
 } from './pty-connection-test-environment'
 
+/** What remountTerminalTabForRecovery answers now that it reports admission. */
+const REMOUNTED = { remounted: true as const, generation: 1 }
+const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
+
 const {
   resetAndRefreshAllTerminalWebglAtlases,
   scheduleTerminalWebglAtlasRecovery,
@@ -787,7 +791,7 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
     _resetTerminalPaneRecoveryForTests()
-    const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+    const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
     mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
     const transport = createMockTransport('daemon-pty')
     let writeUnavailable: (() => void) | undefined
@@ -803,7 +807,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     expect(window.api.pty.hasPty).toHaveBeenCalledWith('daemon-pty')
-    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
     _resetTerminalPaneRecoveryForTests()
   })
 
@@ -811,7 +815,7 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const { _resetTerminalPaneRecoveryForTests } = await import('./terminal-pane-recovery')
     _resetTerminalPaneRecoveryForTests()
-    const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+    const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
     mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
     const transport = createMockTransport('daemon-pty')
     let writeUnavailable: (() => void) | undefined
@@ -826,7 +830,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
     writeUnavailable?.()
     await flushAsyncTicks(6)
-    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
 
     // The surviving tail of `echo hi; rm -rf x`: reaching the fresh shell would
     // let the user's own Enter run `rm -rf x` (#10065 follow-up).
@@ -848,7 +852,7 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const { settleTerminalWriteStallWatch, WRITE_PIPELINE_STALL_CHECK_MS } =
       await import('@/lib/pane-manager/terminal-write-pipeline-health')
-    const remountTerminalTabForRecovery = vi.fn<(tabId: string) => boolean>(() => true)
+    const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
     mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
     const transport = createMockTransport('pty-wedged')
     transportFactoryQueue.push(transport)
@@ -865,7 +869,7 @@ describe('connectPanePty', () => {
 
     expect(transport.sendInput).toHaveBeenCalledWith('x')
     expect(pane.terminal.write).toHaveBeenCalledWith('', expect.any(Function))
-    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+    expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
     binding.dispose()
   })
 

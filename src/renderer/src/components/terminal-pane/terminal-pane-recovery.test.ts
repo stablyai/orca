@@ -1,30 +1,92 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  createRemountTerminalTabForRecovery,
+  createSettleTerminalTabRecovery
+} from '@/store/slices/worktrees/session/worktree-slice-lookups'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import {
   _resetTerminalPaneRecoveryForTests,
   captureTerminalPaneRecoveryGeneration,
   registerTerminalPaneRecoveryInstance,
-  requestTerminalPaneRecovery
+  requestTerminalPaneRecovery,
+  settleTerminalPaneRecovery
 } from './terminal-pane-recovery'
 import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
-type StoredTerminalTab = { id: string; viewMode?: 'terminal' | 'chat' }
+type StoredTerminalTab = Pick<TerminalTab, 'id' | 'viewMode' | 'generation' | 'recovery'>
 
+const WORKTREE_ID = 'repo1::/path/wt1'
+
+// The store actions here are the REAL ones, driven over a minimal state bag.
+// The recovery budget is a field on the tab row now, so a fake that only
+// answered booleans could no longer express what this module reads.
 const mocks = vi.hoisted(() => ({
-  remountTerminalTabForRecovery: vi.fn<(tabId: string) => boolean>(() => true),
+  state: {
+    tabsByWorktree: {} as Record<string, unknown[]>,
+    terminalLayoutsByTabId: {} as Record<string, unknown>,
+    pendingStartupByTabId: {} as Record<string, unknown>
+  },
+  // Records tabIds the store ACTUALLY remounted, so every assertion below keeps
+  // meaning "a remount happened" rather than "a remount was asked for".
+  remountTerminalTabForRecovery: vi.fn<(tabId: string) => void>(),
   getTab: vi.fn<() => { viewMode?: 'terminal' | 'chat' } | null>(() => ({})),
-  // The remount index. Kept separate from getTab so a test can stage the
-  // drift between the two that crash b5cfc6ca rode in on.
-  terminalTabs: [] as StoredTerminalTab[],
   recordRendererCrashBreadcrumb: vi.fn(),
   hasPty: vi.fn<(id: string) => Promise<boolean | null>>(async () => true)
 }))
 
+const storeSet = (updater: unknown): void => {
+  const patch =
+    typeof updater === 'function'
+      ? (updater as (state: unknown) => object)(mocks.state)
+      : (updater as object)
+  Object.assign(mocks.state, patch)
+}
+const storeGet = (): unknown => mocks.state
+const realRemount = createRemountTerminalTabForRecovery(storeSet as never, storeGet as never)
+const realSettle = createSettleTerminalTabRecovery(storeSet as never, storeGet as never)
+
+const remountTerminalTabForRecovery: typeof realRemount = (tabId, request) => {
+  const result = realRemount(tabId, request)
+  if (result.remounted) {
+    mocks.remountTerminalTabForRecovery(tabId)
+  }
+  return result
+}
+
+function terminalTabs(): StoredTerminalTab[] {
+  return (mocks.state.tabsByWorktree[WORKTREE_ID] ?? []) as StoredTerminalTab[]
+}
+
+function setTerminalTabs(tabs: StoredTerminalTab[]): void {
+  mocks.state.tabsByWorktree = { [WORKTREE_ID]: tabs }
+}
+
+/** What a mounted pane reports for the tab's current recovery attempt. */
+function settleCurrentRecovery(tabId: string, outcome: 'success' | 'failed' | 'timed-out'): void {
+  settleTerminalPaneRecovery(tabId, captureTerminalPaneRecoveryGeneration(tabId), outcome)
+}
+
+/** A full cycle: request, then the pane the remount mounted reports back.
+ *  Recovery gates on an observed outcome, so a caller that never reports is
+ *  refused — these are the callers that DO report. */
+async function requestAndSettle(
+  request: Parameters<typeof requestTerminalPaneRecovery>[0],
+  outcome: 'success' | 'failed' | 'timed-out' = 'success'
+): Promise<boolean> {
+  const recovered = await requestTerminalPaneRecovery(request)
+  if (recovered) {
+    settleCurrentRecovery(request.tabId, outcome)
+  }
+  return recovered
+}
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
-      remountTerminalTabForRecovery: mocks.remountTerminalTabForRecovery,
-      getTab: mocks.getTab,
-      tabsByWorktree: { 'repo1::/path/wt1': mocks.terminalTabs }
+      ...mocks.state,
+      remountTerminalTabForRecovery,
+      settleTerminalTabRecovery: realSettle,
+      getTab: mocks.getTab
     })
   }
 }))
@@ -35,11 +97,12 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 
 beforeEach(() => {
   _resetTerminalPaneRecoveryForTests()
-  mocks.remountTerminalTabForRecovery.mockClear()
-  mocks.remountTerminalTabForRecovery.mockReturnValue(true)
+  mocks.remountTerminalTabForRecovery.mockReset()
   mocks.getTab.mockClear()
   mocks.getTab.mockReturnValue({})
-  mocks.terminalTabs = [{ id: 'tab-1' }, { id: 'tab-ssh' }]
+  mocks.state.terminalLayoutsByTabId = {}
+  mocks.state.pendingStartupByTabId = {}
+  setTerminalTabs([{ id: 'tab-1' }, { id: 'tab-ssh' }])
   mocks.recordRendererCrashBreadcrumb.mockClear()
   mocks.hasPty.mockClear()
   mocks.hasPty.mockResolvedValue(true)
@@ -57,7 +120,7 @@ afterEach(() => {
 
 describe('requestTerminalPaneRecovery', () => {
   it('does not remount a terminal surface hidden behind native chat', async () => {
-    mocks.getTab.mockReturnValue({ viewMode: 'chat' })
+    setTerminalTabs([{ id: 'tab-1', viewMode: 'chat' }])
 
     await expect(
       requestTerminalPaneRecovery({
@@ -72,9 +135,9 @@ describe('requestTerminalPaneRecovery', () => {
 
   it('does not remount a chat-owned tab the unified tab index has dropped', async () => {
     // The drift crash b5cfc6ca documents: present in tabsByWorktree, gone from
-    // unifiedTabsByWorktree. getTab answers null, so the guard used to pass.
+    // unifiedTabsByWorktree. getTab answers null, and the guard reads the row.
     mocks.getTab.mockReturnValue(null)
-    mocks.terminalTabs = [{ id: 'tab-1', viewMode: 'chat' }]
+    setTerminalTabs([{ id: 'tab-1', viewMode: 'chat' }])
 
     await expect(
       requestTerminalPaneRecovery({
@@ -85,6 +148,21 @@ describe('requestTerminalPaneRecovery', () => {
     ).resolves.toBe(false)
     expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
     expect(mocks.hasPty).not.toHaveBeenCalled()
+  })
+
+  it('reads chat ownership from the row alone, not from the unified tab', async () => {
+    // The local viewMode toggles now patch the row in the same set(), so the
+    // unified tab is never the tie-breaker — a stale one cannot veto a heal.
+    mocks.getTab.mockReturnValue({ viewMode: 'chat' })
+    setTerminalTabs([{ id: 'tab-1', viewMode: 'terminal' }])
+
+    await expect(
+      requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'write-stalled'
+      })
+    ).resolves.toBe(true)
   })
 
   it('remounts the tab and records a breadcrumb for a certified-dead pipeline', async () => {
@@ -118,8 +196,6 @@ describe('requestTerminalPaneRecovery', () => {
   })
 
   it('records a breadcrumb when the tab cannot be remounted, without consuming budget', async () => {
-    mocks.remountTerminalTabForRecovery.mockReturnValue(false)
-
     const result = await requestTerminalPaneRecovery({
       tabId: 'tab-gone',
       ptyId: 'pty-1',
@@ -132,7 +208,7 @@ describe('requestTerminalPaneRecovery', () => {
       { tabId: 'tab-gone', reason: 'restore-blocked' }
     )
     // Budget untouched: a later request for the same tab may still remount.
-    mocks.remountTerminalTabForRecovery.mockReturnValue(true)
+    setTerminalTabs([...terminalTabs(), { id: 'tab-gone' }])
     expect(
       await requestTerminalPaneRecovery({
         tabId: 'tab-gone',
@@ -147,7 +223,7 @@ describe('requestTerminalPaneRecovery', () => {
     vi.setSystemTime(0)
 
     expect(
-      await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'write-stalled' })
+      await requestAndSettle({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'write-stalled' })
     ).toBe(true)
     expect(
       await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'replay-wedged' })
@@ -161,25 +237,140 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
   })
 
+  it('refuses a second request while the last remount has reported nothing', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+
+    expect(
+      await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'write-stalled' })
+    ).toBe(true)
+    // Past the cooldown, inside the cap — only the unsettled attempt refuses it.
+    vi.setSystemTime(16_000)
+    expect(
+      await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'replay-wedged' })
+    ).toBe(false)
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+
+    settleCurrentRecovery('tab-1', 'success')
+    expect(
+      await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'replay-wedged' })
+    ).toBe(true)
+  })
+
+  it('refuses the same reason again once a pane reported it failed', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+
+    expect(
+      await requestAndSettle(
+        { tabId: 'tab-ssh', ptyId: 'ssh:target@@pty-1', reason: 'reattach-unverifiable' },
+        'failed'
+      )
+    ).toBe(true)
+
+    // Far past every window: counting would have healed, evidence has not.
+    for (const now of [16_000, 60_000, 600_000]) {
+      vi.setSystemTime(now)
+      expect(
+        await requestTerminalPaneRecovery({
+          tabId: 'tab-ssh',
+          ptyId: 'ssh:target@@pty-1',
+          reason: 'reattach-unverifiable'
+        })
+      ).toBe(false)
+    }
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+
+    // The user pressing Retry is the new trigger the refusal waits for.
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-ssh',
+        ptyId: 'ssh:target@@pty-1',
+        reason: 'reattach-unverifiable',
+        trigger: 'user'
+      })
+    ).toBe(true)
+  })
+
+  it('reopens a settled failure when the row moves to a new generation', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    await requestAndSettle(
+      { tabId: 'tab-ssh', ptyId: 'ssh:target@@pty-1', reason: 'reattach-unverifiable' },
+      'failed'
+    )
+    vi.setSystemTime(60_000)
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-ssh',
+        ptyId: 'ssh:target@@pty-1',
+        reason: 'reattach-unverifiable'
+      })
+    ).toBe(false)
+
+    // An SSH authority rotation / activation respawn bumps tab.generation.
+    setTerminalTabs(
+      terminalTabs().map((tab) =>
+        tab.id === 'tab-ssh' ? { ...tab, generation: (tab.generation ?? 0) + 1 } : tab
+      )
+    )
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-ssh',
+        ptyId: 'ssh:target@@pty-1',
+        reason: 'reattach-unverifiable'
+      })
+    ).toBe(true)
+  })
+
+  it('does not reopen a settled failure when a host rebuild drops generation', async () => {
+    // A remote-runtime snapshot rebuilds the row without `generation`. That is a
+    // field going missing, not a new trigger — reading it as one would restore
+    // the tab's allowance on every republication.
+    vi.useFakeTimers()
+    vi.setSystemTime(0)
+    await requestAndSettle(
+      { tabId: 'tab-ssh', ptyId: 'ssh:target@@pty-1', reason: 'reattach-unverifiable' },
+      'failed'
+    )
+    const rebuilt = terminalTabs().map((tab) =>
+      tab.id === 'tab-ssh' ? { id: tab.id, recovery: tab.recovery } : tab
+    )
+    setTerminalTabs(rebuilt)
+
+    vi.setSystemTime(60_000)
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-ssh',
+        ptyId: 'ssh:target@@pty-1',
+        reason: 'reattach-unverifiable'
+      })
+    ).toBe(false)
+  })
+
   it('caps recoveries per window to prevent remount storms', async () => {
     vi.useFakeTimers()
     for (let attempt = 0; attempt < 5; attempt += 1) {
       vi.setSystemTime(attempt * 20_000)
-      await requestTerminalPaneRecovery({
+      await requestAndSettle({
         tabId: 'tab-1',
         ptyId: 'pty-1',
         reason: 'write-stalled'
       })
     }
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
+    expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
+      'terminal_pane_recovery_window_cap',
+      { tabId: 'tab-1', reason: 'write-stalled' }
+    )
   })
 
-  it('releases recovery budget and retries when the tab closes', async () => {
+  it('drops the budget with the row the tab closure removes', async () => {
     vi.useFakeTimers()
     const instance = registerTerminalPaneRecoveryInstance('tab-1')
     for (let attempt = 0; attempt < 4; attempt += 1) {
       vi.setSystemTime(attempt * 20_000)
-      await requestTerminalPaneRecovery({
+      await requestAndSettle({
         tabId: 'tab-1',
         ptyId: 'pty-1',
         reason: 'write-stalled'
@@ -188,14 +379,21 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
     expect(vi.getTimerCount()).toBe(1)
 
-    mocks.terminalTabs = []
-    mocks.getTab.mockReturnValue(null)
+    // Disposing the pane must NOT release anything: that release is what erased
+    // every consumed remount and let the cap lapse (crash b5cfc6ca).
     instance.unregister()
+    expect(captureTerminalPaneRecoveryGeneration('tab-1')).toBe(3)
+    expect(
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'write-stalled'
+      })
+    ).toBe(false)
 
+    // Closing the tab drops the row, and the budget with it — same object.
+    setTerminalTabs([{ id: 'tab-1' }])
     expect(captureTerminalPaneRecoveryGeneration('tab-1')).toBe(0)
-    expect(vi.getTimerCount()).toBe(0)
-    mocks.terminalTabs = [{ id: 'tab-1' }]
-    mocks.getTab.mockReturnValue({})
     expect(
       await requestTerminalPaneRecovery({
         tabId: 'tab-1',
@@ -210,7 +408,7 @@ describe('requestTerminalPaneRecovery', () => {
     vi.setSystemTime(0)
     for (let attempt = 0; attempt < 3; attempt += 1) {
       vi.setSystemTime(attempt * 20_000)
-      await requestTerminalPaneRecovery({
+      await requestAndSettle({
         tabId: 'tab-1',
         ptyId: 'pty-1',
         reason: 'write-stalled'
@@ -241,7 +439,9 @@ describe('requestTerminalPaneRecovery', () => {
     vi.useFakeTimers()
     for (let attempt = 0; attempt < 4; attempt += 1) {
       vi.setSystemTime(attempt * 20_000)
-      await requestTerminalPaneRecovery({
+      // Each remounted pane attaches, then wedges again minutes later: the
+      // window cap, not the outcome gate, is what this test is about.
+      await requestAndSettle({
         tabId: 'tab-ssh',
         ptyId: 'ssh:target@@pty-1',
         reason: 'reattach-unverifiable',
@@ -280,7 +480,7 @@ describe('requestTerminalPaneRecovery', () => {
   it('retries a fresh replacement xterm that wedges during the cooldown', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
-    await requestTerminalPaneRecovery({
+    await requestAndSettle({
       tabId: 'tab-1',
       ptyId: 'pty-1',
       reason: 'write-stalled',
@@ -305,7 +505,7 @@ describe('requestTerminalPaneRecovery', () => {
   it('does not let an awaited scheduled retry remount a newer generation', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
-    await requestTerminalPaneRecovery({
+    await requestAndSettle({
       tabId: 'tab-1',
       ptyId: 'pty-1',
       reason: 'write-stalled',
@@ -337,7 +537,8 @@ describe('requestTerminalPaneRecovery', () => {
       })
     ).toBe(true)
     resolveLiveness?.(true)
-    await Promise.resolve()
+    // Drain the resumed probe here, or its remount lands in the next test.
+    await vi.advanceTimersByTimeAsync(0)
 
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(2)
   })
@@ -379,7 +580,7 @@ describe('requestTerminalPaneRecovery', () => {
   it('keeps a sibling pane retry when the first requesting split is disposed', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
-    await requestTerminalPaneRecovery({
+    await requestAndSettle({
       tabId: 'tab-1',
       ptyId: 'pty-1',
       reason: 'write-stalled'
@@ -408,7 +609,7 @@ describe('requestTerminalPaneRecovery', () => {
   it('does not abandon a certified sibling behind a failed liveness retry', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
-    await requestTerminalPaneRecovery({
+    await requestAndSettle({
       tabId: 'tab-1',
       ptyId: 'pty-initial',
       reason: 'write-stalled'
@@ -447,6 +648,7 @@ describe('requestTerminalPaneRecovery', () => {
   })
 
   it('budgets tabs independently', async () => {
+    setTerminalTabs([...terminalTabs(), { id: 'tab-2' }])
     expect(
       await requestTerminalPaneRecovery({ tabId: 'tab-1', ptyId: 'pty-1', reason: 'write-stalled' })
     ).toBe(true)
@@ -616,8 +818,6 @@ describe('requestTerminalPaneRecovery', () => {
   })
 
   it('does not consume budget when the tab no longer exists', async () => {
-    mocks.remountTerminalTabForRecovery.mockReturnValue(false)
-
     const result = await requestTerminalPaneRecovery({
       tabId: 'tab-gone',
       ptyId: 'pty-1',
@@ -670,8 +870,6 @@ describe('requestTerminalPaneRecovery', () => {
     })
 
     it('does not arm when the remount never happened', async () => {
-      mocks.remountTerminalTabForRecovery.mockReturnValue(false)
-
       const result = await requestTerminalPaneRecovery({
         tabId: 'tab-gone',
         ptyId: 'pty-1',
@@ -687,23 +885,28 @@ describe('requestTerminalPaneRecovery', () => {
   // Crash b5cfc6ca (1.4.198, Windows): 8878 'terminal_pane_recovery_remount'
   // breadcrumbs, every one reason='reattach-unverifiable', across 8 tabs in
   // 122.4s (median gap 10ms) — ~1110 per tab against a cap of 3 per 5min. The
-  // renderer then died allocating a 512x512 SkBitmap. Only one line outside the
-  // test reset clears recoveryTimestampsByTabId: the unregister() branch that
-  // fires when getTab() cannot see the tab. getTab reads unifiedTabsByWorktree
-  // while remountTerminalTabForRecovery reads and bumps tabsByWorktree, so a tab
-  // present in one index and absent from the other remounts and then erases the
-  // budget that remount just consumed.
+  // renderer then died allocating a 512x512 SkBitmap.
+  //
+  // The trigger was two tab indices: the budget lived in a module Map keyed by
+  // tabId, and the pane-disposal release erased it whenever getTab (which reads
+  // unifiedTabsByWorktree) could not see a tab remountTerminalTabForRecovery
+  // (which reads tabsByWorktree) still held. The mechanism is what mattered:
+  // each remount mounted a pane that captured a FRESH epoch, so the epoch check
+  // could never refuse its request, and a counting budget was the only thing
+  // between the failure and its own repetition.
   describe('unverifiable reattach remount storm (crash b5cfc6ca)', () => {
     const STORM_CYCLES = 200
     const OBSERVED_MEDIAN_GAP_MS = 10
 
     // One production reattach cycle: connect-pane-pty captures the epoch and
-    // registers the xterm, the reattach answers unverifiable
-    // (recoverUnverifiableDirectSshReattach), and the remount disposes that
-    // xterm — session-reconcile-dispose unregisters the instance.
+    // registers the xterm (connect-pane-pty.ts), the reattach answers
+    // unverifiable, recoverUnverifiableDirectSshReattach settles this pane's
+    // attempt 'failed' and re-requests, and the remount disposes that xterm —
+    // session-reconcile-dispose unregisters the instance.
     async function driveUnverifiableReattachCycle(tabId: string): Promise<void> {
       const terminalRecoveryGeneration = captureTerminalPaneRecoveryGeneration(tabId)
       const instance = registerTerminalPaneRecoveryInstance(tabId)
+      settleTerminalPaneRecovery(tabId, terminalRecoveryGeneration, 'failed')
       await requestTerminalPaneRecovery({
         tabId,
         ptyId: 'ssh:target@@pty-1',
@@ -726,16 +929,47 @@ describe('requestTerminalPaneRecovery', () => {
       vi.setSystemTime(0)
     })
 
-    it('caps remounts when the remounted tab is invisible to getTab', async () => {
-      // remountTerminalTabForRecovery still succeeds — the tab is in
-      // tabsByWorktree, which is what the 8878 remount breadcrumbs prove.
+    it('collapses the reported storm to a single remount', async () => {
+      // The reported run produced ~1110 remounts on this tab. One remount is
+      // admitted; after its pane reports the same reason failed, every later
+      // request is refused on evidence — not on a count, and not on a timer.
+      await driveStorm('tab-ssh')
+
+      expect(mocks.remountTerminalTabForRecovery.mock.calls.length).toBe(1)
+    })
+
+    it('stops a slow failure chain the cooldown would have waved through', async () => {
+      // Gaps wider than the cooldown: counting would allow the cap's worth of
+      // remounts before noticing. Evidence stops it at the first observed
+      // failure — the chain never gets a second identical attempt.
+      for (let cycle = 0; cycle < 10; cycle += 1) {
+        vi.setSystemTime(cycle * 20_000)
+        await driveUnverifiableReattachCycle('tab-ssh')
+      }
+
+      expect(mocks.remountTerminalTabForRecovery.mock.calls.length).toBe(1)
+    })
+
+    it('stays capped for a tab the unified index cannot see', async () => {
+      // The pre-#19745 trigger: present in tabsByWorktree, absent from
+      // unifiedTabsByWorktree. Nothing reads the unified index for budget or
+      // existence any more, so the drift has no expression at all.
       mocks.getTab.mockReturnValue(null)
 
       await driveStorm('tab-ssh')
 
-      // Pre-fix this ran one remount per cycle. The 15s cooldown — not the
-      // window cap — coalesces the whole 10ms-gap storm into the first.
       expect(mocks.remountTerminalTabForRecovery.mock.calls.length).toBe(1)
+    })
+
+    it('still refuses when every cycle also disposes and re-registers its xterm', async () => {
+      // The disposal path is the one that used to release the budget. It now
+      // releases nothing that a remount wrote, so a 200-cycle dispose storm
+      // cannot restore the tab's allowance.
+      await driveStorm('tab-ssh')
+      const ledger = terminalTabs().find((tab) => tab.id === 'tab-ssh')?.recovery
+
+      expect(ledger?.attemptedAt).toHaveLength(1)
+      expect(ledger?.outcome).toBe('failed')
     })
   })
 })
