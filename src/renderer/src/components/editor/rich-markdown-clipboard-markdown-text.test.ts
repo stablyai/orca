@@ -182,6 +182,54 @@ describe('serializeRichMarkdownSliceToMarkdown', () => {
     expect(getRichMarkdownSliceSerializer(editor)).toBeUndefined()
   })
 
+  describe('prose with markdown-significant characters', () => {
+    const PROSE =
+      'Compare a < b && c, snake_case_name, 5 * 3, and "quotes" — see <https://example.com>'
+    // The save path entity-escapes `<` and `&`; copy must not diverge from it.
+    const SAVED =
+      'Compare a &lt; b &amp;&amp; c, snake_case_name, 5 * 3, and "quotes" — see [https://example.com](https://example.com)'
+
+    it('matches the save path for a whole-paragraph selection', () => {
+      const editor = createEditor(PROSE)
+      const paraPos = findNodePos(editor, (node) => node.type.name === 'paragraph')
+      const paraNode = editor.state.doc.nodeAt(paraPos)
+      if (!paraNode) {
+        throw new Error('paragraph not found')
+      }
+
+      expect(editor.getMarkdown()).toBe(SAVED)
+      expect(serializeRange(editor, paraPos, paraPos + paraNode.nodeSize)).toBe(SAVED)
+    })
+
+    it('matches the save path for a within-paragraph selection', () => {
+      const editor = createEditor(PROSE)
+      const paraPos = findNodePos(editor, (node) => node.type.name === 'paragraph')
+      const paraNode = editor.state.doc.nodeAt(paraPos)
+      if (!paraNode) {
+        throw new Error('paragraph not found')
+      }
+      const textStart = paraPos + 1
+
+      expect(serializeRange(editor, textStart, textStart + paraNode.textContent.length)).toBe(SAVED)
+    })
+
+    it('leaves underscores, asterisks, and quotes unescaped in a partial selection', () => {
+      const editor = createEditor(PROSE)
+      const paraPos = findNodePos(editor, (node) => node.type.name === 'paragraph')
+      const paraNode = editor.state.doc.nodeAt(paraPos)
+      if (!paraNode) {
+        throw new Error('paragraph not found')
+      }
+      const textStart = paraPos + 1
+      const selected = 'a < b && c, snake_case_name, 5 * 3'
+      const from = textStart + paraNode.textContent.indexOf('a < b')
+
+      expect(serializeRange(editor, from, from + selected.length)).toBe(
+        'a &lt; b &amp;&amp; c, snake_case_name, 5 * 3'
+      )
+    })
+  })
+
   it('falls back to block-joined text when no serializer is available', () => {
     const editor = new Editor({
       element: null,
