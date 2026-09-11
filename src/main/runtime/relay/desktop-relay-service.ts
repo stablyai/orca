@@ -117,8 +117,10 @@ export class DesktopRelayService {
     this.refreshDemand()
   }
 
-  // The re-armable fence: sign-out and relaunch, which want the next auth
-  // mutation to bring Relay back. Quit wants stop() instead — it is terminal.
+  // The re-armable fence, by design: sign-out and relaunch call this
+  // (main-window-core-services.ts onBeforeOrcaProfileSignOut / onBeforeRelaunch)
+  // and want the next authMutated to bring Relay back. Quit deliberately does
+  // NOT use this — it calls stop(), which is terminal. Keep the two apart.
   fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
     // Why a latch rather than just clearing the timers: clearing only covered
     // the liveness tick, and everything else outliving the fence lands in
@@ -227,7 +229,9 @@ export class DesktopRelayService {
     this.refreshDemand({ skipLinger: true })
   }
 
-  // Terminal: no door re-arms this, which is what quit needs.
+  // Terminal: no door re-arms this. Quit calls it (main-process-quit.ts
+  // before-quit). The re-armable counterpart is fenceAndCloseNow, which quit
+  // must not use — a settling mint or an invite expiry re-arms that one.
   stop(): void {
     this.stopped = true
     this.clearTimers()
