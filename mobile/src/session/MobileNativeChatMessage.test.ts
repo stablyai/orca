@@ -269,12 +269,12 @@ describe('MobileNativeChatMessage', () => {
       expect(tree.root.findAllByType('Wrench' as never)).toHaveLength(0)
     })
 
-    it('renders the turn status row under a user message', () => {
+    it('renders the settled turn status row under a user message', () => {
       const tree = render(userMessage([{ type: 'text', text: 'go' }]), {
         structuredActivityUi: true,
-        turnStatus: { startedAt: Date.now(), thinking: true, workedSeconds: null }
+        turnStatus: { startedAt: Date.now() - 3_000, thinking: false, workedSeconds: 3 }
       })
-      expect(textIn(tree.root)).toContain('Thinking')
+      expect(textIn(tree.root)).toContain('Worked for 3s')
     })
 
     it('does not render a turn status row without one', () => {

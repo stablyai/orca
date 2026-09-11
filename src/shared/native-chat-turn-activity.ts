@@ -1,8 +1,5 @@
 import { readAgentJournalTurn } from './agent-session-turn-record'
-import {
-  AGENT_JOURNAL_THINKING_PRESENTATION,
-  type AgentJournalRenderItem
-} from './agent-session-journal-types'
+import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import type { AgentSessionTurnActivity } from './agent-session-wire'
 import { normalizePromptField } from './agent-status-field-normalization'
 import { describeActiveToolCall, formatActiveToolLabel } from './native-chat-tool-activity'
@@ -93,12 +90,6 @@ export function selectStructuredAgentTurnActivity(
   for (let index = turnItems.length - 1; index >= 0; index -= 1) {
     const body = turnItems[index]?.body
     if (body?.kind !== 'status' || readAgentJournalTurn(body) || body.providerFrame) {
-      continue
-    }
-    // Reasoning is the turn's content, not a description of what it is doing. Letting it
-    // through here would put the model's raw reasoning on the one-line indicator; it belongs
-    // in the transcript, and the row falls back to saying the turn is thinking instead.
-    if (body.presentation === AGENT_JOURNAL_THINKING_PRESENTATION) {
       continue
     }
     const text = activityLine(body.text)

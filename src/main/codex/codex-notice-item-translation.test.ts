@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { codexItemBody, codexStreamingJournalItem } from './codex-structured-item-translation'
 import { AgentJournalItemBodySchema } from '../../shared/agent-session-journal-schemas'
-import { AGENT_JOURNAL_THINKING_PRESENTATION } from '../../shared/agent-session-journal-types'
 import { projectStructuredItemsToNativeChat } from '../../shared/structured-agent-session-projection'
 
 describe('plan document translation', () => {
@@ -23,15 +22,15 @@ describe('plan document translation', () => {
     expect(
       codexItemBody({ id: 'r', type: 'reasoning', summary: ['Thinking through the problem.'] })
     ).toEqual({
-      kind: 'status',
-      text: 'Thinking through the problem.',
-      presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'Thinking through the problem.' }]
     })
     expect(codexStreamingJournalItem({ id: 'r', type: 'reasoning' }, 'Thinking…')).toEqual({
       body: {
-        kind: 'status',
-        text: 'Thinking…',
-        presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [{ type: 'text', text: 'Thinking…' }]
       },
       handled: true
     })

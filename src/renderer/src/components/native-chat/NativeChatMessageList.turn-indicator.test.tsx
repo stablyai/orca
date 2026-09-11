@@ -6,10 +6,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import {
-  AGENT_JOURNAL_THINKING_PRESENTATION,
-  type AgentJournalItemBody,
-  type AgentJournalRenderItem
+import type {
+  AgentJournalItemBody,
+  AgentJournalRenderItem
 } from '../../../../shared/agent-session-journal-types'
 
 // The turn record this host writes, and the legacy status row an older host sends.
@@ -20,9 +19,9 @@ const legacyTurnRow: AgentJournalItemBody = {
   turnLifecycle: { turnId: 'turn-1', state: 'running' }
 }
 const reasoningRow: AgentJournalItemBody = {
-  kind: 'status',
-  text: '',
-  presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+  kind: 'message',
+  role: 'reasoning',
+  blocks: [{ type: 'text', text: '' }]
 }
 
 function journalItem(sequence: number, body: AgentJournalItemBody): AgentJournalRenderItem {
@@ -299,6 +298,36 @@ describe('NativeChatMessageList turn indicator', () => {
       'animate-spin'
     )
     expect(container.querySelector('.animate-bounce')).toBeNull()
+  })
+
+  it('does not reuse completed-turn reasoning while the next dispatch is pending', () => {
+    render(
+      <NativeChatMessageList
+        session={{
+          ...session,
+          status: 'working',
+          messages: [
+            {
+              id: 'user-next',
+              role: 'user',
+              blocks: [{ type: 'text', text: 'Start the next task' }],
+              timestamp: Date.now(),
+              source: 'transcript'
+            }
+          ]
+        }}
+        journalItems={[
+          journalItem(1, { kind: 'turn', turnId: 'turn-1', state: 'completed' }),
+          journalItem(2, reasoningRow)
+        ]}
+        isWorking
+        expandSignal={false}
+        fontScale={1}
+      />
+    )
+
+    expect(screen.queryByText('Thinking')).toBeNull()
+    expect(screen.getByText('Working for 0s')).toBeInTheDocument()
   })
 
   it('lets provider activity text beat the reasoning label on the same single row', () => {

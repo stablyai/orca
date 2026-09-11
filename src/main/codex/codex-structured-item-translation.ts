@@ -1,8 +1,5 @@
 import { toolExecutionMetadata, toolWebSearchResults } from '../../shared/native-chat-tool-identity'
-import {
-  AGENT_JOURNAL_THINKING_PRESENTATION,
-  type AgentJournalItemBody
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import {
   boundInlineText,
@@ -271,7 +268,7 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       handled: true
     }
   }
-  if (item.type === 'reasoning' || item.type === 'plan') {
+  if (item.type === 'reasoning') {
     const text =
       readTextContent(item, 'text') ??
       readTextContent(item, 'summary') ??
@@ -281,12 +278,11 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
         text === null
           ? null
           : {
-              kind: 'status',
-              text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
-              // A plan is a durable artifact, not the model reasoning right now.
-              ...(item.type === 'reasoning'
-                ? { presentation: AGENT_JOURNAL_THINKING_PRESENTATION }
-                : {})
+              kind: 'message',
+              role: 'reasoning',
+              blocks: [
+                { type: 'text', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
+              ]
             },
       handled: true
     }
@@ -338,13 +334,14 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
   }
   const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
   return {
-    body: {
-      kind: 'status',
-      text: bounded.text,
-      // Streaming reasoning is the live turn's reasoning; the settled item says so
-      // too, and the indicator reads the tail of the journal while it is still open.
-      ...(item.type === 'reasoning' ? { presentation: AGENT_JOURNAL_THINKING_PRESENTATION } : {})
-    },
+    body:
+      item.type === 'reasoning'
+        ? {
+            kind: 'message',
+            role: 'reasoning',
+            blocks: [{ type: 'text', text: bounded.text }]
+          }
+        : { kind: 'status', text: bounded.text },
     handled: true
   }
 }

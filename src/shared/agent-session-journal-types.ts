@@ -176,10 +176,6 @@ export type AgentJournalTurnLifecycle = {
   durationMs?: number
 }
 
-/** `presentation` value marking a status row as the model's own reasoning, so a client can tell
- *  reasoning from ordinary status chrome. Older clients ignore it and render the text as before. */
-export const AGENT_JOURNAL_THINKING_PRESENTATION = 'thinking'
-
 export type AgentJournalStatusItem = {
   kind: 'status'
   text: string

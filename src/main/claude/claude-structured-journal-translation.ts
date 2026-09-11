@@ -1,7 +1,4 @@
-import {
-  AGENT_JOURNAL_THINKING_PRESENTATION,
-  type AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -183,9 +180,11 @@ export function createClaudeJournalTranslator(
     const thinking = claudeThinkingText(outputEnvelope)
     if (thinking) {
       deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
-        kind: 'status',
-        text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
-        presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [
+          { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
+        ]
       })
       changed = true
     }

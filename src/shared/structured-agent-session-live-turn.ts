@@ -3,10 +3,9 @@
 // typed `turn` item, or the legacy status row that carries one — because state
 // from an earlier turn is never this turn's state.
 
-import {
-  AGENT_JOURNAL_THINKING_PRESENTATION,
-  type AgentJournalRenderItem,
-  type AgentJournalToolCallItem
+import type {
+  AgentJournalRenderItem,
+  AgentJournalToolCallItem
 } from './agent-session-journal-types'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 
@@ -33,18 +32,27 @@ export function activeStructuredAgentSessionTurnId(
 export function isStructuredAgentSessionThinking(
   items: readonly AgentJournalRenderItem[]
 ): boolean {
+  let newestContentIsReasoning: boolean | null = null
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const body = items[index]?.body
-    if (readAgentJournalTurn(body)) {
-      return false
+    const turn = readAgentJournalTurn(body)
+    if (turn) {
+      return turn.state === 'running' && newestContentIsReasoning === true
     }
-    if (body?.kind === 'status' && body.presentation === AGENT_JOURNAL_THINKING_PRESENTATION) {
-      return true
+    if (newestContentIsReasoning !== null) {
+      continue
     }
-    // Any other rendered content means reasoning is no longer the tail.
-    if (body?.kind === 'message' || body?.kind === 'tool-call' || body?.kind === 'diff') {
-      return false
+    if (body?.kind === 'message') {
+      newestContentIsReasoning = body.role === 'reasoning'
+    } else if (
+      body?.kind === 'tool-call' ||
+      body?.kind === 'diff' ||
+      body?.kind === 'approval' ||
+      body?.kind === 'question'
+    ) {
+      newestContentIsReasoning = false
     }
+    // Plain status copy is activity chrome, not newer transcript content.
   }
   return false
 }

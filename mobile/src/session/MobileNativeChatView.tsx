@@ -340,7 +340,7 @@ export function MobileNativeChatView({
                 ) : null
               }
               ListFooterComponent={
-                turns.activeTurnIsUnanchored && turns.active ? (
+                structuredActivityUi && agentWorking && turns.active ? (
                   <MobileNativeChatTurnStatus
                     startedAt={turns.active.startedAt}
                     thinking={turns.active.thinking}

@@ -73,7 +73,6 @@ function MobileNativeChatMessageImpl({
   turnStatus,
   turnExpanded,
   turnKey,
-  turnActivityText,
   onToggleTurn,
   activeTurnIsWorking,
   structuredActivityUi = false
@@ -83,14 +82,12 @@ function MobileNativeChatMessageImpl({
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
   onOpenFile?: (relativePath: string) => void
-  /** This turn's status row, rendered under a user message (desktop parity). */
+  /** This settled turn's status row, rendered under its user message. */
   turnStatus?: NativeChatTurnStatus | null
   /** Whether the turn caret has disclosed this turn's activity. */
   turnExpanded?: boolean
   /** Set only when this row's turn has settled and can disclose its activity. */
   turnKey?: string
-  /** Provider activity copy, set only on the live turn's row. */
-  turnActivityText?: string | null
   /** Stable across renders; the row supplies its own key when tapped. */
   onToggleTurn?: (turnKey: string) => void
   /** Session-level working state for this message's turn; gates the live tool row. */
@@ -153,7 +150,6 @@ function MobileNativeChatMessageImpl({
           startedAt={turnStatus.startedAt}
           thinking={turnStatus.thinking}
           workedSeconds={turnStatus.workedSeconds}
-          activityText={turnActivityText}
           expanded={turnExpanded ?? false}
           onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
         />

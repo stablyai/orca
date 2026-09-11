@@ -25,7 +25,6 @@ import {
   CODEX_USER_INPUT_METHOD
 } from './codex-structured-prompt-replies'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
-import { AGENT_JOURNAL_THINKING_PRESENTATION } from '../../shared/agent-session-journal-types'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'
@@ -800,10 +799,9 @@ describe('codex journal translation', () => {
 
     const reduced = new Map(tap.rows.map((row) => [row.key, row.body]))
     expect(reduced.get('orca:codex-item%3Athread-abc%3Ar-1')).toEqual({
-      kind: 'status',
-      text: 'thinking',
-      // A streamed reasoning row is still reasoning, so the live indicator can read it.
-      presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(reduced.get('orca:codex-item%3Athread-abc%3Apatch-1')).toMatchObject({
       kind: 'diff',

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AGENT_JOURNAL_THINKING_PRESENTATION,
-  type AgentJournalItemBody,
-  type AgentJournalRenderItem
-} from './agent-session-journal-types'
+import type { AgentJournalItemBody, AgentJournalRenderItem } from './agent-session-journal-types'
 import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
 
 function item(sequence: number, body: AgentJournalItemBody): AgentJournalRenderItem {
@@ -37,9 +33,9 @@ describe('selectStructuredAgentTurnActivity', () => {
 
   it("never puts the model's reasoning on the indicator line", () => {
     const reasoning = item(2, {
-      kind: 'status',
-      text: 'Let me check whether the journal already records this',
-      presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'Let me check whether the journal already records this' }]
     })
 
     // Reasoning is the turn's content; the row says the turn is thinking instead.
@@ -68,9 +64,9 @@ describe('selectStructuredAgentTurnActivity', () => {
         [
           typedTurnStart,
           item(2, {
-            kind: 'status',
-            text: 'Weighing two approaches',
-            presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+            kind: 'message',
+            role: 'reasoning',
+            blocks: [{ type: 'text', text: 'Weighing two approaches' }]
           })
         ],
         'turn-1'

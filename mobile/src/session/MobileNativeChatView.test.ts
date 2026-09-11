@@ -274,18 +274,28 @@ describe('MobileNativeChatView', () => {
       return (renderedRow(id) as { props: Record<string, unknown> }).props
     }
 
+    function footerProps(): Record<string, unknown> | null {
+      const list = renderer!.root.find((node) => node.type === 'FlatList')
+      const footer = list.props.ListFooterComponent as
+        | { props: Record<string, unknown> }
+        | null
+        | undefined
+      return footer?.props ?? null
+    }
+
     function workingIndicators(): ReactTestInstance[] {
       return renderer!.root.findAll((node) => node.type === 'WorkingIndicator')
     }
 
-    it('gives the live user turn a status row and drops the three-dot indicator', async () => {
-      const folded = [userTurn('u1', 'go')]
+    it('puts the live status at the turn tail and drops the three-dot indicator', async () => {
+      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'still working')]
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
       const props = rowProps('u1')
       expect(props.structuredActivityUi).toBe(true)
-      // Nothing reports reasoning, so the one live row counts instead of guessing.
-      expect(props.turnStatus).toMatchObject({ thinking: false, workedSeconds: null })
-      expect(props.turnActivityText).toBeNull()
+      expect(props.turnStatus).toBeNull()
+      // Nothing reports reasoning, so the one live footer counts instead of guessing.
+      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
+      expect(listIds().at(-1)).toBe('a1')
       expect(props.activeTurnIsWorking).toBe(true)
       expect(workingIndicators()).toHaveLength(0)
     })
@@ -299,7 +309,8 @@ describe('MobileNativeChatView', () => {
         agentWorking: true,
         turnIndicator: { thinking: true, activityText: null }
       })
-      expect(rowProps('u1').turnStatus).toMatchObject({ thinking: true, workedSeconds: null })
+      expect(rowProps('u1').turnStatus).toBeNull()
+      expect(footerProps()).toMatchObject({ thinking: true, workedSeconds: null })
     })
 
     it('hands the live row the provider activity copy that outranks its fallbacks', async () => {
@@ -311,10 +322,13 @@ describe('MobileNativeChatView', () => {
         agentWorking: true,
         turnIndicator: { thinking: true, activityText: 'Running pnpm test' }
       })
-      expect(rowProps('u1').turnActivityText).toBe('Running pnpm test')
+      expect(footerProps()).toMatchObject({
+        thinking: true,
+        activityText: 'Running pnpm test'
+      })
     })
 
-    it('withholds the activity copy from a settled turn', async () => {
+    it('keeps the activity copy on the live footer instead of a historical row', async () => {
       const folded = [userTurn('u1', 'go'), userTurn('u2', 'again')]
       await render({
         messages: folded,
@@ -323,8 +337,9 @@ describe('MobileNativeChatView', () => {
         agentWorking: true,
         turnIndicator: { thinking: false, activityText: 'Running pnpm test' }
       })
-      expect(rowProps('u1').turnActivityText).toBeNull()
-      expect(rowProps('u2').turnActivityText).toBe('Running pnpm test')
+      expect(rowProps('u1')).not.toHaveProperty('turnActivityText')
+      expect(rowProps('u2')).not.toHaveProperty('turnActivityText')
+      expect(footerProps()).toMatchObject({ activityText: 'Running pnpm test' })
     })
 
     it('keeps the bridge lane on the three-dot indicator with no turn status', async () => {
@@ -334,13 +349,15 @@ describe('MobileNativeChatView', () => {
       expect(props.structuredActivityUi).toBe(false)
       expect(props.turnStatus).toBeNull()
       expect(props.activeTurnIsWorking).toBe(false)
+      expect(footerProps()).toBeNull()
       expect(workingIndicators()).toHaveLength(1)
     })
 
     it('settles the finished turn to a tappable duration', async () => {
       const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
       await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
-      expect(rowProps('u1').turnStatus).toMatchObject({ thinking: false, workedSeconds: null })
+      expect(rowProps('u1').turnStatus).toBeNull()
+      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
       await update({ messages: folded, folded, structuredActivityUi: true, agentWorking: false })
       const settled = rowProps('u1')
       expect(settled.turnStatus).toMatchObject({ thinking: false })
@@ -349,6 +366,7 @@ describe('MobileNativeChatView', () => {
       )
       expect(settled.onToggleTurn).toBeTypeOf('function')
       expect(settled.activeTurnIsWorking).toBe(false)
+      expect(footerProps()).toBeNull()
     })
 
     it('hangs no status row on an assistant row', async () => {
@@ -357,6 +375,7 @@ describe('MobileNativeChatView', () => {
       expect(rowProps('a1').turnStatus).toBeNull()
       // The assistant row still belongs to the live turn, so its tool row stays visible.
       expect(rowProps('a1').activeTurnIsWorking).toBe(true)
+      expect(footerProps()).toMatchObject({ workedSeconds: null })
     })
 
     it('does not carry a running turn clock across chat surfaces', async () => {
@@ -371,7 +390,7 @@ describe('MobileNativeChatView', () => {
           agentWorking: true,
           sendSurfaceId: 'host\0worktree\0tab-a'
         })
-        expect(rowProps('u1').turnStatus).toMatchObject({ startedAt: 1_000 })
+        expect(footerProps()).toMatchObject({ startedAt: 1_000 })
 
         vi.setSystemTime(12_000)
         const secondTab = [userTurn('u2', 'second')]
@@ -383,7 +402,7 @@ describe('MobileNativeChatView', () => {
           sendSurfaceId: 'host\0worktree\0tab-b'
         })
 
-        expect(rowProps('u2').turnStatus).toMatchObject({ startedAt: 12_000 })
+        expect(footerProps()).toMatchObject({ startedAt: 12_000 })
       } finally {
         vi.useRealTimers()
       }

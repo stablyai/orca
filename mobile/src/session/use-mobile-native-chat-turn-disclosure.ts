@@ -16,8 +16,6 @@ export type MobileNativeChatTurnRow = {
   turnExpanded: boolean
   /** Set only on a settled turn — the one row that has activity to disclose. */
   turnKey?: string
-  /** Provider activity copy, on the live turn's row only; it labels that one row. */
-  turnActivityText?: string | null
   activeTurnIsWorking: boolean
 }
 
@@ -48,10 +46,8 @@ export function useMobileNativeChatTurnDisclosure({
   scopeKey: string
 }): {
   active: NativeChatTurnStatus | null
-  /** The live turn's provider activity copy, for the unanchored footer row. */
+  /** The live turn's provider activity copy, for the footer row. */
   activeActivityText: string | null
-  /** True when the live turn has no user message to hang its status row under. */
-  activeTurnIsUnanchored: boolean
   onToggleTurn: (turnKey: string) => void
   resolveRow: (index: number, message: NativeChatMessage) => MobileNativeChatTurnRow
 } {
@@ -108,19 +104,15 @@ export function useMobileNativeChatTurnDisclosure({
   const resolveRow = useCallback(
     (index: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
       const turnKey = turnKeys[index]
-      const isActiveTurn = turnKey === activeTurnKey
       const turnStatus =
         !enabled || message.role !== 'user'
           ? null
-          : isActiveTurn
-            ? active
-            : turnKey
-              ? (completedByTurn[turnKey] ?? null)
-              : null
+          : turnKey
+            ? (completedByTurn[turnKey] ?? null)
+            : null
       return {
         turnStatus,
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
-        turnActivityText: isActiveTurn ? activeActivityText : null,
         // Why: the key travels and the row calls one stable handler with it. A
         // closure per row would be a new identity every render of a streaming
         // transcript, defeating the row's memo; caching one per turn would mean
@@ -134,16 +126,7 @@ export function useMobileNativeChatTurnDisclosure({
             (turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY))
       }
     },
-    [
-      turnKeys,
-      enabled,
-      activeTurnKey,
-      active,
-      activeActivityText,
-      completedByTurn,
-      expandedTurnIds,
-      isWorking
-    ]
+    [turnKeys, enabled, activeTurnKey, completedByTurn, expandedTurnIds, isWorking]
   )
 
   return {
@@ -151,8 +134,6 @@ export function useMobileNativeChatTurnDisclosure({
     activeActivityText,
     /** Stable for a given chat scope, so it never disturbs a row's memo. */
     onToggleTurn: toggleExpandedTurn,
-    activeTurnIsUnanchored:
-      enabled && active != null && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY,
     resolveRow
   }
 }
