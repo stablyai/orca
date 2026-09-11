@@ -124,6 +124,8 @@ describe('MobileOnboardingScreen', () => {
     expect(pages()[0].props.error).toBe('Notification settings could not be updated. Try again.')
     expect(mocks.replace).not.toHaveBeenCalled()
     await act(async () => pages()[0].props.onNotificationChoice('enable'))
+    expect(mocks.setRemotePushEnabled).toHaveBeenCalledTimes(2)
+    expect(mocks.setRemotePushEnabled).toHaveBeenLastCalledWith(true)
     expect(mocks.replace).toHaveBeenCalledWith('/h/paired-host')
   })
 

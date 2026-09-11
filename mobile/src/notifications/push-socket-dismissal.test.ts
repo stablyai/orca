@@ -44,6 +44,19 @@ it('supports ID-only legacy dismissal while preserving host isolation', async ()
   vi.mocked(Notifications.getPresentedNotificationsAsync).mockResolvedValue([
     {
       request: {
+        identifier: 'versioned',
+        content: {
+          data: {
+            hostFingerprint,
+            notificationId: 'same',
+            notificationEpoch: 'new',
+            notificationSeq: 3
+          }
+        }
+      }
+    },
+    {
+      request: {
         identifier: 'legacy',
         content: { data: { hostFingerprint, notificationId: 'same' } }
       }

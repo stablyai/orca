@@ -128,6 +128,19 @@ describe('useRemotePushCapableHosts', () => {
     expect(latest).toEqual({ supported: false, resolved: true })
   })
 
+  it('rechecks a cached answer after disconnecting and reconnecting', async () => {
+    await mount()
+    const client = clientFor('host-1')
+    await setClients([{ hostId: 'host-1', client, state: 'connected' }])
+    await answer('host-1', [CAPABILITY])
+    await setClients([{ hostId: 'host-1', client, state: 'connecting' }])
+    expect(latest).toEqual({ supported: true, resolved: true })
+    await setClients([{ hostId: 'host-1', client, state: 'connected' }])
+    expect(latest).toEqual({ supported: false, resolved: false })
+    await answer('host-1', [])
+    expect(latest).toEqual({ supported: false, resolved: true })
+  })
+
   it('leaves a running probe alone when another host changes state', async () => {
     await mount()
     const first = clientFor('host-1')
@@ -154,9 +167,12 @@ describe('useRemotePushCapableHosts', () => {
   it('restarts the probe when a reconnect replaces the host client', async () => {
     await mount()
     await setClients([{ hostId: 'host-1', client: clientFor('host-1'), state: 'connected' }])
+    await answer('host-1', [CAPABILITY])
+    expect(latest).toEqual({ supported: true, resolved: true })
 
     await setClients([{ hostId: 'host-1', client: clientFor('host-1'), state: 'connected' }])
 
+    expect(latest).toEqual({ supported: false, resolved: false })
     expect(stopProbe).toHaveBeenCalledTimes(1)
     expect(startRuntimeCapabilityProbe).toHaveBeenCalledTimes(2)
     await answer('host-1', [])

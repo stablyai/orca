@@ -6,11 +6,17 @@ import { NativeNotificationDeliverySettings } from './native-notification-delive
 const mocks = vi.hoisted(() => ({
   load: vi.fn(),
   save: vi.fn(),
-  support: { resolved: true, supported: false }
+  support: { resolved: true, supported: false },
+  appState: null as null | ((state: string) => void)
 }))
 vi.mock('react-native', () => ({
   Text: 'Text',
-  AppState: { addEventListener: () => ({ remove() {} }) }
+  AppState: {
+    addEventListener: (_event: string, callback: (state: string) => void) => {
+      mocks.appState = callback
+      return { remove() {} }
+    }
+  }
 }))
 vi.mock('expo-router', () => ({
   useFocusEffect: (callback: () => void) => useEffect(callback, [callback])
@@ -97,4 +103,49 @@ it('does not claim an upgrade is needed while probing or when a host supports pu
     renderer.update(createElement(NativeNotificationDeliverySettings, { enabled: true }))
   })
   expect(JSON.stringify(renderer.toJSON())).not.toContain('Pair an updated desktop')
+})
+
+it.each(['resolve', 'reject'])('ignores a pre-save refresh that later %ss', async (outcome) => {
+  await act(async () => {
+    renderer = create(createElement(NativeNotificationDeliverySettings, { enabled: true }))
+  })
+  let resolve!: (value: typeof preferences) => void
+  let reject!: (error: Error) => void
+  mocks.load.mockReturnValue(
+    new Promise((ok, fail) => {
+      resolve = ok
+      reject = fail
+    })
+  )
+  await act(async () => mocks.appState!('active'))
+  const saved = { ...preferences, sound: true }
+  await act(async () => section().onChange(saved))
+  await act(async () => {
+    if (outcome === 'resolve') {
+      resolve(preferences)
+    } else {
+      reject(new Error('old read failed'))
+    }
+  })
+  expect(section().value).toEqual(saved)
+  expect(JSON.stringify(renderer.toJSON())).not.toContain('Could not load')
+  await act(async () => section().onChange({ ...section().value, suppressWhileViewing: false }))
+  expect(mocks.save).toHaveBeenLastCalledWith({ ...saved, suppressWhileViewing: false })
+})
+
+it('does not refresh while a save is in flight', async () => {
+  await act(async () => {
+    renderer = create(createElement(NativeNotificationDeliverySettings, { enabled: true }))
+  })
+  let finish!: () => void
+  mocks.save.mockReturnValue(
+    new Promise<void>((resolve) => {
+      finish = resolve
+    })
+  )
+  await act(async () => section().onChange({ ...preferences, sound: true }))
+  await act(async () => mocks.appState!('active'))
+  expect(mocks.load).toHaveBeenCalledTimes(1)
+  await act(async () => finish())
+  expect(section().value.sound).toBe(true)
 })

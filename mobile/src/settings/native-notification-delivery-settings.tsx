@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState, Text } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { NotificationDeliverySection } from '../notifications/NotificationDeliverySection'
@@ -16,13 +16,26 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const refreshRevision = useRef(0)
+  const saveInProgress = useRef(false)
   const support = useRemotePushCapableHosts()
   const refresh = useCallback(async () => {
+    if (saveInProgress.current) {
+      return
+    }
+    const revision = ++refreshRevision.current
     try {
-      setDelivery(await loadNotificationDeliveryPreferences())
+      const value = await loadNotificationDeliveryPreferences()
+      if (revision !== refreshRevision.current) {
+        return
+      }
+      setDelivery(value)
       setLoaded(true)
       setError(null)
     } catch {
+      if (revision !== refreshRevision.current) {
+        return
+      }
       setError('Could not load delivery settings. Reopen this screen to retry.')
     }
   }, [])
@@ -40,6 +53,11 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
     return () => subscription.remove()
   }, [refresh])
   const change = async (value: NotificationDeliveryPreferences) => {
+    if (saveInProgress.current) {
+      return
+    }
+    saveInProgress.current = true
+    refreshRevision.current += 1
     setSaving(true)
     setError(null)
     try {
@@ -48,6 +66,7 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
     } catch {
       setError('Could not save delivery settings. Try again.')
     } finally {
+      saveInProgress.current = false
       setSaving(false)
     }
   }

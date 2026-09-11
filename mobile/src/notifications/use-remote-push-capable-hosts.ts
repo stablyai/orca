@@ -70,6 +70,10 @@ export function useRemotePushCapableHosts(): RemotePushHostSupport {
     }
     for (const [hostId, client] of connected) {
       if (!probes.has(hostId)) {
+        setSupportedByHostId((previous) => {
+          const { [hostId]: _removed, ...remaining } = previous
+          return remaining
+        })
         const stop = startRuntimeCapabilityProbe(client, (capabilities) => {
           setSupportedByHostId((previous) => ({
             ...previous,

@@ -82,3 +82,18 @@ it('a delayed dismissal preserves newer alerts, other epochs, and other hosts', 
     'equal'
   ])
 })
+
+it.each([undefined, {}, { notificationEpoch: 'epoch' }, { notificationSeq: 2 }])(
+  'an incomplete dismissal fence %j removes only unversioned entries',
+  async (fence) => {
+    const base = { hostFingerprint: 'host-a', notificationId: 'note' }
+    vi.mocked(Notifications.getPresentedNotificationsAsync).mockResolvedValue([
+      presented('unversioned', base),
+      presented('versioned', { ...base, notificationEpoch: 'epoch', notificationSeq: 2 }),
+      presented('epoch-only', { ...base, notificationEpoch: 'epoch' }),
+      presented('sequence-only', { ...base, notificationSeq: 2 })
+    ] as never)
+    await dismissPresentedPushNotification('note', 'host-a', fence)
+    expect(Notifications.dismissNotificationAsync).toHaveBeenCalledExactlyOnceWith('unversioned')
+  }
+)

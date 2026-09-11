@@ -27,33 +27,39 @@ export function NotificationDisplayTest({ onTroubleshoot }: { onTroubleshoot: ()
       if (hostIds.length === 0) {
         throw new Error('Pair a desktop and try again.')
       }
-      const client = clients.find((entry) => entry.state === 'connected')?.client
-      if (!client) {
+      const connected = clients.filter((entry) => entry.state === 'connected')
+      if (connected.length === 0) {
         throw new Error('Connect a desktop and try again.')
       }
-      const response = await client.sendRequest('notifications.testPush', null, {
-        timeoutMs: 20000,
-        failWhenDisconnected: true
-      })
-      if (!response.ok) {
-        const code = response.error?.code
+      let unavailable = 'Update your desktop to run this test.'
+      for (const { client } of connected) {
+        const response = await client.sendRequest('notifications.testPush', null, {
+          timeoutMs: 20000,
+          failWhenDisconnected: true
+        })
+        if (!response.ok) {
+          const code = response.error?.code
+          if (code === 'forbidden' || code === 'method_not_found') {
+            continue
+          }
+          throw new Error('Could not reach the desktop. Try again.')
+        }
+        const result = response.result as MobilePushTestResult
+        if (result?.accepted) {
+          setMessage('Accepted by Orca’s push service. Check for the notification.')
+          return
+        }
+        if (result?.reason === 'not_registered') {
+          unavailable = 'Reconnect to register this phone for notifications.'
+          continue
+        }
         throw new Error(
-          code === 'forbidden' || code === 'method_not_found'
-            ? 'Update your desktop to run this test.'
-            : 'Could not reach the desktop. Try again.'
+          result?.reason === 'rate_limited'
+            ? 'Too many notifications. Try again later.'
+            : 'Could not send through Orca’s push service. Try again.'
         )
       }
-      const result = response.result as MobilePushTestResult
-      if (!result?.accepted) {
-        throw new Error(
-          result?.reason === 'not_registered'
-            ? 'Reconnect to register this phone for notifications.'
-            : result?.reason === 'rate_limited'
-              ? 'Too many notifications. Try again later.'
-              : 'Could not send through Orca’s push service. Try again.'
-        )
-      }
-      setMessage('Accepted by Orca’s push service. Check for the notification.')
+      throw new Error(unavailable)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not send push test.')
     } finally {

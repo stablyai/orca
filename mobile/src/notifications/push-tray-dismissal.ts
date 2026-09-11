@@ -53,14 +53,11 @@ export async function dismissPresentedPushNotification(
     }
     return (
       payload.notificationId === notificationId &&
-      (!fence ||
-        Boolean(
-          fence.notificationEpoch &&
-          fence.notificationSeq !== undefined &&
-          payload.notificationEpoch === fence.notificationEpoch &&
+      (fence?.notificationEpoch && fence.notificationSeq !== undefined
+        ? payload.notificationEpoch === fence.notificationEpoch &&
           payload.notificationSeq !== undefined &&
           payload.notificationSeq <= fence.notificationSeq
-        ))
+        : payload.notificationEpoch === undefined && payload.notificationSeq === undefined)
     )
   })
 }
