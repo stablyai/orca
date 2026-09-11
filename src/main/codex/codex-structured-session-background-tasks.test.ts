@@ -196,8 +196,10 @@ describe('codex background tasks reach the strip', () => {
         }
       })
       await vi.waitFor(() => expect(adapter.backgroundTaskState('session-1')).toBeUndefined())
+      // The open turn's lifecycle row is revised to interrupted, never tombstoned.
       expect(appendItem.mock.calls.map((call) => call[1])).toEqual([
-        { kind: 'status', text: 'Provider exited: notification admission failed (failed)' }
+        { kind: 'status', text: 'Provider exited: notification admission failed (failed)' },
+        expect.objectContaining({ kind: 'turn', state: 'interrupted' })
       ])
       expect(observed).toEqual([
         expect.objectContaining({

@@ -23,7 +23,15 @@ export type CodexStructuredLaunch = {
 }
 
 export type CodexStructuredSessionEvent =
-  | { type: 'notification'; sessionId: string; threadId: string; method: string; params: unknown }
+  | {
+      type: 'notification'
+      sessionId: string
+      threadId: string
+      method: string
+      params: unknown
+      /** Host receipt time of a turn boundary; survives retry and deferral so a replay is not re-stamped. */
+      observedAt?: number
+    }
   | { type: 'server-request'; sessionId: string; threadId: string; method: string; params: unknown }
   | { type: 'provider-frame'; sessionId: string; threadId: string; kind: string; payload: unknown }
   | {
@@ -37,7 +45,7 @@ export type CodexStructuredSessionEvent =
     }
   | StructuredAgentSessionLifecycleEvent
   /** Translator-only compatibility for callers that do not participate in host recovery. */
-  | { type: 'ended'; sessionId: string; reason: string }
+  | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {
@@ -66,6 +74,8 @@ export type CodexStructuredSessionAdapterDeps = {
 export type CodexSession = {
   connection: CodexAppServerConnection
   ended: boolean
+  /** First observed child exit survives rejected settlement admission. */
+  exitObservedAt?: number
   requestedClose: boolean
   fence: number
   acquisitionGeneration: string

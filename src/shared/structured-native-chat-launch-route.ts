@@ -23,7 +23,6 @@ export type NativeChatDefaultSettings = Pick<
 export type StructuredNativeChatBlocker =
   | 'reused-terminal'
   | 'agent-without-structured-session'
-  | 'draft-prompt'
   | 'floating-workspace'
   | 'tui-launch-customization'
   | 'remote-execution-host'
@@ -44,8 +43,6 @@ export type StructuredNativeChatSupportInput = {
   hostCapabilities: readonly string[] | null
   workspaceKind?: 'git-worktree' | 'folder' | 'floating'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
-  /** A draft stays terminal-backed: the composer, not a turn, owns unsent text. */
-  isDraftPrompt?: boolean
   requiresTuiLaunchCustomization?: boolean
   /** An existing PTY agent keeps its execution transport. */
   reusesTerminal?: boolean
@@ -80,9 +77,6 @@ export function resolveStructuredNativeChatSupport(
   }
   if (!isAgentSessionHandleProvider(input.agent)) {
     return { supported: false, blocker: 'agent-without-structured-session' }
-  }
-  if (input.isDraftPrompt === true) {
-    return { supported: false, blocker: 'draft-prompt' }
   }
   if (input.workspaceKind === 'floating') {
     return { supported: false, blocker: 'floating-workspace' }

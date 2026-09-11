@@ -1,4 +1,4 @@
-export const MOBILE_RICH_MARKDOWN_EDITOR_BODY_SECONDARY = [
+export const MOBILE_RICH_MARKDOWN_EDITOR_SCRIPT_SECONDARY = [
   '      }',
   '',
   '      function indentationWidth(value) {',

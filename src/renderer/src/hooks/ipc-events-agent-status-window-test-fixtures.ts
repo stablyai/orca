@@ -127,6 +127,7 @@ export function buildWindowApi(args: {
         onDetectedPortsChanged: () => () => {},
         ...args.ssh
       },
+      notifications: { dispatch: vi.fn(async () => ({ delivered: false })) },
       agentStatus: {
         onSet: args.onSet,
         onClear: args.onClear ?? vi.fn(() => () => {}),

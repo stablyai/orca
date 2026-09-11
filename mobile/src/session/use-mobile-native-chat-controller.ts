@@ -123,9 +123,13 @@ export function useMobileNativeChatController(args: {
     transcriptSettled: nativeChatSession.status === 'ready'
   })
 
-  const nativeChatAgentWorking = activeChatStructured
+  // Deliberately not gated on the chat view being visible: the streaming gate
+  // has to tell "hidden mid-turn" from "the turn ended".
+  const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
-    : activeChatResolution != null && activeTabAgentWorking
+    : activeTabAgentWorking
+  const nativeChatAgentWorking =
+    nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
   // Throttle the streaming bubble: OpenCode emits a status frame per streamed
   // part, and each one re-renders and re-parses the whole accumulated markdown.
   const nativeChatStreamingText = useThrottledLatestValue(
@@ -295,14 +299,13 @@ export function useMobileNativeChatController(args: {
     /** Structured lane: drives the per-turn status row and live tool progress. */
     nativeChatStructured: activeChatStructured,
     nativeChatAgentWorking,
+    nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
+    nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
     nativeChatCanStop: activeChatStructured
       ? structuredNativeChat.turnId !== null
       : nativeChatAgentWorking,
     nativeChatStreamingText,
-    // Deliberately not gated on the chat view being visible: the streaming gate
-    // has to tell "hidden mid-turn" from "the turn ended".
-    nativeChatStreamLive:
-      activeChatResolution == null ? activeTabAgentWorking : nativeChatAgentWorking,
+    nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,
     nativeChatPermission: activeChatStructured
       ? structuredNativeChat.permission

@@ -1,4 +1,3 @@
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -10,8 +9,7 @@ import {
   buildDirectWorkItemAgentStartupPlan,
   buildDirectWorkItemStartupOpts
 } from '@/lib/launch-work-item-direct-agent'
-import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
+import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
@@ -86,38 +84,29 @@ export async function resolveDirectWorkItemAgent(args: {
   }
 }
 
+/** Why: kept apart from the refusal fallback's preflight because it runs before
+ *  launch on the legacy route only; structured chat has no TUI trust menu. */
 export async function markDirectWorkItemAgentTrusted(args: {
   structuredLaunch: boolean
   agent: TuiAgent | null
   workspacePath: string
   connectionId: string | null
 }): Promise<void> {
-  if (args.structuredLaunch || !args.agent || !window.api.agentTrust?.markTrusted) {
+  if (args.structuredLaunch) {
     return
   }
-  const preflight = TUI_AGENT_CONFIG[args.agent].preflightTrust
-  if (!preflight) {
-    return
-  }
-  try {
-    await window.api.agentTrust.markTrusted({
-      preset: preflight,
-      workspacePath: args.workspacePath,
-      ...(args.connectionId ? { connectionId: args.connectionId } : {})
-    })
-  } catch {
-    // Best-effort: the user can still dismiss the agent trust prompt manually.
-  }
+  await preflightAgentTrust({
+    agent: args.agent,
+    workspacePath: args.workspacePath,
+    connectionId: args.connectionId
+  })
 }
 
 export async function settleDirectWorkItemStructuredLaunch(args: {
-  structuredLaunch: boolean
-  agent: TuiAgent | null
+  plan: AgentSessionLaunchPlan | null
   worktreeId: string
   workspacePath: string
   connectionId: string | null
-  draftContent: string
-  promptDelivery: PromptDelivery
   primaryTabId: string | null
   startupPlan: AgentStartupPlan | null
   launchSource: LaunchSource
@@ -125,50 +114,89 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
   completed: boolean
   structuredLaunch: boolean
   visibilityUnknown: boolean
+  /** The structured launch ended without a surface; there is nothing for the legacy path to finish. */
+  failed: boolean
   primaryTabId: string | null
 }> {
-  let { structuredLaunch, primaryTabId } = args
-  if (!structuredLaunch || !isAgentSessionHandleProvider(args.agent)) {
-    return { completed: false, structuredLaunch, visibilityUnknown: false, primaryTabId }
+  const { plan } = args
+  const notLaunched = (structuredLaunch: boolean) => ({
+    completed: false,
+    structuredLaunch,
+    visibilityUnknown: false,
+    failed: false,
+    primaryTabId: args.primaryTabId
+  })
+  if (plan?.route !== 'structured-native-chat') {
+    return notLaunched(false)
   }
-
-  const launch = startStructuredAgentLaunch(args.worktreeId, args.agent, {
-    prompt: args.draftContent,
-    ...(args.promptDelivery === 'submit-after-ready' ? { promptDelivery: args.promptDelivery } : {})
-  })
-  const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {
-    structuredLaunch = false
-    await preflightAgentTrust({
-      agent: args.agent,
-      workspacePath: args.workspacePath,
-      connectionId: args.connectionId
-    })
-    const fallbackActivation = activateAndRevealWorktree(args.worktreeId, {
-      sidebarRevealBehavior: 'auto',
-      createNewTerminalForStartup: true,
-      ...buildDirectWorkItemStartupOpts(
-        args.agent,
-        args.startupPlan,
-        args.launchSource,
-        args.promptDelivery === 'draft' ? args.draftContent : undefined
-      )
-    })
-    primaryTabId = fallbackActivation === false ? null : fallbackActivation.primaryTabId
-  })
+  const { agent } = plan
+  // Why no tab: the pre-launch tab is the setup shell or default tab, never an agent tab, so
+  // handing it back would paste the prompt there.
+  const withoutAgentSurface = {
+    completed: false,
+    structuredLaunch: true,
+    visibilityUnknown: false,
+    failed: true,
+    primaryTabId: null
+  }
+  let settlement: Awaited<ReturnType<typeof plan.launch>>
   try {
-    await launch.launchResult
-    return { completed: true, structuredLaunch, visibilityUnknown: false, primaryTabId }
-  } catch (error) {
-    if (!(error instanceof StructuredAgentSessionCreateRefusalError)) {
-      const visibilityUnknown = launch.isVisibilityUnknown()
-      return {
-        completed: !visibilityUnknown,
-        structuredLaunch,
-        visibilityUnknown,
-        primaryTabId
+    settlement = await plan.launch({
+      legacyFallback: async () => {
+        await preflightAgentTrust({
+          agent,
+          workspacePath: args.workspacePath,
+          connectionId: args.connectionId
+        })
+        const activation = activateAndRevealWorktree(args.worktreeId, {
+          sidebarRevealBehavior: 'auto',
+          createNewTerminalForStartup: true,
+          ...buildDirectWorkItemStartupOpts(
+            agent,
+            args.startupPlan,
+            args.launchSource,
+            plan.promptDelivery === 'draft' ? plan.prompt : undefined
+          )
+        })
+        return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
       }
-    }
-    await refusalFallback
+    })
+  } catch {
+    // Why: this runs outside the caller's try, so an escaped throw would surface as an unhandled
+    // rejection rather than the failure the caller already knows how to report.
+    return withoutAgentSurface
   }
-  return { completed: false, structuredLaunch, visibilityUnknown: false, primaryTabId }
+  if (!settlement) {
+    return notLaunched(true)
+  }
+  switch (settlement.kind) {
+    case 'structured':
+      return {
+        completed: true,
+        structuredLaunch: true,
+        visibilityUnknown: false,
+        failed: false,
+        primaryTabId: args.primaryTabId
+      }
+    case 'refused-then-legacy':
+      return {
+        completed: false,
+        structuredLaunch: false,
+        visibilityUnknown: false,
+        failed: false,
+        primaryTabId: settlement.primaryTabId
+      }
+    case 'visibility-unknown':
+      return {
+        completed: false,
+        structuredLaunch: true,
+        visibilityUnknown: true,
+        failed: false,
+        primaryTabId: args.primaryTabId
+      }
+    case 'failed':
+    case 'cancelled':
+      // Why: the launch layer already toasted the failure.
+      return withoutAgentSurface
+  }
 }

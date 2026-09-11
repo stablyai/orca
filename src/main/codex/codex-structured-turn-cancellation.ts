@@ -50,7 +50,8 @@ export class CodexStructuredTurnCancellation {
     sessionId: string,
     session: CodexSession,
     method: string,
-    params: unknown
+    params: unknown,
+    observedAt?: number
   ): boolean {
     const threadId = readCodexThreadId(params) ?? session.threadId
     if (method !== 'turn/completed' || threadId !== session.threadId) {
@@ -66,7 +67,8 @@ export class CodexStructuredTurnCancellation {
       sessionId,
       threadId,
       method,
-      params
+      params,
+      ...(observedAt !== undefined ? { observedAt } : {})
     }
     state.deferredCompletions.set(turnId, event)
     return true

@@ -14922,5 +14922,13 @@
       "action": "Probar Agentes",
       "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
     }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "necesita información",
+      "working": "trabajando",
+      "stopped": "detenido",
+      "finished": "finalizado"
+    }
   }
 }

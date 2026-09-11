@@ -3,6 +3,9 @@ import type {
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
+import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+
+export * from './agent-session-wire-refusals'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 // ─── Structured agent-session wire contract ─────────────────────────────────
 // The shapes `agentSession.*` accepts and publishes. Phase 2 builds provider
@@ -117,6 +120,9 @@ export type AgentSessionHistoryPage = {
   hasNewer: boolean
   /** Present on hosts that expose provider-owned background task lifecycle. */
   backgroundTasks?: AgentSessionBackgroundTaskState | null
+  /** Host wall clock (ms epoch) when the page was read, so a client attaching mid-turn
+   *  can anchor a live counter on the real start. Absent from older hosts. */
+  hostNow?: number
 }
 
 export type AgentSessionHistoryResult =
@@ -141,8 +147,11 @@ export type AgentSessionJournalBatch = {
   submissions: AgentJournalSubmission[]
 }
 
+/** Host wall clock (ms epoch) stamped once per published frame; see `AgentSessionHistoryPage`. */
+type AgentSessionHostClockField = { hostNow?: number }
+
 export type AgentSessionSubscribeEvent =
-  | {
+  | ({
       type: 'snapshot'
       sessionId: string
       page: AgentSessionHistoryPage
@@ -153,8 +162,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Latest provider-authored turn activity; optional for mixed-version hosts. */
       activity?: AgentSessionTurnActivity | null
-    }
-  | {
+    } & AgentSessionHostClockField)
+  | ({
       type: 'batch'
       sessionId: string
       batch: AgentSessionJournalBatch
@@ -166,8 +175,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
-    }
-  | {
+    } & AgentSessionHostClockField)
+  | ({
       type: 'reset'
       sessionId: string
       reset: AgentJournalResetReason
@@ -178,7 +187,7 @@ export type AgentSessionSubscribeEvent =
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       activity?: AgentSessionTurnActivity | null
-    }
+    } & AgentSessionHostClockField)
   | { type: 'end' }
 
 // ─── Status feed ────────────────────────────────────────────────────────────
@@ -232,47 +241,6 @@ export type AgentSessionMutationEnvelope = {
   expectedRuntimeFence: number | null
   /** Client-declared; the host recomputes it and compares. */
   payloadFingerprint: string
-}
-
-export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
-  'structured_agent_session_unsupported',
-  'agent_session_checkpoint_stale',
-  'agent_session_conflict',
-  'agent_session_ownership_unknown',
-  'agent_session_operation_conflict',
-  'agent_session_operation_expired',
-  'agent_session_operation_capacity',
-  'agent_session_operation_invalid',
-  'agent_session_operation_unknown',
-  'agent_session_item_revision_stale',
-  'agent_session_already_resolved',
-  'agent_session_identity_required',
-  'agent_session_journal_unreadable',
-  'execution_owner_reconciling'
-] as const
-export type AgentSessionWireRefusalCode = (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number]
-
-/** For a host path that raises its refusal as the thrown code. Narrowing through this keeps an
- *  unrelated fault from being reported to the client as a tidy, wrong refusal. */
-export function isAgentSessionWireRefusalCode(
-  value: unknown
-): value is AgentSessionWireRefusalCode {
-  return (
-    typeof value === 'string' &&
-    (AGENT_SESSION_WIRE_REFUSAL_CODES as readonly string[]).includes(value)
-  )
-}
-
-export type AgentSessionWireRefusal = {
-  rewindReason?: AgentSessionRewindReason
-  code: AgentSessionWireRefusalCode
-  message: string
-  /** On a stale fence, so the client can retry without another round trip. */
-  currentFence?: number
-  /** On a lost compare-and-set: the winning answer and who gave it. */
-  resolution?: AgentJournalResolution
-  /** On a lost compare-and-set: the revision the host actually holds. */
-  currentRevision?: number
 }
 
 export type AgentSessionMutationResult<TValue> =

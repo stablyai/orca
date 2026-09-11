@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve } from 'node:path'
+import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
@@ -386,6 +386,72 @@ describe('packaged runtime resources', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'prunes non-target native packages before the Linux glibc gate',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-after-pack-prune-order-'))
+      const previousPath = process.env.PATH
+      try {
+        const appOutDir = join(root, 'linux-unpacked')
+        const resourcesDir = join(appOutDir, 'resources')
+        await cp(
+          join(process.cwd(), 'resources', 'plugins', 'launch'),
+          join(resourcesDir, 'plugins', 'launch'),
+          { recursive: true }
+        )
+
+        const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
+        await mkdir(unpackedMainDir, { recursive: true })
+        await writeFile(join(unpackedMainDir, 'daemon-entry.js'), '', 'utf8')
+        await writeFile(
+          join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json'),
+          `${JSON.stringify({ name: 'orca-compiled-output', type: 'commonjs', private: true })}\n`,
+          'utf8'
+        )
+
+        const unpackedCliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+        await mkdir(join(unpackedCliDir, 'handlers'), { recursive: true })
+        await writeFile(join(unpackedCliDir, 'handlers', 'skills.js'), '', 'utf8')
+        await writeFile(join(unpackedCliDir, 'index.js'), '', 'utf8')
+
+        const target =
+          process.arch === 'x64'
+            ? { electronArch: 3, machine: 0xb7, nonTarget: 'x64' }
+            : { electronArch: 1, machine: 0x3e, nonTarget: 'arm64' }
+        const wrongArchPackage = join(
+          resourcesDir,
+          'node_modules',
+          '@parcel',
+          `watcher-linux-${target.nonTarget}-glibc`
+        )
+        await mkdir(wrongArchPackage, { recursive: true })
+        const wrongArchElf = Buffer.alloc(20)
+        wrongArchElf.set([0x7f, 0x45, 0x4c, 0x46])
+        wrongArchElf[5] = 1
+        wrongArchElf.writeUInt16LE(target.machine, 18)
+        await writeFile(join(wrongArchPackage, 'watcher.node'), wrongArchElf)
+
+        const stubBinDir = join(root, 'bin')
+        await mkdir(stubBinDir)
+        await writeFile(join(stubBinDir, 'objdump'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+        process.env.PATH = `${stubBinDir}${delimiter}${previousPath ?? ''}`
+
+        await expect(
+          electronBuilderConfig.afterPack({
+            appOutDir,
+            electronPlatformName: 'linux',
+            arch: target.electronArch,
+            packager: { appInfo: { version: '9.9.9' } }
+          })
+        ).resolves.toBeUndefined()
+        await expect(stat(wrongArchPackage)).rejects.toMatchObject({ code: 'ENOENT' })
+      } finally {
+        process.env.PATH = previousPath
+        await rm(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'marks packaged Unix CLI launchers executable',
