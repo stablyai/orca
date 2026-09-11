@@ -24,6 +24,7 @@ const SETTINGS_NAV_TARGETS = [
   'floating-workspace',
   'terminal',
   'quick-commands',
+  'quick-notes',
   'notifications',
   'computer-use',
   'developer-permissions',

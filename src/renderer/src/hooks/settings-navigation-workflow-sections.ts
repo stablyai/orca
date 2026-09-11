@@ -7,6 +7,7 @@ import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-
 import { getGitPaneSearchEntries } from '@/components/settings/git-search'
 import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
 import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands-search'
+import { getQuickNotesPaneSearchEntries } from '@/components/settings/quick-notes-search'
 import { getShareSkillsSettingsSearchEntries } from '@/components/settings/share-skills-settings-search'
 import { getTasksPaneSearchEntries } from '@/components/settings/tasks-search'
 import { translate } from '@/i18n/i18n'
@@ -21,6 +22,7 @@ import {
   PanelsTopLeft,
   Play,
   SquareTerminal,
+  StickyNote,
   TabletSmartphone
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
@@ -119,6 +121,17 @@ export function buildWorkflowSettingsSections(
       ),
       icon: Play,
       searchEntries: getQuickCommandsPaneSearchEntries(),
+      group: 'workflows'
+    },
+    {
+      id: 'quick-notes',
+      title: translate('auto.hooks.useSettingsNavigationMetadata.quickNotesTitle', 'Quick Notes'),
+      description: translate(
+        'auto.hooks.useSettingsNavigationMetadata.quickNotesDescription',
+        'Saved snippets of text you can copy to the clipboard.'
+      ),
+      icon: StickyNote,
+      searchEntries: getQuickNotesPaneSearchEntries(),
       group: 'workflows'
     },
     ...(showDesktopOnlySettings

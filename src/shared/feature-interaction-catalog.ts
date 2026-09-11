@@ -43,6 +43,7 @@ export type FeatureInteractionId =
   | 'notifications'
   | 'ports'
   | 'quick-commands'
+  | 'quick-notes'
   | 'resource-manager'
   | 'review-notes'
   | 'ssh'
@@ -137,6 +138,7 @@ export const FEATURE_INTERACTIONS = [
   { id: 'notifications', interaction: 'desktop notifications enabled or tested' },
   { id: 'ports', interaction: 'Ports popover opened, configured, or port action used' },
   { id: 'quick-commands', interaction: 'terminal quick command created or edited' },
+  { id: 'quick-notes', interaction: 'quick note created or edited' },
   { id: 'resource-manager', interaction: 'Resource Manager opened or configured' },
   { id: 'review-notes', interaction: 'review note added or sent to an agent' },
   {

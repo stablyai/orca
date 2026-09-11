@@ -24,6 +24,7 @@ import type { NotificationSettings } from './notification-settings-types'
 import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
+import type { QuickNote } from './quick-note-types'
 import type { TuiAgent } from './tui-agent'
 import type {
   AgentDashboardMode,
@@ -155,6 +156,8 @@ export type GlobalSettings = {
   terminalWordSeparator?: string
   terminalCursorOpacity?: number
   terminalQuickCommands?: TerminalQuickCommand[]
+  /** Reusable plain-text snippets; picking one copies its body to the clipboard. Global scope only. */
+  quickNotes?: QuickNote[]
   windowBackgroundBlur?: boolean
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean

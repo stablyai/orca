@@ -76,6 +76,7 @@ describe('feature interactions', () => {
       'notifications',
       'ports',
       'quick-commands',
+      'quick-notes',
       'resource-manager',
       'review-notes',
       'ssh',
