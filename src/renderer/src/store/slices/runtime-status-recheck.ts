@@ -1,6 +1,6 @@
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
+import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
 import type { RuntimeEnvironmentStatus } from './runtime-status'
 
@@ -101,9 +101,19 @@ export function clearRuntimeStatusRechecksForTests(): void {
   cancelRuntimeStatusRechecks([...rechecks.keys()])
 }
 
+/**
+ * Whether this recorded verdict is one the ladder must keep re-asking.
+ *
+ * Null qualifies because a host recorded unreachable is excluded from the client-event
+ * subscription set (that set is gated on a truthy status), so no reconnect signal can
+ * ever clear it and one failed boot probe otherwise outlives the outage. #16516
+ */
 function shouldRecheck(status: RuntimeStatus | null): boolean {
+  if (status === null) {
+    return true
+  }
   return Boolean(
-    status?.capabilities?.includes(REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
+    status.capabilities?.includes(REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY) &&
     status.remoteControl &&
     status.remoteControl.state !== 'ready'
   )
@@ -147,6 +157,12 @@ async function fireRuntimeStatusRecheck(
     })
     nextEntry = { status: unwrapRuntimeRpcResult<RuntimeStatus>(response), checkedAt: Date.now() }
   } catch (error: unknown) {
+    // The probe short-circuits locally for a manually disconnected host, so retrying only
+    // burns a timer against an answer the user already chose.
+    if (hasRuntimeRpcErrorCode(error, 'runtime_manually_disconnected')) {
+      cancelRuntimeStatusRecheck(environmentId)
+      return
+    }
     const remoteControl = extractRuntimeTransportDiagnostics(error)
     nextEntry = {
       status: null,

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   isConnectedRuntimeHostState,
+  isDisconnectedRuntimeHostState,
   runtimeHostConnectionState,
+  runtimeHostConnectionStateForEntry,
   runtimeStatusForOverall
 } from './runtime-host-connection-state'
 
@@ -177,3 +179,55 @@ describe('runtime host connection state', () => {
     ).toBe('disconnected')
   })
 })
+
+describe('runtime host connection state for a recorded status entry', () => {
+  it('separates a host that was never probed from one a probe found unreachable', () => {
+    // The sidebar read raw truthiness, which collapsed these two into the same red glyph.
+    expect(runtimeHostConnectionStateForEntry(undefined)).toBe('checking')
+    expect(runtimeHostConnectionStateForEntry({ status: null })).toBe('disconnected')
+  })
+
+  it('reads the remote-control diagnostics recorded beside a failed probe', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        remoteControl: remoteControl('reconnecting')
+      })
+    ).toBe('reconnecting')
+  })
+
+  it('agrees with the status bar that a closed control channel is disconnected', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: makeStatus({ remoteControl: remoteControl('closed') })
+      })
+    ).toBe('disconnected')
+  })
+
+  it('names only the disconnected verdict as disconnected', () => {
+    expect(isDisconnectedRuntimeHostState('disconnected')).toBe(true)
+    for (const state of [
+      'connected',
+      'checking',
+      'reconnecting',
+      'runtime-unavailable',
+      'workspace-window-closed'
+    ] as const) {
+      expect(isDisconnectedRuntimeHostState(state)).toBe(false)
+    }
+  })
+})
+
+function remoteControl(
+  state: NonNullable<RuntimeStatus['remoteControl']>['state']
+): NonNullable<RuntimeStatus['remoteControl']> {
+  return {
+    state,
+    pendingRequestCount: 0,
+    subscriptionCount: 0,
+    reconnectAttempt: 1,
+    lastConnectedAt: null,
+    lastClose: null,
+    lastError: null
+  }
+}
