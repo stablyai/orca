@@ -150,7 +150,13 @@ export function attachStructuredAgentSession(
         }
         await recoverInterruptedCompaction(context.deps.store, sessionId, attached.journal, fence)
         if (attached.recovery) {
-          context.subscribers.reset(sessionId, attached.journal, attached.recovery.reset, fence)
+          context.subscribers.reset(
+            sessionId,
+            attached.journal,
+            attached.recovery.reset,
+            fence,
+            attached.recovery.trigger
+          )
         } else if (previousFence !== undefined && previousFence !== fence) {
           context.subscribers.snapshot(sessionId, attached.journal, fence)
         } else {

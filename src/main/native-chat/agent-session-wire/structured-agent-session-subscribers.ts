@@ -18,6 +18,7 @@ import {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
+import { agentSessionResetFrame, type AgentSessionResetFrame } from './agent-session-reset-frame'
 import {
   createAgentSessionCatchUpReader,
   readAgentSessionHydrationPage
@@ -142,9 +143,11 @@ export class AgentSessionSubscribers {
     journal: AgentSessionJournal,
     reason: AgentJournalResetReason,
     fence: number,
+    cause?: AgentSessionResetFrame['resetCause'],
     backgroundTasks?: AgentSessionBackgroundTaskState | null
   ): void {
-    this.replay(sessionId, journal, fence, backgroundTasks, { type: 'reset', reset: reason })
+    const frame = agentSessionResetFrame(reason, cause)
+    this.replay(sessionId, journal, fence, backgroundTasks, frame)
   }
 
   snapshot(
@@ -161,7 +164,7 @@ export class AgentSessionSubscribers {
     journal: AgentSessionJournal,
     fence: number,
     backgroundTasks: AgentSessionBackgroundTaskState | null | undefined,
-    frame: { type: 'snapshot' } | { type: 'reset'; reset: AgentJournalResetReason }
+    frame: { type: 'snapshot' } | AgentSessionResetFrame
   ): void {
     const page = readAgentSessionHydrationPage(journal, fence)
     const hostNow = this.now()

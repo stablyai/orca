@@ -42,6 +42,8 @@ export const AGENT_JOURNAL_EPOCH_REASONS = [
   'legacy_import',
   'corruption',
   'unreconcilable_prefix',
+  /** The journal was GONE, and this anchor stands in for the history it held. */
+  'journal_missing',
   'handle_forked',
   'schema_unreadable'
 ] as const

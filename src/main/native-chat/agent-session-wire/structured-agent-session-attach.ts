@@ -188,7 +188,10 @@ export async function attachJournal(input: {
       sessionId: identity.sessionId
     }),
     fence,
-    historyFilePath
+    historyFilePath,
+    // A null expected fence is this call creating the session, so its journal is
+    // absent rather than lost; anything else attaches to a record that existed.
+    recordPredatesCall: input.params.envelope.expectedRuntimeFence !== null
   })
   try {
     // That await is a WRITE. A failure in it leaves the journal with no caller

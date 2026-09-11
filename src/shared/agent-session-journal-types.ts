@@ -279,3 +279,13 @@ export const AGENT_JOURNAL_RESET_REASONS = [
   'schema_unreadable'
 ] as const
 export type AgentJournalResetReason = (typeof AGENT_JOURNAL_RESET_REASONS)[number]
+
+/** What made the reset necessary. Reported ALONGSIDE the reason rather than as
+ *  another reason value: the reason reaches paired and mobile decoders that may
+ *  reject an unknown one, and a reader that ignores this field still resets. */
+export const AGENT_JOURNAL_RESET_CAUSES = [
+  'journal_missing',
+  'journal_corrupt',
+  'schema_unreadable'
+] as const
+export type AgentJournalResetCause = (typeof AGENT_JOURNAL_RESET_CAUSES)[number]

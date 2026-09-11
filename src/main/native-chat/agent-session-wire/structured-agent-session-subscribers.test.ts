@@ -2,7 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_RESET_REASONS,
+  AGENT_SESSION_JOURNAL_SCHEMA_VERSION
+} from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionHandoffStatus,
   AgentSessionStatusEvent,
@@ -35,6 +38,40 @@ afterEach(async () => {
 })
 
 describe('AgentSessionSubscribers', () => {
+  // The reason reaches paired and mobile decoders that may reject a value they
+  // have never seen, so the recovery that caused the reset rides beside it.
+  it('names the recovery cause without widening the reset reason', async () => {
+    const journal = await journals.open({
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: { kind: 'codex', threadId: 'thread-1' }
+      },
+      journalDir: join(root, 'reset-cause-journal')
+    })
+    const events: AgentSessionSubscribeEvent[] = []
+    const subscribers = new AgentSessionSubscribers()
+    subscribers.open({
+      id: 'subscriber-1',
+      sessionId: SESSION,
+      journal,
+      fence: 3,
+      emit: (event) => events.push(event)
+    })
+
+    subscribers.reset(SESSION, journal, 'epoch_changed', 3, 'journal_missing')
+    subscribers.reset(SESSION, journal, 'epoch_changed', 3)
+
+    const resets = events.filter((event) => event.type === 'reset')
+    expect(resets).toHaveLength(2)
+    expect(resets[0]).toMatchObject({ reset: 'epoch_changed', resetCause: 'journal_missing' })
+    expect(AGENT_JOURNAL_RESET_REASONS).toContain(resets[0]?.reset)
+    // Absent, not null, when the host has no cause to name.
+    expect(resets[1] && 'resetCause' in resets[1]).toBe(false)
+  })
+
   it('publishes the current fence when a resumed cursor is already caught up', async () => {
     const journal = await journals.open({
       identity: {

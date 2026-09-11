@@ -7,7 +7,10 @@ import type {
   AgentSessionTurnActivity,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
-import type { AgentJournalResetReason } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalResetCause,
+  AgentJournalResetReason
+} from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   StructuredAgentSessionHostDeps,
@@ -25,7 +28,8 @@ export type StructuredAgentSessionAttachContext = {
       sessionId: string,
       journal: AgentSessionJournal,
       reset: AgentJournalResetReason,
-      fence: number
+      fence: number,
+      cause?: AgentJournalResetCause
     ) => void
     snapshot: (sessionId: string, journal: AgentSessionJournal, fence: number) => void
     publish: (

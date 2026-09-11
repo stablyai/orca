@@ -40,6 +40,10 @@ export type JournalLoad = {
   /** Directory-internal: the first sequence of an unusable suffix. The store
    *  deletes from here before it accepts a write; a probe leaves it alone. */
   truncateFrom?: number
+  /** The live epoch stands in for a journal that was gone. Distinguished from
+   *  plain corruption because a caller that DROPS a corrupt session would drop
+   *  this one every time it restored, which is the disappearance being fixed. */
+  historyMissing?: true
 }
 
 /**
@@ -118,6 +122,8 @@ export function replayJournal(
   // A latched journal reduces to nothing by design; only a writable one can be
   // held to the anchor.
   const unanchored = !latched && rows[0]?.kind !== 'epoch'
+  const anchor = rows[0]
+  const historyMissing = anchor?.kind === 'epoch' && anchor.reason === 'journal_missing'
   return {
     state,
     readOnly: latched,
@@ -128,18 +134,31 @@ export function replayJournal(
       (repairedFrom !== null && awaitsRebuild(rows, repairedFrom)) ||
       awaitsProviderHistory(rows),
     malformedRows,
-    ...(truncateFrom !== undefined && !latched ? { truncateFrom } : {})
+    ...(truncateFrom !== undefined && !latched ? { truncateFrom } : {}),
+    ...(historyMissing ? { historyMissing: true as const } : {})
   }
 }
 
 /**
- * The epoch a total repair published, still holding nothing but its own anchor
- * and disclosure. The rows it dropped were never reconstructed, so provider
- * history has to be retried rather than this being called a clean timeline.
+ * An epoch published in place of history this host could not keep, still holding
+ * nothing but its own anchor and disclosure. The rows it stands for were never
+ * reconstructed, so provider history has to be retried rather than this being
+ * called a clean timeline.
  */
 function awaitsProviderHistory(rows: readonly JournalRow[]): boolean {
   const anchor = rows[0]
-  if (anchor?.kind !== 'epoch' || anchor.reason !== 'unreconcilable_prefix') {
+  if (anchor?.kind !== 'epoch') {
+    return false
+  }
+  // A journal that was GONE keeps its demand past any write. A partial repair
+  // retires on one because the prefix it kept is still the session's own
+  // history; here there is no prefix, so a later message is indistinguishable
+  // from a session that never had a past — and the retry is the only thing that
+  // would ever tell them apart again.
+  if (anchor.reason === 'journal_missing') {
+    return true
+  }
+  if (anchor.reason !== 'unreconcilable_prefix') {
     return false
   }
   // The anchor sits at sequence 1, so content of the epoch's own starts at 2.

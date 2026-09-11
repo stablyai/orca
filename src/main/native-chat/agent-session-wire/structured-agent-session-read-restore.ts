@@ -9,6 +9,10 @@ import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import {
+  journalHistoryIsMissing,
+  openAgentSessionJournalWithRecovery
+} from './agent-session-journal-recovery'
+import {
   attachFingerprintFields,
   journalIdentityFor,
   type AgentSessionAttachParams
@@ -40,25 +44,45 @@ export async function restoreStructuredAgentSessionRead(
     workspaceId: record.location.workspaceId,
     sessionId
   })
+  const identity = journalIdentityFor(record, params)
   const loaded = loadJournal(journalDir, sessionId)
-  if (loaded?.corrupt) {
+  // Restore is a read, so it cannot repair damage — but a journal that is GONE
+  // is not damage, and dropping it is the disappearance itself. The record
+  // predates every restore by definition, so this is always the caller that can
+  // tell lost history from a session that has none.
+  const missingHistory = journalHistoryIsMissing({
+    probe: loaded,
+    identity,
+    journalDir,
+    recordPredatesCall: true
+  })
+  if (loaded?.corrupt && !missingHistory) {
     return null
   }
   // A session still in the pre-SQLite format has no `journal.db` to load. Dropping
   // it here leaves it unpublished, which is also what prunes its tab out of the
   // saved workspace — so the chat disappears with nowhere to explain itself.
-  if (!loaded && !findJournalFileFormatRemnant(journalDir)) {
+  if (!loaded && !missingHistory && !findJournalFileFormatRemnant(journalDir)) {
     return null
   }
-  const journal = await openAgentSessionJournal({
-    identity: journalIdentityFor(record, params),
-    journalDir,
-    // Omitted, not `null`: the store reads `null` as "replay already ran and
-    // found nothing" and founds a fresh epoch. In process the probe above is the
-    // previous statement, so the window is zero-width; this holds the line for a
-    // database another process creates in between.
-    ...(loaded ? { loaded } : {})
-  })
+  const journal = missingHistory
+    ? (
+        await openAgentSessionJournalWithRecovery({
+          identity,
+          journalDir,
+          fence: record.lease.runtimeFence,
+          recordPredatesCall: true
+        })
+      ).journal
+    : await openAgentSessionJournal({
+        identity,
+        journalDir,
+        // Omitted, not `null`: the store reads `null` as "replay already ran and
+        // found nothing" and founds a fresh epoch. In process the probe above is the
+        // previous statement, so the window is zero-width; this holds the line for a
+        // database another process creates in between.
+        ...(loaded ? { loaded } : {})
+      })
   // Read restore opens the journal and nothing else: no adapter call, so no
   // provider child. Opening it can still write — a session whose history is in
   // the old format founds its epoch and commits the row explaining that here.

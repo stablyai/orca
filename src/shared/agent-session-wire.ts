@@ -17,6 +17,7 @@ import type { AgentSessionConversationCommand } from './agent-session-conversati
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem,
+  AgentJournalResetCause,
   AgentJournalResetReason,
   AgentJournalResolution,
   AgentJournalSubmission
@@ -129,13 +130,13 @@ export type AgentSessionHistoryResult =
   | { ok: true; page: AgentSessionHistoryPage; providerSession?: AgentProviderSessionMetadata }
   /** Every reset carries a byte-bounded tail page so recovery cannot exceed
    *  remote outbound admission or require another call before resubscribing. */
-  | {
+  | ({
       ok: false
       reset: AgentJournalResetReason
       page: AgentSessionHistoryPage
       fence?: number
       providerSession?: AgentProviderSessionMetadata
-    }
+    } & AgentSessionResetCauseField)
 
 /** Cursor-qualified incremental publication. Items and submissions carry their
  *  CURRENT reduced state rather than a delta, so applying a batch twice
@@ -149,6 +150,11 @@ export type AgentSessionJournalBatch = {
 
 /** Host wall clock (ms epoch) stamped once per published frame; see `AgentSessionHistoryPage`. */
 type AgentSessionHostClockField = { hostNow?: number }
+
+/** Which failure the reset came out of, when the host knows. Absent from older
+ *  hosts and from a reset a cursor mismatch raised, so a reader that renders it
+ *  must fall back to the reason alone. */
+type AgentSessionResetCauseField = { resetCause?: AgentJournalResetCause }
 
 export type AgentSessionSubscribeEvent =
   | ({
@@ -187,7 +193,8 @@ export type AgentSessionSubscribeEvent =
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       activity?: AgentSessionTurnActivity | null
-    } & AgentSessionHostClockField)
+    } & AgentSessionHostClockField &
+      AgentSessionResetCauseField)
   | { type: 'end' }
 
 // ─── Status feed ────────────────────────────────────────────────────────────

@@ -443,6 +443,137 @@ describe('openAgentSessionJournalWithRecovery', () => {
     )
   })
 
+  // A record whose journal is GONE used to open as a fresh store: the only
+  // trigger was damage IN a journal, so nothing here was damaged and the blank
+  // `session_created` epoch became the session's authoritative history.
+  describe('a record whose journal is absent', () => {
+    async function epochReasonOnDisk(): Promise<string | undefined> {
+      const load = loadJournal(journalDir, CODEX_SESSION)
+      let reason: string | undefined
+      await withJournalDatabase(journalDir, (db) => {
+        const rows = readJournalEpochRows(db, CODEX_SESSION, load?.state.epoch ?? '')
+        reason = JSON.parse(rows[0]?.rowJson ?? '{}').reason
+      })
+      return reason
+    }
+
+    it('rebuilds from provider history instead of founding a blank session', async () => {
+      const opened = await openAgentSessionJournalWithRecovery({
+        identity: IDENTITY,
+        journalDir,
+        fence: 1,
+        historyFilePath,
+        recordPredatesCall: true
+      })
+      journals.track(opened.journal)
+
+      expect(opened.recovery).toMatchObject({ trigger: 'journal_missing', reset: 'epoch_changed' })
+      expect(opened.recovery?.imported).toBeGreaterThan(0)
+      expect(JSON.stringify(opened.journal.snapshot().items.map((entry) => entry.body))).toContain(
+        'add a retry'
+      )
+      await opened.journal.close()
+      // The blank epoch is absent: what stands is the rebuilt timeline's own.
+      expect(await epochReasonOnDisk()).toBe('legacy_import')
+      expect(loadJournal(journalDir, CODEX_SESSION)).toMatchObject({ corrupt: false })
+    })
+
+    it('holds the rebuild owed when provider history cannot be read', async () => {
+      const opened = await openAgentSessionJournalWithRecovery({
+        identity: IDENTITY,
+        journalDir,
+        fence: 1,
+        historyFilePath: join(root, 'missing.jsonl'),
+        recordPredatesCall: true
+      })
+      journals.track(opened.journal)
+
+      expect(opened.recovery).toMatchObject({ trigger: 'journal_missing', imported: 0 })
+      expect(opened.recovery?.error).toBeTruthy()
+      expect(opened.journal.snapshot().items).toEqual([])
+      await opened.journal.close()
+      // Not `session_created`: a blank epoch presented as history is the defect.
+      expect(await epochReasonOnDisk()).toBe('journal_missing')
+      expect(loadJournal(journalDir, CODEX_SESSION)).toMatchObject({
+        corrupt: true,
+        historyMissing: true
+      })
+    })
+
+    // A partial repair retires on a write because the prefix it kept is still
+    // the session's own history. Here there is no prefix, so a write would
+    // silently make the blank permanent.
+    it('keeps the rebuild owed across a later write', async () => {
+      const first = await openAgentSessionJournalWithRecovery({
+        identity: IDENTITY,
+        journalDir,
+        fence: 1,
+        historyFilePath: join(root, 'missing.jsonl'),
+        recordPredatesCall: true
+      })
+      journals.track(first.journal)
+      await first.journal.appendItem(
+        item(2),
+        { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'typed later' }] },
+        { fence: 1 }
+      )
+      await first.journal.close()
+
+      expect(loadJournal(journalDir, CODEX_SESSION)).toMatchObject({
+        corrupt: true,
+        historyMissing: true
+      })
+      // And the retry still names the cause it recovered from, not the damage
+      // the standing anchor would otherwise look like.
+      const retried = await openAgentSessionJournalWithRecovery({
+        identity: IDENTITY,
+        journalDir,
+        fence: 1,
+        historyFilePath,
+        recordPredatesCall: true
+      })
+      journals.track(retried.journal)
+      expect(retried.recovery).toMatchObject({ trigger: 'journal_missing' })
+      expect(retried.recovery?.imported).toBeGreaterThan(0)
+      await retried.journal.close()
+      expect(loadJournal(journalDir, CODEX_SESSION)).toMatchObject({ corrupt: false })
+    })
+
+    it('founds an ordinary session when this call is the one creating it', async () => {
+      const opened = await openAgentSessionJournalWithRecovery({
+        identity: IDENTITY,
+        journalDir,
+        fence: 1,
+        historyFilePath
+      })
+      journals.track(opened.journal)
+
+      expect(opened.recovery).toBeNull()
+      expect(opened.journal.snapshot().items).toEqual([])
+      await opened.journal.close()
+      expect(await epochReasonOnDisk()).toBe('session_created')
+      expect(loadJournal(journalDir, CODEX_SESSION)).toMatchObject({ corrupt: false })
+    })
+
+    it('founds an ordinary session when the record names no provider conversation', async () => {
+      const opened = await openAgentSessionJournalWithRecovery({
+        identity: {
+          ...IDENTITY,
+          providerHandle: { kind: 'opaque', agent: 'codex', value: 'pending' }
+        },
+        journalDir,
+        fence: 1,
+        historyFilePath,
+        recordPredatesCall: true
+      })
+      journals.track(opened.journal)
+
+      expect(opened.recovery).toBeNull()
+      await opened.journal.close()
+      expect(await epochReasonOnDisk()).toBe('session_created')
+    })
+  })
+
   it('rebuilds the emptied epoch once provider history is readable again', async () => {
     await seedRepairableSession()
 
