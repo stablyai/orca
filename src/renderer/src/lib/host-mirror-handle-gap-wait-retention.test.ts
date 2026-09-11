@@ -95,6 +95,26 @@ describe('host mirror handle gap wait retention', () => {
     expect(hasHostMirrorHandleWaitExpired(ENV_A, 'tab-499')).toBe(true)
   })
 
+  it('never drops another environment verdict for a row that is only mid-rehydration', () => {
+    // Row absence is transient: during a rehydration a worktree's rows can be missing for a
+    // frame before landing again on the SAME generation. A sweep triggered by an unrelated
+    // environment must not read that frame as "the pane is gone" — the verdict would vanish and
+    // the pane would re-park on a fresh full budget, which is the spurious-release-resets-the-
+    // timer hazard in a new place.
+    setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 1)
+    setRuntimeEnvironmentConnectionGenerationForTests(ENV_B, 1)
+    setLiveTabs({ 'repo-1::wt-b': ['tab-b'], 'repo-1::wt-a': ['tab-a'] })
+    parkAndExpire(ENV_B, 'repo-1::wt-b', 'tab-b')
+    expect(hasHostMirrorHandleWaitExpired(ENV_B, 'tab-b')).toBe(true)
+
+    // B is briefly rowless while A's pane times out and records its own verdict.
+    setLiveTabs({ 'repo-1::wt-a': ['tab-a'] })
+    parkAndExpire(ENV_A, 'repo-1::wt-a', 'tab-a')
+
+    setLiveTabs({ 'repo-1::wt-b': ['tab-b'], 'repo-1::wt-a': ['tab-a'] })
+    expect(hasHostMirrorHandleWaitExpired(ENV_B, 'tab-b')).toBe(true)
+  })
+
   it('drops an environment verdict once that environment reconnects', () => {
     setRuntimeEnvironmentConnectionGenerationForTests(ENV_A, 1)
     setLiveTabs({ [WORKTREE]: ['tab-a', 'tab-b'] })
@@ -152,7 +172,8 @@ describe('host mirror handle gap wait retention', () => {
     }
     expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
-    // Only the final round's pane is still published.
-    expect(countExpiredHostMirrorHandleGapVerdictsForTests()).toBe(1)
+    // One per environment: each sweeps only its own rows, so each keeps the newest verdict it
+    // recorded and nothing older. 400 rounds, 2 environments, 2 entries.
+    expect(countExpiredHostMirrorHandleGapVerdictsForTests()).toBe(2)
   })
 })

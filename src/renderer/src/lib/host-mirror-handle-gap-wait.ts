@@ -68,14 +68,19 @@ function recordExpiredWait(environmentId: string, key: string): void {
   // one for a pane whose row is gone. Generation alone does not bound the map — a tab id
   // is never reissued, so a connection that never drops (the ordinary case for a session
   // left open for days) kept one entry for every pane that ever timed out.
+  // Why both rules stay inside this environment: the caller's own row is published right now
+  // (the deadline only records while its waiter is parked), which is what makes "no row" mean
+  // "retracted" rather than "not re-published yet" — the same inference `waiterIsReleased`
+  // already makes. That evidence covers only this environment. Sweeping others would drop a
+  // verdict belonging to an environment that is merely mid-rehydration, and its pane would
+  // re-park on a fresh full budget. Removed environments are left to teardown, not to this.
   const prefix = `${environmentId}\0`
   const liveTabs = liveTabIds()
   for (const [staleKey, staleGeneration] of expiredGenerationByPane) {
-    if (!liveTabs.has(staleKey.slice(staleKey.indexOf('\0') + 1))) {
-      expiredGenerationByPane.delete(staleKey)
+    if (!staleKey.startsWith(prefix)) {
       continue
     }
-    if (staleKey.startsWith(prefix) && staleGeneration !== generation) {
+    if (!liveTabs.has(staleKey.slice(prefix.length)) || staleGeneration !== generation) {
       expiredGenerationByPane.delete(staleKey)
     }
   }
