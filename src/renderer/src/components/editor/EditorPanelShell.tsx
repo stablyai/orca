@@ -22,6 +22,7 @@ type EditorPanelShellProps = {
   model: EditorPanelRenderModel
   copiedPathVisible: boolean
   showMarkdownTableOfContents: boolean
+  showTestSpecOutline: boolean
   canShowMarkdownFrontmatterToggle: boolean
   markdownFrontmatterVisible: boolean
   sideBySide: boolean
@@ -41,6 +42,7 @@ type EditorPanelShellProps = {
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
+  onToggleTestSpecOutline: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
   createMarkdownArtifactRequest?: () => Promise<ArtifactWriteRequest>
@@ -51,6 +53,7 @@ type EditorPanelShellProps = {
   onSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
   onReloadContent: (file: OpenFile) => void
   onCloseMarkdownTableOfContents: () => void
+  onCloseTestSpecOutline: () => void
   onCloseRenameDialog: () => void
   onRenameConfirm: (newRelPath: string) => Promise<void>
   markdownAnnotationsEnabled: boolean
@@ -63,6 +66,7 @@ export function EditorPanelShell({
   model,
   copiedPathVisible,
   showMarkdownTableOfContents,
+  showTestSpecOutline,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
   sideBySide,
@@ -82,6 +86,7 @@ export function EditorPanelShell({
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
+  onToggleTestSpecOutline,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
   createMarkdownArtifactRequest,
@@ -92,6 +97,7 @@ export function EditorPanelShell({
   onSaveForFile,
   onReloadContent,
   onCloseMarkdownTableOfContents,
+  onCloseTestSpecOutline,
   onCloseRenameDialog,
   onRenameConfirm,
   markdownAnnotationsEnabled
@@ -113,6 +119,8 @@ export function EditorPanelShell({
           canOpenPreviewToSide={model.canOpenPreviewToSide}
           canShowMarkdownPreview={model.canShowMarkdownPreview}
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
+          canShowTestSpecOutline={model.canShowTestSpecOutline}
+          showTestSpecOutline={showTestSpecOutline}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
           shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
           canExportMarkdownToPdf={model.canExportMarkdownToPdf}
@@ -129,6 +137,7 @@ export function EditorPanelShell({
           onToggleSideBySide={onToggleSideBySide}
           onEditorToggleChange={onEditorToggleChange}
           onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
+          onToggleTestSpecOutline={onToggleTestSpecOutline}
           onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
           createMarkdownArtifactRequest={createMarkdownArtifactRequest}
@@ -160,8 +169,10 @@ export function EditorPanelShell({
           handleSaveForFile={onSaveForFile}
           reloadContent={onReloadContent}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
+          showTestSpecOutline={showTestSpecOutline}
           showMarkdownFrontmatter={markdownFrontmatterVisible}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
+          onCloseTestSpecOutline={onCloseTestSpecOutline}
           markdownAnnotationsEnabled={markdownAnnotationsEnabled}
         />
       </Suspense>

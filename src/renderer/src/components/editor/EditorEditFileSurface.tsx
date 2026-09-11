@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
@@ -14,6 +16,9 @@ import {
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import type { FileContent } from './editor-panel-content-types'
+import { parseTestCaseOutline } from './test-case-outline-parse'
+import { isTestSpecFile } from './test-spec-outline-gate'
+import { TestSpecOutlinePanel } from './TestSpecOutlinePanel'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
 import { EditorMarkdownFileSurface } from './EditorMarkdownFileSurface'
@@ -44,6 +49,7 @@ export function EditorEditFileSurface({
   isChangesMode,
   sideBySide,
   showMarkdownTableOfContents,
+  showTestSpecOutline,
   showMarkdownFrontmatter,
   onCloseMarkdownTableOfContents,
   markdownAnnotationsEnabled,
@@ -54,7 +60,8 @@ export function EditorEditFileSurface({
   handleContentChange,
   handleDirtyStateHint,
   handleSave,
-  reloadContent
+  reloadContent,
+  onCloseTestSpecOutline
 }: {
   activeFile: OpenFile
   viewStateScopeId: string
@@ -75,8 +82,10 @@ export function EditorEditFileSurface({
   isChangesMode: boolean
   sideBySide: boolean
   showMarkdownTableOfContents: boolean
+  showTestSpecOutline: boolean
   showMarkdownFrontmatter: boolean
   onCloseMarkdownTableOfContents: () => void
+  onCloseTestSpecOutline: () => void
   markdownAnnotationsEnabled: boolean
   pendingEditorReveal: PendingEditorReveal | null
   markdownDocuments: MarkdownDocumentsController
@@ -87,6 +96,26 @@ export function EditorEditFileSurface({
   handleSave: (content: string) => Promise<boolean>
   reloadContent: (file: OpenFile) => void
 }): React.JSX.Element {
+  // Why: hooks precede the loading/error/binary early returns below; parse the
+  // best-known content and let the guards decide whether the panel mounts.
+  const outlineSourceContent = editBuffer ?? fileContent?.content ?? ''
+  // Why: parse only while the panel is open for a spec file — full-document scan on every keystroke while closed is invisible wasted CPU.
+  const testOutlineItems = useMemo(
+    () =>
+      showTestSpecOutline && !isMarkdown && isTestSpecFile(activeFile.relativePath, monacoLanguage)
+        ? parseTestCaseOutline(outlineSourceContent)
+        : [],
+    [showTestSpecOutline, isMarkdown, activeFile.relativePath, monacoLanguage, outlineSourceContent]
+  )
+  const handleTestOutlineNavigate = (line: number): void => {
+    useAppStore.getState().setPendingEditorReveal({
+      column: 1,
+      fileId: activeFile.id,
+      filePath: activeFile.filePath,
+      line,
+      matchLength: 0
+    })
+  }
   if (activeFile.conflict?.kind === 'conflict-placeholder') {
     return <ConflictPlaceholderView file={activeFile} />
   }
@@ -127,6 +156,14 @@ export function EditorEditFileSurface({
   }
 
   const currentContent = editBuffer ?? fileContent.content
+  const testOutlinePanel =
+    showTestSpecOutline && !isMarkdown ? (
+      <TestSpecOutlinePanel
+        items={testOutlineItems}
+        onClose={onCloseTestSpecOutline}
+        onNavigate={handleTestOutlineNavigate}
+      />
+    ) : null
   const externalChangeBanner =
     activeFile.externalMutation === 'changed' ? (
       <ExternalFileChangeBanner
@@ -241,7 +278,10 @@ export function EditorEditFileSurface({
       onSave={handleSave}
     />
   ) : (
-    monacoEditor
+    <div className="min-h-0 flex flex-1 flex-row h-full">
+      {testOutlinePanel}
+      <div className="min-w-0 flex-1 h-full">{monacoEditor}</div>
+    </div>
   )
 
   return (

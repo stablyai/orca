@@ -52,8 +52,10 @@ export function EditorContent({
   isChangesMode,
   sideBySide,
   showMarkdownTableOfContents = false,
+  showTestSpecOutline = false,
   showMarkdownFrontmatter = false,
   onCloseMarkdownTableOfContents = noopCloseMarkdownTableOfContents,
+  onCloseTestSpecOutline = noopCloseMarkdownTableOfContents,
   markdownAnnotationsEnabled = true,
   pendingEditorReveal,
   handleContentChange,
@@ -80,8 +82,10 @@ export function EditorContent({
   isChangesMode: boolean
   sideBySide: boolean
   showMarkdownTableOfContents?: boolean
+  showTestSpecOutline?: boolean
   showMarkdownFrontmatter?: boolean
   onCloseMarkdownTableOfContents?: () => void
+  onCloseTestSpecOutline?: () => void
   markdownAnnotationsEnabled?: boolean
   pendingEditorReveal: PendingEditorReveal | null
   handleContentChange: (content: string) => void
@@ -245,8 +249,10 @@ export function EditorContent({
         isChangesMode={isChangesMode}
         sideBySide={sideBySide}
         showMarkdownTableOfContents={showMarkdownTableOfContents}
+        showTestSpecOutline={showTestSpecOutline}
         showMarkdownFrontmatter={showMarkdownFrontmatter}
         onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
+        onCloseTestSpecOutline={onCloseTestSpecOutline}
         markdownAnnotationsEnabled={markdownAnnotationsEnabled}
         pendingEditorReveal={pendingEditorReveal}
         markdownDocuments={markdownDocuments}

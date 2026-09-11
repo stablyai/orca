@@ -81,6 +81,7 @@ export function createRecentlyClosedEditorTabs(
             editorViewMode: {},
             markdownFrontmatterVisible: {},
             markdownTableOfContentsVisible: {},
+            testSpecOutlineVisible: {},
             pendingEditorReveal: null,
             pendingEditorFocusRequest: null
           }
@@ -109,6 +110,11 @@ export function createRecentlyClosedEditorTabs(
         )
         const newMarkdownTableOfContentsVisible = Object.fromEntries(
           Object.entries(s.markdownTableOfContentsVisible).filter(([fileId]) =>
+            remainingFileIds.has(fileId)
+          )
+        )
+        const newTestSpecOutlineVisible = Object.fromEntries(
+          Object.entries(s.testSpecOutlineVisible).filter(([fileId]) =>
             remainingFileIds.has(fileId)
           )
         )
@@ -185,6 +191,7 @@ export function createRecentlyClosedEditorTabs(
           editorViewMode: newEditorViewMode,
           markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
           markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
+          testSpecOutlineVisible: newTestSpecOutlineVisible,
           activeFileIdByWorktree: newActiveFileIdByWorktree,
           activeTabTypeByWorktree: newActiveTabTypeByWorktree,
           tabBarOrderByWorktree: nextTabBarOrderByWorktree,

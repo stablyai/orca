@@ -74,6 +74,8 @@ function EditorPanelInner({
   const setMarkdownFrontmatterVisible = useAppStore((s) => s.setMarkdownFrontmatterVisible)
   const markdownTableOfContentsVisible = useAppStore((s) => s.markdownTableOfContentsVisible)
   const setMarkdownTableOfContentsVisible = useAppStore((s) => s.setMarkdownTableOfContentsVisible)
+  const testSpecOutlineVisible = useAppStore((s) => s.testSpecOutlineVisible)
+  const setTestSpecOutlineVisible = useAppStore((s) => s.setTestSpecOutlineVisible)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
   const editorDraftSelector = useMemo(
     () => createEditorPanelDraftSelector(activeFile),
@@ -323,6 +325,7 @@ function EditorPanelInner({
     markdownFrontmatterVisible[markdownDocumentStateFileId] ?? true
   const isMarkdownTableOfContentsVisible =
     markdownTableOfContentsVisible[markdownDocumentStateFileId] ?? false
+  const isTestSpecOutlineVisible = testSpecOutlineVisible[activeFile.id] ?? false
   const createActiveMarkdownArtifactRequest = () =>
     Promise.resolve(
       createCurrentMarkdownArtifactRequest(
@@ -342,6 +345,7 @@ function EditorPanelInner({
         model={model}
         copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
         showMarkdownTableOfContents={isMarkdownTableOfContentsVisible}
+        showTestSpecOutline={model.canShowTestSpecOutline && isTestSpecOutlineVisible}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={isMarkdownFrontmatterVisible}
         sideBySide={sideBySide}
@@ -366,6 +370,9 @@ function EditorPanelInner({
             !isMarkdownTableOfContentsVisible
           )
         }
+        onToggleTestSpecOutline={() =>
+          setTestSpecOutlineVisible(activeFile.id, !isTestSpecOutlineVisible)
+        }
         onToggleMarkdownFrontmatter={() =>
           setMarkdownFrontmatterVisible(markdownDocumentStateFileId, !isMarkdownFrontmatterVisible)
         }
@@ -384,6 +391,7 @@ function EditorPanelInner({
         onCloseMarkdownTableOfContents={() =>
           setMarkdownTableOfContentsVisible(markdownDocumentStateFileId, false)
         }
+        onCloseTestSpecOutline={() => setTestSpecOutlineVisible(activeFile.id, false)}
         onCloseRenameDialog={closeRenameDialog}
         onRenameConfirm={handleRenameConfirm}
         markdownAnnotationsEnabled={markdownAnnotationsEnabled}

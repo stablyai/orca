@@ -35,6 +35,8 @@ type EditorPanelHeaderProps = {
   canOpenPreviewToSide: boolean
   canShowMarkdownPreview: boolean
   canShowMarkdownTableOfContents: boolean
+  canShowTestSpecOutline: boolean
+  showTestSpecOutline: boolean
   isMarkdownTableOfContentsDisabled: boolean
   shouldShowMarkdownExportAction: boolean
   canExportMarkdownToPdf: boolean
@@ -51,6 +53,7 @@ type EditorPanelHeaderProps = {
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
+  onToggleTestSpecOutline: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
   createMarkdownArtifactRequest?: () => Promise<ArtifactWriteRequest>
@@ -74,6 +77,8 @@ export function EditorPanelHeader({
   shouldShowMarkdownExportAction,
   canExportMarkdownToPdf,
   showMarkdownTableOfContents,
+  canShowTestSpecOutline,
+  showTestSpecOutline,
   canShowMarkdownFrontmatterToggle,
   markdownFrontmatterVisible,
   sideBySide,
@@ -86,6 +91,7 @@ export function EditorPanelHeader({
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
+  onToggleTestSpecOutline,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
   createMarkdownArtifactRequest
@@ -313,6 +319,31 @@ export function EditorPanelHeader({
                     'auto.components.editor.EditorPanelHeader.5447c4f68f',
                     'Table of Contents'
                   )}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+      {canShowTestSpecOutline && (
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className={`p-1 rounded hover:bg-accent hover:text-foreground transition-colors flex-shrink-0 ${
+                  showTestSpecOutline ? 'bg-accent text-foreground' : 'text-muted-foreground'
+                }`}
+                onClick={onToggleTestSpecOutline}
+                aria-label={translate(
+                  'auto.components.editor.EditorPanelHeader.a81f2c94e2',
+                  'Test Outline'
+                )}
+                aria-pressed={showTestSpecOutline}
+              >
+                <ListTree size={14} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {translate('auto.components.editor.EditorPanelHeader.a81f2c94e2', 'Test Outline')}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

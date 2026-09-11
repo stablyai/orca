@@ -52,6 +52,10 @@ export function createCloseFileAction(
           visibilityKeysToRemove.length > 0
             ? removeMarkdownVisibilityKeys(s.markdownTableOfContentsVisible, visibilityKeysToRemove)
             : s.markdownTableOfContentsVisible
+        const newTestSpecOutlineVisible =
+          visibilityKeysToRemove.length > 0
+            ? removeMarkdownVisibilityKeys(s.testSpecOutlineVisible, visibilityKeysToRemove)
+            : s.testSpecOutlineVisible
         // Why: editorCursorLine is keyed by fileId and grows unbounded across a long session without cleanup on close.
         const newEditorCursorLine = { ...s.editorCursorLine }
         delete newEditorCursorLine[fileId]
@@ -185,6 +189,7 @@ export function createCloseFileAction(
           editorViewMode: newEditorViewMode,
           markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
           markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
+          testSpecOutlineVisible: newTestSpecOutlineVisible,
           tabBarOrderByWorktree: nextTabBarOrderByWorktree,
           pendingEditorReveal: null,
           pendingEditorFocusRequest:

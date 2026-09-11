@@ -23,6 +23,8 @@ export type EditorDraftState = {
   setMarkdownFrontmatterVisible: (fileId: string, visible: boolean) => void
   markdownTableOfContentsVisible: Record<string, boolean>
   setMarkdownTableOfContentsVisible: (fileId: string, visible: boolean) => void
+  testSpecOutlineVisible: Record<string, boolean>
+  setTestSpecOutlineVisible: (fileId: string, visible: boolean) => void
   markdownTocPanelWidth: number
   setMarkdownTocPanelWidth: (width: number) => void
   combinedDiffFileTreeWidth: number
@@ -141,6 +143,21 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
             [fileId]: true
           }
         }
+      }),
+
+    // Test spec outline visibility (#19721)
+    testSpecOutlineVisible: {},
+    setTestSpecOutlineVisible: (fileId, visible) =>
+      set((s) => {
+        if (!visible) {
+          if (!(fileId in s.testSpecOutlineVisible)) {
+            return s
+          }
+          const next = { ...s.testSpecOutlineVisible }
+          delete next[fileId]
+          return { testSpecOutlineVisible: next }
+        }
+        return { testSpecOutlineVisible: { ...s.testSpecOutlineVisible, [fileId]: true } }
       }),
 
     // Markdown table of contents panel sizing

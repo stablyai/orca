@@ -81,6 +81,7 @@ export function removeEditorStateForReplacedPreview(
     | 'editorViewMode'
     | 'markdownFrontmatterVisible'
     | 'markdownTableOfContentsVisible'
+    | 'testSpecOutlineVisible'
     | 'openFiles'
   >,
   replacedFile: Pick<OpenFile, 'id' | 'markdownPreviewSourceFileId'>,
@@ -94,6 +95,7 @@ export function removeEditorStateForReplacedPreview(
   | 'editorViewMode'
   | 'markdownFrontmatterVisible'
   | 'markdownTableOfContentsVisible'
+  | 'testSpecOutlineVisible'
 > {
   const visibilityKeys = [
     replacedFile.id,
@@ -115,7 +117,8 @@ export function removeEditorStateForReplacedPreview(
       markdownRichModeSizeOverride: state.markdownRichModeSizeOverride,
       editorViewMode: state.editorViewMode,
       markdownFrontmatterVisible: state.markdownFrontmatterVisible,
-      markdownTableOfContentsVisible: state.markdownTableOfContentsVisible
+      markdownTableOfContentsVisible: state.markdownTableOfContentsVisible,
+      testSpecOutlineVisible: state.testSpecOutlineVisible
     }
   }
   return {
@@ -142,6 +145,10 @@ export function removeEditorStateForReplacedPreview(
     ),
     markdownTableOfContentsVisible: removeMarkdownVisibilityKeys(
       state.markdownTableOfContentsVisible,
+      visibilityKeys
+    ),
+    testSpecOutlineVisible: removeMarkdownVisibilityKeys(
+      state.testSpecOutlineVisible,
       visibilityKeys
     )
   }

@@ -14676,7 +14676,8 @@
           "f0fd4174b5": "Open file tab to use rich markdown editing",
           "a10d9b8337": "Open file",
           "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change"
+          "631dab0df3": "Next change",
+          "a81f2c94e2": "Test Outline"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
@@ -15214,6 +15215,15 @@
           "a0af0198aa": "Large diffs are not rendered by default.",
           "c3d9f4a712": "This diff's size isn't known yet, so it loads on request.",
           "f7fa7a40d0": "Load diff"
+        },
+        "TestSpecOutlinePanel": {
+          "97ad46f11f": "Collapse {{value0}}",
+          "65b036b6c8": "Expand {{value0}}",
+          "9c1e44a2d7": "Go to line {{value0}}",
+          "27d0a9c49a": "Test case outline",
+          "06357eea60": "Test Outline",
+          "bbe8369097": "Close test outline",
+          "de3928b6e4": "No test cases found"
         }
       },
       "diff": {

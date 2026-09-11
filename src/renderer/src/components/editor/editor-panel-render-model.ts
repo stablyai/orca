@@ -14,6 +14,7 @@ import type { FileContent } from './editor-panel-content-types'
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import { getMarkdownRenderMode, type MarkdownRenderState } from './markdown-render-mode'
 import { getCachedMarkdownRichModeEligibility } from './markdown-rich-mode-eligibility-cache'
+import { isTestSpecFile } from './test-spec-outline-gate'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 
@@ -202,6 +203,13 @@ export function getEditorPanelRenderModel({
     canShowMarkdownTableOfContents:
       viewerLanguage === 'markdown' &&
       (hasViewModeToggle || activeFile.mode === 'markdown-preview'),
+    // Why: spec files render as plain Monaco with no outline — gate narrowly so the
+    // parse/panel cost only applies where describe/it trees exist.
+    canShowTestSpecOutline:
+      activeFile.mode === 'edit' &&
+      !isChangesMode &&
+      (resolvedLanguage === 'typescript' || resolvedLanguage === 'javascript') &&
+      isTestSpecFile(activeFile.relativePath, resolvedLanguage),
     canShowMarkdownPreview: canOpenMarkdownPreview({
       language: viewerLanguage,
       mode: activeFile.mode,

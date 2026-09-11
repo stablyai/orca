@@ -67,6 +67,7 @@ function renderShell(file: OpenFile, isCombinedDiff = false): string {
       model={model as never}
       copiedPathVisible={false}
       showMarkdownTableOfContents={false}
+      showTestSpecOutline={false}
       canShowMarkdownFrontmatterToggle={false}
       markdownFrontmatterVisible={false}
       sideBySide={false}
@@ -86,6 +87,7 @@ function renderShell(file: OpenFile, isCombinedDiff = false): string {
       onToggleSideBySide={noop}
       onEditorToggleChange={noop}
       onToggleMarkdownTableOfContents={noop}
+      onToggleTestSpecOutline={noop}
       onToggleMarkdownFrontmatter={noop}
       onExportMarkdownToPdf={noop}
       onContentChange={noop}
@@ -95,6 +97,7 @@ function renderShell(file: OpenFile, isCombinedDiff = false): string {
       onSaveForFile={async () => true}
       onReloadContent={noop}
       onCloseMarkdownTableOfContents={noop}
+      onCloseTestSpecOutline={noop}
       onCloseRenameDialog={noop}
       onRenameConfirm={async () => {}}
       markdownAnnotationsEnabled={false}

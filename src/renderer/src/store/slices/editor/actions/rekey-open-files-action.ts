@@ -127,6 +127,7 @@ export function createRekeyOpenFilesAction(
             s.markdownTableOfContentsVisible,
             migrations
           ),
+          testSpecOutlineVisible: rekeyFileIdRecord(s.testSpecOutlineVisible, migrations),
           activeFileId: s.activeFileId ? (migrations.get(s.activeFileId) ?? s.activeFileId) : null,
           activeFileIdByWorktree,
           tabBarOrderByWorktree,
