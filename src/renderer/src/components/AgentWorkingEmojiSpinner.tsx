@@ -1,35 +1,19 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
+import { createSpinnerAnimationStartHandler } from './spinner-phase-sync'
 
 const EMOJI_SPINNER_ANIMATION_NAME = 'agent-working-emoji-rotate'
 
-// Why: anchoring the Web Animation timeline gives late mounts the same phase as
-// existing spinners without recurring JS, mirroring AgentWorkingSpinner.
-function syncEmojiSpinnerPhase(el: HTMLSpanElement | null): void {
-  if (el === null || typeof el.getAnimations !== 'function') {
-    return
-  }
+const handleEmojiSpinnerAnimationStart = createSpinnerAnimationStartHandler(
+  EMOJI_SPINNER_ANIMATION_NAME
+)
 
-  const animation = el
-    .getAnimations()
-    .find(
-      (candidate) =>
-        'animationName' in candidate && candidate.animationName === EMOJI_SPINNER_ANIMATION_NAME
-    )
-  if (animation !== undefined) {
-    animation.startTime = 0
-  }
-}
-
-function handleEmojiSpinnerAnimationStart(event: React.AnimationEvent<HTMLSpanElement>): void {
-  if (event.animationName === EMOJI_SPINNER_ANIMATION_NAME) {
-    syncEmojiSpinnerPhase(event.currentTarget)
-  }
-}
-
-// Why: the working-state emoji rotates via CSS (.agent-working-emoji-spinner in
-// main.css) so rotation runs on the compositor and never touches the input
-// thread. Callers size it via className (size-2 etc.).
+/**
+ * Working-state indicator that spins the workspace's chosen emoji instead of the
+ * generic ring. Rotation animates via CSS (.agent-working-emoji-spinner in
+ * main.css) so it runs on the compositor and never touches the input thread.
+ * Callers size it via className (size-2 etc.).
+ */
 export function AgentWorkingEmojiSpinner({
   emoji,
   className
