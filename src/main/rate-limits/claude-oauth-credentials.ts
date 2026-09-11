@@ -44,7 +44,13 @@ export function parseClaudeOAuthCredentialsJson(
     const oauth = (JSON.parse(raw) as ClaudeCredentials)?.claudeAiOauth
     const hasRefreshableCredentials =
       typeof oauth?.refreshToken === 'string' && oauth.refreshToken.trim() !== ''
-    if (!oauth?.accessToken || typeof oauth.accessToken !== 'string') {
+    // Why: a whitespace-only token is unusable — treat it as absent so the
+    // entry counts as emptied (signed-out) instead of reaching the OAuth path.
+    const accessToken =
+      typeof oauth?.accessToken === 'string' && oauth.accessToken.trim() !== ''
+        ? oauth.accessToken.trim()
+        : null
+    if (accessToken == null) {
       return {
         token: null,
         hasRefreshableCredentials,
@@ -55,7 +61,7 @@ export function parseClaudeOAuthCredentialsJson(
       }
     }
     // Why: expiresAt is not authoritative for the usage endpoint; let the server decide.
-    return { token: oauth.accessToken, hasRefreshableCredentials, source }
+    return { token: accessToken, hasRefreshableCredentials, source }
   } catch {
     return emptyClaudeOAuthCredentialReadResult()
   }

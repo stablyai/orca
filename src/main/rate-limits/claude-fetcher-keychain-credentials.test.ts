@@ -469,9 +469,9 @@ describe('fetchClaudeRateLimits', () => {
         })
       )
 
-    await expect(
-      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
-    ).resolves.toMatchObject({
+    // Why: no allowPtyFallback override — signed-out must return before the
+    // generic CLI plan step even when the caller allows PTY fallback.
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
       provider: 'claude',
       status: 'error',
       error: 'Claude sign-in expired',
