@@ -1,7 +1,7 @@
 import { isAnteHeadlessOneShotCommand } from './ante-headless-command'
 import { isPrimeAgentHeadlessOneShotCommand } from './prime-agent-headless-command'
 import { isPrintModeHeadlessOneShotCommand } from './print-mode-headless-command'
-import { isNonInteractiveFxCommand } from './fx-command-mode'
+import { isInteractiveFxCommand } from './fx-command-mode'
 import type { TuiAgent } from './tui-agent'
 
 // Why: a table (not an if-chain) so adding an agent is one entry; Claude and Trae share
@@ -29,7 +29,7 @@ export function filterNonInteractiveAgentCommand<T extends AgentCommandRecogniti
   if (
     recognition &&
     (isHeadlessOneShotAgentCommand(recognition.agent, tokens) ||
-      (recognition.agent === 'fx' && isNonInteractiveFxCommand(tokens)))
+      (recognition.agent === 'fx' && !isInteractiveFxCommand(tokens)))
   ) {
     return null
   }

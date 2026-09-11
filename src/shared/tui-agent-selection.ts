@@ -8,7 +8,6 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'claude-agent-teams',
   'openclaude',
   'codex',
-  'fx',
   'grok',
   'copilot',
   'opencode',
@@ -40,7 +39,9 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'rovo',
   'hermes',
   'devin',
-  'openclaw'
+  'openclaw',
+  // Why: the unrelated `fx` JSON viewer shares this binary name, so exact agent binaries win.
+  'fx'
 ] as const satisfies readonly TuiAgent[]
 
 // Why: fresh installs should expose Claude Agent Teams in agent pickers; the

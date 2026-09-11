@@ -38,13 +38,13 @@ describe('buildOnboardingFolderAgentStartup', () => {
     })
 
     expect(startup).toMatchObject({
-      command: "fx '--full-access'",
-      env: {},
+      command: 'fx',
+      env: { FX_PERMISSION_MODE: 'full-access' },
       launchAgent: 'fx',
       launchConfig: {
-        agentCommand: "fx '--full-access'",
-        agentArgs: '--full-access',
-        agentEnv: {}
+        agentCommand: 'fx',
+        agentArgs: '',
+        agentEnv: { FX_PERMISSION_MODE: 'full-access' }
       },
       telemetry: {
         agent_kind: 'fx',

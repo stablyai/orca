@@ -159,7 +159,7 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
 }
 
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
+  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission (?:needed|required)|requires permission|allow once|allow always|apply this change\?|run this command\?/i
 
 // Why text at all: cursor-agent has no approval hook, so the key-bound menu is the only authority.
 const CURSOR_APPROVAL_CHOICE_MARKERS = [
@@ -223,6 +223,23 @@ function findTerminalWaitBlockedSignal(
   const signal = findBlockedSignalInLiveWindow(normalized)
   // Why: callers compare this index against ready-header indexes found over the full tail.
   return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
+}
+
+function findFxApprovalPromptIndex(normalized: string): number | null {
+  const permissionIndex = normalized.lastIndexOf('permission needed')
+  if (permissionIndex === -1) {
+    return null
+  }
+  const dialog = normalized.slice(permissionIndex)
+  const lines = dialog.split('\n').filter((line) => line.trim().length > 0)
+  const footer = lines.at(-1) ?? ''
+  return dialog.includes('apply this change?') &&
+    dialog.includes('apply once') &&
+    footer.includes('choose now') &&
+    footer.includes('enter confirm') &&
+    footer.includes('esc cancel')
+    ? permissionIndex
+    : null
 }
 
 function findBlockedSignalInLiveWindow(
@@ -297,6 +314,10 @@ function findBlockedSignalInLiveWindow(
   const cursorApprovalIndex = findCursorApprovalPromptIndex(normalized)
   if (cursorApprovalIndex !== null) {
     candidates.push({ reason: 'agent-approval-prompt', index: cursorApprovalIndex })
+  }
+  const fxApprovalIndex = findFxApprovalPromptIndex(normalized)
+  if (fxApprovalIndex !== null) {
+    candidates.push({ reason: 'agent-approval-prompt', index: fxApprovalIndex })
   }
   const permissionPromptIndex = Math.max(
     normalized.lastIndexOf('permission required'),

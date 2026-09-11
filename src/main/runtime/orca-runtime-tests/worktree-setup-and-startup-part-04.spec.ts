@@ -18,7 +18,7 @@ import { TEST_REPO_ID, makeWorktreeMeta, store } from '../orca-runtime-test-fixt
 describe('OrcaRuntimeService', () => {
   it.each([
     { agent: 'aider' as const, command: "aider '--yes-always'" },
-    { agent: 'fx' as const, command: "fx '--full-access'" }
+    { agent: 'fx' as const, command: 'fx' }
   ])(
     'sends follow-up prompts for CLI-created $agent startup agents',
     async ({ agent, command }) => {
@@ -84,7 +84,10 @@ describe('OrcaRuntimeService', () => {
         expect.objectContaining({
           cwd: '/tmp/workspaces/runtime-cli-aider-startup',
           command,
-          worktreeId: result.worktree.id
+          worktreeId: result.worktree.id,
+          ...(agent === 'fx'
+            ? { env: expect.objectContaining({ FX_PERMISSION_MODE: 'full-access' }) }
+            : {})
         })
       )
       await vi.waitFor(() => {
