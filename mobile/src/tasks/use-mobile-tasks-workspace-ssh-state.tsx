@@ -20,6 +20,7 @@ import {
   sshRepoConnectRun,
   sshRepoStateRead
 } from './mobile-workspace-source-operations'
+import { getWorkspaceDetectAgentsParams } from '../worktree/workspace-agent-detection-target'
 
 export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsModel) {
   const {
@@ -125,7 +126,13 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
             connectionId: workspaceCreateTargetRepo.connectionId
           })
         }
-      : { operation: localAgentDetectionRead, reply: localAgentDetectionRead.request(client) }
+      : {
+          operation: localAgentDetectionRead,
+          reply: localAgentDetectionRead.request(
+            client,
+            getWorkspaceDetectAgentsParams(workspaceCreateTargetRepo.path)
+          )
+        }
     void detection.reply
       .then((reply) => {
         if (stale) {
