@@ -87,5 +87,42 @@ export const LIVE_CREDENTIAL_SURFACES: readonly TerminalCredentialPromptCase[] =
       'https://claude.ai/oauth/authorize?code=true',
       'Paste code here if prompted >'
     ]
+  ],
+  // The dialog this guard was written for (F19749-1). A numbered menu of credential actions
+  // ending in a bare `>` caret: no terminator anywhere, so only the row-final noun carries it.
+  [
+    'antigravity sign-in menu over ready chrome',
+    [
+      'Antigravity CLI 1.0.3',
+      'user@example.com (Antigravity Business)',
+      'Sign in to continue',
+      '~/orca/workspaces/orca/agy-dispatch-issue',
+      '1. Open browser',
+      '2. Paste an API key',
+      '>'
+    ]
+  ],
+  ['vendor-qualified indented api-key ask', ['  Enter your Antigravity API key:']],
+  // sudo translates its prompt but never its `[sudo]` tag, and the only thing it asks for is a
+  // password. An English-only rule here misses every non-English desktop.
+  ['sudo password on a German system', ['[sudo] Passwort für neil:']],
+  ['sudo password on a zh-TW system', ['[sudo] neil 的密碼：']],
+  ['sudo password on a Japanese system', ['[sudo] neil のパスワード:']],
+  ['sudo retry notice', ['[sudo] Sorry, try again.', '[sudo] password for neil:']],
+  // The common api-key ask names the env var it fills, so the noun carries an underscore.
+  [
+    'aider env-var api-key ask',
+    ['Aider v0.86.1', 'Model: gpt-6 with diff edit format', '', 'Enter your OPENAI_API_KEY:']
+  ],
+  ['bare env-var api-key label', ['ANTHROPIC_API_KEY:']],
+  ['waiting on the user to sign in', ['Waiting for you to sign in…']],
+  [
+    'crush api-key onboarding dialog',
+    [
+      '╭─ Crush ───────────────────────╮',
+      '│  Connect your model provider           │',
+      '│  Paste your API key here:              │',
+      '╰─────────────────────────────╯'
+    ]
   ]
 ]

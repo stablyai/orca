@@ -48,6 +48,39 @@ describe('findCredentialPromptIndex', () => {
     }
   })
 
+  it('keeps the sentinel a superset over every screen, not just the ones we expect to block', () => {
+    // Why both corpora: asserting the superset only over screens we already believe block makes
+    // the test as biased as the corpus. The invariant is about the detector's OWN verdict — any
+    // screen it matches must survive the prefilter — and that is what caught the main lane
+    // silently passing the Antigravity sign-in menu the renderer lane refused.
+    for (const [name, lines] of [...LIVE_CREDENTIAL_SURFACES, ...LEGITIMATE_AGENT_SCREENS]) {
+      if (findCredentialPromptIndex(screen(lines).toLowerCase()) === null) {
+        continue
+      }
+      const matched = lines.some((line) => TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE.test(line))
+      expect(matched, name).toBe(true)
+    }
+  })
+
+  it('keeps the sentinel linear on adversarial lines', () => {
+    // The sentinel runs per retained tail line at streaming rate, so a variable-length prefix
+    // inside its noun alternation is not a style question: the obvious way to spell the env-var
+    // vendor slot (`(?:[a-z0-9]+_)?api[ _-]?key`) costs 30ms on one 5.5k-char line, ~1000x this
+    // budget, and stalls the whole tail index.
+    const lines = [
+      `${'a'.repeat(5000)}${'_'.repeat(500)}`,
+      `${'a_'.repeat(2500)}api key${'x'.repeat(200)}`,
+      'passwordx'.repeat(500)
+    ]
+    const started = performance.now()
+    for (let run = 0; run < 100; run += 1) {
+      for (const line of lines) {
+        TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE.test(line)
+      }
+    }
+    expect(performance.now() - started).toBeLessThan(500)
+  })
+
   it('does not fire on any realistic terminal title', () => {
     for (const title of TERMINAL_TITLE_CLASSIFICATION_CORPUS) {
       expect(findCredentialPromptIndex(title.toLowerCase()), title).toBeNull()

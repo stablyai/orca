@@ -35,13 +35,18 @@ export function createPasteUndeliveredNotice(args: {
         // Why: PTY never spawned = genuine launch failure; stay silent so the caller emits the sole notice.
         return
       }
-      if (!currentTab || state.activeWorktreeId !== args.worktreeId) {
+      const navigatedAway = !currentTab || state.activeWorktreeId !== args.worktreeId
+      if (navigatedAway && failure !== 'credential-prompt') {
         // Why: user cancelled (closed tab / switched worktrees); mark notified so the deferred caller suppresses its toast too.
         notified = true
         return
       }
       notified = true
       if (failure === 'credential-prompt') {
+        // Why this one ignores the cancel suppression: navigating away is evidence the user stopped
+        // caring about a stalled readiness wait, but it is not consent to lose a prompt the guard
+        // withheld. Suppressing here is the one path on which a credential refusal — including a
+        // false positive — disappears with no toast, no fallback and no record.
         showAgentPasteCredentialPromptToast(args.agent, args.submitted)
         return
       }

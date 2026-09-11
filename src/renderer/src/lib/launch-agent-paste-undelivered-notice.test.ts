@@ -76,13 +76,34 @@ describe('createPasteUndeliveredNotice', () => {
     expect(undelivered.wasNotified()).toBe(false)
   })
 
-  it('suppresses the toast but marks notified once the user has moved on', () => {
+  it('suppresses a readiness timeout once the user has moved on', () => {
+    testState.appState.activeWorktreeId = 'wt-2'
+    const undelivered = notice()
+    undelivered.onUndelivered('readiness-timeout')
+
+    expect(testState.toastMessage).not.toHaveBeenCalled()
+    expect(testState.track).not.toHaveBeenCalled()
+    expect(undelivered.wasNotified()).toBe(true)
+  })
+
+  it('still reports a credential refusal after the user switched workspaces', () => {
+    // The one path that could lose a prompt outright: the cancel suppression also sets
+    // `notified`, which turns off the deferred caller's fallback toast. A false positive here
+    // would leave no trace at all.
     testState.appState.activeWorktreeId = 'wt-2'
     const undelivered = notice()
     undelivered.onUndelivered('credential-prompt')
 
-    expect(testState.showCredentialToast).not.toHaveBeenCalled()
-    expect(testState.toastMessage).not.toHaveBeenCalled()
+    expect(testState.showCredentialToast).toHaveBeenCalledExactlyOnceWith('codex', true)
+    expect(undelivered.wasNotified()).toBe(true)
+  })
+
+  it('still reports a credential refusal after the tab was closed', () => {
+    testState.appState.tabsByWorktree = { 'wt-1': [] }
+    const undelivered = notice()
+    undelivered.onUndelivered('credential-prompt')
+
+    expect(testState.showCredentialToast).toHaveBeenCalledExactlyOnceWith('codex', true)
     expect(undelivered.wasNotified()).toBe(true)
   })
 })
