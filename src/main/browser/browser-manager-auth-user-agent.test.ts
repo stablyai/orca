@@ -112,10 +112,13 @@ describe('browserManager', () => {
     setUserAgent.mockClear()
 
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
-    expect(setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
+    expect(setUserAgent).not.toHaveBeenCalled()
+    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+      userAgent: googleAuthUserAgent()
+    })
 
-    // A redirect off the auth host must derive the CDP write from the session UA, not the stale
-    // Firefox WebContents UA installed by the direct navigation.
+    // A redirect off the auth host must derive the CDP write from the session UA, not the standing
+    // Firefox CDP override installed by the direct navigation.
     sendCommand.mockClear()
     willRedirect(null, 'https://myaccount.google.com/', false, true)
     const uaOverrideIndex = sendCommand.mock.calls.findIndex(
@@ -458,9 +461,9 @@ describe('browserManager', () => {
     )
   })
 
-  // Why: a direct load reaches did-start-navigation before the request is dispatched, so the
-  // WebContents write is safe there and must stay — CDP is the redirect-path mechanism only.
-  it('still uses the WebContents UA write for navigations that are not redirects', () => {
+  // Why: WebContents.setUserAgent() after a direct navigation starts replays that document and all
+  // of its subresources. The auth identity must use the cancel-free CDP path for direct loads too.
+  it('retargets direct auth navigation over CDP without writing the WebContents UA', () => {
     const guest = {
       id: 420,
       isDestroyed: vi.fn(() => false),
@@ -490,18 +493,14 @@ describe('browserManager', () => {
 
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
 
-    expect(guest.setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
-    expect(guest.debugger.sendCommand).not.toHaveBeenCalledWith(
-      'Emulation.setUserAgentOverride',
-      expect.anything()
-    )
+    expect(guest.setUserAgent).not.toHaveBeenCalled()
+    expect(guest.debugger.sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+      userAgent: googleAuthUserAgent()
+    })
   })
 
-  // Why: the direct-navigation branch still writes the Firefox UA through WebContents.setUserAgent,
-  // and nothing ever restores it once the guest switches to the CDP override. A viewport preset that
-  // read getUserAgent() back as its base identity would therefore republish Firefox on every ordinary
-  // host — the wire UA saying Firefox while sec-ch-ua still says Chrome, the exact cross-layer tell
-  // this scope exists to remove.
+  // Why: a viewport preset must derive its base from the session identity, independent of the
+  // standing auth CDP override, or it can republish Firefox on an ordinary host.
   it('keeps a viewport preset on the session identity after an auth-host visit', async () => {
     const { guest, debuggerSendCommand } = makeViewportGuest(9001)
     webContentsFromIdMock.mockReturnValue(guest)
@@ -528,8 +527,10 @@ describe('browserManager', () => {
 
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
     await flushViewportOps()
-    // The direct branch pins the WebContents UA to Firefox and never restores it.
-    expect((guest.getUserAgent as () => string)()).toBe(googleAuthUserAgent())
+    expect(guest.setUserAgent).not.toHaveBeenCalled()
+    expect(debuggerSendCommand).toHaveBeenLastCalledWith('Emulation.setUserAgentOverride', {
+      userAgent: googleAuthUserAgent()
+    })
 
     willRedirect({ preventDefault: vi.fn() }, 'https://myaccount.google.com/', false, true)
     await flushViewportOps()

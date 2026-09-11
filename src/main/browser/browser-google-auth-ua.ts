@@ -20,6 +20,19 @@ export function isGoogleAuthUrl(rawUrl: string): boolean {
   }
 }
 
+export function shouldUseGoogleAuthIdentity(
+  url: string,
+  referrer: string,
+  resourceType: string
+): boolean {
+  if (isGoogleAuthUrl(url)) {
+    return true
+  }
+  // Why: early cross-host subresources can leave before the WebContents Firefox override lands;
+  // the auth referrer identifies their owning flow. Main-frame exits must restore the profile UA.
+  return resourceType !== 'mainFrame' && isGoogleAuthUrl(referrer)
+}
+
 // Why: rv:/Gecko/Firefox tokens must line up with a real released build and the
 // platform token must match the host OS, or the UA is internally inconsistent and
 // itself a bot tell.

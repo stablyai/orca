@@ -49,8 +49,7 @@ import {
 import {
   createViewportGuestFactory,
   flushViewportOps,
-  GUEST_CLEAN_UA,
-  GUEST_ELECTRON_UA
+  GUEST_CLEAN_UA
 } from './browser-manager-viewport-test-fixtures'
 
 const { guestOnMock, webContentsFromIdMock } = browserMocks
@@ -377,7 +376,7 @@ describe('browserManager', () => {
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/', true)
       await flushViewportOps()
 
-      expect(guest.setUserAgent).toHaveBeenLastCalledWith(GUEST_ELECTRON_UA)
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
 
       // A later preset must also resolve the committed, non-auth URL.
@@ -636,7 +635,7 @@ describe('browserManager', () => {
       await presetDone
     })
 
-    it('does not reinstall a preset while its final UA clear is in flight', async () => {
+    it('preserves the auth-owned UA while a preset UA clear is in flight', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4258, 'https://example.com/')
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
@@ -671,7 +670,7 @@ describe('browserManager', () => {
       debuggerSendCommand.mockClear()
       didStartNavigation(null, 'https://accounts.google.com/', false, true)
       await flushViewportOps()
-      expect(debuggerSendCommand).not.toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
         userAgent: googleAuthUserAgent()
       })
 
@@ -725,7 +724,7 @@ describe('browserManager', () => {
       })
     })
 
-    it('does not touch the UA override on navigation when no preset is standing', async () => {
+    it('applies the auth-owned UA on navigation when no preset is standing', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4248)
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
@@ -740,13 +739,12 @@ describe('browserManager', () => {
 
       didStartNavigation(null, 'https://accounts.google.com/', false, true)
       await flushViewportOps()
-      expect(debuggerSendCommand).not.toHaveBeenCalledWith(
-        'Emulation.setUserAgentOverride',
-        expect.anything()
-      )
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+        userAgent: googleAuthUserAgent()
+      })
     })
 
-    it('stops re-issuing the UA override once the preset is cleared', async () => {
+    it('keeps applying the auth-owned UA once the preset is cleared', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4249)
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
@@ -770,10 +768,9 @@ describe('browserManager', () => {
       debuggerSendCommand.mockClear()
       didStartNavigation(null, 'https://accounts.google.com/', false, true)
       await flushViewportOps()
-      expect(debuggerSendCommand).not.toHaveBeenCalledWith(
-        'Emulation.setUserAgentOverride',
-        expect.anything()
-      )
+      expect(debuggerSendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+        userAgent: googleAuthUserAgent()
+      })
     })
 
     it('leaves the UA override alone on navigation for native-UA profiles', async () => {

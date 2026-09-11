@@ -4,6 +4,7 @@ import {
   googleAuthUserAgent,
   isGoogleAuthUrl,
   setUserAgentHeader,
+  shouldUseGoogleAuthIdentity,
   stripClientHints
 } from './browser-google-auth-ua'
 
@@ -30,6 +31,28 @@ describe('googleAuthUserAgent', () => {
     expect(ua).toMatch(/^Mozilla\/5\.0 \(.+; rv:\d+\.0\) Gecko\/20100101 Firefox\/\d+\.0$/)
     expect(ua).not.toContain('Chrome')
     expect(ua).not.toContain('Electron')
+  })
+})
+
+describe('shouldUseGoogleAuthIdentity', () => {
+  it('includes cross-host subresources referred by an auth document', () => {
+    expect(
+      shouldUseGoogleAuthIdentity(
+        'https://www.gstatic.com/accounts/signin.js',
+        'https://accounts.google.com/v3/signin/identifier',
+        'script'
+      )
+    ).toBe(true)
+  })
+
+  it('excludes a post-auth main-frame exit even when the auth document referred it', () => {
+    expect(
+      shouldUseGoogleAuthIdentity(
+        'https://mail.google.com/',
+        'https://accounts.google.com/v3/signin/identifier',
+        'mainFrame'
+      )
+    ).toBe(false)
   })
 })
 

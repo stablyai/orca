@@ -3,8 +3,8 @@ import type { Session } from 'electron'
 import {
   currentUserAgent,
   googleAuthUserAgent,
-  isGoogleAuthUrl,
   setUserAgentHeader,
+  shouldUseGoogleAuthIdentity,
   stripClientHints
 } from './browser-google-auth-ua'
 
@@ -30,10 +30,10 @@ export function setupGoogleAuthUserAgentOverride(sess: Session): void {
 
   sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
     const headers = details.requestHeaders
-    if (isGoogleAuthUrl(details.url)) {
+    if (shouldUseGoogleAuthIdentity(details.url, details.referrer, details.resourceType)) {
       // Why: present a Firefox identity on Google's sign-in hosts so the user logs
-      // in inside the app and Google issues self-refreshing bound cookies. Strip
-      // sec-ch-ua* because real Firefox sends none.
+      // in inside the app and Google issues self-refreshing bound cookies. Auth-page
+      // subresources share that identity even before the WebContents override lands.
       setUserAgentHeader(headers, firefoxUa)
       stripClientHints(headers)
       callback({ requestHeaders: headers })
