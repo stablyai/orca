@@ -153,8 +153,7 @@ describe('openHttpLink', () => {
     expect(openRuntimeBrowserTabMock).toHaveBeenCalledExactlyOnceWith({
       workspaceId: 'wt-1',
       url: 'https://github.com/acme/widgets/pull/123',
-      intent: { kind: 'url' },
-      expectedRuntimeEnvironmentId: 'remote-1'
+      intent: { kind: 'url' }
     })
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(openUrlMock).not.toHaveBeenCalled()
