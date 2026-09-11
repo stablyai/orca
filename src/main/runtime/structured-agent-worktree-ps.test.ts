@@ -2,12 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { parsePairingCode } from '../../shared/pairing'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { AgentSessionRecordStore } from './agent-session-record-store'
-import { RpcDispatcher } from './rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
 import {
   MOCK_GIT_WORKTREES,
   OrcaRuntimeService,
@@ -16,6 +17,7 @@ import {
   listWorktreesStrict
 } from './orca-runtime-test-mocks.spec'
 import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
+import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
 const launchMocks = vi.hoisted(() => ({
   activateAndRevealWorktree: vi.fn(),
@@ -73,6 +75,8 @@ await import('./orca-runtime-test-lifecycle.spec')
 
 let integratedHost: StructuredAgentSessionHost | null = null
 let integratedRoot: string | null = null
+let integratedServer: OrcaRuntimeRpcServer | null = null
+const integratedConnections: RemoteRuntimeRequestConnection[] = []
 
 beforeEach(() => {
   vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
@@ -80,12 +84,17 @@ beforeEach(() => {
   vi.mocked(listWorktreesStrict).mockResolvedValue(MOCK_GIT_WORKTREES)
 })
 afterEach(async () => {
+  for (const connection of integratedConnections.splice(0)) {
+    connection.close()
+  }
+  await integratedServer?.stop()
   await integratedHost?.flushAllStreamedEvents()
   if (integratedRoot) {
     await rm(integratedRoot, { recursive: true, force: true })
   }
   integratedHost = null
   integratedRoot = null
+  integratedServer = null
   setStructuredAgentSessionHost(null)
   vi.unstubAllGlobals()
 })
@@ -182,8 +191,9 @@ describe('structured agent worktree.ps projection', () => {
     launchMocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'tab-1' })
 
     integratedRoot = await mkdtemp(join(tmpdir(), 'orca-work-item-start-integration-'))
+    const recordStoreDirectory = join(integratedRoot, 'store')
     const recordStore = await AgentSessionRecordStore.open({
-      directory: join(integratedRoot, 'store'),
+      directory: recordStoreDirectory,
       hostId: 'local'
     })
     const providerDispatch = vi.fn<StructuredAgentSessionAdapter['dispatch']>(async () => ({
@@ -205,10 +215,14 @@ describe('structured agent worktree.ps projection', () => {
     setStructuredAgentSessionHost(integratedHost)
 
     const runtime = new OrcaRuntimeService(store)
-    vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
+    let clientSettings: {
+      experimentalStructuredNativeChat: boolean
+      workItemStartPromptDelivery: 'draft' | 'submit-after-ready'
+    } = {
       experimentalStructuredNativeChat: false,
       workItemStartPromptDelivery: 'submit-after-ready'
-    } as never)
+    }
+    vi.spyOn(runtime, 'getClientSettings').mockImplementation(() => clientSettings as never)
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
     })
@@ -228,27 +242,35 @@ describe('structured agent worktree.ps projection', () => {
         }) as never
     )
     vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue(undefined)
-    const dispatcher = new RpcDispatcher({
+    integratedServer = new OrcaRuntimeRpcServer({
       runtime,
-      methods: STRUCTURED_AGENT_SESSION_METHODS
+      userDataPath: integratedRoot,
+      enableWebSocket: true,
+      wsPort: 0
     })
-    let requestNumber = 0
+    await integratedServer.start()
+    const offer = integratedServer.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'web-structured-start',
+      scope: 'runtime'
+    })
+    if (!offer.available) {
+      throw new Error('pairing unavailable')
+    }
+    const pairing = parsePairingCode(offer.pairingUrl)
+    if (!pairing) {
+      throw new Error('invalid pairing')
+    }
+    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
+      id: TEST_WORKTREE_ID,
+      creatorProvenance: { kind: 'paired-device', deviceId: offer.deviceId }
+    } as never)
+    const connection = new RemoteRuntimeRequestConnection(pairing, [
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+    ])
+    integratedConnections.push(connection)
     launchMocks.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
-      requestNumber += 1
-      const response = await dispatcher.dispatch(
-        {
-          id: `work-item-${requestNumber}`,
-          authToken: 'desktop-ipc',
-          method,
-          params
-        },
-        {
-          clientId: 'desktop-renderer',
-          clientKind: 'runtime',
-          clientCapabilities: ['agent-session.structured.v1'],
-          localDesktopAuthority: true
-        }
-      )
+      const response = await connection.request(method, params, 5_000)
       if (!response.ok) {
         throw Object.assign(new Error(response.error.message), { code: response.error.code })
       }
@@ -268,9 +290,9 @@ describe('structured agent worktree.ps projection', () => {
         promptDelivery: 'submit-after-ready',
         item: {
           type: 'issue',
-          number: 57,
+          number: 101,
           title: 'Start native Codex',
-          url: 'https://github.com/acme/repo/issues/57'
+          url: 'https://github.com/acme/repo/issues/101'
         }
       })
     ).resolves.toBe(true)
@@ -288,6 +310,36 @@ describe('structured agent worktree.ps projection', () => {
     expect(replay).toMatchObject({ ok: true, replayed: true })
     expect(providerDispatch).toHaveBeenCalledOnce()
 
+    const supportCall = launchMocks.callRuntimeRpc.mock.calls.find(
+      ([, method]) => method === 'agentSession.createSupport'
+    )
+    const createCall = launchMocks.callRuntimeRpc.mock.calls.find(
+      ([, method]) => method === 'agentSession.create'
+    )
+    if (!supportCall || !createCall) {
+      throw new Error('Work Item Start did not create a structured session')
+    }
+    connection.close()
+    clientSettings = {
+      experimentalStructuredNativeChat: false,
+      workItemStartPromptDelivery: 'draft'
+    }
+    const reconnected = new RemoteRuntimeRequestConnection(pairing, [
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+    ])
+    integratedConnections.push(reconnected)
+    await expect(reconnected.request(supportCall[1], supportCall[2], 5_000)).resolves.toMatchObject(
+      {
+        ok: true,
+        result: { supported: true }
+      }
+    )
+    await expect(reconnected.request(createCall[1], createCall[2], 5_000)).resolves.toMatchObject({
+      ok: true,
+      result: { ok: true, replayed: true }
+    })
+    expect(providerDispatch).toHaveBeenCalledOnce()
+
     const result = await runtime.getWorktreePs()
     const summary = result.worktrees.find((entry) => entry.worktreeId === TEST_WORKTREE_ID)
     const sessionId = (sendCall[2] as { envelope: { sessionId: string } }).envelope.sessionId
@@ -296,12 +348,77 @@ describe('structured agent worktree.ps projection', () => {
         sessionId,
         providerSession: { key: 'session_id', id: 'work-item-thread' },
         agentType: 'codex',
-        prompt: 'https://github.com/acme/repo/issues/57'
+        prompt: 'https://github.com/acme/repo/issues/101'
       })
     ])
     expect(summary?.agents).not.toEqual([])
     expect(summary?.agents[0]?.providerSession).not.toHaveProperty('transcriptPath')
-    expect(recordStore.getRecord(sessionId)?.launchOrigin).toBe('work-item-start')
+    expect(recordStore.getRecord(sessionId)).toMatchObject({
+      launchOrigin: 'work-item-start',
+      launchAuthority: { kind: 'paired-device', deviceId: offer.deviceId }
+    })
+    const reopenedStore = await AgentSessionRecordStore.open({
+      directory: recordStoreDirectory,
+      hostId: 'local'
+    })
+    expect(reopenedStore.getRecord(sessionId)?.launchAuthority).toEqual({
+      kind: 'paired-device',
+      deviceId: offer.deviceId
+    })
+
+    const otherOffer = integratedServer.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'other-runtime',
+      scope: 'runtime'
+    })
+    if (!otherOffer.available) {
+      throw new Error('second pairing unavailable')
+    }
+    const otherPairing = parsePairingCode(otherOffer.pairingUrl)
+    if (!otherPairing) {
+      throw new Error('invalid second pairing')
+    }
+    const otherConnection = new RemoteRuntimeRequestConnection(otherPairing, [
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+    ])
+    integratedConnections.push(otherConnection)
+    await expect(
+      otherConnection.request(
+        'agentSession.createSupport',
+        { worktree: `id:${TEST_WORKTREE_ID}`, agent: 'codex', launchOrigin: 'work-item-start' },
+        5_000
+      )
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+
+    const mobileOffer = integratedServer.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'mobile-client',
+      scope: 'mobile'
+    })
+    if (!mobileOffer.available) {
+      throw new Error('mobile pairing unavailable')
+    }
+    const mobilePairing = parsePairingCode(mobileOffer.pairingUrl)
+    if (!mobilePairing) {
+      throw new Error('invalid mobile pairing')
+    }
+    const mobileConnection = new RemoteRuntimeRequestConnection(mobilePairing, [
+      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+    ])
+    integratedConnections.push(mobileConnection)
+    await expect(
+      mobileConnection.request(
+        'agentSession.createSupport',
+        { worktree: `id:${TEST_WORKTREE_ID}`, agent: 'codex', launchOrigin: 'work-item-start' },
+        5_000
+      )
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
   })
 
   it('lists the authoritative structured session and provider identities', async () => {

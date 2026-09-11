@@ -220,6 +220,10 @@ export function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcD
           : { model: 'gpt-5.6-sol', effort: 'medium' },
       runtimeKind: 'native'
     })),
+    showManagedWorktree: vi.fn(async () => ({
+      id: 'workspace-1',
+      creatorProvenance: { kind: 'host' }
+    })),
     publishStructuredAgentSessionTab: vi.fn()
   })
   const runtime = {
@@ -247,6 +251,7 @@ export async function call(
     clientKind?: 'mobile' | 'runtime'
     clientCapabilities?: string[]
     localDesktopAuthority?: true
+    pairedDeviceId?: string
   },
   runtimeOverrides: Record<string, unknown> = {}
 ): Promise<RpcResponse> {

@@ -95,6 +95,7 @@ export class RpcDispatcher {
           connectionId: options?.connectionId,
           requestId: request.id,
           clientId: options?.clientId,
+          pairedDeviceId: options?.pairedDeviceId,
           clientKind: options?.clientKind,
           localDesktopAuthority: options?.localDesktopAuthority,
           clientCapabilities: options?.clientCapabilities,

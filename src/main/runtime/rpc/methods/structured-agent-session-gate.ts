@@ -13,7 +13,9 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type { RpcContext } from '../core'
 import type { StructuredAgentSessionLaunchOrigin } from '../../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionLaunchAuthority } from '../../../../shared/structured-agent-session-create'
 import {
+  structuredWorkItemStartCallerAuthority,
   supportsStructuredAgentSessionCapability,
   supportsStructuredAgentSessions,
   supportsWorkItemStartStructuredSessionCreate
@@ -34,17 +36,42 @@ export function requireStructuredCapability(ctx: RpcContext): void {
 }
 
 export function canAccessWorkItemStartStructuredSession(
-  ctx: Pick<RpcContext, 'clientCapabilities' | 'clientKind' | 'localDesktopAuthority'>,
+  ctx: Pick<
+    RpcContext,
+    'clientCapabilities' | 'clientKind' | 'localDesktopAuthority' | 'pairedDeviceId'
+  >,
   sessionId: string
 ): boolean {
-  if (
-    ctx.localDesktopAuthority !== true ||
-    ctx.clientKind !== 'runtime' ||
-    !supportsStructuredAgentSessionCapability(ctx)
-  ) {
+  const callerAuthority = structuredWorkItemStartCallerAuthority(ctx)
+  if (!callerAuthority) {
     return false
   }
-  return isWorkItemStartStructuredSession(getStructuredAgentSessionHost(), sessionId)
+  const record = getStructuredAgentSessionHost()?.deps.store.getRecord(sessionId)
+  if (record?.launchOrigin !== 'work-item-start') {
+    return false
+  }
+  if (callerAuthority.kind === 'local-desktop') {
+    return true
+  }
+  return (
+    record.launchAuthority?.kind === 'paired-device' &&
+    record.launchAuthority.deviceId === callerAuthority.deviceId
+  )
+}
+
+export async function resolveWorkItemStartStructuredCreateAuthority(
+  ctx: RpcContext,
+  worktree: string
+): Promise<StructuredAgentSessionLaunchAuthority | null> {
+  const authority = structuredWorkItemStartCallerAuthority(ctx)
+  if (!authority || authority.kind === 'local-desktop') {
+    return authority
+  }
+  const workspace = await ctx.runtime.showManagedWorktree(worktree)
+  return workspace.creatorProvenance?.kind === 'paired-device' &&
+    workspace.creatorProvenance.deviceId === authority.deviceId
+    ? authority
+    : null
 }
 
 export function isWorkItemStartStructuredSession(
@@ -96,11 +123,12 @@ export function requireWorkItemStartStatusHost(ctx: RpcContext): StructuredAgent
   requireStructuredCapability(ctx)
   const host = getStructuredAgentSessionHost()
   if (
-    ctx.localDesktopAuthority !== true ||
-    ctx.clientKind !== 'runtime' ||
+    !structuredWorkItemStartCallerAuthority(ctx) ||
     !host ||
     (!supportsStructuredSessions(ctx) &&
-      !host.deps.store.listRecords().some((record) => record.launchOrigin === 'work-item-start'))
+      !host.deps.store
+        .listRecords()
+        .some((record) => canAccessWorkItemStartStructuredSession(ctx, record.sessionId)))
   ) {
     throw new Error('structured_agent_session_unsupported')
   }
@@ -111,16 +139,16 @@ export function requireWorkItemStartStatusHost(ctx: RpcContext): StructuredAgent
  * WHICH GATE DOES A NEW `agentSession.*` METHOD GET?
  *
  * Global admission can be revoked while sessions are still open. A work-item-start session keeps
- * its narrower local-desktop admission in its durable record. Cleanup remains available either
+ * its narrower server-derived admission in its durable record. Cleanup remains available either
  * way, so the surface splits by what a method does to work in flight:
  *
  *   - Starts, extends, retains or reads work -> `requireStructuredHost`. Global sessions follow
- *     global admission; work-item-start sessions require their authoritative local route.
+ *     global admission; work-item-start sessions require their authoritative launch route.
  *   - Stops or retires work the caller already owns -> `requireStructuredCleanupHost`. close,
  *     cancel, unsubscribe and release live here.
  *
  * Cleanup keeps working after the setting is turned off because the alternative strands the user.
- * A scoped work-item session still requires its authoritative local-desktop route; global sessions
+ * A scoped work-item session still requires its authoritative launch route; global sessions
  * preserve the existing cleanup behavior for capable clients.
  *
  * Cleanup is not an escape hatch. It still demands the negotiated wire capability, so a client
@@ -158,9 +186,7 @@ export async function ensureStructuredHostInstalled(
   // Gated first: a client that cannot read structured sessions must not be able
   // to make the host exist, which is an observable side effect of the surface.
   const mayInstallForScopedSession =
-    ctx.localDesktopAuthority === true &&
-    ctx.clientKind === 'runtime' &&
-    supportsStructuredAgentSessionCapability(ctx) &&
+    structuredWorkItemStartCallerAuthority(ctx) !== null &&
     (Boolean(scoped?.sessionId) ||
       supportsWorkItemStartStructuredSessionCreate(ctx, scoped?.launchOrigin))
   if (!supportsStructuredSessions(ctx) && !mayInstallForScopedSession) {

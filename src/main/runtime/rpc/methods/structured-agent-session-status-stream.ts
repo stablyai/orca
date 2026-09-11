@@ -5,7 +5,7 @@
 
 import { defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import {
-  isWorkItemStartStructuredSession,
+  canAccessWorkItemStartStructuredSession,
   requireStructuredHost as requireHost,
   requireWorkItemStartStatusHost
 } from './structured-agent-session-gate'
@@ -62,7 +62,7 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS: RpcAnyMethod[] = [
       dispose = globallyEnabled
         ? host.subscribeStatus({ id: subscriptionId, emit })
         : host.subscribeStatus({ id: subscriptionId, emit }, (sessionId) =>
-            isWorkItemStartStructuredSession(host, sessionId)
+            canAccessWorkItemStartStructuredSession(ctx, sessionId)
           )
       if (stream.isClosed()) {
         dispose()

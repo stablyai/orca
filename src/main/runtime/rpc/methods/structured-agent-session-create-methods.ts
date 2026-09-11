@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
@@ -11,6 +12,7 @@ import {
   requireStructuredCapability,
   requireStructuredCreateHost,
   requireStructuredHost,
+  resolveWorkItemStartStructuredCreateAuthority,
   structuredCallerFor,
   supportsStructuredSessions
 } from './structured-agent-session-gate'
@@ -61,9 +63,21 @@ export const STRUCTURED_AGENT_SESSION_CREATE_METHODS: RpcAnyMethod[] = [
         params.launchOrigin === 'work-item-start' &&
         params.sessionId !== undefined &&
         canAccessWorkItemStartStructuredSession(ctx, params.sessionId)
+      const existingRecord =
+        params.launchOrigin && params.sessionId
+          ? getStructuredAgentSessionHost()?.deps.store.getRecord(params.sessionId)
+          : null
+      if (existingRecord && !reconcilesDurableSession) {
+        throw new Error('structured_agent_session_unsupported')
+      }
+      const launchAuthority =
+        params.launchOrigin &&
+        !reconcilesDurableSession &&
+        supportsWorkItemStartStructuredSessionCreate(ctx, params.launchOrigin)
+          ? await resolveWorkItemStartStructuredCreateAuthority(ctx, params.worktree)
+          : null
       const admitted = params.launchOrigin
-        ? supportsWorkItemStartStructuredSessionCreate(ctx, params.launchOrigin) ||
-          reconcilesDurableSession
+        ? launchAuthority !== null || reconcilesDurableSession
         : supportsStructuredSessions(ctx)
       if (!admitted) {
         throw new Error('structured_agent_session_unsupported')
@@ -86,9 +100,24 @@ export const STRUCTURED_AGENT_SESSION_CREATE_METHODS: RpcAnyMethod[] = [
           launchOrigin
         })
       }
+      const reconcilesDurableSession = Boolean(
+        launchOrigin && canAccessWorkItemStartStructuredSession(ctx, params.envelope.sessionId)
+      )
+      const existingRecord = launchOrigin
+        ? getStructuredAgentSessionHost()?.deps.store.getRecord(params.envelope.sessionId)
+        : null
+      if (existingRecord && !reconcilesDurableSession) {
+        throw new Error('structured_agent_session_unsupported')
+      }
+      const createAuthority =
+        'worktree' in params &&
+        launchOrigin &&
+        !reconcilesDurableSession &&
+        supportsWorkItemStartStructuredSessionCreate(ctx, launchOrigin)
+          ? await resolveWorkItemStartStructuredCreateAuthority(ctx, params.worktree)
+          : null
       const admitted = launchOrigin
-        ? supportsWorkItemStartStructuredSessionCreate(ctx, launchOrigin) ||
-          canAccessWorkItemStartStructuredSession(ctx, params.envelope.sessionId)
+        ? createAuthority !== null || reconcilesDurableSession
         : supportsStructuredSessions(ctx)
       if (!admitted) {
         throw new Error('structured_agent_session_unsupported')
@@ -96,6 +125,9 @@ export const STRUCTURED_AGENT_SESSION_CREATE_METHODS: RpcAnyMethod[] = [
       if (params.envelope.expectedRuntimeFence !== null) {
         throw new Error('agent_session_operation_invalid')
       }
+      const persistedLaunchAuthority = reconcilesDurableSession
+        ? existingRecord?.launchAuthority
+        : undefined
       const prepared = await resolveUncommittedStructuredCreate(async () => {
         if ('worktree' in params) {
           const intentFingerprint = computeAgentSessionPayloadFingerprint({
@@ -130,7 +162,12 @@ export const STRUCTURED_AGENT_SESSION_CREATE_METHODS: RpcAnyMethod[] = [
             agent: params.agent as 'claude' | 'codex',
             caller: structuredCallerFor(ctx),
             ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {}),
-            ...(params.launchOrigin ? { launchOrigin: params.launchOrigin } : {})
+            ...(params.launchOrigin ? { launchOrigin: params.launchOrigin } : {}),
+            ...(createAuthority
+              ? { launchAuthority: createAuthority }
+              : persistedLaunchAuthority
+                ? { launchAuthority: persistedLaunchAuthority }
+                : {})
           })
         }
         const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)

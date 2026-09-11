@@ -17,7 +17,14 @@ import {
   type AgentSessionHandleProvider,
   type AgentSessionProviderHandleLink
 } from './agent-session-provider-handle'
-import type { StructuredAgentSessionLaunchOrigin } from './structured-agent-session-create'
+import {
+  isStructuredAgentSessionLaunchAuthority,
+  type StructuredAgentSessionLaunchAuthority,
+  type StructuredAgentSessionLaunchOrigin
+} from './structured-agent-session-create'
+import { isAgentSessionOptions } from './agent-session-options'
+
+export { isAgentSessionOptions } from './agent-session-options'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
@@ -136,6 +143,8 @@ export type AgentSessionRecord = {
   launchArgs?: AgentSessionLaunchArgs
   /** Narrow admission retained for sessions created by an explicit Work Item Start action. */
   launchOrigin?: StructuredAgentSessionLaunchOrigin
+  /** Server-derived caller authority for the scoped launch. */
+  launchAuthority?: StructuredAgentSessionLaunchAuthority
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -228,20 +237,6 @@ function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccount
   return (
     (home.variable === 'CLAUDE_CONFIG_DIR' || home.variable === 'CODEX_HOME') &&
     isBoundedString(home.path, MAX_PATH_LENGTH)
-  )
-}
-
-export function isAgentSessionOptions(value: unknown): value is Record<string, string> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false
-  }
-  const entries = Object.entries(value)
-  return (
-    entries.length <= 32 &&
-    entries.every(
-      ([key, option]) =>
-        isBoundedString(key, MAX_ID_LENGTH) && isBoundedString(option, MAX_ID_LENGTH)
-    )
   )
 }
 
@@ -350,6 +345,9 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
       isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
     (record.launchOrigin === undefined || record.launchOrigin === 'work-item-start') &&
+    (record.launchAuthority === undefined ||
+      (record.launchOrigin === 'work-item-start' &&
+        isStructuredAgentSessionLaunchAuthority(record.launchAuthority))) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isAgentSessionLease(record.lease) &&
     record.lease.sessionId === record.sessionId &&

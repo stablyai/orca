@@ -25,6 +25,7 @@ import {
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import type {
+  StructuredAgentSessionLaunchAuthority,
   StructuredAgentSessionLaunchOrigin,
   StructuredAgentSessionResumeSource
 } from '../../../../shared/structured-agent-session-create'
@@ -53,6 +54,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
   launchOrigin?: StructuredAgentSessionLaunchOrigin
+  launchAuthority?: StructuredAgentSessionLaunchAuthority
 }): Promise<PreparedStructuredAgentSessionCreate> {
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null
@@ -65,7 +67,8 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   })
   const resolvedWithOrigin = {
     ...resolved,
-    ...(args.launchOrigin ? { launchOrigin: args.launchOrigin } : {})
+    ...(args.launchOrigin ? { launchOrigin: args.launchOrigin } : {}),
+    ...(args.launchAuthority ? { launchAuthority: args.launchAuthority } : {})
   }
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
@@ -81,6 +84,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       provider: resolved.provider as 'claude' | 'codex',
       agent: resolved.agent as 'claude' | 'codex',
       ...(args.launchOrigin ? { launchOrigin: args.launchOrigin } : {}),
+      ...(args.launchAuthority ? { launchAuthority: args.launchAuthority } : {}),
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
     },
     tab: {

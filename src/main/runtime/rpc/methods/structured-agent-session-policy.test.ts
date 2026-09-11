@@ -60,7 +60,7 @@ describe('supportsStructuredAgentSessions', () => {
     expect(decisions).toEqual([false, false, false])
   })
 
-  it('admits only an authoritative local Work Item Start create', () => {
+  it('admits only an authoritative Work Item Start create', () => {
     const runtime = runtimeWithSetting(false, 'submit-after-ready')
     expect(
       supportsWorkItemStartStructuredSessionCreate(
@@ -69,6 +69,17 @@ describe('supportsStructuredAgentSessions', () => {
           clientKind: 'runtime',
           clientCapabilities: CAPABLE,
           localDesktopAuthority: true
+        },
+        'work-item-start'
+      )
+    ).toBe(true)
+    expect(
+      supportsWorkItemStartStructuredSessionCreate(
+        {
+          runtime,
+          clientKind: 'runtime',
+          clientCapabilities: CAPABLE,
+          pairedDeviceId: 'device-web'
         },
         'work-item-start'
       )

@@ -49,7 +49,7 @@ export function projectSessionTabsForContext(
   snapshot: RuntimeMobileSessionTabsResult,
   context: Pick<
     RpcContext,
-    'runtime' | 'clientKind' | 'clientCapabilities' | 'localDesktopAuthority'
+    'runtime' | 'clientKind' | 'clientCapabilities' | 'localDesktopAuthority' | 'pairedDeviceId'
   >
 ): RuntimeMobileSessionTabsResult {
   return projectSessionTabsForClient(

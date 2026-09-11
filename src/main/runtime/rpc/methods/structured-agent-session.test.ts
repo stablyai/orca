@@ -350,7 +350,10 @@ describe('method routing', () => {
     })
     expect(hostCalls.attach).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ launchOrigin: 'work-item-start' })
+      expect.objectContaining({
+        launchOrigin: 'work-item-start',
+        launchAuthority: { kind: 'local-desktop' }
+      })
     )
 
     const untrusted = await call('agentSession.create', params, STRUCTURED_CLIENT, settings)
@@ -358,6 +361,7 @@ describe('method routing', () => {
       ok: false,
       error: { message: expect.stringContaining('structured_agent_session_unsupported') }
     })
+
     expect(
       await call('agentSession.createSupport', fields, STRUCTURED_CLIENT, {
         getClientSettings: () => ({
@@ -822,7 +826,10 @@ describe('agentSession.subscribeStatus', () => {
   })
 
   it('opens only the scoped feed for the authoritative desktop after returning to Draft', async () => {
-    hostCalls.listRecords.mockReturnValue([{ launchOrigin: 'work-item-start' }])
+    hostCalls.listRecords.mockReturnValue([
+      { sessionId: STATUS_SESSION, launchOrigin: 'work-item-start' }
+    ])
+    hostCalls.getRecord.mockReturnValue({ launchOrigin: 'work-item-start' })
     const reply = await call(
       'agentSession.subscribeStatus',
       null,

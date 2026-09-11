@@ -89,6 +89,41 @@ describe('admission revoked while a session is still open', () => {
     }
   )
 
+  it.each(CLEANUP_METHODS)(
+    'keeps paired Work Item Start cleanup $method scoped to its creating device',
+    async ({ method, params, hostCall }) => {
+      hostCalls.getRecord.mockReturnValue({
+        launchOrigin: 'work-item-start',
+        launchAuthority: { kind: 'paired-device', deviceId: 'device-web' }
+      })
+      const owner = await call(
+        method,
+        params,
+        {
+          ...STRUCTURED_CLIENT,
+          clientId: 'rotated-token',
+          pairedDeviceId: 'device-web'
+        },
+        SETTING_OFF
+      )
+      const otherDevice = await call(
+        method,
+        params,
+        { ...STRUCTURED_CLIENT, pairedDeviceId: 'device-other' },
+        SETTING_OFF
+      )
+
+      expect(owner).toMatchObject({ ok: true })
+      expect(otherDevice).toMatchObject({
+        ok: false,
+        error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+      })
+      if (hostCall !== 'unsubscribe') {
+        expect(hostCalls[hostCall]).toHaveBeenCalledOnce()
+      }
+    }
+  )
+
   it('stops the provider child when closing a chat the setting no longer admits', async () => {
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT, {
       ...SETTING_OFF

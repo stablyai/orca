@@ -24,7 +24,10 @@ import type {
   AgentSessionOwnerRuntimeKind,
   AgentSessionRecord
 } from '../../../shared/agent-session-record'
-import type { StructuredAgentSessionLaunchOrigin } from '../../../shared/structured-agent-session-create'
+import type {
+  StructuredAgentSessionLaunchAuthority,
+  StructuredAgentSessionLaunchOrigin
+} from '../../../shared/structured-agent-session-create'
 import {
   AGENT_SESSION_WIRE_REFUSAL_CODES,
   type AgentSessionMutationEnvelope,
@@ -65,6 +68,8 @@ export type AgentSessionAttachParams = {
   launchArgs?: string[]
   /** Host-admitted origin; direct attach wire schemas never accept it. */
   launchOrigin?: StructuredAgentSessionLaunchOrigin
+  /** Host-derived only; binds a scoped launch to its authenticated caller. */
+  launchAuthority?: StructuredAgentSessionLaunchAuthority
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
   /**
@@ -106,6 +111,7 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     accountHome: params.accountHome,
     runtimeKind: params.runtimeKind,
     launchOrigin: params.launchOrigin,
+    launchAuthority: params.launchAuthority,
     providerHandle: params.providerHandle,
     // Which conversation this attaches to, so an adopting create and a blank one never share an
     // identity. The transcript path is excluded: it is where the host found that conversation this
@@ -259,6 +265,7 @@ export function reserveRequestFor(input: {
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     ...(params.launchOrigin ? { launchOrigin: params.launchOrigin } : {}),
+    ...(params.launchAuthority ? { launchAuthority: params.launchAuthority } : {}),
     runtimeKind: params.runtimeKind,
     ...(params.adopt
       ? {

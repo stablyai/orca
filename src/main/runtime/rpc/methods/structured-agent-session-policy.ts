@@ -5,6 +5,7 @@ import {
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import type { StructuredAgentSessionLaunchOrigin } from '../../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionLaunchAuthority } from '../../../../shared/structured-agent-session-create'
 import { structuredAgentSessionsEnabled } from '../../../../shared/structured-native-chat-launch-route'
 
 type StructuredPolicyContext = Pick<RpcContext, 'clientCapabilities' | 'clientKind'> & {
@@ -55,17 +56,15 @@ export function structuredNativeChatProjectionEnabled(args: {
 }
 
 export function supportsWorkItemStartStructuredSessionCreate(
-  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind' | 'localDesktopAuthority'> & {
+  context: Pick<
+    RpcContext,
+    'clientCapabilities' | 'clientKind' | 'localDesktopAuthority' | 'pairedDeviceId'
+  > & {
     runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
   },
   launchOrigin: StructuredAgentSessionLaunchOrigin | undefined
 ): boolean {
-  if (
-    launchOrigin !== 'work-item-start' ||
-    context.localDesktopAuthority !== true ||
-    context.clientKind !== 'runtime' ||
-    !supportsStructuredAgentSessionCapability(context)
-  ) {
+  if (launchOrigin !== 'work-item-start' || !structuredWorkItemStartCallerAuthority(context)) {
     return false
   }
   try {
@@ -73,4 +72,20 @@ export function supportsWorkItemStartStructuredSessionCreate(
   } catch {
     return false
   }
+}
+
+export function structuredWorkItemStartCallerAuthority(
+  context: Pick<
+    RpcContext,
+    'clientCapabilities' | 'clientKind' | 'localDesktopAuthority' | 'pairedDeviceId'
+  >
+): StructuredAgentSessionLaunchAuthority | null {
+  if (context.clientKind !== 'runtime' || !supportsStructuredAgentSessionCapability(context)) {
+    return null
+  }
+  if (context.localDesktopAuthority === true) {
+    return { kind: 'local-desktop' }
+  }
+  const deviceId = context.pairedDeviceId?.trim()
+  return deviceId ? { kind: 'paired-device', deviceId } : null
 }

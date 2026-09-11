@@ -90,7 +90,9 @@ export function attachParamsForRecord(
     provider: record.provider,
     agent: record.provider,
     accountHome: record.accountHome,
-    runtimeKind: input.runtimeKind ?? record.lease.runtimeKind
+    runtimeKind: input.runtimeKind ?? record.lease.runtimeKind,
+    ...(record.launchOrigin ? { launchOrigin: record.launchOrigin } : {}),
+    ...(record.launchAuthority ? { launchAuthority: record.launchAuthority } : {})
   }
   return {
     ...params,
