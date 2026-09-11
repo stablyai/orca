@@ -25,21 +25,10 @@ export type ValidatedCookie = ImportedCookieFields & {
   partition: SourcePartitionRead
 }
 
-// Why: Chromium's CookieSameSiteForStorage enum (0=Unspecified,1=None,2=Lax,3=Strict) differs from Firefox's numbering.
-export function chromiumSameSite(raw: number): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
-  switch (raw) {
-    case 1:
-      return 'no_restriction'
-    case 2:
-      return 'lax'
-    case 3:
-      return 'strict'
-    default:
-      return 'unspecified'
-  }
-}
-
-export function firefoxSameSite(raw: number): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
+// Chromium stores net::CookieSameSite unchanged; see net/cookies/cookie_constants.h and
+// net/extras/sqlite/sqlite_persistent_cookie_store.cc (-1 unspecified, 0 None, 1 Lax, 2 Strict).
+// Firefox's moz_cookies uses the same 0/1/2 values, so both database importers share this decoder.
+export function databaseSameSite(raw: number): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
   switch (raw) {
     case 0:
       return 'no_restriction'
@@ -56,7 +45,7 @@ export function normalizeSameSite(
   raw: unknown
 ): 'unspecified' | 'no_restriction' | 'lax' | 'strict' {
   if (typeof raw === 'number') {
-    return chromiumSameSite(raw)
+    return databaseSameSite(raw)
   }
   if (typeof raw !== 'string') {
     return 'unspecified'
