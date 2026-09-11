@@ -153,8 +153,11 @@ async function reconcileHost(hostId: string): Promise<void> {
     }
   }
   if (state.supported == null) {
+    if (!isCurrent()) {
+      return
+    }
     state.capabilityProbeStop ??= startRuntimeCapabilityProbe(client, (capabilities) => {
-      if (state.connection.client !== client) {
+      if (!isCurrent()) {
         return
       }
       state.supported = capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
