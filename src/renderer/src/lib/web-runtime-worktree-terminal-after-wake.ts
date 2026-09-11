@@ -60,7 +60,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
     return
   }
 
-  if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
+  if (!beginWebRuntimeWakeTerminalRespawn(runtimeEnvironmentId, worktreeId)) {
     return
   }
 
@@ -71,6 +71,6 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): v
     activate: true,
     selectWorktree: false
   }).finally(() => {
-    endWebRuntimeWakeTerminalRespawn(worktreeId)
+    endWebRuntimeWakeTerminalRespawn(runtimeEnvironmentId, worktreeId)
   })
 }
