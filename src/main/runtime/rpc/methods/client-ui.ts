@@ -1,6 +1,6 @@
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { defineMethod } from '../core'
+import { InvalidArgumentError, defineMethod } from '../core'
 import {
   NativeChatSessionOptionsMutation,
   PRBotAuthorOverrideUpdate,
@@ -21,9 +21,16 @@ export const CLIENT_UI_METHODS = [
   defineMethod({
     name: 'settings.update',
     params: SettingsUpdate,
-    handler: async (params, { runtime }) => ({
-      settings: await runtime.updateClientSettings(params)
-    })
+    handler: async (params, { runtime, clientKind }) => {
+      // A headless host ships no settings UI, so this RPC is its only admission lever -- but
+      // the phone has no surface for host policy, so it stays refused there as before.
+      if (clientKind === 'mobile' && params.experimentalStructuredNativeChat !== undefined) {
+        throw new InvalidArgumentError(
+          'Structured chat admission is host policy and cannot be set from mobile.'
+        )
+      }
+      return { settings: await runtime.updateClientSettings(params) }
+    }
   }),
   defineMethod({
     name: 'settings.getTerminalQuickCommands',

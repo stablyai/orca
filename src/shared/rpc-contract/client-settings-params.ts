@@ -106,6 +106,9 @@ export const SettingsUpdate = z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
+    // The only lever a headless host has for structured-chat admission: it ships no settings UI,
+    // so without this key a fresh `orca serve` or peer host refuses the surface forever.
+    experimentalStructuredNativeChat: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),

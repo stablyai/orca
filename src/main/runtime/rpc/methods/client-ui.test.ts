@@ -62,7 +62,7 @@ describe('client UI RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { settings } })
   })
 
-  it('rejects paired attempts to mutate the host-owned structured chat setting', async () => {
+  it('rejects mobile attempts to mutate the host-owned structured chat setting', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateClientSettings: vi.fn()
@@ -70,7 +70,8 @@ describe('client UI RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     const response = await dispatcher.dispatch(
-      makeRequest('settings.update', { experimentalStructuredNativeChat: true })
+      makeRequest('settings.update', { experimentalStructuredNativeChat: true }),
+      { clientKind: 'mobile' }
     )
 
     expect(response).toMatchObject({
@@ -78,6 +79,27 @@ describe('client UI RPC methods', () => {
       error: { code: 'invalid_argument' }
     })
     expect(runtime.updateClientSettings).not.toHaveBeenCalled()
+  })
+
+  it('lets a paired desktop peer enable structured chat on a headless host', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn(async () => ({ experimentalStructuredNativeChat: true }))
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.update', { experimentalStructuredNativeChat: true }),
+      { clientKind: 'runtime' }
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { settings: { experimentalStructuredNativeChat: true } }
+    })
+    expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      experimentalStructuredNativeChat: true
+    })
   })
 
   it('persists the runtime host task source settings for mobile Tasks', async () => {

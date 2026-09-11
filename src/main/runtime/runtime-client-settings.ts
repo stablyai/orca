@@ -68,6 +68,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'defaultLinearTeamSelection'
   | 'githubProjects'
   | 'experimentalNewWorktreeCardStyle'
+  | 'experimentalStructuredNativeChat'
   | 'compactWorktreeCards'
   | 'minimaxGroupId'
   | 'minimaxUsageModels'
