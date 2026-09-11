@@ -6,7 +6,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { agentJournalTurnBody } from '../../shared/agent-session-turn-record'
-import { CODEX_USER_MESSAGE_ORDINAL } from './codex-structured-turn-start'
+import { CODEX_USER_MESSAGE_ORDINAL } from './codex-turn-ordinals'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission

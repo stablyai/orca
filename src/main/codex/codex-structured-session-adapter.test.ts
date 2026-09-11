@@ -432,7 +432,7 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
 })
 
 describe('CodexStructuredSessionAdapter.dispatch', () => {
-  it('accepts a turn Codex names in its response', async () => {
+  it('admits a send as soon as Codex owns it', async () => {
     const codex = fakeCodex({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
     const adapter = await acquired(codex)
 
@@ -451,10 +451,9 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD_ID, turnId: 'turn-1', ordinal: 0 }
-    })
+    // Identity is not knowable here: a send coalesced into a running turn shares
+    // that turn's id, so the echo settles which message landed where.
+    expect(outcome).toEqual({ state: 'admitted' })
     expect(codex.connections[0].calls[1].params).toEqual({
       threadId: THREAD_ID,
       clientUserMessageId: 'client-1',
@@ -466,7 +465,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
     })
   })
 
-  it('accepts a turn named only by the notification that raced the ack', async () => {
+  it('admits a send on a build whose turn/start answers before the turn is named', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []
     const adapter = await acquired(codex, {}, events)
@@ -485,8 +484,7 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toMatchObject({ state: 'accepted' })
-    expect(outcome).toMatchObject({ providerIdentity: { turnId: 'turn-late' } })
+    expect(outcome).toEqual({ state: 'admitted' })
     expect(events.at(-1)).toMatchObject({ type: 'notification', method: 'turn/started' })
   })
 
@@ -510,39 +508,13 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       fence: 7
     })
 
-    expect(outcome).toEqual({
-      state: 'accepted',
-      providerIdentity: { provider: 'codex', threadId: THREAD_ID, turnId: 'turn-root', ordinal: 0 }
-    })
+    expect(outcome).toEqual({ state: 'admitted' })
     // Each event carries the thread it actually came from, so the journal can
     // keep a subagent's turn out of the root conversation.
     expect(events.map((event) => (event.type === 'notification' ? event.threadId : null))).toEqual([
       'thread-child',
       THREAD_ID
     ])
-  })
-
-  it('settles unknown rather than failed when Codex never names the turn', async () => {
-    vi.useFakeTimers()
-    try {
-      const codex = fakeCodex()
-      const adapter = await acquired(codex)
-
-      const dispatching = adapter.dispatch({
-        sessionId: 'session-1',
-        clientMessageId: 'client-1',
-        body: USER_MESSAGE,
-        fence: 7
-      })
-      await vi.advanceTimersByTimeAsync(10_000)
-
-      expect(await dispatching).toEqual({
-        state: 'unknown',
-        reason: 'codex app-server started a turn it did not name in time'
-      })
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('rejects only when Codex answered and declined', async () => {

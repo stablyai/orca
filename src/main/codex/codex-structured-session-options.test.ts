@@ -1,3 +1,4 @@
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { describe, expect, it, vi } from 'vitest'
 import type { CodexAppServerConnection } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
@@ -31,7 +32,7 @@ function optionSession(request: CodexAppServerConnection['request']): CodexSessi
     prompts: new CodexAcquisitionWindow().prompts,
     options: new Map(),
     reportedOptions: { model: 'gpt-live', effort: 'high' },
-    turnIdWaiters: [],
+    dispatchEchoes: createCodexDispatchEchoes(),
     translator: null
   }
 }
