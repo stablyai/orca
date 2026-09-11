@@ -54,8 +54,7 @@ describe('checks panel hosted review click routing', () => {
       url: 'https://github.com/acme/widgets/pull/123',
       event: { metaKey: false, ctrlKey: false, shiftKey: false },
       isMac: true,
-      worktreeId: 'wt-1',
-      allowRemoteInApp: true
+      worktreeId: 'wt-1'
     })
 
     expect(openHttpLinkMock).toHaveBeenCalledWith('https://github.com/acme/widgets/pull/123', {
@@ -69,8 +68,7 @@ describe('checks panel hosted review click routing', () => {
       url: 'https://github.com/acme/widgets/pull/123',
       event: { metaKey: true, ctrlKey: false, shiftKey: true },
       isMac: true,
-      worktreeId: 'wt-1',
-      allowRemoteInApp: true
+      worktreeId: 'wt-1'
     })
 
     expect(openHttpLinkMock).toHaveBeenCalledWith('https://github.com/acme/widgets/pull/123', {
@@ -132,8 +130,6 @@ describe('checks panel hosted review modifier hint destination', () => {
     ).toBe('orca')
   })
 
-  // Why: openHttpLink trims before treating a runtime as active, so a blank id must
-  // not suppress a hint for a click that still reaches Orca.
   it('ignores a blank runtime id', () => {
     expect(
       resolveChecksPanelHostedReviewModifierDestination(
