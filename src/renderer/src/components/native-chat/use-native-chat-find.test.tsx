@@ -68,6 +68,7 @@ function ComposerField({
     activeSuggestion: 0,
     draft: '',
     isComposing: () => false,
+    matchesSubmitKey: (event) => event.key === 'Enter' && !event.shiftKey,
     completePickerItem: vi.fn(),
     dispatchPickerCommand: vi.fn(),
     dismissPicker,

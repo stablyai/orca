@@ -10,6 +10,8 @@ import { useNativeChatComposerRecall } from './use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
+import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
+import { useComposerSubmitKeyMatch } from './use-claude-submit-gesture'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
@@ -323,6 +325,11 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       [dispatchPtyPickerCommand, sendStructured, structuredTransport]
     )
 
+    const matchesSubmitKey = useComposerSubmitKeyMatch(
+      agent,
+      nativeChatComposerTargetIsRemote(targetPtyId)
+    )
+
     const handleKeyDown = useNativeChatComposerKeyDown({
       autocomplete,
       mentionFiles,
@@ -331,6 +338,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       draft,
       recall: recall.recall,
       isComposing: imeEnterGesture.isComposing,
+      matchesSubmitKey,
       completePickerItem: goalMode.interceptPick(completeItem),
       dispatchPickerCommand: goalMode.interceptPick(resume.interceptPick(dispatchPickerCommand)),
       dismissPicker: dismiss,
