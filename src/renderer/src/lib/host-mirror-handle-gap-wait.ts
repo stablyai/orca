@@ -20,6 +20,12 @@ import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '@/runtime/web-session-tab-rpc-ti
  *    recovery: a resume after a bounded wait is defensible, an indefinite hold
  *    is the latch-that-never-releases defect. A reconnect bumps the connection
  *    generation and arms a fresh wait.
+ *
+ * Sustained reconnect churn can therefore hold a pane parked indefinitely: each reconnect voids the
+ * in-flight verdict and grants a fresh full budget. That is CORRECT, not the defect above. Under
+ * churn the pane's liveness genuinely is unverifiable, and `docs/reference/ssh-execution-boundary.md`
+ * forbids resolving unverifiable to `exited`. It has the shape of a latch that never releases, so
+ * do not "fix" it by letting a verdict from one connection decide another — that is #19735.
  */
 export const HOST_MIRROR_HANDLE_GAP_DEADLINE_MS = WEB_SESSION_TAB_RPC_TIMEOUT_MS
 
@@ -38,7 +44,16 @@ type HandleGapStoreState = Pick<
 >
 
 const waitersByPane = new Map<string, HandleGapWaiter>()
-/** Connection generation whose wait already expired for the pane. */
+/**
+ * Connection generation whose wait already expired for the pane.
+ *
+ * KNOWN LEAK, not fixed: entries are pruned only by `recordExpiredWait`, and only for the
+ * environment doing the recording. An environment that is removed and never expires another pane
+ * keeps its rows for the life of the session. Bounded by panes x environments and inert — a stale
+ * row cannot match, because removing an environment advances its connection generation — but it
+ * does not drain. Another agent has a separate fix in flight for a DIFFERENT leak in this same map
+ * (pruning on tab death); reconcile with that change rather than patching around it.
+ */
 const expiredGenerationByPane = new Map<string, number>()
 let unsubscribeStore: (() => void) | null = null
 
@@ -82,7 +97,15 @@ function releaseWaiter(key: string): void {
   clearTimeout(waiter.deadline)
   waitersByPane.delete(key)
   stopStoreSubscriptionIfIdle()
-  waiter.run()
+  try {
+    waiter.run()
+  } catch (error) {
+    // Why: one write releases every due pane, and the drain runs inside the store subscriber. The
+    // panes in it are strangers to each other and to the frame that published the handle, so an
+    // unguarded replay throw both strands every pane queued behind it and surfaces at the mirror
+    // apply's own `setState`. The pane is already unparked here; only its replay is lost.
+    console.warn('[host-mirror-handle-gap] parked resume replay failed:', error)
+  }
 }
 
 function waiterIsReleased(waiter: HandleGapWaiter, state: HandleGapStoreState): boolean {
