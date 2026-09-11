@@ -528,6 +528,7 @@ describe('Claude structured journal translation', () => {
     expect(keyed.get('orca:claude-tool%3Aclaude-session%3Atool-1')).toMatchObject({
       kind: 'tool-call',
       name: 'Bash',
+      callId: 'tool-1',
       state: 'completed',
       output: { head: 'a.ts\nb.ts', truncated: false }
     })
@@ -546,6 +547,7 @@ describe('Claude structured journal translation', () => {
     expect(state.items.at(-1)?.body).toMatchObject({
       kind: 'tool-call',
       name: 'tool',
+      callId: 'tool-1',
       input: null,
       output: { head: 'done again' }
     })
@@ -606,6 +608,7 @@ describe('Claude structured journal translation', () => {
     ])
     expect(state.items[0]?.body).toMatchObject({
       kind: 'tool-call',
+      callId: 'tool-1',
       state: 'completed',
       output: { head: 'done' }
     })

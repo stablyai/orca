@@ -93,6 +93,7 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'tool-call',
       name: parsed?.name ?? 'shell',
+      callId: item.id,
       // Raw command and cwd stay so the expanded view still shows what ran.
       input: boundToolInput(
         { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
@@ -120,6 +121,7 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
       body: {
         kind: 'tool-call',
         name: 'apply_patch',
+        callId: item.id,
         input: boundToolInput({ changes: item.changes ?? null }, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
         state: commandState(item)
       },
@@ -171,6 +173,7 @@ function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'tool-call',
       name: mcpToolCallName(item),
+      callId: item.id,
       ...(server && tool ? { mcpIdentity: { server, tool } } : {}),
       input: boundToolInput(mcpToolArguments(item.arguments), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
       state: failure === null ? commandState(item) : 'failed',
@@ -213,6 +216,7 @@ function webSearchItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'tool-call',
       name: 'web_search',
+      callId: item.id,
       ...(results.length > 0 ? { webSearchResults: results } : {}),
       input: boundToolInput(webSearchInput(item), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
       state: item.action === null || item.action === undefined ? 'running' : 'completed',
