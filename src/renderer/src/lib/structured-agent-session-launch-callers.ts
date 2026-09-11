@@ -5,6 +5,7 @@ import {
 } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type { StructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 
 export type StructuredRefusalFallback = () =>
   | void
@@ -143,6 +144,8 @@ export function addStructuredLaunchCaller(args: {
   launchResult: Promise<{ sessionId: string; fence: number }>
   options: StructuredAgentLaunchOptions
   stagedEntry: StructuredAgentSessionOutboxEntry | null
+  /** Taken from the launch's intent so a joiner's prompt cannot address a different host. */
+  owner: StructuredAgentSessionOwner
 }): StructuredLaunchCaller {
   const fallback = Promise.withResolvers<boolean>()
   const fallbackPromptDelivery = Promise.withResolvers<StructuredPromptDeliveryResult | null>()
@@ -163,7 +166,8 @@ export function addStructuredLaunchCaller(args: {
   const promptDeliveryResult = settleStructuredAgentLaunchPrompt({
     launchResult: args.launchResult,
     options: args.options,
-    stagedEntry: args.stagedEntry
+    stagedEntry: args.stagedEntry,
+    owner: args.owner
   })
   caller.promptDeliveryResult = promptDeliveryResult?.catch(async (error) => {
     if (error instanceof StructuredAgentSessionCreateRefusalError) {

@@ -13,6 +13,11 @@ import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import {
+  structuredAgentSessionOwnerCallFence,
+  structuredAgentSessionOwnerTarget,
+  type StructuredAgentSessionOwner
+} from '@/runtime/structured-agent-session-owner'
 
 export type WorktreeCreationStructuredSessionResult = {
   accepted: boolean
@@ -37,15 +42,21 @@ type LaunchStructuredWorktreeSessionArgs = {
 
 async function retireCancelledStructuredSession(
   worktreeId: string,
-  sessionId: string
+  sessionId: string,
+  owner: StructuredAgentSessionOwner
 ): Promise<void> {
-  const target = { kind: 'local' } as const
+  const target = structuredAgentSessionOwnerTarget(owner)
   await closeStructuredAgentSession(target, sessionId).catch(() => undefined)
-  await callRuntimeRpc(target, 'session.tabs.close', {
-    worktree: toRuntimeWorktreeSelector(worktreeId),
-    tabId: `agent-session:${sessionId}`,
-    reason: 'user'
-  }).catch(() => undefined)
+  await callRuntimeRpc(
+    target,
+    'session.tabs.close',
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      tabId: `agent-session:${sessionId}`,
+      reason: 'user'
+    },
+    structuredAgentSessionOwnerCallFence(owner)
+  ).catch(() => undefined)
 }
 
 /** What quick create did before structured chat: rename flag, trust preflight, then a terminal. */
@@ -185,7 +196,11 @@ export async function launchStructuredWorktreeSession(
     case 'cancelled': {
       // Why: a refusal means no session exists on the host, so there is nothing to retire.
       if (!refused) {
-        await retireCancelledStructuredSession(args.worktreeId, settlement.sessionId)
+        await retireCancelledStructuredSession(
+          args.worktreeId,
+          settlement.sessionId,
+          settlement.owner
+        )
       }
       // Why: a fallback that already opened a terminal owns the surface, cancel or not; reporting
       // the pre-launch tab would hand the caller a workspace the user cannot see the agent in.

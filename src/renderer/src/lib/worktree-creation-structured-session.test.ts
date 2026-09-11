@@ -130,6 +130,7 @@ describe('launchStructuredWorktreeSession', () => {
   it('activates the structured session once it is published', async () => {
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
+      owner: { kind: 'local' },
       launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
       isVisibilityUnknown: () => false,
       releaseCallerAfterUnknownOutcome: vi.fn(),
@@ -163,6 +164,7 @@ describe('launchStructuredWorktreeSession', () => {
   it('hands the loop the delivery mode the composer decided with the route', async () => {
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
+      owner: { kind: 'local' },
       launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
       isVisibilityUnknown: () => false,
       releaseCallerAfterUnknownOutcome: vi.fn(),
@@ -189,6 +191,7 @@ describe('launchStructuredWorktreeSession', () => {
   it('does not activate a published session when the user has moved on', async () => {
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
+      owner: { kind: 'local' },
       launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
       isVisibilityUnknown: () => false,
       releaseCallerAfterUnknownOutcome: vi.fn(),
@@ -211,6 +214,7 @@ describe('launchStructuredWorktreeSession', () => {
   it('retries an unknown launch with no prompt so the outbox is not re-staged', async () => {
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
+      owner: { kind: 'local' },
       launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
       isVisibilityUnknown: () => false,
       releaseCallerAfterUnknownOutcome: vi.fn(),
@@ -254,6 +258,7 @@ describe('launchStructuredWorktreeSession', () => {
     const launchResult = new Promise<never>(() => {})
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
+      owner: { kind: 'local' },
       launchResult,
       isVisibilityUnknown: () => false,
       releaseCallerAfterUnknownOutcome: vi.fn(),
@@ -420,6 +425,7 @@ describe('launchStructuredWorktreeSession', () => {
     const launchResult = Promise.reject(new StructuredAgentSessionCreateRefusalError('unsupported'))
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-refused',
+      owner: { kind: 'local' },
       launchResult,
       isVisibilityUnknown: () => false,
       releaseCallerAfterUnknownOutcome: vi.fn(),
@@ -485,6 +491,7 @@ describe('launchStructuredWorktreeSession', () => {
   it('reports a known failure as accepted with the caller surface untouched', async () => {
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
+      owner: { kind: 'local' },
       launchResult: Promise.reject(new Error('boom')),
       isVisibilityUnknown: () => false,
       releaseCallerAfterUnknownOutcome: vi.fn(),
@@ -514,6 +521,7 @@ describe('launchStructuredWorktreeSession', () => {
     })
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
+      owner: { kind: 'local' },
       launchResult,
       isVisibilityUnknown: () => false,
       releaseCallerAfterUnknownOutcome: vi.fn(),
@@ -555,11 +563,16 @@ describe('launchStructuredWorktreeSession', () => {
     })
     expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledWith('worktree-1', 'session-1')
     expect(mocks.closeStructuredAgentSession).toHaveBeenCalledWith({ kind: 'local' }, 'session-1')
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'session.tabs.close', {
-      worktree: { id: 'worktree-1' },
-      tabId: 'agent-session:session-1',
-      reason: 'user'
-    })
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'session.tabs.close',
+      {
+        worktree: { id: 'worktree-1' },
+        tabId: 'agent-session:session-1',
+        reason: 'user'
+      },
+      {}
+    )
     expect(mocks.activateStructuredAgentSessionById).not.toHaveBeenCalled()
     expect(mocks.unsubscribe).toHaveBeenCalledOnce()
   })
@@ -568,6 +581,7 @@ describe('launchStructuredWorktreeSession', () => {
     const releaseCallerAfterUnknownOutcome = vi.fn()
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-unknown',
+      owner: { kind: 'local' },
       launchResult: Promise.reject(new Error('connection lost')),
       isVisibilityUnknown: () => true,
       releaseCallerAfterUnknownOutcome,
@@ -612,6 +626,7 @@ describe('launchStructuredWorktreeSession', () => {
   it('activates the workspace before selecting a chat when creation deferred activation', async () => {
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
+      owner: { kind: 'local' },
       launchResult: Promise.resolve({ sessionId: 'session-1', fence: 1 }),
       claimDefinitiveRefusalFallback: vi.fn(() => Promise.resolve(false))
     })

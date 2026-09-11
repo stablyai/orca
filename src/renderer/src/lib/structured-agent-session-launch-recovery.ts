@@ -4,8 +4,8 @@ import {
   StructuredAgentSessionCreateRefusalError,
   type StructuredAgentSessionLaunchIntent
 } from '@/lib/launch-structured-agent-session'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
+import { callStructuredAgentSessionForOwner } from '@/runtime/structured-agent-session-owner'
+import { listStructuredSessionTabsForOwner } from '@/runtime/structured-session-publication-inventory'
 import { useAppStore } from '@/store'
 
 export type StructuredAgentLaunchReceipt = { sessionId: string; fence: number }
@@ -35,7 +35,7 @@ async function verifyPublishedSession(state: StructuredLaunchRecoveryState): Pro
   if (hasAdoptedStructuredSession(state.intent)) {
     return
   }
-  const snapshots = await refreshLocalStructuredSessionTabs()
+  const snapshots = await listStructuredSessionTabsForOwner(state.intent.owner)
   throwIfLaunchCancelled(state)
   const published = snapshots.some(
     (snapshot) =>
@@ -66,8 +66,8 @@ async function recoverPublishedSessionReceipt(
   state: StructuredLaunchRecoveryState
 ): Promise<StructuredAgentLaunchReceipt> {
   await verifyPublishedSession(state)
-  const history = await callStructuredAgentSession<AgentSessionHistoryResult>(
-    { kind: 'local' },
+  const history = await callStructuredAgentSessionForOwner<AgentSessionHistoryResult>(
+    state.intent.owner,
     'agentSession.history',
     { sessionId: state.intent.sessionId, direction: 'tail', limit: 1 }
   )

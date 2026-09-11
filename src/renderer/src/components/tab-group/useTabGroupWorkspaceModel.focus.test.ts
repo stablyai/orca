@@ -250,7 +250,7 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
 
     await vi.waitFor(() => expect(mocks.closeUnifiedTab).toHaveBeenCalledWith(agentTab.id))
     expect(mocks.callRuntimeRpc.mock.calls).toEqual([
-      [{ kind: 'local' }, 'agentSession.close', { sessionId: 'codex-session-1' }],
+      [{ kind: 'local' }, 'agentSession.close', { sessionId: 'codex-session-1' }, {}],
       [
         { kind: 'local' },
         'session.tabs.close',

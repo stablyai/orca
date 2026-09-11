@@ -1,6 +1,9 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { runtimeTargetForExecutionHostId, type RuntimeClientTarget } from './runtime-client-target'
+import { callStructuredAgentSession } from './structured-agent-session-client'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-tabs-sync/snapshot-apply'
+import type { WebSessionIntentOwner } from './web-session-intent-owner'
 
 /**
  * The host a structured session belongs to, pinned once at launch. The pairing revision rides along
@@ -55,4 +58,43 @@ export function structuredAgentSessionOwnerMatchesPairing(
     owner.kind === 'local' ||
     getRuntimeEnvironmentRevision(owner.environmentId) === owner.pairingRevision
   )
+}
+
+/**
+ * The one RPC seam every stage of a pinned launch goes through. It addresses the owner's host and
+ * carries the revision captured with it, so a re-pair between stages fails the call instead of
+ * silently retargeting it at whatever machine now answers to that id.
+ */
+export function callStructuredAgentSessionForOwner<TResult>(
+  owner: StructuredAgentSessionOwner,
+  method: string,
+  params?: unknown
+): Promise<TResult> {
+  return callStructuredAgentSession<TResult>(
+    structuredAgentSessionOwnerTarget(owner),
+    method,
+    params,
+    structuredAgentSessionOwnerCallFence(owner)
+  )
+}
+
+/** The revision every call for this owner is fenced on; empty for a host with no pairing. */
+export function structuredAgentSessionOwnerCallFence(owner: StructuredAgentSessionOwner): {
+  expectedEnvironmentPairingRevision?: number
+} {
+  return owner.kind === 'environment' && owner.pairingRevision !== undefined
+    ? { expectedEnvironmentPairingRevision: owner.pairingRevision }
+    : {}
+}
+
+/** Focus intents are partitioned by owner, so a launch must record under the host that publishes it. */
+export function structuredAgentSessionOwnerIntentKey(
+  owner: StructuredAgentSessionOwner
+): WebSessionIntentOwner {
+  return owner.kind === 'environment'
+    ? {
+        environmentId: owner.environmentId,
+        ...(owner.pairingRevision === undefined ? {} : { pairingRevision: owner.pairingRevision })
+      }
+    : { environmentId: LOCAL_STRUCTURED_SESSION_OWNER }
 }

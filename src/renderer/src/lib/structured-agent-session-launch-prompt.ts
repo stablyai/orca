@@ -12,7 +12,10 @@ import {
   mutateStructuredAgentSessionLaunchPrompt,
   type StructuredAgentSessionLaunchPromptMutation
 } from '@/components/native-chat/structured-agent-session-outbox-storage'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import {
+  callStructuredAgentSessionForOwner,
+  type StructuredAgentSessionOwner
+} from '@/runtime/structured-agent-session-owner'
 
 export type StructuredPromptDeliveryResult = {
   delivered: boolean
@@ -36,7 +39,8 @@ function mutateEntry(
 
 async function dispatchStructuredLaunchPrompt(
   entry: StructuredAgentSessionOutboxEntry,
-  receipt: LaunchReceipt
+  receipt: LaunchReceipt,
+  owner: StructuredAgentSessionOwner
 ): Promise<boolean> {
   if (
     !mutateEntry(entry, (current) => ({
@@ -48,13 +52,9 @@ async function dispatchStructuredLaunchPrompt(
     return false
   }
   try {
-    const result = await callStructuredAgentSession<
+    const result = await callStructuredAgentSessionForOwner<
       AgentSessionMutationResult<AgentSessionSendResult>
-    >(
-      { kind: 'local' },
-      'agentSession.send',
-      structuredAgentSessionSendRequest(entry, receipt.fence)
-    )
+    >(owner, 'agentSession.send', structuredAgentSessionSendRequest(entry, receipt.fence))
     if (!result.ok) {
       mutateEntry(entry, (current) =>
         requeueStructuredAgentSessionSendRefusal(current, result.refusal.code, () =>
@@ -88,6 +88,8 @@ export function settleStructuredAgentLaunchPrompt(args: {
   launchResult: Promise<LaunchReceipt>
   options: StructuredLaunchPromptOptions
   stagedEntry: StructuredAgentSessionOutboxEntry | null
+  /** The launch's pinned owner: the first prompt goes to the host that holds the session. */
+  owner: StructuredAgentSessionOwner
 }): Promise<StructuredPromptDeliveryResult> | undefined {
   // Why: a draft has no delivery event — the composer adopts it and the user sends it — so
   // `onPromptDelivered` never fires and no result is reported.
@@ -98,7 +100,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
     if (!args.stagedEntry) {
       return { delivered: false, failureNotified: true }
     }
-    const delivered = await dispatchStructuredLaunchPrompt(args.stagedEntry, receipt)
+    const delivered = await dispatchStructuredLaunchPrompt(args.stagedEntry, receipt, args.owner)
     if (delivered) {
       args.options.onPromptDelivered?.()
     }

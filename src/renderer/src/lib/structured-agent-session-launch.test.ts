@@ -410,7 +410,8 @@ describe('startStructuredAgentLaunch', () => {
         body: expect.objectContaining({
           blocks: [{ type: 'text', text: 'second prompt' }]
         })
-      })
+      }),
+      {}
     )
   })
 

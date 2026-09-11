@@ -14,7 +14,8 @@ import {
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,
   method: string,
-  params?: unknown
+  params?: unknown,
+  options: { expectedEnvironmentPairingRevision?: number } = {}
 ): Promise<TResult> {
   if (
     method === 'agentSession.rewind' &&
@@ -27,8 +28,8 @@ export async function callStructuredAgentSession<TResult>(
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
   }
   return method === 'agentSession.conversationCommand'
-    ? callRuntimeRpc<TResult>(target, method, params, { timeoutMs: 195_000 })
-    : callRuntimeRpc<TResult>(target, method, params)
+    ? callRuntimeRpc<TResult>(target, method, params, { ...options, timeoutMs: 195_000 })
+    : callRuntimeRpc<TResult>(target, method, params, options)
 }
 
 async function subscribeStructuredAgentSessionMethod<TEvent>(

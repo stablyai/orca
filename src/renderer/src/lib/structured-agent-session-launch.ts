@@ -36,6 +36,7 @@ import {
   trackPendingStructuredLaunch,
   type StructuredLaunchState
 } from '@/lib/structured-agent-session-launch-registry'
+import type { StructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 import * as launchDraft from './structured-agent-session-launch-draft'
 import { trackStructuredLaunchFailureToast } from './structured-agent-session-launch-failure-toast'
 
@@ -54,6 +55,8 @@ type StructuredLaunchStateResult = {
 
 export type StructuredAgentLaunchResult = {
   sessionId: string
+  /** The host this launch is pinned to, so a caller retiring it addresses the same one. */
+  owner: StructuredAgentSessionOwner
   launchResult: Promise<StructuredAgentLaunchReceipt>
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   isVisibilityUnknown: () => boolean
@@ -162,7 +165,8 @@ function structuredAgentLaunchState(
         group: existing.callers,
         launchResult: existing.promise,
         options: joined,
-        stagedEntry: stagedPrompt
+        stagedEntry: stagedPrompt,
+        owner: existing.intent.owner
       })
     }
   }
@@ -202,7 +206,8 @@ function structuredAgentLaunchState(
     group: state.callers,
     launchResult: state.promise,
     options,
-    stagedEntry: stagedPrompt
+    stagedEntry: stagedPrompt,
+    owner: intent.owner
   })
   trackPendingStructuredLaunch(state)
   trackLaunchSettlement(state, state.promise)
@@ -240,6 +245,7 @@ export function startStructuredAgentLaunch(
   const { state, caller } = structuredAgentLaunchState(worktreeId, agent, options)
   return {
     sessionId: state.intent.sessionId,
+    owner: state.intent.owner,
     launchResult: state.promise,
     ...(caller.promptDeliveryResult ? { promptDeliveryResult: caller.promptDeliveryResult } : {}),
     isVisibilityUnknown: () => state.visibilityUnknown,

@@ -56,7 +56,7 @@ describe('callStructuredAgentSession rewind capability', () => {
       'env-1',
       AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
     )
-    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(target, 'agentSession.rewind', params)
+    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(target, 'agentSession.rewind', params, {})
   })
 
   it('does not dispatch rewind when host capability cannot be verified', async () => {
@@ -73,8 +73,8 @@ describe('callStructuredAgentSession rewind capability', () => {
     await callStructuredAgentSession(target, 'agentSession.send', params)
 
     expect(mocks.supportsCapability).not.toHaveBeenCalled()
-    expect(mocks.call).toHaveBeenCalledWith({ kind: 'local' }, 'agentSession.rewind', params)
-    expect(mocks.call).toHaveBeenCalledWith(target, 'agentSession.send', params)
+    expect(mocks.call).toHaveBeenCalledWith({ kind: 'local' }, 'agentSession.rewind', params, {})
+    expect(mocks.call).toHaveBeenCalledWith(target, 'agentSession.send', params, {})
   })
 })
 

@@ -7,6 +7,7 @@ import {
 } from '@/lib/structured-agent-session-launch'
 import type { StructuredPromptDeliveryResult } from '@/lib/structured-agent-session-launch-prompt'
 import type { ActivateAndRevealResult } from '@/lib/worktree-activation'
+import type { StructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 
 export type StructuredAgentLegacyFallbackResult = {
   /** Absent when the fallback opened a tab in an already-active workspace instead of activating one. */
@@ -25,6 +26,8 @@ export type StructuredAgentLaunchSettlement =
   | {
       kind: 'cancelled'
       sessionId: string
+      /** The host the launch was pinned to, so retiring it cannot address a different one. */
+      owner: StructuredAgentSessionOwner
       /** The legacy surface the refusal fallback had already opened when the cancel arrived; it
        *  outlives the cancel, so the caller must report its tab rather than the pre-launch one. */
       fallback?: StructuredAgentLegacyFallbackResult
@@ -88,6 +91,7 @@ export async function settleStructuredAgentLaunch(
   const cancelled = (): StructuredAgentLaunchSettlement => ({
     kind: 'cancelled',
     sessionId: launch.sessionId,
+    owner: launch.owner,
     ...(fallback.result ? { fallback: fallback.result } : {})
   })
   try {

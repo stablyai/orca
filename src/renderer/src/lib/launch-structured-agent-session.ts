@@ -11,7 +11,6 @@ import {
 } from '../../../shared/structured-agent-session-create'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { useAppStore } from '@/store'
 import {
@@ -19,9 +18,10 @@ import {
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-tabs-sync'
 import {
+  callStructuredAgentSessionForOwner,
   captureStructuredAgentSessionOwnerForHost,
+  structuredAgentSessionOwnerIntentKey,
   type StructuredAgentSessionOwner
 } from '@/runtime/structured-agent-session-owner'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -101,8 +101,14 @@ export function createStructuredAgentSessionLaunchIntent(
 ): StructuredAgentSessionLaunchIntent {
   const sessionId = createStructuredAgentSessionId(agent, () => crypto.randomUUID())
   const state = useAppStore.getState()
+  // Captured off the same store read, before any await: a re-pair mid-launch must not retarget it.
+  const owner = captureStructuredAgentSessionOwnerForHost(
+    getExecutionHostIdForWorktree(state, worktreeId)
+  )
+  // Why the owner's key: focus intents are partitioned by publisher, so one recorded against the
+  // local mirror could never match the publication a peer-owned session arrives in.
   recordWebSessionFocusIntent(
-    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    structuredAgentSessionOwnerIntentKey(owner),
     worktreeId,
     `agent-session:${sessionId}`,
     undefined,
@@ -112,10 +118,7 @@ export function createStructuredAgentSessionLaunchIntent(
     sessionId,
     worktreeId,
     agent,
-    // Captured off the same store read, before any await: a re-pair mid-launch must not retarget it.
-    owner: captureStructuredAgentSessionOwnerForHost(
-      getExecutionHostIdForWorktree(state, worktreeId)
-    ),
+    owner,
     params: structuredAgentSessionCreateParams({
       sessionId,
       worktree: toRuntimeWorktreeSelector(worktreeId),
@@ -130,7 +133,7 @@ export function abandonStructuredAgentSessionLaunchIntent(
   intent: StructuredAgentSessionLaunchIntent
 ): void {
   clearWebSessionFocusIntentIfMatches(
-    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    structuredAgentSessionOwnerIntentKey(intent.owner),
     intent.worktreeId,
     `agent-session:${intent.sessionId}`
   )
@@ -162,11 +165,13 @@ function delay(ms: number): Promise<void> {
 async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): Promise<boolean> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      const support = await callStructuredAgentSession<{ supported: boolean; reason?: string }>(
-        { kind: 'local' },
-        'agentSession.createSupport',
-        { worktree: intent.params.worktree, agent: intent.agent }
-      )
+      const support = await callStructuredAgentSessionForOwner<{
+        supported: boolean
+        reason?: string
+      }>(intent.owner, 'agentSession.createSupport', {
+        worktree: intent.params.worktree,
+        agent: intent.agent
+      })
       return support.supported === true
     } catch (error) {
       const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
@@ -204,11 +209,9 @@ export async function launchStructuredAgentSession(
   await requireHostCreateSupport(intent)
   let result: AgentSessionMutationResult<AgentSessionAttachResult>
   try {
-    result = await callStructuredAgentSession<AgentSessionMutationResult<AgentSessionAttachResult>>(
-      { kind: 'local' },
-      'agentSession.create',
-      intent.params
-    )
+    result = await callStructuredAgentSessionForOwner<
+      AgentSessionMutationResult<AgentSessionAttachResult>
+    >(intent.owner, 'agentSession.create', intent.params)
   } catch (error) {
     const code = definitiveStructuredAgentSessionCreateErrorCode(error)
     if (code) {
