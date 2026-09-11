@@ -1,7 +1,5 @@
-import {
-  readPushNotificationsPreference,
-  savePushNotificationsEnabled
-} from '../storage/preferences'
+import { readPushNotificationsPreference } from '../storage/preferences'
+import { setRemotePushEnabled } from './push-registration'
 import { getNotificationPermissionState } from './mobile-notifications'
 
 export async function shouldPresentNotificationOptIn(): Promise<boolean> {
@@ -18,13 +16,13 @@ export async function shouldPresentNotificationOptIn(): Promise<boolean> {
       }
       // Why: an already-authorized device should inherit the useful default
       // without seeing an onboarding decision it has effectively made.
-      await savePushNotificationsEnabled(true)
+      await setRemotePushEnabled(true)
       return false
     }
     if (permission.status === 'denied' || !permission.canAskAgain) {
       // Why: iOS cannot show its authorization prompt again, so a blocking
       // onboarding screen would be a dead end; Settings remains the recovery.
-      await savePushNotificationsEnabled(false)
+      await setRemotePushEnabled(false)
       return false
     }
     return permission.status === 'undetermined'
