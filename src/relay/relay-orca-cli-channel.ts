@@ -154,9 +154,13 @@ export async function runRelayOrcaCliChannel(
   // Why an explicit error path: the decoder contains a throwing frame owner instead of letting
   // it escape, so a malformed relay reply must still end this one-shot command, not park it.
   const onDecodeError = (error: Error): void => {
-    process.stderr.write(`[orca-cli] Relay protocol error: ${error.message}\n`)
-    sock.destroy()
-    process.exit(1)
+    // Why exit inside the write callback: stderr is async on pipe transports, so exiting early
+    // drops the only evidence this failure ever produces — the same reason relay-handshake.ts
+    // writes its mismatch line this way.
+    process.stderr.write(`[orca-cli] Relay protocol error: ${error.message}\n`, () => {
+      sock.destroy()
+      process.exit(1)
+    })
   }
   const decoder = new FrameDecoder((frame: DecodedFrame) => {
     if (frame.id > highestReceivedSeq) {
