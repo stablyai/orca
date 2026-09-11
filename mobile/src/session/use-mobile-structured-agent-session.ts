@@ -115,7 +115,7 @@ export function useMobileStructuredAgentSession(args: {
       if (result.status === 'unknown') {
         // Prompt/option/cancel plans cannot redispatch an unknown ledger row;
         // issue a fresh id so a retry can be admitted after the user checks the
-        // stream. Sends opt into explicit retryUnknown below.
+        // stream. Sends rotate operation ids on retry below.
         operationIdsRef.current.delete(key)
         return result
       }
