@@ -1,4 +1,3 @@
-import { useNotificationPaneNavigation } from './use-notification-pane-navigation'
 import { useMobileSessionFoundation } from './use-mobile-session-foundation'
 import { useMobileSessionScreenState } from './use-mobile-session-screen-state'
 import { useMobileSessionTerminalRuntime } from './use-mobile-session-terminal-runtime'
@@ -83,7 +82,6 @@ export function useMobileSessionController() {
   useMobileSessionStartup(keyboardState)
   useMobileSessionPreferenceFocus(keyboardState)
   const tabSwitching = Object.assign(keyboardState, useMobileSessionTabSwitching(keyboardState))
-  useNotificationPaneNavigation(tabSwitching)
   const terminalWebview = Object.assign(tabSwitching, useMobileSessionTerminalWebview(tabSwitching))
   const terminalSendActions = Object.assign(
     terminalWebview,

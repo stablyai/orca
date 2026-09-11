@@ -26,8 +26,7 @@ export const PushNotificationSchema = z
     agentState: PushAgentStateSchema.nullable(),
     title: z.string().min(1).max(PUSH_LIMITS.titleMaxChars),
     body: z.string().max(PUSH_LIMITS.bodyMaxChars),
-    worktreeId: z.string().min(1).max(2048).optional(),
-    paneKey: z.string().min(1).max(2048).optional()
+    worktreeId: z.string().min(1).max(2048).optional()
   })
   .strict()
   .refine(
