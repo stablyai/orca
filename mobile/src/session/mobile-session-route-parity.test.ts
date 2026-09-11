@@ -69,8 +69,11 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 const HEAD_CALLBACK_BODY_SHA256 = 'af7f3c62954250d4be7ee432ecd10dc2689792aad8230fed2d1d68bbc892d776'
 const HEAD_EFFECT_SHA256 = 'd9ebfaabc1e79773cdada7ab370b20459ed972f1f8edce1652199f4d0391cd13'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
+// Moved once for the create-tab placement fix: handleCreateTerminal now paints the created tab
+// after the anchor it sent the host instead of appending. Only that body changed; the other 11
+// extracted functions are byte-identical.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'fde6679349ab2b8c30c7e627841ff99bd1dd24441ee95323d0aa70230422ae24'
+  '90b88dfc168c664d87b240af14f6c4e19fa506a3d1005fcd9ef29df1befc810c'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'cab85e4e4a3f43289ba93ddea9ccce57aea83e0bf14fd1620a965aad0c1cb49e'
 const HEAD_NATIVE_REMOVAL_SHA256 =

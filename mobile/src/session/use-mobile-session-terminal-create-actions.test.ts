@@ -262,3 +262,78 @@ describe('mobile + Codex tab creation routing', () => {
     }
   )
 })
+
+describe('optimistic placement of a created tab', () => {
+  let renderer: ReactTestRenderer | undefined
+  afterEach(() => renderer?.unmount())
+
+  async function createLegacyTerminal(scope: ReturnType<typeof createScope>) {
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal()
+    })
+  }
+
+  function tabIdsAfterCreate(
+    scope: ReturnType<typeof createScope>,
+    prior: { id: string }[]
+  ): string[] {
+    const updater = (scope.setSessionTabs as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[0] as (
+      prev: { id: string }[]
+    ) => { id: string }[]
+    return updater(prior).map((tab) => tab.id)
+  }
+
+  it('paints the created tab after the anchor it asked the host for, not at the end', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    await createLegacyTerminal(scope)
+
+    expect(scope.setSessionTabs).toHaveBeenCalled()
+    // The request anchored on the active tab, so the paint must land in the same slot the host
+    // splices into; appending here is what made the tab jump on the next snapshot.
+    expect(tabIdsAfterCreate(scope, [{ id: 'existing-tab' }, { id: 'trailing-tab' }])).toEqual([
+      'existing-tab',
+      'terminal-tab-1',
+      'trailing-tab'
+    ])
+  })
+
+  it('sends the same anchor it paints with', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    await createLegacyTerminal(scope)
+
+    expect(scope.client.sendRequest).toHaveBeenCalledWith(
+      'session.tabs.createTerminal',
+      expect.objectContaining({ afterTabId: 'existing-tab' })
+    )
+  })
+
+  it('appends when the anchor is not in the client list, matching the host fallback', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    await createLegacyTerminal(scope)
+
+    expect(tabIdsAfterCreate(scope, [{ id: 'unrelated-tab' }])).toEqual([
+      'unrelated-tab',
+      'terminal-tab-1'
+    ])
+  })
+
+  it('leaves the list alone when the host snapshot already placed the tab', async () => {
+    const scope = createScope(clientReturning(terminalCreateResponse()))
+    await createLegacyTerminal(scope)
+
+    const prior = [{ id: 'existing-tab' }, { id: 'terminal-tab-1' }, { id: 'trailing-tab' }]
+    expect(tabIdsAfterCreate(scope, prior)).toEqual([
+      'existing-tab',
+      'terminal-tab-1',
+      'trailing-tab'
+    ])
+  })
+})
