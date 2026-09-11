@@ -76,6 +76,7 @@ vi.mock('../providers/windows-pty-job-membership', () => ({
 
 import { createPtySubprocess } from './pty-subprocess'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import { ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV } from '../pty/codex-default-home-shell-startup'
 
 const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
@@ -345,6 +346,92 @@ describe('createPtySubprocess', () => {
         })
       })
     )
+  })
+
+  it('keeps the Git Bash wrapper without a managed Codex preflight', async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'C:\\PortableGit\\bin\\bash.exe',
+        env: { [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1' }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'C:\\PortableGit\\bin\\bash.exe',
+      [
+        '-c',
+        expect.stringMatching(
+          /^chcp\.com 65001 >\/dev\/null 2>&1; exec "\$BASH" --rcfile '.*shell-ready\/bash\/rcfile' -i$/
+        )
+      ],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          CHERE_INVOKING: '1',
+          [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1'
+        })
+      })
+    )
+  })
+
+  it('preserves a daemon-only user CODEX_HOME without dropping Git Bash integration', async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const previousCodexHome = process.env.CODEX_HOME
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    process.env.CODEX_HOME = 'C:\\UserCustom\\codex'
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'C:\\PortableGit\\bin\\bash.exe',
+        env: { [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1' },
+        envToDelete: ['ORCA_CODEX_HOME']
+      })
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'C:\\PortableGit\\bin\\bash.exe',
+      [
+        '-c',
+        expect.stringMatching(
+          /^chcp\.com 65001 >\/dev\/null 2>&1; exec "\$BASH" --rcfile '.*shell-ready\/bash\/rcfile' -i$/
+        )
+      ],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          CHERE_INVOKING: '1',
+          CODEX_HOME: 'C:\\UserCustom\\codex'
+        })
+      })
+    )
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(spawnEnv[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBeUndefined()
   })
 
   it('rejects a missing explicit native Windows cwd before node-pty spawn', async () => {

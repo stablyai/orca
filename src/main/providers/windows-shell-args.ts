@@ -29,8 +29,11 @@ const CMD_CODEX_LAUNCH_PREFLIGHT = `if defined ORCA_CODEX_LAUNCH_PREFLIGHT call 
 // `&&`) keeps startup working even if chcp.com is missing.
 const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
-function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
-  if (!codexLaunchPreflightCommand) {
+function getGitBashLaunchCommand(
+  codexLaunchPreflightCommand?: string,
+  useGitBashShellReadyWrapper = false
+): string {
+  if (!codexLaunchPreflightCommand && !useGitBashShellReadyWrapper) {
     return GIT_BASH_UTF8_LOGIN_COMMAND
   }
 
@@ -179,7 +182,8 @@ export function resolveWindowsShellLaunchArgs(
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
   startupCommand?: string,
-  codexLaunchPreflightCommand?: string
+  codexLaunchPreflightCommand?: string,
+  useGitBashShellReadyWrapper = false
 ): WindowsShellLaunchArgs {
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = normalizeWindowsTerminalCwd(cwd)
@@ -216,7 +220,10 @@ export function resolveWindowsShellLaunchArgs(
 
   if (isWindowsGitBashShellPath(shellPath)) {
     return {
-      shellArgs: ['-c', getGitBashLaunchCommand(codexLaunchPreflightCommand)],
+      shellArgs: [
+        '-c',
+        getGitBashLaunchCommand(codexLaunchPreflightCommand, useGitBashShellReadyWrapper)
+      ],
       effectiveCwd: nativeCwd,
       validationCwd: nativeCwd
     }

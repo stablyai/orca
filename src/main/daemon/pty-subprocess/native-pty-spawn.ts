@@ -5,6 +5,7 @@ import {
 } from '../../providers/macos-tcc-login-shell'
 import type { WindowsShellSpawnAttempt } from '../../providers/windows-shell-fallback-chain'
 import { assignHostProcessToKillOnCloseJob } from '../../windows/windows-pty-job'
+import { scrubCodexDefaultHomeMarkerForWindowsShell } from '../../pty/codex-default-home-shell-startup'
 
 export type SpawnedDaemonPty = {
   process: pty.IPty
@@ -61,6 +62,7 @@ export function spawnNativeDaemonPty(args: {
     }
     for (const attempt of args.windowsFallbackAttempts.slice(1)) {
       try {
+        scrubCodexDefaultHomeMarkerForWindowsShell(args.env, attempt.shellPath)
         const process = spawnAt(attempt.shellPath, attempt.shellArgs, attempt.effectiveCwd)
         const message = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
         console.warn(

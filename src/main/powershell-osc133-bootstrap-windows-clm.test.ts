@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { encodePowerShellCommand } from './powershell-osc133-bootstrap'
 import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
+import { ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV } from './pty/codex-default-home-shell-startup'
 
 const WINDOWS_POWERSHELLS = ['powershell.exe', 'pwsh.exe'] as const
 const PROFILE_CODEX_HOME = 'C:\\Profile Custom\\codex'
@@ -18,7 +19,35 @@ for (const shell of WINDOWS_POWERSHELLS) {
         const cwd = mkdtempSync(join(tmpdir(), 'orca-powershell-clm-'))
         try {
           expect(runBootstrap(shell, languageMode, cwd)).toContain(
-            `mode=${languageMode};codexHome=${MANAGED_CODEX_HOME};orcaHome=${MANAGED_CODEX_HOME};startupCount=2;cwd=${cwd}`
+            `mode=${languageMode};codexHome=${MANAGED_CODEX_HOME};orcaHome=${MANAGED_CODEX_HOME};reset=;startupCount=2;cwd=${cwd}`
+          )
+        } finally {
+          rmSync(cwd, { recursive: true, force: true })
+        }
+      }
+    )
+
+    it.each(['FullLanguage', 'ConstrainedLanguage'] as const)(
+      'removes a profile-only CODEX_HOME in %s mode',
+      (languageMode) => {
+        const cwd = mkdtempSync(join(tmpdir(), 'orca-powershell-default-home-'))
+        try {
+          expect(runBootstrap(shell, languageMode, cwd, 'default-home')).toContain(
+            `mode=${languageMode};codexHome=;orcaHome=;reset=;startupCount=2;cwd=${cwd}`
+          )
+        } finally {
+          rmSync(cwd, { recursive: true, force: true })
+        }
+      }
+    )
+
+    it.each(['FullLanguage', 'ConstrainedLanguage'] as const)(
+      'restores an explicitly named default CODEX_HOME in %s mode',
+      (languageMode) => {
+        const cwd = mkdtempSync(join(tmpdir(), 'orca-powershell-explicit-default-home-'))
+        try {
+          expect(runBootstrap(shell, languageMode, cwd, 'explicit-default-home')).toContain(
+            `mode=${languageMode};codexHome=C:\\Users\\jin\\.codex;orcaHome=;reset=;startupCount=2;cwd=${cwd}`
           )
         } finally {
           rmSync(cwd, { recursive: true, force: true })
@@ -31,7 +60,8 @@ for (const shell of WINDOWS_POWERSHELLS) {
 function runBootstrap(
   shell: (typeof WINDOWS_POWERSHELLS)[number],
   languageMode: 'FullLanguage' | 'ConstrainedLanguage',
-  cwd: string
+  cwd: string,
+  homeMode: 'managed' | 'default-home' | 'explicit-default-home' = 'managed'
 ): string {
   const launch = resolveWindowsShellLaunchArgs(
     shell,
@@ -54,7 +84,13 @@ function runBootstrap(
       env: {
         ...process.env,
         CODEX_HOME: PROFILE_CODEX_HOME,
-        ORCA_CODEX_HOME: MANAGED_CODEX_HOME,
+        ...(homeMode === 'managed'
+          ? { ORCA_CODEX_HOME: MANAGED_CODEX_HOME }
+          : {
+              ORCA_CODEX_HOME: MANAGED_CODEX_HOME,
+              [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]:
+                homeMode === 'default-home' ? '1' : 'C:\\Users\\jin\\.codex'
+            }),
         ORCA_TEST_BOOTSTRAP: encodedCommand,
         ORCA_TEST_LANGUAGE_MODE: languageMode
       },
@@ -93,7 +129,7 @@ $runner.Commands.Clear()
 $null = $runner.AddScript($bootstrap).Invoke()
 $runner.Commands.Clear()
 $runner.AddScript(
-  '"mode=$($ExecutionContext.SessionState.LanguageMode);codexHome=$env:CODEX_HOME;orcaHome=$env:ORCA_CODEX_HOME;startupCount=$env:ORCA_TEST_STARTUP_COUNT;cwd=$($PWD.Path)"'
+  '"mode=$($ExecutionContext.SessionState.LanguageMode);codexHome=$env:CODEX_HOME;orcaHome=$env:ORCA_CODEX_HOME;reset=$env:${ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV};startupCount=$env:ORCA_TEST_STARTUP_COUNT;cwd=$($PWD.Path)"'
 ).Invoke()
 $runner.Dispose()
 $runspace.Dispose()
