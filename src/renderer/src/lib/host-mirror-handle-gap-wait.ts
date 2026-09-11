@@ -82,7 +82,15 @@ function releaseWaiter(key: string): void {
   clearTimeout(waiter.deadline)
   waitersByPane.delete(key)
   stopStoreSubscriptionIfIdle()
-  waiter.run()
+  // Why contained: the release path runs inside useAppStore.subscribe, so a replay that throws
+  // escapes the setState that triggered it — aborting the listener loop, so every subscriber
+  // after this one misses the write, and stranding the sibling panes the same frame made due.
+  // The waiter's own state is already torn down above, so nothing is held by swallowing here.
+  try {
+    waiter.run()
+  } catch (error) {
+    console.error(`[host-mirror] parked resume replay failed for ${key}:`, error)
+  }
 }
 
 function waiterIsReleased(waiter: HandleGapWaiter, state: HandleGapStoreState): boolean {
