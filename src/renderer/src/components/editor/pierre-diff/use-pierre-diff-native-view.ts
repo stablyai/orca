@@ -73,9 +73,11 @@ export function usePierreDiffNativeView(
         latest.current.fileDiff,
         latest.current.editable
       )
-      if (saved.selection?.side === 'deletions') {
-        editorRef.current?.setDeletedTextSelectionActive(true)
-      }
+      // NOTE: do not pre-activate deleted-text mode here. Pierre's
+      // setDeletedTextSelectionActive(true) calls #updateSelections([]) internally, so calling it
+      // each iteration wipes the selection this loop is trying to restore and convergence can
+      // never be reached. restorePierreNativeSelection sets the mode immediately before it
+      // applies the range, which is the correct and only place it belongs.
       if (
         current.instance.getCodeScrollLeft() === saved.scrollLeft &&
         JSON.stringify(selected) === JSON.stringify(saved.selection)
