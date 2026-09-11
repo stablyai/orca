@@ -16,7 +16,7 @@ import {
   parseMissionPlan
 } from '../../mission/mission-plan'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { requiredString } from '../schemas'
 
 const MissionPlanParams = z.object({
@@ -27,7 +27,7 @@ const MissionPlanParams = z.object({
     .optional()
 })
 
-export const MISSION_METHODS: RpcMethod[] = [
+export const MISSION_METHODS = [
   defineMethod({
     name: 'mission.plan',
     params: MissionPlanParams,

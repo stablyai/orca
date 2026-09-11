@@ -8,7 +8,7 @@ import {
   getCollaborationRuntimeTopology,
   registerCollaborationRuntimeTopology
 } from '../../collaboration/collaboration-runtime-registry'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { requiredString } from '../schemas'
 import { resolveRunScope } from './orchestration/runs/run-scope'
 
@@ -40,7 +40,7 @@ const CollaborationConfigureParams = z.object({
 
 // Why: coordinator-owned — the run binding comes from the coordinator's pane,
 // never from caller-supplied ids, so no caller can configure a foreign run.
-export const COLLABORATION_CONFIGURE_METHODS: RpcMethod[] = [
+export const COLLABORATION_CONFIGURE_METHODS = [
   defineMethod({
     name: 'orchestration.collaborationConfigure',
     params: CollaborationConfigureParams,
