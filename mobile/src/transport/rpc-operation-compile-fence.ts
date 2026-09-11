@@ -14,7 +14,8 @@ import type {
   ObjectResultRpcDefinition,
   RequireResultRpcDefinition,
   RpcAcceptanceName,
-  RpcCompatibleReader
+  RpcCompatibleReader,
+  RpcOperation
 } from './rpc-operation-contract'
 
 // Why this file exists: the descriptor's whole point is that a call site cannot pick the
@@ -25,6 +26,7 @@ import type {
 
 declare const client: RpcClient
 
+// FENCE: variant-readers-cannot-be-empty
 // @ts-expect-error a variant reader combinator must have at least one reader
 const _fenceEmptyVariantReaders = rpcResultVariants([])
 
@@ -167,4 +169,56 @@ export async function fenceVerdictTypes(): Promise<void> {
   // @ts-expect-error the probe's policy yields a boolean, not the other family's rows
   const rows: WorkspaceRows = await runRpcOperation(client, worktreePsProbe, {})
   void rows
+}
+
+// FENCE: manual-decoding-descriptor-needs-a-reader
+// @ts-expect-error the public descriptor also requires decoding, even without the factory
+export const fenceManualWithoutReader: RpcOperation<
+  'worktree.ps',
+  'require-result-or-throw',
+  'rows',
+  WorkspaceRows,
+  'on-settle'
+> = {
+  name: 'fence.manual',
+  method: 'worktree.ps',
+  acceptance: 'require-result-or-throw',
+  barrier: 'on-settle',
+  consumes: [],
+  schedules: []
+}
+
+// FENCE: broad-policy-still-requires-a-reader
+// @ts-expect-error widening the policy cannot disconnect it from its required reader
+export const fenceBroadWithoutReader: RpcOperation<
+  'worktree.ps',
+  RpcAcceptanceName,
+  'rows',
+  WorkspaceRows,
+  'on-settle'
+> = {
+  name: 'fence.broad',
+  method: 'worktree.ps',
+  acceptance: 'require-result-or-throw',
+  barrier: 'on-settle',
+  consumes: [],
+  schedules: [],
+  read: undefined
+}
+
+// FENCE: object-descriptor-needs-a-reader
+// @ts-expect-error object acceptance must decode, just like require-result acceptance
+export const fenceObjectWithoutReader: RpcOperation<
+  'worktree.ps',
+  'object-result-or-null',
+  'rows',
+  WorkspaceRows,
+  'on-settle'
+> = {
+  name: 'fence.object',
+  method: 'worktree.ps',
+  acceptance: 'object-result-or-null',
+  barrier: 'on-settle',
+  consumes: [],
+  schedules: []
 }

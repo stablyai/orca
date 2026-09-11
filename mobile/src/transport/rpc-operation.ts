@@ -1,4 +1,4 @@
-import type { RpcClient, SendRequestOptions } from './rpc-client'
+import type { UnvalidatedRpcRequestPort, SendRequestOptions } from './unvalidated-rpc-request-port'
 import type { RpcMethodName, RpcSendParams } from './rpc-params-contract'
 import type { RpcResponse } from './types'
 import {
@@ -78,7 +78,7 @@ export function defineRpcOperation(definition: RpcOperationDefinitionInput): Any
 
 /** Sends the operation without interpreting it; transport rejection stays on the promise. */
 async function request(
-  client: RpcClient,
+  client: UnvalidatedRpcRequestPort,
   operation: AnyRpcOperation,
   params: unknown,
   options?: SendRequestOptions
@@ -208,7 +208,7 @@ export async function runRpcOperation<
   Variant extends string,
   Value
 >(
-  client: RpcClient,
+  client: UnvalidatedRpcRequestPort,
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'on-settle'>,
   params: RpcSendParams<Method>,
   options?: SendRequestOptions
@@ -226,7 +226,7 @@ export async function captureRpcOperationSettlement<
   Value,
   Barrier extends RpcInterpretationBarrier
 >(
-  client: RpcClient,
+  client: UnvalidatedRpcRequestPort,
   operation: RpcOperation<Method, Acceptance, Variant, Value, Barrier>,
   params: RpcSendParams<Method>,
   options?: SendRequestOptions
@@ -251,7 +251,7 @@ export function startRpcOperation<
   Variant extends string,
   Value
 >(
-  client: RpcClient,
+  client: UnvalidatedRpcRequestPort,
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'after-all-requests'>,
   params: RpcSendParams<Method>,
   options?: SendRequestOptions

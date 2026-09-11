@@ -355,6 +355,7 @@ describe('the compile fence', () => {
     )
 
     expect(markers).toEqual([
+      'variant-readers-cannot-be-empty',
       'probe-cannot-take-a-reader',
       'decoding-policy-needs-a-reader',
       'acceptance-must-be-a-named-policy',
@@ -369,8 +370,11 @@ describe('the compile fence', () => {
       'declared-barrier-cannot-be-moved-earlier',
       'on-settle-operation-cannot-defer-to-a-barrier',
       'params-are-fixed-by-the-method',
-      'probe-verdict-is-not-a-decoded-value'
+      'probe-verdict-is-not-a-decoded-value',
+      'manual-decoding-descriptor-needs-a-reader',
+      'broad-policy-still-requires-a-reader',
+      'object-descriptor-needs-a-reader'
     ])
-    expect(fenceSource.split(expectErrorDirective).length - 1).toBe(13)
+    expect(fenceSource.split(expectErrorDirective).length - 1).toBe(17)
   })
 })

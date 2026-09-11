@@ -72,24 +72,25 @@ export type RpcOperation<
   /** Family name, not the method: two families may share a method with different acceptance. */
   readonly name: string
   readonly method: Method
-  readonly acceptance: Acceptance
   readonly barrier: Barrier
   /** Reply fields this family reads — the host contract a wire change has to respect. */
   readonly consumes: readonly string[]
   /** Refresh/poll schedules this family owns; empty when it only runs on user intent. */
   readonly schedules: readonly string[]
-  /** Absent for policies that read no result payload. */
-  readonly read?: RpcCompatibleReader<unknown, Variant, Value>
-}
+} & {
+  [Policy in RpcAcceptanceName]: {
+    readonly acceptance: Policy
+    readonly read: Policy extends 'require-result-or-throw' | 'object-result-or-null'
+      ? RpcCompatibleReader<unknown, Variant, Value>
+      : undefined
+  }
+}[Acceptance]
 
-// Covariant top type: an operation's reader may narrow the variant and the value.
-export type AnyRpcOperation = RpcOperation<
-  RpcMethodName,
-  RpcAcceptanceName,
-  string,
-  unknown,
-  RpcInterpretationBarrier
->
+// Internal interpreter view; public send APIs retain the policy/reader correlation.
+export type AnyRpcOperation = Pick<
+  RpcOperation<RpcMethodName, RpcAcceptanceName, string, unknown, RpcInterpretationBarrier>,
+  'name' | 'method' | 'acceptance' | 'barrier' | 'consumes' | 'schedules'
+> & { readonly read: RpcCompatibleReader<unknown, string, unknown> | undefined }
 
 /** The verdict the declared policy yields. Not a per-call choice. */
 export type RpcVerdict<
