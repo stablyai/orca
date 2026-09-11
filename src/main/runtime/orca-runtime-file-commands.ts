@@ -22,6 +22,10 @@ import { ClientHostedBrowserRowPublisher } from './client-hosted-browser-row-pub
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
+import { parseWslPath } from '../wsl'
+import { requireWorktreeCreateRoute } from '../worktree-create-execution-host-route'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 
 export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchCleanup {
   protected readonly fileCommands = new RuntimeFileCommands({
@@ -71,6 +75,36 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
 
   protected readonly gitCommands = new RuntimeGitCommands({
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
+    resolveRuntimeModelDiscoveryTarget: async (selector) => {
+      if (typeof selector !== 'string') {
+        const repo = await this.resolveRepoSelector(selector.repoSelector)
+        const route = requireWorktreeCreateRoute(repo)
+        return {
+          cwd: repo.path,
+          executionHostId: route.hostId,
+          ...(route.kind === 'local'
+            ? { localGitOptions: getLocalProjectWorktreeGitOptions(this.requireStore(), repo) }
+            : {})
+        }
+      }
+      const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
+      if (folderScope) {
+        const wslDistro = parseWslPath(folderScope.path)?.distro
+        return {
+          cwd: folderScope.path,
+          executionHostId: folderScope.connectionId
+            ? toSshExecutionHostId(folderScope.connectionId)
+            : LOCAL_EXECUTION_HOST_ID,
+          ...(wslDistro ? { localGitOptions: { wslDistro } } : {})
+        }
+      }
+      const target = await this.resolveRuntimeGitTarget(selector)
+      return {
+        cwd: target.worktree.path,
+        executionHostId: target.executionHostId,
+        localGitOptions: target.localGitOptions
+      }
+    },
     getRuntimeSettings: () => this.requireStore().getSettings() as GlobalSettings,
     getCommitMessageAgentEnvironment: () => this.accounts.getCommitMessageAgentEnvironment(),
     // Why: resolved worktrees are cached for a second, so link/unlink would lag

@@ -77,6 +77,7 @@ export function parseClaudeModels(stdout: string): CommitMessageModel[] {
       )
       return {
         id: model.id,
+        ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
         label: model.label,
         ...(model.description ? { description: model.description } : {}),
         ...(thinkingLevels.length > 0

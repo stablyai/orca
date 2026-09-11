@@ -168,7 +168,7 @@ describe('orchestration RPC methods', () => {
       )
     })
 
-    it('applies and reports opaque per-invocation model preferences', async () => {
+    it('applies and reports official per-invocation model preferences', async () => {
       setup()
       mockCurrentWorkerStart()
       const task = db.createTask({ spec: 'launch a custom model' })
@@ -177,7 +177,7 @@ describe('orchestration RPC methods', () => {
         task: task.id,
         from: 'term_coord',
         agent: 'claude',
-        model: 'aws-bedrock-opus-5',
+        model: 'opus',
         effort: 'high'
       })) as {
         dispatchId: string
@@ -191,20 +191,39 @@ describe('orchestration RPC methods', () => {
       expect(result).toMatchObject({
         state: 'ready',
         launch: {
-          requested: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' },
-          effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' }
+          requested: { agent: 'claude', model: 'opus', effort: 'high' },
+          effective: { agent: 'claude', model: 'opus', effort: 'high' }
         }
       })
       expect(runtime.createTerminal).toHaveBeenCalledWith(
         'id:repo::worktree',
         expect.objectContaining({
           startupAgent: 'claude',
-          launchPreferences: { model: 'aws-bedrock-opus-5', effort: 'high' }
+          launchPreferences: { model: 'opus', effort: 'high' }
         })
       )
       expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
         launch: result.launch
       })
+    })
+
+    it('resolves the dispatching coordinator’s worktree once for a --model dispatch', async () => {
+      // The model probe and the placement both need it; two `showTerminal` round trips for one
+      // dispatch is one more than the answer costs.
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'launch a custom model' })
+
+      await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'claude',
+        model: 'opus'
+      })
+
+      expect(
+        vi.mocked(runtime.showTerminal).mock.calls.filter(([handle]) => handle === 'term_coord')
+      ).toHaveLength(1)
     })
 
     it('rejects launch preferences for an existing terminal before creating a Dispatch', async () => {

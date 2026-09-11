@@ -74,7 +74,7 @@ export function getRuntimeGitGenerationSettings(
 }
 
 export function localAgentRuntimeTargetForTarget(
-  target: RuntimeGitTarget
+  target: Pick<RuntimeGitTarget, 'executionHostId' | 'localGitOptions'>
 ): CommitMessageAgentRuntimeTarget {
   const wslDistro = localGitOptionsForTarget(target).wslDistro
   return wslDistro ? { runtime: 'wsl', wslDistro } : { runtime: 'host' }

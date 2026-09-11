@@ -35,8 +35,20 @@ export type RuntimeGitTarget = {
   localGitOptions?: GitRuntimeOptions
 }
 
+export type RuntimeModelDiscoverySelector = string | { repoSelector: string }
+
+export type RuntimeModelDiscoveryTarget = {
+  cwd: string
+  executionHostId: ExecutionHostId
+  localGitOptions?: GitRuntimeOptions
+}
+
 export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
+  /** Model discovery needs an execution host and cwd, not an existing Git worktree. */
+  resolveRuntimeModelDiscoveryTarget?(
+    selector: RuntimeModelDiscoverySelector
+  ): Promise<RuntimeModelDiscoveryTarget>
   getRuntimeSettings(): GlobalSettings
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
@@ -63,7 +75,9 @@ export type RuntimeGitRoute =
   /** `provider: null` is "remote and currently unreachable" — never "run it here". */
   | { kind: 'ssh'; connectionId: string; provider: SshGitProvider | null }
 
-export function runtimeGitRouteForTarget(target: RuntimeGitTarget): RuntimeGitRoute {
+export function runtimeGitRouteForTarget(
+  target: Pick<RuntimeGitTarget, 'executionHostId'>
+): RuntimeGitRoute {
   const route = resolveGitRouteForHost(target.executionHostId)
   switch (route.kind) {
     case 'local':
@@ -90,7 +104,9 @@ export function requireRuntimeGitProvider(target: RuntimeGitTarget): SshGitProvi
   return route.provider
 }
 
-export function localGitOptionsForTarget(target: RuntimeGitTarget): GitRuntimeOptions {
+export function localGitOptionsForTarget(
+  target: Pick<RuntimeGitTarget, 'executionHostId' | 'localGitOptions'>
+): GitRuntimeOptions {
   // WSL routing describes *this* machine; no remote host may inherit it.
   return target.executionHostId === LOCAL_EXECUTION_HOST_ID ? (target.localGitOptions ?? {}) : {}
 }

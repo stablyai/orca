@@ -26,6 +26,8 @@ export type ThinkingLevel = { id: string; label: string }
 export type CommitMessageModel = {
   /** Value passed to the agent CLI's --model flag. */
   id: string
+  /** Full model id a discovered alias resolves to, when the CLI reports one. */
+  resolvedModel?: string
   /** Visible label in the model dropdown. */
   label: string
   /** Discovery-provided detail, e.g. what a CLI alias resolves to on this host. */
@@ -70,6 +72,7 @@ export type CommitMessageAgentSpec = {
 
 export type CommitMessageModelCapability = {
   id: string
+  resolvedModel?: string
   label: string
   description?: string
   thinkingLevels?: ThinkingLevel[]
@@ -174,6 +177,7 @@ function toCommitMessageAgentCapability(
     // swap this source without leaking binary/argv details into UI code.
     models: spec.models.map((model) => ({
       id: model.id,
+      ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
       label: model.label,
       ...(model.description ? { description: model.description } : {}),
       ...(model.thinkingLevels ? { thinkingLevels: [...model.thinkingLevels] } : {}),

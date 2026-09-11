@@ -46,9 +46,14 @@ export async function startLocalWorker(args: {
   const { params, runtime, db, run, coordinatorPane, existingTask, orchestrationMutation } = args
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+  const { agent, launch, callerWorktreeId } = await prepareLocalWorkerStart({
+    params,
+    createsWorktree,
+    runtime
+  })
 
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(runtime, params.from)
+  const coordinatorWorktreeId =
+    callerWorktreeId ?? (await resolveDispatchCallerWorktreeId(runtime, params.from))
   const creationWorktree = createsWorktree
     ? await runtime.showManagedWorktree(`id:${coordinatorWorktreeId}`)
     : undefined

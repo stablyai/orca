@@ -8,6 +8,10 @@ import { resolveAgentSessionOptionLaunch } from '../../../../../../shared/agent-
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import {
+  describeWorkerLaunchModelRejection,
+  type WorkerLaunchModelAuthority
+} from './worker-launch-model-authority'
 
 export type OrchestrationWorkerLaunchSelection = {
   agent: TuiAgent | null
@@ -48,10 +52,13 @@ export function createPendingWorkerLaunchReceipt(args: {
   }
 }
 
+/** `authority` names the ids the executing host accepts from its live list and known aliases.
+ *  Only a `live` one may refuse; a seed fallback means the host was never listed. */
 export function resolveWorkerLaunchPreferences(args: {
   agent: TuiAgent
   model?: string
   effort?: string
+  authority?: WorkerLaunchModelAuthority
 }): {
   preferences: AgentLaunchPreferences | undefined
   receipt: OrchestrationWorkerLaunchReceipt
@@ -74,20 +81,31 @@ export function resolveWorkerLaunchPreferences(args: {
     )
   }
 
+  const model = args.model
+  // Only a host that actually answered may refuse an id. A seed fallback means the CLI could not
+  // be listed there, and an unreachable host is not a statement that the model does not exist —
+  // let the agent CLI itself report it.
+  const authority = args.authority
+  if (authority?.source === 'live' && !authority.modelIds.includes(model)) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      describeWorkerLaunchModelRejection({ agent: args.agent, model, authority })
+    )
+  }
+  // Effort is a flag Orca emits, not a host fact, so the catalog decides it on both paths — a
+  // probe's generic level list must never narrow the menu a seeded model carries.
   if (args.effort) {
-    const model = findCatalogModel(catalog, args.model)
+    const seeded = findCatalogModel(catalog, model)
     const option =
-      findCatalogOption(model, 'effort') ??
-      (!model
-        ? catalog.unknownModelOptions?.find((candidate) => candidate.id === 'effort')
-        : undefined)
+      findCatalogOption(seeded, 'effort') ??
+      (seeded ? undefined : catalog.unknownModelOptions?.find(({ id }) => id === 'effort'))
     if (
       option?.kind.type !== 'select' ||
       !option.kind.choices.some((choice) => choice.value === args.effort)
     ) {
       throw new OrchestrationError(
         'invalid_argument',
-        `Agent ${args.agent} model ${args.model} does not support effort ${args.effort}.`
+        `Agent ${args.agent} model ${model} does not support effort ${args.effort}.`
       )
     }
   }

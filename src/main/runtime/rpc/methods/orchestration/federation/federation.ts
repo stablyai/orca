@@ -50,7 +50,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         )
       }
       const createsWorktree = params.worktree === 'new-top-level'
-      const { agent, launch } = prepareFederationAttachmentWorkerStart({
+      const { agent, launch } = await prepareFederationAttachmentWorkerStart({
         params,
         createsWorktree,
         runtime
