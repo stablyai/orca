@@ -36,7 +36,23 @@ type HandleGapStoreState = Pick<
 >
 
 const waitersByPane = new Map<string, HandleGapWaiter>()
-/** Connection generation whose wait already expired for the pane. */
+/**
+ * Connection generation whose wait already expired for the pane.
+ *
+ * Sticky for the life of that connection on purpose: this is the loop-breaker. A replayed sweep
+ * re-asks about the same pane, and without a recorded verdict it would park, expire and replay
+ * forever. So it is NOT cleared when the pane's row is retracted.
+ *
+ * The cost of that, and the reason it is written down: the key is a tab id, and a tab id is not
+ * guaranteed unique over a connection — `createTab` honours caller-supplied id hints and orphan
+ * adoption re-keys rows. A pane republished under a retired pane's tab id inherits "your wait
+ * already expired" and skips its own wait, which is the #19735 shape. Fixing it by clearing on
+ * re-park would remove the loop-breaker, so it is pinned in
+ * host-mirror-handle-gap-wait-retention.test.ts rather than traded away.
+ *
+ * Bounded by the panes that have parked AND expired on each environment's current connection;
+ * every environment's rows are retired on its own next reconnect, by any expiry anywhere.
+ */
 const expiredGenerationByPane = new Map<string, number>()
 let unsubscribeStore: (() => void) | null = null
 
@@ -53,16 +69,18 @@ export function hasHostMirrorHandleWaitExpired(environmentId: string, tabId: str
 }
 
 function recordExpiredWait(environmentId: string, key: string): void {
-  const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
-  // Why: a verdict from a previous connection is dead weight; drop it so the map
-  // stays bounded by the panes parked on the current connection.
-  const prefix = `${environmentId}\0`
+  // Why every environment and not just this one: a verdict is dead weight once its own environment
+  // reconnects, but only an expiry INSIDE that environment used to look at it — so a quiet or
+  // removed environment, which by definition expires nothing again, retained its rows for the life
+  // of the process. Each key names its own environment, so the generation it must be judged against
+  // is readable from the key.
   for (const [staleKey, staleGeneration] of expiredGenerationByPane) {
-    if (staleKey.startsWith(prefix) && staleGeneration !== generation) {
+    const staleEnvironmentId = staleKey.slice(0, staleKey.indexOf('\0'))
+    if (getRuntimeEnvironmentConnectionGeneration(staleEnvironmentId) !== staleGeneration) {
       expiredGenerationByPane.delete(staleKey)
     }
   }
-  expiredGenerationByPane.set(key, generation)
+  expiredGenerationByPane.set(key, getRuntimeEnvironmentConnectionGeneration(environmentId))
 }
 
 function stopStoreSubscriptionIfIdle(): void {
@@ -151,6 +169,10 @@ export function parkUntilHostMirrorHandleLands(
 
 export function countParkedHostMirrorHandleGapPanesForTests(): number {
   return waitersByPane.size
+}
+
+export function countExpiredHostMirrorHandleWaitsForTests(): number {
+  return expiredGenerationByPane.size
 }
 
 export function resetHostMirrorHandleGapWaitsForTests(): void {
