@@ -143,6 +143,28 @@ export default function TerminalPaneHeaderOverlay({
             onPointerDownCapture={
               title || isEditing ? () => onActivatePaneTitleInteraction(pane.id) : undefined
             }
+            onPointerDown={(event) => {
+              // Why: the bar itself is the drag-initiating surface (title text,
+              // rename input, and every action button stop propagation on their
+              // own pointerdown so this only fires for the empty bar area) —
+              // matches SortableTab.tsx's root-drag/child-stopPropagation split.
+              if (paneCount > 1 && !isEditing) {
+                onBeginPaneDrag(pane.id, event.currentTarget, event.nativeEvent)
+              }
+            }}
+            onDoubleClick={(event) => {
+              // Why: beginPaneDragFromPointerDown calls handle.setPointerCapture()
+              // on this bar (the `handle` it's given), which retargets every
+              // subsequent mouse-compatibility event for that pointer — including
+              // dblclick — to the bar itself, not whatever child was under the
+              // cursor. A dblclick handler on the inner title text/span would
+              // never receive it, so it has to live here instead.
+              if (!title || isEditing) {
+                return
+              }
+              event.stopPropagation()
+              onStartRename(pane.id)
+            }}
             onDragOver={(event) => {
               onActivatePaneTitleInteraction(pane.id)
               if (
@@ -197,6 +219,9 @@ export default function TerminalPaneHeaderOverlay({
                   'Pane title'
                 )}
                 value={renameValue}
+                // Why: stop the bar's own pointerdown from starting a pane drag
+                // while the rename input is focused/being clicked into.
+                onPointerDown={(event) => event.stopPropagation()}
                 onChange={(event) => onRenameValueChange(event.target.value)}
                 onKeyDown={(event) => {
                   // Why: an Enter that only confirms a CJK IME candidate must
@@ -222,28 +247,21 @@ export default function TerminalPaneHeaderOverlay({
               />
             ) : (
               <>
-                {paneCount > 1 && !isChromeless && (
-                  <div
-                    className="pane-title-drag-handle"
-                    aria-hidden="true"
-                    onPointerDown={(event) => {
-                      onBeginPaneDrag(pane.id, event.currentTarget, event.nativeEvent)
-                    }}
-                  />
-                )}
                 {title ? (
-                  <button
-                    type="button"
+                  // Why: plain drag surface, not a button — double-click-to-rename
+                  // is wired on the bar itself (see onDoubleClick above), because
+                  // pointer capture retargets the dblclick there, not to a child.
+                  // Matches SortableTab.tsx's tab label (also a plain span).
+                  <span
                     className="pane-title-text"
-                    onClick={() => onStartRename(pane.id)}
-                    aria-label={translate(
+                    title={translate(
                       'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
                       'Edit pane title: {{value0}}',
                       { value0: title }
                     )}
                   >
                     {title}
-                  </button>
+                  </span>
                 ) : null}
                 <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
                   {canContinueAgentSessionInNewSession && isActivePane ? (
@@ -258,6 +276,13 @@ export default function TerminalPaneHeaderOverlay({
                             'components.agentSessionContinuation.continueInNewSession',
                             'Continue in New Session…'
                           )}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          // Why: a native dblclick isn't blocked by the click
+                          // handler's stopPropagation above (a separate event)
+                          // — without this it would bubble up and incorrectly
+                          // trigger the bar's rename handler (same reasoning
+                          // applies to every action button below).
+                          onDoubleClick={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation()
                             onContinueAgentSessionInNewSession?.(pane)
@@ -296,6 +321,11 @@ export default function TerminalPaneHeaderOverlay({
                                 )
                           }
                           aria-pressed={isChatViewMode}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          // Why: see the first action button's comment above —
+                          // a native dblclick would otherwise bubble up and
+                          // incorrectly trigger the bar's rename handler.
+                          onDoubleClick={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation()
                             onToggleNativeChat?.()
@@ -327,6 +357,11 @@ export default function TerminalPaneHeaderOverlay({
                             isActivePane ? 'terminal-pane-split-target' : undefined
                           }
                           aria-label={splitRightLabel}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          // Why: see the first action button's comment above —
+                          // a native dblclick would otherwise bubble up and
+                          // incorrectly trigger the bar's rename handler.
+                          onDoubleClick={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation()
                             onSplitPane(pane, 'vertical')
@@ -348,6 +383,11 @@ export default function TerminalPaneHeaderOverlay({
                           variant="ghost"
                           size="icon-xs"
                           className="pane-title-close"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          // Why: see the first action button's comment above —
+                          // a native dblclick would otherwise bubble up and
+                          // incorrectly trigger the bar's rename handler.
+                          onDoubleClick={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation()
                             onRemoveTitle(pane.id)
@@ -376,6 +416,11 @@ export default function TerminalPaneHeaderOverlay({
                           variant="ghost"
                           size="icon-xs"
                           className="pane-title-close"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          // Why: see the first action button's comment above —
+                          // a native dblclick would otherwise bubble up and
+                          // incorrectly trigger the bar's rename handler.
+                          onDoubleClick={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation()
                             onClosePane(pane.id)
