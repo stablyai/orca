@@ -5,25 +5,13 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import type { Socket } from 'node:net'
 import {
   RELAY_VERSION,
-  RELAY_PROTOCOL_VERSION,
   MessageType,
   FrameDecoder,
   encodeHandshakeFrame,
   parseHandshakeMessage,
-  describeRelayProtocolVersion,
-  relayProtocolOffer,
-  relayProtocolOfferAdmits,
-  type DecodedFrame,
-  type RelayHandshakeCapabilities
+  type DecodedFrame
 } from './protocol'
-import { PTY_CONSUMER_SESSION_PROTOCOL_VERSION } from '../shared/pty-consumer-session-contract'
 import { relayLogLine } from './relay-diagnostic-log'
-
-// Contracts that turn over independently of the handshake integer, so a client cannot infer them
-// from `protocolVersion` and must not have to infer them from the build hash either.
-function relayHandshakeCapabilities(): RelayHandshakeCapabilities {
-  return { ptyConsumerSession: PTY_CONSUMER_SESSION_PROTOCOL_VERSION }
-}
 
 // Why: clients treat this exit code as non-retryable; other non-zero exits are transient.
 export const EXIT_CODE_VERSION_MISMATCH = 42
@@ -133,23 +121,16 @@ function handleDaemonHandshakeFrame(
     sock.destroy()
     return false
   }
-  // Why the build hash is still first: it is the only gate every already-deployed relay has, and
-  // it stays the fallback for peers that offer no protocol range at all. Negotiation is what lets
-  // a relay stranded by an app update keep serving the PTYs it already owns (#13852) — the hash
-  // differs by construction there, while the wire is unchanged.
-  const negotiated = msg.version === launchVersion || relayProtocolOfferAdmits(msg)
-  if (!negotiated) {
+  if (msg.version !== launchVersion) {
     relayLogLine(
-      `[relay] Handshake mismatch: own=${launchVersion}/p${RELAY_PROTOCOL_VERSION}, ` +
-        `client=${msg.version}/p${describeRelayProtocolVersion(msg.protocolVersion)}; closing socket`
+      `[relay] Handshake mismatch: own=${launchVersion}, client=${msg.version}; closing socket`
     )
     try {
       sock.write(
         encodeHandshakeFrame({
           type: 'orca-relay-handshake-mismatch',
           expected: launchVersion,
-          got: msg.version,
-          ...relayProtocolOffer()
+          got: msg.version
         })
       )
     } catch {
@@ -169,17 +150,8 @@ function handleDaemonHandshakeFrame(
     sock.end()
     return false
   }
-  process.stderr.write(
-    `[relay] Handshake OK from version=${msg.version} (${msg.version === launchVersion ? 'same build' : `cross-build, protocol ${RELAY_PROTOCOL_VERSION}`})\n`
-  )
-  sock.write(
-    encodeHandshakeFrame({
-      type: 'orca-relay-handshake-ok',
-      version: launchVersion,
-      ...relayProtocolOffer(),
-      capabilities: relayHandshakeCapabilities()
-    })
-  )
+  process.stderr.write(`[relay] Handshake OK from version=${msg.version}\n`)
+  sock.write(encodeHandshakeFrame({ type: 'orca-relay-handshake-ok', version: launchVersion }))
   return true
 }
 
@@ -222,11 +194,7 @@ export function runConnectHandshake(
         process.exit(1)
       }
       if (msg.type === 'orca-relay-handshake-ok') {
-        // Why both numbers: with negotiation the daemon's build can legitimately differ from this
-        // bridge's, so the version alone no longer says which relay answered.
-        process.stderr.write(
-          `[relay-connect] Handshake OK at version=${msg.version} protocol=${describeRelayProtocolVersion(msg.protocolVersion)}\n`
-        )
+        process.stderr.write(`[relay-connect] Handshake OK at version=${msg.version}\n`)
         handshakeDone = true
         const leftover = decoder.drain()
         sock.removeAllListeners('data')
@@ -236,9 +204,7 @@ export function runConnectHandshake(
       if (msg.type === 'orca-relay-handshake-mismatch') {
         // Why: exit inside the write callback; stderr is async on pipe transports, so exiting early drops the version detail.
         process.stderr.write(
-          `[relay-connect] Handshake mismatch: expected=${msg.expected}, daemon=${msg.got}, ` +
-            `daemonProtocol=${describeRelayProtocolVersion(msg.protocolVersion)}, ours=${RELAY_PROTOCOL_VERSION}; ` +
-            `exiting ${EXIT_CODE_VERSION_MISMATCH}\n`,
+          `[relay-connect] Handshake mismatch: expected=${msg.expected}, daemon=${msg.got}; exiting ${EXIT_CODE_VERSION_MISMATCH}\n`,
           () => {
             sock.destroy()
             process.exit(EXIT_CODE_VERSION_MISMATCH)
@@ -277,9 +243,7 @@ export function runConnectHandshake(
     encodeHandshakeFrame({
       type: 'orca-relay-handshake',
       version: myVersion,
-      ...(endpointCredential ? { endpointCredential } : {}),
-      // A relay that predates the offer ignores these keys and compares the hash as before.
-      ...relayProtocolOffer()
+      ...(endpointCredential ? { endpointCredential } : {})
     })
   )
 }

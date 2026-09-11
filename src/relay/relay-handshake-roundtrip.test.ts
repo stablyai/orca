@@ -13,14 +13,10 @@ import {
   encodeHandshakeFrame,
   encodeJsonRpcFrame,
   FrameDecoder,
-  parseHandshakeMessage,
-  MIN_RELAY_PROTOCOL_VERSION,
-  RELAY_PROTOCOL_VERSION,
   type DecodedFrame,
   type HandshakeMessage,
   MessageType
 } from './protocol'
-import { PTY_CONSUMER_SESSION_PROTOCOL_VERSION } from '../shared/pty-consumer-session-contract'
 import { relayTestSocketPath } from './relay-test-socket-path'
 
 // Why: --connect normally calls process.exit on mismatch / fatal handshake
@@ -215,85 +211,8 @@ describe('handshake round-trip over a real Socket pair', () => {
     bridgeSock.destroy()
   })
 
-  // Reads the daemon's single handshake reply off a raw socket, so a test can assert what the
-  // envelope carries rather than only whether the bridge accepted it.
-  function readDaemonReply(sock: Socket): Promise<HandshakeMessage> {
-    return new Promise((resolve) => {
-      const decoder = new FrameDecoder((frame) => {
-        if (frame.type === MessageType.Handshake) {
-          resolve(parseHandshakeMessage(frame.payload))
-        }
-      })
-      sock.on('data', (chunk: Buffer) => decoder.feed(chunk))
-    })
-  }
-
-  it('refuses a cross-build bridge that offers no protocol range at all', async () => {
-    // Why raw bytes: runConnectHandshake now always offers a range. Every relay already deployed
-    // sends none, and for those the build hash stays the only gate — this is that fallback.
-    await startDaemon('0.1.0+server-version')
-
-    const bridgeSock = connect(sockPath)
-    await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
-    const reply = readDaemonReply(bridgeSock)
-
-    bridgeSock.write(
-      encodeHandshakeFrame({ type: 'orca-relay-handshake', version: '0.1.0+different' })
-    )
-
-    // The refusal now names the daemon's protocol version, which a content hash cannot express.
-    await expect(reply).resolves.toMatchObject({
-      type: 'orca-relay-handshake-mismatch',
-      expected: '0.1.0+server-version',
-      got: '0.1.0+different',
-      protocolVersion: RELAY_PROTOCOL_VERSION,
-      minProtocolVersion: MIN_RELAY_PROTOCOL_VERSION
-    })
-
-    bridgeSock.destroy()
-  })
-
-  it('refuses a cross-build bridge whose offered range excludes this daemon', async () => {
-    await startDaemon('0.1.0+server-version')
-
-    const bridgeSock = connect(sockPath)
-    await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
-    const reply = readDaemonReply(bridgeSock)
-
-    bridgeSock.write(
-      encodeHandshakeFrame({
-        type: 'orca-relay-handshake',
-        version: '0.1.0+different',
-        protocolVersion: RELAY_PROTOCOL_VERSION + 5,
-        minProtocolVersion: RELAY_PROTOCOL_VERSION + 5
-      })
-    )
-
-    await expect(reply).resolves.toMatchObject({ type: 'orca-relay-handshake-mismatch' })
-
-    bridgeSock.destroy()
-  })
-
   it('exits with EXIT_CODE_VERSION_MISMATCH when the daemon reports a mismatch', async () => {
-    server = createServer((sock) => {
-      trackServerSocket(sock)
-      const decoder = new FrameDecoder((frame) => {
-        if (frame.type !== MessageType.Handshake) {
-          return
-        }
-        sock.write(
-          encodeHandshakeFrame({
-            type: 'orca-relay-handshake-mismatch',
-            expected: '0.1.0+server-version',
-            got: '0.1.0+different',
-            protocolVersion: RELAY_PROTOCOL_VERSION + 5,
-            minProtocolVersion: RELAY_PROTOCOL_VERSION + 5
-          })
-        )
-      })
-      sock.on('data', (chunk: Buffer) => decoder.feed(chunk))
-    })
-    await new Promise<void>((r) => server.listen(sockPath, () => r()))
+    await startDaemon('0.1.0+server-version')
 
     const bridgeSock = connect(sockPath)
     await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
@@ -306,107 +225,6 @@ describe('handshake round-trip over a real Socket pair', () => {
     expect(acceptedCb).not.toHaveBeenCalled()
 
     bridgeSock.destroy()
-  })
-
-  // #13852: after an app update the client's bundle hashes differently, so the incumbent relay
-  // holding every live PTY refused it and that work became permanently unreachable.
-  it('admits a bridge from a different build once it offers a range this daemon falls in', async () => {
-    const { accepted } = await startDaemon('0.1.0+incumbent-holding-live-ptys')
-
-    const bridgeSock = connect(sockPath)
-    await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
-
-    const acceptedCb = vi.fn<(leftover: Buffer) => void>()
-    runConnectHandshake(bridgeSock, '0.1.0+freshly-updated-client', { onAccepted: acceptedCb })
-
-    await accepted
-    await vi.waitFor(() => expect(acceptedCb).toHaveBeenCalledTimes(1))
-    expect(exitSpy).not.toHaveBeenCalled()
-
-    bridgeSock.destroy()
-  })
-
-  it('answers a cross-build bridge with the protocol version and capabilities it must speak', async () => {
-    await startDaemon('0.1.0+incumbent-holding-live-ptys')
-
-    const bridgeSock = connect(sockPath)
-    await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
-    const reply = readDaemonReply(bridgeSock)
-
-    bridgeSock.write(
-      encodeHandshakeFrame({
-        type: 'orca-relay-handshake',
-        version: '0.1.0+freshly-updated-client',
-        protocolVersion: RELAY_PROTOCOL_VERSION + 3,
-        minProtocolVersion: MIN_RELAY_PROTOCOL_VERSION
-      })
-    )
-
-    await expect(reply).resolves.toMatchObject({
-      type: 'orca-relay-handshake-ok',
-      // The build the client actually reached, which is no longer its own.
-      version: '0.1.0+incumbent-holding-live-ptys',
-      protocolVersion: RELAY_PROTOCOL_VERSION,
-      minProtocolVersion: MIN_RELAY_PROTOCOL_VERSION,
-      capabilities: { ptyConsumerSession: PTY_CONSUMER_SESSION_PROTOCOL_VERSION }
-    })
-
-    bridgeSock.destroy()
-  })
-
-  // The refusal path logs the peer's claim, and `JSON.parse` yields objects a template literal
-  // cannot stringify. A throw there is inside the frame-decoder callback, so it would kill the
-  // daemon — and every PTY it still holds — on an unauthenticated frame.
-  it('refuses a hostile protocolVersion claim without taking the daemon down', async () => {
-    const { accepted } = await startDaemon('0.1.0+server-version')
-
-    const bridgeSock = connect(sockPath)
-    await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
-    const reply = readDaemonReply(bridgeSock)
-
-    bridgeSock.write(
-      encodeHandshakeFrame(
-        JSON.parse(
-          '{"type":"orca-relay-handshake","version":"0.1.0+different","protocolVersion":{"toString":1}}'
-        ) as HandshakeMessage
-      )
-    )
-
-    await expect(reply).resolves.toMatchObject({ type: 'orca-relay-handshake-mismatch' })
-
-    // Still serving: a second, well-formed client is admitted after the hostile one.
-    const good = connect(sockPath)
-    await new Promise<void>((r) => good.once('connect', () => r()))
-    runConnectHandshake(good, '0.1.0+server-version', { onAccepted: vi.fn() })
-    await accepted
-
-    bridgeSock.destroy()
-    good.destroy()
-  })
-
-  // Tolerance replaces a compatibility gate, never the auth gate: the credential file lives inside
-  // the incumbent's own install dir, so presenting it is what proves the caller may reach it.
-  it('still refuses a cross-build bridge that cannot present the endpoint credential', async () => {
-    const { accepted } = await startDaemon('0.1.0+incumbent', 'secret-credential')
-
-    const bridgeSock = connect(sockPath)
-    await new Promise<void>((r) => bridgeSock.once('connect', () => r()))
-    const closed = new Promise<void>((r) => bridgeSock.once('close', () => r()))
-
-    runConnectHandshake(
-      bridgeSock,
-      '0.1.0+freshly-updated-client',
-      { onAccepted: vi.fn() },
-      'wrong-credential'
-    )
-
-    await closed
-    await expect(
-      Promise.race([
-        accepted.then(() => 'accepted'),
-        new Promise<string>((r) => setTimeout(() => r('closed'), 20))
-      ])
-    ).resolves.toBe('closed')
   })
 
   it('does not call onAccepted before any handshake-ok frame arrives', async () => {
