@@ -37,6 +37,7 @@ import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLink } from './rich-markdown-html-superscript-link'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
+import { RichMarkdownEscape } from './rich-markdown-escape'
 import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownProseEntities } from './rich-markdown-prose-entities'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
@@ -257,6 +258,7 @@ export function createRichMarkdownExtensions({
       }
     }),
     RichMarkdownProseEntities,
+    RichMarkdownEscape,
     createRichMarkdownAnnotationHighlightExtension()
   ]
 
