@@ -30,13 +30,27 @@ export const RELAY_PROTOCOL_VERSION = 1
  * no live reader at all.
  *
  * Keep it — the mechanism is correct and hostile-input-safe, and it is the part that has to exist
- * first. Making it live needs two more changes, both of which must land together:
+ * first. Making it live needs THREE more changes, all of which must land together. Landing only
+ * the first two ships a negotiation that still refuses, later and less legibly:
  *   1. route the bridge to the incumbent's socket rather than to its own version directory;
  *   2. stop `validateGrant` (`ssh-pty-consumer-session.ts`) refusing on `serverBuildId`. Its
  *      premise, "client and relay ship in one build", is still TRUE today and becomes false the
  *      moment (1) lands — it is a second gate that would refuse what the handshake just admitted.
+ *   3. give that same refusal a way to survive a protocol-version difference. It is ONE `if` with
+ *      two disjuncts, and deleting the `serverBuildId` clause leaves the other one standing:
+ *      `grant.protocolVersion !== PTY_CONSUMER_SESSION_PROTOCOL_VERSION` — a DIFFERENT constant
+ *      from this file's `RELAY_PROTOCOL_VERSION`, compared for exact equality, with no range, no
+ *      floor and no fallback. Two peers that just negotiated a compatible relay protocol are still
+ *      refused if their PTY-session constants differ by one. And there is nothing to negotiate it
+ *      with: `capabilities` on `orca-relay-handshake-ok` is written at exactly one site
+ *      (`relay-handshake.ts`) and read by nothing outside tests, so (3) means giving that field a
+ *      reader before it can carry the peer's PTY-session protocol.
  *
- * Until both land, a change here cannot be validated by any end-to-end test, only by the
+ * Budget a debugging session for the error text too: the refusal interpolates only the build ids,
+ * so a pure protocol-version mismatch reports as "expected build X, got X" with two IDENTICAL ids,
+ * which points at the gate that is not the problem.
+ *
+ * Until all three land, a change here cannot be validated by any end-to-end test, only by the
  * handshake's own unit suite.
  */
 
