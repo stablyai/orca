@@ -49,10 +49,11 @@ export async function diffTextSelectionPoints(code: Locator, text: string) {
     const viewport = code.getBoundingClientRect()
     const left = Math.min(first.getBoundingClientRect().left, last.getBoundingClientRect().left)
     const right = Math.max(first.getBoundingClientRect().right, last.getBoundingClientRect().right)
-    // Why measured and not a constant: the line-number column is sticky, so centering the glyph in
-    // a narrow pane slides it underneath the gutter and every point hit-tests as a line number.
-    const gutter = code.querySelector('[data-line-number-content]')?.getBoundingClientRect()
-    const inset = Math.max(24, gutter ? gutter.right - viewport.left + 8 : 0)
+    // Why measured and not a constant: the line-number column is sticky, so centering the glyph
+    // in a narrow pane slides it under the gutter and every point hit-tests as a line number.
+    const gutterRight =
+      code.querySelector('[data-line-number-content]')?.getBoundingClientRect().right ?? 0
+    const inset = Math.max(24, gutterRight > 0 ? gutterRight - viewport.left + 8 : 0)
     code.scrollLeft += left - viewport.left - Math.max(inset, (viewport.width - (right - left)) / 2)
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     const point = (range: Range, end: boolean) => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { FileDiffMetadata } from '@pierre/diffs'
 import type { PierreDiffInput } from './pierre-diff-metadata'
 import { requestPierreFileDiff } from './pierre-diff-parse-client'
@@ -17,9 +17,13 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
   const pendingRequest = useRef<AbortController | null>(null)
   const markEdited = useCallback(() => pendingRequest.current?.abort(), [])
   // Why a ref: flipping editability must not re-parse the file, but the next request still has to
-  // read the current value (an editable surface blocks on the highlight).
+  // read the current value (an editable surface blocks on the highlight). Written in a layout
+  // effect, not during render -- React can discard a render, and the request reads this from a
+  // timeout scheduled by a passive effect, which always runs after layout effects.
   const editableRef = useRef(editable)
-  editableRef.current = editable
+  useLayoutEffect(() => {
+    editableRef.current = editable
+  }, [editable])
 
   useEffect(() => {
     if (!input) {

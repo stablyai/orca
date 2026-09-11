@@ -1,6 +1,7 @@
 import { rmSync, writeFileSync } from 'node:fs'
 import { diffTextSelectionPoints } from './diff-text-selection'
 import { test, expect } from './helpers/orca-app'
+import { setDiffWindowSize } from './diff-window-size'
 import { waitForSessionReady } from './helpers/store'
 import { addAndActivateRepo } from './helpers/isolated-repo-activation'
 import { createIsolatedLargeDiffRepo } from './large-diff-repro-fixtures'
@@ -11,18 +12,18 @@ test('copies backwards selections with file and line context from each diff side
   electronApp,
   registerPostElectronShutdownCleanup
 }) => {
-  const original = 'export const one = 1\nexport const two = 2\nexport const three = 3\n'
+  // Why short lines: a side-by-side pane is half the window, and CI's display is narrower than a
+  // dev machine's. Long lines leave no scroll position that exposes both ends of the drag, so the
+  // selection silently lands on the sticky line-number column.
+  const original = 'const a = 1\nconst b = 2\nconst c = 3\n'
   const fixture = createIsolatedLargeDiffRepo(original)
   registerPostElectronShutdownCleanup(async () =>
     rmSync(fixture.repoPath, { recursive: true, force: true })
   )
   const modified = original.replaceAll('= ', '= 9')
   writeFileSync(fixture.absolutePath, modified)
-  // Why pinned: side-by-side panes are half the window, and these tests drag across whole
-  // lines. A narrower CI display than a dev window leaves no scroll position that exposes
-  // both endpoints, so the drag silently lands on the sticky line-number column.
-  await orcaPage.setViewportSize({ width: 1600, height: 900 })
   await waitForSessionReady(orcaPage)
+  await setDiffWindowSize(electronApp)
   await addAndActivateRepo(orcaPage, fixture.repoPath)
   await orcaPage.evaluate(() =>
     window.__store!.getState().updateSettings({ diffDefaultView: 'side-by-side' })

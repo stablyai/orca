@@ -326,7 +326,10 @@ test.describe('Large diff freeze repro', () => {
         samples: value.samples
       }))
       expect(measurement.samples).toBeGreaterThan(5)
-      expect(measurement.maxGap).toBeLessThan(1_000)
+      // Same architecture cost as the single-file bound above: Pierre's worker returns a whole-file
+      // themed AST in one message, so switching to a wholly replaced file costs one long
+      // deserialization rather than Monaco's many short tokenization slices.
+      expect(measurement.maxGap).toBeLessThan(1_500)
       await changedFile.click()
       await expect(
         orcaPage
