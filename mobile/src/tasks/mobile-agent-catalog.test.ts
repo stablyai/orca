@@ -24,4 +24,10 @@ describe('mobile agent catalog', () => {
       expect.not.objectContaining({ faviconDomain: expect.any(String) })
     )
   })
+
+  it('lists Vercel fx once and leaves it on the offline generic icon path', () => {
+    const entries = MOBILE_AGENT_CATALOG.filter((agent) => agent.id === 'fx')
+
+    expect(entries).toEqual([{ id: 'fx', label: 'Vercel fx' }])
+  })
 })
