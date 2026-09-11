@@ -131,7 +131,31 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
   })
 
-  it('infers OpenClaude answers through its Claude-compatible selector path', () => {
+  it('routes an OpenClaude answer through the option-number keystroke path', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'openclaude')
+    )
+
+    act(() => result.current.sendAnswer(PROMPT, [{ indices: [1] }]))
+
+    expect(mocks.sendNativeChatAskAnswer).toHaveBeenCalledWith(
+      { terminalTabId: 'tab-1' },
+      'pty-1',
+      [{ raw: '2' }],
+      expect.any(Function)
+    )
+    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
+  })
+
+  // resolveHookPayloadAgentType keeps an OpenClaude pane's status payload at
+  // literal agentType 'openclaude', and both inference gates reject anything
+  // but 'claude'. OpenClaude steps its selector like Claude but must take the
+  // same no-confirmation path as Codex, or the card holds the pane's wait
+  // behind a confirmation that can never arrive.
+  it('reports that an OpenClaude answer owes no confirmation', () => {
+    mocks.storeState = {
+      agentStatusByPaneKey: { [PANE_KEY]: { ...waitingQuestion, agentType: 'openclaude' } }
+    }
     const { result } = renderHook(() =>
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'openclaude')
     )
@@ -141,11 +165,13 @@ describe('useNativeChatInteractiveSend', () => {
       sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
     })
 
+    expect(sendResult?.awaitsConfirmation).toBe(false)
+
     const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
-    expect(onSettled).toBeTypeOf('function')
     onSettled?.(true)
     sendResult?.confirmAnswered()
-    expect(mocks.inferQuestionAnswered).toHaveBeenCalledOnce()
+
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
   })
 
   // Codex steps its selector like Claude, but both inference gates reject a
