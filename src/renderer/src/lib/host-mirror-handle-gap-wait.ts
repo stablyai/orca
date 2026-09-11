@@ -47,12 +47,13 @@ const waitersByPane = new Map<string, HandleGapWaiter>()
 /**
  * Connection generation whose wait already expired for the pane.
  *
- * KNOWN LEAK, not fixed: entries are pruned only by `recordExpiredWait`, and only for the
- * environment doing the recording. An environment that is removed and never expires another pane
- * keeps its rows for the life of the session. Bounded by panes x environments and inert — a stale
- * row cannot match, because removing an environment advances its connection generation — but it
- * does not drain. Another agent has a separate fix in flight for a DIFFERENT leak in this same map
- * (pruning on tab death); reconcile with that change rather than patching around it.
+ * Two rules drain it, and neither subsumes the other because both are driven by a recording:
+ * `recordExpiredWait` drops rows from a superseded generation, and a separate rule (8f166411306)
+ * drops rows whose tab is no longer published, both scoped to the environment doing the recording.
+ * An environment that is REMOVED records nothing ever again, so neither rule can reach it — hence
+ * the teardown clear below, which is the only thing that can. A stranded row is inert (removing an
+ * environment advances its connection generation, so it can never match again); this is a leak
+ * fix, not a correctness one.
  */
 const expiredGenerationByPane = new Map<string, number>()
 let unsubscribeStore: (() => void) | null = null
@@ -187,6 +188,27 @@ export function parkUntilHostMirrorHandleLands(
 
 export function countParkedHostMirrorHandleGapPanesForTests(): number {
   return waitersByPane.size
+}
+
+/**
+ * Drops the verdicts an environment's teardown makes unreachable.
+ *
+ * Only the verdicts. Parked waiters deliberately survive, matching
+ * `clearHostSessionMirrorHydration`: a re-pair or effect restart replaces the connection's
+ * evidence, it does not cancel the recovery this client still owes the pane. A waiter left here is
+ * bounded by its own deadline and replays the sweep exactly as it would have.
+ */
+export function clearHostMirrorHandleGapVerdictsForEnvironment(environmentId: string): void {
+  const prefix = `${environmentId}\0`
+  for (const key of expiredGenerationByPane.keys()) {
+    if (key.startsWith(prefix)) {
+      expiredGenerationByPane.delete(key)
+    }
+  }
+}
+
+export function countHostMirrorHandleGapVerdictsForTests(): number {
+  return expiredGenerationByPane.size
 }
 
 export function resetHostMirrorHandleGapWaitsForTests(): void {

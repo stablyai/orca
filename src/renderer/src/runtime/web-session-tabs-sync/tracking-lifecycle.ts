@@ -38,6 +38,7 @@ import {
   clearWebSessionTerminalPlacementsForEnvironment
 } from '../web-session-terminal-placement'
 import { clearHostSessionMirrorHydration } from '../host-session-mirror-hydration'
+import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/host-mirror-handle-gap-wait'
 import { clearHostSessionTabIdMappings } from './tracking-mappings'
 import {
   sessionTabsFreshnessKey,
@@ -218,6 +219,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   clearWebSessionBrowserPlacementsForEnvironment(trimmedEnvironmentId)
   clearWebSessionTerminalPlacementsForEnvironment(trimmedEnvironmentId)
   clearHostSessionMirrorHydration(trimmedEnvironmentId)
+  clearHostMirrorHandleGapVerdictsForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
 }
 
