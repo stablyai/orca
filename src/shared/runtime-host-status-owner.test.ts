@@ -185,3 +185,23 @@ it('cancelling one reader leaves the shared request available to other readers',
   pending.resolve(success())
   expect((await remaining).ok).toBe(true)
 })
+
+it.each(['unknown', 'ready'] as const)(
+  'distinguishes the caller deadline with %s transport',
+  async (transport) => {
+    const { owner, request } = createOwner()
+    owner.connectionChanged(transport)
+    request.mockReturnValue(deferred().promise)
+    const response = owner.refresh({ timeoutMs: 100 })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await response).toMatchObject({
+      ok: false,
+      error: {
+        message:
+          transport === 'ready'
+            ? 'Status request timed out.'
+            : 'Timed out waiting for the remote Orca runtime.'
+      }
+    })
+  }
+)

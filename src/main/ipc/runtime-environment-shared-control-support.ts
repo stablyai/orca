@@ -1,5 +1,7 @@
-import type { getPreferredPairingOffer } from '../../shared/runtime-environments'
-import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
+import type {
+  getPreferredPairingOffer,
+  KnownRuntimeEnvironment
+} from '../../shared/runtime-environments'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 import {
   getAcceptedRuntimeEnvironmentCapabilityOutcome,

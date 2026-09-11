@@ -107,7 +107,14 @@ export class RuntimeHostStatusOwner {
       }
       const timer = setTimeout(() => {
         release()
-        resolve(runtimeHostStatusFailure('runtime_unavailable', 'Status request timed out.'))
+        resolve(
+          runtimeHostStatusFailure(
+            'runtime_unavailable',
+            this.snapshot.transport === 'ready'
+              ? 'Status request timed out.'
+              : 'Timed out waiting for the remote Orca runtime.'
+          )
+        )
       }, options.timeoutMs ?? REQUEST_TIMEOUT_MS)
       const waiter: Waiter = {
         resolve,
