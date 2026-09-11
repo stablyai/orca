@@ -72,9 +72,17 @@ describe('direct-SSH reconnect merge: local state the host has not seen', () => 
     expect(merged.tabsByWorktree[WORKTREE].map((tab) => tab.id)).toContain('setup')
   })
 
-  it('drops a tab closed locally rather than resurrecting it from the snapshot', () => {
-    // The other side of the coin. Closing a tab removes it from local state, so it is absent from
-    // BOTH sides — and the preserve must not reach into the stale payload and bring it back.
+  // Renamed from "drops a tab closed locally rather than resurrecting it from the snapshot", which
+  // this body never checked and the code does not do — the assertion below is satisfied while
+  // `closed` is present, and the comment two lines down says so. A close is only dropped when a
+  // tombstone records it, which is `remote-workspace-session-merge-close-tombstones.test.ts`;
+  // disabling `isSuppressedByClose` entirely leaves every test in THIS file green.
+  //
+  // What this body does check is still worth keeping: the preserve branch is a filter over the two
+  // inputs, never a source of ids.
+  it('invents no tab id: every merged id came from local state or the snapshot', () => {
+    // Closing a tab removes it from local state, so it is absent from one side — and the preserve
+    // must not reach into the stale payload and synthesize anything that was in neither.
     const agent = terminalTab('agent')
     const closed = terminalTab('closed')
     const current = sessionState({ tabsByWorktree: { [WORKTREE]: [agent] } })
