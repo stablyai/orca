@@ -21,6 +21,7 @@ import { colors } from '../theme/mobile-theme'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
+/** Live keyboard capture is a local input buffer, not the terminal's editable line. */
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
   const {
     insets,
@@ -296,6 +297,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               ref={liveInputRef}
               style={styles.liveInputCapture}
               value={liveInputCapture}
+              allowEmptyBackspaceRepeat={Platform.OS === 'ios'}
               onChange={handleLiveInputChange}
               onKeyPress={handleLiveInputKeyPress}
               onSubmitEditing={() => {

@@ -407,6 +407,34 @@ describe('terminal live input commit hook', () => {
     expect(sent).toEqual([])
   })
 
+  it('forwards every native Backspace after a paste flush empties the capture', async () => {
+    const { captures, handlers, sent, unmount } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'abc', false)
+    await handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
+    expect(captures.at(-1)).toBe('')
+    const beforeDelete = sent.length
+
+    for (let i = 0; i < 5; i += 1) {
+      handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Backspace' } })
+    }
+
+    await vi.waitFor(() => expect(sent.slice(beforeDelete)).toEqual(Array(5).fill('\x7f')))
+    unmount()
+  })
+
+  it('deletes typed text once per edit and continues with raw Backspace after the capture empties', async () => {
+    const { handlers, sent, unmount } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'ab', false)
+    for (const text of ['a', '']) {
+      handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Backspace' } })
+      changeLiveInput(handlers, text, false)
+    }
+    handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Backspace' } })
+
+    await vi.waitFor(() => expect(sent.join('')).toBe('ab\x7f\x7f\x7f'))
+    unmount()
+  })
+
   it('Given Backspace with field text When the key arrives Then edits locally without terminal bytes', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness()

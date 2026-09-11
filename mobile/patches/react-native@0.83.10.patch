@@ -1,8 +1,27 @@
 diff --git a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
-index d02e003a439e410ddab597b2c036256c80db0395..3caff21b0d00bfbc6dea3f8470e812b8343ac3a2 100644
 --- a/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
 +++ b/React/Fabric/Mounting/ComponentViews/TextInput/RCTTextInputComponentView.mm
-@@ -703,6 +703,7 @@ static NSSet<NSNumber *> *returnKeyTypesSet;
+@@ -192,6 +192,9 @@
+   if (newTextInputProps.multiline != oldTextInputProps.multiline) {
+     [self _setMultiline:newTextInputProps.multiline];
+   }
++  if (!newTextInputProps.multiline) {
++    ((RCTUITextField *)_backedTextInputView).allowEmptyBackspaceRepeat = newTextInputProps.allowEmptyBackspaceRepeat;
++  }
+ 
+   if (newTextInputProps.traits.autocapitalizationType != oldTextInputProps.traits.autocapitalizationType) {
+     _backedTextInputView.autocapitalizationType =
+@@ -381,6 +384,9 @@
+   _backedTextInputView.inputAccessoryViewID = nil;
+   _backedTextInputView.inputAccessoryView = nil;
+   _hasInputAccessoryView = false;
++  if ([_backedTextInputView isKindOfClass:[RCTUITextField class]]) {
++    ((RCTUITextField *)_backedTextInputView).allowEmptyBackspaceRepeat = NO;
++  }
+   [_backedTextInputView resignFirstResponder];
+ }
+ 
+@@ -703,6 +709,7 @@
  {
    return {
        .text = RCTStringFromNSString(_backedTextInputView.attributedText.string),
@@ -58,3 +77,94 @@ index 79ee7ffe43..956f189a1c 100644
 +  _textView.layoutMetrics = EmptyLayoutMetrics;
    _accessibilityProvider = nil;
  }
+diff --git a/Libraries/Components/TextInput/RCTTextInputViewConfig.js b/Libraries/Components/TextInput/RCTTextInputViewConfig.js
+--- a/Libraries/Components/TextInput/RCTTextInputViewConfig.js
++++ b/Libraries/Components/TextInput/RCTTextInputViewConfig.js
+@@ -164,6 +164,7 @@
+       onKeyPressSync: true,
+     }),
+     disableKeyboardShortcuts: true,
++    allowEmptyBackspaceRepeat: true,
+   },
+ };
+ 
+diff --git a/Libraries/Components/TextInput/TextInput.d.ts b/Libraries/Components/TextInput/TextInput.d.ts
+--- a/Libraries/Components/TextInput/TextInput.d.ts
++++ b/Libraries/Components/TextInput/TextInput.d.ts
+@@ -139,6 +139,9 @@
+    * If true, the keyboard shortcuts (undo/redo and copy buttons) are disabled. The default value is false.
+    */
+   disableKeyboardShortcuts?: boolean | undefined;
++
++  /** Keep native backspace repetition available for single-line terminal capture. */
++  allowEmptyBackspaceRepeat?: boolean | undefined;
+ 
+   /**
+    * enum('never', 'while-editing', 'unless-editing', 'always')
+diff --git a/Libraries/Components/TextInput/TextInput.flow.js b/Libraries/Components/TextInput/TextInput.flow.js
+--- a/Libraries/Components/TextInput/TextInput.flow.js
++++ b/Libraries/Components/TextInput/TextInput.flow.js
+@@ -272,6 +272,9 @@
+    * @platform ios
+    */
+   disableKeyboardShortcuts?: ?boolean,
++
++  /** Keep native backspace repetition available for single-line terminal capture. @platform ios */
++  allowEmptyBackspaceRepeat?: ?boolean,
+ 
+   /**
+    * When the clear button should appear on the right side of the text view.
+diff --git a/Libraries/Text/TextInput/Singleline/RCTUITextField.h b/Libraries/Text/TextInput/Singleline/RCTUITextField.h
+--- a/Libraries/Text/TextInput/Singleline/RCTUITextField.h
++++ b/Libraries/Text/TextInput/Singleline/RCTUITextField.h
+@@ -35,6 +35,7 @@
+ @property (nonatomic, assign, readonly) CGPoint contentOffset;
+ @property (nonatomic, assign, readonly) UIEdgeInsets contentInset;
+ @property (nonatomic, assign) BOOL disableKeyboardShortcuts;
++@property (nonatomic, assign) BOOL allowEmptyBackspaceRepeat;
+ 
+ @end
+ 
+diff --git a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
+--- a/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
++++ b/Libraries/Text/TextInput/Singleline/RCTUITextField.mm
+@@ -233,6 +233,12 @@
+ }
+ 
+ #pragma mark - Overrides
++
++- (BOOL)hasText
++{
++  // The terminal can have deletable text even when its local keyboard capture is empty.
++  return _allowEmptyBackspaceRepeat || [super hasText];
++}
+ 
+ #pragma clang diagnostic push
+ #pragma clang diagnostic ignored "-Wdeprecated-implementations"
+diff --git a/ReactCommon/react/renderer/components/textinput/platform/ios/react/renderer/components/iostextinput/TextInputProps.cpp b/ReactCommon/react/renderer/components/textinput/platform/ios/react/renderer/components/iostextinput/TextInputProps.cpp
+--- a/ReactCommon/react/renderer/components/textinput/platform/ios/react/renderer/components/iostextinput/TextInputProps.cpp
++++ b/ReactCommon/react/renderer/components/textinput/platform/ios/react/renderer/components/iostextinput/TextInputProps.cpp
+@@ -39,6 +39,12 @@
+           "inputAccessoryViewButtonLabel",
+           sourceProps.inputAccessoryViewButtonLabel,
+           {})),
++      allowEmptyBackspaceRepeat(convertRawProp(
++          context,
++          rawProps,
++          "allowEmptyBackspaceRepeat",
++          sourceProps.allowEmptyBackspaceRepeat,
++          false)),
+       onKeyPressSync(convertRawProp(
+           context,
+           rawProps,
+diff --git a/ReactCommon/react/renderer/components/textinput/platform/ios/react/renderer/components/iostextinput/TextInputProps.h b/ReactCommon/react/renderer/components/textinput/platform/ios/react/renderer/components/iostextinput/TextInputProps.h
+--- a/ReactCommon/react/renderer/components/textinput/platform/ios/react/renderer/components/iostextinput/TextInputProps.h
++++ b/ReactCommon/react/renderer/components/textinput/platform/ios/react/renderer/components/iostextinput/TextInputProps.h
+@@ -36,6 +36,7 @@
+   const std::string inputAccessoryViewID{};
+   const std::string inputAccessoryViewButtonLabel{};
+ 
++  bool allowEmptyBackspaceRepeat{false};
+   bool onKeyPressSync{false};
+   bool onChangeSync{false};
+ };

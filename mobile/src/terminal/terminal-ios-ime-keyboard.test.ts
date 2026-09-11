@@ -1,9 +1,41 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { readMobileSessionRouteSource } from '../session/mobile-session-route-source-family.test-support'
 
 const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
 
 describe('terminal iOS IME keyboard', () => {
+  it('opts only the iOS live capture into backspace repeat with an empty field', () => {
+    const liveInput = commandDockSource.slice(
+      commandDockSource.indexOf('ref={liveInputRef}'),
+      commandDockSource.indexOf('ref={commandInputRef}')
+    )
+    expect(liveInput).toContain("allowEmptyBackspaceRepeat={Platform.OS === 'ios'}")
+    expect(commandDockSource.match(/allowEmptyBackspaceRepeat=/g)).toHaveLength(1)
+  })
+
+  it('patches the iOS native repeat eligibility without injecting text or synthesizing deletions', () => {
+    const manifest = JSON.parse(
+      readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+    )
+    const version = manifest.dependencies['react-native'].replace(/^[^\d]*/, '')
+    const patch = readFileSync(
+      new URL(`../../patches/react-native@${version}.patch`, import.meta.url),
+      'utf8'
+    )
+    expect(patch).toContain('+    allowEmptyBackspaceRepeat: true,')
+    expect(patch).toContain('+  bool allowEmptyBackspaceRepeat{false};')
+    expect(patch).toContain('+          "allowEmptyBackspaceRepeat",')
+    expect(patch).toContain(
+      '+    ((RCTUITextField *)_backedTextInputView).allowEmptyBackspaceRepeat = newTextInputProps.allowEmptyBackspaceRepeat;'
+    )
+    expect(patch).toContain(
+      '+    ((RCTUITextField *)_backedTextInputView).allowEmptyBackspaceRepeat = NO;'
+    )
+    expect(patch).toContain('+  return _allowEmptyBackspaceRepeat || [super hasText];')
+    expect(patch).not.toContain('+- (void)deleteBackward')
+  })
+
   it('does not force terminal inputs onto the ASCII-only iOS keyboard', () => {
     expect(commandDockSource).not.toContain("'ascii-capable'")
     expect(commandDockSource).not.toContain('"ascii-capable"')
