@@ -184,6 +184,34 @@ Terminal rules:
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction horizontal` splits left/right. `--direction vertical` splits top/bottom.
 
+## Quick Commands
+
+A quick command is a saved terminal command (or agent prompt) that the user launches from the tab-bar quick-commands menu, the terminal context menu, or the command palette. Each one is scoped either globally or to a single repo, so a repo-scoped command only appears in that project's workspaces.
+
+Use these to leave the user a reusable, one-click command instead of printing a shell line they must copy.
+
+```text
+ORCA quick-command list --json
+ORCA quick-command list --worktree active --scope repo --json
+ORCA quick-command show --id <quickCommandId> --json
+ORCA quick-command create --label "Run tests" --command "pnpm test" --worktree active --json
+ORCA quick-command create --label "Reset db" --command "pnpm db:reset" --no-enter --json
+ORCA quick-command create --label "Review diff" --agent claude --prompt "review the working tree diff" --json
+ORCA quick-command set --id <quickCommandId> --command "pnpm test --run" --json
+ORCA quick-command set --id <quickCommandId> --global --json
+ORCA quick-command rm --id <quickCommandId> --json
+```
+
+Quick command rules:
+
+- Scope comes from `--repo <selector>` or `--worktree <selector>`; with neither, `create` saves a global command. On `set`, scope moves only when `--repo`, `--worktree`, or `--global` is passed.
+- `list` defaults to every saved command. With a repo or worktree it defaults to `--scope applicable` (global plus that repo). `--scope repo` and `--scope applicable` require one of those selectors; `all` and `global` do not.
+- `--command <text>` is a shell command. `--agent <id> --prompt <text>` saves an agent prompt instead, and `set --agent` converts a shell command into an agent prompt, reusing the command text as the prompt.
+- Body flags belonging to the other action are rejected rather than ignored, so `set --prompt` on a shell command fails instead of silently doing nothing.
+- `--no-enter` types the command into the terminal without submitting it — use it for anything destructive the user should confirm by hand. It applies to `--command` only.
+- Only agents that accept a prompt at launch can back an agent-prompt command; the CLI rejects the rest.
+- At most 40 quick commands are stored. Changes reach the running app immediately; the user does not need to reopen Settings.
+
 ## Artifacts
 
 Artifacts publish HTML or Markdown files through the signed-in Orca account. Anyone can view

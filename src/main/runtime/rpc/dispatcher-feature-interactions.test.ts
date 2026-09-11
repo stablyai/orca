@@ -114,6 +114,26 @@ const METHODS = [
     handler: () => ({ cleared: false })
   }),
   defineMethod({
+    name: 'quickCommand.create',
+    params: z.object({}),
+    handler: () => ({ quickCommand: {}, quickCommands: [] })
+  }),
+  defineMethod({
+    name: 'quickCommand.update',
+    params: z.object({}),
+    handler: () => ({ quickCommand: {}, quickCommands: [] })
+  }),
+  defineMethod({
+    name: 'quickCommand.rm',
+    params: z.object({}),
+    handler: () => ({ removed: {}, quickCommands: [] })
+  }),
+  defineMethod({
+    name: 'quickCommand.list',
+    params: z.object({}),
+    handler: () => ({ quickCommands: [], repoId: null })
+  }),
+  defineMethod({
     name: 'computer.permissions',
     params: z.object({}),
     handler: () => ({ opened: true })
@@ -169,6 +189,20 @@ describe('RpcDispatcher feature interactions', () => {
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('computer-use-setup')
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('cookie-import')
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledTimes(2)
+  })
+
+  it('records quick command edits but not reads', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
+
+    await dispatcher.dispatch(makeRequest('quickCommand.create'))
+    await dispatcher.dispatch(makeRequest('quickCommand.update'))
+    await dispatcher.dispatch(makeRequest('quickCommand.rm'))
+    await dispatcher.dispatch(makeRequest('quickCommand.list'))
+
+    expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('quick-commands')
+    // the read must not count: only create/update/rm are edits
+    expect(runtime.recordFeatureInteraction).toHaveBeenCalledTimes(3)
   })
 
   it('does not record failed runtime methods', async () => {
