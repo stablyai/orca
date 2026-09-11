@@ -550,14 +550,22 @@ function loadNativeModule(moduleName) {
   }
   if (moduleName === 'node-pty') {
     projectRequire('node-pty')
-    const { assertNodePtyJobOwnership } = projectRequire(
+    const { assertNodePtyJobOwnership, nodePtyAddonPath } = projectRequire(
       './config/scripts/node-pty-job-ownership.cjs'
     )
     const { loadNativeModule } = projectRequire('node-pty/lib/utils')
     const nativeName = getNodePtyNativeModuleName()
     const native = loadNativeModule(nativeName)
     assertNodePtyWindowsConptyRuntime(native.dir)
-    assertNodePtyJobOwnership({ nativeName, native })
+    assertNodePtyJobOwnership({
+      nativeName,
+      native,
+      addonPath: nodePtyAddonPath(
+        projectRequire.resolve('node-pty/lib/utils'),
+        native,
+        nativeName
+      )
+    })
     if (requirePatchedNodePtySourceBuild && !isNodePtyReleaseBuildDir(native.dir)) {
       throw new Error(
         'node-pty resolved to ' +
