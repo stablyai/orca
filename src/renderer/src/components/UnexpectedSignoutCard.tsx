@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { BookOpen, ChevronDown, CircleUserRound, Files, Smartphone, X } from 'lucide-react'
 import { useAppStore } from '../store'
-import { useOrcaProfileAuthStatusRefresh } from '@/hooks/use-orca-profile-auth-status-refresh'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { Button } from './ui/button'
@@ -52,12 +51,26 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   const connecting = useAppStore((s) => s.orcaProfileConnecting)
   const connect = useAppStore((s) => s.connectCurrentOrcaProfile)
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [authRefreshReady, setAuthRefreshReady] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [preview] = useState(readPreviewFlag)
   const [previewDismissed, setPreviewDismissed] = useState(false)
   const reconnectingProfile = useRef<string | null>(null)
 
-  useOrcaProfileAuthStatusRefresh()
+  useEffect(() => {
+    let cancelled = false
+    void useAppStore
+      .getState()
+      .fetchOrcaProfileAuthStatus()
+      .finally(() => {
+        if (!cancelled) {
+          setAuthRefreshReady(true)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -87,7 +100,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
     dismissedVersion
   })
 
-  const visible = preview ? persistedUIReady && !previewDismissed : eligible
+  const visible = preview ? persistedUIReady && !previewDismissed : authRefreshReady && eligible
 
   // Observe recovery independently of visibility and asynchronous version/hydration reads.
   useEffect(() => {
