@@ -150,6 +150,10 @@ export function renderCodexAccountRow(
               'Re-authenticate accounts on {{value0}} by running: orca account add --agent codex',
               { value0: accountRuntimeSentenceLabel }
             )}
+            actionLabel={translate(
+              'auto.components.settings.AccountsPane.8a0f870153',
+              'Re-authenticate'
+            )}
           >
             <Button
               variant="ghost"

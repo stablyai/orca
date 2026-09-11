@@ -165,6 +165,10 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
               'Add accounts on {{value0}} by running: orca account add --agent codex',
               { value0: accountRuntimeSentenceLabel }
             )}
+            actionLabel={translate(
+              'auto.components.settings.AccountsPane.b0e948a4f9',
+              'Add Account'
+            )}
           >
             <Button
               variant="outline"

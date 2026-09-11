@@ -6,11 +6,13 @@ export function AccountsPaneRemoteActionWrapper({
   isRemote,
   notice,
   tooltip,
+  actionLabel,
   children
 }: {
   isRemote: boolean
   notice: string
   tooltip: string
+  actionLabel?: string
   children: React.ReactNode
 }): React.JSX.Element {
   if (!isRemote) {
@@ -23,7 +25,7 @@ export function AccountsPaneRemoteActionWrapper({
         <span
           tabIndex={0}
           role="button"
-          aria-label={tooltip}
+          aria-label={actionLabel}
           className="inline-flex rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onClick={() => toast.info(notice)}
           onKeyDown={(event) => {
@@ -33,7 +35,9 @@ export function AccountsPaneRemoteActionWrapper({
             }
           }}
         >
-          {children}
+          <span className="pointer-events-none" aria-hidden="true">
+            {children}
+          </span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="top">{tooltip}</TooltipContent>

@@ -133,7 +133,7 @@ describe('AccountsPane', () => {
     expect(markup).not.toContain('Remote server: the remote server')
     // The WSL account-location toggle is a local concern; a remote owner hides it.
     expect(markup).not.toContain('aria-label="Account location"')
-    const addAccountIndex = markup.indexOf('Add Account')
+    const addAccountIndex = markup.indexOf('Add Account</button>')
     expect(addAccountIndex).toBeGreaterThan(0)
     expect(markup.slice(markup.lastIndexOf('<button', addAccountIndex), addAccountIndex)).toContain(
       'disabled=""'

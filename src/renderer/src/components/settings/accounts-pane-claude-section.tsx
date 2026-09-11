@@ -88,6 +88,10 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 'Add accounts on {{value0}} by running: orca account add --agent claude',
                 { value0: accountRuntimeSentenceLabel }
               )}
+              actionLabel={translate(
+                'auto.components.settings.AccountsPane.b0e948a4f9',
+                'Add Account'
+              )}
             >
               <Button
                 variant="outline"
@@ -265,6 +269,10 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                           'auto.components.settings.AccountsPane.remoteReauthClaudeTooltip',
                           'Re-authenticate accounts on {{value0}} by running: orca account add --agent claude',
                           { value0: accountRuntimeSentenceLabel }
+                        )}
+                        actionLabel={translate(
+                          'auto.components.settings.AccountsPane.8a0f870153',
+                          'Re-authenticate'
                         )}
                       >
                         <Button
