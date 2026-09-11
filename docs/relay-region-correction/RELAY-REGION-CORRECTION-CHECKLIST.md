@@ -2,7 +2,7 @@
 
 Updated: 2026-09-11. **Local implementation validated through current-main rollback and Docker SSH transport checks. Release/rollout gates remain.**
 
-Source of truth for behavior: [final implementation plan](RELAY-REGION-CORRECTION-PLAN.md), especially section 5a. Independent verdict: [final review](RELAY-REGION-CORRECTION-FINAL-REVIEW.md), against `a9338438c437e1ba763a03f17b9d468988bd045b`. Investigation history: [progress log](RELAY-ROLLOUT-PROGRESS.md).
+Source of truth for behavior: [final implementation plan](RELAY-REGION-CORRECTION-PLAN.md), especially section 5a. Independent verdict: [final review](https://github.com/stablyai/orca/blob/0db9fdc486366f7451289f0c0599eed9ae1d94be/docs/relay-region-correction/RELAY-REGION-CORRECTION-FINAL-REVIEW.md), against `a9338438c437e1ba763a03f17b9d468988bd045b`. Investigation history: [progress log](https://github.com/stablyai/orca/blob/0db9fdc486366f7451289f0c0599eed9ae1d94be/docs/relay-region-correction/RELAY-ROLLOUT-PROGRESS.md).
 
 This is the execution tracker. Check a task only after its implementation and relevant verification are complete; attach the commit/PR and test evidence to that task or its phase evidence entry. Record in-progress work and blockers below. Prototype results do not complete production implementation tasks. Keep this file current after each meaningful implementation or validation milestone; record design changes in the plan and summarize them in the progress log.
 
@@ -194,3 +194,11 @@ The focused retention tests passed (12 tests), but the real-WebSocket rollback j
 
 - [x] Create coordinated cloud/desktop draft PR and run CI.
   - PR [#20031](https://github.com/stablyai/orca/pull/20031); corrected commit CI passed Secret scan, build, Terraform, test, and test-vs-non-test LoC. No review comments yet.
+
+## Review scope — 2026-09-11
+
+Cloud and desktop are separate dependent branches: `main` → `relay-region-cloud` →
+`relay-connection-speed`. Historical investigation material is archived outside
+the shipping diff. See acceptance evidence for the simplification and split checks.
+Release gates above remain open; cloud can precede desktop release with correction
+disabled and legacy clients excluded by capability negotiation.

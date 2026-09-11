@@ -27,11 +27,10 @@ export async function measureRelayRegionDecision(
       .map(regionMeasurement)
       .filter((entry): entry is RegionMeasurement => entry !== null)
     const incumbent = measurements.find((entry) => entry.region === window.incumbentRegion)
-    const target = [...measurements].sort((a, b) => a.latencyMs - b.latencyMs)[0]
     if (window.expiresAt <= options.now()) {
       return { outcome: 'inconclusive', reason: 'expired-window' }
     }
-    if (!incumbent || !target || measurements.length !== RELAY_REGIONS.length) {
+    if (!incumbent || measurements.length !== RELAY_REGIONS.length) {
       return { outcome: 'inconclusive', reason: 'incomplete-measurement' }
     }
     // A stable tie is conclusive evidence; the director applies the incumbent margin.

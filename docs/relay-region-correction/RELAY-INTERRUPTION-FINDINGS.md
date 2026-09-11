@@ -31,7 +31,7 @@ The desired preservation tests assert retaining the source after 30,001ms while 
 
 The mobile recovery test takes **251ms of fake time**, comprising a 250ms retry floor plus one simulated socket event. This is NOT a latency measurement or an estimate of real user downtime. Real recovery adds socket establishment, director calls, E2EE, credential confirmation, and possibly backoff/retries. Therefore there is insufficient evidence to approve forced interruption as a reliably short user-visible event.
 
-Commands, patches, environment adjustments, hashes, and explicit skip accounting: [experiment README](tests/tools/relay-rehome-interruption/README.md). Tests with `-t repro:` intentionally exclude unrelated cases; missing Postgres setup was not used to claim green PostgreSQL tests.
+Commands, patches, environment adjustments, hashes, and explicit skip accounting: [experiment README](https://github.com/stablyai/orca/blob/0db9fdc486366f7451289f0c0599eed9ae1d94be/tests/tools/relay-rehome-interruption/README.md). Tests with `-t repro:` intentionally exclude unrelated cases; missing Postgres setup was not used to claim green PostgreSQL tests.
 
 ## Why retaining existing sessions is simpler than proving idle
 
@@ -69,4 +69,4 @@ No measured typical session length or fixed maximum for the proposed finish-exis
 
 ## Follow-up review limitation
 
-The GPT-6-astra / low review found an independent 6h ±30m control lease, renewed only for the active origin, and a 24-hour durable rehome refresh ceiling. Auth refresh across origins does not extend the source control lease. Therefore the two timer-removal experiments and one-hour SQLite test do not prove arbitrarily long live source retention. The revised plan now requires explicit same-generation source renewal, retained-source rollback, and mode-aware durable lifetime/rollback compatibility. See `RELAY-REGION-CORRECTION-REVIEW-V2.md`; no further test or implementation validation has been claimed.
+The GPT-6-astra / low review found an independent 6h ±30m control lease, renewed only for the active origin, and a 24-hour durable rehome refresh ceiling. Auth refresh across origins does not extend the source control lease. Therefore the two timer-removal experiments and one-hour SQLite test do not prove arbitrarily long live source retention. The revised plan now requires explicit same-generation source renewal, retained-source rollback, and mode-aware durable lifetime/rollback compatibility. See [archived relay region correction review v2](https://github.com/stablyai/orca/blob/0db9fdc486366f7451289f0c0599eed9ae1d94be/docs/relay-region-correction/RELAY-REGION-CORRECTION-REVIEW-V2.md); no further test or implementation validation has been claimed.

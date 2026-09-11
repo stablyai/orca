@@ -46,7 +46,7 @@ Logs: `.tmp/region-relay-full-suite-final.log`, `.tmp/region-final-targeted.log`
   cohort approval remain deployment gates. All cleanup workers must support retention
   before enabling. Disabling new claims does not make old cleanup versions safe.
 - Independent review and its fix follow-up are in
-  `RELAY-REGION-CORRECTION-IMPLEMENTATION-REVIEW.md`.
+  [archived relay region correction implementation review](https://github.com/stablyai/orca/blob/0db9fdc486366f7451289f0c0599eed9ae1d94be/docs/relay-region-correction/RELAY-REGION-CORRECTION-IMPLEMENTATION-REVIEW.md).
 
 ## Preserved user work
 
@@ -154,3 +154,31 @@ required desktop and cloud checks.
 ## CI static-analysis follow-up — 2026-09-11
 
 CI identified and the latest commit removes a relay-region preference dependency cycle by moving the reader import to its boundary module. Focused preference/correction tests pass **35/35** and focused oxlint passes. A full local native quality scan still reports two pre-existing mobile transport cycles (`host-client-hooks.ts` and `client-context.tsx`); they are outside this change and are not modified here.
+
+## Cloud/desktop review split — 2026-09-11
+
+The cloud branch `relay-region-cloud` contains cloud implementation, shared wire
+contracts, compatibility fixtures, deployment safeguards and cloud tests. The
+desktop branch `relay-connection-speed` builds on that branch and contains desktop
+lifecycle changes, real transport tests, the reliability gate and current docs.
+Deploy cloud support first; correction defaults off and requires negotiated
+capability, so older desktops remain on legacy behavior. Desktop release timing
+does not require enabling correction.
+
+Removed historical patches and repeated review/progress reports from the shipping
+diff; the combined revision `0db9fdc486366f7451289f0c0599eed9ae1d94be` and local
+`.tmp/region-split-history` preserve them. Removed a latency sort used only to
+check presence; the director still owns target selection. Kept retry cancellation
+and exact-generation authority checks supported by prior red/green evidence.
+
+Split validation:
+
+- `ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/runtime/relay/relay-region-correction.test.ts src/main/runtime/relay/relay-region-refresh.test.ts`: **2 files / 16 passed** (`.tmp/region-split-focused.log`).
+- `ORCA_BACKGROUND_LAUNCH=1 pnpm tc:node`: **passed** (`.tmp/region-split-typecheck.log`).
+- `pnpm exec oxlint src/main/runtime/relay/relay-region-decision.ts`: **passed**.
+- `pnpm run check:reliability-gates`: **121 gates passed**.
+- From `cloud/apps/relay`: `ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run src/host-session-registry.test.ts src/region-correction-restart.test.ts src/region-correction-store.test.ts`: **3 files / 67 passed** (`.tmp/region-split-cloud.log`).
+- `git diff --check`: **passed**.
+
+Fresh split CI and the existing packaged/device/platform/production release gaps
+remain required; splitting the review does not satisfy deployment gates.
