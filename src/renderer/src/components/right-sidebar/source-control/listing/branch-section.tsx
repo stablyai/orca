@@ -92,7 +92,7 @@ export function SourceControlBranchSection({
             type="button"
             variant="ghost"
             size="xs"
-            className="px-1.5 text-muted-foreground hover:text-foreground"
+            className="shrink-0 whitespace-nowrap px-1.5 text-muted-foreground hover:text-foreground"
             onClick={(e) => {
               e.stopPropagation()
               if (currentWorktreeId && worktreePath && branchSummary) {
