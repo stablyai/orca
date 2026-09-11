@@ -79,6 +79,16 @@ describe('a cwd scope is the sidebar key, or anything below it', () => {
     expect(selected(db)).toEqual([1])
   })
 
+  it('narrows to nothing when no scope the caller gave could be keyed', async () => {
+    // `cwdKey` returns null for a scope it cannot key, and a scope that matches
+    // nothing must return nothing; dropping it would answer the whole index.
+    const db = await openIndex()
+    addSession(db, 1, '/work/app')
+    addSession(db, 2, '/elsewhere')
+    expect(selected(db, { scopePaths: [''] })).toEqual([])
+    expect(selected(db, { scopePaths: ['', '/work/app'] })).toEqual([1])
+  })
+
   it('keeps a WSL UNC workspace distinct from the bare Linux spelling', async () => {
     // PR 2 decided cwd_key does not qualify a Linux path with its distro: the
     // collision is real but every SSH host has it too, and the fix is a column

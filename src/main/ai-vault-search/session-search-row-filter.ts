@@ -53,9 +53,9 @@ export function sessionRowFilter(
     const present = filters.scopePaths
       .map((scope) => scopeCondition(filter, scope))
       .filter((condition) => condition !== null)
-    if (present.length > 0) {
-      filter.conditions.push(`(${present.join(' OR ')})`)
-    }
+    // Every scope unkeyable still means a scope, so it narrows to nothing;
+    // pushing no condition would widen the search to every session instead.
+    filter.conditions.push(present.length > 0 ? `(${present.join(' OR ')})` : '0 = 1')
   }
   return filter
 }
