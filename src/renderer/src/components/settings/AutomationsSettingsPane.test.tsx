@@ -63,4 +63,27 @@ describe('AutomationsSettingsPane', () => {
     await user.click(openButton)
     expect(mocks.openAutomationsPage).toHaveBeenCalledOnce()
   })
+
+  it('toggles expandProjectFolderOnAutomationRun setting (#20113)', async () => {
+    const user = userEvent.setup()
+    const updateSettings = vi.fn()
+    render(
+      <AutomationsSettingsPane
+        settings={{
+          ...getDefaultSettings('/tmp'),
+          expandProjectFolderOnAutomationRun: true
+        }}
+        updateSettings={updateSettings}
+      />
+    )
+
+    const toggle = screen.getByRole('switch', {
+      name: 'Expand the project when a run starts'
+    })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    await user.click(toggle)
+    expect(updateSettings).toHaveBeenCalledWith({
+      expandProjectFolderOnAutomationRun: false
+    })
+  })
 })

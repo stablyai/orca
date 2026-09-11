@@ -233,6 +233,8 @@ export type GlobalSettings = {
   showTasksButton: boolean
   /** Only toggles the sidebar shortcut; Automations stay reachable from Settings/View menu. */
   showAutomationsButton?: boolean
+  /** Why: #20113 — Open the collapsed project folder that holds the workspace for an automation run when it starts. */
+  expandProjectFolderOnAutomationRun?: boolean
   /** Deprecated: Artifacts are always available. Use showArtifactsButton for sidebar visibility. */
   artifactsEnabled?: boolean
   /** Capability gate for agent-driven publishing; off until granted, enforced in main, not just the UI. */

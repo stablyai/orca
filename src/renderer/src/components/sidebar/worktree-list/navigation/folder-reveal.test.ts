@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
@@ -44,6 +45,19 @@ function makeProjectGroup(overrides: Partial<ProjectGroup>): ProjectGroup {
     ...overrides
   }
 }
+function makeRepo(overrides: Partial<Repo> = {}): Repo {
+  return {
+    id: 'repo-1',
+    name: 'repo-1',
+    path: '/workspace/repo-1',
+    isBare: false,
+    isArchived: false,
+    sortOrder: 1,
+    projectGroupId: null,
+    ...overrides
+  }
+}
+
 
 function makeWorktree(id: string): Worktree {
   return {
@@ -117,6 +131,84 @@ describe('worktree list folder reveal', () => {
         [child, root]
       )
     ).toEqual([getProjectGroupHeaderKey(root.id), getProjectGroupHeaderKey(child.id)])
+  })
+
+  it('accepts raw folder workspace id as well as scoped key (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const child = makeProjectGroup({
+      id: 'group-child',
+      name: 'Platform',
+      parentGroupId: root.id
+    })
+    const folderWorkspace = makeFolderWorkspace({ projectGroupId: child.id })
+
+    expect(
+      getFolderWorkspaceRevealGroupKeys(
+        folderWorkspace.id,
+        [folderWorkspace],
+        [child, root]
+      )
+    ).toEqual([getProjectGroupHeaderKey(root.id), getProjectGroupHeaderKey(child.id)])
+  })
+
+  it('resolves project group keys for git worktrees when worktrees and repoMap are provided (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const child = makeProjectGroup({
+      id: 'group-child',
+      name: 'Platform',
+      parentGroupId: root.id
+    })
+    const repo = makeRepo({ id: 'repo-1', projectGroupId: child.id })
+    const worktree = makeWorktree('wt-1')
+
+    const keys = getFolderWorkspaceRevealGroupKeys(
+      'wt-1',
+      [],
+      [child, root],
+      {
+        worktrees: [worktree],
+        repoMap: new Map([[repo.id, repo]])
+      }
+    )
+
+    expect(keys).toEqual([
+      getProjectGroupHeaderKey(root.id),
+      getProjectGroupHeaderKey(child.id),
+      'project:repo-1'
+    ])
+  })
+
+  it('narrows git worktree reveal to the specified execution host (#20113)', () => {
+    const root = makeProjectGroup({ id: 'group-root', name: 'Company' })
+    const repo = makeRepo({ id: 'repo-1', projectGroupId: root.id })
+    const localWorktree = { ...makeWorktree('wt-1'), hostId: 'local' as const }
+    const remoteWorktree = { ...makeWorktree('wt-1'), hostId: 'ssh:builder' as const }
+
+    const keys = getFolderWorkspaceRevealGroupKeys(
+      'wt-1',
+      [],
+      [root],
+      {
+        worktrees: [localWorktree, remoteWorktree],
+        repoMap: new Map([[repo.id, repo]]),
+        executionHostId: 'ssh:builder'
+      }
+    )
+
+    expect(keys).toEqual([getProjectGroupHeaderKey(root.id), 'project:repo-1'])
+
+    // When asking for a different host that has no matching worktree, returns empty
+    const mismatchKeys = getFolderWorkspaceRevealGroupKeys(
+      'wt-1',
+      [],
+      [root],
+      {
+        worktrees: [localWorktree],
+        repoMap: new Map([[repo.id, repo]]),
+        executionHostId: 'ssh:builder'
+      }
+    )
+    expect(mismatchKeys).toEqual([])
   })
 })
 

@@ -1,5 +1,6 @@
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
@@ -14,10 +15,12 @@ function findFolderWorkspaceByKey(
   folderWorkspaces: readonly FolderWorkspace[]
 ): FolderWorkspace | null {
   const scope = parseWorkspaceKey(worktreeId)
-  if (scope?.type !== 'folder') {
-    return null
+  if (scope) {
+    return scope.type === 'folder'
+      ? (folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId) ?? null)
+      : null
   }
-  return folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId) ?? null
+  return folderWorkspaces.find((workspace) => workspace.id === worktreeId) ?? null
 }
 
 export function getKnownSidebarWorktreeById(
@@ -65,44 +68,77 @@ export function getFolderWorkspaceRevealGroupKeys(
     groupBy?: WorktreeGroupBy
     workspaceStatuses?: readonly WorkspaceStatusDefinition[]
     defaultHostId?: ExecutionHostId
+    worktrees?: readonly Worktree[]
+    repoMap?: ReadonlyMap<string, Repo>
+    executionHostId?: ExecutionHostId | null
   }
 ): string[] {
   const folderWorkspace = findFolderWorkspaceByKey(worktreeId, folderWorkspaces)
-  if (!folderWorkspace) {
-    return []
-  }
-
-  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
-  const keys: string[] = []
-  const seen = new Set<string>()
-  let groupId: string | null = folderWorkspace.projectGroupId
-  while (groupId && !seen.has(groupId)) {
-    seen.add(groupId)
-    const group = groupsById.get(groupId)
-    if (!group) {
-      break
+  if (folderWorkspace) {
+    const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+    const keys: string[] = []
+    const seen = new Set<string>()
+    let groupId: string | null = folderWorkspace.projectGroupId
+    while (groupId && !seen.has(groupId)) {
+      seen.add(groupId)
+      const group = groupsById.get(groupId)
+      if (!group) {
+        break
+      }
+      keys.unshift(getProjectGroupHeaderKey(group.id))
+      groupId = group.parentGroupId
     }
-    keys.unshift(getProjectGroupHeaderKey(group.id))
-    groupId = group.parentGroupId
+
+    // Under non-repo grouping the project-group headers above do not exist, so the
+    // lane and host headers are the ones actually hiding the row (#15362). Lane
+    // keys come from the same function grouping uses, so the two cannot disagree.
+    const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
+    if (options?.groupBy && options.groupBy !== 'repo' && owningGroup) {
+      keys.push(
+        getFolderWorkspaceLaneKey(
+          { folderWorkspace, projectGroup: owningGroup },
+          options.groupBy,
+          options.workspaceStatuses ?? []
+        )
+      )
+    }
+    if (owningGroup && options?.defaultHostId) {
+      keys.push(
+        `host:${getFolderWorkspaceHostId(folderWorkspace, owningGroup, options.defaultHostId)}`
+      )
+    }
+    return keys
   }
 
-  // Under non-repo grouping the project-group headers above do not exist, so the
-  // lane and host headers are the ones actually hiding the row (#15362). Lane
-  // keys come from the same function grouping uses, so the two cannot disagree.
-  const owningGroup = groupsById.get(folderWorkspace.projectGroupId)
-  if (options?.groupBy && options.groupBy !== 'repo' && owningGroup) {
-    keys.push(
-      getFolderWorkspaceLaneKey(
-        { folderWorkspace, projectGroup: owningGroup },
-        options.groupBy,
-        options.workspaceStatuses ?? []
-      )
+  if (options?.worktrees && options?.repoMap) {
+    const targetWorktree = options.worktrees.find(
+      (worktree) =>
+        worktree.id === worktreeId &&
+        (!options.executionHostId || !worktree.hostId || worktree.hostId === options.executionHostId)
     )
+    if (targetWorktree) {
+      const repo = options.repoMap.get(targetWorktree.repoId)
+      if (repo) {
+        const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+        const keys: string[] = []
+        const seen = new Set<string>()
+        let groupId: string | null = repo.projectGroupId ?? null
+        while (groupId && !seen.has(groupId)) {
+          seen.add(groupId)
+          const group = groupsById.get(groupId)
+          if (!group) {
+            break
+          }
+          keys.unshift(getProjectGroupHeaderKey(group.id))
+          groupId = group.parentGroupId
+        }
+        if (!options.groupBy || options.groupBy === 'repo') {
+          keys.push(`project:${repo.id}`)
+        }
+        return keys
+      }
+    }
   }
-  if (owningGroup && options?.defaultHostId) {
-    keys.push(
-      `host:${getFolderWorkspaceHostId(folderWorkspace, owningGroup, options.defaultHostId)}`
-    )
-  }
-  return keys
+
+  return []
 }
