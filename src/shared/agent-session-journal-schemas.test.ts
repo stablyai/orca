@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AgentJournalItemBodySchema,
   isAdmissibleAgentJournalItemBody,
   isAdmissibleAgentJournalMessageBody,
   isAdmissibleAgentJournalRenderItem,
@@ -33,7 +34,15 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
       },
       { type: 'tool-call', name: 'Read', input: { path: 'a' } },
       { type: 'tool-result', output: 'ok', isError: false },
-      { type: 'image-ref', path: '/tmp/a.png', alt: 'screenshot' }
+      { type: 'image-ref', path: '/tmp/a.png', alt: 'screenshot' },
+      {
+        type: 'subagent-group',
+        groupId: 'claude-session:turn-1',
+        agents: [
+          { id: 'task-1', label: 'Explore', state: 'working', startedAt: 1_000 },
+          { id: 'task-2', label: 'Review', state: 'completed', tokens: 42, settledAt: 2_000 }
+        ]
+      }
     ]
   },
   { kind: 'tool-call', name: 'Read', input: undefined, state: 'running' },
@@ -59,6 +68,16 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
     text: 'turn',
     turnLifecycle: { turnId: 'turn-1', state: 'running' },
     providerFrame: { provider: 'codex', kind: 'raw', payload: PAYLOAD }
+  },
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: { turnId: 'turn-2', state: 'completed', startedAt: 1_000, completedAt: 188_000 }
+  },
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: { turnId: 'turn-3', state: 'unverifiable', startedAt: 1_000 }
   }
 ]
 
@@ -143,6 +162,41 @@ describe('nested corruption is rejected', () => {
     ).toBe(false)
   })
 
+  it('rejects a subagent roster whose entries are malformed', () => {
+    // A KNOWN block type stays a known block: it must not fall through to the
+    // forward-tolerant arm just because its payload is wrong.
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'subagent-group', groupId: 'g', agents: [{ id: 'a', label: 'x' }] }]
+      })
+    ).toBe(false)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'subagent-group', groupId: 'g', agents: 'not-a-roster' }]
+      })
+    ).toBe(false)
+  })
+
+  it('keeps a state string a newer build might write admissible', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'system',
+        blocks: [
+          {
+            type: 'subagent-group',
+            groupId: 'g',
+            agents: [{ id: 'a', label: 'x', state: 'some-future-state' }]
+          }
+        ]
+      })
+    ).toBe(true)
+  })
+
   it('rejects shallow render items and submissions', () => {
     expect(
       isAdmissibleAgentJournalRenderItem({
@@ -222,13 +276,20 @@ describe('optional tool annotations', () => {
   const body = { kind: 'tool-call', name: 'shell', input: null, state: 'completed' }
   it('admits old rows and rows with optional annotations without a new kind', () => {
     expect(isAdmissibleAgentJournalItemBody(body)).toBe(true)
-    expect(isAdmissibleAgentJournalItemBody({ ...body, exitCode: 0, durationMs: 0 })).toBe(true)
+    expect(
+      isAdmissibleAgentJournalItemBody({ ...body, callId: 'call-1', exitCode: 0, durationMs: 0 })
+    ).toBe(true)
     expect(
       isAdmissibleAgentJournalItemBody({
         ...body,
         webSearchResults: [{ title: 'Docs', url: 'https://example.com' }]
       })
     ).toBe(true)
+    const padded = AgentJournalItemBodySchema.safeParse({ ...body, callId: ' call-1 ' })
+    expect(padded.success).toBe(true)
+    if (padded.success && padded.data.kind === 'tool-call') {
+      expect(padded.data.callId).toBe(' call-1 ')
+    }
   })
   it('admits explicit MCP identity without constraining the raw name', () => {
     expect(
@@ -240,6 +301,9 @@ describe('optional tool annotations', () => {
     ).toBe(true)
   })
   it.each([
+    { callId: '' },
+    { callId: ' \t' },
+    { callId: 1 },
     { exitCode: '127' },
     { exitCode: 1.5 },
     { durationMs: -1 },
@@ -247,4 +311,14 @@ describe('optional tool annotations', () => {
   ])('rejects malformed annotation %s', (metadata) =>
     expect(isAdmissibleAgentJournalItemBody({ ...body, ...metadata })).toBe(false)
   )
+
+  it('rejects whitespace-only provider IDs in message blocks too', () => {
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', name: 'shell', input: null, callId: '\n\t' }]
+      })
+    ).toBe(false)
+  })
 })

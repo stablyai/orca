@@ -54,6 +54,7 @@ export function createLegacyStorageCutoverFixture(): {
   })
 
   const legacyTask = first.createTask({
+    runId: 'run_legacy_local',
     spec: 'legacy',
     createdByTerminalHandle: 'term_legacy_coord'
   })
@@ -76,16 +77,19 @@ export function createLegacyStorageCutoverFixture(): {
   )
   const legacyMessages = [
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_coord',
       to: 'term_legacy_worker',
       subject: 'read worker mail'
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'read coordinator mail'
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_coord',
       to: 'term_legacy_worker',
       subject: 'second worker page'
@@ -99,6 +103,7 @@ export function createLegacyStorageCutoverFixture(): {
     question: 'Retained question?'
   })
   const rejection = first.insertMessage({
+    runId: 'run_legacy_local',
     from: 'term_legacy_worker',
     to: 'term_legacy_coord',
     subject: 'Rejected heartbeat',
@@ -106,6 +111,7 @@ export function createLegacyStorageCutoverFixture(): {
     payload: JSON.stringify({ _orcaLifecycleRejection: { code: 'migration', reason: 'cutover' } })
   })
   const lookalike = first.insertMessage({
+    runId: 'run_legacy_local',
     from: 'term_legacy_worker',
     to: 'term_legacy_coord',
     subject: 'Ordinary legacy mail',
@@ -115,36 +121,42 @@ export function createLegacyStorageCutoverFixture(): {
   })
   const malformedRejections = [
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Invalid JSON marker',
       payload: '{"_orcaLifecycleRejection":'
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Array marker',
       payload: JSON.stringify({ _orcaLifecycleRejection: [] })
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'String marker',
       payload: JSON.stringify({ _orcaLifecycleRejection: 'migration' })
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Incomplete marker',
       payload: JSON.stringify({ _orcaLifecycleRejection: { code: 'migration' } })
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Non-string marker fields',
       payload: JSON.stringify({ _orcaLifecycleRejection: { code: 19, reason: false } })
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Array root',
@@ -153,6 +165,7 @@ export function createLegacyStorageCutoverFixture(): {
       ])
     }),
     first.insertMessage({
+      runId: 'run_legacy_local',
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'String root',

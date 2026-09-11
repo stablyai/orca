@@ -5,6 +5,7 @@ import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionHistoryResult
 } from '../../../../shared/agent-session-wire'
+import { isUnattachedAgentSessionReadRefusal } from '../../../../shared/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
@@ -33,6 +34,9 @@ export type StructuredAgentSessionReadOwner = {
 }
 
 const owners = new Map<string, StructuredAgentSessionReadOwner>()
+
+/** Bounded so a busy stream cannot turn one scroll-to-top into an endless read chain. */
+const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
 
 function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {
   return item.body.kind !== 'status' || !item.body.providerFrame
@@ -72,7 +76,7 @@ function createReadOwner(
     emit()
   }
   const apply = (action: StructuredAgentSessionAction): void => {
-    const state = reduceStructuredAgentSession(snapshot.state, action)
+    const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
     if (state !== snapshot.state) {
       setSnapshot({ ...snapshot, state })
     }
@@ -121,6 +125,7 @@ function createReadOwner(
       return
     }
     let restored = snapshot.state.items.filter(countsTowardInitialHistory).length
+    let anchorSlides = 0
     while (snapshot.state.hasOlder && restored < NATIVE_CHAT_INITIAL_LIMIT) {
       const oldest = oldestStructuredAgentSessionCursor(snapshot.state)
       if (!oldest || shouldStop()) {
@@ -146,7 +151,16 @@ function createReadOwner(
       if (shouldStop()) {
         return
       }
-      apply({ type: 'older-page', requestedEpoch: oldest.epoch, page: older.page })
+      // A live batch that head-trimmed past the anchor makes this page discontiguous;
+      // the reducer drops it, so re-anchor rather than chase a moving window forever.
+      if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence !== oldest.sequence) {
+        anchorSlides += 1
+        if (anchorSlides >= OLDER_PAGE_ANCHOR_ATTEMPTS) {
+          break
+        }
+        continue
+      }
+      apply({ type: 'older-page', requestedCursor: oldest, page: older.page })
       if (shouldStop()) {
         return
       }
@@ -209,28 +223,41 @@ function createReadOwner(
       if (shouldStop()) {
         return
       }
-      const cursor = oldestStructuredAgentSessionCursor(snapshot.state)
-      if (!cursor || !snapshot.state.hasOlder || snapshot.loadingOlder) {
-        return
-      }
-      if (shouldStop()) {
+      if (
+        !oldestStructuredAgentSessionCursor(snapshot.state) ||
+        !snapshot.state.hasOlder ||
+        snapshot.loadingOlder
+      ) {
         return
       }
       setSnapshot({ ...snapshot, loadingOlder: true })
       try {
-        const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
-          target,
-          'agentSession.history',
-          { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
-        )
-        if (shouldStop()) {
-          return
-        }
-        if (result.ok && !shouldStop()) {
-          apply({ type: 'older-page', requestedEpoch: cursor.epoch, page: result.page })
+        // A live batch can head-trim past the anchor mid-read, and the reducer drops
+        // that page rather than leave a hole in the transcript. Re-anchor and retry.
+        for (let attempt = 0; attempt < OLDER_PAGE_ANCHOR_ATTEMPTS; attempt += 1) {
+          const cursor = oldestStructuredAgentSessionCursor(snapshot.state)
+          if (!cursor || shouldStop()) {
+            return
+          }
+          const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
+            target,
+            'agentSession.history',
+            { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
+          )
+          if (shouldStop() || !result.ok) {
+            return
+          }
+          // The reducer drops a page whose anchor slid, so only an intact anchor lands.
+          if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence === cursor.sequence) {
+            apply({ type: 'older-page', requestedCursor: cursor, page: result.page })
+            return
+          }
         }
       } catch (error) {
-        if (!shouldStop()) {
+        // An unattached session is the live transport's subject, not this page's: it re-asks and
+        // decides. A page that refused that way must not put the pane in an error state the
+        // transport is about to clear.
+        if (!shouldStop() && !isUnattachedAgentSessionReadRefusal(error)) {
           apply({ type: 'error', message: String(error) })
         }
       } finally {

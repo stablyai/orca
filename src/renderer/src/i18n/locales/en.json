@@ -1490,7 +1490,7 @@
       "Landing": {
         "76a95f7f47": "Create",
         "f05d237049": "Add a project first",
-        "f9eaa9e12d": "Add Project",
+        "f9eaa9e12d": "Add project",
         "6ca6ff404e": "ORCA",
         "520304a067": "Orca logo",
         "ce44fad849": "Missing dependencies",
@@ -2379,8 +2379,6 @@
         "recentChatsTerminalsHeader": "Recent Chats & Terminals",
         "27f10cca63": "Search chats, terminals, worktrees, settings, and actions...",
         "2770f02910": "Search chats, terminals, worktrees, settings, and actions",
-        "paletteOpenTabBranch": "Branch name",
-        "paletteOpenTabWorkspace": "Workspace name",
         "lastActiveTime": "Last active {{value0}} ago"
       },
       "github": {
@@ -3371,7 +3369,10 @@
             "1d04b1630b": "Split Down",
             "6b3efb106e": "Split Up",
             "fdd29eb669": "Pin Tab",
-            "8e9d603a09": "Unpin Tab"
+            "8e9d603a09": "Unpin Tab",
+            "revealInFinder": "Reveal in Finder",
+            "openContainingFolder": "Open Containing Folder",
+            "revealInFileExplorer": "Reveal in File Explorer"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
@@ -5294,14 +5295,12 @@
         "SidebarHeader": {
           "projects": "Projects",
           "spaces": "Spaces",
-          "25a95899c9": "Add Project",
           "92154beb7e": "New workspace",
           "49f62c5665": "Workspace board",
           "5c9c7c16aa": "Add a project to create workspaces",
-          "ca6f729da2": "New workspace ({{value0}})",
           "a30e34eb5c": "Close workspace board",
           "views": "Sidebar view",
-          "moreActions": "More workspace actions"
+          "addProject": "Add project"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -5789,7 +5788,8 @@
               "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "unstoppedPty": "Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.",
               "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.",
-              "runningAgentSession": "This workspace still has running agent sessions, so Orca stopped before deleting any files. Force Delete will close them and discard any work they hold."
+              "runningAgentSession": "Orca could not confirm every agent session in this workspace has closed, so it stopped before deleting any files. Use Force Delete to remove it anyway.",
+              "runningAgentSessionLive": "This workspace still has running agent sessions that Orca could not close, so it stopped before deleting any files. Force Delete will discard any work they hold."
             }
           }
         },
@@ -10490,7 +10490,20 @@
             "agent": "agent",
             "process": "process",
             "prompt": "prompt",
-            "stop": "stop"
+            "stop": "stop",
+            "minimumContrast": {
+              "title": "Color Contrast",
+              "description": "Improve text readability or preserve the colors chosen by terminal programs.",
+              "contrast": "contrast",
+              "minimum": "minimum",
+              "ratio": "ratio",
+              "readability": "readability",
+              "wcag": "wcag",
+              "powerline": "powerline",
+              "statusline": "statusline",
+              "dim": "dim",
+              "colors": "colors"
+            }
           },
           "windows": {
             "search": {
@@ -11815,6 +11828,20 @@
         },
         "NativeChatSupportedAgents": {
           "label": "Supported agents:"
+        },
+        "contrast": {
+          "title": "Color Contrast",
+          "description": "Improve text readability or preserve the colors chosen by terminal programs.",
+          "ratio": "Contrast target",
+          "autoDescription": "Balances readability with your terminal theme. Recommended.",
+          "offDescription": "Keeps program colors unchanged, including dim text and Powerline separators.",
+          "customDescription": "Choose how much to increase contrast between text and its background.",
+          "auto": "Automatic",
+          "off": "Off",
+          "custom": "Custom",
+          "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
+          "subtle": "Subtle",
+          "strong": "Strong"
         }
       },
       "right": {
@@ -11954,7 +11981,10 @@
             "3161c4e425": "folder",
             "e887fa4b2e": "Open in Terminal",
             "1d8e182c32": "View File",
-            "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable"
+            "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable",
+            "revealInFinder": "Reveal in Finder",
+            "openContainingFolder": "Open Containing Folder",
+            "revealInFileExplorer": "Reveal in File Explorer"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -13614,7 +13644,7 @@
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",
-            "addProject": "Add a new project",
+            "addProject": "Add project",
             "label": "Project",
             "browse": "Browse projects",
             "listLabel": "Projects",
@@ -14654,7 +14684,10 @@
           "f0fd4174b5": "Open file tab to use rich markdown editing",
           "a10d9b8337": "Open file",
           "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change"
+          "631dab0df3": "Next change",
+          "revealInFinder": "Reveal in Finder",
+          "openContainingFolder": "Open Containing Folder",
+          "revealInFileExplorer": "Reveal in File Explorer"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
@@ -16219,8 +16252,6 @@
           "5651b216c6": "Unknown project",
           "22b22034bc": "Standalone terminal unavailable in Activity.",
           "afdc2139a8": "Agent terminal closed. Open a new terminal in this workspace to continue.",
-          "compactModeDescription": "Shows shorter thread rows with one-line titles and two-line status messages.",
-          "unreadOnlyDescription": "Filters the activity list to show only threads with unread updates.",
           "clearCompleted": "Clear completed",
           "none": "None",
           "search": "Search",
@@ -16240,7 +16271,9 @@
             "idle": "Idle",
             "unverifiable": "No recent update",
             "permission": "Needs attention"
-          }
+          },
+          "filtersSection": "Filters",
+          "viewSection": "View"
         },
         "clearCompleted": {
           "clearedOne": "Cleared 1 completed agent",
@@ -16257,8 +16290,8 @@
           "dc708f3eff": "Close agents"
         },
         "ActivityScopeFilterControls": {
-          "resetScope": "Show all hosts and projects",
-          "hiddenCount": "{{value0}} hidden"
+          "hiddenCount": "{{value0}} hidden",
+          "resetScope": "Show all hosts and projects"
         },
         "ActivityThreadHoverCard": {
           "pathCopied": "Path copied to clipboard",
@@ -16861,6 +16894,21 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "UnexpectedSignoutCard": {
+        "9f2c1a4b7d": "You've been signed out",
+        "3e8f5c2a91": "Dismiss",
+        "7b4d9e1f2a": "Sign in again as {{value0}} to restore Artifact sharing, Orca Relay, and skill sharing.",
+        "5a1c8d3e6f": "Sign in again to restore Artifact sharing, Orca Relay, and skill sharing.",
+        "1f6b2c9d4e": "What you get back",
+        "8d2e4f7a1b": "Artifact sharing",
+        "2c9a5b6e8d": "Publish HTML and Markdown files and manage every shared link from Orca.",
+        "6e3f1a9c5b": "Orca Relay",
+        "4b7d2e8f1a": "Connect Orca Mobile to this desktop across cellular or any Wi-Fi.",
+        "9a4c6b2d7e": "Skill sharing",
+        "3d8e5f1b9c": "Share skills behind an unlisted link and install them on any machine you use.",
+        "7e1a9c4d2f": "Signing in…",
+        "c5b3e8a17d": "Sign in to Orca"
       }
     },
     "i18n": {
@@ -16969,6 +17017,35 @@
       "empty": "No users found"
     },
     "native-chat": {
+      "taskList": {
+        "title": "Tasks",
+        "completed": "Completed",
+        "inProgress": "In progress",
+        "pending": "Pending",
+        "empty": "No tasks",
+        "progress": "{{completed}} of {{total}} tasks completed",
+        "added": "Added {{task}}",
+        "removed": "Removed {{task}}",
+        "started": "Started {{task}}",
+        "finished": "Completed {{task}}",
+        "reset": "Marked pending: {{task}}",
+        "updated": "Updated {{task}}",
+        "unchanged": "Tasks unchanged",
+        "showAll": "Full task list"
+      },
+      "turnDiff": {
+        "one": "1 changed file",
+        "many": "{{count}} changed files",
+        "partial": "Partial diff",
+        "recorded": "Totals from recorded edits in this turn."
+      },
+      "receipt": {
+        "unavailable": "Selected answer unavailable",
+        "cancelled": "Cancelled",
+        "resolved": "Resolved",
+        "resolver": "Answered on {{device}}",
+        "cancelledBy": "Cancelled on {{device}}"
+      },
       "notices": {
         "compaction": "Context compacted",
         "details": "Details",
@@ -17085,8 +17162,34 @@
         "command": "Background command",
         "monitor": "Background monitor",
         "task": "Background task",
-        "runningList": "Running background tasks",
-        "detailsUnavailable": "Task details are unavailable for this session."
+        "detailsUnavailable": "Task details are unavailable for this session.",
+        "countAgentsOne": "1 agent",
+        "countAgentsMany": "{{value0}} agents",
+        "countShellOne": "1 shell",
+        "countShellMany": "{{value0}} shells",
+        "countShellCommandOne": "1 shell command",
+        "countMonitorsOne": "1 monitor",
+        "countMonitorsMany": "{{value0}} monitors",
+        "countWorkflowsOne": "1 workflow",
+        "countWorkflowsMany": "{{value0}} workflows",
+        "countTasksOne": "1 task",
+        "countTasksMany": "{{value0}} tasks",
+        "headerTotal": "{{value0}} background tasks",
+        "stateWorking": "working",
+        "stateMonitoring": "monitoring",
+        "stateWaiting": "waiting",
+        "stateBlocked": "blocked",
+        "stateDone": "done",
+        "stateIdle": "stopped",
+        "stateUnverifiable": "unverifiable",
+        "reasonWaiting": "needs approval",
+        "reasonUnverifiable": "no contact",
+        "reasonBlocked": "failed",
+        "groupAgents": "Agents",
+        "groupShell": "Shell",
+        "groupMonitors": "Monitors",
+        "groupWorkflows": "Workflows",
+        "groupTasks": "Tasks"
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {
@@ -17736,5 +17839,13 @@
     "title": "Orca keeps failing to load",
     "stalledMessage": "The app window stopped responding while reloading after a crash.",
     "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "needs input",
+      "working": "working",
+      "stopped": "stopped",
+      "finished": "finished"
+    }
   }
 }

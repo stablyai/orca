@@ -172,7 +172,9 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'markdown.readTab',
   'markdown.saveTab',
   'notifications.getMissedSince',
+  'notifications.registerPush',
   'notifications.subscribe',
+  'notifications.unregisterPush',
   'notifications.unsubscribe',
   'pairing.getEndpoints',
   'pairing.provisionRelay',
@@ -246,6 +248,8 @@ export const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'status.get',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  // Why: the phone reports a takeover out of band, the same signal the desktop renderer sends.
+  'orchestration.workerTerminalUserInput',
   'terminal.clearBuffer',
   'terminal.close',
   'terminal.closeAll',

@@ -1,4 +1,5 @@
 import { restoreRewindJournalBody } from './structured-rewind-journal-body'
+import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
 import { isDeepStrictEqual } from 'node:util'
 import {
   agentJournalItemKey,
@@ -60,7 +61,14 @@ export async function recoverStructuredRewind(
       }
       throw new Error(`agent_session_rewind:${recovered?.reason ?? 'outcome-unknown'}`)
     }
-    const expectedItems = new Set(rewind.retained.map((item) => item.itemId))
+    const expectedItems = new Set(
+      rewind.retained
+        .filter((item) => {
+          const identity = parseAgentJournalItemKey(item.itemId)
+          return identity?.provider === 'codex' && identity.threadId === target.threadId
+        })
+        .map((item) => item.itemId)
+    )
     const observedItems = new Set<string>()
     for (const { identity } of recovered.items) {
       const itemId = agentJournalItemKey(identity)
@@ -76,11 +84,14 @@ export async function recoverStructuredRewind(
     if (observedItems.size !== expectedItems.size) {
       throw new Error('agent_session_rewind:proof-mismatch')
     }
-    const retained = recovered.items.map(({ identity, body }) => ({
-      itemId: agentJournalItemKey(identity),
-      body,
-      observedAt: now()
-    }))
+    const retained = mergeRetainedHostLifecycleRows(
+      rewind.retained,
+      recovered.items.map(({ identity, body }) => ({
+        itemId: agentJournalItemKey(identity),
+        body,
+        observedAt: now()
+      }))
+    )
     if (
       retained.length > 10_000 ||
       Buffer.byteLength(JSON.stringify(retained), 'utf8') > AGENT_SESSION_HISTORY_MAX_PAGE_BYTES

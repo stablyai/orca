@@ -1,3 +1,4 @@
+import { reportWorkerTerminalUserInput } from './worker-terminal-takeover-report'
 import { getTerminalLiveAccessoryRawSendTarget } from './terminal-live-accessory-raw-send-target'
 import { isTerminalSendRpcAccepted } from './terminal-send-rpc-response'
 import { buildTerminalSendParams, TERMINAL_INPUT_SEND_OPTIONS } from './terminal-send-request'
@@ -37,5 +38,14 @@ export async function sendTerminalLiveAccessoryRawBytes(
       }),
       TERMINAL_INPUT_SEND_OPTIONS
     )
-    .then(isTerminalSendRpcAccepted, () => false)
+    .then(
+      (response) => {
+        const accepted = isTerminalSendRpcAccepted(response)
+        if (accepted) {
+          reportWorkerTerminalUserInput(args.client!, rawSendTarget)
+        }
+        return accepted
+      },
+      () => false
+    )
 }

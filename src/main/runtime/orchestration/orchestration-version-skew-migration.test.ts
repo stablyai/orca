@@ -389,7 +389,10 @@ describe('OrchestrationDb version-skew migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-version-skew-v30-reset-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
-    const task = db.createTask({ spec: 'reset by an older writer' })
+    const task = db.createTask({
+      runId: 'run_legacy_local',
+      spec: 'reset by an older writer'
+    })
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

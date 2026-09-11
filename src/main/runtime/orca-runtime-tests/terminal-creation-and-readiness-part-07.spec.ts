@@ -146,11 +146,11 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-hooks-review-prompt'
+      blockedReason: 'agent-hooks-review-prompt'
     })
   })
 
-  it('returns a blocked wait result for Codex update prompts', async () => {
+  it('returns an agent-neutral blocked wait result for update prompts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -177,11 +177,11 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-update-prompt'
+      blockedReason: 'agent-update-prompt'
     })
   })
 
-  it('returns a blocked wait result for Codex workspace trust prompts', async () => {
+  it('returns an agent-neutral blocked wait result for workspace trust prompts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -203,7 +203,7 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-trust-workspace'
+      blockedReason: 'agent-trust-workspace'
     })
   })
 
@@ -270,7 +270,7 @@ describe('OrcaRuntimeService', () => {
     ).rejects.toThrow('timeout')
   })
 
-  it('returns a blocked wait result for Codex cwd selection prompts', async () => {
+  it('returns an agent-neutral blocked wait result for cwd selection prompts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -297,7 +297,7 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-cwd-prompt'
+      blockedReason: 'agent-cwd-prompt'
     })
   })
 
@@ -359,11 +359,11 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-hooks-review-prompt'
+      blockedReason: 'agent-hooks-review-prompt'
     })
   })
 
-  it('returns a blocked wait result for generic Codex interactive prompts', async () => {
+  it('returns an agent-neutral blocked wait result for generic interactive prompts', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -390,7 +390,7 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-interactive-prompt'
+      blockedReason: 'agent-interactive-prompt'
     })
   })
 

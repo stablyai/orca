@@ -8,7 +8,10 @@ describe('federated Dispatch observation fence', () => {
 
   it('rejects out-of-order epochs and observations captured before release', () => {
     const database = (db = new OrchestrationDb(':memory:'))
-    const task = database.createTask({ spec: 'fenced federated observation' })
+    const task = database.createTask({
+      runId: 'run_legacy_local',
+      spec: 'fenced federated observation'
+    })
     const started = database.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,

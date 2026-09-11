@@ -54,16 +54,6 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
   // dispatch contexts immediately, rather than waiting for the coordinator's
   // next poll cycle. This catches agent crashes and unexpected exits within
   // milliseconds. The task is set back to 'pending' so it can be re-dispatched.
-  /** A worker settled by its own process exit makes its pane fenceable now, not at the next app
-   *  start; a fence sweep must never fail the exit path behind it. */
-  private sweepSettledWorkerResumeFencesAfterExit(): void {
-    try {
-      this.prepareLegacyWorkerTerminalRecovery()
-    } catch (error) {
-      console.warn('[orchestration] settled worker resume fence sweep failed', error)
-    }
-  }
-
   protected failActiveDispatchOnExit(
     handle: string,
     paneKey: string | null,
@@ -90,7 +80,6 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
     const stopping = this._orchestrationDb.getWorkerDispatch?.(dispatch.id)
     if (stopping?.state === 'stopping' && stopping.runtime_epoch === this.getRuntimeId()) {
       this._orchestrationDb.settleWorkerStop(dispatch.id)
-      this.sweepSettledWorkerResumeFencesAfterExit()
       return
     }
 
@@ -99,7 +88,6 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
       workerProcessExited: true,
       terminationReason: cause.kind
     })
-    this.sweepSettledWorkerResumeFencesAfterExit()
     if (isDeliberateTerminalExit(cause)) {
       return
     }
@@ -145,7 +133,7 @@ export class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApp
           exitCause: cause,
           handle
         }),
-        ...(recipient.runId ? { runId: recipient.runId } : {})
+        runId: dispatch.run_id
       })
       this.notifyMessageArrived(escalation.to_handle, escalation.type)
     } catch (error) {

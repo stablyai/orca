@@ -18,14 +18,20 @@ import {
 export function isExplicitAgentStatusFresh(
   entry: Pick<
     AgentStatusEntry,
-    'updatedAt' | 'evidenceObservedAt' | 'mirroredEvidenceReceivedAt' | 'restoredUnconfirmed'
+    | 'updatedAt'
+    | 'evidenceObservedAt'
+    | 'mirroredEvidenceReceivedAt'
+    | 'restoredUnconfirmed'
+    | 'structuredHostOwned'
   >,
   now: number,
   staleAfterMs: number
 ): boolean {
   // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
   return (
-    entry.restoredUnconfirmed !== true && now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs
+    entry.restoredUnconfirmed !== true &&
+    (entry.structuredHostOwned === true ||
+      now - agentStatusEvidenceObservedAt(entry) <= staleAfterMs)
   )
 }
 

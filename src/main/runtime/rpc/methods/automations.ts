@@ -1,6 +1,6 @@
 import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
-import { defineMethod, type RpcContext, type RpcMethod } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import {
   AutomationCreate,
   AutomationId,
@@ -25,7 +25,7 @@ function mutationOwner(
   return context.runtime.automationOwnerPrecondition(id) ?? undefined
 }
 
-export const AUTOMATION_METHODS: RpcMethod[] = [
+export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.list',
     params: AutomationList,

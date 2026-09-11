@@ -97,13 +97,19 @@ export function startRegionalRehomeWorker(
         })
       )
     } catch (error) {
-      await (attemptId
-        ? assignments.recordRegionalRehomeDispatchFailure(attemptId)
-        : assignments.recordRegionalRehomeWorkerFailure()
-      ).catch(() => undefined)
+      // Only a claimed attempt was drained. A poll that failed before the claim
+      // - a pool timeout on the once-a-second control read - dispatched nothing,
+      // so it must not spend the budget that latches the durable control off.
+      if (attemptId) {
+        await assignments
+          .recordRegionalRehomeDispatchFailure(attemptId)
+          .catch(() => undefined)
+      }
       console.warn(
         JSON.stringify({
-          event: 'orca_relay_regional_rehome_dispatch_failed',
+          event: attemptId
+            ? 'orca_relay_regional_rehome_dispatch_failed'
+            : 'orca_relay_regional_rehome_poll_failed',
           reason: error instanceof Error ? error.message : 'unknown'
         })
       )

@@ -21,7 +21,9 @@ export const AGENT_STATUS_OBSERVATION_ORIGINS = [
   /** Seeded when Orca launched the agent itself, before any provider signal. */
   'launch',
   /** Stamped by orchestration dispatch rather than by the agent. */
-  'orchestration'
+  'orchestration',
+  /** Projected by the structured session host from a session's journal; no PTY, no hook. */
+  'structured'
 ] as const
 export type AgentStatusObservationOrigin = (typeof AGENT_STATUS_OBSERVATION_ORIGINS)[number]
 

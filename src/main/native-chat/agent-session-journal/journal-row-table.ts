@@ -20,6 +20,7 @@ const SELECT_EPOCH_ROWS = `SELECT epoch, seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? ORDER BY seq ASC`
 const SELECT_ROWS_AFTER = `SELECT epoch, seq, ts, row_json FROM journal_rows
 WHERE session_id = ? AND epoch = ? AND seq > ? ORDER BY seq ASC`
+const SELECT_ROWS_AFTER_LIMITED = `${SELECT_ROWS_AFTER} LIMIT ?`
 const DELETE_SUFFIX = 'DELETE FROM journal_rows WHERE session_id = ? AND epoch = ? AND seq >= ?'
 
 export function readJournalSessionEpoch(db: Database.Database, sessionId: string): string | null {
@@ -58,8 +59,14 @@ export function readJournalRowsAfter(
   db: Database.Database,
   sessionId: string,
   epoch: string,
-  afterSeq: number
+  afterSeq: number,
+  limit?: number
 ): JournalStoredRow[] {
+  if (limit !== undefined) {
+    return toStoredRows(
+      db.prepare(SELECT_ROWS_AFTER_LIMITED).all(sessionId, epoch, afterSeq, limit)
+    )
+  }
   return toStoredRows(db.prepare(SELECT_ROWS_AFTER).all(sessionId, epoch, afterSeq))
 }
 

@@ -8,11 +8,23 @@ import {
   stripClientHints
 } from './browser-google-auth-ua'
 
-// Why: the session keeps Electron's stock UA. Stripping the Electron/app tokens to look like
-// plain Chrome is what Cloudflare Turnstile rejects (error 600010): a Chrome UA that ships no
-// client hints reads as a spoof, while a declared Electron client clears the same challenge.
-// This handler only owns the Google auth-host Firefox switch, which is a proven, host-scoped
-// exception that must stay consistent across the header and every cross-host subresource.
+// Why: Electron's default UA includes "Electron/X.X.X" and the app name
+// (e.g. "orca/1.2.3"), an impossible identity for sessions imported from Chrome.
+// This focused revocation fix strips only those tokens; it does not attempt full Chrome
+// impersonation, and Chromium's client-hint identity remains browser-owned.
+export function cleanElectronUserAgent(ua: string): string {
+  return (
+    ua
+      .replace(/\s+Electron\/\S+/, '')
+      // Why: \S+ matches any non-whitespace token (e.g. "orca/1.3.8-rc.0")
+      // including pre-release semver strings that [\d.]+ would miss.
+      .replace(/(\)\s+)\S+\s+(Chrome\/)/, '$1$2')
+  )
+}
+
+// Why: Chromium already publishes one internally consistent client-hint identity through both
+// request headers and navigator.userAgentData. This handler only owns the host-scoped Firefox
+// exception; synthesizing Chrome brands here would make those two browser-owned surfaces disagree.
 export function setupGoogleAuthUserAgentOverride(sess: Session): void {
   const firefoxUa = googleAuthUserAgent()
 
@@ -24,11 +36,20 @@ export function setupGoogleAuthUserAgentOverride(sess: Session): void {
       // sec-ch-ua* because real Firefox sends none.
       setUserAgentHeader(headers, firefoxUa)
       stripClientHints(headers)
-    } else if (currentUserAgent(headers) === firefoxUa) {
-      // Why: while the auth document is on screen the WebContents UA is Firefox, so its
-      // cross-host subresource/XHR requests carry the Firefox UA yet still bear Chromium
-      // client hints — a sharper cross-host identity tell than either alone.
+      callback({ requestHeaders: headers })
+      return
+    }
+    if (currentUserAgent(headers) === firefoxUa) {
+      // Why: while the auth document is on screen the WebContents UA is Firefox,
+      // so its cross-host subresource/XHR requests (gstatic, play.google.com, the
+      // sign-in challenge endpoints) reach here carrying the Firefox UA yet still
+      // bearing Chromium client hints. Rewriting those to Chrome pairs a Firefox
+      // UA with Chrome hints — a sharper cross-host identity tell than either
+      // alone, which can stall Google's password-submit challenge. Real Firefox
+      // sends no client hints, so strip them to keep one identity for the flow.
       stripClientHints(headers)
+      callback({ requestHeaders: headers })
+      return
     }
     callback({ requestHeaders: headers })
   })

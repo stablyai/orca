@@ -17,6 +17,8 @@ export async function discoverAiVaultSessionSources(args: {
   const { options, limitPerAgent, issues } = args
   const wslHomeDirs = normalizedWslHomeDirs(options.wslHomeDirs)
 
+  // The Cursor chat-meta scan scope is owned by scanAiVaultSessions: it has to
+  // span parse as well, and finalize runs after this returns.
   return Promise.all([
     // Why: OpenCode 1.17.x migrated sessions from per-session JSON files to a
     // SQLite DB. discoverOpenCodeSessions runs both the file scanner (legacy)

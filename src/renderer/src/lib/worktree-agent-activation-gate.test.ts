@@ -653,6 +653,33 @@ describe('worktree agent activation gate', () => {
     await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
   })
 
+  it.each([
+    ['ssh:box@@pty-1', WORKTREE_ID],
+    [`${WORKTREE_ID}@@legacy`, ''],
+    // A relay seeds worktreeId from the host's own ORCA_WORKTREE_ID, so a foreign value must not
+    // hide a session the minted id already claims for this workspace.
+    [`${WORKTREE_ID}@@stale-env`, 'other-repo::/elsewhere']
+  ])(
+    'adopts %s using workspace metadata or the legacy ID fallback',
+    async (livePtyId, worktreeId) => {
+      const { deps, createTab, resume } = testDeps({
+        sessions: [{ ...listed(livePtyId), worktreeId }],
+        surfaceOwners: new Map([
+          [livePtyId, { paneKey: `tab-live:${LIVE_LEAF_ID}`, ptyId: livePtyId, tabId: 'tab-live' }]
+        ])
+      })
+      const store = deps.getState()
+      seedExistingSurface(store, { tabId: 'tab-live', leafId: LIVE_LEAF_ID })
+
+      await expect(runWorktreeAgentActivationGate(WORKTREE_ID, deps)).resolves.toBe('adopted')
+      expect(createTab).not.toHaveBeenCalled()
+      expect(resume).not.toHaveBeenCalled()
+      expect(store.terminalLayoutsByTabId['tab-live']?.ptyIdsByLeafId).toEqual({
+        [LIVE_LEAF_ID]: livePtyId
+      })
+    }
+  )
+
   it('adopts a host surface hydrated under a differently spelled workspace id', async () => {
     const livePtyId = `${WORKTREE_ID}@@live-agent`
     const { deps, createTab } = testDeps({

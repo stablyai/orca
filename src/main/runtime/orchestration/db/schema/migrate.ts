@@ -10,6 +10,7 @@ import { migrateV36 } from './migrate-v36'
 import { migrateV37 } from './migrate-v37'
 import { migrateV38 } from './migrate-v38'
 import { migrateV39 } from './migrate-v39'
+import { migrateV40 } from './migrate-v40'
 
 // Why: CREATE TABLE IF NOT EXISTS won't alter existing DBs; migrate in a txn that bumps user_version only on success (atomic all-or-nothing).
 export function migrate(this: OrchestrationDb): void {
@@ -30,6 +31,7 @@ export function migrate(this: OrchestrationDb): void {
     migrateV37.call(this, current)
     migrateV38.call(this, current)
     migrateV39.call(this, current)
+    migrateV40.call(this, current)
     this.createMailboxDeliveryIndexesIfPossible()
     this.db.pragma(`user_version = ${SCHEMA_VERSION}`)
     this.db.exec('COMMIT')

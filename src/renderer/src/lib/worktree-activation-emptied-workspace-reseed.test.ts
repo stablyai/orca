@@ -32,6 +32,23 @@ function seedClosedLastTerminal(worktreeId: string): void {
 }
 
 describe('activating a workspace whose last terminal was closed', () => {
+  it.each([
+    ['Blank Terminal', null, 1],
+    ['an agent', 'codex' as const, 0]
+  ])('seeds a default shell for %s selection only', (_label, agent, expectedTabCount) => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+
+    const result = activateAndRevealWorktree(worktree.id, {
+      agent,
+      notifyHostRuntime: false
+    })
+
+    expect(result).not.toBe(false)
+    expect(result === false ? null : result.primaryTabId === null).toBe(expectedTabCount === 0)
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(expectedTabCount)
+  })
+
   it.each([true, false])(
     'forwards providesInitialSurface=%s through the async activation gate',
     async (providesInitialSurface) => {
@@ -234,6 +251,22 @@ function seedEmptiedFolderWorkspaceOnTwoHosts(): void {
 }
 
 describe('activating a folder workspace whose last terminal was closed', () => {
+  it.each([
+    ['Blank Terminal', null, 1],
+    ['an agent', 'codex' as const, 0]
+  ])('seeds a default shell for %s selection only', (_label, agent, expectedTabCount) => {
+    seedEmptiedFolderWorkspaceOnTwoHosts()
+
+    const result = activateAndRevealFolderWorkspace(FOLDER_ID, {
+      agent,
+      executionHostId: 'local'
+    })
+
+    expect(result).not.toBe(false)
+    expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
+    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(expectedTabCount)
+  })
+
   it.each([true, false])(
     'forwards providesInitialSurface=%s through the async activation gate',
     async (providesInitialSurface) => {
@@ -309,7 +342,20 @@ describe('activating a folder workspace whose last terminal was closed', () => {
     vi.stubGlobal('window', {
       api: {
         runtime: {
-          call: vi.fn(async () => ({ ok: true, result: { snapshots: [] } }))
+          // A `session.tabs.list` answer must name the scope it listed, or the gate refuses it and
+          // blocks — which would leave the row empty for the wrong reason.
+          call: vi.fn(async () => ({
+            ok: true,
+            result: {
+              worktree: FOLDER_KEY,
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 1,
+              activeGroupId: null,
+              activeTabId: null,
+              activeTabType: null,
+              tabs: []
+            }
+          }))
         },
         pty: { listSessions: vi.fn(async () => []) }
       }

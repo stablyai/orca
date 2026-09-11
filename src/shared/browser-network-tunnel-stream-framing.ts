@@ -4,11 +4,16 @@ const DEFAULT_MAX_RETAINED_BYTES = 2 * 1024 * 1024
 const DEFAULT_MAX_QUEUED_BYTES = 1024 * 1024
 const DEFAULT_MAX_QUEUED_FRAMES = 512
 
+// Single source of truth so writer admission reserves exactly what encoding allocates.
+function encodedFrameByteLength(frame: Uint8Array): number {
+  return LENGTH_BYTES + frame.byteLength
+}
+
 export function encodeBrowserNetworkTunnelStreamFrame(frame: Uint8Array): Uint8Array {
   if (frame.byteLength === 0 || frame.byteLength > DEFAULT_MAX_FRAME_BYTES) {
     throw new Error('browser_tunnel_stream_frame_invalid')
   }
-  const encoded = new Uint8Array(LENGTH_BYTES + frame.byteLength)
+  const encoded = new Uint8Array(encodedFrameByteLength(frame))
   new DataView(encoded.buffer).setUint32(0, frame.byteLength, false)
   encoded.set(frame, LENGTH_BYTES)
   return encoded
@@ -134,16 +139,16 @@ export class BrowserNetworkTunnelStreamFrameWriter {
     if (this.closed) {
       return false
     }
+    if (
+      this.retainedBytes + encodedFrameByteLength(frame) > this.maxQueuedBytes ||
+      this.frames.length + (this.writing ? 1 : 0) >= this.maxQueuedFrames
+    ) {
+      return false
+    }
     let encoded: Uint8Array
     try {
       encoded = encodeBrowserNetworkTunnelStreamFrame(frame)
     } catch {
-      return false
-    }
-    if (
-      this.retainedBytes + encoded.byteLength > this.maxQueuedBytes ||
-      this.frames.length + (this.writing ? 1 : 0) >= this.maxQueuedFrames
-    ) {
       return false
     }
     this.frames.push(encoded)

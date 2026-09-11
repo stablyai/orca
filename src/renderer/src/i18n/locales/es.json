@@ -4409,11 +4409,10 @@
           "92154beb7e": "Nuevo espacio de trabajo",
           "49f62c5665": "Tablero de espacios de trabajo",
           "5c9c7c16aa": "Agregar un proyecto para crear espacios de trabajo",
-          "ca6f729da2": "Nuevo espacio de trabajo ({{value0}})",
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
-          "25a95899c9": "Agregar proyecto",
           "spaces": "Espacios",
-          "views": "Vista de la barra lateral"
+          "views": "Vista de la barra lateral",
+          "addProject": "Agregar proyecto"
         },
         "SidebarNav": {
           "80611a8b10": "Buscar",
@@ -14188,8 +14187,6 @@
           "5651b216c6": "Proyecto desconocido",
           "22b22034bc": "Terminal independiente no disponible en Actividad.",
           "afdc2139a8": "Terminal de Agent cerrada. Abre una nueva terminal en este workspace para continuar.",
-          "compactModeDescription": "Muestra filas de hilo más cortas con títulos de una línea y mensajes de estado de dos líneas.",
-          "unreadOnlyDescription": "Filtra la lista de actividad para mostrar solo hilos con actualizaciones sin leer.",
           "clearCompleted": "Borrar completados",
           "none": "Ninguno",
           "search": "Buscar",
@@ -14207,7 +14204,9 @@
             "idle": "Inactivo",
             "unverifiable": "Sin actualizaciones recientes",
             "permission": "Requiere atención"
-          }
+          },
+          "filtersSection": "Filtros",
+          "viewSection": "Vista"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "Mostrar todos los hosts y proyectos"
@@ -14922,6 +14921,14 @@
       "hide": "Ocultar Agentes",
       "action": "Probar Agentes",
       "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "necesita información",
+      "working": "trabajando",
+      "stopped": "detenido",
+      "finished": "finalizado"
     }
   }
 }

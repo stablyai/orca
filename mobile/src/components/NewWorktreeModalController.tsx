@@ -13,6 +13,7 @@ type Props = {
   hostId?: string
   existingWorktreePaths?: readonly string[]
   existingWorktrees?: readonly { repoId: string; branch: string }[]
+  openExternalUrl: (url: string) => Promise<unknown>
   onVisibleChange?: (visible: boolean) => void
   onRouteVisibleChange: (visible: boolean) => void
   onCreated: (worktreeId: string, name: string) => void
@@ -26,6 +27,7 @@ export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerH
       hostId,
       existingWorktreePaths,
       existingWorktrees,
+      openExternalUrl,
       onVisibleChange,
       onRouteVisibleChange,
       onCreated
@@ -61,6 +63,7 @@ export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerH
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={existingWorktrees}
+        openExternalUrl={openExternalUrl}
         onCreated={onCreated}
         onClose={close}
       />

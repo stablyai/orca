@@ -1,5 +1,9 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import {
+  deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab
+} from '@/lib/agent-launch-prompt-delivery'
 import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { CLIENT_PLATFORM, getWorkspaceIntentName, getWorkspaceSeedName } from '@/lib/new-workspace'
@@ -17,7 +21,10 @@ import type { GitPushTarget } from '../../../shared/worktree/types'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import type { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-direct-agent'
-import { buildDirectWorkItemStartupOpts } from '@/lib/launch-work-item-direct-agent'
+import {
+  buildDirectWorkItemStartupOpts,
+  notifyDirectWorkItemAgentStartTimeout
+} from '@/lib/launch-work-item-direct-agent'
 import { getDirectWorkItemDraftContent } from '@/lib/launch-work-item-direct-draft'
 import {
   resolveDirectPrStartPoint,
@@ -28,13 +35,11 @@ import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { settleDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
-import { deliverDirectWorkItemPrompt } from '@/lib/launch-work-item-direct-prompt-delivery'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/launch-work-item-direct-route-preparation'
-import { resolveAgentLaunchRoute, type AgentLaunchRoutingInput } from '@/lib/agent-launch-routing'
-
-function resolveDirectWorkItemRoute(input: AgentLaunchRoutingInput) {
-  return resolveAgentLaunchRoute(input)
-}
+import {
+  planAgentSessionLaunch,
+  type AgentSessionLaunchPlan
+} from '@/lib/agent-session-launch-plan'
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -159,7 +164,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let startupPlan = null as ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
   let effectiveAgent: TuiAgent | null = null
   let draftLaunchedNatively = false
-  let structuredLaunch = false
+  let plan: AgentSessionLaunchPlan | null = null
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
   let startupPlanFailed = false
   try {
@@ -197,6 +202,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     const launchPreparation = await prepareDirectWorkItemAgentLaunch({
       worktreeId,
       worktreePath,
+      repoId,
       agentOverride,
       agentArgs,
       repoConnectionId,
@@ -207,7 +213,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       promptDelivery,
       launchPlatform: args.launchPlatform,
       repoProjectRuntime,
-      routeResolver: resolveDirectWorkItemRoute
+      planLaunch: planAgentSessionLaunch
     })
     if (launchPreparation.unavailable) {
       activateAndRevealWorktree(worktreeId, {
@@ -221,13 +227,13 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     startupPlan = launchPreparation.startupPlan
     draftLaunchedNatively = launchPreparation.draftLaunchedNatively
     startupPlanFailed = launchPreparation.startupPlanFailed
-    structuredLaunch = launchPreparation.structuredLaunch
+    plan = launchPreparation.plan
 
     const activation = activateAndRevealWorktree(worktreeId, {
       sidebarRevealBehavior: 'auto',
       setup: result.setup,
       defaultTabs: result.defaultTabs,
-      ...(structuredLaunch
+      ...(launchPreparation.structuredLaunch
         ? { providesInitialSurface: true }
         : buildDirectWorkItemStartupOpts(
             effectiveAgent,
@@ -252,18 +258,17 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   store.setSidebarOpen(true)
 
   const structuredResult = await settleDirectWorkItemStructuredLaunch({
-    structuredLaunch,
-    agent: effectiveAgent,
+    plan,
     worktreeId,
     workspacePath: worktreePath,
     connectionId: repoConnectionId,
-    draftContent,
-    promptDelivery,
     primaryTabId,
     startupPlan,
     launchSource
   })
-  if (structuredResult.visibilityUnknown) {
+  if (structuredResult.visibilityUnknown || structuredResult.failed) {
+    // Why: callers hang irreversible follow-up work off a `true` here, so a structured launch that
+    // opened no surface must not report the workspace as started.
     return false
   }
   if (structuredResult.completed) {
@@ -276,13 +281,31 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
 
-  deliverDirectWorkItemPrompt({
-    primaryTabId,
-    effectiveAgent,
-    draftContent,
-    promptDelivery,
-    startupPlan,
-    draftLaunchedNatively
-  })
+  if (primaryTabId && effectiveAgent && promptDelivery === 'draft') {
+    // Why: the draft rides in on argv or the startup payload, so no paste runs
+    // below; mirror it into chat the way the new-tab launcher does.
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: primaryTabId,
+      agent: effectiveAgent,
+      text: draftContent
+    })
+  }
+  if (
+    primaryTabId &&
+    startupPlan &&
+    !draftLaunchedNatively &&
+    !(promptDelivery === 'draft' && startupPlan.draftPrompt)
+  ) {
+    const submit = promptDelivery === 'submit-after-ready'
+    const agent = startupPlan.agent
+    void deliverLaunchPromptToAgentTab({
+      tabId: primaryTabId,
+      agent,
+      content: draftContent,
+      submit,
+      forcePaste: submit,
+      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
+    })
+  }
   return true
 }

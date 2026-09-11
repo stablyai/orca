@@ -2,10 +2,7 @@ import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
-import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
-import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
-import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-ask'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatFileSearch } from './use-mobile-native-chat-file-search'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
@@ -14,10 +11,10 @@ import { useMobileNativeChatSessionOptionController } from './use-mobile-native-
 import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
-import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
+import { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -123,14 +120,13 @@ export function useMobileNativeChatController(args: {
     transcriptSettled: nativeChatSession.status === 'ready'
   })
 
-  const nativeChatAgentWorking = activeChatStructured
-    ? structuredNativeChat.isWorking
-    : activeChatResolution != null && activeTabAgentWorking
   // Deliberately not gated on the chat view being visible: the streaming gate
   // has to tell "hidden mid-turn" from "the turn ended".
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeTabAgentWorking
+  const nativeChatAgentWorking =
+    nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
   // Throttle the streaming bubble: OpenCode emits a status frame per streamed
   // part, and each one re-renders and re-parses the whole accumulated markdown.
   const nativeChatStreamingText = useThrottledLatestValue(
@@ -141,7 +137,7 @@ export function useMobileNativeChatController(args: {
   )
   const {
     permission: legacyNativeChatPermission,
-    question: legacyNativeChatQuestion,
+    question: legacyQuestion,
     detectedAsk: nativeChatDetectedAsk,
     ask: nativeChatAskPrompt
   } = useMobileNativeChatPrompts({
@@ -172,42 +168,19 @@ export function useMobileNativeChatController(args: {
     ? client != null && activeChatSessionId != null && connState === 'connected'
     : nativeChatInputLeaseReady && connState === 'connected'
 
-  const { answerAsk: handleNativeChatAnswerAsk, cancelPending: cancelNativeChatAnswer } =
-    useMobileNativeChatAnswerSend({
-      client,
-      enabled: inputSendable && !activeChatStructured,
-      handleRef: activeHandleRef,
-      deviceTokenRef,
-      agentRef: activeChatAgentRef,
-      sessionId: activeChatSessionId,
-      streamIdentity,
-      onSendError
-    })
-
-  const handleNativeChatCancelAsk = useMobileNativeChatCancelAsk({
+  const {
+    answerAsk: handleNativeChatAnswerAsk,
+    cancelAsk: handleNativeChatCancelAsk,
+    respondPermission: legacyHandleNativeChatRespondPermission,
+    stop: handleNativeChatStop
+  } = useMobileBridgeChatPromptWrites({
     client,
     enabled: inputSendable && !activeChatStructured,
     handleRef: activeHandleRef,
     deviceTokenRef,
-    cancelPending: cancelNativeChatAnswer,
-    onSendError
-  })
-
-  const legacyHandleNativeChatRespondPermission = useMobileNativeChatPermissionSend({
-    client,
-    enabled: inputSendable && !activeChatStructured,
-    handleRef: activeHandleRef,
-    deviceTokenRef,
-    onSendError
-  })
-
-  const handleNativeChatStop = useMobileNativeChatStop({
-    client,
-    enabled: inputSendable && !activeChatStructured,
-    handleRef: activeHandleRef,
-    deviceTokenRef,
+    agentRef: activeChatAgentRef,
+    sessionId: activeChatSessionId,
     streamIdentity,
-    cancelPending: cancelNativeChatAnswer,
     onSendError
   })
 
@@ -243,6 +216,7 @@ export function useMobileNativeChatController(args: {
   })
 
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
+    agent: activeChatResolution?.agent === 'claude' ? 'claude' : 'codex',
     sendStructured: structuredNativeChat.sendWithOutcome,
     captureSendOrigin,
     clearDraftForSend,
@@ -299,15 +273,19 @@ export function useMobileNativeChatController(args: {
     /** Structured lane: drives the per-turn status row and live tool progress. */
     nativeChatStructured: activeChatStructured,
     nativeChatAgentWorking,
+    nativeChatTurnIndicator: activeChatStructured ? structuredNativeChat.turnIndicator : null,
+    nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
+    nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
+    nativeChatCanStop: activeChatStructured
+      ? structuredNativeChat.turnId !== null
+      : nativeChatAgentWorking,
     nativeChatStreamingText,
     nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,
     nativeChatPermission: activeChatStructured
       ? structuredNativeChat.permission
       : legacyNativeChatPermission,
-    nativeChatQuestion: activeChatStructured
-      ? structuredNativeChat.question
-      : legacyNativeChatQuestion,
+    nativeChatQuestion: activeChatStructured ? structuredNativeChat.question : legacyQuestion,
     nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
     nativeChatAskKey,
     dismissNativeChatAsk,
