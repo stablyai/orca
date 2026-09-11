@@ -20,6 +20,7 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getConnectionId } from '@/lib/connection-context'
+import { toast } from 'sonner'
 
 export function ensureWebRuntimeWorktreeTerminalAfterWake(
   worktreeId: string,
@@ -109,7 +110,15 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         : {}),
     activate: opts?.activate !== false,
     selectWorktree: false
-  }).finally(() => {
-    endWebRuntimeWakeTerminalRespawn(worktreeId)
   })
+    .then((outcome) => {
+      if (outcome.status === 'failed') {
+        toast.error(outcome.message, {
+          id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
+        })
+      }
+    })
+    .finally(() => {
+      endWebRuntimeWakeTerminalRespawn(worktreeId)
+    })
 }
