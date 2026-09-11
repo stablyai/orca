@@ -71,9 +71,11 @@ async function rendererDetails(
   expectedSiblingCount: number
 ): Promise<Record<string, unknown>> {
   return vi.waitFor(async () => {
-    const [report] = await store.listRecent()
+    // By source, not position: a recorded child report would otherwise head the list and
+    // make this poll time out instead of fail.
+    const report = (await store.listRecent()).find((candidate) => candidate.source === 'renderer')
     expect(report?.details.siblingProcessDeathCount).toBe(expectedSiblingCount)
-    return report.details
+    return report!.details
   })
 }
 
