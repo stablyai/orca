@@ -240,7 +240,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "dompurify": "3.4.14",
-    "electron": "43.6.0",
+    "electron": "43.7.0",
     "electron-builder": "^26.15.3",
     "electron-builder-squirrel-windows": "^26.15.3",
     "electron-vite": "^5.0.0",
