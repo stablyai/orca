@@ -38,6 +38,8 @@
     "../src/main/persistence/applying-settings/ui-selection-normalization.ts",
     "../src/main/persistence/applying-settings/ui-interaction-merge.ts",
     "../src/main/protected-secret-persistence.ts",
+    "../src/main/daemon/rpc-timeouts.ts",
+    "../src/main/startup/first-window-startup-services.ts",
     "../src/main/startup/serve-desktop-activation.ts",
     "../src/main/startup/serve-mode-argv.ts",
     "../src/main/startup/single-instance-lock.ts",

@@ -77,6 +77,10 @@ export function launchAiVaultSessionInNewTab(args: {
     ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
     ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
     ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
+    // Why unconditional: every launch through here re-enters a transcript the vault
+    // scanner found on disk, including agents with no provider-session model whose
+    // resume rides the command alone.
+    resumesAgentSession: true,
     telemetry: {
       agent_kind: tuiAgentToAgentKind(args.agent),
       launch_source: 'sidebar',

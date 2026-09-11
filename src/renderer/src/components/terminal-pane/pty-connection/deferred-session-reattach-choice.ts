@@ -13,6 +13,7 @@ import {
   canRestorePairedParkedTerminal,
   isSessionOwnedByWorktree
 } from './paired-parked-terminal-restore'
+import { armSpawnSettlementWatchdog } from './unbound-pane-spawn-recovery'
 import { startDeferredSessionReattach } from './deferred-session-reattach-connect'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -155,6 +156,10 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
       }
       recordPtyConnectDiagnostic(`pane=${session.pane.id} -> PENDING SPAWN`)
       session.armDirectSshPaneRetryTimeout(pendingSpawn, session.directSshRetryAttempt)
+      // Why re-arm: a spawn whose arming pane was disposed before it could arm has
+      // no clock at all, and this pane would inherit the freeze. Already-armed
+      // spawns no-op, and the resume exclusion rides the promise, not this call.
+      armSpawnSettlementWatchdog(session, pendingSpawn)
       void pendingSpawn
         .then((spawnedPtyId) => {
           if (session.disposed) {

@@ -17,6 +17,11 @@ export type WorktreeStartupPayload = {
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
+  /** True when this startup re-enters an EXISTING provider transcript. Set by the
+   *  producer, because the resume can be carried by the command alone: an AI-vault
+   *  resume for an agent Orca has no session model for emits `--resume <id>` with no
+   *  `resumeProviderSession`, so inferring it from that field alone misses them. */
+  resumesAgentSession?: boolean
   launchToken?: string
   launchAgent?: TuiAgent
   draftPrompt?: string

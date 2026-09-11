@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
-import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'
+import { observeSpawnSettlement } from './unbound-pane-spawn-recovery'
 import { STARTUP_CWD_FALLBACK_NOTICE } from './startup-cwd-fallback-notice'
 import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pty-connect-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
@@ -317,20 +317,18 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         }
       })
     session.armDirectSshPaneRetryTimeout(trackedPromise, session.directSshRetryAttempt)
-    void trackedPromise.then((spawnedPtyId) => {
-      if (spawnedPtyId) {
-        return
-      }
-      queueMicrotask(() => {
-        if (
-          session.disposed ||
-          session.transport.getPtyId() ||
-          pendingSpawnByPaneKey.has(session.pendingSpawnKey)
-        ) {
-          return
-        }
-        settleSpawnThatLeftPaneUnbound(session)
-      })
+    observeSpawnSettlement(session, trackedPromise, {
+      // Why all three: spawnIpcPty falls back to the transport options for
+      // `resumeProviderSession`, so a pane whose startup carries a provider session
+      // (sidebar resume of a sleeping agent) re-issues --resume on EVERY fresh spawn
+      // with no cold-restore override to mark it; and a vault resume for an agent
+      // Orca has no session model for carries the resume in the command alone, so
+      // only the producer's own flag identifies it.
+      resumesProviderSession: Boolean(
+        coldRestoreOverride ??
+        session.paneStartup?.resumesAgentSession ??
+        session.transportOptions?.resumeProviderSession
+      )
     })
     // Why: split panes in the same tab can spawn concurrently. Key by pane
     // as well as tab so a remount cannot attach to a sibling setup pane's PTY.

@@ -105,6 +105,7 @@ export function launchSleepingAgentSession(
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: record.providerSession,
+      resumesAgentSession: true,
       launchAgent: record.agent,
       ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
       ...(startupPlan.startupCommandDelivery

@@ -2,6 +2,7 @@ import type { Socket } from 'node:net'
 import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { encodeNdjson } from './ndjson'
+import { CONNECTION_ATTEMPT_WAIT_MS, CONNECT_TIMEOUT_MS, REQUEST_TIMEOUT_MS } from './rpc-timeouts'
 import {
   PROTOCOL_VERSION,
   NOTIFY_PREFIX,
@@ -25,9 +26,6 @@ import {
 import { writeNotifyWithSettlement } from './daemon-client-notify-settlement'
 import { requestDaemonRpc } from './daemon-client-rpc-request'
 
-const CONNECT_TIMEOUT_MS = 5000
-const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
-const REQUEST_TIMEOUT_MS = 30000
 const NOTIFY_SETTLEMENT_TIMEOUT_MS = 5000
 
 export type DaemonClientOptions = {

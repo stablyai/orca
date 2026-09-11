@@ -34,6 +34,10 @@ export type TerminalPaneRecoveryReason =
   // binding. pty:data for the old id then lands in the pre-handler buffer, which
   // ACKs it — main's delivery health stays green while the pane shows nothing.
   | 'spawn-left-pane-unbound'
+  // Same end state, reached without the spawn ever settling: pty:spawn is an
+  // untimed invoke, so a hung main handler starves both the pane-key unpin and
+  // the settled-spawn recovery above. Kept distinct for field triage.
+  | 'spawn-never-settled'
 
 type RecoveryRequest = {
   tabId: string

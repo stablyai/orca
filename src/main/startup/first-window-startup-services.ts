@@ -22,6 +22,9 @@ export const FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS = 12_000
 // them lose their daemon sessions permanently (#5232). The PTY gate therefore
 // waits for the daemon attempt itself and only fail-opens at a hard cap that
 // exists solely as a deadlock backstop.
+// The renderer's spawn-settlement watchdog must outlast this, and its budget test
+// imports it from here — so this file is typechecked under the web config too and
+// must stay import-free.
 export const LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS = 60_000
 
 function startService(
