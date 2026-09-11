@@ -4,6 +4,7 @@ import {
   nativeChatTurnHasResponse,
   reduceNativeChatTurnTiming,
   selectNativeChatTurnStatuses,
+  type NativeChatSettledTurns,
   type NativeChatTurnStatus,
   type NativeChatTurnTimingByTurn
 } from '../../../../shared/native-chat-turn-status'
@@ -14,12 +15,15 @@ export function useNativeChatTurnStatus({
   messages,
   latestUserIndex,
   isWorking,
-  workingStartedAt
+  workingStartedAt,
+  settledTurns
 }: {
   messages: readonly NativeChatMessage[]
   latestUserIndex: number
   isWorking: boolean
   workingStartedAt?: number | null
+  /** Host-recorded durations; they outrank whatever this client observed. */
+  settledTurns?: NativeChatSettledTurns | null
 }): {
   active: NativeChatTurnStatus | null
   completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
@@ -48,6 +52,7 @@ export function useNativeChatTurnStatus({
     activeTurnKey,
     isWorking,
     workingStartedAt,
-    hasCurrentTurnResponse
+    hasCurrentTurnResponse,
+    settledByTurn: settledTurns ?? undefined
   })
 }

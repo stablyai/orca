@@ -3,10 +3,7 @@ import {
   type OrchestrationMutationRequestShowResult
 } from '../../../../../../shared/orchestration-mutation-request'
 import { defineMethod, type RpcMethod } from '../../../core'
-import { requiredString } from '../../../schemas'
-import { z } from 'zod'
-
-const RequestShowParams = z.object({ request: requiredString('Missing --request') })
+import { RequestShowParams } from '../../../../../../shared/rpc-contract/orchestration-runs-mutation-request-show-params'
 
 export const ORCHESTRATION_MUTATION_REQUEST_METHODS: RpcMethod[] = [
   defineMethod({

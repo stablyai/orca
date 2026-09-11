@@ -12,7 +12,10 @@ import {
   type StructuredAgentSessionStatusSubscriber
 } from '../../../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
@@ -97,6 +100,7 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
         {
           journal: {
             isReadOnly: false,
+            cursor: () => ({ epoch: 'epoch-status', sequence: 2 }),
             lastActivityAt: () => 2,
             snapshot: () => ({ items: STATUS_ITEMS })
           } as unknown as AgentSessionJournal,
@@ -140,7 +144,26 @@ export function hostStub(): StructuredAgentSessionHost {
       }
     })),
     rewind: vi.fn(async () => ({ ok: true, value: { itemId: 'chosen', epoch: 'next' } })),
-    send: vi.fn(async () => ({ ok: true, replayed: false })),
+    send: vi.fn(async () => ({
+      ok: true,
+      replayed: false,
+      fence: 1,
+      cursor: { epoch: 'epoch-a', sequence: 1 },
+      value: {
+        clientMessageId: OPERATION,
+        submission: {
+          clientMessageId: OPERATION,
+          fence: 1,
+          payloadFingerprint: FINGERPRINT,
+          dispatchState: 'accepted',
+          providerItemId: 'provider-1',
+          reason: null,
+          submittedAt: 1,
+          resolvedAt: 2
+        }
+      }
+    })),
+    waitForSendSettlement: vi.fn(),
     cancel: vi.fn(async () => ({ ok: true, replayed: false })),
     close: vi.fn(async () => undefined),
     revealSession: vi.fn(async () => ({
@@ -236,6 +259,7 @@ export async function call(
     clientId?: string
     clientKind?: 'mobile' | 'runtime'
     clientCapabilities?: string[]
+    signal?: AbortSignal
   },
   runtimeOverrides: Record<string, unknown> = {}
 ): Promise<RpcResponse> {
@@ -254,11 +278,17 @@ export async function call(
 
 export const STRUCTURED_CLIENT = {
   clientKind: 'runtime' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
+  ]
 }
 export const STRUCTURED_MOBILE_CLIENT = {
   clientKind: 'mobile' as const,
-  clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
+  ]
 }
 
 /** Every suite wants the same lifecycle: a fresh stub per test, no host left installed. */

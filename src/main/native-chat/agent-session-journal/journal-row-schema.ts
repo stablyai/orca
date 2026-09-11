@@ -74,7 +74,7 @@ export type JournalSubmissionRow = JournalRowBase & {
 export type JournalDispatchRow = JournalRowBase & {
   kind: 'dispatch'
   clientMessageId: string
-  state: Exclude<AgentJournalDispatchState, 'pending'>
+  state: AgentJournalDispatchState
   /** Provider item identity adopted on accept. */
   providerItemId: string | null
   reason: string | null

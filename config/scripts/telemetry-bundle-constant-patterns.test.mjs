@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { BUILD_IDENTITY_RE, WRITE_KEY_RE } from './telemetry-bundle-constant-patterns.mjs'
+import {
+  BUILD_IDENTITY_RE,
+  MINIFIED_TELEMETRY_RE,
+  WRITE_KEY_RE
+} from './telemetry-bundle-constant-patterns.mjs'
 
 describe('telemetry bundle constant patterns', () => {
   it.each(['const', 'let', 'var'])('accepts %s declarations', (declaration) => {
@@ -12,5 +16,10 @@ describe('telemetry bundle constant patterns', () => {
     expect('const BUILD_IDENTITY = "dev"').not.toMatch(BUILD_IDENTITY_RE)
     expect('const WRITE_KEY = null').not.toMatch(WRITE_KEY_RE)
     expect('const WRITE_KEY = "example-key"').not.toMatch(WRITE_KEY_RE)
+  })
+
+  it('accepts minified adjacent declarations', () => {
+    const bundle = 'var dde=`stable`,fde=`phc_example-key_123`,pde=(dde===`stable`)'
+    expect(bundle).toMatch(MINIFIED_TELEMETRY_RE)
   })
 })

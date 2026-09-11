@@ -4393,7 +4393,6 @@
           "a30e34eb5c": "ワークスペースボードを閉じる",
           "spaces": "スペース",
           "views": "サイドバービュー",
-          "createMenu": "作成",
           "addProject": "プロジェクトを追加"
         },
         "SidebarNav": {
@@ -14957,6 +14956,14 @@
       "hide": "Agent を隠す",
       "action": "Agent を試す",
       "hiddenToast": "Agent タブを非表示にしました。設定 → 実験的機能で再度有効にできます。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "入力待ち",
+      "working": "処理中",
+      "stopped": "停止",
+      "finished": "完了"
     }
   }
 }

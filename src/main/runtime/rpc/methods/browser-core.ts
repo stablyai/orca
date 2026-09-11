@@ -1,5 +1,5 @@
 import { defineMethod, type RpcMethod } from '../core'
-import { BrowserTarget, requiredString } from '../schemas'
+import { BrowserTarget } from '../schemas'
 import {
   Check,
   Drag,
@@ -33,10 +33,7 @@ import {
 } from './browser-schemas'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-schema'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
-
-const CertificateProceed = BrowserTarget.extend({
-  challengeId: requiredString('Missing required challengeId')
-})
+import { CertificateProceed } from '../../../../shared/rpc-contract/browser-core-params'
 
 export const BROWSER_CORE_METHODS: RpcMethod[] = [
   defineMethod({

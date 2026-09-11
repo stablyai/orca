@@ -23,7 +23,11 @@ import {
   normalizePreviewText,
   timestampMs
 } from './session-scanner-values'
-import { NO_TRANSCRIPT_MESSAGES, type TranscriptMessageSink } from './session-transcript-consumers'
+import {
+  NO_TRANSCRIPT_MESSAGES,
+  type TranscriptMessageSink,
+  type TranscriptSessionIdentity
+} from './session-transcript-consumers'
 import {
   boundedText,
   transcriptMessageRole,
@@ -64,6 +68,28 @@ export function createAccumulator(args: {
   }
 }
 
+/**
+ * The session identity a fold holds right now. Null until it has an id, which
+ * every supported format writes in the opening lines of the transcript.
+ */
+export function accumulatorSessionIdentity(
+  accumulator: SessionAccumulator
+): TranscriptSessionIdentity | null {
+  const sessionId = accumulator.sessionId.trim()
+  if (!sessionId) {
+    return null
+  }
+  return {
+    sessionId,
+    cwd: accumulator.cwd,
+    // The generated fallback is `finalizeSession`'s, not this one's: a title
+    // that is still absent mid-read is better said to be absent.
+    title: accumulator.title ?? accumulator.fallbackTitle,
+    createdAt: accumulator.createdAt,
+    updatedAt: accumulator.updatedAt
+  }
+}
+
 export function cloneSessionAccumulator(accumulator: SessionAccumulator): SessionAccumulator {
   return { ...accumulator, previewMessages: [...accumulator.previewMessages] }
 }
@@ -77,6 +103,7 @@ export function accumulatorFoldResumeState(
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => consumeRecordLine(accumulator, line),
+    identity: () => accumulatorSessionIdentity(accumulator),
     clone: () =>
       accumulatorFoldResumeState(cloneSessionAccumulator(accumulator), consumeRecordLine),
     touchFile: (file) => {

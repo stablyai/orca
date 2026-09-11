@@ -25,6 +25,9 @@ export type RuntimeWorktreeAgentRow = {
   stateStartedAt: number
   updatedAt: number
   restoredUnconfirmed?: boolean
+  /** The structured session host still runs this row's provider child, so it is fresh regardless
+   *  of age. Optional on the wire: old hosts never send it. */
+  structuredHostOwned?: true
 }
 
 export type RuntimeWorktreePsSummary = {

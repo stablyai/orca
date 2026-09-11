@@ -27,6 +27,8 @@ export type StructuredAgentSessionAppendOptions = {
   coalescingKey?: string
   /** Marks a critical lifecycle operation for lifecycle barriers and diagnostics. */
   lifecycle?: boolean
+  /** Host clock to stamp on the row instead of its append time. */
+  observedAt?: number
 }
 
 export type StructuredAgentSessionEventSink = {
@@ -162,7 +164,11 @@ export function createDeferredStructuredAgentSessionEventSink(
           {
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
-            run: (bound) => bound.journal.appendItem(identity, body, { fence: bound.fence })
+            run: (bound) =>
+              bound.journal.appendItem(identity, body, {
+                fence: bound.fence,
+                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
+              })
           },
           options
         )
@@ -172,7 +178,11 @@ export function createDeferredStructuredAgentSessionEventSink(
           {
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
-            run: (bound) => bound.journal.appendItem(identity, body, { fence: bound.fence })
+            run: (bound) =>
+              bound.journal.appendItem(identity, body, {
+                fence: bound.fence,
+                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
+              })
           },
           options
         ),

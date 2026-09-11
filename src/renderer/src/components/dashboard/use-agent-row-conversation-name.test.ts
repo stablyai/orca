@@ -197,6 +197,24 @@ describe('useAgentRowConversationName', () => {
       )
     })
 
+    it('gives a provider session title only to the pane that owns that session', () => {
+      setSplitStore('\u2733 Linear work log')
+      storeState.current.tabsByWorktree['wt-1'][0] = {
+        id: 'tab-1',
+        worktreeId: 'wt-1',
+        customTitle: null,
+        title: '\u2733 Linear work log',
+        aiVaultTitle: { agent: 'claude', sessionId: 'session-a', title: 'Provider title' }
+      }
+      const sessionA = splitRow(LEAF_A, '\u2733 Linear work log')
+      sessionA.entry.providerSession = { key: 'session_id', id: 'session-a' }
+      const sessionB = splitRow(LEAF_B, '\u2733 Linear work log')
+      sessionB.entry.providerSession = { key: 'session_id', id: 'session-b' }
+
+      expect(useAgentRowConversationName(sessionA)).toBe('Provider title')
+      expect(useAgentRowConversationName(sessionB)).toBe('Redis cache strategy')
+    })
+
     it('does not rename the sibling row when the other pane is clicked', () => {
       // Clicking pane B re-syncs the tab title to B's; both rows must be unmoved.
       setSplitStore('\u2733 Redis cache strategy')

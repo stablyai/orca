@@ -4398,7 +4398,6 @@
           "a30e34eb5c": "워크스페이스 보드 닫기",
           "spaces": "스페이스",
           "views": "사이드바 보기",
-          "createMenu": "생성",
           "addProject": "프로젝트 추가"
         },
         "SidebarNav": {
@@ -15096,6 +15095,14 @@
       "hide": "에이전트 숨기기",
       "action": "에이전트 사용해 보기",
       "hiddenToast": "에이전트 탭이 숨겨졌습니다. 설정 → 실험 기능에서 다시 활성화하세요."
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "입력 필요",
+      "working": "작업 중",
+      "stopped": "중지됨",
+      "finished": "완료됨"
     }
   }
 }

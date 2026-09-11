@@ -6,6 +6,7 @@ import type { IPtyProvider } from '../providers/types'
 import type { RuntimeTerminalAgentStatusEvent } from './runtime-terminal-contracts'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import type { ObservedAgentStatusPaneIdentity } from '../ipc/agent-status-ipc-boundary'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
 import type {
@@ -49,6 +50,9 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       // terminal output. worktree.ps reads this at query time so mobile shows the
       // same inline agent rows the desktop sidebar does — same source, 1:1.
       getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
+      /** Where structured (native chat) sessions publish into that same store, so the snapshot
+       *  above lists them like every other agent. */
+      structuredAgentStatusSink?: StructuredAgentSessionStatusSink
       /** The identity the runtime resolved for a pane as each status arrived. Without it the
        *  fleet path reminted cached rows against whatever the pane owns now. */
       readObservedAgentStatusPaneIdentity?: (paneKey: string) => ObservedAgentStatusPaneIdentity
@@ -188,6 +192,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       this.stats = stats
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
+    this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))
     this.getAgentProviderSessionSnapshotFn =

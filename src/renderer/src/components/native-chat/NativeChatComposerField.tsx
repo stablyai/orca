@@ -166,7 +166,7 @@ export function NativeChatComposerField({
       {/* Extra bottom padding keeps the input box off the window rim. */}
       <div className="px-3 pt-2 pb-4 sm:px-4">
         <div className="relative mx-auto w-full max-w-4xl">
-          {autocomplete.mode === 'slash' || autocomplete.mode === 'skill' ? (
+          {autocomplete.mode === 'slash' ? (
             <NativeChatPickerMenu
               autocomplete={autocomplete}
               activeIndex={activeSuggestion}
@@ -239,15 +239,10 @@ export function NativeChatComposerField({
               }}
               onPasteCapture={onPaste}
               onSelect={onTextareaSelect}
-              aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}
-              aria-controls={
-                autocomplete.mode === 'slash' || autocomplete.mode === 'skill'
-                  ? pickerListboxId
-                  : undefined
-              }
+              aria-expanded={autocomplete.mode === 'slash'}
+              aria-controls={autocomplete.mode === 'slash' ? pickerListboxId : undefined}
               aria-activedescendant={
-                (autocomplete.mode === 'slash' || autocomplete.mode === 'skill') &&
-                autocomplete.items.length > 0
+                autocomplete.mode === 'slash' && autocomplete.items.length > 0
                   ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
                   : undefined
               }

@@ -8,6 +8,7 @@ import { makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
 import { useTerminalWorkspaceFoundation } from './use-terminal-workspace-foundation'
 import { applyTerminalColdActivation } from './terminal-cold-activation'
 import { collectTerminalParkingPassCandidates } from './terminal-parking-pass-candidates'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { WorkspaceSurface } from './workspace-surface-projection'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
@@ -147,6 +148,84 @@ describe('workspace surface ids', () => {
     ])
     expect(hiddenSince.has('repo::/stale')).toBe(false)
   })
+  it('keeps the surface projection stable across a git-worktree switch', () => {
+    const repo = makeRepo()
+    const worktrees = Array.from({ length: 423 }, (_, index) =>
+      makeWorktree(`repo-1::/worktree-${index}`, `Workspace ${index}`)
+    )
+    useAppStore.setState({
+      worktreesByRepo: { [repo.id]: worktrees },
+      activeWorktreeId: worktrees[0].id
+    })
+
+    const { result } = renderHook(() => useTerminalWorkspaceFoundation())
+    const surfaces = result.current.workspaceSurfaces
+    const ids = result.current.workspaceSurfaceIds
+    const idSet = result.current.workspaceSurfaceIdSet
+    expect(surfaces).toHaveLength(423)
+
+    // Pre-fix every switch re-ran the projection (423 surface objects) and re-derived
+    // the id array, because the active id was a dep even with no folder host to tie-break.
+    for (let index = 1; index < 10; index += 1) {
+      act(() => {
+        useAppStore.setState({ activeWorktreeId: worktrees[index].id })
+      })
+      expect(result.current.renderedActiveWorktreeId).toBe(worktrees[index].id)
+      expect(result.current.workspaceSurfaces).toBe(surfaces)
+      expect(result.current.workspaceSurfaceIds).toBe(ids)
+      expect(result.current.workspaceSurfaceIdSet).toBe(idSet)
+    }
+  })
+
+  it('still re-projects when the active folder workspace owns the collision tie-break', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const localFolder: FolderWorkspace = {
+      id: 'folder-shared',
+      projectGroupId: 'group-shared',
+      name: 'orca',
+      folderPath: '/work/orca-local',
+      connectionId: null,
+      executionHostId: 'local',
+      linkedTask: null,
+      comment: '',
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 1,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const runtimeFolder: FolderWorkspace = {
+      ...localFolder,
+      folderPath: '/remote/orca',
+      executionHostId: 'runtime:env-1'
+    }
+    useAppStore.setState({
+      folderWorkspaces: [localFolder, runtimeFolder],
+      activeWorktreeId: 'folder:folder-shared',
+      activeWorkspaceExecutionHostId: 'runtime:env-1'
+    })
+
+    const { result } = renderHook(() => useTerminalWorkspaceFoundation())
+    expect(result.current.workspaceSurfaces).toEqual([
+      { id: 'folder:folder-shared', path: '/remote/orca' }
+    ])
+
+    // Leaving the folder workspace drops the tie-break, so the projection must re-run
+    // and fall back to first-wins rather than mount the previous host's path.
+    act(() => {
+      useAppStore.setState({
+        activeWorktreeId: 'repo-1::/worktree-0',
+        activeWorkspaceExecutionHostId: null
+      })
+    })
+    expect(result.current.workspaceSurfaces).toEqual([
+      { id: 'folder:folder-shared', path: '/work/orca-local' }
+    ])
+    warn.mockRestore()
+  })
+
   it('stops idle worktree writes from re-firing surface-keyed terminal effects', () => {
     const repo = makeRepo()
     const worktrees = Array.from({ length: 20 }, (_, index) =>

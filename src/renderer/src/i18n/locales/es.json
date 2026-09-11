@@ -4412,7 +4412,6 @@
           "a30e34eb5c": "Cerrar tablero del espacio de trabajo",
           "spaces": "Espacios",
           "views": "Vista de la barra lateral",
-          "createMenu": "Crear",
           "addProject": "Agregar proyecto"
         },
         "SidebarNav": {
@@ -14922,6 +14921,14 @@
       "hide": "Ocultar Agentes",
       "action": "Probar Agentes",
       "hiddenToast": "La pestaña Agentes está oculta. Vuelve a activarla en Configuración → Experimental."
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "necesita información",
+      "working": "trabajando",
+      "stopped": "detenido",
+      "finished": "finalizado"
     }
   }
 }

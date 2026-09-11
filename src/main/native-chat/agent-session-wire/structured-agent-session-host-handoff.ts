@@ -86,6 +86,13 @@ export function createStructuredAgentSessionHostHandoff(
       host.publishStatus?.(sessionId)
       try {
         await host.flush(sessionId)
+        const session = host.session(sessionId)
+        await session.journal.markPendingSubmissionsUnknown(
+          session.fence,
+          'provider_exited_before_acknowledgement'
+        )
+        host.subscribers.publish(sessionId, session.journal)
+        host.publishStatus?.(sessionId)
         host.eventSink(sessionId).unbind()
         return { state: 'stopped' }
       } catch (error) {

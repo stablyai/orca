@@ -11,7 +11,10 @@ import {
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  hasUnansweredStructuredAgentSessionDispatch
+} from '../../../src/shared/structured-agent-session-projection'
 import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
@@ -31,25 +34,27 @@ import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 
 type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
 
-type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> & {
-  session: MobileNativeChatSession
-  isWorking: boolean
-  turnId: string | null
-  sendWithOutcome: (
-    text: string,
-    images?: string[],
-    deadline?: number,
-    attachments?: readonly StructuredMobileAttachment[]
-  ) => Promise<MobileNativeChatSendOutcome>
-  cancel: () => void
-  permission: MobileChatPermission | null
-  question: MobileChatQuestion | null
-  respondPermission: (optionId: string) => Promise<boolean>
-  respondQuestion: (answer: string) => Promise<boolean>
-}
+type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
+  ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
+    session: MobileNativeChatSession
+    isWorking: boolean
+    turnId: string | null
+    sendWithOutcome: (
+      text: string,
+      images?: string[],
+      deadline?: number,
+      attachments?: readonly StructuredMobileAttachment[]
+    ) => Promise<MobileNativeChatSendOutcome>
+    cancel: () => void
+    permission: MobileChatPermission | null
+    question: MobileChatQuestion | null
+    respondPermission: (optionId: string) => Promise<boolean>
+    respondQuestion: (answer: string) => Promise<boolean>
+  }
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -116,15 +121,7 @@ export function useMobileStructuredAgentSession(args: {
     [client, enabled, onSendError, sessionId, sessionKey]
   )
 
-  const {
-    conversationCommands,
-    optionPickerRequest,
-    invokeStructuredOption,
-    optionSnapshot,
-    optionSurface,
-    pendingOptionId,
-    setStructuredOption
-  } = useMobileStructuredAgentOptions({
+  const options = useMobileStructuredAgentOptions({
     agent,
     client,
     sessionId,
@@ -132,6 +129,8 @@ export function useMobileStructuredAgentSession(args: {
     fence: state.fence,
     mutate
   })
+  const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
+    options
 
   const sendWithOutcome = useCallback(
     async (
@@ -269,6 +268,8 @@ export function useMobileStructuredAgentSession(args: {
     () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
     [state.items, state.submissions]
   )
+  const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
   const status = state.status === 'idle' ? 'idle' : state.status
   const approvalPrompt = useMemo(
     () => state.items.find(pendingStructuredApproval) ?? null,
@@ -280,8 +281,7 @@ export function useMobileStructuredAgentSession(args: {
   )
 
   return {
-    conversationCommands,
-    optionPickerRequest,
+    ...options,
     session: {
       messages,
       status,
@@ -291,18 +291,17 @@ export function useMobileStructuredAgentSession(args: {
       loadingEarlier: loadingOlder,
       loadEarlier
     },
-    isWorking: activeStructuredAgentSessionTurnId(state.items) !== null,
-    turnId: activeStructuredAgentSessionTurnId(state.items),
+    // A dispatch the provider has not answered yet is already work — see the desktop hook.
+    isWorking:
+      turnId !== null ||
+      hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
+    turnId,
+    ...turnTiming,
     sendWithOutcome,
     cancel,
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt, groupedDraft),
-    optionSnapshot,
-    optionSurface,
-    pendingOptionId,
     respondPermission,
-    respondQuestion,
-    setStructuredOption,
-    invokeStructuredOption
+    respondQuestion
   }
 }
