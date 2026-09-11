@@ -16,6 +16,7 @@ const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
   'src/renderer/src/components/terminal-pane/terminal-agent-session-fork.ts',
   'src/renderer/src/components/use-terminal-create-actions.ts',
   'src/renderer/src/lib/fix-checks-agent-launch.ts',
+  'src/renderer/src/lib/floating-workspace-tab-creation.ts',
   'src/renderer/src/lib/launch-agent-session-continuation.ts',
   'src/renderer/src/lib/run-quick-command-in-new-tab.ts'
 ]
