@@ -2,7 +2,9 @@
 // registration each paired phone asked for, and the durable delete queue. Built
 // alongside DesktopRelayService but deliberately not gated on cloud sign-in: the
 // gateway authenticates with the host keypair, so accountless hosts push too.
+import { randomUUID } from 'node:crypto'
 import type {
+  MobilePushTestResult,
   MobilePushRegisterInput,
   MobilePushRegisterResult
 } from '../../../shared/mobile-push-contract'
@@ -103,6 +105,53 @@ export class DesktopPushService {
     this.unsubscribe = null
     this.runtimeRpc.setOnPushUnregisterQueued(null)
     this.runtime.setMobilePushRegistrar(null)
+  }
+
+  async test(deviceId: string): Promise<MobilePushTestResult> {
+    const device = this.registry.getDevice(deviceId)
+    const registration = device?.pushRegistration
+    if (device?.scope !== 'mobile' || !registration || registration.expiresAt <= Date.now()) {
+      return { accepted: false, reason: 'not_registered' }
+    }
+    if (this.stopped) {
+      return { accepted: false, reason: 'unavailable' }
+    }
+    // Explicit tests target only the caller and bypass automatic activity filters.
+    const result = await this.client.send({
+      registrationIds: [registration.registrationId],
+      notification: {
+        source: 'terminal-bell',
+        agentState: null,
+        title: 'Test notification',
+        body: '',
+        notificationId: randomUUID(),
+        notificationEpoch: randomUUID(),
+        notificationSeq: 0,
+        expiresAt: Date.now() + 300_000,
+        sound: registration.filter.sound !== false
+      }
+    })
+    if (!result.ok) {
+      return {
+        accepted: false,
+        reason: result.reason === 'unreachable' ? 'unavailable' : 'rejected'
+      }
+    }
+    const status = result.results.find(
+      (entry) => entry.registrationId === registration.registrationId
+    )?.status
+    if (status === 'queued') {
+      return { accepted: true }
+    }
+    return {
+      accepted: false,
+      reason:
+        status === 'rate_limited'
+          ? 'rate_limited'
+          : status === 'dead'
+            ? 'not_registered'
+            : 'rejected'
+    }
   }
 
   async register(input: MobilePushRegisterInput): Promise<MobilePushRegisterResult> {

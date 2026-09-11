@@ -13,6 +13,10 @@ const APS_ENVIRONMENT =
 
 module.exports = ({ config }) => ({
   ...config,
+  ios: {
+    ...config.ios,
+    entitlements: { ...config.ios?.entitlements, 'aps-environment': APS_ENVIRONMENT }
+  },
   plugins: (config.plugins ?? []).map((plugin) =>
     plugin === 'expo-notifications'
       ? [

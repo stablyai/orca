@@ -88,6 +88,16 @@ export const NOTIFICATION_METHODS = [
     }
   }),
   defineMethod({
+    name: 'notifications.testPush',
+    params: null,
+    handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
+      if (clientKind !== 'mobile' || !pairedDeviceId) {
+        return { accepted: false, reason: 'not_registered' }
+      }
+      return await runtime.testMobilePushDevice(pairedDeviceId)
+    }
+  }),
+  defineMethod({
     name: 'notifications.unregisterPush',
     params: null,
     // Deleting the gateway token is durable (outbox), so an offline gateway still

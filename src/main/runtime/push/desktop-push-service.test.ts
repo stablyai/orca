@@ -313,3 +313,40 @@ it('renews a seven-day mobile lease only on explicit registration', async () => 
     clock.mockRestore()
   }
 })
+
+it('sends an explicit test only to the requesting registered phone and awaits gateway acceptance', async () => {
+  const { service, registry, deviceId, send } = createService()
+  await service.register({
+    ...REGISTER_INPUT,
+    deviceId,
+    filter: { onlyWhenDesktopAway: true, sound: false }
+  })
+  registry.addDevice('another phone', 'mobile')
+  send.mockResolvedValue({ ok: true, results: [{ registrationId: 'reg-1', status: 'queued' }] })
+  await expect(service.test(deviceId)).resolves.toEqual({ accepted: true })
+  expect(send).toHaveBeenCalledWith({
+    registrationIds: ['reg-1'],
+    notification: expect.objectContaining({
+      source: 'terminal-bell',
+      sound: false,
+      title: 'Test notification'
+    })
+  })
+})
+
+it('does not claim success for missing registrations or failed gateway sends', async () => {
+  const { service, deviceId, send } = createService()
+  await expect(service.test(deviceId)).resolves.toEqual({
+    accepted: false,
+    reason: 'not_registered'
+  })
+  expect(send).not.toHaveBeenCalled()
+  await service.register({ ...REGISTER_INPUT, deviceId })
+  send.mockResolvedValue({ ok: false, reason: 'unreachable' })
+  await expect(service.test(deviceId)).resolves.toEqual({ accepted: false, reason: 'unavailable' })
+  send.mockResolvedValue({
+    ok: true,
+    results: [{ registrationId: 'reg-1', status: 'rate_limited' }]
+  })
+  await expect(service.test(deviceId)).resolves.toEqual({ accepted: false, reason: 'rate_limited' })
+})
