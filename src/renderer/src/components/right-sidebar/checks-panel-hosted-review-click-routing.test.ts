@@ -117,25 +117,19 @@ describe('checks panel hosted review modifier hint destination', () => {
     expect(resolveChecksPanelHostedReviewModifierDestination(null, true)).toBeNull()
   })
 
-  // Why: openHttpLink refuses to route a remote-owned link into Orca, and openLinksInApp
-  // cannot apply there either, so neither destination is reachable.
-  it('stays silent while a remote runtime is active', () => {
+  it('resolves modifier destinations for remote runtimes', () => {
     expect(
       resolveChecksPanelHostedReviewModifierDestination(
         { openLinksInApp: true, activeRuntimeEnvironmentId: 'remote-1' },
         true
       )
-    ).toBeNull()
+    ).toBe('system-browser')
     expect(
       resolveChecksPanelHostedReviewModifierDestination(
-        {
-          openLinksInApp: false,
-          openLinksInAppModifierInverts: true,
-          activeRuntimeEnvironmentId: 'remote-1'
-        },
+        { openLinksInAppModifierInverts: true, activeRuntimeEnvironmentId: 'remote-1' },
         true
       )
-    ).toBeNull()
+    ).toBe('orca')
   })
 
   // Why: openHttpLink trims before treating a runtime as active, so a blank id must
