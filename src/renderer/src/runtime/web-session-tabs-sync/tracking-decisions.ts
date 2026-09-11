@@ -20,6 +20,7 @@ import {
   recordAcceptedWebSessionTabsEnvironment
 } from './tracking'
 import { clearWebSessionTabsTrackingForWorktree } from './tracking-lifecycle'
+import { noteSessionTabsEnvironmentKeyedWorktree } from './session-tabs-environment-key-index'
 import { queueAcceptedWebSessionTerminalSnapshot } from '../web-session-terminal-handle-events'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
@@ -71,7 +72,13 @@ export function decideWebSessionTabsSnapshot(
     // Inventory omissions use a client-only sentinel epoch; recording that
     // sentinel would retire the host epoch and reject the next live frame.
     if (snapshot.publicationEpoch !== VISIBILITY_INVENTORY_REMOVAL_EPOCH) {
-      noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
+      noteSessionTabsEnvironmentKeyedWorktree(environmentId, snapshot.worktree)
+      noteSessionTabsPublicationEpoch(
+        environmentId,
+        snapshot.worktree,
+        key,
+        snapshot.publicationEpoch
+      )
     }
     clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
     queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
@@ -119,7 +126,8 @@ export function decideWebSessionTabsSnapshot(
   }
   rememberHostTerminalTabCount(environmentId, snapshot)
   replayableSessionTabsSnapshotByWorktree.delete(key)
-  noteSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)
+  noteSessionTabsPublicationEpoch(environmentId, snapshot.worktree, key, snapshot.publicationEpoch)
+  noteSessionTabsEnvironmentKeyedWorktree(environmentId, snapshot.worktree)
   latestSessionTabsSnapshotByWorktree.set(key, {
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion

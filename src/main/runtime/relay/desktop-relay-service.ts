@@ -12,11 +12,8 @@ import { RelayAuthCoordinator } from './relay-auth-coordinator'
 import { relayOfflineReasonMintFailureCode } from './relay-offline-reason'
 import { RelaySessionBroker, type RelayBrokerStatus } from './relay-session-broker'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
-import type {
-  RelayRevokeOutbox,
-  RelayDeviceBinding,
-  RelayRevokeOutboxItem
-} from './relay-revoke-outbox'
+import type { RelayDeviceBinding, RelayRevokeOutboxItem } from './relay-revoke-outbox'
+import { RelayRevokeOutboxFlusher } from './relay-revoke-outbox-flush'
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
 import { createRelayRegionPreferenceReader } from './relay-region-preference'
@@ -45,13 +42,15 @@ const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
 
 export class DesktopRelayService {
   private readonly coordinator: RelayAuthCoordinator
-  private readonly revokeOutbox: RelayRevokeOutbox
+  private readonly revokeFlusher: RelayRevokeOutboxFlusher
   private readonly runtimeRpc: OrcaRuntimeRpcServer
   private readonly demandLedger: RelayDemandLedger
   private readonly hostMobilePairingConnectionMode?: () => MobilePairingConnectionMode
   private demandExpiryTimer: ReturnType<typeof setTimeout> | null = null
   private livenessTimer: ReturnType<typeof setInterval> | null = null
   private stopped = false
+  // Cleared only by an explicit re-arm (start/authMutated); see fenceAndCloseNow.
+  private fenced = false
 
   constructor(options: DesktopRelayServiceOptions) {
     const keypair = options.runtimeRpc.getE2EEKeypair()
@@ -60,11 +59,16 @@ export class DesktopRelayService {
       throw new Error('mobile_runtime_not_ready')
     }
     this.runtimeRpc = options.runtimeRpc
-    this.revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
+    const revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
+    this.revokeFlusher = new RelayRevokeOutboxFlusher({
+      outbox: revokeOutbox,
+      isHalted: () => this.stopped || this.fenced,
+      onDrained: () => this.refreshDemand()
+    })
     this.hostMobilePairingConnectionMode = options.hostMobilePairingConnectionMode
     this.demandLedger = new RelayDemandLedger({
       deviceRegistry: options.runtimeRpc.getDeviceRegistry()!,
-      revokeOutbox: this.revokeOutbox,
+      revokeOutbox,
       relayHostId: deriveRelayHostId(keypair.publicKey),
       isRelayAllowedForDevice: (deviceId) => this.isRelayAllowedForDevice(deviceId)
     })
@@ -89,7 +93,7 @@ export class DesktopRelayService {
           onAssignedCellActive: regionPreference.noteAssignedCell,
           onStatus: options.onStatus
         })
-        void this.flushRevokeOutbox(broker)
+        void this.revokeFlusher.flushAll(broker)
         return broker
       },
       onStatus: options.onStatus
@@ -97,38 +101,33 @@ export class DesktopRelayService {
   }
 
   start(): void {
+    this.fenced = false
     this.refreshDemand()
   }
 
   // Safe to call from any wake signal (power resume, network change).
   ensureLive(): void {
-    if (!this.stopped) {
+    if (!this.stopped && !this.fenced) {
       this.coordinator.ensureLive()
     }
   }
 
   authMutated(): void {
+    this.fenced = false
     this.refreshDemand()
   }
 
-  /** Disarms both timers this class owns. Every teardown needs both: the expiry timeout fires
-   *  `refreshDemand`, which reconciles and re-installs the liveness interval. */
-  private disarmTimers(): void {
-    if (this.demandExpiryTimer) {
-      clearTimeout(this.demandExpiryTimer)
-      this.demandExpiryTimer = null
-    }
-    if (this.livenessTimer) {
-      clearInterval(this.livenessTimer)
-      this.livenessTimer = null
-    }
-  }
-
+  // The re-armable fence, by design: sign-out and relaunch call this
+  // (main-window-core-services.ts onBeforeOrcaProfileSignOut / onBeforeRelaunch)
+  // and want the next authMutated to bring Relay back. Quit deliberately does
+  // NOT use this — it calls stop(), which is terminal. Keep the two apart.
   fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
-    // Why: a fence must be hard — a surviving tick could catch the window between
-    // the pre-sign-out fence and the profile wipe and briefly resurrect a broker.
-    // The next auth mutation re-arms via refreshDemand.
-    this.disarmTimers()
+    // Why a latch rather than just clearing the timers: clearing only covered
+    // the liveness tick, and everything else outliving the fence lands in
+    // refreshDemand and re-arms it — a settling mint's finally, a pending
+    // invite-expiry wake, a power-resume ensureLive.
+    this.fenced = true
+    this.clearTimers()
     this.coordinator.fenceAndCloseNow(hostCloseReason)
   }
 
@@ -158,7 +157,7 @@ export class DesktopRelayService {
       broker.hostId === item.relayHostId &&
       broker.ownerIdentityKey === item.ownerIdentityKey
     ) {
-      void this.flushRevoke(broker, item)
+      void this.revokeFlusher.flushItem(broker, item)
     }
   }
 
@@ -230,15 +229,25 @@ export class DesktopRelayService {
     this.refreshDemand({ skipLinger: true })
   }
 
+  // Terminal: no door re-arms this. Quit calls it (main-process-quit.ts
+  // before-quit). The re-armable counterpart is fenceAndCloseNow, which quit
+  // must not use — a settling mint or an invite expiry re-arms that one.
   stop(): void {
     this.stopped = true
-    this.disarmTimers()
+    this.clearTimers()
     this.coordinator.stop()
   }
 
-  private async flushRevokeOutbox(broker: RelaySessionBroker): Promise<void> {
-    for (const item of this.revokeOutbox.pendingFor(broker.ownerIdentityKey, broker.hostId)) {
-      await this.flushRevoke(broker, item)
+  /** Disarms both timers this class owns. Every teardown needs both: the expiry timeout fires
+   *  `refreshDemand`, which reconciles and re-installs the liveness interval. */
+  private clearTimers(): void {
+    if (this.demandExpiryTimer) {
+      clearTimeout(this.demandExpiryTimer)
+      this.demandExpiryTimer = null
+    }
+    if (this.livenessTimer) {
+      clearInterval(this.livenessTimer)
+      this.livenessTimer = null
     }
   }
 
@@ -257,20 +266,6 @@ export class DesktopRelayService {
       context.transport.relayHostId !== broker.hostId
     ) {
       throw new Error('stale_relay_connection')
-    }
-  }
-
-  private async flushRevoke(
-    broker: RelaySessionBroker,
-    item: RelayRevokeOutboxItem
-  ): Promise<void> {
-    try {
-      await broker.revokeDevice(item.relayDeviceId, item.reqId)
-      this.revokeOutbox.remove(item.reqId)
-      this.refreshDemand()
-    } catch {
-      // Why: the durable item is the source of truth; reconnecting the same
-      // account/control retries this stable reqId without delaying local revoke.
     }
   }
 
@@ -330,7 +325,7 @@ export class DesktopRelayService {
   }
 
   private refreshDemand(options?: { skipLinger?: boolean }): void {
-    if (this.stopped) {
+    if (this.stopped || this.fenced) {
       return
     }
     if (!this.livenessTimer) {
