@@ -57,4 +57,18 @@ jobs:
             --exclude=src/shared/startup-shell-portability.live-shell.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
-            --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+            --shard=${{ matrix.shard }}/${{ matrix.shard_total }} 2>&1 | tee vitest-output.log
+
+      # Flaky tests that pass on retry keep the shard green, so surface them
+      # explicitly in the job summary for triage.
+      - name: Report flaky tests
+        if: always()
+        run: |
+          if [ -s vitest-output.log ] && grep -q 'retry x' vitest-output.log; then
+            {
+              echo "### ⚠️ Flaky tests detected (node ${{ matrix.node }}, shard ${{ matrix.shard }}/${{ matrix.shard_total }})"
+              '```'
+              grep 'retry x' vitest-output.log
+              '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi

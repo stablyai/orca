@@ -36,6 +36,10 @@ export default defineConfig({
     // the Vitest 5s defaults are too tight for the slowest integration cases.
     hookTimeout: 60_000,
     testTimeout: 30_000,
+    // CI-only: one retry keeps a flaky test from failing a required shard; local
+    // runs stay retry-free so flakiness surfaces for devs. Retried-but-passed
+    // tests are printed by the default reporter and scraped into the job summary.
+    retry: process.env.CI ? 1 : 0,
     // Why: Windows process and shell startup are slower under full-suite load;
     // macOS/Linux keep Vitest's default worker parallelism.
     ...windowsTestWorkerOptions
