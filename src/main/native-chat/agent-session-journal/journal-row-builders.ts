@@ -76,7 +76,8 @@ export function journalDispatchRowBuilder(
       clientMessageId: input.clientMessageId,
       dispatchState: input.state,
       providerItemId,
-      reason: input.state === 'accepted' ? null : (input.reason ?? null),
+      reason:
+        input.state === 'accepted' || input.state === 'pending' ? null : (input.reason ?? null),
       seq,
       fence: input.fence,
       ts,
@@ -219,7 +220,7 @@ export function buildJournalSubmissionRow(input: {
 export function buildJournalDispatchRow(input: {
   state: JournalReducerState
   clientMessageId: string
-  dispatchState: Exclude<AgentJournalDispatchState, 'pending'>
+  dispatchState: AgentJournalDispatchState
   providerItemId: string | null
   reason: string | null
   seq: number

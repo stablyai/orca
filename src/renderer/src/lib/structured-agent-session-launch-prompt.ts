@@ -69,10 +69,15 @@ async function dispatchStructuredLaunchPrompt(
         ? null
         : {
             ...current,
-            state: dispatchState === 'unknown' ? 'unconfirmed' : 'queued'
+            state:
+              dispatchState === 'unknown'
+                ? 'unconfirmed'
+                : dispatchState === 'pending'
+                  ? 'dispatching'
+                  : 'queued'
           }
     )
-    return dispatchState === 'accepted'
+    return dispatchState === 'accepted' || dispatchState === 'pending'
   } catch {
     mutateEntry(entry, (current) => ({ ...current, state: 'unconfirmed' }))
     return false

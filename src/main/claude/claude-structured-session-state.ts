@@ -64,7 +64,7 @@ export type ClaudeStructuredSessionAdapterDeps = {
     identity: AgentSessionJournalIdentity
   }) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  /** A dispatch whose ack timed out, proven delivered by a later provider replay. */
+  /** Direct settlement path for a provider replay; its durable item row also reconciles delivery. */
   onDispatchSettledLate?: (input: {
     sessionId: string
     clientMessageId: string
@@ -81,7 +81,6 @@ export type ClaudeStructuredSessionAdapterDeps = {
   now?: () => number
   requestTimeoutMs?: number
   initTimeoutMs?: number
-  dispatchAckTimeoutMs?: number
   persistHandle?: (input: {
     sessionId: string
     providerSessionId: string
@@ -100,18 +99,16 @@ export type ClaudeStructuredSessionAdapterDeps = {
 
 export type ClaudeDispatchWaiter = {
   resolve: (uuid: string | null) => void
-  timer: ReturnType<typeof setTimeout>
   acceptsResult: boolean
-  /** Carried so a replay that lands after the ack window can settle the journal
-   *  submission this dispatch came from, not just the in-memory turn identity. */
-  clientMessageId: string
+  /** Submission settled by the replay, or null for provider-control turns. */
+  clientMessageId: string | null
   /** Client uuid echoed by Claude so a replay is tied to its own dispatch. */
   sentUuid: string
   /** Sequence used to fence a late identity from a newer dispatch. */
   dispatchSequence: number
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
-  /** The waiter timed out or its write failed, but its replay may still arrive. */
+  /** The write failed or the child died, but a replay may still name it. */
   retired?: boolean
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
   replayContentKey: string
@@ -127,7 +124,7 @@ export type ClaudeSession = {
   acquisitionGeneration: string
   prompts: ClaudePromptRegistry
   dispatchWaiters: ClaudeDispatchWaiter[]
-  /** Bounded identities for dispatches whose ack was unknown when they returned. */
+  /** Bounded identities for dispatches whose child died or whose write failed. */
   retiredDispatchWaiters: ClaudeDispatchWaiter[]
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
   replayContentFallbackBlocked: boolean
