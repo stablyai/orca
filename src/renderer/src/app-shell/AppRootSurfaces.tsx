@@ -1,3 +1,4 @@
+import { NotificationCardStack } from '../components/NotificationCardStack'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
@@ -57,6 +58,11 @@ const SshPassphraseDialog = lazy(() =>
 )
 const UpdateCard = lazy(() =>
   import('../components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
+)
+const UnexpectedSignoutCard = lazy(() =>
+  import('../components/UnexpectedSignoutCard').then((module) => ({
+    default: module.UnexpectedSignoutCard
+  }))
 )
 const RemoteServerUpdateDialog = lazy(
   () => import('../components/settings/RemoteServerUpdateDialog')
@@ -273,16 +279,23 @@ export function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
-      {shouldMountUpdateCard ? (
+      <NotificationCardStack>
+        {shouldMountUpdateCard ? (
+          <Suspense fallback={null}>
+            <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>
+              <UpdateCard />
+            </OverlayBoundary>
+          </Suspense>
+        ) : null}
         <Suspense fallback={null}>
-          <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>
-            <UpdateCard />
+          <OverlayBoundary boundaryId="overlay.unexpected-signout" resetKey={activeView}>
+            <UnexpectedSignoutCard />
           </OverlayBoundary>
         </Suspense>
-      ) : null}
-      <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
-        <StarNagCard />
-      </OverlayBoundary>
+        <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
+          <StarNagCard />
+        </OverlayBoundary>
+      </NotificationCardStack>
       <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
         <StarNagToastHost />
       </OverlayBoundary>

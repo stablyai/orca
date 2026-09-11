@@ -203,6 +203,9 @@ jobs:
       - name: Boot orcad and round-trip a terminal
         run: pnpm run smoke:orcad-terminal
 
+      - name: Verify the generated RPC params catalog
+        run: pnpm run verify:rpc-params-catalog
+
       - name: Verify bundled skill guides
         run: pnpm run verify:bundled-skill-guides
 

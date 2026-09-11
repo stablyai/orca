@@ -2,14 +2,14 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcContext, RpcMethod } from '../rpc/core'
+import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../rpc/core'
 import { NOTIFICATION_METHODS } from '../rpc/methods/notifications'
 import { DeviceRegistry } from '../device-registry'
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
 import { OrcaRuntimeService } from '../orca-runtime'
 
 function method(name: string): RpcMethod {
-  const found = NOTIFICATION_METHODS.find((candidate) => candidate.name === name)
+  const found = eraseRpcMethods(NOTIFICATION_METHODS).find((candidate) => candidate.name === name)
   if (!found || 'stream' in found) {
     throw new Error(`${name} is not a one-shot RPC method`)
   }

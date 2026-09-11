@@ -3,9 +3,10 @@
 import '@testing-library/jest-dom/vitest'
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { NativeChatMessageList } from './NativeChatMessageList'
+import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -28,6 +29,11 @@ function journalItem(sequence: number, body: AgentJournalItemBody): AgentJournal
   return { itemId: `item-${sequence}`, revision: 1, sequence, observedAt: sequence, body }
 }
 
+let restoreViewport = (): void => {}
+beforeAll(() => {
+  restoreViewport = installNativeChatMessageListTestViewport()
+})
+afterAll(() => restoreViewport())
 afterEach(cleanup)
 
 const session: NativeChatLiveSession = {

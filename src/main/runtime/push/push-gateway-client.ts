@@ -48,6 +48,7 @@ export type PushSendNotification = {
   title: string
   body: string
   worktreeId?: string
+  paneKey?: string
 }
 
 type PushGatewayClientOptions = {

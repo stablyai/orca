@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "120364513935",
+    "project_id": "onorca-cloud",
+    "storage_bucket": "onorca-cloud.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:120364513935:android:1d951dc430aeb9bc664efa",
+        "android_client_info": {
+          "package_name": "com.stably.orca.mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "120364513935-evfa8502bp5r9hn7afhd9i03oibs8223.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBmT_w0OUQSiVfxblx-F0qlRvGkBBkTNQU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "120364513935-evfa8502bp5r9hn7afhd9i03oibs8223.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

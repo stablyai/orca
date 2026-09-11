@@ -22,6 +22,7 @@ export type MobileNotificationDispatchEvent = {
   title: string
   body: string
   worktreeId?: string
+  paneKey?: string
   notificationId?: string
   notificationSeq?: number
   notificationEpoch?: string

@@ -202,6 +202,7 @@ describe('codex item bodies', () => {
     expect(codexItemBody(LIVE_TURN[2] as CodexThreadItem)).toEqual({
       kind: 'tool-call',
       name: 'shell',
+      callId: 'item-2',
       input: { command: 'ls', cwd: '/tmp' },
       exitCode: 0,
       state: 'completed',
@@ -230,6 +231,7 @@ describe('codex item bodies', () => {
     expect(body).toEqual({
       kind: 'tool-call',
       name: 'read',
+      callId: 'item-read',
       // `name` is the target's basename, which `path` already carries and no
       // label ever reads, so it stays out of the bounded journal payload.
       input: { command: "sed -n '1,200p' notes.txt", cwd: '/repo', path: '/repo/notes.txt' },
@@ -258,6 +260,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'search',
+      callId: 'item-search',
       input: { command: 'rg -n --no-heading beta .', cwd: '/repo', query: 'beta', directory: '.' },
       state: 'running'
     })
@@ -277,6 +280,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'search',
+      callId: 'item-search-bare',
       input: { command: 'rg beta', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -297,6 +301,7 @@ describe('codex item bodies', () => {
     expect(body).toEqual({
       kind: 'tool-call',
       name: 'list',
+      callId: 'item-list',
       input: { command: 'ls', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -327,6 +332,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'shell',
+      callId: 'item-mixed',
       input: { command: 'cat a.txt && ls src', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -350,6 +356,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'read',
+      callId: 'item-two-reads',
       input: { command: 'cat a.ts && cat b.ts', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -425,6 +432,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'read',
+      callId: 'item-read-null',
       input: { command: 'cat', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -452,6 +460,7 @@ describe('codex item bodies', () => {
     const shellRow = {
       kind: 'tool-call',
       name: 'shell',
+      callId: 'item-fallback',
       input: { command: 'ls', cwd: '/tmp' },
       exitCode: 0,
       state: 'completed'
@@ -640,6 +649,7 @@ describe('codex item bodies', () => {
       // Server-qualified, and the arguments stay top level so the row label can
       // read `query`/`command`/`file_path` out of them.
       name: 'weather/get_forecast',
+      callId: 'mcp-1',
       mcpIdentity: { server: 'weather', tool: 'get_forecast' },
       input: { city: 'Oslo' },
       state: 'completed',
@@ -688,6 +698,7 @@ describe('codex item bodies', () => {
     expect(codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: {} })).toEqual({
       kind: 'tool-call',
       name: 't',
+      callId: 'm',
       input: null,
       state: 'running'
     })
@@ -735,6 +746,7 @@ describe('codex item bodies', () => {
     expect(codexItemBody({ type: 'webSearch', id: 'w', query: '', action: null })).toEqual({
       kind: 'tool-call',
       name: 'web_search',
+      callId: 'w',
       input: null,
       state: 'running'
     })
@@ -749,6 +761,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'web_search',
+      callId: 'w',
       input: {
         query: 'orca release notes',
         description: 'search',

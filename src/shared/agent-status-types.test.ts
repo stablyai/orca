@@ -15,6 +15,8 @@ import {
   AGENT_STATUS_STATES,
   AGENT_TYPE_MAX_LENGTH
 } from './agent-status-types'
+import type { AgentType, WellKnownAgentType } from './agent-status-types'
+import type { TuiAgent } from './tui-agent'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -674,5 +676,34 @@ describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
         value: parseAgentStatusPayload(JSON.stringify(payload))
       })
     }
+  })
+})
+
+describe('WellKnownAgentType', () => {
+  // Compile-time proof the union is derived from TuiAgent rather than hand-copied:
+  // a literal list that misses any launchable agent id fails to typecheck here.
+  const widenTuiAgent = (agent: TuiAgent): WellKnownAgentType => agent
+
+  it('covers every TuiAgent id plus the unknown sentinel', () => {
+    // ids the previous 22-member hand-written union had drifted past
+    const formerlyMissing: WellKnownAgentType[] = [
+      'qwen-code',
+      'mistral-vibe',
+      'claude-agent-teams'
+    ]
+    const sentinel: WellKnownAgentType = 'unknown'
+
+    expect([...formerlyMissing, sentinel, widenTuiAgent('rovo')]).toEqual([
+      'qwen-code',
+      'mistral-vibe',
+      'claude-agent-teams',
+      'unknown',
+      'rovo'
+    ])
+  })
+
+  it('keeps AgentType open to custom agent names', () => {
+    const custom: AgentType = 'some-in-house-agent'
+    expect(custom).toBe('some-in-house-agent')
   })
 })

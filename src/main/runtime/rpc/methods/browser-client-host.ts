@@ -14,9 +14,9 @@ import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-regist
 import { adoptRuntimeBrowserClientPagesFromInventory } from '../../runtime-browser-client-page-adoption'
 import { recoverUnavailableRuntimeBrowserClientPages } from '../../runtime-browser-client-page-recovery'
 import { releaseRuntimeBrowserClientPageRecord } from '../../runtime-browser-client-page-release'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 
-export const BROWSER_CLIENT_HOST_METHODS: RpcAnyMethod[] = [
+export const BROWSER_CLIENT_HOST_METHODS = [
   defineStreamingMethod({
     name: 'browser.clientHost.attach',
     params: BrowserClientHostAttachParams,
