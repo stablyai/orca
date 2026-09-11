@@ -167,6 +167,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         if (this.userAgentModeByPageId.get(browserTabId) !== 'native') {
           // Navigation must see the preset intent while the final CDP command is in flight.
           this.viewportUaOverrideMobileByTabId.set(browserTabId, override.mobile)
+          this.setSessionMobileViewportIntent(browserTabId, guest.session, override.mobile)
           // Why: same sender as the navigation path, so both resolve the tab's host identically.
           await this.sendViewportUserAgentOverride(guest, override.mobile)
         }
@@ -185,6 +186,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         const trackedMobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
         // A navigation after this point must not re-install the override behind the clear.
         this.viewportUaOverrideMobileByTabId.delete(browserTabId)
+        this.clearSessionMobileViewportIntent(browserTabId)
         try {
           if (this.authUserAgentOverrideStateByGuestId.has(guest.id)) {
             const url = this.resolveTabNavigationUrl(guest)
@@ -204,6 +206,7 @@ export abstract class BrowserManagerViewport extends BrowserManagerDownloadLifec
         } catch (error) {
           if (trackedMobile !== undefined) {
             this.viewportUaOverrideMobileByTabId.set(browserTabId, trackedMobile)
+            this.setSessionMobileViewportIntent(browserTabId, guest.session, trackedMobile)
           }
           throw error
         }

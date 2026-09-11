@@ -48,6 +48,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     const previousWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (previousWebContentsId !== undefined && previousWebContentsId !== webContentsId) {
       this.retireStaleGuestWebContents(previousWebContentsId)
+      this.clearSessionMobileViewportIntent(browserTabId)
       this.viewportPresetActiveByTabId.delete(browserTabId)
       this.viewportScrollStateByTabId.delete(browserTabId)
     }
@@ -61,6 +62,10 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.userAgentModeByPageId.set(browserTabId, userAgentMode)
     } else {
       this.userAgentModeByPageId.delete(browserTabId)
+    }
+    if (userAgentMode === 'native') {
+      this.clearSessionMobileViewportIntent(browserTabId)
+      this.viewportUaOverrideMobileByTabId.delete(browserTabId)
     }
     this.rendererWebContentsIdByTabId.set(browserTabId, rendererWebContentsId)
     if (worktreeId) {
@@ -133,6 +138,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.worktreeIdByTabId.delete(browserTabId)
     // Why: drop the viewport-op chain so the Map doesn't retain a promise keyed to a destroyed guest.
     this.viewportOpsByTabId.delete(browserTabId)
+    this.clearSessionMobileViewportIntent(browserTabId)
     this.viewportUaOverrideMobileByTabId.delete(browserTabId)
     this.viewportPresetActiveByTabId.delete(browserTabId)
     this.viewportScrollStateByTabId.delete(browserTabId)
@@ -171,6 +177,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     const previousWebContentsId = this.webContentsIdByTabId.get(browserPageId)
     if (previousWebContentsId !== undefined && previousWebContentsId !== webContentsId) {
       this.retireStaleGuestWebContents(previousWebContentsId)
+      this.clearSessionMobileViewportIntent(browserPageId)
       this.viewportPresetActiveByTabId.delete(browserPageId)
       this.viewportScrollStateByTabId.delete(browserPageId)
     }
@@ -181,6 +188,10 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
       this.userAgentModeByPageId.set(browserPageId, userAgentMode)
     } else {
       this.userAgentModeByPageId.delete(browserPageId)
+    }
+    if (userAgentMode === 'native') {
+      this.clearSessionMobileViewportIntent(browserPageId)
+      this.viewportUaOverrideMobileByTabId.delete(browserPageId)
     }
     if (worktreeId) {
       this.worktreeIdByTabId.set(browserPageId, worktreeId)
@@ -213,6 +224,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.sessionProfileIdByPageId.clear()
     this.userAgentModeByPageId.clear()
     this.viewportUaOverrideMobileByTabId.clear()
+    this.mobileViewportTabIdsBySession.clear()
     this.viewportPresetActiveByTabId.clear()
     this.viewportScrollStateByTabId.clear()
     this.authUserAgentOverrideStateByGuestId.clear()
