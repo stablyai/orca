@@ -81,6 +81,12 @@ export type RuntimeStatus = {
   /** True only when this Windows host can prove process creation times for PID ownership. */
   windowsProcessStartTimeAvailable?: boolean
   /**
+   * The host's effective structured-chat admission. The capability bit only says the host
+   * speaks the surface; admission additionally depends on host policy. Absent means the host
+   * predates this field — unknown, never "disabled" and never "enabled".
+   */
+  structuredSessionAdmission?: { enabled: boolean }
+  /**
    * Optional for mixed-version peers. Absence means the host predates structured
    * degradation reporting, not that the host proved every optional feature available.
    */

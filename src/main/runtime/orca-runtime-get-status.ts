@@ -31,6 +31,7 @@ import type {
 } from '../../shared/runtime-client-events'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 import { wakeFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade-wake'
+import { isStructuredNativeChatEnabled } from './rpc/methods/structured-agent-session-policy'
 
 type RuntimeStatusHost = {
   getAvailableAuthoritativeWindow(): unknown
@@ -116,6 +117,10 @@ export class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithGetRuntimeId {
       ...(degradations.length > 0 ? { degradations } : {}),
       worktreeCreateIdempotency: { dedupeTtlMs: WORKTREE_CREATE_RESULT_TTL_MS },
       ...(windowsProcessStartTimeAvailable ? { windowsProcessStartTimeAvailable } : {}),
+      // Why: the capability bit is advertised unconditionally, so a remote client cannot tell a
+      // host that refuses on policy from one that cannot speak the surface. Publish the verdict
+      // the host's own admission check reaches, read through that same policy function.
+      structuredSessionAdmission: { enabled: isStructuredNativeChatEnabled(this) },
       hostPlatform: process.platform,
       terminalWindowsShell: this.store?.getSettings?.().terminalWindowsShell ?? null,
       floatingWorkspaceEnabled: this.store?.getSettings?.().floatingTerminalEnabled !== false,
