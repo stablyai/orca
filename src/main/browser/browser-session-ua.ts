@@ -1,4 +1,5 @@
 import type { Session } from 'electron'
+import type { ViewportUserAgentOverride } from './browser-viewport-user-agent'
 
 import {
   currentUserAgent,
@@ -23,22 +24,59 @@ export function cleanElectronUserAgent(ua: string): string {
 }
 
 export type BrowserSessionRequestUserAgentResolver = (args: {
+  session: Session
   url: string
   webContentsId?: number
   currentUserAgent?: string
   effectiveUserAgent?: string
   baseUserAgent: string
-}) => string | undefined
+}) => ViewportUserAgentOverride | undefined
 
-// Why: Chromium already publishes one internally consistent client-hint identity through both
-// request headers and navigator.userAgentData. This handler owns the legacy User-Agent header on
-// the wire; synthesizing Chrome brands here would make those browser-owned surfaces disagree.
+function quoteClientHint(value: string): string {
+  return `"${value.replace(/["\\]/g, '\\$&')}"`
+}
+
+function formatClientHintBrands(brands: { brand: string; version: string }[]): string {
+  return brands
+    .map(({ brand, version }) => `${quoteClientHint(brand)};v=${quoteClientHint(version)}`)
+    .join(', ')
+}
+
+function applyUserAgentMetadataHeaders(
+  headers: Record<string, string>,
+  metadata: NonNullable<ViewportUserAgentOverride['userAgentMetadata']>
+): void {
+  const values: Record<string, string> = {
+    'sec-ch-ua': formatClientHintBrands(metadata.brands),
+    'sec-ch-ua-full-version-list': formatClientHintBrands(metadata.fullVersionList),
+    'sec-ch-ua-full-version': quoteClientHint(metadata.fullVersion),
+    'sec-ch-ua-platform': quoteClientHint(metadata.platform),
+    'sec-ch-ua-platform-version': quoteClientHint(metadata.platformVersion),
+    'sec-ch-ua-arch': quoteClientHint(metadata.architecture),
+    'sec-ch-ua-model': quoteClientHint(metadata.model),
+    'sec-ch-ua-mobile': metadata.mobile ? '?1' : '?0'
+  }
+  for (const key of Object.keys(headers)) {
+    const lowerKey = key.toLowerCase()
+    if (!lowerKey.startsWith('sec-ch-ua')) {
+      continue
+    }
+    const value = values[lowerKey]
+    if (value === undefined) {
+      delete headers[key]
+    } else {
+      headers[key] = value
+    }
+  }
+}
+
+// Desktop client hints remain browser-owned. Mobile overrides carry the same metadata CDP used,
+// so worker requests can replace only hints Chromium already chose to emit without inventing them.
 export function setupGoogleAuthUserAgentOverride(
   sess: Session,
   resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
 ): void {
   const firefoxUa = googleAuthUserAgent()
-
   sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
     const headers = details.requestHeaders
     const requestUserAgent = currentUserAgent(headers)
@@ -63,27 +101,27 @@ export function setupGoogleAuthUserAgentOverride(
       callback({ requestHeaders: headers })
       return
     }
-    const userAgent =
+    const identity =
       // Requests from an auth document fan out to gstatic and other non-auth hosts. Preserve the
       // Firefox identity already placed on those requests instead of switching them to Chrome.
       requestUserAgent === firefoxUa
-        ? firefoxUa
+        ? { userAgent: firefoxUa }
         : resolveRequestUserAgent
           ? (resolveRequestUserAgent({
+              session: sess,
               url: details.url,
               webContentsId: details.webContentsId,
               currentUserAgent: requestUserAgent,
               effectiveUserAgent,
               baseUserAgent
-            }) ??
-            (baseUserAgent || requestUserAgent))
+            }) ?? { userAgent: baseUserAgent || requestUserAgent || '' })
           : effectiveUserAgent === firefoxUa
-            ? firefoxUa
-            : baseUserAgent || requestUserAgent
-    if (userAgent) {
-      setUserAgentHeader(headers, userAgent)
+            ? { userAgent: firefoxUa }
+            : { userAgent: baseUserAgent || requestUserAgent || '' }
+    if (identity.userAgent) {
+      setUserAgentHeader(headers, identity.userAgent)
     }
-    if (userAgent === firefoxUa) {
+    if (identity.userAgent === firefoxUa) {
       // Why: while the auth document is on screen the WebContents UA is Firefox,
       // so its cross-host subresource/XHR requests (gstatic, play.google.com, the
       // sign-in challenge endpoints) reach here carrying the Firefox UA yet still
@@ -94,6 +132,9 @@ export function setupGoogleAuthUserAgentOverride(
       stripClientHints(headers)
       callback({ requestHeaders: headers })
       return
+    }
+    if (identity.userAgentMetadata) {
+      applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
     }
     callback({ requestHeaders: headers })
   })

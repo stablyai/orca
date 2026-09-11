@@ -94,34 +94,81 @@ describe('browserManager', () => {
     // Ablation: with no mobile preset, the clean session identity is resolved.
     expect(
       browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
         url: 'https://example.com/logo.png',
         webContentsId: guest.id as number,
         currentUserAgent: GUEST_CLEAN_UA,
         baseUserAgent: GUEST_ELECTRON_UA
       })
-    ).toBe(GUEST_CLEAN_UA)
+    ).toEqual({ userAgent: GUEST_CLEAN_UA })
 
     await browserManager.setViewportOverride('tab-request-identity', MOBILE_VIEWPORT_OVERRIDE)
     await flushViewportOps()
     const mobile = browserManager.resolveBrowserGuestRequestUserAgent({
+      session: guest.session as Electron.Session,
       url: 'https://example.com/logo.png',
       webContentsId: guest.id as number,
       currentUserAgent: GUEST_CLEAN_UA,
       baseUserAgent: GUEST_ELECTRON_UA
     })
-    expect(mobile).toContain('CriOS/134')
-    expect(mobile).toContain('iPhone')
+    expect(mobile.userAgent).toContain('CriOS/134')
+    expect(mobile.userAgent).toContain('iPhone')
+    expect(mobile.userAgentMetadata).toMatchObject({
+      mobile: true,
+      platform: 'iOS',
+      model: 'iPhone'
+    })
+
+    // A service-worker request has no webContentsId; the Session is its only surviving owner.
+    const workerMobile = browserManager.resolveBrowserGuestRequestUserAgent({
+      session: guest.session as Electron.Session,
+      url: 'https://example.com/worker-beacon',
+      baseUserAgent: GUEST_ELECTRON_UA
+    })
+    expect(workerMobile.userAgent).toBe(mobile.userAgent)
+    expect(workerMobile.userAgentMetadata).toEqual(mobile.userAgentMetadata)
 
     // Negative control: auth-document fan-out remains Firefox even while mobile emulation is active.
     expect(
       browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
         url: 'https://www.gstatic.com/_/signin/log',
         webContentsId: guest.id as number,
         currentUserAgent: GUEST_ELECTRON_UA,
         effectiveUserAgent: googleAuthUserAgent(),
         baseUserAgent: GUEST_ELECTRON_UA
       })
-    ).toBe(googleAuthUserAgent())
+    ).toEqual({ userAgent: googleAuthUserAgent() })
+
+    await browserManager.setViewportOverride('tab-request-identity', null)
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
+        url: 'https://example.com/worker-beacon',
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toEqual({ userAgent: GUEST_CLEAN_UA })
+
+    await browserManager.setViewportOverride('tab-request-identity', MOBILE_VIEWPORT_OVERRIDE)
+    browserManager.unregisterGuest('tab-request-identity')
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
+        url: 'https://example.com/worker-after-tab-close',
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toEqual({ userAgent: GUEST_CLEAN_UA })
+  })
+
+  it('keeps an unscoped worker request on the desktop identity without a mobile preset', () => {
+    const { guest } = makeViewportGuest(4246)
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
+        url: 'https://example.com/desktop-worker',
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toEqual({ userAgent: GUEST_CLEAN_UA })
   })
 
   it('presents the Firefox UA on Google auth hosts and restores the base UA off them', async () => {

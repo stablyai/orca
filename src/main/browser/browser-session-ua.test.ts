@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { googleAuthUserAgent } from './browser-google-auth-ua'
 import { cleanElectronUserAgent, setupGoogleAuthUserAgentOverride } from './browser-session-ua'
+import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
 
 type RequestDetails = {
   url: string
@@ -34,15 +35,23 @@ function runRequest(listener: RequestListener, details: RequestDetails): Record<
 }
 
 describe('browser session request identity', () => {
-  it('ablates the resolver on an image request while enforcing its per-guest value when enabled', () => {
-    const mobileUa =
-      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/134.0.0.0 Mobile/15E148 Safari/604.1'
+  it('ablates the resolver on a worker request while enforcing its mobile identity when enabled', () => {
+    const mobileIdentity = buildViewportUserAgentOverride({
+      url: 'https://example.com/worker-beacon',
+      mobile: true,
+      baseUserAgent: 'Chrome/134.0.0.0'
+    })
     const request = {
-      url: 'https://example.com/logo.png',
-      webContentsId: 44,
+      url: 'https://example.com/worker-beacon',
       requestHeaders: {
         'User-Agent': 'Electron/30 Chrome/134',
-        'sec-ch-ua': 'browser-owned'
+        'sec-ch-ua': 'desktop brands',
+        'sec-ch-ua-full-version-list': 'desktop versions',
+        'sec-ch-ua-platform': '"macOS"',
+        'sec-ch-ua-platform-version': '"15.0.0"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-model': '""',
+        'sec-ch-ua-form-factors': '"Desktop"'
       }
     }
 
@@ -53,19 +62,27 @@ describe('browser session request identity', () => {
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) orca/1.0.0 Chrome/134.0.0.0 Electron/30.0.0 Safari/537.36'
       )
     )
+    expect(disabled['sec-ch-ua-platform']).toBe('"macOS"')
 
-    const resolver = vi.fn(() => mobileUa)
+    const resolver = vi.fn(() => mobileIdentity)
     const enabled = runRequest(install(resolver), structuredClone(request))
-    expect(enabled['User-Agent']).toBe(mobileUa)
+    expect(enabled['User-Agent']).toBe(mobileIdentity.userAgent)
     expect(resolver).toHaveBeenCalledWith(
-      expect.objectContaining({ url: request.url, webContentsId: request.webContentsId })
+      expect.objectContaining({ url: request.url, webContentsId: undefined })
     )
-    // Negative control: the resolver does not alter Chromium-owned client hints.
-    expect(enabled['sec-ch-ua']).toBe('browser-owned')
+    expect(enabled['sec-ch-ua']).toContain('"Google Chrome";v="134"')
+    expect(enabled['sec-ch-ua-full-version-list']).toContain('"Google Chrome";v="134.0.0.0"')
+    expect(enabled['sec-ch-ua-platform']).toBe('"iOS"')
+    expect(enabled['sec-ch-ua-platform-version']).toBe('"17.0"')
+    expect(enabled['sec-ch-ua-mobile']).toBe('?1')
+    expect(enabled['sec-ch-ua-model']).toBe('"iPhone"')
+    expect(enabled['sec-ch-ua-form-factors']).toBeUndefined()
   })
 
   it('keeps Firefox across auth-document cross-host requests and strips its hints', () => {
-    const listener = install(({ effectiveUserAgent }) => effectiveUserAgent)
+    const listener = install(({ effectiveUserAgent }) =>
+      effectiveUserAgent ? { userAgent: effectiveUserAgent } : undefined
+    )
     const headers = runRequest(listener, {
       url: 'https://www.gstatic.com/_/signin/log',
       webContentsId: 7,
@@ -82,7 +99,7 @@ describe('browser session request identity', () => {
   })
 
   it('keeps the Firefox auth-host branch independent of the resolver', () => {
-    const resolver = vi.fn(() => 'unexpected Chrome identity')
+    const resolver = vi.fn(() => ({ userAgent: 'unexpected Chrome identity' }))
     const headers = runRequest(install(resolver), {
       url: 'https://accounts.google.com/v3/signin/identifier',
       requestHeaders: {

@@ -5,7 +5,10 @@ import {
 } from './browser-session-ua'
 import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
-import { buildViewportUserAgentOverride } from './browser-viewport-user-agent'
+import {
+  buildViewportUserAgentOverride,
+  type ViewportUserAgentOverride
+} from './browser-viewport-user-agent'
 import {
   safeOrigin,
   type AuthUserAgentOverrideOperation,
@@ -17,7 +20,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   /** Resolve the one legacy User-Agent value the session hook must enforce for this guest request. */
   resolveBrowserGuestRequestUserAgent(
     request: Parameters<BrowserSessionRequestUserAgentResolver>[0]
-  ): string {
+  ): ViewportUserAgentOverride {
     const firefoxUa = googleAuthUserAgent()
     const pendingNavigation =
       request.webContentsId === undefined
@@ -29,7 +32,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       request.currentUserAgent === firefoxUa &&
       (!pendingNavigation || isGoogleAuthUrl(pendingNavigation.currentUrl))
     ) {
-      return firefoxUa
+      return { userAgent: firefoxUa }
     }
     const overrideState =
       request.webContentsId === undefined
@@ -47,10 +50,10 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     ) {
       // Direct auth navigations use WebContents.setUserAgent, which Electron fails to carry onto
       // image/XHR/fetch requests. Read that effective guest identity so those paths stay Firefox.
-      return firefoxUa
+      return { userAgent: firefoxUa }
     }
     if (currentOverride?.userAgent === firefoxUa) {
-      return firefoxUa
+      return { userAgent: firefoxUa }
     }
     const browserPageId =
       request.webContentsId === undefined
@@ -58,12 +61,12 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
         : this.tabIdByWebContentsId.get(request.webContentsId)
     const mobile = browserPageId
       ? (this.viewportUaOverrideMobileByTabId.get(browserPageId) ?? false)
-      : false
+      : this.hasSessionMobileViewportIntent(request.session)
     return buildViewportUserAgentOverride({
       url: request.url,
       mobile,
       baseUserAgent: cleanElectronUserAgent(request.baseUserAgent)
-    }).userAgent
+    })
   }
 
   // Why: navigator.userAgent (read by Google's auth JS) reflects the WebContents UA,
