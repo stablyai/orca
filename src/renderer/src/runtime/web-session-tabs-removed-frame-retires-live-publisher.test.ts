@@ -172,6 +172,54 @@ describe('a removal frame must not retire the publisher that is still live', () 
     ).toBe(false)
   })
 
+  /**
+   * The recovery gate's epoch fence is the only thing between a superseded generation and the
+   * mirror when a sibling stream delivers its frame late enough to outrank the successor on
+   * delivery order. Retractions no longer retire anything, so a genuine handover is now the only
+   * thing that exercises this fence — it is narrower than it was, not unreachable.
+   */
+  it('fences a superseded generation whose late frame outranks the successor on delivery order', () => {
+    const firstReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
+    expect(admits(liveFrame(1), firstReceived)).toBe(true)
+
+    const successor = { ...liveFrame(1), publicationEpoch: 'renderer-generation-2' }
+    const successorReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, successor)
+    expect(admits(successor, successorReceived)).toBe(true)
+
+    // A sibling stream delivers the predecessor's frame after the handover, so delivery order alone
+    // would admit it. Its generation is retired, and that is what has to reject it.
+    const late = liveFrame(9)
+    const lateReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, late)
+    expect(lateReceived).toBeGreaterThan(successorReceived)
+    expect(shouldApplyRecoveredWebSessionTabsSnapshot(ENVIRONMENT_ID, late, lateReceived)).toBe(
+      false
+    )
+  })
+
+  /**
+   * Rate-independence, which is the point of fixing this at the root. The defect surfaced only 1
+   * run in 6 because the retired-value check is an exact string match while the lineage check
+   * treats `:headless-merge:` as the same publisher, so a merged republication walked past a fence
+   * a bare one hit. The removal path must no longer care which shape arrives; if it did, the defect
+   * would not be fixed, only re-rated.
+   */
+  for (const [label, epoch] of [
+    ['bare', LIVE_EPOCH],
+    ['headless-merge', `${LIVE_EPOCH}:headless-merge:abc`]
+  ] as const) {
+    it(`readmits a ${label} republication after a removal, through the full path`, () => {
+      const liveReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, liveFrame(1))
+      expect(admits(liveFrame(1), liveReceived)).toBe(true)
+
+      const removedReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, removalFrame())
+      expect(admits(removalFrame(), removedReceived)).toBe(true)
+
+      const republished = { ...liveFrame(2), publicationEpoch: epoch }
+      const republishedReceived = recordReceivedWebSessionTabsSnapshot(ENVIRONMENT_ID, republished)
+      expect(admits(republished, republishedReceived)).toBe(true)
+    })
+  }
+
   // Why this stays fenced: a genuinely superseded generation is retired by a *successor's*
   // publication, which is a handover. Only the removal path must stop retiring.
   it('still fences a predecessor generation that a successor replaced', () => {
