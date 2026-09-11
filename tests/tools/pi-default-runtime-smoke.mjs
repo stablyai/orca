@@ -45,16 +45,20 @@ try {
   await build({
     stdin: {
       contents:
-        "export {planCommitMessageGeneration} from './src/shared/commit-message-plan'; export {runProcess} from './src/shared/child-process/run-process';",
+        "export {planCommitMessageGeneration} from './src/shared/commit-message-plan'; export {resolveSourceControlAiForOperation} from './src/shared/source-control-ai'; export {getDefaultSettings} from './src/shared/constants'; export {runProcess} from './src/shared/child-process/run-process';",
       resolveDir: process.cwd()
     },
     bundle: true,
     platform: 'node',
     format: 'cjs',
-    outfile: bundle,
-    packages: 'external'
+    outfile: bundle
   })
-  const { planCommitMessageGeneration, runProcess } = createRequire(import.meta.url)(bundle)
+  const {
+    planCommitMessageGeneration,
+    runProcess,
+    resolveSourceControlAiForOperation,
+    getDefaultSettings
+  } = createRequire(import.meta.url)(bundle)
   server.listen(0, '127.0.0.1')
   await once(server, 'listening')
   const dir = join(scratch, 'agent')
@@ -84,16 +88,27 @@ try {
     join(dir, 'settings.json'),
     JSON.stringify({ defaultProvider: 'orca-proof', defaultModel: 'local' })
   )
-  const planned = planCommitMessageGeneration(
-    { agentId: 'pi', model: 'default' },
-    'Generate one short commit message.'
-  )
+  const settings = getDefaultSettings(scratch)
+  settings.defaultTuiAgent = 'pi'
+  settings.sourceControlAi.agentId = 'pi'
+  settings.commitMessageAi.agentId = 'pi'
+  function planOperation(operation) {
+    const resolved = resolveSourceControlAiForOperation({
+      settings,
+      operation,
+      discoveryHostKey: 'local'
+    })
+    assert.equal(resolved.ok, true)
+    assert.equal(resolved.value.params.useConfiguredDefaultModel, true)
+    return planCommitMessageGeneration(resolved.value.params, 'Generate one short commit message.')
+  }
+  const planned = planOperation('branchName')
   assert.equal(planned.ok, true)
   const fixedArgs = planned.plan.args
   assert.ok(!fixedArgs.includes('--model'))
   const variants = [
     ['baseline', [...fixedArgs, '--model', 'github-copilot/gpt-5.4-mini']],
-    ['configured-default', fixedArgs],
+    ['branch-name-configured-default', fixedArgs],
     [
       'explicit-override',
       planCommitMessageGeneration(
@@ -102,6 +117,10 @@ try {
       ).plan.args
     ]
   ]
+  variants.push(
+    ['commit-message-configured-default', planOperation('commitMessage').plan.args],
+    ['pull-request-configured-default', planOperation('pullRequest').plan.args]
+  )
   const results = []
   for (const [variant, args] of variants) {
     const n = requests.length
@@ -140,11 +159,16 @@ try {
   assert.equal(results[2].code, 0, results[2].stderr)
   assert.equal(results[2].model, 'override')
   assert.equal(results[2].requests, 1)
+  for (const result of results.slice(3)) {
+    assert.equal(result.code, 0, result.stderr)
+    assert.equal(result.requests, 1)
+    assert.equal(result.model, 'local')
+  }
   console.log(
     JSON.stringify(
       {
         scope:
-          'Actual Pi CLI and production command planner; isolated models.json provider with local OpenAI-compatible fixture.',
+          'Actual Pi CLI, source-control operation resolver (including first-work branchName), and production command planner; isolated models.json provider with local OpenAI-compatible fixture.',
         platform: process.platform,
         results
       },
