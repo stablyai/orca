@@ -278,6 +278,14 @@ describe('push notification preference', () => {
     vi.mocked(AsyncStorage.setItem).mockReset()
   })
 
+  it.each(['true', 'false'])('requires fresh consent for legacy choice %s', async (legacy) => {
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'orca:pushNotificationsEnabled' ? legacy : null
+    )
+    await expect(readPushNotificationsPreference()).resolves.toEqual({ value: null, loaded: true })
+    await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
+  })
+
   it('distinguishes an unset preference from an explicit disabled choice', async () => {
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
       key === 'orca:remotePushEnabled' ? 'true' : null
@@ -315,7 +323,7 @@ describe('push notification preference', () => {
       await savePushNotificationsEnabled(enabled)
       await expect(loadPushNotificationsEnabled()).resolves.toBe(enabled)
     }
-    expect([...storage]).toEqual([['orca:pushNotificationsEnabled', 'false']])
+    expect([...storage]).toEqual([['orca:pushServiceNotificationsEnabled', 'false']])
   })
 })
 

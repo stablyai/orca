@@ -116,10 +116,6 @@ async function connectedHost() {
   return client
 }
 async function choose(entry: string) {
-  if (entry === 'gate') {
-    await expect(shouldPresentNotificationOptIn()).resolves.toBe(false)
-    return
-  }
   await act(async () => {
     renderer = create(
       createElement(entry === 'settings' ? NotificationsScreen : MobileOnboardingScreen)
@@ -134,7 +130,7 @@ async function choose(entry: string) {
   })
 }
 function expectChoiceComplete(entry: string) {
-  expect(mocks.storage.get('orca:pushNotificationsEnabled')).toBe('true')
+  expect(mocks.storage.get('orca:pushServiceNotificationsEnabled')).toBe('true')
   if (entry === 'settings') {
     expect(renderer!.root.findByType('Switch').props).toMatchObject({
       value: true,
@@ -161,7 +157,43 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-it.each(['settings', 'onboarding', 'gate'])(
+it.each(['true', 'false'])(
+  'requires consent before registering a legacy %s user',
+  async (legacy) => {
+    mocks.storage.set('orca:pushNotificationsEnabled', legacy)
+    const client = await connectedHost()
+    await expect(shouldPresentNotificationOptIn()).resolves.toBe(true)
+    await drain()
+    expect(getDevicePushToken).not.toHaveBeenCalled()
+    expect(client.sendRequest).not.toHaveBeenCalled()
+    await choose('onboarding')
+    await drain()
+    await expect(shouldPresentNotificationOptIn()).resolves.toBe(false)
+    expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
+      'notifications.registerPush'
+    ])
+  }
+)
+
+it('remembers Not now without registering and does not ask again', async () => {
+  mocks.storage.set('orca:pushNotificationsEnabled', 'true')
+  const client = await connectedHost()
+  await act(async () => {
+    renderer = create(createElement(MobileOnboardingScreen))
+  })
+  await act(async () => {
+    renderer!.root.findByType('Page').props.onNotificationChoice('skip')
+  })
+  await drain()
+  await expect(shouldPresentNotificationOptIn()).resolves.toBe(false)
+  expect(mocks.storage.get('orca:pushServiceNotificationsEnabled')).toBe('false')
+  expect(getDevicePushToken).not.toHaveBeenCalled()
+  expect(
+    client.sendRequest.mock.calls.some(([method]) => method === 'notifications.registerPush')
+  ).toBe(false)
+})
+
+it.each(['settings', 'onboarding'])(
   '%s schedules exactly one registration with token sync running',
   async (entry) => {
     const client = await connectedHost()
@@ -175,7 +207,7 @@ it.each(['settings', 'onboarding', 'gate'])(
   }
 )
 
-it.each(['settings', 'onboarding', 'gate'])(
+it.each(['settings', 'onboarding'])(
   '%s finishes local consent while native token acquisition is pending',
   async (entry) => {
     const client = await connectedHost()
@@ -194,7 +226,7 @@ it.each(['settings', 'onboarding', 'gate'])(
   }
 )
 
-it.each(['settings', 'onboarding', 'gate'])(
+it.each(['settings', 'onboarding'])(
   '%s finishes local consent while registration RPC is pending',
   async (entry) => {
     const client = await connectedHost()
@@ -252,7 +284,7 @@ it('exposes a failed consent write without scheduling or changing durable consen
   vi.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('consent write failed'))
   await expect(setRemotePushEnabled(true)).rejects.toThrow('consent write failed')
   await drain()
-  expect(mocks.storage.has('orca:pushNotificationsEnabled')).toBe(false)
+  expect(mocks.storage.has('orca:pushServiceNotificationsEnabled')).toBe(false)
   expect(client.sendRequest).not.toHaveBeenCalled()
 })
 
@@ -268,7 +300,7 @@ it('exposes a failed records write and still schedules exactly one cleanup', asy
     .mockRejectedValueOnce(new Error('records write failed'))
   await expect(setRemotePushEnabled(false)).rejects.toThrow('records write failed')
   await drain()
-  expect(mocks.storage.get('orca:pushNotificationsEnabled')).toBe('false')
+  expect(mocks.storage.get('orca:pushServiceNotificationsEnabled')).toBe('false')
   expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
     'notifications.unregisterPush'
   ])

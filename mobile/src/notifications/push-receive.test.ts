@@ -51,7 +51,7 @@ beforeEach(() => {
   AppState.currentState = 'background'
   setNotificationViewingWorkspace(null)
   storage.clear()
-  storage.set('orca:pushNotificationsEnabled', 'true')
+  storage.set('orca:pushServiceNotificationsEnabled', 'true')
   resetForegroundPushClaimsForTests()
   vi.mocked(loadHostCatalog).mockResolvedValue([
     ...hosts,

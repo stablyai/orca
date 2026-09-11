@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
-const NOTIF_KEY = 'orca:pushNotificationsEnabled'
+// Consent to the push service is separate from the old socket notification choice.
+const NOTIF_KEY = 'orca:pushServiceNotificationsEnabled'
 
 export type PushNotificationsPreference = {
   readonly value: boolean | null
