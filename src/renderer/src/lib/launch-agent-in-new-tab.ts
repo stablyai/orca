@@ -5,7 +5,7 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
-import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
+import { createPasteUndeliveredNotice } from '@/lib/launch-agent-paste-undelivered-notice'
 import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
@@ -264,7 +264,7 @@ function launchAgentInNewTabInternal(
     seedNativeChatLaunchDraftForAgentTab({ tabId: tab.id, agent, text: trimmedPrompt })
   }
   if (pasteDraftAfterLaunch !== null) {
-    const timeoutNotice = createPasteReadinessTimeoutNotice({
+    const undeliveredNotice = createPasteUndeliveredNotice({
       worktreeId,
       tabId: tab.id,
       agent,
@@ -276,7 +276,7 @@ function launchAgentInNewTabInternal(
       agent,
       submit: submitPastedPrompt,
       forcePaste: promptDelivery === 'submit-after-ready',
-      onUndelivered: timeoutNotice.onTimeout
+      onUndelivered: undeliveredNotice.onUndelivered
     }).then((delivered) => {
       if (delivered) {
         if (agent === 'command-code' && submitPastedPrompt) {
@@ -286,7 +286,7 @@ function launchAgentInNewTabInternal(
         }
         onPromptDelivered?.()
       }
-      return { delivered, failureNotified: !delivered && timeoutNotice.wasNotified() }
+      return { delivered, failureNotified: !delivered && undeliveredNotice.wasNotified() }
     })
     if (promptDelivery === 'submit-after-ready') {
       promptDeliveryResult = deliveryPromise

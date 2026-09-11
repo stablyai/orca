@@ -6,10 +6,8 @@ import {
   createRendererParityTerminal,
   writeToTerminal
 } from '../../../shared/terminal-restore-parity-fixture'
-import {
-  LEGITIMATE_AGENT_SCREENS,
-  LIVE_CREDENTIAL_SURFACES
-} from '../../../shared/terminal-credential-prompt-corpus'
+import { LEGITIMATE_AGENT_SCREENS } from '../../../shared/terminal-legitimate-agent-screens-corpus'
+import { LIVE_CREDENTIAL_SURFACES } from '../../../shared/terminal-live-credential-surfaces-corpus'
 import { registerPtyVisibleScreen } from '@/components/terminal-pane/pty-visible-screen-registry'
 import { isAgentPasteBlockedByCredentialPrompt } from './agent-paste-credential-prompt-guard'
 

@@ -7,10 +7,8 @@ import {
   findCredentialPromptIndex,
   TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE
 } from './terminal-credential-prompt-detection'
-import {
-  LEGITIMATE_AGENT_SCREENS,
-  LIVE_CREDENTIAL_SURFACES
-} from './terminal-credential-prompt-corpus'
+import { LEGITIMATE_AGENT_SCREENS } from './terminal-legitimate-agent-screens-corpus'
+import { LIVE_CREDENTIAL_SURFACES } from './terminal-live-credential-surfaces-corpus'
 import { TERMINAL_TITLE_CLASSIFICATION_CORPUS } from './terminal-title-classification-corpus'
 
 function screen(lines: string[]): string {

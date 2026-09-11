@@ -2,10 +2,8 @@
 // blocks must also reach `agent-credential-prompt` through the wait-blocked vocabulary, which
 // is what makes `writeTerminalAgentPrompt` refuse the PTY write.
 import { describe, expect, it } from 'vitest'
-import {
-  LEGITIMATE_AGENT_SCREENS,
-  LIVE_CREDENTIAL_SURFACES
-} from '../../shared/terminal-credential-prompt-corpus'
+import { LEGITIMATE_AGENT_SCREENS } from '../../shared/terminal-legitimate-agent-screens-corpus'
+import { LIVE_CREDENTIAL_SURFACES } from '../../shared/terminal-live-credential-surfaces-corpus'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptPreview

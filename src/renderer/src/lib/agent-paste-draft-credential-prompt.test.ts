@@ -10,6 +10,7 @@ import { registerPtyVisibleScreen } from '@/components/terminal-pane/pty-visible
 import {
   pasteDraftToAgentPtyWhenReady,
   pasteDraftWhenAgentReady,
+  sendBracketedPasteToRunningAgent,
   submitPromptToAgentPty
 } from './agent-paste-draft'
 
@@ -227,10 +228,24 @@ describe('the agent paste lane refuses a live credential prompt', () => {
 
   it('guards the automation reuse entry point, which has no readiness wait at all', async () => {
     await showOnPane('pty-1', SIGN_IN_DIALOG)
+    const onUndelivered = vi.fn()
 
     await expect(
-      submitPromptToAgentPty({ tabId: 'tab-1', ptyId: 'pty-1', content: PROMPT })
+      submitPromptToAgentPty({ tabId: 'tab-1', ptyId: 'pty-1', content: PROMPT, onUndelivered })
     ).resolves.toBe(false)
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    // A refusal the caller never hears about is the silent drop the guard exists to prevent.
+    expect(onUndelivered).toHaveBeenCalledExactlyOnceWith('credential-prompt')
+  })
+
+  it('reports a refused paste into an already-running agent', async () => {
+    await showOnPane('pty-1', SIGN_IN_DIALOG)
+    const onUndelivered = vi.fn()
+
+    await expect(
+      sendBracketedPasteToRunningAgent({ ptyId: 'pty-1', content: PROMPT, onUndelivered })
+    ).resolves.toBe(false)
+    expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
+    expect(onUndelivered).toHaveBeenCalledExactlyOnceWith('credential-prompt')
   })
 })

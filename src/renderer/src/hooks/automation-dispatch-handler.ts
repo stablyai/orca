@@ -1,6 +1,7 @@
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
+import { trackAgentPasteCredentialPromptRefusal } from '@/lib/agent-paste-credential-prompt-notice'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
@@ -111,7 +112,13 @@ export async function handleAutomationDispatchRequest({
             const submitted = await submitPromptToAgentPty({
               tabId: reusableSession.tabId,
               ptyId: reusableSession.ptyId,
-              content: automation.prompt
+              content: automation.prompt,
+              // Why no toast: a refused reuse falls through to a fresh background session below,
+              // so the prompt still lands — but the refusal must not vanish from telemetry.
+              onUndelivered: (failure) =>
+                failure === 'credential-prompt'
+                  ? trackAgentPasteCredentialPromptRefusal(automation.agentId)
+                  : undefined
             })
             if (!submitted) {
               completion.cleanupRunObservers()

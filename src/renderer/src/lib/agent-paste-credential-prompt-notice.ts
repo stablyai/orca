@@ -18,6 +18,11 @@ export function showAgentPasteCredentialPromptToast(agent: TuiAgent, submitted: 
       { value0: submitted ? 'prompt' : 'notes' }
     )
   )
+  trackAgentPasteCredentialPromptRefusal(agent)
+}
+
+/** For callers that recover on their own and so must not toast, but still owe the refusal a record. */
+export function trackAgentPasteCredentialPromptRefusal(agent: TuiAgent): void {
   // Why 'unknown': errorClassSchema has no credential-refusal slot, and the dashboard's unknown
   // slice is this repo's established trigger to add one.
   track('agent_error', { error_class: 'unknown', agent_kind: tuiAgentToAgentKind(agent) })

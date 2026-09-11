@@ -10,10 +10,8 @@ import {
   visibleNonBlankTerminalLines
 } from './terminal-visible-screen-projection'
 import { findCredentialPromptIndex } from './terminal-credential-prompt-detection'
-import {
-  LEGITIMATE_AGENT_SCREENS,
-  LIVE_CREDENTIAL_SURFACES
-} from './terminal-credential-prompt-corpus'
+import { LEGITIMATE_AGENT_SCREENS } from './terminal-legitimate-agent-screens-corpus'
+import { LIVE_CREDENTIAL_SURFACES } from './terminal-live-credential-surfaces-corpus'
 
 const VIEWPORT = { cols: 120, rows: 24 }
 

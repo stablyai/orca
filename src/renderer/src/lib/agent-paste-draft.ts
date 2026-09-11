@@ -189,27 +189,27 @@ export async function submitPromptToAgentPty(args: {
   tabId: string
   ptyId: string
   content: string
+  onUndelivered?: (failure: AgentDraftDeliveryFailure) => void
 }): Promise<boolean> {
-  return (
-    (await sendBracketedPasteToAgent({
+  return await deliverBracketedPaste(
+    {
       settings: getSettingsForAgentTabRuntimeOwner(args.tabId),
       ptyId: args.ptyId,
       content: args.content,
       submit: true
-    })) === 'delivered'
+    },
+    args.onUndelivered
   )
 }
 
 export async function sendBracketedPasteToRunningAgent(args: {
   ptyId: string
   content: string
+  onUndelivered?: (failure: AgentDraftDeliveryFailure) => void
 }): Promise<boolean> {
-  return (
-    (await sendBracketedPasteToAgent({
-      ptyId: args.ptyId,
-      content: args.content,
-      submit: true
-    })) === 'delivered'
+  return await deliverBracketedPaste(
+    { ptyId: args.ptyId, content: args.content, submit: true },
+    args.onUndelivered
   )
 }
 

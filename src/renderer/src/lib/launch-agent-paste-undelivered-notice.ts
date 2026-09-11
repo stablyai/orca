@@ -2,25 +2,31 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
+import { showAgentPasteCredentialPromptToast } from '@/lib/agent-paste-credential-prompt-notice'
+import type { AgentDraftDeliveryFailure } from '@/lib/agent-paste-credential-prompt-guard'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
 /**
  * Notice for a post-launch paste that never landed — a stalled readiness wait
  * would otherwise drop the user's text silently.
  *
+ * Why it takes the failure: the two reasons want different telemetry. Reporting a
+ * credential refusal as `paste_readiness_timeout` is the same lie the reason argument
+ * exists to prevent.
+ *
  * `wasNotified()` reports whether the user already heard about it, so a
  * deferred caller can suppress a duplicate toast.
  */
-export function createPasteReadinessTimeoutNotice(args: {
+export function createPasteUndeliveredNotice(args: {
   worktreeId: string
   tabId: string
   agent: TuiAgent
   submitted: boolean
-}): { onTimeout: () => void; wasNotified: () => boolean } {
+}): { onUndelivered: (failure: AgentDraftDeliveryFailure) => void; wasNotified: () => boolean } {
   let notified = false
   return {
     wasNotified: () => notified,
-    onTimeout: () => {
+    onUndelivered: (failure) => {
       const state = useAppStore.getState()
       const currentTab = (state.tabsByWorktree[args.worktreeId] ?? []).find(
         (tab) => tab.id === args.tabId
@@ -34,6 +40,11 @@ export function createPasteReadinessTimeoutNotice(args: {
         notified = true
         return
       }
+      notified = true
+      if (failure === 'credential-prompt') {
+        showAgentPasteCredentialPromptToast(args.agent, args.submitted)
+        return
+      }
       toast.message(
         translate(
           'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
@@ -41,7 +52,6 @@ export function createPasteReadinessTimeoutNotice(args: {
           { value0: args.submitted ? 'prompt' : 'notes' }
         )
       )
-      notified = true
       track('agent_error', {
         error_class: 'paste_readiness_timeout',
         agent_kind: tuiAgentToAgentKind(args.agent)
