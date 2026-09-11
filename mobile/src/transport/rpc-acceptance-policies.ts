@@ -13,10 +13,7 @@ export function requireRpcResultOrThrowCodedError(response: RpcResponse): unknow
   return response.result
 }
 
-/**
- * Accepts only a success whose result is a non-null object. Arrays qualify.
- * Strictly narrower than `rpcResultOrNull`: a `null`, string or numeric result is refused.
- */
+/** Accepts only a success whose result is a non-null object. Arrays qualify. */
 export function rpcObjectResultOrNull(response: RpcResponse): Record<string, unknown> | null {
   if (!response.ok || typeof response.result !== 'object' || response.result === null) {
     return null

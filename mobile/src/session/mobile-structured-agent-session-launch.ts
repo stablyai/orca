@@ -143,11 +143,16 @@ export async function createMobileStructuredAgentSession(
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
   if (!response.ok) {
-    const error = response.error as { code?: unknown } | null | undefined
-    if (!error || typeof error !== 'object' || typeof error.code !== 'string') {
+    const error = response.error as { code?: unknown; message?: unknown } | null | undefined
+    if (
+      !error ||
+      typeof error !== 'object' ||
+      typeof error.code !== 'string' ||
+      typeof error.message !== 'string'
+    ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
-    return classifyCreateRefusal(agent, response.error.code, response.error.message)
+    return classifyCreateRefusal(agent, error.code, error.message)
   }
   const result = response.result as AgentSessionMutationResult<AgentSessionAttachResult>
   if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') {
@@ -157,7 +162,8 @@ export async function createMobileStructuredAgentSession(
     if (
       !result.refusal ||
       typeof result.refusal !== 'object' ||
-      typeof result.refusal.code !== 'string'
+      typeof result.refusal.code !== 'string' ||
+      typeof result.refusal.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
