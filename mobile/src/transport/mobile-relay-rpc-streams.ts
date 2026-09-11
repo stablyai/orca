@@ -9,6 +9,7 @@ import {
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
 import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
+import { isStreamingOpenerReply } from './rpc-acceptance-policies'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse, RpcSuccess } from './types'
 
@@ -119,7 +120,7 @@ export class MobileRelayRpcStreams {
           }
         }
       }
-      if (response.ok && response.streaming !== true) {
+      if (response.ok && !isStreamingOpenerReply(response)) {
         this.cancelledSubscriptions.delete(response.id)
       }
       return true

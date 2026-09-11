@@ -3,6 +3,7 @@ import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { setCachedRepos } from '../cache/repo-cache'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
+import { rpcResultOrNull } from '../transport/rpc-acceptance-policies'
 import type { RepoSummary } from '../worktree/host-worktree-rpc-types'
 import { repoColor } from '../worktree/repo-color'
 import {
@@ -18,7 +19,7 @@ type SshTargetSummaryRow = { id: string; label: string }
 async function requestResult(client: RpcClient, method: string): Promise<unknown> {
   try {
     const response = await client.sendRequest(method)
-    return response.ok ? (response as RpcSuccess).result : null
+    return rpcResultOrNull(response)
   } catch {
     // Best-effort: hosts that predate a method still list repos; labels degrade to host ids.
     return null

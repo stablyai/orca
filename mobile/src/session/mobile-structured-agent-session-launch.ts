@@ -12,6 +12,7 @@ import {
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
 import type { RpcClient } from '../transport/rpc-client'
+import { isCodedRpcRefusal, isRpcReplyWithBooleanOk } from '../transport/rpc-acceptance-policies'
 import { structuredSessionRandomUuid } from './mobile-structured-agent-session-rpc'
 
 type StructuredCreateSupport = {
@@ -137,15 +138,11 @@ export async function createMobileStructuredAgentSession(
     }
   }
 
-  if (!response || typeof response !== 'object' || typeof response.ok !== 'boolean') {
+  if (!isRpcReplyWithBooleanOk(response)) {
     return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
   }
   if (!response.ok) {
-    if (
-      !response.error ||
-      typeof response.error !== 'object' ||
-      typeof response.error.code !== 'string'
-    ) {
+    if (!isCodedRpcRefusal(response)) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
     return classifyCreateRefusal(agent, response.error.code, response.error.message)
