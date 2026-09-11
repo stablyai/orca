@@ -27,6 +27,7 @@ import {
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { matchesSettingsSearch } from './settings-search'
+import { getClaudeSystemDefaultSignInWarning } from './claude-account-auth-warning'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex-config-sync-warning'
 import {
@@ -72,6 +73,8 @@ export function AccountsPane({
   accountOwnerPlatform = null
 }: AccountsPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const claudeRateLimits = useAppStore((s) => s.rateLimits.claude)
+  const claudeRateLimitTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
@@ -209,6 +212,14 @@ export function AccountsPane({
   const codexConfigSyncWarning = getCodexConfigSyncWarning(codexConfigSync)
   const systemCodexMissingSignIn = activeCodexAuthWarning === 'missing-sign-in'
   const systemCodexNeedsSignIn = activeCodexAccountId === null && Boolean(activeCodexAuthWarning)
+  // Why: remote snapshots own their system-default login, but the desktop's
+  // usage poll must not be misattributed to a remote account owner (#7973).
+  const systemClaudeNeedsSignIn = getClaudeSystemDefaultSignInWarning({
+    limits: isRemoteAccountScope ? null : claudeRateLimits,
+    target: claudeRateLimitTarget,
+    runtime: accountRuntime,
+    systemActive: systemClaudeActive
+  })
   const accountRuntimeUnavailable =
     accountRuntime.runtime === 'wsl' && !wslAvailable && !wslCapabilitiesLoading
 
@@ -316,6 +327,7 @@ export function AccountsPane({
     claudeAction,
     visibleClaudeAccounts,
     systemClaudeActive,
+    systemClaudeNeedsSignIn,
     setRemoveClaudeTarget,
     runClaudeAccountAction,
     codexAccounts,
