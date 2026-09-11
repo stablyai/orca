@@ -74,11 +74,11 @@ export function ActivityThreadListToolbar({
                 value={query}
                 onChange={(event) => onQueryChange(event.target.value)}
                 placeholder={translate(
-                  'auto.components.activity.ActivityPrototypePage.795cbf26e2',
-                  'Filter...'
+                  'auto.components.activity.ActivityPrototypePage.searchAgent',
+                  'Search for agents...'
                 )}
                 className={cn(
-                  'h-7 w-full pl-6 text-[11px] shadow-none focus-visible:ring-0',
+                  'h-7 w-full border border-border/80 bg-background pl-6 text-xs shadow-none placeholder:text-xs focus-visible:border-ring/70 focus-visible:ring-0 dark:border-white/15 dark:bg-white/[0.04]',
                   query ? 'pr-6' : ''
                 )}
               />
@@ -109,7 +109,7 @@ export function ActivityThreadListToolbar({
             >
               <SelectTrigger
                 size="sm"
-                className="h-7 w-[116px] shrink-0 px-2 text-[11px]"
+                className="h-7 w-[116px] shrink-0 px-2 text-xs"
                 aria-label={translate(
                   'auto.components.activity.ActivityPrototypePage.770d458144',
                   'Group agent activity by'
@@ -194,7 +194,7 @@ export function ActivityThreadListToolbar({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+              className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={onMarkAllThreadsRead}
               disabled={!hasUnreadThreads}
             >
@@ -212,7 +212,7 @@ export function ActivityThreadListToolbar({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+              className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground"
               onClick={onClearCompleted}
               disabled={!hasCompletedThreads}
             >

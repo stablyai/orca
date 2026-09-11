@@ -14190,6 +14190,7 @@
           "clearCompleted": "Borrar completados",
           "none": "Ninguno",
           "search": "Buscar",
+          "searchAgent": "Buscar agentes...",
           "showUnreadOnly": "Mostrar solo no leídos",
           "showChildAgents": "Mostrar agentes secundarios",
           "activityOptions": "Opciones de actividad",

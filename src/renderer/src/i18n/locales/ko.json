@@ -14268,6 +14268,7 @@
           "clearCompleted": "완료된 항목 지우기",
           "none": "없음",
           "search": "검색",
+          "searchAgent": "에이전트 검색...",
           "showUnreadOnly": "읽지 않은 항목만 표시",
           "showChildAgents": "하위 에이전트 표시",
           "activityOptions": "활동 옵션",
