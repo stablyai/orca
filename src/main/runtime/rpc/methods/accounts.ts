@@ -1,91 +1,20 @@
-import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import {
+  AccountsUnsubscribeParams,
+  AddClaudeFromConfigDirParams,
+  AddCodexFromHomeParams,
+  ConsumeCodexResetCreditParams,
+  ListAccountsParams,
+  RemoveAccountParams,
+  SelectAccountParams,
+  SelectCodexAccountForTargetParams
+} from '../../../../shared/rpc-contract/accounts-params'
 
 // Why: monotonically increasing per-process counter avoids the Date.now()
 // collision that fired when two near-simultaneous accounts.subscribe calls
 // collided on the same millisecond and one evicted the other through
 // registerSubscriptionCleanup's existing-key eviction path.
 let accountsSubscriptionSeq = 0
-
-const CodexResetTarget = z.discriminatedUnion('runtime', [
-  z.object({ runtime: z.literal('host'), wslDistro: z.null() }).strict(),
-  // Why: reset scope must identify one exact WSL distro; null means all slots only for selection.
-  z.object({ runtime: z.literal('wsl'), wslDistro: z.string().trim().min(1).max(255) }).strict()
-])
-
-const CodexSelectionTarget = z.discriminatedUnion('runtime', [
-  z.object({ runtime: z.literal('host'), wslDistro: z.null() }).strict(),
-  z
-    .object({
-      runtime: z.literal('wsl'),
-      // A null distro intentionally means all WSL selection slots.
-      wslDistro: z.string().trim().min(1).max(255).nullable()
-    })
-    .strict()
-])
-
-const SelectAccountParams = z.object({
-  accountId: z
-    .union([z.string().min(1, 'Missing accountId'), z.null()])
-    .transform((v) => (v === null ? null : v))
-})
-
-const SelectCodexAccountForTargetParams = SelectAccountParams.extend({
-  target: CodexSelectionTarget
-})
-
-const RemoveAccountParams = z.object({
-  accountId: z.string().min(1, 'Missing accountId')
-})
-
-const CodexResetExpectedScope = z
-  .object({
-    target: CodexResetTarget,
-    accountId: z.string().min(1, 'Missing accountId').max(512),
-    accountRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    offerRevision: z.string().startsWith('v1:', 'Invalid offerRevision').max(4_096)
-  })
-  .strict()
-
-const ConsumeCodexResetCreditParams = z
-  .object({
-    // Why: the phone owns the logical attempt key so a lost response can be
-    // retried without spending a finite earned credit twice.
-    idempotencyKey: z.uuid('Invalid idempotencyKey'),
-    expectedScope: CodexResetExpectedScope
-  })
-  .strict()
-
-const AddClaudeFromConfigDirParams = z.object({
-  configDir: z.string().min(1, 'Missing configDir'),
-  runtime: z.enum(['host', 'wsl']).optional(),
-  wslDistro: z.string().nullish(),
-  previousLegacyCredentialsSha256: z
-    .string()
-    .regex(/^[a-f0-9]{64}$/, 'Invalid legacy credential digest')
-    .nullable()
-    .optional()
-})
-
-const AddCodexFromHomeParams = z.object({
-  sourceHome: z.string().min(1, 'Missing sourceHome'),
-  runtime: z.enum(['host', 'wsl']).optional(),
-  wslDistro: z.string().nullish()
-})
-
-// Why: `orca account list` prints only emails and the active ids, so it opts out
-// of the forced all-provider usage refresh below — that lane bypasses the poll
-// throttle and Retry-After gate and costs one serial round-trip per account.
-const ListAccountsParams = z.object({
-  refreshUsage: z.boolean().default(true)
-})
-
-const AccountsUnsubscribeParams = z.object({
-  subscriptionId: z
-    .unknown()
-    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
-    .pipe(z.string().min(1, 'Missing subscriptionId'))
-})
 
 // Why: bridges the desktop ClaudeAccountService / CodexAccountService /
 // RateLimitService into the WebSocket / local-socket RPC. Read + switch +

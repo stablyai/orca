@@ -1,16 +1,8 @@
-import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
-import { OptionalString, requiredNumber } from '../schemas'
-
-const WorkspacePortScanParams = z.object({
-  repoId: OptionalString
-})
-
-const WorkspacePortKillParams = z.object({
-  repoId: OptionalString,
-  pid: requiredNumber('Missing process id'),
-  port: requiredNumber('Missing port')
-})
+import {
+  WorkspacePortKillParams,
+  WorkspacePortScanParams
+} from '../../../../shared/rpc-contract/workspace-ports-params'
 
 export const WORKSPACE_PORT_METHODS: RpcMethod[] = [
   defineMethod({

@@ -1,7 +1,6 @@
-import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { assertRpcClipboardTextWriteWithinLimit } from '../rpc-clipboard-text-validation'
-import { BrowserTarget, OptionalFiniteNumber } from '../schemas'
+import { BrowserTarget } from '../schemas'
 import {
   ClipboardWrite,
   CookieDelete,
@@ -22,17 +21,7 @@ import {
   StorageKeyValue,
   Viewport
 } from './browser-schemas'
-
-const MouseModifiers = z
-  .unknown()
-  .transform((v) => (Array.isArray(v) ? v : undefined))
-  .pipe(z.union([z.array(z.enum(['cmd', 'ctrl', 'alt', 'shift'])), z.undefined()]))
-  .optional()
-
-const MouseClick = MouseXY.merge(MouseButton).extend({
-  radius: OptionalFiniteNumber,
-  modifiers: MouseModifiers
-})
+import { MouseClick } from '../../../../shared/rpc-contract/browser-extras-params'
 
 export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
   defineMethod({
