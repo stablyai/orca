@@ -142,10 +142,9 @@ function makeDetected(authoritative: boolean): unknown {
   }
 }
 
-function getInlineRenameTitleTag(markup: string): string {
-  const match = markup.match(/<span[^>]*data-worktree-title-inline-rename=""[^>]*>/)
-  expect(match).not.toBeNull()
-  return match?.[0] ?? ''
+function getInlineRenameTitleText(markup: string): string {
+  const match = markup.match(/<span[^>]*data-worktree-title-inline-rename=""[^>]*>([^<]*)</)
+  return match?.[1] ?? ''
 }
 
 function getCardSurfaceTag(markup: string): string {
@@ -154,10 +153,14 @@ function getCardSurfaceTag(markup: string): string {
   return match?.[0] ?? ''
 }
 
-async function renderCard(overrides: Partial<Worktree> = {}, repo: Repo = makeRepo()) {
+async function renderCard(
+  overrides: Partial<Worktree> = {},
+  repo: Repo = makeRepo(),
+  cardProps: { hostContextLabel?: string } = {}
+) {
   const { default: WorktreeCard } = await import('./WorktreeCard')
   return renderToStaticMarkup(
-    <WorktreeCard worktree={makeWorktree(overrides)} repo={repo} isActive={false} />
+    <WorktreeCard worktree={makeWorktree(overrides)} repo={repo} isActive={false} {...cardProps} />
   )
 }
 
@@ -170,59 +173,122 @@ describe('WorktreeCard provisional startup rows', () => {
     startupWorktreeRefreshCompleted = false
   })
 
-  it('dims the title and reserves the identity row while the catalog is a fallback', async () => {
+  it('holds the auto title and reserves the identity row while the catalog is a fallback', async () => {
     // A synthesized fallback row carries no head either; a detached badge is not its shape.
-    const markup = await renderCard({ displayName: 'hetzner-vps', branch: '', head: '' })
+    const markup = await renderCard({
+      displayName: 'hetzner-vps',
+      branch: '',
+      head: '',
+      displayNameMode: 'automatic'
+    })
 
     expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('data-worktree-card-title-placeholder=""')
     expect(markup).toContain('data-worktree-card-identity-placeholder=""')
+    // The hover popover may still echo the persisted name; the card title must not.
+    expect(markup.split('data-hover-card-content')[0]).not.toContain(
+      'data-worktree-title-inline-rename='
+    )
     expect(markup).toContain('animate-pulse')
     expect(markup).toContain('motion-reduce:animate-none')
-    expect(getInlineRenameTitleTag(markup)).toContain('text-muted-foreground')
     // A reserved identity row keeps the settled card padding instead of the title-only `py-2`.
     expect(getCardSurfaceTag(markup)).toContain('pt-1.25')
     expect(getCardSurfaceTag(markup)).not.toContain('py-2')
   })
 
+  it('reserves the identity slot alongside existing host meta', async () => {
+    const markup = await renderCard(
+      { displayName: 'hetzner-vps', branch: '', head: '', displayNameMode: 'automatic' },
+      makeRepo(),
+      { hostContextLabel: 'Hetzner VPS' }
+    )
+
+    expect(markup).toContain('Hetzner VPS')
+    expect(markup).toContain('data-worktree-card-identity-placeholder=""')
+  })
+
+  it('keeps an explicit fixed label visible while reserving the identity slot', async () => {
+    const markup = await renderCard({
+      displayName: 'Fixed label',
+      branch: '',
+      head: '',
+      displayNameMode: 'fixed'
+    })
+
+    expect(markup).not.toContain('data-worktree-card-title-placeholder=""')
+    expect(getInlineRenameTitleText(markup)).toContain('Fixed label')
+    expect(markup).toContain('data-worktree-card-identity-placeholder=""')
+  })
+
   it('renders the settled card once the scan is authoritative', async () => {
     detectedWorktreesByRepo = { 'repo-1': makeDetected(true) }
-    const markup = await renderCard({ displayName: 'main', branch: 'main' })
+    const markup = await renderCard({
+      displayName: 'main',
+      branch: 'main',
+      displayNameMode: 'automatic'
+    })
 
     expect(markup).not.toContain('data-worktree-card-identity-placeholder=""')
-    expect(getInlineRenameTitleTag(markup)).not.toContain('text-muted-foreground')
+    expect(markup).not.toContain('data-worktree-card-title-placeholder=""')
+    expect(getInlineRenameTitleText(markup)).toContain('main')
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
   it('settles after startup completes even when the catalog stays non-authoritative', async () => {
     startupWorktreeRefreshCompleted = true
-    const markup = await renderCard({ displayName: 'hetzner-vps', branch: '' })
+    const markup = await renderCard({
+      displayName: 'hetzner-vps',
+      branch: '',
+      head: '',
+      displayNameMode: 'automatic'
+    })
 
     expect(markup).not.toContain('data-worktree-card-identity-placeholder=""')
-    expect(getInlineRenameTitleTag(markup)).not.toContain('text-muted-foreground')
+    expect(markup).not.toContain('data-worktree-card-title-placeholder=""')
+    expect(getInlineRenameTitleText(markup)).toContain('hetzner-vps')
   })
 
   it('leaves the legacy card style untouched', async () => {
     settings = { experimentalNewWorktreeCardStyle: false, compactWorktreeCards: false }
-    const markup = await renderCard({ displayName: 'hetzner-vps', branch: '' })
+    const markup = await renderCard({
+      displayName: 'hetzner-vps',
+      branch: '',
+      head: '',
+      displayNameMode: 'automatic'
+    })
 
     expect(markup).not.toContain('data-worktree-card-identity-placeholder=""')
-    expect(getInlineRenameTitleTag(markup)).not.toContain('text-muted-foreground')
+    expect(markup).not.toContain('data-worktree-card-title-placeholder=""')
+    expect(getInlineRenameTitleText(markup)).toContain('hetzner-vps')
   })
 
-  it('does not reserve an identity row when the fallback row already has meta content', async () => {
-    // Detached-head rows keep their real badge instead of a placeholder.
-    const markup = await renderCard({ displayName: 'hetzner-vps', branch: '', head: 'abc123' })
+  it('keeps a real detached badge instead of an identity placeholder', async () => {
+    const markup = await renderCard({
+      displayName: 'hetzner-vps',
+      branch: '',
+      head: 'abc123',
+      displayNameMode: 'automatic'
+    })
 
     expect(markup).not.toContain('data-worktree-card-identity-placeholder=""')
     expect(markup).toContain('Detached HEAD')
+    expect(markup).toContain('data-worktree-card-title-placeholder=""')
   })
 
   it('does not reserve an identity row for folder workspaces', async () => {
     const markup = await renderCard(
-      { id: 'repo-1::/repo/folder', path: '/repo/folder', displayName: 'Folder', branch: '' },
+      {
+        id: 'repo-1::/repo/folder',
+        path: '/repo/folder',
+        displayName: 'Folder',
+        branch: '',
+        head: '',
+        displayNameMode: 'automatic'
+      },
       makeRepo({ kind: 'folder' })
     )
 
     expect(markup).not.toContain('data-worktree-card-identity-placeholder=""')
+    expect(markup).not.toContain('data-worktree-card-title-placeholder=""')
   })
 })
