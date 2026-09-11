@@ -1,5 +1,5 @@
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo } from 'react'
 import { useNativeChatDisclosure } from './native-chat-disclosure-store'
 import { NativeChatToolLine } from './NativeChatToolLine'
 import { Check, ChevronRight } from 'lucide-react'
@@ -75,30 +75,10 @@ export function NativeChatToolRun({
     disclosureId === undefined
       ? undefined
       : `run:${disclosureId}:${expandOverride ?? '-'}:${expandSignal}:${revealedDiff?.requestId ?? '-'}`
-  const { open, setOpen, resetOpen } = useNativeChatDisclosure(
+  const { open, setOpen } = useNativeChatDisclosure(
     runKey,
     revealedDiff ? true : (expandOverride ?? expandSignal)
   )
-  const [controls, setControls] = useState({
-    expandOverride,
-    expandSignal,
-    revealedDiff
-  })
-  if (
-    controls.expandOverride !== expandOverride ||
-    controls.expandSignal !== expandSignal ||
-    controls.revealedDiff !== revealedDiff
-  ) {
-    setControls({ expandOverride, expandSignal, revealedDiff })
-    if (revealedDiff && controls.revealedDiff !== revealedDiff) {
-      resetOpen(true)
-    } else if (
-      controls.expandOverride !== expandOverride ||
-      controls.expandSignal !== expandSignal
-    ) {
-      resetOpen(expandOverride ?? expandSignal)
-    }
-  }
 
   // Childless groups are dropped so `subagentRows.length` stays an honest test of
   // "something will draw": the roster-only branch below returns a margin-bearing

@@ -24,15 +24,13 @@ import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
  *  arbitrarily expensive, so this buys smoothness by the row, not by the screen. */
 export const NATIVE_CHAT_WINDOW_OVERSCAN = 6
 
-/** Below this the scroll root cannot tell us where the viewport is, so windowing
- *  would be guessing. A collapsed or not-yet-laid-out pane reads as 0. */
-export const MIN_WINDOWED_VIEWPORT_PX = 32
-
 const FALLBACK_ROW_PX = 48
+/** Retired keys are harmless to layout but otherwise accumulate for the pane's
+ *  lifetime as a capped transcript advances. Compact them well before the stale
+ *  entries become material compared with the live window. */
+export const MAX_RETIRED_NATIVE_CHAT_MEASUREMENTS = 512
 
 export type NativeChatTranscriptWindow = {
-  /** False means the caller must render every row itself, in normal flow. */
-  isWindowed: boolean
   virtualItems: VirtualItem[]
   totalSize: number
   scrollMargin: number
@@ -88,24 +86,21 @@ export function useNativeChatTranscriptWindow({
 }): NativeChatTranscriptWindow {
   const sizerElementRef = useRef<HTMLDivElement | null>(null)
   const [scrollMargin, setScrollMargin] = useState(0)
-  const [viewportHeight, setViewportHeight] = useState<number | null>(null)
-
-  const slotsRef = useRef(slots)
-  slotsRef.current = slots
+  const previousMeasurementKeysRef = useRef<ReadonlySet<string> | null>(null)
+  const retiredMeasurementCountRef = useRef(0)
   const pinned = useMemo(
     () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex }),
     [slots.length, revealIndex]
   )
-  // Stable identities: the virtualizer keys its measurement memo on these, so a
-  // fresh closure per render would rebuild every row's offset on every frame.
+  // A content-only tail revision must not rebuild measured offsets: doing so
+  // breaks the end anchor while the row grows. Structural changes replace it.
+  const encodedItemKeys = JSON.stringify(slots.map((slot) => slot.message.id))
+  const itemKeys = useMemo(() => JSON.parse(encodedItemKeys) as string[], [encodedItemKeys])
   const estimateSize = useCallback(
-    (index: number) => slotsRef.current[index]?.estimatedHeight ?? FALLBACK_ROW_PX,
-    []
+    (index: number) => slots[index]?.estimatedHeight ?? FALLBACK_ROW_PX,
+    [slots]
   )
-  const getItemKey = useCallback(
-    (index: number) => slotsRef.current[index]?.message.id ?? index,
-    []
-  )
+  const getItemKey = useCallback((index: number) => itemKeys[index] ?? index, [itemKeys])
   // Identity tracks the pinned set on purpose. The virtualizer memoizes the
   // mounted indexes on this function, so a stable one would keep serving the
   // range from before a row was pinned — and a reveal would point at a row that
@@ -155,19 +150,45 @@ export function useNativeChatTranscriptWindow({
     if (!container) {
       return
     }
-    const read = (): void => {
-      const height = container.offsetHeight
-      setViewportHeight((current) => (current === height ? current : height))
-      readScrollMargin()
-    }
-    read()
+    readScrollMargin()
     if (typeof ResizeObserver === 'undefined') {
       return
     }
-    const observer = new ResizeObserver(read)
+    const observer = new ResizeObserver(readScrollMargin)
     observer.observe(container)
     return () => observer.disconnect()
   }, [readScrollMargin, scrollRef])
+
+  useLayoutEffect(() => {
+    const currentKeys = new Set(itemKeys)
+    const previousKeys = previousMeasurementKeysRef.current
+    previousMeasurementKeysRef.current = currentKeys
+    if (previousKeys !== null) {
+      for (const key of previousKeys) {
+        if (!currentKeys.has(key)) {
+          retiredMeasurementCountRef.current += 1
+        }
+      }
+    }
+    if (retiredMeasurementCountRef.current < MAX_RETIRED_NATIVE_CHAT_MEASUREMENTS) {
+      return
+    }
+
+    const retainedMeasurements = virtualizer
+      .takeSnapshot()
+      .filter((item) => typeof item.key === 'string' && currentKeys.has(item.key))
+    const scrollTop = scrollRef.current?.scrollTop
+    virtualizer.measure()
+    // Materialize the estimate-only layout before restoring retained sizes.
+    virtualizer.getTotalSize()
+    for (const item of retainedMeasurements) {
+      virtualizer.resizeItem(item.index, item.size)
+    }
+    if (scrollTop !== undefined) {
+      virtualizer.scrollToOffset(scrollTop)
+    }
+    retiredMeasurementCountRef.current = 0
+  }, [itemKeys, scrollRef, virtualizer])
 
   const sizerRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -198,15 +219,8 @@ export function useNativeChatTranscriptWindow({
     [scrollRef, virtualizer]
   )
 
-  // Unknown height means "not measured yet", not "unusable": falling back on the
-  // first render would mount the entire transcript once before windowing ever
-  // engaged, which is the cost this exists to avoid.
-  const isWindowed =
-    slots.length > 0 && (viewportHeight === null || viewportHeight >= MIN_WINDOWED_VIEWPORT_PX)
-
   return {
-    isWindowed,
-    virtualItems: isWindowed ? virtualizer.getVirtualItems() : [],
+    virtualItems: virtualizer.getVirtualItems(),
     totalSize: virtualizer.getTotalSize(),
     scrollMargin,
     sizerRef,

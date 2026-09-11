@@ -5,13 +5,7 @@ import {
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 import type { NativeChatTranscriptWindow } from './use-native-chat-transcript-window'
 
-/** The transcript's rows, either windowed or whole.
- *
- *  Windowed, they sit at absolute offsets inside a spacer the height of the
- *  entire transcript; whole, they are plain children of the transcript column and
- *  lay out exactly as they did before windowing existed. The control path is not
- *  a degraded mode — it is what runs whenever the scroll root cannot say where
- *  the viewport is, and it has to stay indistinguishable from the old list. */
+/** Windowed transcript rows, absolutely positioned inside a full-height spacer. */
 export function NativeChatTranscriptItems({
   slots,
   context,
@@ -21,20 +15,9 @@ export function NativeChatTranscriptItems({
   context: NativeChatTranscriptRowContext
   window: NativeChatTranscriptWindow
 }): React.JSX.Element {
-  if (!window.isWindowed) {
-    return (
-      <>
-        {slots.map((slot) => (
-          <NativeChatTranscriptRow key={slot.message.id} slot={slot} context={context} />
-        ))}
-      </>
-    )
-  }
   return (
     <div
       ref={window.sizerRef}
-      // Present only while windowing is engaged: the whole-transcript path has
-      // no spacer, so this is also how a test tells the two apart.
       data-native-chat-window
       className="relative w-full"
       style={{ height: `${window.totalSize}px` }}

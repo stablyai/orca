@@ -85,13 +85,19 @@ function reservedTranscriptHeight(root: ParentNode): number {
 // height, a viewport, and a `scrollTop` that clamps the way a real one does.
 // Off by default, because a transcript with a real document opens pinned to its
 // bottom and the cases above are about where the window sits, not where it lands.
-function stubLayout({ scrollGeometry = false } = {}): () => void {
+function stubLayout({
+  scrollGeometry = false,
+  viewportHeight = () => VIEWPORT_PX
+}: {
+  scrollGeometry?: boolean
+  viewportHeight?: () => number
+} = {}): () => void {
   const scrollTops = new WeakMap<HTMLElement, number>()
   const restores = [
     overrideLayoutProperty('offsetHeight', {
       get(this: HTMLElement): number {
         if (this.hasAttribute('data-native-chat-scroll')) {
-          return VIEWPORT_PX
+          return viewportHeight()
         }
         if (this.hasAttribute('data-native-chat-window')) {
           return reservedTranscriptHeight(this.parentElement ?? this)
@@ -112,7 +118,7 @@ function stubLayout({ scrollGeometry = false } = {}): () => void {
     restores.push(
       overrideLayoutProperty('clientHeight', {
         get(this: HTMLElement): number {
-          return this.hasAttribute('data-native-chat-scroll') ? VIEWPORT_PX : 0
+          return this.hasAttribute('data-native-chat-scroll') ? viewportHeight() : 0
         }
       }),
       overrideLayoutProperty('scrollHeight', {
@@ -427,20 +433,33 @@ describe('revealing a diff from a turn rollup', () => {
   })
 })
 
-describe('transcript with no usable scroll root', () => {
+describe('transcript with a hidden scroll root', () => {
   const transcript = Array.from({ length: 40 }, (_, index) => marker(index))
 
-  // Not a degraded mode: this is what runs whenever the scroll root cannot say
-  // where the viewport is, and it has to render exactly what the list rendered
-  // before windowing existed.
-  it('falls back to mounting every row, with no spacer between them and the column', () => {
-    const { container } = render(list(transcript))
+  it('keeps the transcript bounded and rehydrates when the viewport becomes measurable', () => {
+    let viewportHeight = 0
+    const restoreLayout = stubLayout({ viewportHeight: () => viewportHeight })
+    const restoreResizeObserver = stubResizeObserver()
+    try {
+      const { container } = render(list(transcript))
 
-    expect(container.querySelector('[data-native-chat-window]')).toBeNull()
-    expect(container.querySelectorAll('[data-index]')).toHaveLength(0)
-    expect(screen.getAllByText(/^marker-/)).toHaveLength(40)
-    const column = container.querySelector('.max-w-4xl')
-    expect(column?.children).toHaveLength(40)
+      expect(container.querySelector('[data-native-chat-window]')).toBeInTheDocument()
+      expect(container.querySelectorAll('[data-index]')).toHaveLength(0)
+      expect(screen.queryByText(/^marker-/)).toBeNull()
+      const column = container.querySelector('.max-w-4xl')
+      expect(column?.children).toHaveLength(1)
+
+      viewportHeight = VIEWPORT_PX
+      act(() => {
+        deliverResizes()
+      })
+      const { indexes } = windowState(container)
+      expect(indexes.length).toBeGreaterThan(0)
+      expect(indexes.length).toBeLessThan(transcript.length)
+    } finally {
+      restoreResizeObserver()
+      restoreLayout()
+    }
   })
 })
 

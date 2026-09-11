@@ -66,14 +66,14 @@ export function estimateNativeChatTextLines(markdown: string): number {
   return lines
 }
 
-const metricsCache = new WeakMap<object, NativeChatRowContentMetrics>()
+const metricsCache = new WeakMap<NativeChatMessage, NativeChatRowContentMetrics>()
 
-/** Cached on the block array, like the row content it reads, so a streaming turn
+/** Cached on the message, so its role remains part of the identity and a streaming turn
  *  re-deriving on every frame pays for the changed row only. */
 export function nativeChatRowContentMetrics(
   message: NativeChatMessage
 ): NativeChatRowContentMetrics {
-  const cached = metricsCache.get(message.blocks)
+  const cached = metricsCache.get(message)
   if (cached) {
     return cached
   }
@@ -85,7 +85,7 @@ export function nativeChatRowContentMetrics(
     toolCount: content.tools.length,
     subagentGroupCount: content.subagentGroups.length
   }
-  metricsCache.set(message.blocks, metrics)
+  metricsCache.set(message, metrics)
   return metrics
 }
 
@@ -93,26 +93,34 @@ export function estimateNativeChatRowHeight(
   content: NativeChatRowContentMetrics,
   chrome: NativeChatRowChromeMetrics
 ): number {
+  let partCount = 0
+  let height = 0
   if (chrome.hasReceipt) {
-    return RECEIPT_PX + (chrome.hasStatus ? NATIVE_CHAT_ROW_GAP_PX + STATUS_ROW_PX : 0)
+    height = RECEIPT_PX
+    partCount = 1
+  } else {
+    height = content.textLines * LINE_HEIGHT_PX
+    if (content.role === 'user' && content.textLines > 0) {
+      height += USER_BUBBLE_CHROME_PX
+    }
+    if (content.imageCount > 0) {
+      height += IMAGE_STRIP_PX
+    }
+    if (content.toolCount > 0) {
+      // A run is one collapsed header by default; its members only exist while open.
+      height += TOOL_RUN_PX
+    }
+    height += content.subagentGroupCount * SUBAGENT_ROW_PX
+    partCount = height > 0 ? 1 : 0
   }
-  let height = content.textLines * LINE_HEIGHT_PX
-  if (content.role === 'user' && content.textLines > 0) {
-    height += USER_BUBBLE_CHROME_PX
-  }
-  if (content.imageCount > 0) {
-    height += IMAGE_STRIP_PX
-  }
-  if (content.toolCount > 0) {
-    // A run is one collapsed header by default; its members only exist while open.
-    height += TOOL_RUN_PX
-  }
-  height += content.subagentGroupCount * SUBAGENT_ROW_PX
   if (chrome.hasStatus) {
-    height += NATIVE_CHAT_ROW_GAP_PX + STATUS_ROW_PX
+    height += STATUS_ROW_PX
+    partCount += 1
   }
   if (chrome.hasTurnDiff) {
-    height += NATIVE_CHAT_ROW_GAP_PX + TURN_DIFF_PX
+    height += TURN_DIFF_PX
+    partCount += 1
   }
+  height += Math.max(0, partCount - 1) * NATIVE_CHAT_ROW_GAP_PX
   return Math.min(ROW_MAX_PX, Math.max(ROW_MIN_PX, height))
 }

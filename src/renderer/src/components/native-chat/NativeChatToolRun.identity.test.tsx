@@ -58,7 +58,18 @@ describe('inline tool annotations', () => {
     expect(screen.queryByRole('button')).toBeNull()
 
     rerender(<ToolRunDisclosureHarness expandOverride />)
+    expect(screen.getByRole('button', { name: /1×/ }).getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('resynchronizes a standalone run when the toolbar signal flips', () => {
+    const { rerender } = render(
+      <NativeChatToolRun blocks={[shell]} expandSignal={false} activeTurnIsWorking={false} />
+    )
     expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('false')
+
+    rerender(<NativeChatToolRun blocks={[shell]} expandSignal activeTurnIsWorking={false} />)
+
+    expect(screen.getByRole('button', { name: /1×/ }).getAttribute('aria-expanded')).toBe('true')
   })
 
   it('uses provider call identities for byte-identical line disclosure keys', () => {

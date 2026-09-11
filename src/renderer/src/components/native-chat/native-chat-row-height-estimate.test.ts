@@ -81,9 +81,51 @@ describe('transcript row height estimate', () => {
     expect(withStatus - bare).toBeGreaterThan(NATIVE_CHAT_ROW_GAP_PX)
   })
 
-  it('reuses one derivation per block set', () => {
+  it('does not add a leading gap to status-only or diff-only rows', () => {
+    const empty = nativeChatRowContentMetrics(message(''))
+    const bare = estimateNativeChatRowHeight(empty, NO_CHROME)
+    const statusOnly = estimateNativeChatRowHeight(empty, { ...NO_CHROME, hasStatus: true })
+    const diffOnly = estimateNativeChatRowHeight(empty, { ...NO_CHROME, hasTurnDiff: true })
+
+    expect(statusOnly).toBe(diffOnly)
+    expect(statusOnly - bare).toBeLessThan(NATIVE_CHAT_ROW_GAP_PX)
+  })
+
+  it('includes both rendered parts and their gap for a receipt carrying a diff', () => {
+    const empty = nativeChatRowContentMetrics(message(''))
+    const receipt = estimateNativeChatRowHeight(empty, {
+      hasReceipt: true,
+      hasStatus: false,
+      hasTurnDiff: false
+    })
+    const diff = estimateNativeChatRowHeight(empty, {
+      hasReceipt: false,
+      hasStatus: false,
+      hasTurnDiff: true
+    })
+    const together = estimateNativeChatRowHeight(empty, {
+      hasReceipt: true,
+      hasStatus: false,
+      hasTurnDiff: true
+    })
+
+    expect(together).toBe(receipt + NATIVE_CHAT_ROW_GAP_PX + diff)
+  })
+
+  it('reuses one derivation per message', () => {
     const subject = message('cached')
     expect(nativeChatRowContentMetrics(subject)).toBe(nativeChatRowContentMetrics(subject))
+  })
+
+  it('keeps role-specific chrome when two messages share their blocks', () => {
+    const blocks: NativeChatMessage['blocks'] = [{ type: 'text', text: 'same content' }]
+    const withRole = (role: NativeChatMessage['role']): NativeChatMessage => ({
+      ...message('same content', role),
+      blocks
+    })
+
+    expect(nativeChatRowContentMetrics(withRole('user')).role).toBe('user')
+    expect(nativeChatRowContentMetrics(withRole('assistant')).role).toBe('assistant')
   })
 
   it('reserves more for a row carrying a tool run than for its prose alone', () => {

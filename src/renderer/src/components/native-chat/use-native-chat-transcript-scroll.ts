@@ -52,10 +52,8 @@ export function useNativeChatTranscriptScroll({
   loadEarlier: () => void
   alignToViewportTop: (element: HTMLElement) => void
 }): NativeChatTranscriptScroll {
-  const [stuckToBottom, setStuckToBottom] = useState(true)
   const [showJump, setShowJump] = useState(false)
-  const stuckToBottomRef = useRef(stuckToBottom)
-  stuckToBottomRef.current = stuckToBottom
+  const stuckToBottomRef = useRef(true)
   const previousScrollTopRef = useRef(0)
   const loadEarlierRequestedAtRef = useRef<number | null>(null)
 
@@ -66,7 +64,7 @@ export function useNativeChatTranscriptScroll({
     }
     const geometry = geometryOf(element)
     const stick = isNearBottom(geometry)
-    setStuckToBottom(stick)
+    stuckToBottomRef.current = stick
     setShowJump(shouldShowJumpToLatest(stick, geometry))
     return geometry
   }, [scrollRef])
@@ -104,14 +102,13 @@ export function useNativeChatTranscriptScroll({
     // The document's own bottom, not the window's last row: the typing indicator,
     // the activity line and the column's end padding all live past it.
     element.scrollTop = element.scrollHeight
-    setStuckToBottom(true)
+    stuckToBottomRef.current = true
     setShowJump(false)
   }, [scrollRef])
 
   const scrollMessageToTop = useCallback(
     (element: HTMLElement) => {
       stuckToBottomRef.current = false
-      setStuckToBottom(false)
       alignToViewportTop(element)
     },
     [alignToViewportTop]

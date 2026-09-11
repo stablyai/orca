@@ -47,34 +47,23 @@ export function createAppStoreModuleMock(): Record<string, unknown> {
   return { useAppStore }
 }
 
-export type ReactVirtualizerOptionsCapture = {
-  current: ({ count: number } & Record<string, unknown>) | null
-}
-
-export function createReactVirtualModuleMock(
-  optionsCapture?: ReactVirtualizerOptionsCapture
-): Record<string, unknown> {
+export function createReactVirtualModuleMock(): Record<string, unknown> {
   return {
     defaultRangeExtractor: ({ startIndex, endIndex }: { startIndex: number; endIndex: number }) =>
       Array.from({ length: endIndex - startIndex + 1 }, (_, index) => startIndex + index),
     measureElement: () => 32,
-    useVirtualizer: (options: { count: number } & Record<string, unknown>) => {
-      if (optionsCapture) {
-        optionsCapture.current = options
-      }
-      return {
-        elementsCache: new Map(),
-        getTotalSize: () => options.count * 80,
-        getVirtualItems: () =>
-          Array.from({ length: options.count }, (_, index) => ({
-            index,
-            key: `row-${index}`,
-            start: index * 80
-          })),
-        measureElement: vi.fn(),
-        scrollToIndex: vi.fn()
-      }
-    }
+    useVirtualizer: ({ count }: { count: number }) => ({
+      elementsCache: new Map(),
+      getTotalSize: () => count * 80,
+      getVirtualItems: () =>
+        Array.from({ length: count }, (_, index) => ({
+          index,
+          key: `row-${index}`,
+          start: index * 80
+        })),
+      measureElement: vi.fn(),
+      scrollToIndex: vi.fn()
+    })
   }
 }
 
