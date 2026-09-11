@@ -35,6 +35,8 @@ export type AgentStatusExtensionHarness = {
   handlers: Record<string, HookHandler>
   processEnv: Record<string, string | undefined>
   callHook: (name: string, event?: unknown, context?: HookContext) => Promise<void>
+  emitEvent: (name: string, payload?: unknown) => void
+  eventListenerCount: () => number
   // Re-invoke the extension factory in the same process (as Pi does on an
   // in-process extension reload), swapping in the freshly registered handlers.
   reload: () => void
@@ -103,7 +105,12 @@ export function createAgentStatusExtensionHarness(args: {
   }
 
   const module = {
-    exports: {} as { default?: (pi: { on: (name: string, handler: HookHandler) => void }) => void }
+    exports: {} as {
+      default?: (pi: {
+        on: (name: string, handler: HookHandler) => void
+        events: { on: (name: string, handler: (payload?: unknown) => void) => () => void }
+      }) => void
+    }
   }
   const requireMock = vi.fn((specifier: string) => {
     if (specifier === 'fs') {
@@ -161,10 +168,24 @@ export function createAgentStatusExtensionHarness(args: {
   }
 
   const handlers: Record<string, HookHandler> = {}
+  const eventHandlers = new Map<string, Set<(payload?: unknown) => void>>()
   const registerInto = (target: Record<string, HookHandler>): void => {
     register({
       on(name: string, handler: HookHandler) {
         target[name] = handler
+      },
+      events: {
+        on(name: string, handler: (payload?: unknown) => void) {
+          const listeners = eventHandlers.get(name) ?? new Set()
+          listeners.add(handler)
+          eventHandlers.set(name, listeners)
+          return () => {
+            listeners.delete(handler)
+            if (listeners.size === 0) {
+              eventHandlers.delete(name)
+            }
+          }
+        }
       }
     })
   }
@@ -180,6 +201,13 @@ export function createAgentStatusExtensionHarness(args: {
     callHook: async (name, event, hookContext) => {
       await handlers[name]?.(event, hookContext)
     },
+    emitEvent: (name, payload) => {
+      for (const handler of eventHandlers.get(name) ?? []) {
+        handler(payload)
+      }
+    },
+    eventListenerCount: () =>
+      [...eventHandlers.values()].reduce((count, listeners) => count + listeners.size, 0),
     reload: () => {
       for (const key of Object.keys(handlers)) {
         delete handlers[key]
