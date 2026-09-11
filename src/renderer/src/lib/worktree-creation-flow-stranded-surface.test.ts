@@ -231,7 +231,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
         agent: 'codex',
         launchCommand: 'codex',
         expectedProcess: 'codex',
-        followupPrompt: null,
+        draftPrompt: 'draft context',
+        followupPrompt: 'follow-up context',
         launchConfig: { agentArgs: '', agentEnv: {} }
       }
     })
