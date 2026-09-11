@@ -190,6 +190,7 @@ export class RelayControlOrigin {
         : {}),
       onConnectionOpen: (message) => this.openConnection(message),
       onDrain: (message) => this.options.onDrain(this, message),
+      onPendingChanged: () => this.options.onPendingChanged?.(this),
       onClose: (code) => {
         this.controls.delete(control)
         const timer = this.retiredControlTimers.get(control)

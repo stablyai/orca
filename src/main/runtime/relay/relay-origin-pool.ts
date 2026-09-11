@@ -19,7 +19,6 @@ export class RelayOriginPool {
   )
   private readonly drainingOrigins = this.retirement.draining
   private readonly basisOrigins = this.retirement.basis
-  private authorityVersion = 0
   private assignment: RelayAssignment | null = null
   private deferredAssignment: RelayAssignment | null = null
   private relayJwt: string | null = null
@@ -161,7 +160,6 @@ export class RelayOriginPool {
     origin: RelayControlOrigin,
     message: RelayDrainMessage
   ): Promise<void> {
-    const authorityVersion = this.authorityVersion
     try {
       if (!this.relayJwt) {
         throw new Error('relay_authorization_unavailable')
@@ -181,9 +179,6 @@ export class RelayOriginPool {
         fetch: this.options.fetch
       })
       this.assertCurrent()
-      if (authorityVersion !== this.authorityVersion) {
-        return
-      }
       if (
         this.deferredAssignment &&
         this.deferredAssignment.assignmentEpoch > assignment.assignmentEpoch
@@ -204,8 +199,7 @@ export class RelayOriginPool {
             assignment,
             this.relayJwt,
             message.graceMs,
-            authorityVersion
-          )
+            )
         }
         if (rebound) {
           this.assertCurrent()
@@ -219,7 +213,6 @@ export class RelayOriginPool {
           assignment,
           this.relayJwt,
           message.graceMs,
-          authorityVersion
         )
       }
       this.options.onStatus('registered')
@@ -243,17 +236,13 @@ export class RelayOriginPool {
     origin: RelayControlOrigin,
     assignment: RelayAssignment,
     relayJwt: string,
-    graceMs: number,
-    authorityVersion = this.authorityVersion
+    graceMs: number
   ): Promise<void> {
     const target = this.createOrigin(assignment, relayJwt)
     this.origins.add(target)
     try {
       await target.open()
       this.assertCurrent()
-      if (authorityVersion !== this.authorityVersion) {
-        throw new Error('stale_relay_target')
-      }
     } catch (error) {
       this.origins.delete(target)
       target.closeNow()
