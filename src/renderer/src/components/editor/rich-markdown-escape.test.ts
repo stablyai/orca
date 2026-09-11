@@ -41,7 +41,7 @@ const ESCAPES = [
   ['1\\. not a list'],
   ['a\\\\b backslash'],
   ['100\\% and \\# hash']
-] as const
+]
 
 describe('backslash escape round trip', () => {
   it.each(ESCAPES)('preserves %j', (source) => {

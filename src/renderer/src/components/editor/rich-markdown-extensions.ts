@@ -9,7 +9,7 @@ import { Table } from '@tiptap/extension-table'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
-import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
+import { BlockMath } from '@tiptap/extension-mathematics'
 import { Markdown } from '@tiptap/markdown'
 import { createLowlight, common } from 'lowlight'
 import {
@@ -38,6 +38,7 @@ import { createRichMarkdownHtmlSuperscriptLink } from './rich-markdown-html-supe
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
 import { RichMarkdownEscape } from './rich-markdown-escape'
+import { RichMarkdownInlineMath } from './rich-markdown-inline-math'
 import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownProseEntities } from './rich-markdown-prose-entities'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
@@ -232,7 +233,7 @@ export function createRichMarkdownExtensions({
     TableRow,
     TableHeader,
     TableCell,
-    InlineMath.configure({
+    RichMarkdownInlineMath.configure({
       katexOptions: {
         throwOnError: false
       }
