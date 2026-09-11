@@ -40,7 +40,8 @@ describe('worktree.rm PTY-stop waiver', () => {
       true,
       false,
       true,
-      'local'
+      'local',
+      false
     )
   })
 
@@ -60,7 +61,8 @@ describe('worktree.rm PTY-stop waiver', () => {
       true,
       false,
       false,
-      'local'
+      'local',
+      false
     )
   })
 
@@ -81,7 +83,65 @@ describe('worktree.rm PTY-stop waiver', () => {
       true,
       false,
       false,
-      'ssh:builder'
+      'ssh:builder',
+      false
+    )
+  })
+})
+
+// Why (#19334): same shape, same reason — a FAILED archive hook blocks removal, and waiving that
+// is its own explicit decision. `force` must not carry it either.
+describe('worktree.rm archive-hook waiver', () => {
+  it('forwards an explicit archive-hook waiver to the runtime', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch({
+      id: 'req-1',
+      authToken: 'tok',
+      method: 'worktree.rm',
+      params: {
+        worktree: 'id:wt-1',
+        hostId: 'local',
+        runHooks: true,
+        allowFailedArchiveHook: true
+      }
+    } satisfies RpcRequest)
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
+      'id:wt-1',
+      false,
+      true,
+      false,
+      'local',
+      true
+    )
+  })
+
+  it('does not infer an archive-hook waiver from force', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch({
+      id: 'req-1',
+      authToken: 'tok',
+      method: 'worktree.rm',
+      params: {
+        worktree: 'id:wt-1',
+        hostId: 'local',
+        force: true,
+        allowUnverifiedPtyStop: true,
+        runHooks: true
+      }
+    } satisfies RpcRequest)
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
+      'id:wt-1',
+      true,
+      true,
+      true,
+      'local',
+      false
     )
   })
 })

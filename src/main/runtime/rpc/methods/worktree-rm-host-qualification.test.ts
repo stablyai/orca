@@ -34,7 +34,8 @@ describe('worktree.rm host qualification', () => {
       true,
       false,
       false,
-      'local'
+      'local',
+      false
     )
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
   })
@@ -57,7 +58,8 @@ describe('worktree.rm host qualification', () => {
       true,
       false,
       false,
-      'local'
+      'local',
+      false
     )
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
   })
@@ -80,7 +82,8 @@ describe('worktree.rm host qualification', () => {
       true,
       false,
       false,
-      'runtime:env-1'
+      'runtime:env-1',
+      false
     )
   })
 
@@ -122,7 +125,8 @@ describe('worktree.rm host qualification', () => {
       true,
       false,
       false,
-      'ssh:target-a'
+      'ssh:target-a',
+      false
     )
   })
 
@@ -156,7 +160,8 @@ describe('worktree.rm host qualification', () => {
       true,
       false,
       false,
-      'local'
+      'local',
+      false
     )
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
   })
@@ -210,7 +215,8 @@ describe('worktree.rm host qualification', () => {
       true,
       false,
       false,
-      undefined
+      undefined,
+      false
     )
   })
 

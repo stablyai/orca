@@ -135,6 +135,64 @@ describe('command aliases dispatch to the canonical handler', () => {
     }
   })
 
+  // #19334: a failed archive hook blocks removal, so the CLI must exit non-zero rather than
+  // report a delete that did not happen — and the waiver must ride its own flag, never --force.
+  it('exits non-zero when worktree removal is refused by a failed archive hook', async () => {
+    queueFixtures(callMock, okFixture('req_show', { worktree: { hostId: 'local' } }))
+    callMock.mockRejectedValueOnce(
+      Object.assign(new Error('Archive hook failed for worktree: /tmp/wt — exited 23.'), {
+        code: 'worktree_archive_hook_failed'
+      })
+    )
+    const priorExitCode = process.exitCode
+
+    try {
+      await main(
+        ['worktree', 'rm', '--worktree', 'id:wt-1', '--force', '--run-hooks', '--json'],
+        '/tmp/repo'
+      )
+
+      expect(process.exitCode).toBe(1)
+      expect(callMock).toHaveBeenNthCalledWith(
+        2,
+        'worktree.rm',
+        expect.objectContaining({
+          runHooks: true,
+          allowFailedArchiveHook: false
+        })
+      )
+    } finally {
+      process.exitCode = priorExitCode
+    }
+  })
+
+  it('forwards the explicit archive-hook waiver on worktree rm', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: { hostId: 'local' } }),
+      okFixture('req', { removed: true })
+    )
+
+    await main(
+      [
+        'worktree',
+        'rm',
+        '--worktree',
+        'id:wt-1',
+        '--run-hooks',
+        '--allow-failed-archive-hook',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'worktree.rm',
+      expect.objectContaining({ runHooks: true, allowFailedArchiveHook: true })
+    )
+  })
+
   it('still runs `terminal focus` after the handler de-duplication', async () => {
     queueFixtures(callMock, okFixture('req', { focus: { ok: true } }))
 

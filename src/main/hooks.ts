@@ -121,7 +121,9 @@ export function runHook(
   repo: Repo,
   hooksPath?: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
-): Promise<{ success: boolean; output: string }> {
+  // Why (#19334): an absent exitCode means no exit was ever observed. The archive-hook removal
+  // gate reads that as `unverifiable` rather than folding it into a zero.
+): Promise<{ success: boolean; output: string; exitCode?: number }> {
   const hooks = getEffectiveHooks(repo, hooksPath)
   const script = hooks?.scripts[hookName]
 
@@ -176,7 +178,11 @@ export function runHook(
         if (result.code !== 0) {
           const message = `Command failed with exit code ${result.code}.`
           console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, message)
-          return { success: false, output: `${result.stdout}\n${result.stderr}\n${message}`.trim() }
+          return {
+            success: false,
+            output: `${result.stdout}\n${result.stderr}\n${message}`.trim(),
+            ...(typeof result.code === 'number' ? { exitCode: result.code } : {})
+          }
         }
         console.log(`[hooks] ${hookName} hook completed in ${cwd}`)
         return { success: true, output: `${result.stdout}\n${result.stderr}`.trim() }
@@ -204,9 +210,12 @@ export function runHook(
       (error, stdout, stderr) => {
         if (error) {
           console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, error.message)
+          // A timeout kills the child, so `code` is absent and the failure stays unverifiable.
+          const exitCode = (error as { code?: unknown }).code
           resolve({
             success: false,
-            output: `${stdout}\n${stderr}\n${error.message}`.trim()
+            output: `${stdout}\n${stderr}\n${error.message}`.trim(),
+            ...(typeof exitCode === 'number' ? { exitCode } : {})
           })
         } else {
           console.log(`[hooks] ${hookName} hook completed in ${cwd}`)

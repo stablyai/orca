@@ -29,12 +29,16 @@ export function gitStatusErrorMeansNotRepository(error: unknown): boolean {
 export function getRuntimeWorktreeRemovalOptionsKey(
   force: boolean,
   runHooks: boolean,
-  allowUnverifiedPtyStop: boolean
+  allowUnverifiedPtyStop: boolean,
+  allowFailedArchiveHook = false
 ): string {
   // Why: a forced retry must not coalesce onto the in-flight attempt that just
   // failed the PTY gate — it would inherit that failure instead of retrying.
   const ptyKey = allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
-  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}`
+  // Same reason for the archive waiver: a retry that waives the failed hook must not coalesce
+  // onto the in-flight attempt that is about to refuse on it.
+  const archiveKey = allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
+  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}:${archiveKey}`
 }
 
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime

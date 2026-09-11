@@ -22,6 +22,7 @@ import {
 } from '../../../shared/skill-install-failure'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
 import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
+import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
 import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
@@ -125,6 +126,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'stale_delivery',
   'waiter_exists',
   'invalid_argument',
+  // Why (#19334): "your archive hook failed, nothing was deleted" is a distinct decision — retry,
+  // waive, or skip the hook. Flattened to runtime_error a caller can only pattern-match the text.
+  ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
   NESTED_WORKER_DEPTH_EXCEEDED_CODE,
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,

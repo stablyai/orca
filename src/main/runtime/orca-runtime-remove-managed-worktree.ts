@@ -32,7 +32,10 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
     force = false,
     runHooks = false,
     allowUnverifiedPtyStop = false,
-    hostId?: string
+    hostId?: string,
+    // Why (#19334): waives a FAILED archive hook only. Separate from `runHooks` (which decides
+    // whether the hook runs at all) and never implied by `force`.
+    allowFailedArchiveHook = false
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -44,7 +47,12 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
     })
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, allowUnverifiedPtyStop)
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(
+      force,
+      runHooks,
+      allowUnverifiedPtyStop,
+      allowFailedArchiveHook
+    )
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,
@@ -238,6 +246,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           hasLocalOptions: hasLocalWorktreeGitOptions,
           force,
           runHooks,
+          allowFailedArchiveHook,
           allowUnverifiedPtyStop,
           deleteBranch,
           acquireWatcherRemoval: this.acquireFileWatcherRemoval,
