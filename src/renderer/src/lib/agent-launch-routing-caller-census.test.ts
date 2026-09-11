@@ -27,9 +27,10 @@ const ROUTE_PLANNER = 'src/renderer/src/lib/agent-session-launch-plan.ts'
 const DIRECT_ROUTE_RESOLVER_CALL = /\b(?:resolveAgentLaunchRoute|structuredAgentLaunchSupported)\(/
 // Why: adopting a verdict bypasses the resolver by design (a persisted quick-create request, a
 // resume whose gate already planned), so each adopter is pinned rather than trusted by convention.
-const VERDICT_ADOPTERS = [
-  // Launch sites now route through launchAgentSession; no production caller adopts a verdict.
-]
+// Why: every launch site now routes through launchAgentSession. Quick create is the one adopter
+// left, because it persists its verdict across worktree creation and re-enters on recovery; that
+// two-phase re-entry is deleted with the verdict types, not here.
+const VERDICT_ADOPTERS = ['src/renderer/src/lib/worktree-creation-structured-session.ts']
 
 async function productionFiles(): Promise<string[]> {
   return glob(['src/**/*.ts', 'src/**/*.tsx'], {
