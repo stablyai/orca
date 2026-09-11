@@ -83,7 +83,7 @@ export function MobileHomeAccountUsageCards(props: {
                       />
                       {fableWeeklyBar ? (
                         <UsageBar
-                          label="Fable"
+                          label="F"
                           usedPercent={fableWeeklyBar.usedPercent}
                           unavailable={fableWeeklyBar.unavailable}
                           loading={fableWeeklyBar.loading}

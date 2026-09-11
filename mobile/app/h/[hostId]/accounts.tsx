@@ -202,6 +202,10 @@ export default function AccountsScreen() {
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
     const activeSessionBar = getUsageBarState(activeUsage, 'session')
     const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
+    const activeFableWeeklyBar =
+      provider === 'claude' && activeUsage?.fableWeekly
+        ? getUsageBarState(activeUsage, 'fableWeekly')
+        : null
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
     return (
@@ -239,6 +243,15 @@ export default function AccountsScreen() {
                     loading={activeWeeklyBar.loading}
                     resetText={getWindowResetLabel(activeUsage, 'weekly', now)}
                   />
+                  {activeFableWeeklyBar ? (
+                    <UsageBar
+                      label="F"
+                      usedPercent={activeFableWeeklyBar.usedPercent}
+                      unavailable={activeFableWeeklyBar.unavailable}
+                      loading={activeFableWeeklyBar.loading}
+                      resetText={getWindowResetLabel(activeUsage, 'fableWeekly', now)}
+                    />
+                  ) : null}
                 </View>
               ) : null}
             </View>
@@ -262,6 +275,10 @@ export default function AccountsScreen() {
               (!isActive && inactiveEntry?.isFetching === true)
             const sessionBar = getUsageBarState(usage, 'session', isFetching)
             const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
+            const fableWeeklyBar =
+              provider === 'claude' && usage?.fableWeekly
+                ? getUsageBarState(usage, 'fableWeekly', isFetching)
+                : null
             return (
               <View key={account.id}>
                 <View style={styles.separator} />
@@ -294,6 +311,15 @@ export default function AccountsScreen() {
                         loading={weeklyBar.loading}
                         resetText={getWindowResetLabel(usage, 'weekly', now)}
                       />
+                      {fableWeeklyBar ? (
+                        <UsageBar
+                          label="F"
+                          usedPercent={fableWeeklyBar.usedPercent}
+                          unavailable={fableWeeklyBar.unavailable}
+                          loading={fableWeeklyBar.loading}
+                          resetText={getWindowResetLabel(usage, 'fableWeekly', now)}
+                        />
+                      ) : null}
                     </View>
                     {usage?.error ? (
                       <Text style={styles.errorText} numberOfLines={1}>

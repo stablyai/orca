@@ -83,7 +83,7 @@ describe('MobileHomeAccountUsageCards', () => {
       .flatMap((node) => node.children.filter((child) => typeof child === 'string'))
   }
 
-  it('renders a Claude Fable weekly usage bar when the snapshot includes fableWeekly', async () => {
+  it('renders a Claude F weekly usage bar when the snapshot includes fableWeekly', async () => {
     const text = await renderWith(
       makeSnapshot(
         makeClaudeLimits({
@@ -99,11 +99,11 @@ describe('MobileHomeAccountUsageCards', () => {
 
     expect(text).toContain('5h')
     expect(text).toContain('7d')
-    expect(text).toContain('Fable')
+    expect(text).toContain('F')
   })
 
-  it('does not render a Fable label when fableWeekly is absent', async () => {
+  it('does not render an F label when fableWeekly is absent', async () => {
     const text = await renderWith(makeSnapshot(makeClaudeLimits({ fableWeekly: null })))
-    expect(text).not.toContain('Fable')
+    expect(text).not.toContain('F')
   })
 })
