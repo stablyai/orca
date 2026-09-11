@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native'
+import { Linking, Pressable, Text, View } from 'react-native'
 import { Check, Moon } from 'lucide-react-native'
 import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
 import { ActionSheetContent } from '../components/ActionSheetModal'
@@ -215,6 +215,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         hostId={hostId}
         existingWorktreePaths={existingWorktreePaths}
         existingWorktrees={state.worktrees}
+        openExternalUrl={(url) => Linking.openURL(url)}
         onVisibleChange={(visible) => {
           state.newWorktreeModalVisibleRef.current = visible
         }}

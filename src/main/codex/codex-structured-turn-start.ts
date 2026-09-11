@@ -7,6 +7,7 @@ import {
 } from './codex-app-server-connection'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
 import { readCodexTurnId } from './codex-structured-thread-facts'
+import { DISPATCH_DOUBT_CODEX_TURN_UNNAMED } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
 
 // Starting a Codex turn and learning its id, which are not the same event:
 // `turn/start` returns the id on newer builds and acks before it exists on
@@ -115,7 +116,7 @@ export async function dispatchCodexTurn(
     throw error
   }
   return turnId === null
-    ? { state: 'unknown', reason: 'codex app-server started a turn it did not name in time' }
+    ? { state: 'unknown', reason: DISPATCH_DOUBT_CODEX_TURN_UNNAMED }
     : {
         state: 'accepted',
         providerIdentity: {

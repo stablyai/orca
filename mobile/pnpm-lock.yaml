@@ -136,6 +136,9 @@ importers:
       react-native-svg:
         specifier: ^15.15.4
         version: 15.15.4(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.8))(react@19.2.8)
+      react-native-uitextview:
+        specifier: 2.2.0
+        version: 2.2.0(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.8))(react@19.2.8)
       react-native-web:
         specifier: ^0.21.2
         version: 0.21.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -6154,6 +6157,12 @@ packages:
 
   react-native-svg@15.15.4:
     resolution: {integrity: sha512-boT/vIRgj6zZKBpfTPJJiYWMbZE9duBMOwPK6kCSTgxsS947IFMOq9OgIFkpWZTB7t229H24pDRkh3W9ZK/J1A==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+
+  react-native-uitextview@2.2.0:
+    resolution: {integrity: sha512-Vbv3cTAuyfkYrfsR2YKFsOd9OYgfys+IX5yvvYY7Wd6TrOd6FSGrX93xtQHjeLXV1ds6fDJcFJsuLi3S4Ypr8A==}
     peerDependencies:
       react: '*'
       react-native: '*'
@@ -14608,6 +14617,11 @@ snapshots:
       react: 19.2.8
       react-native: 0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.8)
       warn-once: 0.1.1
+
+  react-native-uitextview@2.2.0(react-native@0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.8))(react@19.2.8):
+    dependencies:
+      react: 19.2.8
+      react-native: 0.83.10(patch_hash=44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d)(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.8)
 
   react-native-web@0.21.2(react-dom@19.2.8(react@19.2.8))(react@19.2.8):
     dependencies:

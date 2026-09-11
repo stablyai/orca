@@ -11,7 +11,12 @@ import {
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-projection'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../../src/shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  isStructuredAgentSessionThinking
+} from '../../../src/shared/structured-agent-session-live-turn'
+import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat-turn-activity'
 import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
@@ -28,28 +33,33 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
+import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat-turn-status'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 
 type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
 
-type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> & {
-  session: MobileNativeChatSession
-  isWorking: boolean
-  turnId: string | null
-  sendWithOutcome: (
-    text: string,
-    images?: string[],
-    deadline?: number,
-    attachments?: readonly StructuredMobileAttachment[]
-  ) => Promise<MobileNativeChatSendOutcome>
-  cancel: () => void
-  permission: MobileChatPermission | null
-  question: MobileChatQuestion | null
-  respondPermission: (optionId: string) => Promise<boolean>
-  respondQuestion: (answer: string) => Promise<boolean>
-}
+type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
+  ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
+    session: MobileNativeChatSession
+    isWorking: boolean
+    turnId: string | null
+    /** What labels the live turn's one indicator row. */
+    turnIndicator: NativeChatLiveTurnIndicator
+    sendWithOutcome: (
+      text: string,
+      images?: string[],
+      deadline?: number,
+      attachments?: readonly StructuredMobileAttachment[]
+    ) => Promise<MobileNativeChatSendOutcome>
+    cancel: () => void
+    permission: MobileChatPermission | null
+    question: MobileChatQuestion | null
+    respondPermission: (optionId: string) => Promise<boolean>
+    respondQuestion: (answer: string) => Promise<boolean>
+  }
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -116,15 +126,7 @@ export function useMobileStructuredAgentSession(args: {
     [client, enabled, onSendError, sessionId, sessionKey]
   )
 
-  const {
-    conversationCommands,
-    optionPickerRequest,
-    invokeStructuredOption,
-    optionSnapshot,
-    optionSurface,
-    pendingOptionId,
-    setStructuredOption
-  } = useMobileStructuredAgentOptions({
+  const options = useMobileStructuredAgentOptions({
     agent,
     client,
     sessionId,
@@ -132,6 +134,8 @@ export function useMobileStructuredAgentSession(args: {
     fence: state.fence,
     mutate
   })
+  const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
+    options
 
   const sendWithOutcome = useCallback(
     async (
@@ -269,6 +273,14 @@ export function useMobileStructuredAgentSession(args: {
     () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
     [state.items, state.submissions]
   )
+  const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
+  const activityText =
+    selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
+  const thinking = isStructuredAgentSessionThinking(state.items)
+  // Stable while the readings hold, so a streaming turn does not re-render the
+  // whole chat surface on every journal batch.
+  const turnIndicator = useMemo(() => ({ thinking, activityText }), [thinking, activityText])
   const status = state.status === 'idle' ? 'idle' : state.status
   const approvalPrompt = useMemo(
     () => state.items.find(pendingStructuredApproval) ?? null,
@@ -280,8 +292,7 @@ export function useMobileStructuredAgentSession(args: {
   )
 
   return {
-    conversationCommands,
-    optionPickerRequest,
+    ...options,
     session: {
       messages,
       status,
@@ -291,18 +302,18 @@ export function useMobileStructuredAgentSession(args: {
       loadingEarlier: loadingOlder,
       loadEarlier
     },
-    isWorking: activeStructuredAgentSessionTurnId(state.items) !== null,
-    turnId: activeStructuredAgentSessionTurnId(state.items),
+    // A dispatch the provider has not answered yet is already work — see the desktop hook.
+    isWorking:
+      turnId !== null ||
+      hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
+    turnId,
+    turnIndicator,
+    ...turnTiming,
     sendWithOutcome,
     cancel,
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt, groupedDraft),
-    optionSnapshot,
-    optionSurface,
-    pendingOptionId,
     respondPermission,
-    respondQuestion,
-    setStructuredOption,
-    invokeStructuredOption
+    respondQuestion
   }
 }

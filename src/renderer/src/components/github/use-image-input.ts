@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { Editor } from '@tiptap/react'
 import { getGitHubMarkdownImageUrlState } from './github-markdown-image-url'
+import { buildRichMarkdownImageInsertContent } from '@/components/editor/rich-markdown-image-insert-content'
 import { translate } from '@/i18n/i18n'
 
 export function useImageInput(
@@ -54,7 +55,11 @@ export function useImageInput(
     editor
       .chain()
       .focus()
-      .insertContent({ type: 'image', attrs: { src: imageUrlState.url } })
+      .insertContent(
+        buildRichMarkdownImageInsertContent(editor, editor.state.selection.from, {
+          src: imageUrlState.url
+        })
+      )
       .run()
     setImageUrl('')
     setImageInputOpen(false)

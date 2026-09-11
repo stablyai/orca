@@ -42,7 +42,6 @@ const placements = [
 const blockers: StructuredNativeChatBlocker[] = [
   'reused-terminal',
   'agent-without-structured-session',
-  'draft-prompt',
   'floating-workspace',
   'tui-launch-customization',
   'remote-execution-host',
@@ -108,10 +107,13 @@ describe('shared feasibility owns every caller decision', () => {
             expect.objectContaining({
               agent,
               executionHostId,
-              isDraftPrompt: promptDelivery === 'draft',
               requiresTuiLaunchCustomization: true,
               workspaceKind: 'folder'
             })
+          )
+          // Why: delivery mode is prompt metadata, never a feasibility input.
+          expect(predicate).toHaveBeenLastCalledWith(
+            expect.not.objectContaining({ isDraftPrompt: expect.anything() })
           )
           for (const blocker of blockers) {
             predicate.mockReturnValue({ supported: false, blocker })

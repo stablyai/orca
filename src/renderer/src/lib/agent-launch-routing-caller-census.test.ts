@@ -20,13 +20,16 @@ const LAUNCH_AGENT_IN_NEW_TAB_CALLERS = [
   'src/renderer/src/lib/run-quick-command-in-new-tab.ts'
 ]
 
-const ROUTE_POLICY_OWNERS = [
-  'src/renderer/src/components/sidebar/folder-workspace-composer-submit.ts',
-  'src/renderer/src/hooks/composer-state/full-creation-execution.ts',
-  'src/renderer/src/hooks/composer-state/quick-creation-execution.ts',
-  'src/renderer/src/lib/launch-agent-in-new-tab.ts',
-  'src/renderer/src/lib/launch-work-item-direct.ts',
-  'src/renderer/src/lib/onboarding-folder-agent-startup.ts'
+// Why: the planner is the one production module that decides a route. A second resolver call
+// site is how the seven launch sites drifted apart before it existed.
+const ROUTE_RESOLVER_DEFINITION = 'src/renderer/src/lib/agent-launch-routing.ts'
+const ROUTE_PLANNER = 'src/renderer/src/lib/agent-session-launch-plan.ts'
+const DIRECT_ROUTE_RESOLVER_CALL = /\b(?:resolveAgentLaunchRoute|structuredAgentLaunchSupported)\(/
+// Why: adopting a verdict bypasses the resolver by design (a persisted quick-create request, a
+// resume whose gate already planned), so each adopter is pinned rather than trusted by convention.
+const VERDICT_ADOPTERS = [
+  'src/renderer/src/components/right-sidebar/ai-vault-session-resume-in-chat-launch.ts',
+  'src/renderer/src/lib/worktree-creation-structured-session.ts'
 ]
 
 async function productionFiles(): Promise<string[]> {
@@ -47,14 +50,24 @@ describe('agent launch routing caller census', () => {
     expect(callers).toEqual([...LAUNCH_AGENT_IN_NEW_TAB_CALLERS].sort())
   })
 
-  it('pins the direct creation families that must own one route decision', async () => {
-    const owners = (await productionFiles())
-      .filter((file) => file !== 'src/renderer/src/lib/agent-launch-routing.ts')
+  it('lets only the planner decide a launch route', async () => {
+    const directCallers = (await productionFiles())
+      .filter((file) => file !== ROUTE_RESOLVER_DEFINITION)
       .filter((file) =>
-        readFileSync(join(REPO_ROOT, file), 'utf8').includes('resolveAgentLaunchRoute(')
+        DIRECT_ROUTE_RESOLVER_CALL.test(readFileSync(join(REPO_ROOT, file), 'utf8'))
       )
       .sort()
-    expect(owners).toEqual([...ROUTE_POLICY_OWNERS].sort())
+    expect(directCallers).toEqual([ROUTE_PLANNER])
+  })
+
+  it('pins every production adopter of a planned verdict', async () => {
+    const adopters = (await productionFiles())
+      .filter((file) => file !== ROUTE_PLANNER)
+      .filter((file) =>
+        readFileSync(join(REPO_ROOT, file), 'utf8').includes('adoptAgentSessionLaunchVerdict(')
+      )
+      .sort()
+    expect(adopters).toEqual([...VERDICT_ADOPTERS].sort())
   })
 
   it('keeps non-visible, resume, and floating launchers intentionally outside the route', () => {
@@ -63,7 +76,7 @@ describe('agent launch routing caller census', () => {
       'src/renderer/src/lib/launch-ai-vault-session.ts',
       'src/renderer/src/components/floating-terminal/FloatingTerminalWindowControls.tsx'
     ]) {
-      expect(readFileSync(join(REPO_ROOT, file), 'utf8')).not.toContain('resolveAgentLaunchRoute(')
+      expect(readFileSync(join(REPO_ROOT, file), 'utf8')).not.toContain('resolveAgentLaunchRoute')
     }
   })
 })

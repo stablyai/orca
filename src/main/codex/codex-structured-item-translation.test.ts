@@ -10,6 +10,7 @@ import {
   codexItemIdentity,
   codexJournalItem,
   codexMessageBlocks,
+  codexStreamingJournalItem,
   CodexTurnOrdinals,
   MAX_CODEX_TURN_ORDINAL_BYTES,
   MAX_CODEX_TURN_ORDINAL_ENTRIES,
@@ -201,6 +202,7 @@ describe('codex item bodies', () => {
     expect(codexItemBody(LIVE_TURN[2] as CodexThreadItem)).toEqual({
       kind: 'tool-call',
       name: 'shell',
+      callId: 'item-2',
       input: { command: 'ls', cwd: '/tmp' },
       exitCode: 0,
       state: 'completed',
@@ -229,6 +231,7 @@ describe('codex item bodies', () => {
     expect(body).toEqual({
       kind: 'tool-call',
       name: 'read',
+      callId: 'item-read',
       // `name` is the target's basename, which `path` already carries and no
       // label ever reads, so it stays out of the bounded journal payload.
       input: { command: "sed -n '1,200p' notes.txt", cwd: '/repo', path: '/repo/notes.txt' },
@@ -257,6 +260,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'search',
+      callId: 'item-search',
       input: { command: 'rg -n --no-heading beta .', cwd: '/repo', query: 'beta', directory: '.' },
       state: 'running'
     })
@@ -276,6 +280,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'search',
+      callId: 'item-search-bare',
       input: { command: 'rg beta', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -296,6 +301,7 @@ describe('codex item bodies', () => {
     expect(body).toEqual({
       kind: 'tool-call',
       name: 'list',
+      callId: 'item-list',
       input: { command: 'ls', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -326,6 +332,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'shell',
+      callId: 'item-mixed',
       input: { command: 'cat a.txt && ls src', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -349,6 +356,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'read',
+      callId: 'item-two-reads',
       input: { command: 'cat a.ts && cat b.ts', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -424,6 +432,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'read',
+      callId: 'item-read-null',
       input: { command: 'cat', cwd: '/repo' },
       exitCode: 0,
       state: 'completed'
@@ -451,6 +460,7 @@ describe('codex item bodies', () => {
     const shellRow = {
       kind: 'tool-call',
       name: 'shell',
+      callId: 'item-fallback',
       input: { command: 'ls', cwd: '/tmp' },
       exitCode: 0,
       state: 'completed'
@@ -592,12 +602,18 @@ describe('codex item bodies', () => {
       body: { kind: 'status', text, presentation: 'plan-document' },
       handled: true
     })
+    // A plan is a durable artifact, so it must never read as the model reasoning now.
+    expect(codexItemBody({ type: 'plan', id: 'plan-document', text })).not.toMatchObject({
+      kind: 'message',
+      role: 'reasoning'
+    })
   })
 
-  it('renders reasoning as status and exposes an unknown item as a provider frame', () => {
+  it('renders reasoning as a typed message and exposes an unknown item as a provider frame', () => {
     expect(codexItemBody({ type: 'reasoning', id: 'r', text: 'thinking' })).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(codexItemBody({ type: 'reasoning', id: 'r' })).toBeNull()
     expect(codexItemBody({ type: 'agentMessage', id: 'm', text: '' })).toBeNull()
@@ -605,6 +621,15 @@ describe('codex item bodies', () => {
       kind: 'status',
       text: 'codex · item:somethingCodexAddedLater',
       providerFrame: { provider: 'codex', kind: 'item:somethingCodexAddedLater' }
+    })
+  })
+
+  it('keeps non-reasoning item streams as status activity', () => {
+    expect(
+      codexStreamingJournalItem({ type: 'somethingCodexAddedLater', id: 'x' }, 'still working')
+    ).toEqual({
+      body: { kind: 'status', text: 'still working' },
+      handled: true
     })
   })
 
@@ -624,6 +649,7 @@ describe('codex item bodies', () => {
       // Server-qualified, and the arguments stay top level so the row label can
       // read `query`/`command`/`file_path` out of them.
       name: 'weather/get_forecast',
+      callId: 'mcp-1',
       mcpIdentity: { server: 'weather', tool: 'get_forecast' },
       input: { city: 'Oslo' },
       state: 'completed',
@@ -672,6 +698,7 @@ describe('codex item bodies', () => {
     expect(codexItemBody({ type: 'mcpToolCall', id: 'm', tool: 't', arguments: {} })).toEqual({
       kind: 'tool-call',
       name: 't',
+      callId: 'm',
       input: null,
       state: 'running'
     })
@@ -719,6 +746,7 @@ describe('codex item bodies', () => {
     expect(codexItemBody({ type: 'webSearch', id: 'w', query: '', action: null })).toEqual({
       kind: 'tool-call',
       name: 'web_search',
+      callId: 'w',
       input: null,
       state: 'running'
     })
@@ -733,6 +761,7 @@ describe('codex item bodies', () => {
     ).toEqual({
       kind: 'tool-call',
       name: 'web_search',
+      callId: 'w',
       input: {
         query: 'orca release notes',
         description: 'search',
@@ -830,7 +859,11 @@ describe('codex item bodies', () => {
         summary: ['first', 'second'],
         content: [{ text: 'fallback' }]
       })
-    ).toEqual({ kind: 'status', text: 'first\nsecond' })
+    ).toEqual({
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'first\nsecond' }]
+    })
   })
 
   it('refuses a value that is not a thread item at all', () => {

@@ -2378,8 +2378,6 @@
         "recentChatsTerminalsHeader": "Recent Chats & Terminals",
         "27f10cca63": "Search chats, terminals, worktrees, settings, and actions...",
         "2770f02910": "Search chats, terminals, worktrees, settings, and actions",
-        "paletteOpenTabBranch": "Branch name",
-        "paletteOpenTabWorkspace": "Workspace name",
         "lastActiveTime": "Last active {{value0}} ago"
       },
       "github": {
@@ -3370,7 +3368,10 @@
             "1d04b1630b": "Split Down",
             "6b3efb106e": "Split Up",
             "fdd29eb669": "Pin Tab",
-            "8e9d603a09": "Unpin Tab"
+            "8e9d603a09": "Unpin Tab",
+            "revealInFinder": "Reveal in Finder",
+            "openContainingFolder": "Open Containing Folder",
+            "revealInFileExplorer": "Reveal in File Explorer"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
@@ -5786,7 +5787,8 @@
               "lockedReason": "This workspace is locked by Git. Git reported: {{value0}}. Run git worktree unlock <worktree-path> from its repository, then retry deletion.",
               "unstoppedPty": "Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.",
               "unstoppedPtyLive": "This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.",
-              "runningAgentSession": "This workspace still has running agent sessions, so Orca stopped before deleting any files. Force Delete will close them and discard any work they hold."
+              "runningAgentSession": "Orca could not confirm every agent session in this workspace has closed, so it stopped before deleting any files. Use Force Delete to remove it anyway.",
+              "runningAgentSessionLive": "This workspace still has running agent sessions that Orca could not close, so it stopped before deleting any files. Force Delete will discard any work they hold."
             }
           }
         },
@@ -11978,7 +11980,10 @@
             "3161c4e425": "folder",
             "e887fa4b2e": "Open in Terminal",
             "1d8e182c32": "View File",
-            "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable"
+            "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable",
+            "revealInFinder": "Reveal in Finder",
+            "openContainingFolder": "Open Containing Folder",
+            "revealInFileExplorer": "Reveal in File Explorer"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -14678,7 +14683,10 @@
           "f0fd4174b5": "Open file tab to use rich markdown editing",
           "a10d9b8337": "Open file",
           "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change"
+          "631dab0df3": "Next change",
+          "revealInFinder": "Reveal in Finder",
+          "openContainingFolder": "Open Containing Folder",
+          "revealInFileExplorer": "Reveal in File Explorer"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
@@ -16885,6 +16893,21 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "UnexpectedSignoutCard": {
+        "9f2c1a4b7d": "You've been signed out",
+        "3e8f5c2a91": "Dismiss",
+        "7b4d9e1f2a": "Sign in again as {{value0}} to restore Artifact sharing, Orca Relay, and skill sharing.",
+        "5a1c8d3e6f": "Sign in again to restore Artifact sharing, Orca Relay, and skill sharing.",
+        "1f6b2c9d4e": "What you get back",
+        "8d2e4f7a1b": "Artifact sharing",
+        "2c9a5b6e8d": "Publish HTML and Markdown files and manage every shared link from Orca.",
+        "6e3f1a9c5b": "Orca Relay",
+        "4b7d2e8f1a": "Connect Orca Mobile to this desktop across cellular or any Wi-Fi.",
+        "9a4c6b2d7e": "Skill sharing",
+        "3d8e5f1b9c": "Share skills behind an unlisted link and install them on any machine you use.",
+        "7e1a9c4d2f": "Signing in…",
+        "c5b3e8a17d": "Sign in to Orca"
       }
     },
     "i18n": {
@@ -17138,8 +17161,34 @@
         "command": "Background command",
         "monitor": "Background monitor",
         "task": "Background task",
-        "runningList": "Running background tasks",
-        "detailsUnavailable": "Task details are unavailable for this session."
+        "detailsUnavailable": "Task details are unavailable for this session.",
+        "countAgentsOne": "1 agent",
+        "countAgentsMany": "{{value0}} agents",
+        "countShellOne": "1 shell",
+        "countShellMany": "{{value0}} shells",
+        "countShellCommandOne": "1 shell command",
+        "countMonitorsOne": "1 monitor",
+        "countMonitorsMany": "{{value0}} monitors",
+        "countWorkflowsOne": "1 workflow",
+        "countWorkflowsMany": "{{value0}} workflows",
+        "countTasksOne": "1 task",
+        "countTasksMany": "{{value0}} tasks",
+        "headerTotal": "{{value0}} background tasks",
+        "stateWorking": "working",
+        "stateMonitoring": "monitoring",
+        "stateWaiting": "waiting",
+        "stateBlocked": "blocked",
+        "stateDone": "done",
+        "stateIdle": "stopped",
+        "stateUnverifiable": "unverifiable",
+        "reasonWaiting": "needs approval",
+        "reasonUnverifiable": "no contact",
+        "reasonBlocked": "failed",
+        "groupAgents": "Agents",
+        "groupShell": "Shell",
+        "groupMonitors": "Monitors",
+        "groupWorkflows": "Workflows",
+        "groupTasks": "Tasks"
       },
       "jumpToLatest": "Jump to latest",
       "toggle": {
@@ -17789,5 +17838,13 @@
     "title": "Orca keeps failing to load",
     "stalledMessage": "The app window stopped responding while reloading after a crash.",
     "crashLoopMessage": "The app window crashed repeatedly and stopped reloading automatically."
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "needs input",
+      "working": "working",
+      "stopped": "stopped",
+      "finished": "finished"
+    }
   }
 }

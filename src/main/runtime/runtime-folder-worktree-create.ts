@@ -172,7 +172,7 @@ export async function createRuntimeFolderWorktree(args: {
       undefined,
       args.startup && !didSpawnStartup ? args.startup : undefined
     )
-  } else if (deps.ptySpawnAvailable && !didSpawnStartup) {
+  } else if (deps.ptySpawnAvailable && !didSpawnStartup && !args.createdWithAgent) {
     try {
       await deps.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {

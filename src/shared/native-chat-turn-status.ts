@@ -3,8 +3,6 @@
 // and the mobile app (used directly — mobile ships English only) so the two
 // surfaces never drift. Everything here is pure; each platform owns its own clock.
 
-import type { NativeChatMessage } from './native-chat-types'
-
 export const NATIVE_CHAT_TURN_STATUS_COPY = {
   thinking: 'Thinking',
   workingFor: 'Working for {{value0}}',
@@ -48,6 +46,52 @@ export function describeNativeChatTurnStatus({
   return { key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
 }
 
+/** The two readings that label a live turn's one indicator row, carried together
+ *  so a surface cannot pick up one without the other. */
+export type NativeChatLiveTurnIndicator = {
+  thinking: boolean
+  activityText: string | null
+}
+
+export type NativeChatActiveTurnLabel =
+  | { source: 'activity'; text: string }
+  | { source: 'status'; key: 'thinking' | 'workingFor'; duration: string | null }
+
+/** The live turn's single indicator label. Provider activity wins because it is the
+ *  only text that says what the turn is actually doing; reasoning is next; the
+ *  running clock is the floor. Shared so desktop and mobile cannot disagree. */
+export function describeNativeChatActiveTurnLabel({
+  activityText,
+  thinking,
+  elapsedSeconds
+}: {
+  activityText?: string | null
+  thinking: boolean
+  elapsedSeconds: number
+}): NativeChatActiveTurnLabel {
+  const text = activityText?.trim()
+  if (text) {
+    return { source: 'activity', text }
+  }
+  return thinking
+    ? { source: 'status', key: 'thinking', duration: null }
+    : { source: 'status', key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
+}
+
+/** The live turn's label in English. For platforms without i18n (mobile). */
+export function formatNativeChatActiveTurnLabel(input: {
+  activityText?: string | null
+  thinking: boolean
+  elapsedSeconds: number
+}): string {
+  const label = describeNativeChatActiveTurnLabel(input)
+  if (label.source === 'activity') {
+    return label.text
+  }
+  const copy = NATIVE_CHAT_TURN_STATUS_COPY[label.key]
+  return label.duration == null ? copy : copy.replaceAll('{{value0}}', label.duration)
+}
+
 /** Resolve the turn-status label in English. For platforms without i18n (mobile). */
 export function formatNativeChatTurnStatusLabel(input: {
   thinking: boolean
@@ -57,26 +101,6 @@ export function formatNativeChatTurnStatusLabel(input: {
   const { key, duration } = describeNativeChatTurnStatus(input)
   const copy = NATIVE_CHAT_TURN_STATUS_COPY[key]
   return duration == null ? copy : copy.replaceAll('{{value0}}', duration)
-}
-
-/** True once the current turn has produced anything renderable — the boundary
- *  between the "Thinking" label and the counting "Working for N" label. */
-export function nativeChatTurnHasResponse(
-  messages: readonly NativeChatMessage[],
-  latestUserIndex: number
-): boolean {
-  return messages
-    .slice(latestUserIndex + 1)
-    .some(
-      (message) =>
-        (message.role === 'assistant' || message.role === 'tool') &&
-        message.blocks.some(
-          (block) =>
-            block.type === 'tool-call' ||
-            block.type === 'tool-result' ||
-            (block.type === 'text' && block.text.trim().length > 0)
-        )
-    )
 }
 
 export type NativeChatTurnTiming = {
@@ -165,19 +189,33 @@ export function reduceNativeChatTurnTiming(
   }
 }
 
-/** Split the timing map into the active turn's status and the settled ones. */
+/** A turn duration the execution host recorded, which outranks anything this
+ *  platform observed locally. */
+export type NativeChatSettledTurn = { startedAt: number; workedSeconds: number }
+
+/** Per turn: the host's duration, or null when the host recorded the turn but
+ *  has no duration to show (still running, or its end was never observed).
+ *  Either way the host's word replaces whatever this platform clocked locally. */
+export type NativeChatSettledTurns = ReadonlyMap<string, NativeChatSettledTurn | null>
+
+/** Split the timing map into the active turn's status and the settled ones.
+ *  Host-recorded durations override the locally observed ones per turn; local
+ *  observation remains the floor for hosts that record nothing. */
 export function selectNativeChatTurnStatuses(
   timingByTurn: NativeChatTurnTimingByTurn,
   {
     activeTurnKey,
     isWorking,
     workingStartedAt,
-    hasCurrentTurnResponse
+    thinking,
+    settledByTurn
   }: {
     activeTurnKey: string
     isWorking: boolean
     workingStartedAt?: number | null
-    hasCurrentTurnResponse: boolean
+    /** Whether the active turn is reasoning right now, from its journal content. */
+    thinking: boolean
+    settledByTurn?: NativeChatSettledTurns
   }
 ): { active: NativeChatTurnStatus | null; completedByTurn: Record<string, NativeChatTurnStatus> } {
   const completedByTurn = Object.fromEntries(
@@ -188,11 +226,22 @@ export function selectNativeChatTurnStatuses(
         { startedAt: timing.startedAt, thinking: false, workedSeconds: timing.workedSeconds }
       ])
   ) as Record<string, NativeChatTurnStatus>
+  for (const [turnKey, settled] of settledByTurn ?? []) {
+    if (settled === null) {
+      delete completedByTurn[turnKey]
+      continue
+    }
+    completedByTurn[turnKey] = {
+      startedAt: settled.startedAt,
+      thinking: false,
+      workedSeconds: settled.workedSeconds
+    }
+  }
   return {
     active: isWorking
       ? {
           startedAt: workingStartedAt ?? timingByTurn[activeTurnKey]?.startedAt ?? null,
-          thinking: !hasCurrentTurnResponse,
+          thinking,
           workedSeconds: null
         }
       : (completedByTurn[activeTurnKey] ?? null),

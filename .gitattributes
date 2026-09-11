@@ -31,6 +31,13 @@
 # the reviewable change, and pin LF because they are compared byte-for-byte.
 # Not -diff: the shell diff is the review surface when a wrapper does change.
 /src/main/__fixtures__/shell-wrapper-snapshots/*.txt linguist-generated=true text eol=lf
+# Captured agent PTY transcripts. -text, not `text eol=lf` like the wrapper snapshots above:
+# these carry real CR and CRLF bytes as the terminal emitted them, and line-ending
+# normalisation on a Windows checkout would rewrite the evidence the fixture exists to be.
+/src/main/runtime/__fixtures__/*.txt -text
 # Generated runtime English subset: compared byte-for-byte by
 # verify:localization-runtime-catalog, so a CRLF checkout would fail the gate.
 /src/renderer/src/i18n/en-runtime-required.json linguist-generated=true text eol=lf
+# Generated method->params catalog: compared byte-for-byte by
+# verify:rpc-params-catalog, so a CRLF checkout would fail the gate.
+/src/shared/rpc-contract/rpc-params-catalog.generated.ts linguist-generated=true text eol=lf

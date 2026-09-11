@@ -1,7 +1,7 @@
 import { compile, type ZodType } from 'zod'
 import {
   formatZodError,
-  type RpcAnyMethod,
+  type RpcAnyMethodDeclaration,
   type RpcEnvelopeMeta,
   type RpcRequest,
   type RpcResponse
@@ -12,7 +12,7 @@ const compiledParams = new WeakMap<ZodType, ZodType>()
 
 export function parseRpcRequestParams(
   request: RpcRequest,
-  method: RpcAnyMethod,
+  method: RpcAnyMethodDeclaration,
   meta: RpcEnvelopeMeta
 ): { value: unknown; error?: undefined } | { value?: undefined; error: RpcResponse } {
   if (method.params === null) {

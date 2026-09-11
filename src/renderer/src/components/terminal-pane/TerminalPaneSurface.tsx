@@ -176,7 +176,10 @@ export function TerminalPaneSurface({
                       return requestTerminalPaneRecovery({
                         tabId,
                         ptyId,
-                        reason: 'reattach-unverifiable'
+                        reason: 'reattach-unverifiable',
+                        // The user asking again is the new trigger that reopens
+                        // a reason an observed failure has closed.
+                        trigger: 'user'
                       }).then((recovered) => {
                         if (recovered) {
                           dismissTerminalError()

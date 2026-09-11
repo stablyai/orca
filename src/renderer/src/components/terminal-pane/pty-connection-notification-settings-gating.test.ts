@@ -244,8 +244,7 @@ describe('connectPanePty', () => {
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
     expect(deps.dispatchNotification).toHaveBeenCalledWith(
       expect.objectContaining({
-        source: 'agent-task-complete',
-        suppressOsNotification: true
+        source: 'agent-task-complete'
       })
     )
   })
@@ -286,8 +285,7 @@ describe('connectPanePty', () => {
     expect(deps.dispatchNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',
-        paneKey: makePaneKey('tab-1', LEAF_1),
-        suppressOsNotification: true
+        paneKey: makePaneKey('tab-1', LEAF_1)
       })
     )
   })

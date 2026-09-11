@@ -43,6 +43,10 @@ export function sanitizeHydratedEntry(
   if (record.paneKey !== paneKey) {
     return null
   }
+  // Why: structured rows are never written; the host republishes the live projection on restore.
+  if (record.structuredHost !== undefined) {
+    return null
+  }
   const tabId = record.tabId
   if (tabId !== undefined && (typeof tabId !== 'string' || tabId.length === 0)) {
     return null

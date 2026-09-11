@@ -1,4 +1,4 @@
-import { defineStreamingMethod, type RpcAnyMethod } from '../../core'
+import { defineStreamingMethod } from '../../core'
 import { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-protocol'
 import { TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES } from '../../../../../shared/terminal-multiplex-flow-control'
 import { TerminalSourceRangeRegistry } from '../../terminal-source-range-registry'
@@ -11,7 +11,7 @@ import { installMultiplexCleanup } from './terminal-multiplex-cleanup'
 import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
 
-export const TERMINAL_MULTIPLEX_METHODS: RpcAnyMethod[] = [
+export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
     name: 'terminal.multiplex',
     params: TerminalMultiplex,
