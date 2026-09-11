@@ -140,6 +140,22 @@ function seedActiveSleepingRecord(worktreeId: string): string {
   return seedActiveSleepingRecordFor(worktreeId, WEB_TAB_ID, LEAF_ID, 'handle-gap-session')
 }
 
+/** A recorded status entry whose runtime answered nothing: the shape a dropped link leaves behind. */
+function setRuntimeEnvironmentDisconnectedForTests(environmentId: string): void {
+  useAppStore.setState({
+    runtimeStatusByEnvironmentId: new Map(useAppStore.getState().runtimeStatusByEnvironmentId).set(
+      environmentId,
+      { status: null } as never
+    )
+  } as never)
+}
+
+function clearRuntimeEnvironmentStatusEntryForTests(environmentId: string): void {
+  const next = new Map(useAppStore.getState().runtimeStatusByEnvironmentId)
+  next.delete(environmentId)
+  useAppStore.setState({ runtimeStatusByEnvironmentId: next } as never)
+}
+
 describe('resume across the mirror handle gap', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -330,6 +346,41 @@ describe('resume across the mirror handle gap', () => {
     vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
     expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toHaveLength(1)
+  })
+
+  // The journey: the network drops mid-turn on a paired runtime. Nothing is unpaired and no
+  // reconnect has happened, so the connection generation has not moved — runtime-status.ts
+  // advances it on the *reconnect*, under a new runtime id. The deadline therefore fires with a
+  // generation that still matches, and its silence is about the outage, not about the host. A
+  // verdict recorded there resumes the agent the host is still running (#19735 through the
+  // disconnect door, docs/reference/ssh-execution-boundary.md).
+  it('does not turn an outage into a verdict when the environment dropped mid-park', () => {
+    const worktree = makeRuntimeOwnedWorktree()
+    seedMirroredWorkspace(worktree)
+    const paneKey = seedActiveSleepingRecord(worktree.id)
+    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
+    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
+
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS / 2)
+    setRuntimeEnvironmentDisconnectedForTests(RUNTIME_ENV_ID)
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
+
+    const during = useAppStore.getState()
+    expect(during.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(Object.keys(during.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
+    expect((during.tabsByWorktree[worktree.id] ?? []).map((tab) => tab.id)).toEqual([WEB_TAB_ID])
+    // Held, not abandoned: something is still armed to decide once contact returns.
+    expect(countParkedHostMirrorHandleGapPanesForTests()).toBe(1)
+
+    // Contact returns and the host still publishes no handle for the pane. That silence IS
+    // evidence, so the next full budget decides — a hold that outlives the outage would be the
+    // latch-that-never-releases defect this module exists to avoid.
+    clearRuntimeEnvironmentStatusEntryForTests(RUNTIME_ENV_ID)
+    vi.advanceTimersByTime(HOST_MIRROR_HANDLE_GAP_DEADLINE_MS)
+
+    const after = useAppStore.getState()
+    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(1)
   })
 
   it('releases only the pane whose handle landed when two panes share the environment', () => {
