@@ -49,14 +49,21 @@ describe('createIpcPtyTransport', () => {
 
   it('lets a remount claim a late shared result before predecessor retirement', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
-    const { revokePtySpawnRetirement } = await import('./pty-connection/pty-spawn-ownership')
     const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
-    let resolveOld!: (result: { id: string }) => void
-    let resolveSuccessor!: (result: { id: string; isReattach: true }) => void
-    const oldSpawn = new Promise<{ id: string }>((resolve) => {
+    let resolveOld!: (result: { id: string; incarnationId?: string }) => void
+    let resolveSuccessor!: (result: {
+      id: string
+      isReattach: true
+      incarnationId?: string
+    }) => void
+    const oldSpawn = new Promise<{ id: string; incarnationId?: string }>((resolve) => {
       resolveOld = resolve
     })
-    const successorSpawn = new Promise<{ id: string; isReattach: true }>((resolve) => {
+    const successorSpawn = new Promise<{
+      id: string
+      isReattach: true
+      incarnationId?: string
+    }>((resolve) => {
       resolveSuccessor = resolve
     })
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
@@ -69,12 +76,18 @@ describe('createIpcPtyTransport', () => {
     const predecessor = createIpcPtyTransport(options)
     const successor = createIpcPtyTransport(options)
     const predecessorConnect = predecessor.connect({ url: '', callbacks: {} })
-    revokePtySpawnRetirement('tab-1:44444444-4444-4444-8444-444444444444')
     predecessor.detach?.()
     const successorConnect = successor.connect({ url: '', callbacks: {} })
 
-    resolveOld({ id: 'late-live-pty' })
-    resolveSuccessor({ id: 'late-live-pty', isReattach: true })
+    resolveOld({ id: 'late-live-pty', incarnationId: 'inc-1' })
+    // The shared main-side reservation can deliver the predecessor's reply
+    // before the replacement's IPC task. Cleanup must remain pending until the
+    // replacement proves it received the same PTY, rather than relying on a
+    // single microtask.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    expect(kill).not.toHaveBeenCalled()
+
+    resolveSuccessor({ id: 'late-live-pty', isReattach: true, incarnationId: 'inc-1' })
     await Promise.all([predecessorConnect, successorConnect])
 
     expect(kill).not.toHaveBeenCalled()

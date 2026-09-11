@@ -16,9 +16,9 @@ import { isSshSessionGoneError } from './pty-connection/pty-connect-limits'
 import { spawnIpcPty } from './ipc-pty-spawn-request'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 import {
-  claimPtySpawnRetirement,
-  clearPtySpawnRetirementHandoff,
-  successorOwnsPtySpawn
+  publishPtySpawnOwnership,
+  successorOwnsPtySpawnResult,
+  type PtySpawnOwnershipAttempt
 } from './pty-connection/pty-spawn-ownership'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
@@ -37,6 +37,7 @@ type IpcPtyConnectContext = {
   setCallbacks: (callbacks: PtyConnectOptions['callbacks']) => void
   getCallbacks: () => PtyConnectOptions['callbacks']
   paneOwnershipKey: string | null
+  spawnOwnershipAttempt: PtySpawnOwnershipAttempt | null
 }
 
 export async function connectIpcPty(
@@ -95,28 +96,21 @@ export async function connectIpcPty(
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     const retireFreshSpawn = async (): Promise<void> => {
-      // Give a watchdog remount's successor one turn to claim the shared
-      // result before retiring it from the disposed predecessor.
-      await Promise.resolve()
+      // Resolve this attempt for concurrent siblings without granting it
+      // ownership: every path below rejected the result before binding.
+      publishPtySpawnOwnership(context.spawnOwnershipAttempt, spawnResult, { accepted: false })
       // A newer generation may already own a recycled id; an id-only kill would retire its PTY.
+      const successorOwnsResult = await successorOwnsPtySpawnResult(
+        context.spawnOwnershipAttempt,
+        spawnResult
+      )
       if (
         !spawnResult.isReattach &&
         !spawnResult.coldRestore &&
         !context.ownsPtyId(spawnResult.id) &&
-        !(
-          context.paneOwnershipKey &&
-          successorOwnsPtySpawn(context.paneOwnershipKey, spawnResult.id)
-        )
+        !successorOwnsResult
       ) {
-        try {
-          await window.api.pty.kill(spawnResult.id)
-        } finally {
-          if (context.paneOwnershipKey) {
-            clearPtySpawnRetirementHandoff(context.paneOwnershipKey)
-          }
-        }
-      } else if (context.paneOwnershipKey) {
-        clearPtySpawnRetirementHandoff(context.paneOwnershipKey)
+        await window.api.pty.kill(spawnResult.id)
       }
     }
 
@@ -131,11 +125,6 @@ export async function connectIpcPty(
     if (context.isDestroyed()) {
       await retireFreshSpawn()
       return
-    }
-    if (context.paneOwnershipKey) {
-      // A live successor claims the result before binding; the predecessor's
-      // deferred retirement then observes this exact ownership transfer.
-      claimPtySpawnRetirement(context.paneOwnershipKey, spawnResult.id)
     }
     if (spawnResult.isReattach && !admittedSessionId) {
       context.getCallbacks().onReattachDetermined?.()
@@ -154,6 +143,10 @@ export async function connectIpcPty(
       // buffered exit is the real thing. A fresh spawn's PTY did not exist yet.
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
     }
+    // Publish only after this connect has passed all stale-generation and
+    // admission fences. A rejected successor must not claim a PTY it never
+    // binds, or the predecessor would leak it instead of retiring it.
+    publishPtySpawnOwnership(context.spawnOwnershipAttempt, spawnResult)
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)

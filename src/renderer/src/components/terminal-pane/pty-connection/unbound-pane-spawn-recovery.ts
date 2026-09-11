@@ -10,21 +10,8 @@ import {
   pendingSpawnGenerationByPaneKey
 } from './pty-connect-limits'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { revokePtySpawnRetirement } from './pty-spawn-ownership'
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
 
 type SpawnSettlementRecord = { resumesProviderSession: boolean; armed: boolean }
-
-function spawnOwnershipKey(session: ConnectPanePtySession, pendingSpawnKey: string): string {
-  if (session.cacheKey) {
-    return session.cacheKey
-  }
-  try {
-    return makePaneKey(session.deps.tabId, session.pane.leafId)
-  } catch {
-    return pendingSpawnKey
-  }
-}
 
 // Why keyed on the spawn rather than on the pane or the arming call: both facts are
 // properties of the spawn and must survive a remount adopting it under the same pane
@@ -168,13 +155,11 @@ export function armSpawnSettlementWatchdog(
         return
       }
       if (!session.disposed) {
-        revokePtySpawnRetirement(spawnOwnershipKey(session, pendingSpawnKey))
         remountUnboundPane(session, 'spawn-never-settled', 'spawn never settled; pane left unbound')
         return
       }
       // Arming pane is gone, but an adopter may still be waiting on the pin. No
       // instance id: this request belongs to the tab, not to a disposed xterm.
-      revokePtySpawnRetirement(spawnOwnershipKey(session, pendingSpawnKey))
       void requestTerminalPaneRecovery({
         tabId,
         ptyId: null,

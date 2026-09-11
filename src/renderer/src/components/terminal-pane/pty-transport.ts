@@ -6,6 +6,10 @@ import { createPtyOutputProcessor } from './pty-output-processor'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import {
+  beginPtySpawnOwnership,
+  finishPtySpawnOwnership
+} from './pty-connection/pty-spawn-ownership'
 
 export {
   ensurePtyDispatcher,
@@ -138,6 +142,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   return {
     connect: async (options) => {
       const connectGeneration = advancePtyLifecycle()
+      const spawnOwnershipAttempt = beginPtySpawnOwnership(paneOwnershipKey)
       try {
         return await connectIpcPty(options, {
           transportOptions: opts,
@@ -152,9 +157,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           isCurrent: (id) => lifecycleGeneration === connectGeneration && connected && ptyId === id,
           setCallbacks,
           getCallbacks: () => storedCallbacks,
-          paneOwnershipKey
+          paneOwnershipKey,
+          spawnOwnershipAttempt
         })
       } finally {
+        finishPtySpawnOwnership(spawnOwnershipAttempt)
         if (lifecycleGeneration === connectGeneration) {
           await flushPreconnectInput()
         }
