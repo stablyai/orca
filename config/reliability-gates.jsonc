@@ -11,6 +11,81 @@
   },
   "gates": [
     {
+      "id": "runtime.connection-owned-host-status",
+      "title": "Host status recovers with its owning connection",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime",
+      "layer": "service-integration-and-e2e",
+      "surfaces": [
+        "sidebar host status",
+        "desktop runtime connection",
+        "browser primary connection"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Real authenticated sockets plus isolated desktop and headless hosts with desktop and browser viewers; deterministic lifecycle tests cover stale results and reader deadlines.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/19163"],
+      "invariant": "Failed bootstrap and authenticated reconnect converge without UI triggers; one connection owner publishes verified status, with no independent healthy status polling.",
+      "oracle": "Observe automatic recovery, retained runtime identity on failure, ordered publications, exact request counts, isolated viewer outages, and retirement on disconnect.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/runtime-host-status-owner.test.ts src/main/ipc/runtime-environment-status-recovery.test.ts src/main/ipc/runtime-environment-status-connection.test.ts src/renderer/src/store/slices/runtime-status-snapshot.test.ts src/renderer/src/web/web-runtime-status-owner.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/runtime-host-status-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/shared/runtime-host-status-owner.test.ts",
+        "src/main/ipc/runtime-environment-status-recovery.test.ts",
+        "src/main/ipc/runtime-environment-status-connection.test.ts",
+        "src/renderer/src/store/slices/runtime-status-snapshot.test.ts",
+        "src/renderer/src/web/web-runtime-status-owner.test.ts",
+        "tests/e2e/runtime-host-status-recovery.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/runtime-environment-status-recovery.test.ts",
+          "assertions": [
+            "recovers a saved host after its first status check fails, without another UI request"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/runtime-host-status-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "summary": "Desktop-host and headless-host journeys passed with desktop and browser viewers.",
+          "durationSeconds": 31.3
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "Target excluding builds; measured p95 not established."
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Local candidate runs passed; no sustained CI history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "First-status-failure oracle failed on main 58ff95becb40 (one request instead of two) and passes on the candidate. E2E verifies candidate recovery, not a baseline comparison."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Deterministic tests assert one shared request and no healthy owner polling."
+      },
+      "promotionCriteria": ["Collect repeated CI runs without unexplained flakes."],
+      "knownGaps": [
+        "No live Linux, Windows, SSH, or mixed-version pair validation.",
+        "TCP interruption exercises reconnect, not a full real host process restart.",
+        "The outage begins on the first saved-host check, not by relaunching a preseeded desktop profile."
+      ],
+      "demotionRule": "Keep experimental until repeated runs establish reliability; preserve request-count and lifecycle assertions."
+    },
+    {
       "id": "mobile-push.headless-startup-and-policy",
       "title": "Headless push lifecycle and mobile delivery policy",
       "maturity": "experimental",

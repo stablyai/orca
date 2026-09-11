@@ -1,13 +1,11 @@
-import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
-import { useNow } from '@/hooks/use-now'
 import {
   describeNativeChatTurnStatus,
   formatNativeChatDuration,
-  NATIVE_CHAT_TURN_STATUS_COPY,
-  nativeChatElapsedSeconds
+  NATIVE_CHAT_TURN_STATUS_COPY
 } from '../../../../shared/native-chat-turn-status'
+import { useNativeChatElapsedSeconds } from './use-native-chat-elapsed-seconds'
 
 export { formatNativeChatDuration }
 
@@ -24,15 +22,8 @@ export function NativeChatWorkingStatus({
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
-  // Why: elapsed seconds is ordinary render dataflow, not an external system.
-  // The shared 1s clock is visibility-gated and collapses every in-flight turn
-  // onto one tick, instead of one interval plus one commit per turn.
   const counting = !thinking && workedSeconds == null
-  const now = useNow(1_000, counting)
-  // Why: preserves the old effect's `startedAt ?? Date.now()` epoch for the
-  // single frame before the turn's startedAt lands.
-  const [mountedAt] = useState(() => Date.now())
-  const elapsedSeconds = counting ? nativeChatElapsedSeconds(startedAt, mountedAt, now) : 0
+  const elapsedSeconds = useNativeChatElapsedSeconds(startedAt, counting)
 
   const { key, duration } = describeNativeChatTurnStatus({
     thinking,
@@ -67,6 +58,7 @@ export function NativeChatWorkingStatus({
     return (
       <button
         type="button"
+        data-native-chat-turn-status="settled"
         className={`${className} w-full text-left hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70`}
         aria-label={translate(
           'components.native-chat.status.toggleDetails',
@@ -84,6 +76,7 @@ export function NativeChatWorkingStatus({
   return (
     <div
       className={className}
+      data-native-chat-turn-status={workedSeconds == null ? 'active' : 'settled'}
       aria-label={translate(
         'components.native-chat.status.responding',
         NATIVE_CHAT_TURN_STATUS_COPY.responding

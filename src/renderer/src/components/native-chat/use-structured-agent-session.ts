@@ -36,7 +36,7 @@ import {
 } from './structured-agent-session-message-projection'
 import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
-import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
+import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat-turn-activity'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'
 

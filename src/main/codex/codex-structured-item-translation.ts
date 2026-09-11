@@ -85,6 +85,10 @@ export type CodexJournalItem = {
   handled: boolean
 }
 
+function reasoningMessageBody(text: string): AgentJournalItemBody {
+  return { kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text }] }
+}
+
 function commandItem(item: CodexThreadItem): CodexJournalItem {
   const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
   const bounded = output === null ? null : boundInlineText(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
@@ -272,7 +276,7 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       handled: true
     }
   }
-  if (item.type === 'reasoning' || item.type === 'plan') {
+  if (item.type === 'reasoning') {
     const text =
       readTextContent(item, 'text') ??
       readTextContent(item, 'summary') ??
@@ -281,7 +285,7 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       body:
         text === null
           ? null
-          : { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
+          : reasoningMessageBody(boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text),
       handled: true
     }
   }
@@ -331,5 +335,11 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     }
   }
   const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-  return { body: { kind: 'status', text: bounded.text }, handled: true }
+  return {
+    body:
+      item.type === 'reasoning'
+        ? reasoningMessageBody(bounded.text)
+        : { kind: 'status', text: bounded.text },
+    handled: true
+  }
 }

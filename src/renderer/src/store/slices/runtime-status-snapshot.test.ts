@@ -1,0 +1,111 @@
+import { beforeEach, expect, it, vi } from 'vitest'
+import { create } from 'zustand'
+import { toast } from 'sonner'
+import {
+  createRuntimeStatusSlice,
+  clearRuntimeEnvironmentConnectionGenerationsForTests,
+  type RuntimeStatusSlice
+} from './runtime-status'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+
+vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
+vi.mock('@/runtime/restored-client-hosted-browser-host-attach', () => ({
+  ensureBrowserClientHostsForRestoredPages: vi.fn(),
+  ensureBrowserClientHostForRestartedRuntime: vi.fn()
+}))
+vi.mock('@/runtime/client-hosted-browser-close-intent-replay', () => ({
+  replayClientHostedBrowserCloseIntents: vi.fn()
+}))
+
+beforeEach(() => {
+  clearRuntimeEnvironmentConnectionGenerationsForTests()
+  vi.clearAllMocks()
+})
+const environment = {
+  id: 'env-a',
+  name: 'Host',
+  createdAt: 1,
+  pairingRevision: 1,
+  endpoints: [],
+  preferredEndpointId: ''
+} as unknown as PublicKnownRuntimeEnvironment
+function store() {
+  const value = create<RuntimeStatusSlice>()((...args) =>
+    createRuntimeStatusSlice(...(args as unknown as Parameters<typeof createRuntimeStatusSlice>))
+  )
+  value.getState().setRuntimeEnvironments([environment])
+  return value
+}
+function snapshot(
+  sequence: number,
+  patch: Partial<RuntimeHostStatusSnapshot> = {}
+): RuntimeHostStatusSnapshot {
+  return {
+    environmentId: 'env-a',
+    pairingRevision: 1,
+    sequence,
+    checkedAt: sequence,
+    transport: 'ready',
+    verification: 'verified',
+    status: { runtimeId: 'rt-1' } as RuntimeStatus,
+    ...patch
+  }
+}
+
+it('hydrates both viewers and rejects an older read after a newer publication', () => {
+  for (const viewer of [store(), store()]) {
+    viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(2))
+    viewer
+      .getState()
+      .applyRuntimeHostStatusSnapshot(snapshot(1, { status: null, verification: 'unavailable' }))
+    expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
+      'rt-1'
+    )
+  }
+})
+
+it('represents failed verification honestly without manufacturing a session restart or toast', () => {
+  const viewer = store()
+  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(1))
+  const generation = viewer
+    .getState()
+    .runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
+  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(2, { verification: 'unavailable' }))
+  expect(
+    runtimeHostConnectionStateForEntry(viewer.getState().runtimeStatusByEnvironmentId.get('env-a'))
+  ).toBe('runtime-unavailable')
+  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(3))
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
+    generation
+  )
+  expect(toast.warning).not.toHaveBeenCalled()
+  viewer
+    .getState()
+    .applyRuntimeHostStatusSnapshot(snapshot(4, { status: { runtimeId: 'rt-2' } as RuntimeStatus }))
+  expect(
+    viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
+  ).toBeGreaterThan(generation ?? 0)
+})
+
+it('retains disconnect ordering and rejects publications for removed or replaced pairings', () => {
+  const viewer = store()
+  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(1))
+  viewer
+    .getState()
+    .applyRuntimeHostStatusSnapshot(
+      snapshot(3, { retired: true, verification: 'blocked', transport: 'disconnected' })
+    )
+  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(2))
+  expect(
+    runtimeHostConnectionStateForEntry(viewer.getState().runtimeStatusByEnvironmentId.get('env-a'))
+  ).toBe('disconnected')
+  viewer.getState().setRuntimeEnvironments([{ ...environment, pairingRevision: 2 }])
+  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(4))
+  expect(viewer.getState().runtimeStatusByEnvironmentId.has('env-a')).toBe(false)
+  viewer.getState().setRuntimeEnvironments([])
+  viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(5, { pairingRevision: 2 }))
+  expect(viewer.getState().runtimeStatusByEnvironmentId.has('env-a')).toBe(false)
+})
