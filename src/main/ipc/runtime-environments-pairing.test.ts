@@ -1,3 +1,4 @@
+import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
 import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -477,6 +478,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       ok: false,
       error: { code: 'runtime_manually_disconnected' }
     })
+    const getSnapshots = handler<undefined, RuntimeHostStatusSnapshot[]>(
+      'runtimeEnvironments:getStatusSnapshots'
+    )
+    // A new renderer only has the snapshot read, not the earlier disconnect event.
+    expect(await getSnapshots(null, undefined)).toMatchObject([
+      { environmentId: added.environment.id, retired: true, transport: 'disconnected' }
+    ])
     const call = handler<
       { selector: string; method: string },
       { ok: boolean; error?: { code: string } }
@@ -502,6 +510,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       result: { runtimeId: 'runtime-remote' }
     })
     expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledOnce()
+    expect(await getSnapshots(null, undefined)).toMatchObject([
+      { environmentId: added.environment.id, verification: 'verified' }
+    ])
+    expect((await getSnapshots(null, undefined))[0].retired).not.toBe(true)
   })
 
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {

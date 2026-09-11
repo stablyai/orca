@@ -131,6 +131,8 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       markRuntimeEnvironmentManuallyDisconnected(environment.id)
       invalidateTransport(environment.id)
       closeLegacySelectorTransport(args.selector, environment.id)
+      // Retain disconnected evidence for renderers that missed the teardown event.
+      getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id)
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )
