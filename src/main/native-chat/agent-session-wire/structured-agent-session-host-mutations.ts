@@ -32,6 +32,11 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import type {
+  QueuedStructuredAgentSessionSend,
+  StructuredAgentSessionSendQueue
+} from './structured-agent-session-send-queue'
+import { settleSendDispatch } from './structured-agent-session-turns'
 
 export type StructuredAgentSessionMutationContext = {
   deps: StructuredAgentSessionHostDeps
@@ -40,13 +45,16 @@ export type StructuredAgentSessionMutationContext = {
   requireSession: (sessionId: string) => StructuredAgentSessionHostSession
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   now: () => number
+  /** Holds a send's dispatch until the turn ahead of it reaches a terminal event. */
+  sendQueue: StructuredAgentSessionSendQueue
 }
 
 function mutate<TValue>(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
   envelope: AgentSessionMutationEnvelope,
-  plan: MutationPlan<TValue>
+  plan: MutationPlan<TValue>,
+  deferDispatch?: () => boolean
 ): Promise<AgentSessionMutationResult<TValue>> {
   return context.serialize(envelope.sessionId, () =>
     admitAndRunAgentSessionMutation({
@@ -57,9 +65,41 @@ function mutate<TValue>(
       plan,
       journal: context.sessions.get(envelope.sessionId)?.journal,
       publish: (journal) => context.publish(envelope.sessionId, journal),
-      now: () => context.now()
+      now: () => context.now(),
+      ...(deferDispatch ? { deferDispatch } : {})
     })
   )
+}
+
+/** Dispatches one held send now that the turn ahead of it ended. It runs on the
+ *  session's own lane, so it can never overlap the mutation that queued it. */
+export function releaseQueuedStructuredAgentSessionSend(
+  context: StructuredAgentSessionMutationContext,
+  sessionId: string,
+  send: QueuedStructuredAgentSessionSend
+): Promise<boolean> {
+  return context.serialize(sessionId, async () => {
+    const session = context.sessions.get(sessionId)
+    if (!session) {
+      return false
+    }
+    const outcome = await settleSendDispatch(
+      {
+        sessionId,
+        journal: session.journal,
+        fence: session.fence,
+        adapter: context.deps.adapter,
+        publish: () => context.publish(sessionId, session.journal)
+      },
+      { ...send, recordPendingDispatch: true }
+    )
+    // Only a submission the provider now owns will produce a turn to wait on.
+    return (
+      outcome.ok &&
+      (outcome.value.submission.dispatchState === 'pending' ||
+        outcome.value.submission.dispatchState === 'accepted')
+    )
+  })
 }
 
 export function sendStructuredAgentSessionTurn(
@@ -73,32 +113,38 @@ export function sendStructuredAgentSessionTurn(
   }
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const plan = sendPlan(params)
-  return mutate(context, caller, params.envelope, {
-    ...plan,
-    run: (ctx) => {
-      const rewind = context.deps.store.getRecord(ctx.sessionId)?.rewind
-      if (rewind?.phase === 'prepared' || rewind?.phase === 'provider-succeeded') {
-        return Promise.resolve(rewindRefusal('outcome-unknown'))
+  return mutate(
+    context,
+    caller,
+    params.envelope,
+    {
+      ...plan,
+      run: (ctx) => {
+        const rewind = context.deps.store.getRecord(ctx.sessionId)?.rewind
+        if (rewind?.phase === 'prepared' || rewind?.phase === 'provider-succeeded') {
+          return Promise.resolve(rewindRefusal('outcome-unknown'))
+        }
+        const command = context.deps.store.getRecord(ctx.sessionId)?.conversationCommand
+        if (
+          command &&
+          ((command.state === 'unknown' && command.phase === 'prepared') ||
+            (command.command === 'clear' && command.replacementSessionId))
+        ) {
+          return Promise.resolve({
+            ok: false,
+            refusal: {
+              code: 'agent_session_operation_invalid',
+              message: command.replacementSessionId
+                ? 'This conversation has been cleared. Use the current conversation.'
+                : 'The conversation operation is unconfirmed.'
+            }
+          })
+        }
+        return plan.run(ctx)
       }
-      const command = context.deps.store.getRecord(ctx.sessionId)?.conversationCommand
-      if (
-        command &&
-        ((command.state === 'unknown' && command.phase === 'prepared') ||
-          (command.command === 'clear' && command.replacementSessionId))
-      ) {
-        return Promise.resolve({
-          ok: false,
-          refusal: {
-            code: 'agent_session_operation_invalid',
-            message: command.replacementSessionId
-              ? 'This conversation has been cleared. Use the current conversation.'
-              : 'The conversation operation is unconfirmed.'
-          }
-        })
-      }
-      return plan.run(ctx)
-    }
-  })
+    },
+    () => context.sendQueue.defersSend(params.envelope.sessionId)
+  )
 }
 
 export function cancelStructuredAgentSessionTurn(

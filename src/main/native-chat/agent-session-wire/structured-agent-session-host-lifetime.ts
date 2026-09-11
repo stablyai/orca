@@ -5,7 +5,6 @@
 // bookkeeping that decides when to run it than buried among the twenty other things a session can
 // do.
 
-import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-projection'
 import {
   evictStructuredAgentSession,
   STRUCTURED_AGENT_SESSION_EVICTION_STEPS,
@@ -20,6 +19,11 @@ import type {
 } from './structured-agent-session-host-types'
 import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
 import { resumeHeldStructuredAgentSession } from './structured-agent-session-hold-resume'
+import {
+  StructuredAgentSessionSendQueue,
+  structuredAgentSessionTurnIsActive,
+  type StructuredAgentSessionSendQueueDeps
+} from './structured-agent-session-send-queue'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 
 export type StructuredAgentSessionLifetimeContext = {
@@ -100,6 +104,19 @@ export async function resumeStructuredAgentSessionForHold(
   })
 }
 
+/** The send queue, wired to the same journal reads the release clock uses: both
+ *  answer "is this session mid-turn" from the journal and nothing else. */
+export function createStructuredAgentSessionSendQueue(
+  context: () => Pick<StructuredAgentSessionLifetimeContext, 'sessions' | 'deps'>,
+  release: StructuredAgentSessionSendQueueDeps['release']
+): StructuredAgentSessionSendQueue {
+  return new StructuredAgentSessionSendQueue({
+    journalFor: (sessionId) => context().sessions.get(sessionId)?.journal,
+    release,
+    onError: (error) => context().deps.onEventSinkError?.(error)
+  })
+}
+
 export function createStructuredAgentSessionHolds(
   context: StructuredAgentSessionLifetimeContext,
   input: {
@@ -117,12 +134,8 @@ export function createStructuredAgentSessionHolds(
       ),
     evict: input.close,
     hasProviderChild: (sessionId) => hasProviderChild(context, sessionId),
-    isTurnActive: (sessionId) => {
-      const session = context.sessions.get(sessionId)
-      return session
-        ? activeStructuredAgentSessionTurnId(session.journal.snapshot().items) !== null
-        : false
-    },
+    isTurnActive: (sessionId) =>
+      structuredAgentSessionTurnIsActive(context.sessions.get(sessionId)?.journal),
     onError: (error) => context.deps.onEventSinkError?.(error),
     ...(context.deps.releaseGraceMs === undefined ? {} : { graceMs: context.deps.releaseGraceMs })
   })

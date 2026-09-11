@@ -46,6 +46,8 @@ export type AgentSessionMutationRequest<TValue> = {
   journal: AgentSessionJournal | undefined
   publish: (journal: AgentSessionJournal) => void
   now: () => number
+  /** Send only: holds the adapter dispatch behind the session's running turn. */
+  deferDispatch?: () => boolean
 }
 
 export async function admitAndRunAgentSessionMutation<TValue>(
@@ -147,6 +149,7 @@ function turnContext<TValue>(
         .then(() => undefined),
     resolvedBy: request.callerKey,
     publish: () => request.publish(journal),
-    now: () => request.now()
+    now: () => request.now(),
+    ...(request.deferDispatch ? { deferDispatch: request.deferDispatch } : {})
   }
 }

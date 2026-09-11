@@ -69,6 +69,9 @@ export type JournalSubmissionRow = JournalRowBase & {
   payloadFingerprint: string
   providerHandle: AgentSessionProviderHandle
   body: AgentJournalMessageItem
+  /** The send was admitted behind a running turn and its dispatch deferred. A
+   *  later dispatch row — of any state — clears it. */
+  queued?: true
 }
 
 export type JournalDispatchRow = JournalRowBase & {

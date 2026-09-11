@@ -249,6 +249,11 @@ export type AgentJournalSubmission = {
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live
    *  `unknown` is a send still outstanding; a recovered one outlived its writer. */
   recovered?: true
+  /** Set while the host is HOLDING this send behind a running turn: durably
+   *  admitted, never handed to the adapter. Absent means a dispatch was
+   *  attempted, so an older host's rows keep today's meaning. Readers outside
+   *  the host ignore it and render the submission as pending either way. */
+  queued?: true
 }
 
 /** Durable answer to "did my send land?", keyed by client message id. Only an

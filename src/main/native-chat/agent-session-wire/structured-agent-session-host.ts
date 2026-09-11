@@ -23,6 +23,7 @@ import { StructuredAgentSessionHostRuntimeState } from './structured-agent-sessi
 import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import {
   createStructuredAgentSessionHolds,
+  createStructuredAgentSessionSendQueue,
   evictHeldStructuredAgentSession,
   type StructuredAgentSessionLifetimeContext
 } from './structured-agent-session-host-lifetime'
@@ -33,6 +34,7 @@ import type {
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { listStructuredAgentSessionTabs } from './structured-agent-session-host-tabs'
 import {
+  releaseQueuedStructuredAgentSessionSend,
   structuredAgentSessionMutationDelegates,
   settleStructuredAgentSessionLateDispatch,
   type StructuredAgentSessionMutationContext
@@ -62,7 +64,13 @@ export class StructuredAgentSessionHost {
   private readonly clientDelivery = new StructuredAgentSessionClientDelivery(
     this.sessions,
     () => this.now(),
-    () => this.deps
+    () => this.deps,
+    (sessionId) => this.sendQueue.observe(sessionId)
+  )
+  private readonly sendQueue = createStructuredAgentSessionSendQueue(
+    () => this.lifetimeContext(),
+    (sessionId, send) =>
+      releaseQueuedStructuredAgentSessionSend(this.mutationContext(), sessionId, send)
   )
   private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
@@ -262,7 +270,8 @@ export class StructuredAgentSessionHost {
       publish: (sessionId, journal) => this.subscribers.publish(sessionId, journal),
       requireSession: (sessionId) => this.requireSession(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
-      now: () => this.now()
+      now: () => this.now(),
+      sendQueue: this.sendQueue
     }
   }
 

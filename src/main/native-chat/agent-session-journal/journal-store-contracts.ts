@@ -54,6 +54,8 @@ export type JournalSubmissionInput = {
   payloadFingerprint: string
   body: AgentJournalMessageItem
   fence: number
+  /** Durably records that this send is waiting on the active turn, not dispatched. */
+  queued?: true
 }
 
 export type JournalItemAppendInput = {

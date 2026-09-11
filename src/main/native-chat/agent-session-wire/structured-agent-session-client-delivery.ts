@@ -21,7 +21,9 @@ export class StructuredAgentSessionClientDelivery {
   constructor(
     private readonly sessions: Map<string, StructuredAgentSessionHostSession>,
     now: () => number,
-    deps: () => StructuredAgentSessionHostDeps
+    deps: () => StructuredAgentSessionHostDeps,
+    /** Every edge that can change journal content, including the one that ends a turn. */
+    private readonly onJournalPublished: (sessionId: string) => void = () => undefined
   ) {
     this.statusFeed = createStructuredAgentSessionHostStatusFeed({ sessions, now, deps })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
@@ -63,6 +65,7 @@ export class StructuredAgentSessionClientDelivery {
   private publishJournal(sessionId: string, journal: AgentSessionJournal): void {
     this.statusFeed.publish(sessionId, journal)
     this.sendSettlement.publish(sessionId, journal)
+    this.onJournalPublished(sessionId)
   }
 
   private requireJournal(sessionId: string): AgentSessionJournal {

@@ -17,12 +17,16 @@ import {
   agentJournalSubmissionKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
-import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
-import { dispatchMayMatchProviderEcho } from './journal-dispatch-doubt-reasons'
 import { journalItemRevisionIsStale } from './journal-item-revision'
+import {
+  acceptSubmissionFromProviderItem,
+  resolveJournalItemId
+} from './journal-submission-echo-adoption'
 import type { JournalRow } from './journal-row-schema'
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
+
+export { resolveJournalItemId } from './journal-submission-echo-adoption'
 
 export type JournalReducerState = {
   sessionId: string
@@ -134,47 +138,6 @@ export function rememberAppliedSettlementId(
   }
 }
 
-export function resolveJournalItemId(
-  state: JournalReducerState,
-  itemId: string,
-  body?: AgentJournalRenderItem['body']
-): string {
-  const aliased = state.aliases.get(itemId)
-  if (aliased) {
-    return aliased
-  }
-  const identity = parseAgentJournalItemKey(itemId)
-  if (
-    !body ||
-    body.kind !== 'message' ||
-    body.role !== 'user' ||
-    !identity ||
-    identity.provider === 'orca'
-  ) {
-    return itemId
-  }
-  const fingerprint = structuredAgentSessionPayloadFingerprint({
-    method: 'agentSession.send',
-    sessionId: state.sessionId,
-    fields: { body }
-  })
-  // Exact payload plus queue order preserves repeated identical sends one-for-one.
-  const submission = [...state.submissions.values()]
-    .sort((left, right) => left.submittedAt - right.submittedAt)
-    .find(
-      (candidate) =>
-        dispatchMayMatchProviderEcho(candidate.dispatchState, candidate.reason) &&
-        candidate.payloadFingerprint === fingerprint &&
-        state.items.get(agentJournalSubmissionKey(candidate.clientMessageId))?.revision === 0
-    )
-  if (!submission) {
-    return itemId
-  }
-  const submissionId = agentJournalSubmissionKey(submission.clientMessageId)
-  state.aliases.set(itemId, submissionId)
-  return submissionId
-}
-
 function resolveItemId(state: JournalReducerState, itemId: string): string {
   return state.aliases.get(itemId) ?? itemId
 }
@@ -242,7 +205,8 @@ function applySubmission(
     providerItemId: null,
     reason: null,
     submittedAt: row.ts,
-    resolvedAt: null
+    resolvedAt: null,
+    ...(row.queued ? { queued: row.queued } : {})
   })
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
   upsertItem(state, itemId, 0, {
@@ -270,6 +234,9 @@ function applyDispatch(
   submission.dispatchState = row.state
   submission.providerItemId = row.providerItemId
   submission.reason = row.reason
+  // Any dispatch row proves the send left the queue, including the transition
+  // back to `pending` that a released send records for exactly that purpose.
+  delete submission.queued
   submission.resolvedAt = row.state === 'pending' ? null : row.ts
   if (row.recovered) {
     submission.recovered = row.recovered
@@ -288,40 +255,6 @@ function applyDispatch(
   })
 }
 
-function acceptSubmissionFromProviderItem(
-  state: JournalReducerState,
-  providerItemId: string,
-  resolvedItemId: string,
-  row: Pick<JournalRow, 'epoch' | 'seq' | 'fence' | 'ts'>
-): void {
-  if (providerItemId === resolvedItemId) {
-    return
-  }
-  const submission = [...state.submissions.values()].find(
-    (candidate) => agentJournalSubmissionKey(candidate.clientMessageId) === resolvedItemId
-  )
-  if (
-    !submission ||
-    submission.dispatchState === 'accepted' ||
-    submission.dispatchState === 'rejected'
-  ) {
-    return
-  }
-  submission.fence = row.fence
-  submission.dispatchState = 'accepted'
-  submission.providerItemId = providerItemId
-  submission.reason = null
-  submission.resolvedAt = row.ts
-  delete submission.recovered
-  state.receipts.set(submission.clientMessageId, {
-    clientMessageId: submission.clientMessageId,
-    providerItemId,
-    cursor: { epoch: row.epoch, sequence: row.seq },
-    acceptedAt: row.ts
-  })
-}
-
-/** Project the folded state into the client-facing snapshot. */
 export function renderJournalState(state: JournalReducerState): AgentJournalSnapshot {
   // Sequence is the sole ordering key; map insertion order is not, because a
   // re-created item re-enters the map after the items that followed it.

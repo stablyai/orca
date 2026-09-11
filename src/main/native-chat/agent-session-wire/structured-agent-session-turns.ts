@@ -39,7 +39,17 @@ export type AgentSessionTurnContext = {
   resolvedBy: string
   publish: () => void
   now: () => number
+  /** Holds this send's adapter dispatch behind the session's running turn; see
+   *  `structured-agent-session-send-queue`. */
+  deferDispatch?: () => boolean
 }
+
+/** What handing a durably-appended submission to the adapter needs, and nothing
+ *  more — a send released from the queue has no envelope behind it. */
+export type AgentSessionDispatchContext = Pick<
+  AgentSessionTurnContext,
+  'sessionId' | 'journal' | 'fence' | 'adapter' | 'publish'
+>
 
 export type TurnOutcome<TValue> =
   | { ok: true; value: TValue }
@@ -52,7 +62,7 @@ function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal
 /** A thrown adapter error is indistinguishable from a lost reply, so it settles
  *  as `unknown` rather than as a rejection. */
 async function dispatchSafely(
-  ctx: AgentSessionTurnContext,
+  ctx: AgentSessionDispatchContext,
   clientMessageId: string,
   body: AgentJournalMessageItem
 ): Promise<AgentSessionDispatchOutcome> {
@@ -114,8 +124,24 @@ export async function performSend(
     }
   }
   if (!redeliver) {
-    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
+    // Only a first admission is held: a retry exists solely for a frame the
+    // provider provably never took, and it carries its own doubt row.
+    const queued = ctx.deferDispatch?.() === true
+    await ctx.journal.appendSubmission({
+      ...input,
+      fence: ctx.fence,
+      ...(queued ? { queued: true } : {})
+    })
     ctx.publish()
+    if (queued) {
+      return {
+        ok: true,
+        value: {
+          clientMessageId: input.clientMessageId,
+          submission: requireSubmission(ctx, input.clientMessageId)
+        }
+      }
+    }
   } else {
     // Retry resumes work without moving or duplicating the original message.
     await ctx.journal.resolveDispatch({
@@ -127,12 +153,34 @@ export async function performSend(
     ctx.publish()
   }
 
+  return settleSendDispatch(ctx, {
+    clientMessageId: input.clientMessageId,
+    body: input.body,
+    ...(redeliver ? { recordPendingDispatch: true } : {})
+  })
+}
+
+/**
+ * Hands one durably-appended submission to the adapter and records what came
+ * back. Shared by a live send and by a send the queue releases once the turn
+ * ahead of it ended.
+ *
+ * `recordPendingDispatch` writes the transition back to `pending` that a first
+ * admission does not need — the submission is already pending. A retry needs it
+ * so clients do not mistake a successful re-admission for a refused
+ * redelivery, and a released send needs it to clear its `queued` marker.
+ */
+export async function settleSendDispatch(
+  ctx: AgentSessionDispatchContext,
+  input: {
+    clientMessageId: string
+    body: AgentJournalMessageItem
+    recordPendingDispatch?: true
+  }
+): Promise<TurnOutcome<AgentSessionSendResult>> {
   const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
-  // A first admission needs no dispatch row: the submission is already pending.
-  // A retry must durably clear the old doubt so clients do not mistake a
-  // successful re-admission for a refused redelivery.
   if (outcome.state === 'admitted') {
-    if (redeliver) {
+    if (input.recordPendingDispatch) {
       await ctx.journal.resolveDispatch({
         clientMessageId: input.clientMessageId,
         state: 'pending',
@@ -191,7 +239,7 @@ export async function performSend(
 }
 
 function requireSubmission(
-  ctx: AgentSessionTurnContext,
+  ctx: AgentSessionDispatchContext,
   clientMessageId: string
 ): AgentJournalSubmission {
   const submission = ctx.journal
