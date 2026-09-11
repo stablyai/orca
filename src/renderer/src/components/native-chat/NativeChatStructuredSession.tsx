@@ -1,9 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
-import { RotateCcw } from 'lucide-react'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import { Button } from '@/components/ui/button'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
@@ -16,13 +14,13 @@ import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useStructuredAgentSession } from './use-structured-agent-session'
-import { translate } from '@/i18n/i18n'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useStructuredNativeChatComposerTransport } from './use-structured-native-chat-composer-transport'
+import { NativeChatStructuredSessionNotices } from './NativeChatStructuredSessionNotices'
 
 type StoppingBackgroundTasks = {
   sessionId: string
@@ -138,17 +136,6 @@ export function NativeChatStructuredSession(
           }
         ]
       : [])
-  // Only the head of the outbox is ever dispatched, so it is the only entry a
-  // Retry can act on and the only one whose state can be holding the queue.
-  // Scanning past it named a message the user was not looking at and re-sent
-  // one from earlier in the session while their newest sat behind it.
-  const outboxHead = controller.outbox[0] ?? null
-  const retryableOutboxEntry =
-    outboxHead &&
-    (outboxHead.state === 'unconfirmed' ||
-      outboxHead.clientMessageId === controller.blockedClientMessageId)
-      ? outboxHead
-      : null
   const structuredTransport = useStructuredNativeChatComposerTransport({
     controller,
     agent: props.agent,
@@ -269,46 +256,7 @@ export function NativeChatStructuredSession(
           }}
         />
       ) : null}
-      {retryableOutboxEntry ? (
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-1 text-xs text-muted-foreground">
-          <span>
-            {retryableOutboxEntry.state === 'unconfirmed'
-              ? translate(
-                  'auto.components.native.chat.NativeChatStructuredSession.1f772bb5d0',
-                  'Message delivery is unconfirmed.'
-                )
-              : translate(
-                  'auto.components.native.chat.NativeChatStructuredSession.93ef441197',
-                  'Message was not sent.'
-                )}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            onClick={() => controller.retry(retryableOutboxEntry.clientMessageId)}
-          >
-            <RotateCcw className="size-3" />
-            {translate(
-              'auto.components.native.chat.NativeChatStructuredSession.a5e7f14068',
-              'Retry'
-            )}
-          </Button>
-        </div>
-      ) : null}
-      {controller.cached ? (
-        <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-muted-foreground">
-          {translate(
-            'components.native-chat.structuredSessionOwnerRepaired',
-            'This chat\u2019s host was re-paired. Showing the last loaded transcript; sending is off.'
-          )}
-        </p>
-      ) : null}
-      {controller.error || composerError ? (
-        <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-destructive">
-          {controller.error ?? composerError}
-        </p>
-      ) : null}
+      <NativeChatStructuredSessionNotices controller={controller} composerError={composerError} />
       {controller.backgroundTasks.show ? (
         <NativeChatBackgroundTasksStatus
           isVisible={props.isVisible}

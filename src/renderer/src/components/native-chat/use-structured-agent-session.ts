@@ -45,6 +45,9 @@ import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing
 
 export type { StructuredPromptItem } from './structured-agent-session-message-projection'
 
+/** The pane's whole view of a structured session; the notice strip reads it too. */
+export type StructuredAgentSessionController = ReturnType<typeof useStructuredAgentSession>
+
 export function useStructuredAgentSession(args: {
   sessionId: string
   target: RuntimeClientTarget
