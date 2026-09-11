@@ -74,6 +74,11 @@ function recordExpiredWait(environmentId: string, key: string): void {
   // already makes. That evidence covers only this environment. Sweeping others would drop a
   // verdict belonging to an environment that is merely mid-rehydration, and its pane would
   // re-park on a fresh full budget. Removed environments are left to teardown, not to this.
+  //
+  // Do not widen this on the assumption the inference is airtight: it establishes that this
+  // environment has A published row, not that it has finished republishing. A host that has
+  // published p1 and not yet p2 can still cost p2 its verdict here. That residual is
+  // conservative in the same direction — drop, re-park, hold longer, never resume early.
   const prefix = `${environmentId}\0`
   const liveTabs = liveTabIds()
   for (const [staleKey, staleGeneration] of expiredGenerationByPane) {
