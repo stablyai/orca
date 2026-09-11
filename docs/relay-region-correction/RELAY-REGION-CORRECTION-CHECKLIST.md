@@ -1,6 +1,6 @@
 # Relay region correction — implementation checklist
 
-Updated: 2026-09-11. **Local implementation validated through current-main rollback and Docker SSH transport checks. Release/rollout gates remain.**
+Updated: 2026-09-11. **MERGE BLOCKED: fresh split validation reproduced the rollback confirmation failure. Earlier green runs are insufficient; release/rollout gates also remain.**
 
 Source of truth for behavior: [final implementation plan](RELAY-REGION-CORRECTION-PLAN.md), especially section 5a. Independent verdict: [final review](https://github.com/stablyai/orca/blob/0db9fdc486366f7451289f0c0599eed9ae1d94be/docs/relay-region-correction/RELAY-REGION-CORRECTION-FINAL-REVIEW.md), against `a9338438c437e1ba763a03f17b9d468988bd045b`. Investigation history: [progress log](https://github.com/stablyai/orca/blob/0db9fdc486366f7451289f0c0599eed9ae1d94be/docs/relay-region-correction/RELAY-ROLLOUT-PROGRESS.md).
 
@@ -12,7 +12,7 @@ This is the execution tracker. Check a task only after its implementation and re
 - [x] Create this implementation checklist.
 - [x] Begin implementation from current baseline `027acb4efa2e6b226d40df266b86367423946d62` in this worktree; preserve unrelated changes (details in progress log).
 
-Active tasks: complete explicit release/evidence gaps below. The current-main rollback regression is fixed and validated with real WebSockets; emergency-drain behavior remains covered. Remaining unchecked items denote release gaps, not claimed test coverage. See [acceptance evidence](RELAY-REGION-CORRECTION-ACCEPTANCE.md). Shared API recorded in [implementation contracts](RELAY-REGION-CORRECTION-API.md).
+Active tasks: complete explicit release/evidence gaps below. The current-main rollback regression passed earlier but recurred during split validation; transport is not reliably green. Emergency-drain behavior remains covered. Remaining unchecked items denote release gaps, not claimed test coverage. See [acceptance evidence](RELAY-REGION-CORRECTION-ACCEPTANCE.md). Shared API recorded in [implementation contracts](RELAY-REGION-CORRECTION-API.md).
 
 ## 1. Fresh decisions and safe initial placement — plan §§1–2
 

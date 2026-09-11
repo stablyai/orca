@@ -182,3 +182,13 @@ Split validation:
 
 Fresh split CI and the existing packaged/device/platform/production release gaps
 remain required; splitting the review does not satisfy deployment gates.
+
+### Latest transport disposition: merge blocked
+
+`ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/relay-region-correction.unit.test.ts`
+returned **1 passed / 1 failed** in 127.04s (`.tmp/region-split-transport.log`).
+The rollback test again timed out at line 504 waiting for
+`sourceSession.regionalRestoration` to become null. The split leaves cloud and
+origin lifecycle code unchanged; the new latency-sort cleanup is not exercised
+by this harness. Earlier 2/2 runs therefore do not establish reliable green
+transport. Investigate the remaining timer/handshake race before merge or rollout.
