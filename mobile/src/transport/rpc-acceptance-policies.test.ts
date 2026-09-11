@@ -118,6 +118,44 @@ describe('rpcObjectResultOrNull', () => {
   })
 })
 
+// A refusal that illegally carries success-shaped fields: without the `ok` check each of these
+// would read the stray field and answer as if the call had succeeded.
+describe('a refusal carrying stray success fields', () => {
+  const strayRefusal = {
+    id: 'rpc-1',
+    ok: false,
+    error: { code: 'method_not_found', message: 'Nope' },
+    result: { value: 1 },
+    streaming: true,
+    _meta: meta
+  } as unknown as RpcResponse
+
+  it('yields null rather than the stray result', () => {
+    expect(rpcObjectResultOrNull(strayRefusal)).toBeNull()
+  })
+
+  it('is still recognised as a coded refusal', () => {
+    expect(isCodedRpcRefusal(strayRefusal, 'method_not_found')).toBe(true)
+  })
+
+  it('is still recognised as method-not-found', () => {
+    expect(isMethodNotFoundRefusal(strayRefusal)).toBe(true)
+  })
+
+  // The mirror case: a success carrying a stray error must not read as a refusal.
+  it('does not read a success carrying a stray error as a refusal', () => {
+    const straySuccess = {
+      id: 'rpc-1',
+      ok: true,
+      result: { value: 1 },
+      error: { code: 'method_not_found', message: 'Nope' },
+      _meta: meta
+    } as unknown as RpcResponse
+    expect(isMethodNotFoundRefusal(straySuccess)).toBe(false)
+    expect(isCodedRpcRefusal(straySuccess, 'method_not_found')).toBe(false)
+  })
+})
+
 describe('isMethodNotFoundRefusal', () => {
   it('matches only the method_not_found code', () => {
     expect(isMethodNotFoundRefusal(refusal('method_not_found'))).toBe(true)
@@ -138,6 +176,19 @@ describe('isStreamingOpenerReply', () => {
 
   it('refuses a success with no streaming flag', () => {
     expect(isStreamingOpenerReply(success({ subscriptionId: 's1' }))).toBe(false)
+  })
+
+  // A truthy non-boolean off the wire must not open a stream: the registry would route it to
+  // handleStreamingResponse and wait for frames that never come.
+  it.each([['yes'], [1], [{}]])('refuses a truthy non-boolean streaming flag %j', (flag) => {
+    const response = {
+      id: 'rpc-1',
+      ok: true,
+      result: { subscriptionId: 's1' },
+      streaming: flag,
+      _meta: meta
+    } as unknown as RpcResponse
+    expect(isStreamingOpenerReply(response)).toBe(false)
   })
 
   it('refuses a refusal even when it carries a streaming flag', () => {
