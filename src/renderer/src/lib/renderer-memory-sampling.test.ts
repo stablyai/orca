@@ -232,6 +232,27 @@ describe('renderer memory highwater census re-arming', () => {
     expect(censuses().at(-1)?.nearMarkMinutes as number).toBeGreaterThan(beforeGap + 400)
   })
 
+  // A short trough is still a trough. 40 one-minute spikes separated by 14 minutes at 100MB is
+  // not 10 hours of sustained pressure, and reporting it as such sends triage on a leak hunt.
+  it('counts only samples actually seen near the mark, not elapsed time', async () => {
+    stubFootprint(658)
+    await tick()
+    await tick()
+
+    for (let cycle = 0; cycle < 40; cycle += 1) {
+      stubFootprint(100)
+      for (let minute = 0; minute < 14; minute += 1) {
+        await tick()
+      }
+      stubFootprint(620)
+      await tick()
+    }
+
+    // ~40 in-band samples out of ~602 minutes elapsed.
+    const reported = censuses().at(-1)?.nearMarkMinutes as number
+    expect(reported).toBeLessThanOrEqual(60)
+  })
+
   it('emits at most one census per mark while a renderer oscillates around it', async () => {
     stubFootprint(601)
     await tick()

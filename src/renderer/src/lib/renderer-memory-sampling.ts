@@ -54,11 +54,10 @@ type HeapMetrics = BrowserPerformanceMemory & {
 /** Mark -> monotonic time it last emitted a census. */
 /** First crossing is kept separately: a refresh replaces the crumb's own `createdAt`. */
 type HighwaterMarkState = {
-  firstCrossedAtMs: number
+  /** Accumulated, not derived from a start time: only samples actually seen in band count. */
+  nearMarkMs: number
+  lastSampleAtMs: number
   lastEmittedAtMs: number
-  lastWithinBandAtMs: number
-  /** When the renderer was first observed below the band; null while it is in band. */
-  belowBandSinceMs: number | null
 }
 const emittedHighwaterRatios = new Map<number, HighwaterMarkState>()
 const emittedPrivateHighwaterMarks = new Map<number, HighwaterMarkState>()
@@ -277,22 +276,16 @@ function noteHighwaterBandResidency(
   if (state === undefined) {
     return
   }
-  if (value < mark * RENDERER_HIGHWATER_RECENSUS_BAND) {
-    // Why stamp rather than re-anchor here: the spell has to be measured from observed samples.
-    emitted.set(mark, { ...state, belowBandSinceMs: state.belowBandSinceMs ?? nowMs })
-    return
-  }
-  // Why an observed spell and not elapsed time: a renderer that is simply not being sampled — a
-  // main thread wedged past the sample interval, or a suspend — has not left the band, and must
-  // not have its clock reset. Only samples we actually saw below the band count.
-  const lapsed =
-    state.belowBandSinceMs !== null &&
-    nowMs - state.belowBandSinceMs > RENDERER_HIGHWATER_RECENSUS_MS
+  // Credit each in-band sample with the time since the previous sample. Why accumulate rather than
+  // measure from the first crossing: sawtooth (build, GC, build) is the ordinary shape of renderer
+  // memory, and elapsed time would report a renderer that spent 94% of 10h at 100MB as sustained
+  // pressure. A gap in sampling is still credited, because a wedged renderer has not left the band.
+  const elapsedMs = Math.max(0, nowMs - state.lastSampleAtMs)
+  const inBand = value >= mark * RENDERER_HIGHWATER_RECENSUS_BAND
   emitted.set(mark, {
-    firstCrossedAtMs: lapsed ? nowMs : state.firstCrossedAtMs,
-    lastEmittedAtMs: state.lastEmittedAtMs,
-    lastWithinBandAtMs: nowMs,
-    belowBandSinceMs: null
+    nearMarkMs: inBand ? state.nearMarkMs + elapsedMs : state.nearMarkMs,
+    lastSampleAtMs: nowMs,
+    lastEmittedAtMs: state.lastEmittedAtMs
   })
 }
 
@@ -307,14 +300,9 @@ function stampHighwaterMark(
   mark: number,
   nowMs: number
 ): number {
-  const firstCrossedAtMs = emitted.get(mark)?.firstCrossedAtMs ?? nowMs
-  emitted.set(mark, {
-    firstCrossedAtMs,
-    lastEmittedAtMs: nowMs,
-    lastWithinBandAtMs: nowMs,
-    belowBandSinceMs: null
-  })
-  return Math.round((nowMs - firstCrossedAtMs) / 60_000)
+  const nearMarkMs = emitted.get(mark)?.nearMarkMs ?? 0
+  emitted.set(mark, { nearMarkMs, lastSampleAtMs: nowMs, lastEmittedAtMs: nowMs })
+  return Math.round(nearMarkMs / 60_000)
 }
 
 function isHighwaterCensusDue(
