@@ -21,6 +21,7 @@ export type StructuredPromptDeliveryResult = {
 
 export type StructuredLaunchPromptOptions = {
   prompt?: string
+  promptDelivery?: 'auto-submit' | 'submit-after-ready' | 'draft'
   onPromptDelivered?: () => void
 }
 
@@ -68,10 +69,15 @@ async function dispatchStructuredLaunchPrompt(
         ? null
         : {
             ...current,
-            state: dispatchState === 'unknown' ? 'unconfirmed' : 'queued'
+            state:
+              dispatchState === 'unknown'
+                ? 'unconfirmed'
+                : dispatchState === 'pending'
+                  ? 'dispatching'
+                  : 'queued'
           }
     )
-    return dispatchState === 'accepted'
+    return dispatchState === 'accepted' || dispatchState === 'pending'
   } catch {
     mutateEntry(entry, (current) => ({ ...current, state: 'unconfirmed' }))
     return false
@@ -83,7 +89,9 @@ export function settleStructuredAgentLaunchPrompt(args: {
   options: StructuredLaunchPromptOptions
   stagedEntry: StructuredAgentSessionOutboxEntry | null
 }): Promise<StructuredPromptDeliveryResult> | undefined {
-  if (!args.options.prompt?.trim()) {
+  // Why: a draft has no delivery event — the composer adopts it and the user sends it — so
+  // `onPromptDelivered` never fires and no result is reported.
+  if (args.options.promptDelivery === 'draft' || !args.options.prompt?.trim()) {
     return undefined
   }
   return args.launchResult.then(async (receipt) => {

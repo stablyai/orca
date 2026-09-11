@@ -16591,5 +16591,13 @@
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats."
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "attend une réponse",
+      "working": "en cours",
+      "stopped": "arrêté",
+      "finished": "terminé"
+    }
   }
 }

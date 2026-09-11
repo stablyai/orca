@@ -216,6 +216,106 @@ describe('submission and dispatch state machine', () => {
     expect(items[0]?.revision).toBe(1)
   })
 
+  it('durably accepts a pending submission from the provider echo row itself', () => {
+    const body = userText('hi')
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'item',
+        itemId: 'claude:session-1:user-1',
+        revision: 1,
+        body,
+        ...base(2)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1',
+      resolvedAt: 1_002
+    })
+    expect(state.receipts.get('cm_1')).toMatchObject({
+      providerItemId: 'claude:session-1:user-1',
+      cursor: { epoch: EPOCH, sequence: 2 }
+    })
+  })
+
+  it('does not give a newer identical echo to an older proven-undelivered submission', () => {
+    const body = userText('same message')
+    const state = fold([
+      {
+        ...submission,
+        body,
+        payloadFingerprint: sendFingerprint(body)
+      },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        ...submission,
+        clientMessageId: 'cm_2',
+        body,
+        payloadFingerprint: sendFingerprint(body),
+        ...base(3)
+      },
+      {
+        kind: 'item',
+        itemId: 'claude:session-1:user-1',
+        revision: 1,
+        body,
+        ...base(4)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_2')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1'
+    })
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.receipts.get('cm_2')?.providerItemId).toBe('claude:session-1:user-1')
+  })
+
+  it('does not accept a submission from a stale provider item behind its tombstone', () => {
+    const body = userText('hi')
+    const providerItemId = 'claude:session-1:user-1'
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      { kind: 'tombstone', itemId: providerItemId, revision: 2, ...base(2) },
+      { kind: 'item', itemId: providerItemId, revision: 1, body, ...base(3) }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('pending')
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.aliases.has(providerItemId)).toBe(false)
+  })
+
+  it('does not accept a submission from a stale lifecycle item behind its tombstone', () => {
+    const body = userText('hi')
+    const providerItemId = 'claude:session-1:user-1'
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'settlement-1',
+        mutations: [
+          { kind: 'tombstone', itemId: providerItemId, revision: 2 },
+          { kind: 'item', itemId: providerItemId, revision: 1, body }
+        ],
+        ...base(2)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('pending')
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.aliases.has(providerItemId)).toBe(false)
+  })
+
   it.each(['codex:thread-1:turn-1:0', 'claude:session-1:user-1'])(
     'preserves submitted text and attachments when %s is restored',
     (providerItemId) => {
@@ -382,6 +482,36 @@ describe('submission and dispatch state machine', () => {
     ])
     expect(state.submissions.get('cm_1')?.dispatchState).toBe('accepted')
     expect(state.receipts.get('cm_1')).toBeTruthy()
+  })
+
+  it('returns a proven retry to pending without moving its original submission', () => {
+    const state = fold([
+      submission,
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'pending',
+        providerItemId: null,
+        reason: null,
+        ...base(3)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'pending',
+      submittedAt: submission.ts,
+      reason: null,
+      resolvedAt: null
+    })
+    expect(renderJournalState(state).items[0]?.sequence).toBe(submission.seq)
   })
 
   it('ignores a dispatch for a submission this epoch never saw', () => {
