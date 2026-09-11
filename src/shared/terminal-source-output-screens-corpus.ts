@@ -136,6 +136,15 @@ export const AGENT_SOURCE_OUTPUT_SCREENS: readonly TerminalCredentialPromptCase[
       '    // Enter the code below to finish linking the account'
     ]
   ],
+  // A comment marker is not dialog decoration. Row 1 supplies the auth verb, so without that
+  // distinction the comment on the bottom row reads as a dialog leading its own row.
+  [
+    'source comment leading with an action phrase, corroborated by the comment above it',
+    [
+      '    // See the authentication guide for details',
+      '    // Sign in with the provider console to continue'
+    ]
+  ],
   // Prose that merely ENDS on a credential noun, which an unanchored ask verb read as a prompt.
   sourceRow(
     'wrapped comment ending on a credential noun',
