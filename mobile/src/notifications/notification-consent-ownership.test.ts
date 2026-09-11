@@ -53,6 +53,8 @@ vi.mock('react-native-safe-area-context', () => ({
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon' }))
 vi.mock('../components/OrcaLogo', () => ({ OrcaLogo: 'Logo' }))
 vi.mock('../onboarding/MobileOnboardingPage', () => ({ MobileOnboardingPage: 'Page' }))
+vi.mock('../transport/use-all-host-clients', () => ({ useAllHostClients: () => [] }))
+vi.mock('../transport/host-store', () => ({ loadHostCatalog: async () => [] }))
 vi.mock('./NotificationDeliverySection', () => ({ NotificationDeliverySection: 'Delivery' }))
 vi.mock('./use-remote-push-capable-hosts', () => ({ useRemotePushCapableHosts: () => [] }))
 vi.mock('./notification-permissions', () => ({
