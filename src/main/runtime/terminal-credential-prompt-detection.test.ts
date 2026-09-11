@@ -500,6 +500,115 @@ const LEGITIMATE_AGENT_SCREENS: readonly (readonly [string, string[]])[] = [
   [
     'dotenv example printed by the agent',
     ['$ cat .env.example', 'DATABASE_URL=', 'API_KEY=', 'SESSION_SECRET=']
+  ],
+  // Plain source code printed into the pane -- the category this corpus lacked. It had `rg` hits
+  // and diffs, which carry their own chrome, but not bare formatted source. Every line below was
+  // mined from this repo's tracked files and refused a prompt above a real composer caret: oxfmt
+  // renders a ternary consequent as a bare `?` row (5,666 tracked files have one), `.login` reads
+  // as the auth verb "log in", and prose that merely ENDS on a credential noun read as an ask.
+  [
+    'ternary consequent with a sign-in string',
+    [
+      "      ? 'Update desktop Orca and sign in to connect from anywhere'",
+      '› Ask Codex to do anything'
+    ]
+  ],
+  [
+    'ternary consequent with an authentication template literal',
+    ['        ? `replacement session authentication timed out (${stage})`', '> ']
+  ],
+  [
+    'ternary consequent with a login error',
+    ['              ? `Codex login failed: ${trimmedOutput}`', '❯ ']
+  ],
+  [
+    'ternary consequent calling a login spawn builder',
+    [
+      "      ? buildWindowsHostInteractiveLoginSpawn(codexCommand, ['login'])",
+      '› Ask Codex to do anything'
+    ]
+  ],
+  [
+    'ternary consequent with a sign-in status string',
+    ["        ? 'Timed out while checking Codex sign-in status'", '> ']
+  ],
+  [
+    'ternary consequent reading an authorization basis',
+    ['        ? this.originPool.controlForBasis(authorization.basisConnId)', '❯ ']
+  ],
+  [
+    'ternary consequent building a gh auth command',
+    ['    ? `gh auth login --hostname ${host}`', '› Ask Codex to do anything']
+  ],
+  [
+    'ternary consequent with a translated sign-in-again label',
+    ["                ? translate('settings.signInAgain', 'Sign in again')", '❯ ']
+  ],
+  [
+    'ternary consequent with a pat docs url',
+    [
+      "        ? 'https://learn.microsoft.com/azure/devops/accounts/use-pat-to-authenticate'",
+      '› Ask Codex to do anything'
+    ]
+  ],
+  [
+    'ternary filtering assignees by login',
+    ['    ? prevAssignees.filter((l) => l !== login)', '› Ask Codex to do anything']
+  ],
+  [
+    'ternary narrowing a login to a string',
+    ["            ? overrides.filter((login): login is string => typeof login === 'string')", '> ']
+  ],
+  [
+    'ternary removing assignees by login',
+    ['                          ? { removeAssignees: [user.login] }', '❯ ']
+  ],
+  [
+    'ternary mapping project assignees',
+    [
+      '                  ? projectRowDetail.assignees.map((login) => ({',
+      '› Ask Codex to do anything'
+    ]
+  ],
+  [
+    'ternary removing a reviewer by login',
+    ['      ? handleRemoveReviewers([reviewer.login])', '> ']
+  ],
+  [
+    'ternary editing assignees by login',
+    ['                      ? onEditAssignees?.([], [user.login])', '❯ ']
+  ],
+  [
+    'ternary lowercasing an assignee login',
+    [
+      '        ? prevAssignees.filter((user) => user.login.toLowerCase() !== lowerLogin)',
+      '› Ask Codex to do anything'
+    ]
+  ],
+  [
+    'ternary building an assignee removal patch',
+    ["        ? { family: 'assignees', kind: 'remove', logins: [login] }", '❯ ']
+  ],
+  [
+    'wrapped comment ending on a credential noun',
+    ['    // Why: a merely missing or expired bundle must not enter the credential', '❯ ']
+  ],
+  [
+    'wrapped comment ending on a password noun',
+    ['    // The caller must provide the current password', '› Ask Codex to do anything']
+  ],
+  [
+    'wrapped jsdoc ending on an api key noun',
+    ['   * Callers are expected to paste their API key', '> ']
+  ],
+  // No caret, and the bottom row DOES lead with an action phrase, so the only thing keeping this
+  // from reading as a live prompt is that `candidate.login` is a property access.
+  [
+    'source rows where a .login access is the only would-be auth verb',
+    [
+      '    const owner = candidate.login',
+      '    // Enter the code below to finish linking the account'
+    ]
   ]
 ]
 

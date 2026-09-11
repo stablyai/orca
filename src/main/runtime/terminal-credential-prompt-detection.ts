@@ -48,8 +48,14 @@ const CREDENTIAL_NOUN_ANYWHERE_RE = new RegExp(CREDENTIAL_NOUN_SOURCE, 'i')
 
 // Why a vendor slot: real prompts read "enter your Anthropic API key" and
 // "paste your personal access token", not just "enter your API key".
+//
+// Why anchored: unanchored, the ask verb could sit anywhere, so any prose that happened to end on
+// a credential noun read as a prompt — `// Why: a merely missing or expired bundle must not enter
+// the credential` is a real wrapped comment in this repo, and terminal wrapping makes ending on a
+// noun routine. A dialog addresses the user, so its ask verb leads the row, modulo decoration and
+// a menu number (`2. Paste an API key`).
 const CREDENTIAL_ASK_PREFIX_RE =
-  /(?:^|[^a-z])(?:enter|re-?enter|type|paste|input|provide|confirm)(?:\s+(?:your|the|a|an|my|new|current|old))?(?:\s+[a-z][a-z0-9.'-]{0,20}){0,2}[\s_]+$/i
+  /^[^a-z0-9]{0,8}(?:\d{1,2}[.)]\s*)?(?:please\s+)?(?:enter|re-?enter|type|paste|input|provide|confirm)(?:\s+(?:your|the|a|an|my|new|current|old))?(?:\s+[a-z][a-z0-9.'-]{0,20}){0,2}[\s_]+$/i
 
 // A bare label prompt: decoration, an optional qualifier, an optional env-var vendor segment
 // (`ANTHROPIC_API_KEY:`), then the noun.
@@ -72,8 +78,11 @@ const CLAUSE_TERMINATED_RE = /[:›❯»>_]\s*$/
 const SUDO_PASSWORD_RE = /^[^a-z0-9]{0,8}\[sudo\]\s/i
 const GIT_CREDENTIAL_RE = /^[^a-z0-9]{0,8}(?:username|password) for ['"]?[a-z][a-z0-9+.-]*:\/\//i
 
+// Why the lookbehind: `user.login`, `candidate.login` and `overrides.filter((login) =>` are
+// property accesses, not auth wording, and `\b` treats `.` as a boundary. Agents print this
+// repo's own source constantly.
 const AUTH_VERB_RE =
-  /\b(?:sign[ -]?in|signin|log[ -]?in|authenticate|authorized?|authorization|authentication)\b/i
+  /(?<![.\w])(?:sign[ -]?in|signin|log[ -]?in|authenticate|authorized?|authorization|authentication)\b/i
 
 // Wording only a dialog addressing the user uses.
 // Why `waiting for you to` carries an auth continuation: bare "waiting for you to …" is how
@@ -104,9 +113,21 @@ const AUTH_ACTION_FLOW_LEADS_ROW_RE = new RegExp(
   'i'
 )
 
-// An inquirer-style question row. Prose never starts with a bare `?`, so a `?`
-// row asking about auth is a dialog header even when its options wrap below it.
+// An inquirer-style question row. Prose never starts with a bare `?` — but FORMATTED CODE does:
+// oxfmt puts a ternary's consequent on its own row as `? someValue`, and 5,666 tracked files in
+// this repo have one. So the row rule alone is not enough; see `COMPOSER_CARET_ROW_RE`.
 const AUTH_QUESTION_ROW_RE = /^\?\s+\S/
+
+/**
+ * A row that proves the agent is sitting at its own composer, so nothing is asking the user
+ * anything and a `?` row above it is output, not a dialog header.
+ *
+ * Why a bare `>` is safe to include here: this suppresses only the question-row rule, which is
+ * the one rule with no position requirement. A sign-in dialog drawn OVER ready chrome — the
+ * #19749 shape, whose own bottom row is `>` — matches through `isCredentialPromptLine` instead,
+ * and that returns before this is consulted.
+ */
+const COMPOSER_CARET_ROW_RE = /^(?:›\s*ask\b.*|✳\s*claude code\b.*|[>❯›◇»$])$/i
 
 // A finished sentence, i.e. narration. A lone `.`/`!`/`?` ends a clause; `...`
 // and `…` are progress wording ("opening browser...") and are not sentences.
@@ -216,5 +237,6 @@ export function findCredentialPromptIndex(normalized: string): number | null {
     bottomRowAsks &&
     !NARRATION_ROW_RE.test(bottomRow) &&
     (sawAuthVerb || sawCredentialNoun)
-  return authFlowOwnsBottom || sawAuthQuestion ? windowStart : null
+  const bottomRowIsComposerCaret = COMPOSER_CARET_ROW_RE.test(bottomRow)
+  return authFlowOwnsBottom || (sawAuthQuestion && !bottomRowIsComposerCaret) ? windowStart : null
 }
