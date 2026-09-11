@@ -125,10 +125,9 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     }
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
-    const providerSessionId = structuredAgentSessionProviderSessionId(input.sessionId)
     if (existing?.tabs.some((tab) => tab.id === id)) {
-      // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
-      // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
+      // A background re-publish carries nothing but a newly proven conversation, so it cannot
+      // re-surface a client whose mirror lost the tab; healing one needs `activate`.
       if (!input.activate) {
         this.republishStructuredProviderSessions(existing, input.notify)
         return
@@ -158,6 +157,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       }
       return
     }
+    const providerSessionId = structuredAgentSessionProviderSessionId(input.sessionId)
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
