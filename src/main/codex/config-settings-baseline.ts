@@ -4,6 +4,7 @@ import { JsonTextStructureCapacityError } from '../../shared/json-text-structure
 import { NodeFileReadTooLargeError } from '../../shared/node-bounded-file-reader'
 import { join } from 'node:path'
 import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
+import type { MirroredCodexSectionKeys } from './config-toml-runtime-added-sections'
 
 const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
 
@@ -15,12 +16,18 @@ export type CodexSettingsConflict = {
 export type CodexSettingsBaseline = {
   settings: ReadonlyMap<string, string | null>
   conflicts: ReadonlyMap<string, CodexSettingsConflict>
+  /** Section keys the last mirror copied in; `null` when none was recorded. */
+  mirroredSectionKeys: MirroredCodexSectionKeys
 }
 
+// Why: the section set is an added optional field at version 2 on purpose. A
+// version bump would make an older Orca reject the whole baseline as invalid
+// and rebuild it, stranding a runtime setting change it had not yet promoted.
 type StoredSettingsBaseline = {
   version: 1 | 2
   settings: Record<string, string | null>
   conflicts?: Record<string, CodexSettingsConflict>
+  mirroredSections?: string[]
 }
 
 /**
@@ -74,7 +81,12 @@ function readParsedCodexSettingsBaseline(
         conflicts.set(key, conflict)
       }
     }
-    return { settings, conflicts }
+    // Why: absent stays `null` rather than collapsing to an empty set, which
+    // would claim the source contributed nothing and authorize deletions.
+    const mirroredSectionKeys = Array.isArray(parsed.mirroredSections)
+      ? new Set(parsed.mirroredSections.filter((key): key is string => typeof key === 'string'))
+      : null
+    return { settings, conflicts, mirroredSectionKeys }
   } catch (error) {
     // Why: invalid baseline state is still `null` — resetting it is the intent,
     // and only a read that FAILED must be preserved.
@@ -101,6 +113,11 @@ export function writeCodexSettingsBaseline(
   }
   if (baseline.conflicts.size > 0) {
     file.conflicts = Object.fromEntries(baseline.conflicts)
+  }
+  if (baseline.mirroredSectionKeys !== null) {
+    // Why: sorted so a re-mirror that changed nothing serializes identically
+    // and the unchanged-bytes short-circuit below still skips the write.
+    file.mirroredSections = [...baseline.mirroredSectionKeys].sort()
   }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
   const serialized = `${JSON.stringify(file, null, 2)}\n`

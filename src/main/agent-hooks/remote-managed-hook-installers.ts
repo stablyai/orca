@@ -20,6 +20,8 @@ export type RemoteManagedHookInstallOptions = {
   codexHomeDir?: string
   /** Skip the trust write when a redirected runtime config is seeded by the launch path. */
   deferTrustUntilConfigToml?: boolean
+  /** Whether `codexHomeDir` is a home Orca's own runtime installer also writes. */
+  useRuntimeInstallerHookContract?: boolean
   /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
   /** Stops before starting the next installer when the owning relay request
@@ -47,7 +49,8 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
     (sftp, remoteHome, options) =>
       codexHookService.installRemote(sftp, remoteHome, {
         codexHomeDir: options?.codexHomeDir,
-        deferTrustUntilConfigToml: options?.deferTrustUntilConfigToml
+        deferTrustUntilConfigToml: options?.deferTrustUntilConfigToml,
+        useRuntimeInstallerHookContract: options?.useRuntimeInstallerHookContract
       })
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],

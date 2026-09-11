@@ -26,7 +26,14 @@ import { getManagedScript } from './codex-hook-script'
 export async function installCodexHooksRemote(
   sftp: SFTPWrapper,
   remoteHome: string,
-  options?: { codexHomeDir?: string; deferTrustUntilConfigToml?: boolean }
+  options?: {
+    codexHomeDir?: string
+    deferTrustUntilConfigToml?: boolean
+    /** Whether this home is also written by Orca's own runtime installer.
+     *  Defaults to the historical coupling with `codexHomeDir`; an SSH host
+     *  whose Codex merely points elsewhere keeps the guest-home contract. */
+    useRuntimeInstallerHookContract?: boolean
+  }
 ): Promise<AgentHookInstallStatus> {
   const codexHomeBase =
     options?.codexHomeDir?.replace(/\/$/, '') ?? `${remoteHome.replace(/\/$/, '')}/.codex`
@@ -35,7 +42,10 @@ export async function installCodexHooksRemote(
   // Redirected WSL homes must use the same script location and command shape
   // as the runtime installer; two representations of one hooks.json race
   // into stale trust keys. Plain SSH keeps its guest-home script contract.
-  const redirectedCodexHome = options?.codexHomeDir?.replace(/\/$/, '')
+  const redirectedCodexHome =
+    (options?.useRuntimeInstallerHookContract ?? options?.codexHomeDir !== undefined)
+      ? options?.codexHomeDir?.replace(/\/$/, '')
+      : undefined
   const remoteScriptPath = redirectedCodexHome
     ? `${redirectedCodexHome}/.orca/agent-hooks/codex-hook.sh`
     : `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/codex-hook.sh`

@@ -16,6 +16,11 @@ import {
   type CodexSettingsPromotionPlan
 } from './config-settings-promotion'
 import { readCodexSettingsBaseline } from './config-settings-baseline'
+import {
+  createRuntimeAddedSectionFilter,
+  getCodexConfigSectionKeys,
+  type MirroredCodexSectionKeys
+} from './config-toml-runtime-added-sections'
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
 import {
@@ -97,7 +102,8 @@ export function syncSystemConfigIntoManagedCodexHome(
     homes.runtimeHomePath,
     new Map(
       [...promotionPlan.conflicts].filter(([key]) => mirrorResult.preservedConflictKeys.has(key))
-    )
+    ),
+    mirrorResult.mirroredSectionKeys
   )
 }
 
@@ -138,7 +144,11 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
     runtimeConfigBeforeMirror !== null
       ? mergeSystemCodexConfigIntoRuntime(
           runtimeConfigBeforeMirror,
-          prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+          prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir),
+          // Why: this lane refreshes the same home the managed lane records for,
+          // so it reads that record but never advances it — a one-way refresh
+          // for retained PTYs must not claim authority over what was mirrored.
+          readCodexSettingsBaseline(homes.runtimeHomePath)?.mirroredSectionKeys ?? null
         )
       : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
   if (runtimeConfigBeforeMirror === nextRuntimeConfig) {
@@ -152,7 +162,13 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
 type CodexConfigMirrorResult =
   | { status: 'skipped-missing-source' }
   | { status: 'refused-indeterminate'; error: unknown }
-  | { status: 'mirrored'; preservedConflictKeys: ReadonlySet<string> }
+  | {
+      status: 'mirrored'
+      preservedConflictKeys: ReadonlySet<string>
+      /** What the source contributed on this pass, so the next one can tell a
+       *  section deleted at the source from one added inside the managed home. */
+      mirroredSectionKeys: ReadonlySet<string>
+    }
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(
   { runtimeHomePath, systemHomePath, systemConfigDir }: CodexSettingsPromotionHomes,
@@ -181,30 +197,35 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   if (rawSystemConfig.trim() === '') {
     return runtimeConfigExists
       ? { status: 'skipped-missing-source' }
-      : { status: 'mirrored', preservedConflictKeys: new Set() }
+      : { status: 'mirrored', preservedConflictKeys: new Set(), mirroredSectionKeys: new Set() }
   }
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
+  const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+  const mirroredSectionKeys = getCodexConfigSectionKeys(systemConfig)
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
     )
-    return { status: 'mirrored', preservedConflictKeys: new Set() }
+    return { status: 'mirrored', preservedConflictKeys: new Set(), mirroredSectionKeys }
   }
 
-  const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
   // Why: reuse the bytes already observed above rather than re-reading. A second
   // read could succeed where the first failed and re-open the gap this closes.
   const runtimeConfig = runtimeConfigObservation.value
   const preserved = preserveRuntimeConflictValues(
-    mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig),
+    mergeSystemCodexConfigIntoRuntime(
+      runtimeConfig,
+      systemConfig,
+      readCodexSettingsBaseline(runtimeHomePath)?.mirroredSectionKeys ?? null
+    ),
     promotionPlan.runtimeValuesToPreserve
   )
   if (preserved.content !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, preserved.content)
   }
-  return { status: 'mirrored', preservedConflictKeys: preserved.keys }
+  return { status: 'mirrored', preservedConflictKeys: preserved.keys, mirroredSectionKeys }
 }
 
 export function resolveCodexConfigMirrorSourceDirectory(
@@ -236,7 +257,11 @@ export function prepareSystemConfigForFreshRuntimeMirror(
   return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
 }
 
-function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: string): string {
+function mergeSystemCodexConfigIntoRuntime(
+  runtimeConfig: string,
+  systemConfig: string,
+  mirroredSectionKeys: MirroredCodexSectionKeys
+): string {
   const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig))
   const runtimeProjectHeaders = new Set(
     runtimeSections
@@ -259,20 +284,28 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
       .filter((section) => getProjectTrustLevel(section.block) === 'trusted')
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
-  // Why: ordinary Codex settings should mirror ~/.codex exactly; runtime hook
-  // trust and project trust are written under Orca's managed CODEX_HOME and
-  // must survive the copy unless the user explicitly revoked project trust in
-  // the system config.
+  // Why: runtime hook trust and project trust are written under Orca's managed
+  // CODEX_HOME and must survive the copy unless the user explicitly revoked
+  // project trust in the system config. Every other runtime section is kept or
+  // dropped by what the source contributed last time, so a table written
+  // through an Orca-launched Codex is not rebuilt away on the next pass.
+  const keepRuntimeAddedSection = createRuntimeAddedSectionFilter({
+    systemConfig,
+    mirroredSectionKeys
+  })
   return joinTomlBlocks([
     stripRuntimeOwnedTomlSections(systemConfig, runtimeProjectHeaders),
     ...runtimeSections
-      .filter((section) => isRuntimePreservedTomlSection(section.header))
-      .filter(
-        (section) =>
+      .filter((section) => {
+        if (!isRuntimePreservedTomlSection(section.header)) {
+          return keepRuntimeAddedSection(section)
+        }
+        return (
           !isRuntimeProjectTomlSection(section.header) ||
           !systemUntrustedProjectHeaders.has(getRevocationTomlSectionHeaderKey(section.header)) ||
           systemTrustedProjectHeaders.has(getTomlSectionHeaderKey(section.header))
-      )
+        )
+      })
       .map((section) => section.block)
   ])
 }

@@ -240,7 +240,11 @@ export class CodexHookService {
   installRemote(
     sftp: SFTPWrapper,
     remoteHome: string,
-    options?: { codexHomeDir?: string; deferTrustUntilConfigToml?: boolean }
+    options?: {
+      codexHomeDir?: string
+      deferTrustUntilConfigToml?: boolean
+      useRuntimeInstallerHookContract?: boolean
+    }
   ): Promise<AgentHookInstallStatus> {
     return installCodexHooksRemote(sftp, remoteHome, options)
   }

@@ -6,7 +6,6 @@ cli/handlers/core.ts
 cli/handlers/skills.ts
 cli/runtime/launch.ts
 main/agent-hooks/managed-hook-owner-identity.ts
-main/agent-hooks/managed-hook-runtime.ts
 main/app-icon.ts
 main/automations/precheck-runner.ts
 main/claude-accounts/keychain.ts

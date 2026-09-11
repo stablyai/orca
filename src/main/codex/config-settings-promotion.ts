@@ -15,12 +15,14 @@ import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-pa
 import { tuiStructuredKey, upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {
   observeCodexSettingsBaseline,
+  readCodexSettingsBaseline,
   writeCodexSettingsBaseline,
   type CodexSettingsBaseline,
   type CodexSettingsConflict
 } from './config-settings-baseline'
 import { resolveUntrackedCodexSetting } from './config-settings-conflict-resolution'
 import { extractOrdinaryCodexSettings } from './config-toml-runtime-owned-sections'
+import type { MirroredCodexSectionKeys } from './config-toml-runtime-added-sections'
 
 // Why: the mirror reverts in-Codex config changes each launch; promotion salvages them by diffing the last baseline.
 
@@ -161,7 +163,10 @@ function readPromotedSettingValues(configPath: string): Map<string, TopLevelSett
  */
 export function snapshotCodexRuntimeSettingsBaseline(
   runtimeHomePath = getOrcaManagedCodexHomePath(),
-  conflicts: ReadonlyMap<string, CodexSettingsConflict> = new Map()
+  conflicts: ReadonlyMap<string, CodexSettingsConflict> = new Map(),
+  /** Omit on a pass that did not mirror, to carry the recorded set forward
+   *  instead of erasing the only record of what the source last contributed. */
+  mirroredSectionKeys?: MirroredCodexSectionKeys
 ): void {
   try {
     const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
@@ -175,7 +180,14 @@ export function snapshotCodexRuntimeSettingsBaseline(
         settings.set(key, value?.raw ?? null)
       }
     }
-    writeCodexSettingsBaseline(runtimeHomePath, { settings, conflicts })
+    writeCodexSettingsBaseline(runtimeHomePath, {
+      settings,
+      conflicts,
+      mirroredSectionKeys:
+        mirroredSectionKeys === undefined
+          ? (readCodexSettingsBaseline(runtimeHomePath)?.mirroredSectionKeys ?? null)
+          : mirroredSectionKeys
+    })
   } catch (error) {
     console.warn('[codex-settings-promotion] failed to snapshot settings baseline', error)
   }

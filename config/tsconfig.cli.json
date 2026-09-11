@@ -84,6 +84,7 @@
     "../src/main/codex/config-toml-key-path.ts",
     "../src/main/codex/config-toml-line-scan.ts",
     "../src/main/codex/config-toml-project-trust.ts",
+    "../src/main/codex/config-toml-runtime-added-sections.ts",
     "../src/main/codex/config-toml-runtime-owned-sections.ts",
     "../src/main/codex/config-toml-syntax.ts",
     "../src/main/codex/config-toml-trust.ts",
