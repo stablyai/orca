@@ -8,7 +8,6 @@ import {
   normalizeRuntimePathSeparators
 } from './cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
-import { splitAiVaultSearchQuery } from './ai-vault-search-query-operators'
 import { parseWslUncPath } from './wsl-paths'
 import type {
   AiVaultAgent,
@@ -180,61 +179,31 @@ export function agentLabel(agent: AiVaultAgent): string {
   return aiVaultAgentLabel(agent)
 }
 
-/**
- * One reading of `repo:` / `path:` for the whole product.
- *
- * Delegates to `splitAiVaultSearchQuery`, which the search index also plans
- * from, so a query cannot mean one thing in this list and another in the index.
- * The values come back folded because everything this file compares is folded;
- * the index keeps the unfolded form, which is why the split itself does not.
- */
 export function parseVaultQuery(query: string): ParsedQuery {
-  const split = splitAiVaultSearchQuery(query)
-  const fold = (values: readonly string[]): string[] => values.map((value) => value.toLowerCase())
-  return {
-    terms: fold(split.terms),
-    repoTerms: fold(split.repoTerms),
-    pathTerms: fold(split.pathTerms)
-  }
-}
+  const terms: string[] = []
+  const repoTerms: string[] = []
+  const pathTerms: string[] = []
 
-/** What `repo:` and `path:` are compared against for one session. */
-export type AiVaultQueryOperatorTarget = {
-  cwd: string | null
-  filePath: string
-  /**
-   * What `repo:` matches. The panel passes a resolved project label when it has
-   * one; everything else falls back to the last two path segments.
-   */
-  repoLabel?: string
-}
+  for (const rawToken of tokenizeQuery(query)) {
+    const token = rawToken.toLowerCase()
+    if (token.startsWith('repo:')) {
+      const value = token.slice('repo:'.length)
+      if (value) {
+        repoTerms.push(value)
+      }
+      continue
+    }
+    if (token.startsWith('path:')) {
+      const value = token.slice('path:'.length)
+      if (value) {
+        pathTerms.push(value)
+      }
+      continue
+    }
+    terms.push(token)
+  }
 
-/**
- * Whether one session satisfies every `repo:` and `path:` term.
- *
- * The single definition of what those operators mean. The search index applies
- * this over its retrieved rows rather than expressing it in SQL, because SQL
- * cannot: LIKE folds ASCII and nothing else, and `path:` searches the transcript
- * path as well as the working directory. Both keys are conjunctive, matching
- * the qualifier semantics the panel has always had.
- */
-export function matchesAiVaultQueryOperators(
-  target: AiVaultQueryOperatorTarget,
-  operators: { repoTerms: readonly string[]; pathTerms: readonly string[] }
-): boolean {
-  if (operators.repoTerms.length > 0) {
-    const repoLabel = (target.repoLabel ?? folderLabel(target.cwd)).toLowerCase()
-    if (operators.repoTerms.some((term) => !repoLabel.includes(term.toLowerCase()))) {
-      return false
-    }
-  }
-  if (operators.pathTerms.length > 0) {
-    const pathSearch = `${target.cwd ?? ''} ${target.filePath}`.toLowerCase()
-    if (operators.pathTerms.some((term) => !pathSearch.includes(term.toLowerCase()))) {
-      return false
-    }
-  }
-  return true
+  return { terms, repoTerms, pathTerms }
 }
 
 function matchesQuery(
@@ -260,18 +229,25 @@ function matchesQuery(
       return false
     }
   }
-  const sessionProject = filters.sessionProjectById?.get(session.id)
-  return matchesAiVaultQueryOperators(
-    {
-      cwd: session.cwd,
-      filePath: session.filePath,
-      repoLabel:
-        sessionProject?.kind === 'repo'
-          ? (filters.projectLabelByKey?.get(sessionProject.key) ?? sessionProject.label)
-          : undefined
-    },
-    parsed
-  )
+  if (parsed.repoTerms.length > 0) {
+    const sessionProject = filters.sessionProjectById?.get(session.id)
+    const repoLabel = (
+      sessionProject?.kind === 'repo'
+        ? (filters.projectLabelByKey?.get(sessionProject.key) ?? sessionProject.label)
+        : folderLabel(session.cwd)
+    ).toLowerCase()
+    if (parsed.repoTerms.some((term) => !repoLabel.includes(term))) {
+      return false
+    }
+  }
+  if (parsed.pathTerms.length > 0) {
+    const pathSearch = `${session.cwd ?? ''} ${session.filePath}`.toLowerCase()
+    if (parsed.pathTerms.some((term) => !pathSearch.includes(term))) {
+      return false
+    }
+  }
+
+  return true
 }
 
 function sessionSortTime(session: AiVaultSession, sort: AiVaultSort): number {
@@ -314,4 +290,26 @@ function createAiVaultWorkspaceMatcher(workspacePath: string): (normalizedCwd: s
   // WSL transcripts record Linux cwd even when the workspace uses a UNC path.
   const matchesLinux = createNormalizedPathInsideOrEqualMatcher(workspaceWslPath.linuxPath)
   return (cwd) => matches(cwd) || matchesLinux(cwd)
+}
+
+function tokenizeQuery(query: string): string[] {
+  const tokens: string[] = []
+  // Why: keep quoted operator values (repo:/path:) intact so labels and paths
+  // containing spaces still match — e.g. path:"/Users/ada/My Project".
+  const pattern = /(repo|path):"([^"]+)"|(repo|path):'([^']+)'|"([^"]+)"|'([^']+)'|(\S+)/gi
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(query)) !== null) {
+    const operator = match[1] ?? match[3]
+    const operatorValue = match[2] ?? match[4]
+    if (operator && operatorValue?.trim()) {
+      tokens.push(`${operator.toLowerCase()}:${operatorValue.trim()}`)
+      continue
+    }
+
+    const token = match[5] ?? match[6] ?? match[7]
+    if (token?.trim()) {
+      tokens.push(token.trim())
+    }
+  }
+  return tokens
 }
