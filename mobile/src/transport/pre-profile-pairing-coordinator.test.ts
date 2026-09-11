@@ -316,6 +316,34 @@ describe('pre-profile pairing coordinator', () => {
     ])
   })
 
+  // Why 'forbidden' and not only 'method_not_found': the desktop's mobile allowlist gate runs
+  // before its RPC dispatcher, so a method a desktop predates is missing from both and the phone
+  // is refused by scope, never by absence. Keying the fallback on absence alone made the QR pair
+  // fail outright against the exact desktop the fallback exists for.
+  it('tolerates an old desktop scope refusal and commits a direct-only host', async () => {
+    const events: string[] = []
+    const client = fakeClient([success({ version: '1.0.0' }), failure('forbidden')])
+    const deps = dependencies(client, events)
+
+    const attempt = startPreProfilePairing({
+      offer: relayOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+
+    expect(deps.saveHost).toHaveBeenCalledWith(
+      expect.not.objectContaining({ endpoints: expect.anything() })
+    )
+    expect(events).toEqual([
+      'save-journal',
+      'connect',
+      'update-journal',
+      'save-host',
+      'clear-journal'
+    ])
+  })
+
   it('uses relay-basis provisioning when only the relay reaches post-E2EE status', async () => {
     const direct = fakeClient([])
     ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))

@@ -8,11 +8,7 @@ import {
 import { connect, type ConnectOptions } from './rpc-client'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
 import type { HostProfile, PairingOffer } from './types'
-import { isMethodNotFoundRefusal } from './rpc-acceptance-policies'
-import {
-  relayCredentialProvision,
-  relayPairingEndpointsRead
-} from './mobile-relay-pairing-operations'
+import { requireRpcResultOrThrowCodedError } from './rpc-acceptance-policies'
 import {
   createMobileRelayPairingJournal,
   type MobileRelayPairingJournal
@@ -36,6 +32,7 @@ import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-direc
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import { createPairingRelayLogger } from './pairing-relay-log'
 import { redactSocketEndpoint } from './socket-event-debug'
+import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -220,11 +217,11 @@ async function runPairing(
     }
   }
   await dependencies.updateJournal(journal.metadata.journalId, () => journal!.metadata)
-  const provision = await relayCredentialProvision.request(winner.client, {
+  const provision = await winner.client.sendRequest('pairing.provisionRelay', {
     reqId: journal.metadata.installReqId,
     newResumeTokenHash: journal.metadata.pendingResumeTokenHash
   })
-  if (isMethodNotFoundRefusal(provision)) {
+  if (isPairingRelayRpcUnavailable(provision)) {
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
@@ -233,13 +230,14 @@ async function runPairing(
     return { hostId }
   }
   const installed = DeviceCredentialInstalledSchema.parse(
-    relayCredentialProvision.interpret(provision)
+    requireRpcResultOrThrowCodedError(provision)
   )
-  const endpointsReply = await relayPairingEndpointsRead.request(winner.client, {
-    installReqId: journal.metadata.installReqId
-  })
   const endpoints = PairingGetEndpointsResultSchema.parse(
-    relayPairingEndpointsRead.interpret(endpointsReply)
+    requireRpcResultOrThrowCodedError(
+      await winner.client.sendRequest('pairing.getEndpoints', {
+        installReqId: journal.metadata.installReqId
+      })
+    )
   )
   assertCommittedInstall(endpoints.installStatus, installed)
   if (!endpoints.relay) {
