@@ -1159,9 +1159,10 @@ export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
 
 export type RpcMethodName = keyof typeof RPC_PARAMS_BY_METHOD
 
-// Why: z.output is the post-parse shape the handler receives. z.input is not a
-// send-side type here — requiredString is z.unknown().transform(...), so its input
-// admits any value and loses optional/default semantics.
+// Why: z.output is the post-parse shape the handler receives, which is not what a
+// client may send — a .default() field reads as required. z.input is not the answer
+// either: requiredString is z.unknown().transform(...), so its input admits any value.
+// Senders use RpcSendParams from ./rpc-send-params, which is derived from this map.
 export type RpcParams<Method extends RpcMethodName> =
   (typeof RPC_PARAMS_BY_METHOD)[Method] extends z.ZodType
     ? z.output<(typeof RPC_PARAMS_BY_METHOD)[Method]>

@@ -1,5 +1,5 @@
 import type { RpcClient } from './rpc-client'
-import type { RpcMethodName } from './rpc-params-contract'
+import type { RpcMethodName, RpcParams, RpcSendParams } from './rpc-params-contract'
 import { defineRpcOperation, runRpcOperation, startRpcOperation } from './rpc-operation'
 import { rpcResultVariants } from './rpc-operation-result-reader'
 import {
@@ -102,6 +102,41 @@ export const fenceDefineRejectsMismatch = defineRpcOperation({
 // FENCE: method-must-exist-in-the-catalog
 // @ts-expect-error only generated catalog method names are addressable
 export const fenceUnknownMethod: RpcMethodName = 'worktree.nope'
+
+// The send-side params type. z.output (what the handler receives) and z.input (what the
+// coercing builders admit) are both wrong for a sender in opposite directions, so these pin
+// the two failures a regression to either one would reintroduce.
+
+// FENCE: send-params-omit-a-defaulted-field
+// `query` and `limit` carry .default(), so a sender may leave them out. Under z.output both
+// read as required and this line stops compiling.
+export const fenceOmitsDefaultedField: RpcSendParams<'files.searchPaths'> = { worktree: 'w' }
+
+// FENCE: send-params-reject-a-wrong-typed-field
+export const fenceRejectsWrongFieldType: RpcSendParams<'files.searchPaths'> = {
+  // @ts-expect-error z.input of a z.unknown().transform builder admits any value; this does not
+  worktree: 42
+}
+
+// FENCE: send-params-still-name-required-fields
+// @ts-expect-error `worktree` has neither a default nor an optional marker
+export const fenceKeepsRequiredField: RpcSendParams<'files.searchPaths'> = { query: 'x' }
+
+// FENCE: send-params-never-tighten-the-parsed-shape
+// Catalog-wide: anything a handler could have been handed is something a sender may write.
+// A method that ever resolves tighter than its parsed shape lands in this union.
+declare const fenceTighterThanParsed: {
+  [Method in RpcMethodName]: RpcParams<Method> extends RpcSendParams<Method> ? never : Method
+}[RpcMethodName] & {}
+export const fenceNoTighterMethod: never = fenceTighterThanParsed
+
+// FENCE: send-params-do-not-degenerate-to-unknown
+// z.input collapses every coercing builder to `unknown`. Only plugins.panelAction may be
+// unknown, because its schema is literally z.unknown().
+declare const fenceUnknownParams: {
+  [Method in RpcMethodName]: unknown extends RpcSendParams<Method> ? Method : never
+}[RpcMethodName] & {}
+export const fenceOnlyDeclaredUnknown: 'plugins.panelAction' = fenceUnknownParams
 
 export async function fenceBarrierAndParams(): Promise<void> {
   // FENCE: declared-barrier-cannot-be-moved-earlier

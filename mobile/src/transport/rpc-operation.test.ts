@@ -361,11 +361,16 @@ describe('the compile fence', () => {
       'object-policy-reader-sees-an-object',
       'define-rejects-a-mismatched-definition',
       'method-must-exist-in-the-catalog',
+      'send-params-omit-a-defaulted-field',
+      'send-params-reject-a-wrong-typed-field',
+      'send-params-still-name-required-fields',
+      'send-params-never-tighten-the-parsed-shape',
+      'send-params-do-not-degenerate-to-unknown',
       'declared-barrier-cannot-be-moved-earlier',
       'on-settle-operation-cannot-defer-to-a-barrier',
       'params-are-fixed-by-the-method',
       'probe-verdict-is-not-a-decoded-value'
     ])
-    expect(fenceSource.split(expectErrorDirective).length - 1).toBe(11)
+    expect(fenceSource.split(expectErrorDirective).length - 1).toBe(13)
   })
 })

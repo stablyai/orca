@@ -1,5 +1,5 @@
-import type { RpcMethodName, RpcParams } from './rpc-params-contract'
-import type { SendRequestOptions, UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
+import type { RpcClient, SendRequestOptions } from './rpc-client'
+import type { RpcMethodName, RpcSendParams } from './rpc-params-contract'
 import type { RpcResponse } from './types'
 import {
   isMethodNotFoundRefusal,
@@ -76,11 +76,9 @@ export function defineRpcOperation(definition: RpcOperationDefinitionInput): Any
   })
 }
 
-// Takes the raw port, not RpcClient: this is the one module allowed to cross it, and asking
-// for the whole client would hide that dependency behind a type every screen already holds.
 /** Sends the operation without interpreting it; transport rejection stays on the promise. */
 async function request(
-  client: UnvalidatedRpcRequestPort,
+  client: RpcClient,
   operation: AnyRpcOperation,
   params: unknown,
   options?: SendRequestOptions
@@ -210,9 +208,9 @@ export async function runRpcOperation<
   Variant extends string,
   Value
 >(
-  client: UnvalidatedRpcRequestPort,
+  client: RpcClient,
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'on-settle'>,
-  params: RpcParams<Method>,
+  params: RpcSendParams<Method>,
   options?: SendRequestOptions
 ): Promise<RpcVerdict<Acceptance, Value>> {
   const outcome = await request(client, operation, params, options)
@@ -228,9 +226,9 @@ export async function captureRpcOperationSettlement<
   Value,
   Barrier extends RpcInterpretationBarrier
 >(
-  client: UnvalidatedRpcRequestPort,
+  client: RpcClient,
   operation: RpcOperation<Method, Acceptance, Variant, Value, Barrier>,
-  params: RpcParams<Method>,
+  params: RpcSendParams<Method>,
   options?: SendRequestOptions
 ): Promise<RpcOperationSettlement<Variant, Value>> {
   try {
@@ -253,9 +251,9 @@ export function startRpcOperation<
   Variant extends string,
   Value
 >(
-  client: UnvalidatedRpcRequestPort,
+  client: RpcClient,
   operation: RpcOperation<Method, Acceptance, Variant, Value, 'after-all-requests'>,
-  params: RpcParams<Method>,
+  params: RpcSendParams<Method>,
   options?: SendRequestOptions
 ): PendingRpcOperation<RpcOperation<Method, Acceptance, Variant, Value, 'after-all-requests'>> {
   return {
