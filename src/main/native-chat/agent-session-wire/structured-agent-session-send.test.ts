@@ -80,8 +80,8 @@ describe('send', () => {
       ok: true,
       value: { submission: { dispatchState: 'unknown' } }
     })
-    // A thrown adapter call is indistinguishable from a lost reply, so it is not
-    // on the allowlist: Retry replays the recorded outcome.
+    // A thrown adapter call is indistinguishable from a lost reply, so Retry
+    // replays the recorded outcome.
     await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'unknown' } }
@@ -91,8 +91,11 @@ describe('send', () => {
     expect(state.ok && state.page.submissions).toHaveLength(1)
   })
 
-  it('redispatches an explicitly retried unknown the write itself refused', async () => {
+  it('refuses to redeliver an unknown however strongly its reason reads', async () => {
     await attach()
+    // The reason that used to be the sole entry on the redelivery allowlist. It
+    // is now a rejection when it is real, so an `unknown` still carrying it is
+    // only a claim -- and no claim unlocks a second delivery under one id.
     dispatch
       .mockImplementationOnce(async () => ({
         state: 'unknown' as const,
@@ -103,38 +106,47 @@ describe('send', () => {
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
     await host.send(CALLER, params)
-    // The only doubt on the allowlist: the transport refused the frame, so this
-    // is a first delivery and not a second.
     await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
+      ok: true,
+      value: {
+        submission: { dispatchState: 'unknown', reason: 'provider_write_failed: broken pipe' }
+      }
+    })
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    const state = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(state.ok && state.page.submissions).toHaveLength(1)
+  })
+
+  it('settles a refused write as rejected and delivers a rotated id exactly once', async () => {
+    await attach()
+    dispatch
+      .mockImplementationOnce(async () => ({
+        state: 'rejected' as const,
+        reason: 'provider_write_failed: broken pipe'
+      }))
+      .mockImplementationOnce(async () => accepted())
+    const body = hostTestMessage('never written')
+    const params = { envelope: envelope('agentSession.send', { body }), body }
+
+    await expect(host.send(CALLER, params)).resolves.toMatchObject({
+      ok: true,
+      value: {
+        submission: { dispatchState: 'rejected', reason: 'provider_write_failed: broken pipe' }
+      }
+    })
+    // What the user's Retry does with a rejection: a fresh client message id,
+    // which is a first delivery by construction and cannot duplicate the frame
+    // that never left the process.
+    await expect(
+      host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+    ).resolves.toMatchObject({
       ok: true,
       replayed: false,
       value: { submission: { dispatchState: 'accepted' } }
     })
     expect(dispatch).toHaveBeenCalledTimes(2)
     const state = host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(state.ok && state.page.submissions).toHaveLength(1)
-  })
-
-  it('returns an admitted retry to pending until the provider echo accepts it', async () => {
-    await attach()
-    dispatch
-      .mockImplementationOnce(async () => ({
-        state: 'unknown' as const,
-        reason: 'provider_write_failed: connection closed before enqueue'
-      }))
-      .mockImplementationOnce(async () => ({ state: 'admitted' as const }))
-    const body = hostTestMessage('admitted on retry')
-    const params = { envelope: envelope('agentSession.send', { body }), body }
-
-    await host.send(CALLER, params)
-    await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
-      ok: true,
-      replayed: false,
-      value: {
-        submission: { dispatchState: 'pending', reason: null, resolvedAt: null }
-      }
-    })
-    expect(dispatch).toHaveBeenCalledTimes(2)
+    expect(state.ok && state.page.submissions).toHaveLength(2)
   })
 
   it('refuses to redeliver a retry for a turn the provider already owns', async () => {

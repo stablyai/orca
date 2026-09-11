@@ -251,7 +251,7 @@ describe('submission and dispatch state machine', () => {
       {
         kind: 'dispatch',
         clientMessageId: 'cm_1',
-        state: 'unknown',
+        state: 'rejected',
         providerItemId: null,
         reason: 'provider_write_failed: closed before enqueue',
         ...base(2)
@@ -272,7 +272,7 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
-    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('rejected')
     expect(state.submissions.get('cm_2')).toMatchObject({
       dispatchState: 'accepted',
       providerItemId: 'claude:session-1:user-1'
@@ -484,13 +484,13 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_1')).toBeTruthy()
   })
 
-  it('returns a proven retry to pending without moving its original submission', () => {
+  it('keeps a refused write rejected and leaves its bubble where it was', () => {
     const state = fold([
       submission,
       {
         kind: 'dispatch',
         clientMessageId: 'cm_1',
-        state: 'unknown',
+        state: 'rejected',
         providerItemId: null,
         reason: 'provider_write_failed: closed before enqueue',
         ...base(2)
@@ -505,11 +505,12 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
+    // `rejected` is terminal, so nothing can put this id back on the wire; the
+    // user's Retry sends a new message under a new id instead.
     expect(state.submissions.get('cm_1')).toMatchObject({
-      dispatchState: 'pending',
+      dispatchState: 'rejected',
       submittedAt: submission.ts,
-      reason: null,
-      resolvedAt: null
+      reason: 'provider_write_failed: closed before enqueue'
     })
     expect(renderJournalState(state).items[0]?.sequence).toBe(submission.seq)
   })

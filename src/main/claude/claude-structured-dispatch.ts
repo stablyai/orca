@@ -15,10 +15,8 @@ import {
   claudeDispatchInvokesSlashCommand,
   claudeDispatchMessageContent
 } from './claude-structured-dispatch-content'
-import {
-  dispatchWriteFailureReason,
-  dispatchWriteOutcomeUnknownReason
-} from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { dispatchWriteOutcomeUnknownReason } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { dispatchWriteFailureReason } from '../../shared/structured-agent-session-dispatch-rejection'
 import { claudeUserMessageWasProvablyUnwritten } from './claude-agent-sdk-user-message-queue'
 
 const MAX_RETIRED_DISPATCH_WAITERS = 64
@@ -299,21 +297,19 @@ export async function dispatchClaudeTurn(
         }
       }
     }
-    const provablyUnwritten = claudeUserMessageWasProvablyUnwritten(error)
-    if (provablyUnwritten) {
+    if (claudeUserMessageWasProvablyUnwritten(error)) {
       forgetWaiter(session, waiter)
       forgetRetiredWaiter(session, waiter)
       waiter.resolve(null)
-    } else if (!waiter.retired) {
+      // The frame was never handed to the SDK's input pump, so this is not doubt:
+      // the message provably did not happen, which is what `rejected` means.
+      return { state: 'rejected', reason: dispatchWriteFailureReason(error) }
+    }
+    if (!waiter.retired) {
       retireWaiter(session, waiter)
       waiter.resolve(null)
     }
-    return {
-      state: 'unknown',
-      reason: provablyUnwritten
-        ? dispatchWriteFailureReason(error)
-        : dispatchWriteOutcomeUnknownReason(error)
-    }
+    return { state: 'unknown', reason: dispatchWriteOutcomeUnknownReason(error) }
   }
   // The write is the admission signal. Awaiting the echo here would block on the
   // turn already running, which is why the deadline this replaces kept declaring

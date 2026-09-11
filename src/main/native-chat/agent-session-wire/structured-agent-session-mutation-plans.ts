@@ -56,12 +56,13 @@ export function sendPlan(params: {
         .some(
           (entry) => entry.clientMessageId === clientMessageId && entry.dispatchState === 'unknown'
         ),
+    // No `retryUnknown` reaches `performSend`: it decides only whether the ledger
+    // re-reads the submission or replays a cached one, never whether Orca re-sends.
     run: (ctx) =>
       performSend(ctx, {
         clientMessageId,
         payloadFingerprint: params.envelope.payloadFingerprint,
-        body: params.body,
-        retryUnknown: params.retryUnknown
+        body: params.body
       }),
     replay: (ctx) => {
       const submission = ctx.journal

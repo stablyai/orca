@@ -15,11 +15,7 @@ import type {
   AgentSessionSendResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
-import {
-  DISPATCH_DOUBT_PERSISTENCE_FAILED,
-  DISPATCH_DOUBT_RETRY_IN_PROGRESS,
-  dispatchDoubtProvesUndelivered
-} from '../agent-session-journal/journal-dispatch-doubt-reasons'
+import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   AgentSessionDispatchOutcome,
@@ -82,22 +78,19 @@ async function appendStatus(
 }
 
 /**
- * Whether a user's Retry may put this message on the wire again: only where the
- * recorded doubt proves the frame never reached a provider. Everything else
- * replays the recorded outcome instead — one message reached the model five
- * times through this path. Orca never re-sends on its own either way.
+ * One id, one delivery. A submission that already exists replays its recorded
+ * outcome and NEVER goes back on the wire, whatever state it is in and whatever
+ * `retryUnknown` the client sent: `unknown` cannot prove non-delivery — that is
+ * the whole content of the word — and one message reached the model five times
+ * when this was a judgement call instead of an invariant. A user who wants the
+ * message sent anyway retries under a fresh id, which is a first delivery.
  */
-function retryWouldRedeliver(existing: AgentJournalSubmission | undefined): boolean {
-  return existing?.dispatchState === 'unknown' && dispatchDoubtProvesUndelivered(existing.reason)
-}
-
 export async function performSend(
   ctx: AgentSessionTurnContext,
   input: {
     clientMessageId: string
     payloadFingerprint: string
     body: AgentJournalMessageItem
-    retryUnknown?: true
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
@@ -106,39 +99,18 @@ export async function performSend(
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
     return invalid(`Message id ${input.clientMessageId} was already used for another send.`)
   }
-  const redeliver = input.retryUnknown === true && retryWouldRedeliver(existing)
-  if (existing && !redeliver) {
+  if (existing) {
     return {
       ok: true,
       value: { clientMessageId: input.clientMessageId, submission: existing }
     }
   }
-  if (!redeliver) {
-    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
-    ctx.publish()
-  } else {
-    // Retry resumes work without moving or duplicating the original message.
-    await ctx.journal.resolveDispatch({
-      clientMessageId: input.clientMessageId,
-      state: 'unknown',
-      reason: DISPATCH_DOUBT_RETRY_IN_PROGRESS,
-      fence: ctx.fence
-    })
-    ctx.publish()
-  }
+  await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
+  ctx.publish()
 
   const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
-  // A first admission needs no dispatch row: the submission is already pending.
-  // A retry must durably clear the old doubt so clients do not mistake a
-  // successful re-admission for a refused redelivery.
+  // An admission needs no dispatch row: the submission is already pending.
   if (outcome.state === 'admitted') {
-    if (redeliver) {
-      await ctx.journal.resolveDispatch({
-        clientMessageId: input.clientMessageId,
-        state: 'pending',
-        fence: ctx.fence
-      })
-    }
     ctx.publish()
     return {
       ok: true,
