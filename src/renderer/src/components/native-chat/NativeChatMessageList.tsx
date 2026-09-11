@@ -15,10 +15,11 @@ import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
 import { NativeChatTypingIndicatorRow } from './NativeChatTypingIndicatorRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import type { NativeChatTurnActivity } from './native-chat-turn-activity'
+import type { NativeChatTurnActivity } from '../../../../shared/native-chat-turn-activity'
 import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
 
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
+import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
 import {
   nativeChatTurnDiffs,
@@ -149,12 +150,19 @@ export function NativeChatMessageList({
         : new Map<string, NativeChatTurnDiff>(),
     [journalItems, messages, turnKeys]
   )
+  // "Thinking" is real reasoning content at the tail of the turn, not the absence
+  // of output — the latter reports thinking while the request is merely in flight.
+  const thinking = useMemo(
+    () => (journalItems ? isStructuredAgentSessionThinking(journalItems) : false),
+    [journalItems]
+  )
   const turnStatuses = useNativeChatTurnStatus({
     messages,
     latestUserIndex,
     isWorking: showTurnStatus && isWorking,
     workingStartedAt: showTurnStatus ? workingStartedAt : null,
-    settledTurns: showTurnStatus ? settledTurns : null
+    settledTurns: showTurnStatus ? settledTurns : null,
+    thinking
   })
 
   const prependAnchorRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
@@ -310,9 +318,7 @@ export function NativeChatMessageList({
                       runtimeContext={runtimeContext}
                     />
                   )}
-                  {showTurnStatus &&
-                  status &&
-                  (index !== latestUserIndex || showTypingIndicator || !isWorking) ? (
+                  {showTurnStatus && status && status.workedSeconds != null ? (
                     <NativeChatWorkingStatus
                       startedAt={status.startedAt}
                       thinking={status.thinking}
@@ -331,18 +337,8 @@ export function NativeChatMessageList({
                 </Fragment>
               )
             })}
-            {showTurnStatus &&
-            latestUserIndex === -1 &&
-            turnStatuses.active &&
-            showTypingIndicator ? (
-              <NativeChatWorkingStatus
-                startedAt={turnStatuses.active.startedAt}
-                thinking={turnStatuses.active.thinking}
-                workedSeconds={turnStatuses.active.workedSeconds}
-              />
-            ) : null}
             {showTurnStatus && isWorking ? (
-              <NativeChatTurnActivityLine activity={turnActivity} />
+              <NativeChatTurnActivityLine activity={turnActivity} status={turnStatuses.active} />
             ) : null}
             {!showTurnStatus && showTypingIndicator ? <NativeChatTypingIndicatorRow /> : null}
           </div>

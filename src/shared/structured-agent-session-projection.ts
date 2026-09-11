@@ -3,19 +3,25 @@ import {
   normalizeOptionalField,
   normalizePromptField
 } from './agent-status-field-normalization'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission,
-  AgentJournalToolCallItem
-} from './agent-session-journal-types'
+import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
 } from './agent-status-types'
 import { describeToolInput } from './native-chat-tool-summary'
-import { readAgentJournalTurn } from './agent-session-turn-record'
+import {
+  activeStructuredAgentSessionToolCall,
+  activeStructuredAgentSessionTurnId
+} from './structured-agent-session-live-turn'
+
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
+
+// Re-exported so the live-turn readers' existing consumers keep one import site.
+export {
+  activeStructuredAgentSessionToolCall,
+  activeStructuredAgentSessionTurnId
+} from './structured-agent-session-live-turn'
 
 function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
@@ -158,18 +164,6 @@ export function projectStructuredItemToNativeChat(
   return message
 }
 
-export function activeStructuredAgentSessionTurnId(
-  items: readonly AgentJournalRenderItem[]
-): string | null {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const turn = readAgentJournalTurn(items[index]?.body)
-    if (turn) {
-      return turn.state === 'running' ? turn.turnId : null
-    }
-  }
-  return null
-}
-
 export function hasPersistedStructuredAgentSessionTurn(
   items: readonly AgentJournalRenderItem[]
 ): boolean {
@@ -267,24 +261,6 @@ export function latestStructuredAgentSessionAssistantMessage(
     }
   }
   return ''
-}
-
-/** The tool call the newest turn is still inside, or null when nothing is running.
- *  Scanning stops at the turn's own lifecycle row so an abandoned `running` call
- *  from an earlier crashed turn can never be reported as live work. */
-export function activeStructuredAgentSessionToolCall(
-  items: readonly AgentJournalRenderItem[]
-): AgentJournalToolCallItem | null {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
-    if (readAgentJournalTurn(body)) {
-      return null
-    }
-    if (body?.kind === 'tool-call' && body.state === 'running') {
-      return body
-    }
-  }
-  return null
 }
 
 /** The activity fields a sidebar row shows beside the prompt, named as the agent-status

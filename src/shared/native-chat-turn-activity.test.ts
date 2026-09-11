@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THINKING_PRESENTATION,
+  type AgentJournalItemBody,
+  type AgentJournalRenderItem
+} from './agent-session-journal-types'
 import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
 
 function item(sequence: number, body: AgentJournalItemBody): AgentJournalRenderItem {
@@ -32,6 +33,49 @@ describe('selectStructuredAgentTurnActivity', () => {
     )
 
     expect(activity).toEqual({ kind: 'description', text: 'Preparing the answer' })
+  })
+
+  it("never puts the model's reasoning on the indicator line", () => {
+    const reasoning = item(2, {
+      kind: 'status',
+      text: 'Let me check whether the journal already records this',
+      presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+    })
+
+    // Reasoning is the turn's content; the row says the turn is thinking instead.
+    expect(selectStructuredAgentTurnActivity([turnStart, reasoning], 'turn-1')).toBeNull()
+    // An ordinary status row is still a description of what the turn is doing.
+    expect(
+      selectStructuredAgentTurnActivity(
+        [turnStart, reasoning, item(3, { kind: 'status', text: 'Updating the plan' })],
+        'turn-1'
+      )
+    ).toEqual({ kind: 'description', text: 'Updating the plan' })
+    // Provider-authored copy is unaffected, so Codex keeps its line.
+    expect(
+      selectStructuredAgentTurnActivity([turnStart, reasoning], 'turn-1', {
+        turnId: 'turn-1',
+        text: 'Running a command'
+      })
+    ).toEqual({ kind: 'description', text: 'Running a command' })
+  })
+
+  it('skips reasoning behind a typed turn item too', () => {
+    const typedTurnStart = item(1, { kind: 'turn', turnId: 'turn-1', state: 'running' })
+
+    expect(
+      selectStructuredAgentTurnActivity(
+        [
+          typedTurnStart,
+          item(2, {
+            kind: 'status',
+            text: 'Weighing two approaches',
+            presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+          })
+        ],
+        'turn-1'
+      )
+    ).toBeNull()
   })
 
   it('prefers matching ephemeral provider activity over journal-derived status', () => {

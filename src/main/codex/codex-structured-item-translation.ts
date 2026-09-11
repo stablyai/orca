@@ -1,5 +1,8 @@
 import { toolExecutionMetadata, toolWebSearchResults } from '../../shared/native-chat-tool-identity'
-import type { AgentJournalItemBody } from '../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THINKING_PRESENTATION,
+  type AgentJournalItemBody
+} from '../../shared/agent-session-journal-types'
 import type { NativeChatBlock } from '../../shared/native-chat-types'
 import {
   boundInlineText,
@@ -277,7 +280,14 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       body:
         text === null
           ? null
-          : { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
+          : {
+              kind: 'status',
+              text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+              // A plan is a durable artifact, not the model reasoning right now.
+              ...(item.type === 'reasoning'
+                ? { presentation: AGENT_JOURNAL_THINKING_PRESENTATION }
+                : {})
+            },
       handled: true
     }
   }
