@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { requestManualTerminalWorktreePark } from '@/lib/manual-terminal-worktree-parking'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { translate } from '@/i18n/i18n'
 
@@ -182,6 +183,11 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
         if (typeof window !== 'undefined' && window.api?.ephemeralVm?.suspendWorkspace) {
           await window.api.ephemeralVm.suspendWorkspace({ workspaceId: worktreeId })
         }
+        // Why last, and why at all: sleep leaves the workspace in the terminal workbench's mounted
+        // set, so an ordinary unpark remount reattaches the sessions this just killed, misses, and
+        // cold-restores them — the workspace wakes itself minutes later with no user action. Only a
+        // fully slept workspace earns the latch, which holds until a reveal or background wake.
+        requestManualTerminalWorktreePark(worktreeId, 'workspace-sleep')
       } catch (err) {
         console.error('[sleep-worktree] terminal or host suspension failed', {
           worktreeId,

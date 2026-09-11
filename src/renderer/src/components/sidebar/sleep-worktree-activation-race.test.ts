@@ -54,7 +54,8 @@ describe('sleep flow vs slept-workspace activation', () => {
         ephemeralVm: {
           resumeWorkspace: mocks.resumeWorkspace
         }
-      }
+      },
+      dispatchEvent: vi.fn()
     })
     mocks.state.activeWorktreeId = 'wt-parent'
     mocks.state.setActiveWorktree.mockClear()

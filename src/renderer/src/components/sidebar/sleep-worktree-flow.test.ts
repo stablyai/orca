@@ -15,9 +15,11 @@ const mocks = vi.hoisted(() => {
   const toastError = vi.fn()
   const markWorktreeSleepIntent = vi.fn()
   const clearWorktreeSleepIntent = vi.fn()
+  const requestManualTerminalWorktreePark = vi.fn()
   return {
     clearWorktreeSleepIntent,
     markWorktreeSleepIntent,
+    requestManualTerminalWorktreePark,
     state,
     suspendWorkspace,
     toastError
@@ -34,6 +36,9 @@ vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/lib/worktree-sleep-intent', () => ({
   clearWorktreeSleepIntent: mocks.clearWorktreeSleepIntent,
   markWorktreeSleepIntent: mocks.markWorktreeSleepIntent
+}))
+vi.mock('@/lib/manual-terminal-worktree-parking', () => ({
+  requestManualTerminalWorktreePark: mocks.requestManualTerminalWorktreePark
 }))
 
 import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
@@ -57,6 +62,7 @@ describe('runSleepWorktree', () => {
     mocks.suspendWorkspace.mockClear().mockResolvedValue(null)
     mocks.markWorktreeSleepIntent.mockClear()
     mocks.clearWorktreeSleepIntent.mockClear()
+    mocks.requestManualTerminalWorktreePark.mockClear()
     mocks.toastError.mockClear()
     mocks.state.activeWorktreeId = null
     mocks.state.tabsByWorktree = {}
@@ -82,6 +88,30 @@ describe('runSleepWorktree', () => {
     const suspendCallOrder = mocks.suspendWorkspace.mock.invocationCallOrder[0]
     expect(browsersCallOrder).toBeLessThan(terminalsCallOrder)
     expect(terminalsCallOrder).toBeLessThan(suspendCallOrder)
+  })
+
+  it('latches a sleep park so an unpark remount cannot respawn the killed sessions', async () => {
+    mocks.state.activeWorktreeId = 'wt-other'
+
+    await runSleepWorktree('wt-1')
+
+    expect(mocks.requestManualTerminalWorktreePark).toHaveBeenCalledWith('wt-1', 'workspace-sleep')
+    // Why last: only a workspace that finished every teardown step earns the latch.
+    const suspend = mocks.suspendWorkspace.mock.invocationCallOrder[0]
+    const parkRequest = mocks.requestManualTerminalWorktreePark.mock.invocationCallOrder[0]
+    expect(suspend).toBeLessThan(parkRequest)
+  })
+
+  it.each([
+    ['terminal shutdown', () => mocks.state.shutdownWorktreeTerminals],
+    ['host suspension', () => mocks.suspendWorkspace]
+  ])('does not park a workspace whose %s failed', async (_label, getStep) => {
+    mocks.state.activeWorktreeId = 'wt-other'
+    getStep().mockRejectedValueOnce(new Error('boom'))
+
+    await runSleepWorktree('wt-1')
+
+    expect(mocks.requestManualTerminalWorktreePark).not.toHaveBeenCalled()
   })
 
   it('clears activeWorktreeId before teardown when the slept worktree is active', async () => {
