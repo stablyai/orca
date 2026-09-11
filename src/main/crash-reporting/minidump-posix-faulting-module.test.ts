@@ -141,6 +141,8 @@ type DumpOptions = {
   platform?: Platform
   /** MINIDUMP_EXCEPTION.ExceptionInformation[0..n]. */
   exceptionInformation?: bigint[]
+  /** Overrides the size the MINIDUMP_SYSTEM_INFO stream directory declares. */
+  systemInfoDeclaredSize?: number
 }
 
 function buildDump(options: DumpOptions): Buffer {
@@ -159,7 +161,7 @@ function buildDump(options: DumpOptions): Buffer {
     }
     streams.push({
       type: STREAM_TYPE_SYSTEM_INFO,
-      size: SYSTEM_INFO_SIZE,
+      size: options.systemInfoDeclaredSize ?? SYSTEM_INFO_SIZE,
       rva: builder.append(systemInfo)
     })
   }
@@ -421,6 +423,21 @@ describe('a data address never names a faulting module', () => {
       modules: WINDOWS_MODULES,
       exceptionCode: STATUS_ACCESS_VIOLATION,
       exceptionAddress: WIN_FAULT_ADDRESS
+    })
+
+    expect(parseMinidumpCrashSignature(dump)?.faultingModule).toBeUndefined()
+  })
+
+  it('ignores a system-info stream too short to hold PlatformId', () => {
+    // The stream is declared 16 bytes but a WIN32_NT-shaped 2 sits at +20.
+    // Reading it anyway would call this SIGSEGV dump Windows and let si_addr —
+    // an address inside libc — name libc as the faulting module.
+    const dump = buildDump({
+      modules: LINUX_MODULES,
+      exceptionCode: 0xb,
+      exceptionAddress: SI_ADDR_IN_LIBC,
+      platform: 'windows',
+      systemInfoDeclaredSize: 16
     })
 
     expect(parseMinidumpCrashSignature(dump)?.faultingModule).toBeUndefined()

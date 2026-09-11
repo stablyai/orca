@@ -40,6 +40,7 @@ const EXCEPTION_STREAM_SIZE = 168
 // MINIDUMP_SYSTEM_INFO: ProcessorArchitecture u16 at +0, PlatformId u32 at +20.
 const STREAM_TYPE_SYSTEM_INFO = 7
 const SYSTEM_INFO_PLATFORM_ID_OFFSET = 20
+const SYSTEM_INFO_MIN_BYTES = SYSTEM_INFO_PLATFORM_ID_OFFSET + 4
 // Crashpad's MinidumpOS. WIN32_NT is the one platform whose ExceptionAddress is
 // contractually the faulting instruction whatever the exception class.
 const PLATFORM_WIN32_NT = 2
@@ -160,7 +161,11 @@ export type MinidumpExceptionRecord = {
   readonly code?: number
   /** ExceptionAddress verbatim: the instruction on Windows, si_addr on POSIX. */
   readonly address?: bigint
-  /** Faulting instruction, from the crashing thread's CONTEXT. */
+  /**
+   * Faulting instruction, from the crashing thread's CONTEXT. A trap frame
+   * (x86 int3) can report past the trapping instruction, so this is a
+   * disassembly starting point rather than an exact address.
+   */
   readonly instructionPointer?: bigint
   /**
    * The address a module may be attributed to: ExceptionAddress wherever the
@@ -181,7 +186,9 @@ type SystemInfo = {
 
 function readSystemInfo(view: MinidumpView): SystemInfo {
   const stream = findStream(view, STREAM_TYPE_SYSTEM_INFO)
-  if (!stream) {
+  // A stream too short to hold PlatformId would otherwise read it from whatever
+  // follows, and a stray 2 there classifies a POSIX dump as Windows.
+  if (!stream || stream.size < SYSTEM_INFO_MIN_BYTES) {
     return { architecture: null, platformId: null }
   }
   return {
