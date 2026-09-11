@@ -2,12 +2,18 @@
 // the accounts.subscribe snapshot's refreshed `rateLimits` field was read but
 // never applied to the shared store, so the bottom-left status-bar usage
 // meter kept showing the outgoing account's numbers until a manual refresh.
+//
+// Fix v2: the remote snapshot's `rateLimits` is the paired server's own full
+// RateLimitService state, not just Claude/Codex. A wholesale replace would
+// clobber this desktop's own local Gemini/MiniMax/Grok/etc. usage (those
+// providers are never remote-scoped) with the remote host's unrelated local
+// readings, so only the Claude/Codex-related fields are merged in.
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
-import type { RateLimitState } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits, RateLimitState } from '../../../../shared/rate-limit-types'
 import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync-types'
 import type * as RuntimeProviderAccountsClientModule from '../../runtime/runtime-provider-accounts-client'
 import type { ProviderAccountsSnapshot } from '../../runtime/runtime-provider-accounts-client'
@@ -70,7 +76,7 @@ describe('AccountsPane remote rate-limit snapshot wiring', () => {
     window.api = undefined as never
   })
 
-  it('applies a remote snapshot rateLimits payload to the shared store', async () => {
+  it('merges a remote snapshot Claude/Codex usage without clobbering local provider usage', async () => {
     await i18n.changeLanguage('en')
     window.api = {
       codexConfigSync: { status: vi.fn(async () => syncedCodexConfig) },
@@ -78,10 +84,20 @@ describe('AccountsPane remote rate-limit snapshot wiring', () => {
         getStatus: vi.fn(async () => ({ cookieConfigured: false, apiKeyConfigured: false }))
       }
     } as unknown as typeof window.api
+    // This desktop's own local Grok usage, fetched independently of any
+    // paired remote server — must survive the remote snapshot merge below.
+    const localGrokUsage: ProviderRateLimits = {
+      provider: 'grok',
+      session: { usedPercent: 7, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: null,
+      updatedAt: 1,
+      error: null,
+      status: 'ok'
+    }
     useAppStore.setState({
       settingsSearchQuery: '',
       runtimeEnvironments: [],
-      rateLimits: createEmptyRateLimitState()
+      rateLimits: { ...createEmptyRateLimitState(), grok: localGrokUsage }
     })
 
     render(
@@ -93,11 +109,22 @@ describe('AccountsPane remote rate-limit snapshot wiring', () => {
 
     expect(latestOnSnapshot).not.toBeNull()
 
-    const pushedRateLimits: RateLimitState = {
+    // The remote server's own RateLimitService.getState(): refreshed Claude
+    // usage for the newly-selected account, plus its own (unrelated) Grok
+    // reading for that remote host.
+    const remoteRateLimits: RateLimitState = {
       ...createEmptyRateLimitState(),
       claude: {
         provider: 'claude',
         session: { usedPercent: 42, windowMinutes: 300, resetsAt: null, resetDescription: null },
+        weekly: null,
+        updatedAt: Date.now(),
+        error: null,
+        status: 'ok'
+      },
+      grok: {
+        provider: 'grok',
+        session: { usedPercent: 99, windowMinutes: 300, resetsAt: null, resetDescription: null },
         weekly: null,
         updatedAt: Date.now(),
         error: null,
@@ -117,11 +144,14 @@ describe('AccountsPane remote rate-limit snapshot wiring', () => {
           activeAccountId: null,
           activeAccountIdsByRuntime: { host: null, wsl: {} }
         },
-        rateLimits: pushedRateLimits
+        rateLimits: remoteRateLimits
       })
     })
 
-    expect(useAppStore.getState().rateLimits).toBe(pushedRateLimits)
+    const rateLimits = useAppStore.getState().rateLimits
+    expect(rateLimits.claude).toBe(remoteRateLimits.claude)
+    // The remote host's own Grok reading must not overwrite this desktop's.
+    expect(rateLimits.grok).toBe(localGrokUsage)
   })
 
   it('leaves the store untouched when a local snapshot carries no rateLimits payload', async () => {
