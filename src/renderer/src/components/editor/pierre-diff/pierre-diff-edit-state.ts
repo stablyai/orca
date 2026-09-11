@@ -75,10 +75,18 @@ export const createPierreEditor: EditorFactory<PierreDiffAnnotationData, undefin
   // to restore (it skips the editable additions side), so any saved selection means it owns the
   // restore and the editor must get a rebuilt session rather than reassert its own.
   const nativeOwnsSelection = getPierreNativeView(key)?.selection != null
-  const matchesOldSide =
-    matchesContent &&
-    !nativeOwnsSelection &&
-    (stored?.diffSession.oldFile?.lines ?? []).join('') === fileDiff.deletionLines.join('')
+  // Must be at least as strict as Pierre's canRestoreDiffSession (FileDiff.js): it THROWS on a
+  // retained session that cannot resume against the delivered old file, so a looser predicate
+  // here would manufacture the very error this preservation exists to avoid.
+  const oldFile = stored?.diffSession?.oldFile
+  const resumableOldSide =
+    oldFile == null
+      ? fileDiff.type === 'new'
+      : fileDiff.type !== 'new' &&
+        oldFile.name === (fileDiff.prevName ?? fileDiff.name) &&
+        oldFile.lines.length === fileDiff.deletionLines.length &&
+        oldFile.lines.every((line, index) => line === fileDiff.deletionLines[index])
+  const matchesOldSide = matchesContent && !nativeOwnsSelection && resumableOldSide
   const restored = matchesOldSide
     ? stored
     : matchesContent

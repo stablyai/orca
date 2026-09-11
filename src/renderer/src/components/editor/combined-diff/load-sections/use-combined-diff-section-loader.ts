@@ -72,6 +72,9 @@ export function useCombinedDiffSectionLoader({
 
       const gen = generationRef.current
       const loadToken = sectionLoadTokensRef.current.get(index) ?? 0
+      // Why: `dirty` flips back to false once a save is acknowledged, so it cannot tell us whether
+      // the draft moved while this fetch was in flight. Pin the draft identity instead.
+      const draftAtFetchStart = sectionsRef.current[index]?.modifiedContent
       const entries: (GitStatusEntry | GitBranchChangeEntry)[] = isAllMode
         ? allEntries
         : isBranchMode
@@ -152,10 +155,16 @@ export function useCombinedDiffSectionLoader({
         // Why: content really changed, so the old Monaco height no longer describes this row.
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       }
+      // `dirty` flips back to false once a save is acknowledged, so it cannot tell a stale payload
+      // from a fresh one. If the draft moved while this fetch was in flight, only commit when the
+      // payload actually agrees with that draft — otherwise this reverts the user's saved text on
+      // screen and wipes undo history when the remount finds mismatched content.
+      const liveDraft = sectionsRef.current[index]?.modifiedContent
+      if (liveDraft !== draftAtFetchStart && storedContent.modifiedContent !== liveDraft) {
+        return
+      }
       setSections((prev) => {
         return prev.map((s, i) =>
-          // Re-check dirty at settle: the scheduling guard ran before the await, so a draft typed
-          // while this fetch was in flight would otherwise be overwritten by disk content.
           i === index && !s.dirty
             ? {
                 ...s,

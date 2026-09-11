@@ -120,3 +120,23 @@ it('evicts dormant document history when retained text exceeds the budget', () =
   expect(clear).toHaveBeenCalledWith('file-diff', editor.key)
   expect(states.has(editor.key)).toBe(false)
 })
+
+it('rebuilds the session when the old side was renamed', () => {
+  const state = stored()
+  states.set('renamed', state)
+  const diff = {
+    type: 'rename-changed',
+    prevName: 'other',
+    name: 'file',
+    deletionLines: ['old\n'],
+    additionLines: ['new\n']
+  } as unknown as FileDiffMetadata
+  const editor = createPierreEditor('file-diff', withPierreDiffEditState({}, 'renamed', diff))
+  const initialState = (
+    editor as unknown as { options: { initialState?: { diffSession?: unknown } } }
+  ).options.initialState
+  // Pierre throws on a retained session that cannot resume against the delivered old file,
+  // so a rename must fall back to a rebuilt session rather than preserving this one.
+  expect(initialState?.diffSession).toBeUndefined()
+  editor.edit({} as never)()
+})
