@@ -1,4 +1,5 @@
 import { Checkbox } from '@/components/ui/checkbox'
+import { ChevronRight } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -45,7 +46,9 @@ export function AgentStatusHooksControl({
       </p>
       {/* Sibling of the label, never nested inside it: a trigger under the label would toggle the checkbox. */}
       <Collapsible defaultOpen={false}>
-        <CollapsibleTrigger className="cursor-pointer text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:mb-2">
+        <CollapsibleTrigger className="flex cursor-pointer items-center gap-1 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:mb-2 [&[data-state=open]>svg]:rotate-90">
+          {/* Why: without a caret the row reads as static text; its sibling "Show N more agents→" carries one. */}
+          <ChevronRight className="size-3.5 shrink-0 transition-transform" aria-hidden="true" />
           {translate(
             'auto.components.onboarding.AgentStatusHooksControl.disclosureSummary',
             'What Orca changes, and when'
