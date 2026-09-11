@@ -109,13 +109,13 @@ export function usePierreDiffNativeView(
     })
   }, [editorRef])
   useLayoutEffect(() => {
+    // Why: no window is granted here. The ceiling starts at the first view attach, not at
+    // component mount — a large or remote diff can attach many seconds later, and a window
+    // measured from mount would already be spent before the view ever exists.
     const now = Date.now()
-    // Arm once: the ceiling bounds this restore, not each mount. Re-arming per mount (or per
-    // activeGroupId change) would let an unmount/mount cycle extend it forever.
-    if (ceiling.current === 0) {
-      ceiling.current = now + RESTORE_CEILING_MS
+    if (ceiling.current !== 0 && now < ceiling.current) {
+      deadline.current = Math.min(now + RESTORE_DEADLINE_MS, ceiling.current)
     }
-    deadline.current = now + RESTORE_DEADLINE_MS
     schedule()
   }, [activeGroupId, schedule])
   useLayoutEffect(() => {
@@ -193,9 +193,13 @@ export function usePierreDiffNativeView(
       }
       {
         view.current = { host, instance }
-        // Extend while a restore is still pending, but never past the ceiling, and never re-arm
-        // the ceiling here: FileDiff emits 'mount' on every remount cycle.
+        // Start the ceiling at the first attach, then extend while a restore is still pending but
+        // never past it. FileDiff emits 'mount' on every remount cycle, so the ceiling is armed
+        // once and never re-armed here.
         const now = Date.now()
+        if (ceiling.current === 0) {
+          ceiling.current = now + RESTORE_CEILING_MS
+        }
         if (pending.current && now < ceiling.current) {
           deadline.current = Math.min(now + RESTORE_DEADLINE_MS, ceiling.current)
         }

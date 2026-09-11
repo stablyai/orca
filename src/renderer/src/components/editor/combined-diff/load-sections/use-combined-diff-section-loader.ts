@@ -161,9 +161,10 @@ export function useCombinedDiffSectionLoader({
         storedContent.modifiedContent === liveDraft &&
         storedContent.originalContent === liveSection?.originalContent
       if (liveDraft !== draftAtFetchStart && !payloadMatchesLive) {
-        // Why: this index is already marked loaded, so drop that mark and re-drive the fetch —
-        // otherwise a rejected payload pins the section stale with no path back on its own.
-        loadedIndicesRef.current.delete(index)
+        // Why: re-drive the fetch so a rejected payload does not pin the section stale. Do not
+        // clear `loadedIndices` here — requestSectionReload clears it itself when it proceeds,
+        // and refuses while the row is dirty. Clearing unconditionally would strand the index
+        // unscheduled, making the next virtualizer scroll-in refetch a row being typed in.
         requestSectionReloadRef.current(index)
         return
       }
