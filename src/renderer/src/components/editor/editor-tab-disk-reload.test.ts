@@ -69,14 +69,23 @@ describe('requestEditorTabDiskReload', () => {
     window.removeEventListener(ORCA_EDITOR_REQUEST_FILE_RELOAD_EVENT, listener)
   })
 
-  it('dispatches a reload request for a clean tab without touching the draft state', () => {
+  it('dispatches a reload request for a clean tab without an undo toast', () => {
     mockStore([makeFile()])
 
     requestEditorTabDiskReload('file-1')
 
     expect(dispatchedFileIds).toEqual(['file-1'])
-    expect(clearEditorDraft).not.toHaveBeenCalled()
-    expect(markFileDirty).not.toHaveBeenCalled()
+    expect(toastMock).not.toHaveBeenCalled()
+  })
+
+  it('discards a not-yet-dirty draft (isDirty lags behind the debounced draft sync)', () => {
+    mockStore([makeFile()], { 'file-1': 'draft before isDirty flushes' })
+
+    requestEditorTabDiskReload('file-1')
+
+    expect(dispatchedFileIds).toEqual(['file-1'])
+    expect(clearEditorDraft).toHaveBeenCalledWith('file-1')
+    expect(toastMock).toHaveBeenCalledTimes(1)
   })
 
   it('discards a dirty tab draft (with the undo toast) before dispatching', () => {
