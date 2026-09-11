@@ -72,4 +72,16 @@ describe('headless PTY registry hydration ordering', () => {
     expect(source.slice(hookEnv, handlersAndHydration)).toContain('agentHookServer.buildPtyEnv()')
     expect(handlersAndHydration).toBeGreaterThan(hookEnv)
   })
+
+  it('captures orcad status identity at ingest for fleet stale-row fencing', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
+    const runtime = source.indexOf('const runtime = new OrcaRuntimeService(')
+    const identityReader = source.indexOf('readObservedAgentStatusPaneIdentity:', runtime)
+    const identitySubscription = source.indexOf('agentHookServer.subscribeEnrichedStatus(', runtime)
+
+    expect(runtime).toBeGreaterThanOrEqual(0)
+    expect(identityReader).toBeGreaterThan(runtime)
+    expect(identitySubscription).toBeGreaterThan(runtime)
+    expect(source.slice(identitySubscription)).toContain('recordObservedAgentStatusPaneIdentity(')
+  })
 })

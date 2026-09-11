@@ -151,9 +151,12 @@ async function startOrcadRuntime(
   const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
+  const { AgentStatusObservedPaneIdentities, recordObservedAgentStatusPaneIdentity } =
+    await import('../runtime/agent-status-observed-pane-identity')
 
   let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
   let uninstallHookStatusRepublish = (): void => {}
+  let uninstallObservedStatusIdentity = (): void => {}
   let daemonStarted = false
   registerCleanup(async () => {
     try {
@@ -166,11 +169,9 @@ async function startOrcadRuntime(
           await stopOrcadDaemon()
         }
       } finally {
-        try {
-          uninstallHookStatusRepublish()
-        } finally {
-          agentHookServer.stop()
-        }
+        uninstallObservedStatusIdentity()
+        uninstallHookStatusRepublish()
+        agentHookServer.stop()
       }
     }
   })
@@ -180,6 +181,7 @@ async function startOrcadRuntime(
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
   const profile = ensureActiveOrcaProfile(runtimeUserDataPath)
+  const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
   // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`
   // and the read paths that use `this.store?.x ?? []` quietly answer "empty" instead —
   // a server that pairs and lists nothing looks healthy and is not.
@@ -227,6 +229,9 @@ async function startOrcadRuntime(
     getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
     getAgentProviderSessionRowsForPane: (paneKey) =>
       agentHookServer.getStatusSnapshotForPane(paneKey),
+    // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
+    // read, so a row observed under one process otherwise acquires whatever process owns the pane now.
+    readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
     structuredAgentStatusSink: {
       publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
       forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
@@ -236,6 +241,10 @@ async function startOrcadRuntime(
     buildAgentHookPtyEnv: () =>
       isAgentStatusHooksEnabled(store.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
+
+  uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
+    recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched.paneKey, runtime)
+  )
 
   // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a
   // pane's status row changes, and orcad's whole job is serving paired clients.
