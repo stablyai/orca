@@ -31,6 +31,7 @@ import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-direc
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import { createPairingRelayLogger } from './pairing-relay-log'
 import { redactSocketEndpoint } from './socket-event-debug'
+import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>
@@ -219,7 +220,7 @@ async function runPairing(
     reqId: journal.metadata.installReqId,
     newResumeTokenHash: journal.metadata.pendingResumeTokenHash
   })
-  if (isMethodNotFound(provision)) {
+  if (isPairingRelayRpcUnavailable(provision)) {
     if (winner.path !== 'direct') {
       throw new Error('relay pairing RPC unavailable after relay path authentication')
     }
@@ -288,10 +289,6 @@ function requireSuccess(response: RpcResponse): unknown {
     throw new Error(`${response.error.code}: ${response.error.message}`)
   }
   return response.result
-}
-
-function isMethodNotFound(response: RpcResponse): boolean {
-  return !response.ok && response.error.code === 'method_not_found'
 }
 
 function assertCommittedInstall(

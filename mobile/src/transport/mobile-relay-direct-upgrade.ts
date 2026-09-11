@@ -22,6 +22,7 @@ import {
 } from './mobile-relay-direct-upgrade-journal'
 import type { RpcClient } from './rpc-client'
 import type { HostProfile, RpcResponse } from './types'
+import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 
 export type MobileRelayDirectUpgradeResult = {
   host: HostProfile
@@ -79,7 +80,7 @@ export async function upgradeDirectMobileRelay(args: {
     reqId: journal.reqId,
     newResumeTokenHash: journal.pendingResumeTokenHash
   })
-  if (isMethodNotFound(provisionResponse)) {
+  if (isPairingRelayRpcUnavailable(provisionResponse)) {
     await dependencies.clearJournal(args.host.id)
     return null
   }
@@ -136,7 +137,7 @@ async function getEndpoints(
   installReqId: string
 ): Promise<PairingGetEndpointsResult | 'method-not-found'> {
   const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
-  if (isMethodNotFound(response)) {
+  if (isPairingRelayRpcUnavailable(response)) {
     return 'method-not-found'
   }
   return PairingGetEndpointsResultSchema.parse(requireSuccess(response))
@@ -168,8 +169,4 @@ function requireSuccess(response: RpcResponse): unknown {
     throw new Error(`${response.error.code}: ${response.error.message}`)
   }
   return response.result
-}
-
-function isMethodNotFound(response: RpcResponse): boolean {
-  return !response.ok && response.error.code === 'method_not_found'
 }
