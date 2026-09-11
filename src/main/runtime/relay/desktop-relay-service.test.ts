@@ -193,3 +193,48 @@ describe('local-only mobile pairing', () => {
     ).rejects.toThrow('relay_disabled_for_device')
   })
 })
+
+describe('fence clears the pending demand-expiry timeout', () => {
+  afterEach(() => vi.useRealTimers())
+
+  // The lifecycle test above stubs `nextPendingExpiry` to null, so it never arms the second timer
+  // this class owns. With a pairing invite outstanding the fence left that timeout armed, and
+  // `stop()` — the only method that cleared it — has no production caller. The orphaned timeout
+  // then ran `refreshDemand`, which reconciles AND re-installs the liveness interval the fence had
+  // just torn down: the post-fence resurrection the fence comment forbids.
+  it('leaves no armed timer and cannot reconcile after a fence', () => {
+    vi.useFakeTimers()
+    const coordinator = {
+      reconcile: vi.fn(),
+      ensureLive: vi.fn(),
+      fenceAndCloseNow: vi.fn(),
+      stop: vi.fn()
+    }
+    const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
+    Object.assign(service, {
+      coordinator,
+      // A pending invite: the QR is minted and its server-side expiry is still in the future.
+      demandLedger: { nextPendingExpiry: () => Date.now() + 30_000 },
+      stopped: false,
+      livenessTimer: null,
+      demandExpiryTimer: null
+    })
+
+    service.start()
+    expect(coordinator.reconcile).toHaveBeenCalledTimes(1)
+    expect(vi.getTimerCount()).toBe(2)
+
+    service.fenceAndCloseNow()
+    expect(vi.getTimerCount()).toBe(0)
+
+    vi.advanceTimersByTime(30 * 60_000)
+    expect(coordinator.reconcile).toHaveBeenCalledTimes(1)
+    expect(coordinator.ensureLive).not.toHaveBeenCalled()
+
+    // A fence is not a stop: the next auth mutation still re-arms both timers.
+    service.authMutated()
+    expect(coordinator.reconcile).toHaveBeenCalledTimes(2)
+    expect(vi.getTimerCount()).toBe(2)
+    service.stop()
+  })
+})

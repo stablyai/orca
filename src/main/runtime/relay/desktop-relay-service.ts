@@ -111,14 +111,24 @@ export class DesktopRelayService {
     this.refreshDemand()
   }
 
-  fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
-    // Why: a fence must be hard — a surviving liveness tick could catch the
-    // window between the pre-sign-out fence and the profile wipe and briefly
-    // resurrect a broker. The next auth mutation re-arms via refreshDemand.
+  /** Disarms both timers this class owns. Every teardown needs both: the expiry timeout fires
+   *  `refreshDemand`, which reconciles and re-installs the liveness interval. */
+  private disarmTimers(): void {
+    if (this.demandExpiryTimer) {
+      clearTimeout(this.demandExpiryTimer)
+      this.demandExpiryTimer = null
+    }
     if (this.livenessTimer) {
       clearInterval(this.livenessTimer)
       this.livenessTimer = null
     }
+  }
+
+  fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
+    // Why: a fence must be hard — a surviving tick could catch the window between
+    // the pre-sign-out fence and the profile wipe and briefly resurrect a broker.
+    // The next auth mutation re-arms via refreshDemand.
+    this.disarmTimers()
     this.coordinator.fenceAndCloseNow(hostCloseReason)
   }
 
@@ -222,14 +232,7 @@ export class DesktopRelayService {
 
   stop(): void {
     this.stopped = true
-    if (this.demandExpiryTimer) {
-      clearTimeout(this.demandExpiryTimer)
-      this.demandExpiryTimer = null
-    }
-    if (this.livenessTimer) {
-      clearInterval(this.livenessTimer)
-      this.livenessTimer = null
-    }
+    this.disarmTimers()
     this.coordinator.stop()
   }
 
