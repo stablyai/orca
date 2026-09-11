@@ -104,6 +104,7 @@ export class RelayAuthCoordinator {
     this.invalidatePendingOwnerships()
     this.invalidateOwnership(hostCloseReason)
     this.publish('offline', hostCloseReason)
+    this.wakeWaiters()
   }
 
   // Why derived rather than passed in: the coordinator republishes `registered`

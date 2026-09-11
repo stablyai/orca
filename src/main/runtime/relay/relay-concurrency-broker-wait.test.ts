@@ -179,6 +179,30 @@ describe('relay live-broker wait under interleaving', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
+  it('settles a waiter parked on an open that never returns when the coordinator stops', async () => {
+    // The wait is deliberately unbounded across the open it joined, so nothing
+    // else can release this waiter; a teardown that did not wake it leaked the
+    // promise for the life of the process.
+    vi.useFakeTimers()
+    const stuck = deferred<CoordinatedRelayBroker>()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker: () => stuck.promise,
+      onStatus: vi.fn(),
+      random: () => 0.5
+    })
+    coordinator.reconcile()
+    await vi.advanceTimersByTimeAsync(0)
+    const seen = observe(coordinator.waitForLiveBrokerResult(1_000))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(seen()).toBe('unsettled')
+
+    coordinator.stop()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(seen()).toEqual({ broker: null, offlineReason: null })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it('gives a waiter the terminal cause that landed while its retry was armed', async () => {
     vi.useFakeTimers()
     let current: RelayAuthContext | null = context
