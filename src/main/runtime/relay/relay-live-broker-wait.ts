@@ -5,11 +5,18 @@ import type {
 } from './relay-auth-coordinator-contract'
 import type { RelayOfflineReason } from './relay-offline-reason'
 
-// Why 20s: bounds only how long a waiter sits through armed retries and
-// superseded opens, never the open it arrived on. It spans the first few rungs
-// of the backoff ladder and stays inside the phone's 30s request budget, so a
-// sustained outage fails the caller with its cause instead of parking the
-// demand ref.
+// Why 20s: bounds only how long a waiter sits through armed retries and superseded opens, never
+// the open it arrived on. It spans the first few rungs of the backoff ladder, so a sustained
+// outage fails the caller with its cause instead of parking the demand ref.
+//
+// It does NOT bound the call, and an earlier version of this comment claimed it "stays inside the
+// phone's 30s request budget". It cannot: the deadline is consulted only after the await below,
+// and a reconcile's own ceiling is `readContext`'s cloud-refresh timeout (60s, plus one retry for
+// a definitive 5xx) followed by the broker open. Measured: with a reconcile in flight, a wait at
+// this default budget had not settled at 45s. `pairing.provisionRelay` reaches here through
+// `requireActiveBroker`, so the phone gives up and retries while the desktop still holds a
+// transient demand ref for the call it abandoned. relay-auth-coordinator-wait-budget.test.ts pins
+// that so the claim cannot drift back.
 export const LIVE_BROKER_WAIT_BUDGET_MS = 20_000
 
 // Every member is a function because the wait re-reads all of it after each
@@ -45,9 +52,11 @@ export async function runLiveBrokerWait(
     const pending = source.reconcile()
     const superseded = source.authorityChange()
     joinedReconcile = true
-    // Why unbounded on `pending`: a reconcile always settles (opens carry HTTP
-    // deadlines), and cutting a slow-but-succeeding open short would fail a
-    // pairing that was about to work.
+    // Why unbounded on `pending`: a reconcile always settles — BOTH its awaits carry a deadline,
+    // the broker open and `readContext`'s cloud refresh (the larger of the two, and the one an
+    // earlier parenthetical here left out) — and cutting a slow-but-succeeding open short would
+    // fail a pairing that was about to work. "Settles" is not "settles soon": see the ceiling
+    // noted on LIVE_BROKER_WAIT_BUDGET_MS.
     await Promise.race([pending, superseded])
     if (pending !== source.reconcile()) {
       continue
