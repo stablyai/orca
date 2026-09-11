@@ -49,6 +49,7 @@ const store = {
     experimentalNativeChat: true,
     experimentalStructuredNativeChat: true,
     openAgentTabsInChatByDefault: true,
+    terminalWindowsShell: undefined as string | undefined,
     nativeChatSessionOptions: undefined as
       | Record<
           string,
@@ -193,6 +194,7 @@ describe('structured chat adoption guard on the launch path', () => {
     mockToastError.mockReset()
     hostCapabilities = STRUCTURED_HOST_CAPABILITIES
     store.settings.openAgentTabsInChatByDefault = true
+    store.settings.terminalWindowsShell = undefined
     store.settings.nativeChatSessionOptions = undefined
   })
 
@@ -358,6 +360,34 @@ describe('structured chat adoption guard on the launch path', () => {
       viaRefusal: true
     })
     expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
+  })
+
+  it('preserves an explicit launch platform through terminal fallback', async () => {
+    const { StructuredAgentSessionCreateRefusalError } =
+      await import('./launch-structured-agent-session')
+    mockLaunchStructuredCodexSession.mockRejectedValueOnce(
+      new StructuredAgentSessionCreateRefusalError('provider unavailable')
+    )
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    store.settings.terminalWindowsShell = 'cmd.exe'
+
+    const result = launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'start this task',
+      launchPlatform: 'win32'
+    })
+
+    await expect(result?.structuredSettlement).resolves.toMatchObject({
+      kind: 'terminal',
+      viaRefusal: true
+    })
+    expect(mockActivateAndRevealWorkspace).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        startup: expect.objectContaining({ command: result?.startupPlan.launchCommand })
+      })
+    )
   })
 
   it('logs a fallback that throws and never re-enters the terminal launch', async () => {

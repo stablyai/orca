@@ -84,6 +84,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
+    launchPlatform,
     onPromptDelivered
   } = args
   const prepared = prepareAgentInNewTabLaunch(args)
@@ -149,6 +150,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
       prompt: trimmedPrompt,
       promptDelivery: viewModePromptDelivery,
       tuiCustomization: { cwd: initialCwd, agentArgs },
+      ...(launchPlatform ? { launchPlatform } : {}),
       initialSessionOptions: startupPlan.sessionOptions,
       onPromptDelivered,
       launchPlan: plan,
