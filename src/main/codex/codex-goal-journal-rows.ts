@@ -51,9 +51,8 @@ export function codexGoalRowText(method: string, payload: unknown): string | nul
 }
 
 /**
- * What a reader would notice changing. Token and elapsed-time counters climb on every
- * turn, so they are deliberately excluded: including them would append a duplicate row
- * each time accounting ticked.
+ * What changes the visible sentence. Counters and budget stay in the raw disclosure but
+ * cannot append another row with identical copy.
  */
 export function codexGoalRowSignature(method: string, payload: unknown): string | null {
   if (method === GOAL_CLEARED_METHOD) {
@@ -65,8 +64,7 @@ export function codexGoalRowSignature(method: string, payload: unknown): string 
   const goal = goalRecord(payload)
   const objective = typeof goal?.objective === 'string' ? goal.objective.trim() : ''
   const status = typeof goal?.status === 'string' ? goal.status : ''
-  const budget = typeof goal?.tokenBudget === 'number' ? String(goal.tokenBudget) : ''
-  return `${GOAL_UPDATED_METHOD}\u0000${status}\u0000${budget}\u0000${objective}`
+  return `${GOAL_UPDATED_METHOD}\u0000${status}\u0000${objective}`
 }
 
 /** Provider-owned goal generation, stable while accounting counters change. */

@@ -1,9 +1,15 @@
-import { createHash } from 'node:crypto'
-import { parseAgentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
-import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type {
+  StructuredAgentSessionEventSink,
+  StructuredAgentSessionLifecycleJournal
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import {
+  codexGoalJournalDigest,
+  codexGoalJournalIdentity,
+  parseCodexGoalJournalItemId,
+  type CodexGoalJournalState
+} from './codex-goal-journal-identity'
 import {
   codexGoalGeneration,
   codexGoalRowSignature,
@@ -21,66 +27,13 @@ type GoalThreadState = {
   occurrence: string
 }
 
-const GOAL_IDENTITY_PREFIX = 'codex-goal'
-const DIGEST_PATTERN = /^[0-9a-f]{64}$/
-
-function digest(value: string): string {
-  return createHash('sha256').update(value).digest('hex')
-}
-
-function goalIdentity(
-  thread: string,
-  signature: string,
-  occurrence: string
-): AgentJournalItemIdentity {
-  return {
-    provider: 'orca',
-    clientMessageId: `${GOAL_IDENTITY_PREFIX}:${thread}:${signature}:${occurrence}`
-  }
-}
-
-function goalStateFromItem(itemId: string, thread: string): GoalThreadState | null {
-  const identity = parseAgentJournalItemKey(itemId)
-  if (identity?.provider !== 'orca') {
-    return null
-  }
-  const [prefix, itemThread, signature, occurrence, ...rest] = identity.clientMessageId.split(':')
-  return prefix === GOAL_IDENTITY_PREFIX &&
-    itemThread === thread &&
-    DIGEST_PATTERN.test(signature ?? '') &&
-    DIGEST_PATTERN.test(occurrence ?? '') &&
-    rest.length === 0
-    ? { signature: signature as string, occurrence: occurrence as string }
-    : null
-}
-
-function persistedGoalIdentity(
-  journal: Pick<AgentSessionJournal, 'latestItemIdMatching'>,
-  thread: string,
-  signature: string,
-  requirePrevious: boolean
-): AgentJournalItemIdentity | null {
-  const previousItemId = journal.latestItemIdMatching(
-    (itemId) => goalStateFromItem(itemId, thread) !== null
-  )
-  const previous = previousItemId ? goalStateFromItem(previousItemId, thread) : null
-  if (previous?.signature === signature) {
-    return null
-  }
-  // Codex sends a cleared snapshot while resuming threads that never had a goal.
-  // A clear is only a lifecycle occurrence when durable history proves one existed.
-  if (previous === null && requirePrevious) {
-    return null
-  }
-  const occurrence = previous
-    ? digest(JSON.stringify([previous.occurrence, signature]))
-    : digest(JSON.stringify([thread, signature]))
-  return goalIdentity(thread, signature, occurrence)
-}
-
 /** Persists provider-owned goal lifecycle notifications outside generic-row policy. */
 export class CodexJournalGoals {
   private readonly stateByThread = new Map<string, GoalThreadState>()
+  private readonly durableStateByThread = new Map<string, GoalThreadState>()
+  private durableJournal: StructuredAgentSessionLifecycleJournal | null = null
+  private durableEpoch: string | null = null
+  private transientEpoch: string | null = null
 
   constructor(private readonly sink: StructuredAgentSessionEventSink) {}
 
@@ -96,19 +49,20 @@ export class CodexJournalGoals {
     if (signature === null) {
       return null
     }
-    const thread = digest(event.threadId)
+    this.synchronizeTransientEpoch()
+    const thread = codexGoalJournalDigest(event.threadId)
     const reportedGeneration = codexGoalGeneration(event.params)
     const providerGeneration =
-      reportedGeneration === null ? null : digest(`provider:${reportedGeneration}`)
-    const signatureKey = digest(`${signature}\u0000${providerGeneration ?? ''}`)
+      reportedGeneration === null ? null : codexGoalJournalDigest(`provider:${reportedGeneration}`)
+    const signatureKey = codexGoalJournalDigest(`${signature}\u0000${providerGeneration ?? ''}`)
     const previous = this.stateByThread.get(thread)
     if (previous?.signature === signatureKey) {
       this.remember(thread, previous)
       return CODEX_JOURNAL_ADMITTED
     }
     const occurrence = previous
-      ? digest(JSON.stringify([previous.occurrence, signatureKey]))
-      : digest(JSON.stringify([thread, signatureKey]))
+      ? codexGoalJournalDigest(JSON.stringify([previous.occurrence, signatureKey]))
+      : codexGoalJournalDigest(JSON.stringify([thread, signatureKey]))
     const state = { signature: signatureKey, occurrence }
     const translated = unhandledProviderFrameJournalItem(
       'codex',
@@ -120,10 +74,15 @@ export class CodexJournalGoals {
     }
     const admission = appendCodexLifecycleTransition(
       this.sink,
-      goalIdentity(thread, signatureKey, occurrence),
+      codexGoalJournalIdentity(thread, signatureKey, occurrence),
       translated.body,
       (journal) =>
-        persistedGoalIdentity(journal, thread, signatureKey, event.method === 'thread/goal/cleared')
+        this.persistedGoalIdentity(
+          journal,
+          thread,
+          signatureKey,
+          event.method === 'thread/goal/cleared'
+        )
     )
     if (!admission.accepted) {
       return admission
@@ -134,6 +93,10 @@ export class CodexJournalGoals {
 
   clear(): void {
     this.stateByThread.clear()
+    this.durableStateByThread.clear()
+    this.durableJournal = null
+    this.durableEpoch = null
+    this.transientEpoch = null
   }
 
   dispose(): void {
@@ -150,5 +113,65 @@ export class CodexJournalGoals {
       }
       this.stateByThread.delete(oldest)
     }
+  }
+
+  private synchronizeTransientEpoch(): void {
+    const epoch = this.sink.journalEpoch?.() ?? null
+    if (epoch === null) {
+      return
+    }
+    if (this.transientEpoch !== null && this.transientEpoch !== epoch) {
+      this.stateByThread.clear()
+    }
+    this.transientEpoch = epoch
+  }
+
+  private persistedGoalIdentity(
+    journal: StructuredAgentSessionLifecycleJournal,
+    thread: string,
+    signature: string,
+    requirePrevious: boolean
+  ): AgentJournalItemIdentity | null {
+    this.seedDurableState(journal)
+    const previous = this.durableStateByThread.get(thread) ?? null
+    if (previous?.signature === signature) {
+      return null
+    }
+    // Codex sends a cleared snapshot while resuming threads that never had a goal.
+    if (previous === null && requirePrevious) {
+      return null
+    }
+    const occurrence = previous
+      ? codexGoalJournalDigest(JSON.stringify([previous.occurrence, signature]))
+      : codexGoalJournalDigest(JSON.stringify([thread, signature]))
+    this.durableStateByThread.set(thread, { signature, occurrence })
+    return codexGoalJournalIdentity(thread, signature, occurrence)
+  }
+
+  private seedDurableState(journal: StructuredAgentSessionLifecycleJournal): void {
+    if (this.durableJournal === journal && this.durableEpoch === journal.epoch) {
+      return
+    }
+    const latest = new Map<string, { state: CodexGoalJournalState; sequence: number }>()
+    journal.visitItems((itemId, sequence) => {
+      const state = parseCodexGoalJournalItemId(itemId)
+      const previous = state ? latest.get(state.thread) : undefined
+      if (state && (!previous || sequence > previous.sequence)) {
+        latest.set(state.thread, { state, sequence })
+      }
+    })
+    this.durableStateByThread.clear()
+    for (const [thread, { state }] of latest) {
+      this.durableStateByThread.set(thread, {
+        signature: state.signature,
+        occurrence: state.occurrence
+      })
+    }
+    this.durableJournal = journal
+    this.durableEpoch = journal.epoch
+    if (this.transientEpoch !== null && this.transientEpoch !== journal.epoch) {
+      this.stateByThread.clear()
+    }
+    this.transientEpoch = journal.epoch
   }
 }

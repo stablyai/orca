@@ -70,7 +70,7 @@ describe('codexGoalRowSignature', () => {
     expect(later).toBe(first)
   })
 
-  it('separates a changed objective, status, or budget', () => {
+  it('separates visible objective and status changes', () => {
     const base = codexGoalRowSignature('thread/goal/updated', goalFrame())
     expect(
       codexGoalRowSignature('thread/goal/updated', goalFrame({ goal: { status: 'complete' } }))
@@ -78,9 +78,13 @@ describe('codexGoalRowSignature', () => {
     expect(
       codexGoalRowSignature('thread/goal/updated', goalFrame({ goal: { objective: 'Ship it.' } }))
     ).not.toBe(base)
+  })
+
+  it('does not append an identical visible row for a budget-only change', () => {
+    const base = codexGoalRowSignature('thread/goal/updated', goalFrame())
     expect(
       codexGoalRowSignature('thread/goal/updated', goalFrame({ goal: { tokenBudget: 50_000 } }))
-    ).not.toBe(base)
+    ).toBe(base)
   })
 
   it('has no signature for a frame that is not a goal', () => {

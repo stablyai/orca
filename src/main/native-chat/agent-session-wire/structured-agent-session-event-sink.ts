@@ -31,8 +31,13 @@ export type StructuredAgentSessionAppendOptions = {
   observedAt?: number
 }
 
+export type StructuredAgentSessionLifecycleJournal = Pick<
+  AgentSessionJournal,
+  'epoch' | 'visitItems'
+>
+
 export type StructuredAgentSessionLifecycleIdentityResolver = (
-  journal: Pick<AgentSessionJournal, 'latestItemIdMatching'>
+  journal: StructuredAgentSessionLifecycleJournal
 ) => AgentJournalItemIdentity | null
 
 export type StructuredAgentSessionEventSink = {
@@ -62,6 +67,8 @@ export type StructuredAgentSessionEventSink = {
     body: AgentJournalItemBody,
     resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver
   ): StructuredAgentSessionSinkAdmission
+  /** Current durable epoch, when this deferred sink is bound to its journal. */
+  journalEpoch?(): string | null
   appendLifecycleBatch?(
     settlementId: string,
     mutations: readonly JournalLifecycleMutationInput[],
@@ -217,6 +224,7 @@ export function createDeferredStructuredAgentSessionEventSink(
           { lifecycle: true }
         )
       },
+      journalEpoch: queue.journalEpoch,
       appendLifecycleBatch: (settlementId, mutations, options = {}) => {
         const admission = appendLifecycleBatch(settlementId, mutations, options)
         if (!admission.accepted) {

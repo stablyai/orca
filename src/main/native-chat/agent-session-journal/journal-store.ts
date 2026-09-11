@@ -162,15 +162,11 @@ export class AgentSessionJournal {
 
   snapshot = (): AgentJournalSnapshot => renderJournalState(this.state)
 
-  /** Finds an identity in reduced state without allocating and sorting a full snapshot. */
-  latestItemIdMatching = (matches: (itemId: string) => boolean): string | null => {
-    let latest: { itemId: string; sequence: number } | null = null
+  /** Visits reduced items without allocating and sorting a full snapshot. */
+  visitItems = (visit: (itemId: string, sequence: number) => void): void => {
     for (const item of this.state.items.values()) {
-      if (matches(item.itemId) && (latest === null || item.sequence > latest.sequence)) {
-        latest = { itemId: item.itemId, sequence: item.sequence }
-      }
+      visit(item.itemId, item.sequence)
     }
-    return latest?.itemId ?? null
   }
 
   /** Includes revisions and completion tombstones, whose timestamps disappear from render items. */
