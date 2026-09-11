@@ -168,7 +168,7 @@ export function installActiveSessionTabsSubscription({
       snapshotIsFresh: decision.apply,
       localTerminalCount,
       hasLiveLocalPty,
-      skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
+      skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(environmentId, activeWorktreeId)
     })
     let settle: HostSessionMirrorSettle | null = decision.apply
       ? null
@@ -209,14 +209,18 @@ export function installActiveSessionTabsSubscription({
         if (await dispatchWebRuntimeInitialTerminalBootstrap(environmentId, activeWorktreeId)) {
           requestedInitialTerminal = true
         }
-      } else if (isCurrent() && respawn && beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)) {
+      } else if (
+        isCurrent() &&
+        respawn &&
+        beginWebRuntimeWakeTerminalRespawn(environmentId, activeWorktreeId)
+      ) {
         requestedRespawnAfterWake = true
         await createWebRuntimeSessionTerminal({
           worktreeId: activeWorktreeId,
           environmentId,
           activate: true,
           selectWorktree: false
-        }).finally(() => endWebRuntimeWakeTerminalRespawn(activeWorktreeId))
+        }).finally(() => endWebRuntimeWakeTerminalRespawn(environmentId, activeWorktreeId))
       }
     } catch (error) {
       if (isCurrent()) {

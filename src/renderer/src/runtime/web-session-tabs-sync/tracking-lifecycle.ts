@@ -20,7 +20,7 @@ import {
 } from './state'
 import {
   clearWebRuntimeWakeTerminalRespawnForWorktree,
-  clearAllWebRuntimeWakeTerminalRespawn
+  clearWebRuntimeWakeTerminalRespawnForEnvironment
 } from '../web-runtime-wake-terminal-respawn'
 import {
   releaseWebRuntimeInitialTerminalBootstrapOnTeardown,
@@ -143,7 +143,7 @@ export function clearWebSessionTabsTrackingForWorktree(
   removeWebSessionTabsEnvironment(environmentId, worktreeId)
   lastHostTerminalTabCountByWorktree.delete(key)
   sessionTabsInventoryOmissionsByWorktree.delete(key)
-  clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
+  clearWebRuntimeWakeTerminalRespawnForWorktree(environmentId, worktreeId)
   releaseWebRuntimeInitialTerminalBootstrapOnTeardown(environmentId, worktreeId)
   clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
   clearWebSessionCloseIntentsForWorktree({ environmentId }, worktreeId)
@@ -153,6 +153,15 @@ export function clearWebSessionTabsTrackingForWorktree(
   clearWebSessionTerminalPlacementsForWorktree(environmentId, worktreeId)
 }
 
+/**
+ * The per-environment teardown registry. Every module that keeps state keyed by environment hangs
+ * its clear here — this is the one place that fires when an environment is re-paired or goes away,
+ * so a new per-environment map belongs in this list rather than behind a trigger of its own.
+ *
+ * Each clear must be scoped to THIS environment. A clear-everything hides in here as a one-line
+ * call and releases a sibling environment's in-flight work, which is STA-6173 through a side door;
+ * that is how the wake-respawn latch above lost its sibling's claim.
+ */
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
   const trimmedEnvironmentId = environmentId.trim()
   if (!trimmedEnvironmentId) {
@@ -225,7 +234,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   clearWebSessionTerminalPlacementsForEnvironment(trimmedEnvironmentId)
   clearHostSessionMirrorHydration(trimmedEnvironmentId)
   clearHostMirrorHandleGapVerdictsForEnvironment(trimmedEnvironmentId)
-  clearAllWebRuntimeWakeTerminalRespawn()
+  clearWebRuntimeWakeTerminalRespawnForEnvironment(trimmedEnvironmentId)
   clearWebRuntimeInitialTerminalBootstrapsForEnvironment(trimmedEnvironmentId)
 }
 
