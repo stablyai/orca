@@ -26,19 +26,35 @@ export function gitStatusErrorMeansNotRepository(error: unknown): boolean {
   return /not a git repository/i.test(`${message}\n${stderr}`)
 }
 
+/**
+ * Options for `removeManagedWorktree`. Named rather than positional on purpose: three of the
+ * four are interchangeable booleans that each waive a different safety check on a destructive
+ * delete, so a transposition would silently delete a checkout the caller meant to protect.
+ */
+export type RemoveManagedWorktreeOptions = {
+  force?: boolean
+  runHooks?: boolean
+  /** Waives proof that every PTY stopped (#11960). Set by explicit Force Delete only. */
+  allowUnverifiedPtyStop?: boolean
+  /** Waives a FAILED archive hook (#19334). Never implied by `force`, never by `runHooks`. */
+  allowFailedArchiveHook?: boolean
+  hostId?: string
+}
+
 export function getRuntimeWorktreeRemovalOptionsKey(
-  force: boolean,
-  runHooks: boolean,
-  allowUnverifiedPtyStop: boolean,
-  allowFailedArchiveHook = false
+  options: Pick<
+    RemoveManagedWorktreeOptions,
+    'force' | 'runHooks' | 'allowUnverifiedPtyStop' | 'allowFailedArchiveHook'
+  >
 ): string {
   // Why: a forced retry must not coalesce onto the in-flight attempt that just
   // failed the PTY gate — it would inherit that failure instead of retrying.
-  const ptyKey = allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
+  const ptyKey = options.allowUnverifiedPtyStop ? 'allow-unverified-pty' : 'require-pty-stop'
   // Same reason for the archive waiver: a retry that waives the failed hook must not coalesce
   // onto the in-flight attempt that is about to refuse on it.
-  const archiveKey = allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
-  return `${force ? 'force' : 'normal'}:${runHooks ? 'run-hooks' : 'skip-hooks'}:${ptyKey}:${archiveKey}`
+  const archiveKey = options.allowFailedArchiveHook ? 'allow-failed-archive' : 'require-archive'
+  const hooksKey = options.runHooks ? 'run-hooks' : 'skip-hooks'
+  return `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}`
 }
 
 // Null executionHostId means host-unaware: path-only callers match any repo, and the first runtime

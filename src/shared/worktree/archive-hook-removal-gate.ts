@@ -7,9 +7,10 @@ export const ARCHIVE_HOOK_FAILED_REMOVAL_CODE = 'worktree_archive_hook_failed'
 
 export const ARCHIVE_HOOK_FAILED_REMOVAL_PREFIX = 'Archive hook failed for worktree:'
 
-// Surface-neutral on purpose: the CLI spells the flag, the desktop offers the skip-hook choice.
+// Names the flag rather than an in-app control: this message reaches the CLI, the RPC callers and
+// the desktop toast, and only the CLI currently offers a way to act on it (#19334 follow-up).
 export const ARCHIVE_HOOK_OVERRIDE_HINT =
-  'Nothing was stopped, deleted or deregistered. Fix the hook and retry, retry with the archive hook skipped, or retry with an explicit waiver for the failed hook.'
+  'Nothing was stopped, deleted or deregistered. Fix the hook and retry, or delete anyway with `orca worktree rm --allow-failed-archive-hook`.'
 
 /**
  * `exited` means the host reported a non-zero exit for this hook run. `unverifiable` covers every
@@ -52,10 +53,6 @@ export function formatArchiveHookFailure(failure: ArchiveHookFailure): string {
     ARCHIVE_HOOK_OVERRIDE_HINT,
     ...(output ? [output] : [])
   ].join(' ')
-}
-
-export function isArchiveHookRemovalError(error: string): boolean {
-  return error.includes(ARCHIVE_HOOK_FAILED_REMOVAL_PREFIX)
 }
 
 /** Shape both the local and the SSH archive runners answer with. */

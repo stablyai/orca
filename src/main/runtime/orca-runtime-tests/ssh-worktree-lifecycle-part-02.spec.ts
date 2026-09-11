@@ -396,7 +396,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     try {
-      await runtime.removeManagedWorktree('path:/remote/feature', true, false)
+      await runtime.removeManagedWorktree('path:/remote/feature', { force: true, runHooks: false })
     } finally {
       unregisterSshGitProvider('ssh-1')
     }
@@ -472,7 +472,7 @@ describe('OrcaRuntimeService', () => {
     runtime.registerPty('pty-local-same-id', `${TEST_REPO_ID}::/remote/feature`, null)
 
     try {
-      await runtime.removeManagedWorktree('path:/remote/feature', true, false)
+      await runtime.removeManagedWorktree('path:/remote/feature', { force: true, runHooks: false })
     } finally {
       unregisterSshGitProvider('ssh-1')
     }
@@ -519,9 +519,9 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
-      await expect(runtime.removeManagedWorktree('path:/remote/repo', true)).rejects.toThrow(
-        'Refusing to delete protected worktree path: /remote/repo'
-      )
+      await expect(
+        runtime.removeManagedWorktree('path:/remote/repo', { force: true })
+      ).rejects.toThrow('Refusing to delete protected worktree path: /remote/repo')
     } finally {
       unregisterSshGitProvider('ssh-1')
     }

@@ -63,7 +63,7 @@ describe('archive hook removal gate', () => {
     })
 
     const failure = await runtime
-      .removeManagedWorktree(TEST_WORKTREE_ID, false, true)
+      .removeManagedWorktree(TEST_WORKTREE_ID, { force: false, runHooks: true })
       .catch((error: unknown) => error)
 
     expect(failure).toBeInstanceOf(Error)
@@ -88,7 +88,7 @@ describe('archive hook removal gate', () => {
     })
 
     const failure = await runtime
-      .removeManagedWorktree(TEST_WORKTREE_ID, false, true)
+      .removeManagedWorktree(TEST_WORKTREE_ID, { force: false, runHooks: true })
       .catch((error: unknown) => error)
 
     expect((failure as { data?: { outcome?: string; exitCode?: number } }).data).toEqual({
@@ -111,7 +111,11 @@ describe('archive hook removal gate', () => {
 
     await expect(
       // force + the PTY-stop waiver, i.e. everything the desktop Force Delete sets.
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, true, true)
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: true,
+        runHooks: true,
+        allowUnverifiedPtyStop: true
+      })
     ).rejects.toMatchObject({ code: ARCHIVE_HOOK_FAILED_REMOVAL_CODE })
     expectNothingMutated(removeWorktreeMeta)
   })
@@ -126,14 +130,12 @@ describe('archive hook removal gate', () => {
     })
     vi.mocked(removeWorktree).mockResolvedValue({})
 
-    const result = await runtime.removeManagedWorktree(
-      TEST_WORKTREE_ID,
-      false,
-      true,
-      false,
-      undefined,
-      true
-    )
+    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+      force: false,
+      runHooks: true,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: true
+    })
 
     expect(result.archiveHookOverride).toEqual({
       worktreePath: TEST_WORKTREE_PATH,
@@ -164,7 +166,10 @@ describe('archive hook removal gate', () => {
     })
     vi.mocked(removeWorktree).mockResolvedValue({})
 
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, true)
+    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+      force: false,
+      runHooks: true
+    })
 
     expect(result.archiveHookOverride).toBeUndefined()
     expect(removeWorktree).toHaveBeenCalled()
@@ -187,7 +192,10 @@ describe('archive hook removal gate', () => {
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     vi.mocked(removeWorktree).mockResolvedValue({})
 
-    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, true)
+    const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+      force: false,
+      runHooks: true
+    })
 
     expect(runHook).not.toHaveBeenCalled()
     expect(result.warning).toBeUndefined()
@@ -205,13 +213,21 @@ describe('archive hook removal gate', () => {
     vi.mocked(runHook).mockReturnValue(hookRun.promise)
     vi.mocked(removeWorktree).mockResolvedValue({})
 
-    const refused = runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, true)
+    const refused = runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+      force: false,
+      runHooks: true
+    })
     await vi.waitFor(() => expect(runHook).toHaveBeenCalled())
 
     // The waiver is part of the in-flight options key, so a concurrent waived retry is refused
     // outright rather than handed the in-flight attempt that is about to reject on the hook.
     await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, true, false, undefined, true)
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, {
+        force: false,
+        runHooks: true,
+        allowUnverifiedPtyStop: false,
+        allowFailedArchiveHook: true
+      })
     ).rejects.toThrow('Worktree deletion already in progress')
 
     hookRun.resolve({ success: false, output: 'boom', exitCode: 23 })

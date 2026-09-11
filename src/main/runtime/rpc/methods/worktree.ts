@@ -235,17 +235,13 @@ export const WORKTREE_METHODS = [
           }
         }
       }
-      const removalArgs = [
-        params.worktree,
-        params.force === true,
-        params.runHooks === true,
-        params.allowUnverifiedPtyStop === true
-      ] as const
-      const result = await runtime.removeManagedWorktree(
-        ...removalArgs,
-        resolvedHostId,
-        params.allowFailedArchiveHook === true
-      )
+      const result = await runtime.removeManagedWorktree(params.worktree, {
+        force: params.force === true,
+        runHooks: params.runHooks === true,
+        allowUnverifiedPtyStop: params.allowUnverifiedPtyStop === true,
+        allowFailedArchiveHook: params.allowFailedArchiveHook === true,
+        ...(resolvedHostId ? { hostId: resolvedHostId } : {})
+      })
       return { removed: true, ...result }
     }
   }),

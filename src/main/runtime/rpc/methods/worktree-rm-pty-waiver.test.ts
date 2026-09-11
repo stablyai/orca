@@ -35,14 +35,13 @@ describe('worktree.rm PTY-stop waiver', () => {
       }
     } satisfies RpcRequest)
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      true,
-      false,
-      true,
-      'local',
-      false
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: true,
+      allowFailedArchiveHook: false,
+      hostId: 'local'
+    })
   })
 
   it('does not infer a waiver from force alone', async () => {
@@ -56,14 +55,13 @@ describe('worktree.rm PTY-stop waiver', () => {
       params: { worktree: 'id:wt-1', hostId: 'local', force: true, runHooks: false }
     } satisfies RpcRequest)
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      true,
-      false,
-      false,
-      'local',
-      false
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false,
+      hostId: 'local'
+    })
   })
 
   it('resolves the host before forwarding an unqualified removal', async () => {
@@ -78,14 +76,13 @@ describe('worktree.rm PTY-stop waiver', () => {
     } satisfies RpcRequest)
 
     expect(runtime.showManagedWorktree).toHaveBeenCalledWith('id:wt-1')
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      true,
-      false,
-      false,
-      'ssh:builder',
-      false
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false,
+      hostId: 'ssh:builder'
+    })
   })
 })
 
@@ -108,14 +105,13 @@ describe('worktree.rm archive-hook waiver', () => {
       }
     } satisfies RpcRequest)
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      false,
-      true,
-      false,
-      'local',
-      true
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: false,
+      runHooks: true,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: true,
+      hostId: 'local'
+    })
   })
 
   it('does not infer an archive-hook waiver from force', async () => {
@@ -135,13 +131,12 @@ describe('worktree.rm archive-hook waiver', () => {
       }
     } satisfies RpcRequest)
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      true,
-      true,
-      true,
-      'local',
-      false
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: true,
+      allowUnverifiedPtyStop: true,
+      allowFailedArchiveHook: false,
+      hostId: 'local'
+    })
   })
 })

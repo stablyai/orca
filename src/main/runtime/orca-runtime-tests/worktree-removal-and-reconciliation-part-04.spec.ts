@@ -90,9 +90,9 @@ describe('OrcaRuntimeService', () => {
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     try {
-      await expect(runtime.removeManagedWorktree(`id:${worktreeId}`, true)).rejects.toThrow(
-        'SSH filesystem provider unavailable'
-      )
+      await expect(
+        runtime.removeManagedWorktree(`id:${worktreeId}`, { force: true })
+      ).rejects.toThrow('SSH filesystem provider unavailable')
 
       await expect(lstat(localPath)).resolves.toBeTruthy()
       expect(removeWorktree).not.toHaveBeenCalled()
@@ -112,7 +112,7 @@ describe('OrcaRuntimeService', () => {
     try {
       vi.mocked(listWorktrees).mockResolvedValue([])
 
-      await expect(runtime.removeManagedWorktree(worktreeId, true)).rejects.toThrow(
+      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).rejects.toThrow(
         'Refusing to delete unregistered worktree path'
       )
 
@@ -177,7 +177,9 @@ describe('OrcaRuntimeService', () => {
       }
     })
 
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, true)).rejects.toThrow(
+    await expect(
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true, runHooks: true })
+    ).rejects.toThrow(
       `Refusing to delete worktree because it contains another registered worktree: ${TEST_WORKTREE_PATH}/child`
     )
 
@@ -238,7 +240,9 @@ describe('OrcaRuntimeService', () => {
       }
     ])
 
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, true)).rejects.toThrow(
+    await expect(
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true, runHooks: true })
+    ).rejects.toThrow(
       `Failed to force delete worktree at ${TEST_WORKTREE_PATH}. Worktree is locked by Git.`
     )
 
@@ -278,9 +282,9 @@ describe('OrcaRuntimeService', () => {
         }
       ])
 
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, true)).rejects.toThrow(
-      'Worktree is locked by Git'
-    )
+    await expect(
+      runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true, runHooks: true })
+    ).rejects.toThrow('Worktree is locked by Git')
 
     expect(runHook).toHaveBeenCalled()
     expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
@@ -377,7 +381,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(runHook).mockResolvedValue({ success: true, output: '' })
     vi.mocked(removeWorktree).mockResolvedValue({})
 
-    await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, true)
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: false, runHooks: true })
 
     expect(runHook).toHaveBeenCalledWith(
       'archive',
