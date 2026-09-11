@@ -2,6 +2,10 @@ import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '@/runtime/web-session-tab-rpc-timeout'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
+import {
+  isDisconnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 
 /**
  * Per-pane park for the frame between a host's tab rows and its PTY handles.
@@ -147,6 +151,27 @@ function liveTabIds(): Set<string> {
     }
   }
   return tabIds
+}
+
+/**
+ * True only when the client positively knows it is out of contact — the link dropped, or its
+ * replacement is still being established.
+ *
+ * Why not `isConnectedRuntimeHostState`: that reads a host nobody has probed yet as not
+ * connected, and a never-probed host is not the outage this guards. Narrowing to the two states
+ * an outage actually produces keeps the guard to the case where silence provably means "we could
+ * not ask" rather than "the host had nothing to say".
+ *
+ * Why this and not the connection generation: a plain disconnect leaves the generation where it
+ * was — runtime-status.ts advances it on the *reconnect*, under a new runtime id — so a wait that
+ * expires mid-outage is indistinguishable, to the generation guard, from one that expired on a
+ * healthy connection.
+ */
+function environmentContactIsLost(environmentId: string): boolean {
+  const connectionState = runtimeHostConnectionStateForEntry(
+    useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+  )
+  return isDisconnectedRuntimeHostState(connectionState) || connectionState === 'reconnecting'
 }
 
 function recordExpiredWait(environmentId: string, key: string): void {
@@ -309,9 +334,16 @@ export function parkUntilHostMirrorHandleLands(
     // milliseconds before the reconnect authorize a resume on the new one — the #19735
     // fork with an extra step. Release without a verdict instead; the replay re-parks
     // and the new connection gets its own full budget.
+    //
+    // Why contact is checked too: an environment that dropped mid-park publishes nothing,
+    // so the deadline measures the outage rather than the host. Loss of contact is never
+    // evidence about a process (docs/reference/ssh-execution-boundary.md), and a verdict
+    // recorded here authorizes the resume that forks the agent the host is still running.
+    // The generation cannot stand in for it — a plain disconnect never advances it.
     if (
+      !environmentContactIsLost(environmentId) &&
       waitersByPane.get(key)?.generation ===
-      getRuntimeEnvironmentConnectionGeneration(environmentId)
+        getRuntimeEnvironmentConnectionGeneration(environmentId)
     ) {
       recordExpiredWait(environmentId, key)
     }
