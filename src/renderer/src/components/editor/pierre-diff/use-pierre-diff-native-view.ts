@@ -14,7 +14,12 @@ import {
 // The editor reasserts its own selection on attach, which can land well after ours. Budget by
 // wall clock, not frames: under load a frame count expires long before the editor settles.
 // User interaction still cancels the pending restore, so this only bounds the quiet case.
+// The editor reasserts its own selection well after ours, and convergence needs a later Pierre
+// render, so the window extends on each render while a restore is still pending. RESTORE_CEILING
+// is the hard bound: past it no further extension is granted, so a row that renders forever
+// without converging cannot spin forever. User interaction cancels the restore sooner still.
 const RESTORE_DEADLINE_MS = 2_000
+const RESTORE_CEILING_MS = 15_000
 
 export function usePierreDiffNativeView(
   key: string | undefined,
@@ -34,6 +39,7 @@ export function usePierreDiffNativeView(
   const frame = useRef<number | null>(null)
   // Armed on attach; 0 until then so a stale ref can never keep a restore alive.
   const deadline = useRef(0)
+  const ceiling = useRef(0)
   const lastSnapshot = useRef<PierreNativeViewState | undefined>(undefined)
   const schedule = useCallback(() => {
     if (frame.current !== null || !pending.current || Date.now() > deadline.current) {
@@ -103,7 +109,9 @@ export function usePierreDiffNativeView(
     })
   }, [editorRef])
   useLayoutEffect(() => {
-    deadline.current = Date.now() + RESTORE_DEADLINE_MS
+    const now = Date.now()
+    ceiling.current = now + RESTORE_CEILING_MS
+    deadline.current = now + RESTORE_DEADLINE_MS
     schedule()
   }, [activeGroupId, schedule])
   useLayoutEffect(() => {
@@ -174,8 +182,14 @@ export function usePierreDiffNativeView(
     (host: HTMLElement, phase: PostRenderPhase, instance: PierreDiffInstance) => {
       if (phase !== 'unmount') {
         view.current = { host, instance }
-        // Re-arm on attach: the remount is the point a restore becomes possible.
-        deadline.current = Date.now() + RESTORE_DEADLINE_MS
+        const now = Date.now()
+        if (phase === 'mount') {
+          ceiling.current = now + RESTORE_CEILING_MS
+        }
+        // Extend while a restore is still pending, but never past the ceiling.
+        if (pending.current && now < ceiling.current) {
+          deadline.current = Math.min(now + RESTORE_DEADLINE_MS, ceiling.current)
+        }
         schedule()
       }
     },

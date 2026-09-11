@@ -151,10 +151,6 @@ export function useCombinedDiffSectionLoader({
       ) {
         return
       }
-      if (wasShowingContent) {
-        // Why: content really changed, so the old Monaco height no longer describes this row.
-        setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
-      }
       // `dirty` flips back to false once a save is acknowledged, so it cannot tell a stale payload
       // from a fresh one. If the draft moved while this fetch was in flight, only commit when the
       // payload actually agrees with that draft — otherwise this reverts the user's saved text on
@@ -162,6 +158,11 @@ export function useCombinedDiffSectionLoader({
       const liveDraft = sectionsRef.current[index]?.modifiedContent
       if (liveDraft !== draftAtFetchStart && storedContent.modifiedContent !== liveDraft) {
         return
+      }
+      if (wasShowingContent) {
+        // Why: content really changed, so the old measured height no longer describes this row.
+        // Must follow the skip above, or a rejected payload resizes the row being typed in.
+        setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       }
       setSections((prev) => {
         return prev.map((s, i) =>
