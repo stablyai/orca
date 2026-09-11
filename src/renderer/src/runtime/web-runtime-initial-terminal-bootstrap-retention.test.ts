@@ -46,15 +46,21 @@ describe('web runtime initial terminal bootstrap retention', () => {
     expect(countWebRuntimeInitialTerminalBootstrapEnvironmentsForTests()).toBe(0)
   })
 
-  it('releases every key an environment held when that environment tears down', () => {
+  it('releases parked claims an environment held when that environment tears down', () => {
+    // Deliberately seeds PARKED claims, not creates still in flight. An earlier version of this
+    // test asserted teardown reclaims in-flight creates too, which was the pre-fix behaviour:
+    // dropping an in-flight claim is precisely what lets a re-armed closure seed a duplicate
+    // terminal, so that case belongs to the teardown fix, not here. A parked claim is
+    // unambiguous — its mirror answer can never arrive once the subscription is gone.
     for (let index = 0; index < 100; index += 1) {
-      beginWebRuntimeInitialTerminalBootstrap(ENV_A, `repo-1::worktree-${index}`)
-      beginWebRuntimeInitialTerminalBootstrap(ENV_B, `repo-1::worktree-${index}`)
+      for (const environmentId of [ENV_A, ENV_B]) {
+        const worktreeId = `repo-1::worktree-${index}`
+        beginWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+        markWebRuntimeInitialTerminalBootstrapAwaitingMirror(environmentId, worktreeId)
+      }
     }
     expect(countWebRuntimeInitialTerminalBootstrapEntriesForTests()).toBe(200)
 
-    // A create still in flight is exactly what teardown must reclaim: nothing will ever
-    // resolve it once the runtime is gone, so nothing else would remove these keys.
     clearWebRuntimeInitialTerminalBootstrapsForEnvironment(ENV_A)
     expect(countWebRuntimeInitialTerminalBootstrapEntriesForTests()).toBe(100)
     expect(countWebRuntimeInitialTerminalBootstrapEnvironmentsForTests()).toBe(1)

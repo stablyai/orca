@@ -150,10 +150,6 @@ export class RelayAuthCoordinator {
       // was about to work. The budget bounds only the retry chain below.
       await pending
       if (pending !== this.latestReconcile) {
-        // Known gap: this arm skips the deadline check, so under continuous reconcile churn the
-        // budget above is not strictly enforced and the caller's transient demand ref is held
-        // past it. Not a hang — every iteration awaits a settling promise — so it is bounded by
-        // how long churn lasts, not unbounded.
         continue
       }
       // Why: a reconcile that failed transiently has already armed its own
