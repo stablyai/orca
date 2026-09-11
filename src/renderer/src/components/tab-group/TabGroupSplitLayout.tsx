@@ -1,6 +1,7 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { isAutoHideSingleTabStripEnabled } from './auto-hide-single-tab-strip-preference'
 import { areAllTabStripsAutoHidden } from './single-tab-strip-visibility'
 import { TabGroupSplitNodeTree } from './TabGroupSplitNodeTree'
 import { WorkspaceTabDragLayer } from './WorkspaceTabDragLayer'
@@ -26,7 +27,7 @@ export default function TabGroupSplitLayout({
     const groups = state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS
     const tabs = state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
     return areAllTabStripsAutoHidden({
-      autoHideEnabled: state.settings?.autoHideSingleTabStrip === true,
+      autoHideEnabled: isAutoHideSingleTabStripEnabled(state.settings),
       groupTabCounts: groups.map((group) => tabs.filter((tab) => tab.groupId === group.id).length),
       clientHostedRowCount
     })
