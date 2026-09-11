@@ -85,8 +85,11 @@ export function decodeSessionSearchCursor(cursor: string, generation: number, ke
   // A generation that survived parsing is worth reporting even when the rest of
   // the payload is unusable: it is what tells the caller which snapshot the
   // cursor thought it was walking.
+  // A counter, so a fraction or a negative is forged rather than stale.
   const claimed =
-    typeof payload?.g === 'number' && Number.isFinite(payload.g) ? payload.g : undefined
+    typeof payload?.g === 'number' && Number.isInteger(payload.g) && payload.g >= 0
+      ? payload.g
+      : undefined
   if (
     claimed === undefined ||
     !Number.isInteger(payload?.o) ||

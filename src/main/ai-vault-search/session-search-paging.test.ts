@@ -228,7 +228,19 @@ describe('cursor encoding', () => {
     ['a negative offset', encodeSessionSearchCursor(1, -1, 'k'), 1],
     ['a non-integer offset', Buffer.from('{"g":1,"o":1.5,"k":"k"}').toString('base64url'), 1],
     ['a payload that is not an object', Buffer.from('"nope"').toString('base64url'), undefined],
-    ['text that is not base64url JSON', 'zzz!!', undefined]
+    ['text that is not base64url JSON', 'zzz!!', undefined],
+    // A generation is a counter: neither of these is a snapshot that ever
+    // existed, so reporting one as stale would name a generation as expected.
+    [
+      'a fractional generation',
+      Buffer.from('{"g":7.5,"o":0,"k":"k"}').toString('base64url'),
+      undefined
+    ],
+    [
+      'a negative generation',
+      Buffer.from('{"g":-1,"o":0,"k":"k"}').toString('base64url'),
+      undefined
+    ]
   ])('rejects %s as malformed, still naming the index generation', (_name, cursor, claimed) => {
     // The caller has to know which snapshot it was refused against whatever was
     // wrong with the cursor, and the generation it claimed whenever that
