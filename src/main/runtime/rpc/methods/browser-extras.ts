@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { assertRpcClipboardTextWriteWithinLimit } from '../rpc-clipboard-text-validation'
 import { BrowserTarget } from '../schemas'
 import {
@@ -23,7 +23,7 @@ import {
 } from './browser-schemas'
 import { MouseClick } from '../../../../shared/rpc-contract/browser-extras-params'
 
-export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
+export const BROWSER_EXTRA_METHODS = [
   defineMethod({
     name: 'browser.cookie.get',
     params: CookieGet,

@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   PRCommentReaction,
   PrForBranch,
@@ -11,7 +11,7 @@ import {
   ReviewThread
 } from '../../../../shared/rpc-contract/github-pull-request-params'
 
-export const GITHUB_PULL_REQUEST_METHODS: RpcMethod[] = [
+export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.prForBranch',
     params: PrForBranch,

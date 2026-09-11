@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
 import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
@@ -12,7 +12,7 @@ import {
 import { isStructuredWorkerHandle } from '../../../../structured-worker-identity'
 import { WorkerDispatchParams } from '../../../../../../shared/rpc-contract/orchestration-worker-stop-params'
 
-export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineMethod({
     name: 'orchestration.workerStop',
     params: WorkerDispatchParams,

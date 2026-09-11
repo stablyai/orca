@@ -1,5 +1,5 @@
 import { createNotificationStreamFilter } from './notification-stream-policy'
-import { defineStreamingMethod, defineMethod, type RpcAnyMethod } from '../core'
+import { defineStreamingMethod, defineMethod } from '../core'
 import {
   NotificationGetMissedSinceParams,
   NotificationRegisterPushParams,
@@ -13,7 +13,7 @@ import {
 let notificationsSubscriptionSeq = 0
 
 // Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
-export const NOTIFICATION_METHODS: readonly RpcAnyMethod[] = [
+export const NOTIFICATION_METHODS = [
   defineStreamingMethod({
     name: 'notifications.subscribe',
     params: NotificationsSubscribeParams,

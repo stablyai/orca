@@ -1,6 +1,6 @@
 import { contextOnlyAbandonWarning } from '../../../../orchestration/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import {
   exposeDispatchContext,
   exposeObservation,
@@ -22,7 +22,7 @@ import {
   WorkerReadParams
 } from '../../../../../../shared/rpc-contract/orchestration-worker-control-params'
 
-export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.workerShow',
     params: WorkerDispatchParams,

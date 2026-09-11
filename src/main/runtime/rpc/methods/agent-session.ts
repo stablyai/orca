@@ -10,7 +10,7 @@ import {
   parseAgentSessionOperationTimestamp
 } from '../../../../shared/agent-session-host-authority'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
@@ -58,7 +58,7 @@ function assertOperationTimestampWithinFutureSkew(clientOperationId: string): vo
   }
 }
 
-export const AGENT_SESSION_METHODS: RpcAnyMethod[] = [
+export const AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'terminal.ensureAgentSession',
     params: EnsureAgentSessionParams,

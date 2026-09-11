@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isGroupAddress } from '../../../../orchestration/groups'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
@@ -20,7 +20,7 @@ import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
 
-export const ORCHESTRATION_SEND_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
     name: 'orchestration.send',
     params: SendParams,

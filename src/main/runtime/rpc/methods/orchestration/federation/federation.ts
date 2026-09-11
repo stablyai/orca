@@ -1,7 +1,7 @@
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
 import {
   appendFederationSetupEffect,
@@ -24,7 +24,7 @@ import {
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
 
-export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
     name: 'orchestration.federationAttachStart',
     params: FederationAttachStartParams,

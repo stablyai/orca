@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import type { GateStatus } from '../../../../orchestration/db'
 import { Coordinator } from '../../../../orchestration/coordinator'
 import { resolveRunScope } from '../runs/run-scope'
@@ -16,7 +16,7 @@ import {
 // the DB's active-run check), so a single reference suffices.
 let activeCoordinator: Coordinator | null = null
 
-export const ORCHESTRATION_GATE_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_GATE_METHODS = [
   // Why: Section 4.12 — orchestration.run returns immediately with a run ID.
   // The coordinator loop runs in the background; progress is queried via
   // orchestration.taskList. This prevents the RPC call from blocking the

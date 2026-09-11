@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   checkRemoteServerUpdater,
   downloadRemoteServerUpdater,
@@ -7,7 +7,7 @@ import {
 } from '../../remote-server-updater'
 import { UpdaterCheckParams } from '../../../../shared/rpc-contract/updater-params'
 
-export const UPDATER_METHODS: RpcMethod[] = [
+export const UPDATER_METHODS = [
   defineMethod({
     name: 'updater.getStatus',
     params: null,

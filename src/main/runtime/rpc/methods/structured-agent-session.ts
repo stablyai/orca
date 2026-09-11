@@ -18,7 +18,7 @@ import {
   projectTurnItemEvent,
   projectTurnItemHistory
 } from './structured-agent-session-turn-item-capability'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import {
   ensureStructuredHostInstalled as ensureHostInstalled,
   requireStructuredCapability,
@@ -91,7 +91,7 @@ async function attachClientSuppliedLocation(
   return host.attach(callerFor(ctx), attachParams)
 }
 
-export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
+export const STRUCTURED_AGENT_SESSION_METHODS = [
   defineMethod({
     name: 'agentSession.rewind',
     params: RewindParams,

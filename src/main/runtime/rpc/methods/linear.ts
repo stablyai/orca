@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
 import { LINEAR_ISSUE_LIST_METHOD, LINEAR_MCP_ISSUE_LIST_METHOD } from './linear-issue-list-method'
 import {
@@ -20,7 +20,7 @@ import {
   WorkspaceSelection
 } from '../../../../shared/rpc-contract/linear-params'
 
-export const LINEAR_METHODS: RpcMethod[] = [
+export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.connect',
     params: Connect,

@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { normalizeGitLabIssueListArgs } from '../../../gitlab/gitlab-preload-args'
 import { toGitLabJobLogExcerptResult } from '../../../../shared/gitlab-job-log-excerpt'
 import {
@@ -23,7 +23,7 @@ import {
   WorkItemsList
 } from '../../../../shared/rpc-contract/gitlab-params'
 
-export const GITLAB_METHODS: RpcMethod[] = [
+export const GITLAB_METHODS = [
   defineMethod({
     name: 'gitlab.listMRs',
     params: WorkItemsList,

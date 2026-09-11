@@ -1,4 +1,4 @@
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   FileCommitUpload,
   FileCopy,
@@ -33,7 +33,7 @@ function sshMutationArguments(
   ]
 }
 
-export const FILE_MUTATION_METHODS: RpcAnyMethod[] = [
+export const FILE_MUTATION_METHODS = [
   defineMethod({
     name: 'files.write',
     params: FileWrite,

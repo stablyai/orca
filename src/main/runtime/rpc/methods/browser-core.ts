@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { BrowserTarget } from '../schemas'
 import {
   Check,
@@ -35,7 +35,7 @@ import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-crea
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { CertificateProceed } from '../../../../shared/rpc-contract/browser-core-params'
 
-export const BROWSER_CORE_METHODS: RpcMethod[] = [
+export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.snapshot',
     params: BrowserTarget,

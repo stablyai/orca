@@ -5,7 +5,7 @@ import {
   type NativeChatTranscriptSubscription,
   type SubscribeNativeChatTranscriptArgs
 } from '../../../native-chat/transcript-watch'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
 import { sanitizeNativeChatRpcBlock } from './native-chat-rpc-block-sanitize'
 import {
   MOBILE_NATIVE_CHAT_MAX_WINDOW,
@@ -63,7 +63,7 @@ function windowForClient(
   return windowed.map((message) => sanitizeMessage(message, clientKind))
 }
 
-export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
+export const NATIVE_CHAT_METHODS = [
   defineMethod({
     name: 'nativeChat.readSession',
     params: NativeChatSession,

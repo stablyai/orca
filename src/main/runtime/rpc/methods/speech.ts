@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   DictationChunk,
   DictationHandle,
@@ -7,7 +7,7 @@ import {
   SpeechModelAction
 } from '../../../../shared/rpc-contract/speech-params'
 
-export const SPEECH_METHODS: RpcMethod[] = [
+export const SPEECH_METHODS = [
   defineMethod({
     name: 'speech.models.list',
     params: null,

@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
@@ -10,7 +10,7 @@ import {
   RunUseParams
 } from '../../../../../../shared/rpc-contract/orchestration-runs-params'
 
-export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_RUN_METHODS = [
   defineMethod({
     name: 'orchestration.runCreate',
     params: RunCreateParams,

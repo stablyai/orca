@@ -1,4 +1,4 @@
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
 import { remoteFileContentBudget } from './files-remote-content-budget'
@@ -21,7 +21,7 @@ import {
 
 let filesWatchSubscriptionSeq = 0
 
-export const FILE_METHODS: RpcAnyMethod[] = [
+export const FILE_METHODS = [
   defineMethod({
     name: 'files.list',
     params: WorktreeSelector,

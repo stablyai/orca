@@ -1,5 +1,5 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { startFederatedWorker } from '../federation/federated-worker-start'
 import { startLocalWorker } from './local-worker-start'
 import {
@@ -14,7 +14,7 @@ import {
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
 
-export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_WORKER_START_METHODS = [
   defineMethod({
     name: 'orchestration.workerStart',
     params: WorkerStartParams,

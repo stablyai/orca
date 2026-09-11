@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -15,7 +15,7 @@ import {
 } from '../../../../shared/rpc-contract/ai-vault-params'
 export { AiVaultListSessionsParams, AiVaultPrepareSessionResumeParams, AiVaultSessionTitlesParams }
 
-export const AI_VAULT_METHODS: RpcMethod[] = [
+export const AI_VAULT_METHODS = [
   defineMethod({
     name: 'aiVault.resolveSessionTitles',
     params: AiVaultSessionTitlesParams,

@@ -1,4 +1,4 @@
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   ArtifactsDeleteParams,
   ListOptions,
@@ -6,7 +6,7 @@ import {
   WriteRequest
 } from '../../../../shared/rpc-contract/artifacts-params'
 
-export const ARTIFACT_METHODS: readonly RpcAnyMethod[] = [
+export const ARTIFACT_METHODS = [
   defineMethod({
     name: 'artifacts.list',
     params: ListOptions,
