@@ -35,6 +35,8 @@ function createHarness(
     processTitle?: string
     cwdImpl?: () => string
     sessionNameImpl?: () => string
+    setTitle?: (title: string) => void
+    globals?: Record<string | symbol, unknown>
     env?: Record<string, string>
   } = {}
 ): Harness {
@@ -42,6 +44,7 @@ function createHarness(
   const ctx: TitlebarContext = {
     ui: {
       setTitle: (title: string) => {
+        options.setTitle?.(title)
         titles.push(title)
       }
     },
@@ -75,7 +78,7 @@ function createHarness(
     setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
     clearTimeout: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)
   } as Record<string, unknown>
-  context.globalThis = context
+  context.globalThis = options.globals ?? context
 
   const output = ts.transpileModule(getPiTitlebarExtensionSource(options.kind ?? 'pi'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 }
@@ -587,5 +590,115 @@ describe('getPiTitlebarExtensionSource', () => {
 
     expect(harness.handlers.ui_prompt_start).toBeDefined()
     expect(() => harness.handlers.ui_prompt_start?.({}, undefined)).not.toThrow()
+  })
+
+  it.each(['getter', 'title'] as const)(
+    'retires a stale %s during animation without throwing or rescheduling',
+    async (failure) => {
+      let stale = false
+      const harness = createHarness({
+        sessionNameImpl: () => {
+          if (stale && failure === 'getter') {
+            throw new Error('expired session')
+          }
+          return SESSION
+        },
+        setTitle: () => {
+          if (stale && failure === 'title') {
+            throw new Error('expired UI')
+          }
+        }
+      })
+      await harness.callHook('agent_start')
+      stale = true
+      expect(() => vi.advanceTimersByTime(80)).not.toThrow()
+      expect(vi.getTimerCount()).toBe(0)
+      await harness.callHook('agent_start')
+      expect(vi.getTimerCount()).toBe(0)
+      stale = false
+      await harness.callHook('agent_start')
+      expect(vi.getTimerCount()).toBe(1)
+    }
+  )
+
+  it.each(['getter', 'title'] as const)('contains stale %s during shutdown', async (failure) => {
+    let stale = false
+    const harness = createHarness({
+      sessionNameImpl: () => {
+        if (stale && failure === 'getter') {
+          throw new Error('expired session')
+        }
+        return SESSION
+      },
+      setTitle: () => {
+        if (stale && failure === 'title') {
+          throw new Error('expired UI')
+        }
+      },
+      isIdle: () => false
+    })
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end')
+    stale = true
+    await expect(harness.callHook('session_shutdown')).resolves.toBeUndefined()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('does not schedule a timer when the first frame fails', async () => {
+    const harness = createHarness({
+      sessionNameImpl: () => {
+        throw new Error('expired')
+      }
+    })
+    await harness.callHook('agent_start')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('retires animation when an idle recheck loses its session', async () => {
+    const harness = createHarness({
+      isIdle: () => {
+        throw new Error('expired')
+      }
+    })
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end')
+    expect(() => vi.advanceTimersByTime(1)).not.toThrow()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears animation and pending idle checks on session replacement', async () => {
+    const harness = createHarness({ isIdle: () => false })
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end')
+    await harness.callHook('session_shutdown')
+    await harness.callHook('session_start')
+    expect(vi.getTimerCount()).toBe(0)
+    await harness.callHook('agent_start')
+    expect(vi.getTimerCount()).toBe(1)
+  })
+
+  it('reload replaces only its pane owner and ignores late old-generation events', async () => {
+    const globals = {}
+    const old = createHarness({ globals, isIdle: () => false })
+    const other = createHarness({ globals, paneKey: 'pane-2' })
+    await old.callHook('agent_start')
+    await old.callHook('agent_end')
+    await other.callHook('agent_start')
+    const replacement = createHarness({ globals })
+    expect(vi.getTimerCount()).toBe(1)
+    await replacement.callHook('agent_start')
+    const oldCount = old.titles.length
+    await old.callHook('session_shutdown')
+    await old.callHook('agent_start')
+    vi.advanceTimersByTime(80)
+    expect(old.titles).toHaveLength(oldCount)
+    expect(vi.getTimerCount()).toBe(2)
+    expect(replacement.lastTitle()).toMatch(BRAILLE_RE)
+    expect(other.lastTitle()).toMatch(BRAILLE_RE)
+    const third = createHarness({ globals })
+    expect(vi.getTimerCount()).toBe(1)
+    await third.callHook('agent_start')
+    await replacement.callHook('session_shutdown')
+    expect(vi.getTimerCount()).toBe(2)
   })
 })
