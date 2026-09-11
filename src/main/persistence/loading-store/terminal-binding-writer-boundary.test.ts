@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
  * keeps the audited list of such writers from growing silently.
  *
  * It is a tripwire, not the audit: a writer that reaches a binding record through an alias is
- * invisible to the regex. The audit table lives in orca-persistence-design-assessment.md.
+ * invisible to the regex. The audit table lives in the persistence writer audit.
  */
 const TERMINAL_BINDING_WRITER_ALLOWLIST: readonly string[] = readFileSync(
   join(__dirname, '__fixtures__', 'terminal-binding-writer-allowlist.txt'),
@@ -97,7 +97,7 @@ describe('terminal binding writer boundary', () => {
       'New writer of a terminal binding value. It must bump the persistence write generation ' +
         '(scheduleSave, flushOrThrow, or setWorkspaceSession) in the same operation, or ' +
         "persistPtyBinding's fast path can skip a flush it needed. " +
-        'See orca-persistence-design-assessment.md.'
+        'See the persistence writer audit.'
     ).toEqual([])
   })
 
