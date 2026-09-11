@@ -77,7 +77,7 @@ describe('serializeRichMarkdownSliceToMarkdown', () => {
     expect(serializeRange(editor, from, to)).toBe('**bold text** and `inline code`')
   })
 
-  it('keeps the fence and language for a selection inside a code block', () => {
+  it('omits the fence for a selection inside a code block', () => {
     const editor = createEditor(FIXTURE)
     const codePos = findNodePos(editor, (node) => node.type.name === 'codeBlock')
     const codeNode = editor.state.doc.nodeAt(codePos)
@@ -87,8 +87,43 @@ describe('serializeRichMarkdownSliceToMarkdown', () => {
     const from = codePos + 1 + 'const '.length
     const to = codePos + codeNode.nodeSize - 1
 
-    expect(serializeRange(editor, from, to)).toBe(
-      ['```ts', 'answer = 42', 'console.log(answer)', '```'].join('\n')
+    expect(serializeRange(editor, from, to)).toBe(['answer = 42', 'console.log(answer)'].join('\n'))
+  })
+
+  it('leaves markdown characters in code content unescaped', () => {
+    const editor = createEditor(
+      ['```ts', 'if (a < 3) { log("x_y_z") } // **star**', '```'].join('\n')
+    )
+    const codePos = findNodePos(editor, (node) => node.type.name === 'codeBlock')
+    const codeNode = editor.state.doc.nodeAt(codePos)
+    if (!codeNode) {
+      throw new Error('code block not found')
+    }
+
+    expect(serializeRange(editor, codePos + 1, codePos + codeNode.nodeSize - 1)).toBe(
+      'if (a < 3) { log("x_y_z") } // **star**'
+    )
+  })
+
+  it('omits the heading marker for a selection inside a heading', () => {
+    const editor = createEditor(FIXTURE)
+    const headingPos = findNodePos(editor, (node) => node.type.name === 'heading')
+
+    expect(serializeRange(editor, headingPos + 2, headingPos + 1 + 'Heading On'.length)).toBe(
+      'eading On'
+    )
+  })
+
+  it('keeps the heading marker when the selection spans the whole heading', () => {
+    const editor = createEditor(FIXTURE)
+    const headingPos = findNodePos(editor, (node) => node.type.name === 'heading')
+    const headingNode = editor.state.doc.nodeAt(headingPos)
+    if (!headingNode) {
+      throw new Error('heading not found')
+    }
+
+    expect(serializeRange(editor, headingPos, headingPos + headingNode.nodeSize)).toBe(
+      '# Heading One'
     )
   })
 

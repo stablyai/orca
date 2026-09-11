@@ -27,10 +27,11 @@ export function getRichMarkdownSliceSerializer(
  * Serializes a clipboard slice to markdown source, falling back to
  * ProseMirror's block-joined text when no markdown manager is available.
  *
- * A selection inside one textblock yields bare inline content, which the
- * manager renders as one block per inline node. Re-wrapping that content in
- * `enclosingBlock` restores inline joining and the block's own syntax (fence,
- * heading marker).
+ * The output matches what the same selection copies in Source mode. A
+ * selection wholly inside one textblock carries only that block's inline
+ * markdown, because the block's own syntax (heading marker, code fence) sits
+ * outside such a selection in source. `enclosingBlock` is the textblock
+ * holding the selection.
  */
 export function serializeRichMarkdownSliceToMarkdown(
   serializer: RichMarkdownSliceSerializer | undefined,
@@ -40,11 +41,23 @@ export function serializeRichMarkdownSliceToMarkdown(
   if (!serializer) {
     return slice.content.textBetween(0, slice.content.size, '\n\n')
   }
-  let content: Fragment = slice.content
-  if (content.firstChild?.isInline && enclosingBlock.isTextblock) {
-    content = Fragment.from(
-      enclosingBlock.type.create(enclosingBlock.attrs, content, enclosingBlock.marks)
-    )
+  const content: Fragment = slice.content
+  if (!content.firstChild?.isInline || !enclosingBlock.isTextblock) {
+    return serializer.serialize({ type: 'doc', content: content.toJSON() ?? [] })
   }
-  return serializer.serialize({ type: 'doc', content: content.toJSON() ?? [] })
+  // Why: code content is literal, and the inline serializer escapes markdown
+  // characters that must survive a copy out of a code block.
+  if (enclosingBlock.type.spec.code) {
+    return content.textBetween(0, content.size, '\n')
+  }
+  // Why: bare inline content renders one block per node; a paragraph supplies
+  // an inline context without contributing the enclosing block's own syntax.
+  const paragraph = enclosingBlock.type.schema.nodes.paragraph
+  if (!paragraph) {
+    return content.textBetween(0, content.size, '\n')
+  }
+  return serializer.serialize({
+    type: 'doc',
+    content: Fragment.from(paragraph.create(null, content)).toJSON() ?? []
+  })
 }
