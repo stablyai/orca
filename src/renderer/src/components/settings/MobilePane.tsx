@@ -306,12 +306,12 @@ export function MobilePane(): React.JSX.Element {
     if (relayMintFailure == null) {
       return
     }
-    // Why: users share this payload, so it carries no address (selected or relay cell).
-    const payload = await collectMobileRelayDiagnosticsPayload({
-      connectionMode,
-      failure: relayMintFailure
-    })
     try {
+      // Why: users share this payload, so it carries no address (selected or relay cell).
+      const payload = await collectMobileRelayDiagnosticsPayload({
+        connectionMode,
+        failure: relayMintFailure
+      })
       await window.api.ui.writeClipboardText(JSON.stringify(payload, null, 2))
       if (mountedRef.current) {
         toast.success(

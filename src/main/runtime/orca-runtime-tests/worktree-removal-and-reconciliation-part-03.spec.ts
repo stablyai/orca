@@ -35,6 +35,7 @@ import {
   store
 } from '../orca-runtime-test-fixtures.spec'
 import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-builders.spec'
+import { setWorktreeRemovalSshHostHomeResolver } from '../../worktree-removal-execution-host-route'
 
 describe('OrcaRuntimeService', () => {
   it('force-deletes a preserved branch on the qualified host when repo ids collide', async () => {
@@ -453,6 +454,10 @@ describe('OrcaRuntimeService', () => {
     }
     registerSshGitProvider(repo.connectionId, gitProvider as never)
     registerSshFilesystemProvider(repo.connectionId, fsProvider as never)
+    // The recursive-delete gate needs the execution host to have reported its `$HOME`. In
+    // production that comes from the same relay session that minted this fs provider; the test
+    // registers the provider directly, so it has to supply the other half.
+    setWorktreeRemovalSshHostHomeResolver(() => '/remote/home/alice')
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getSshProvider: () => ptyProvider as never
     })
@@ -460,6 +465,7 @@ describe('OrcaRuntimeService', () => {
     try {
       await expect(runtime.removeManagedWorktree(`id:${worktreeId}`, true)).resolves.toEqual({})
     } finally {
+      setWorktreeRemovalSshHostHomeResolver(() => null)
       unregisterSshGitProvider(repo.connectionId)
       unregisterSshFilesystemProvider(repo.connectionId)
     }
