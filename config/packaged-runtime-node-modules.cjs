@@ -395,6 +395,10 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) 
   // that with `electronArch === process.arch`, which also skipped the arm64 slice cross-built on
   // an x64 Windows host -- a rebuild that DOES produce a correct arm64 addon. That slice then
   // shipped the unpatched prebuild as a live fallback. Read the header instead of guessing.
+  //
+  // The proxy is SUPERSEDED, not complementary: both answer "does build/Release hold a binary
+  // this slice can load", and re-adding `electronArch === process.arch` alongside this as
+  // insurance would restore the skip in the exact case the header read exists to cover.
   if (electronPlatformName === 'win32') {
     const releaseAddon = join(nodePtyDir, 'build', 'Release', 'conpty.node')
     if (conptyTargetsArch(releaseAddon, electronArch)) {
