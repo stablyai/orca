@@ -38,7 +38,7 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { useAppStore } from '@/store'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
-import { settleFullCreationStructuredLaunch } from './full-creation-structured-launch'
+import { launchAgentSession } from '@/lib/launch-agent-session'
 import { finalizeFullCreation } from './full-creation-finalization'
 import { buildFullCreationIssueCommand } from './full-creation-issue-command'
 import { buildFullCreationStartup } from './full-creation-startup'
@@ -224,18 +224,24 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         defaultTabs: result.defaultTabs,
         issueCommand,
         ...(backendSpawnedStartup ? { backendStartupTerminalSpawned: true } : {}),
-        ...(!structuredLaunch && startup ? { startup } : {}),
-        ...(structuredLaunch ? { providesInitialSurface: true } : {})
+        ...(!structuredLaunch && startup ? { startup } : {})
+        // The structured launcher owns the agent surface; keep setup/default tabs and issue
+        // command activation here before it selects the published chat tab.
       })
 
-      const settlement = await settleFullCreationStructuredLaunch({
-        plan: launchPlan,
-        agent: tuiAgent,
-        worktreeId: worktree.id,
-        startup,
-        pendingFirstAgentMessageRename,
-        applyWorktreeMeta
-      })
+      const settlement = structuredLaunch
+        ? await launchAgentSession(useAppStore.getState(), {
+            agent: tuiAgent,
+            workspaceId: worktree.id,
+            prompt: startupPlan?.draftPrompt ?? submitStartupPrompt,
+            promptDelivery: startupPlan?.draftPrompt ? 'draft' : 'auto-submit',
+            initialSessionOptions: startupPlan?.sessionOptions,
+            visibility: 'reveal',
+            launchSource:
+              telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
+            pendingFirstAgentMessageRename
+          })
+        : null
 
       // Why: both leave the workspace revealed and the composer text intact; the launch layer has
       // already toasted a failure, and an unknown outcome reconciles on the next click.
@@ -248,8 +254,10 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       // Why: the workspace was already activated before launch; the fallback's activation, when
       // present, supersedes it.
       const activation =
-        settlement?.kind === 'refused-then-legacy'
-          ? (settlement.activation ?? initialActivation)
+        settlement?.kind === 'terminal'
+          ? settlement.tabId
+            ? { primaryTabId: settlement.tabId }
+            : false
           : initialActivation
 
       if (!structuredLaunchAccepted && startupPlan) {
@@ -260,7 +268,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         }
       }
 
-      if (!structuredLaunchAccepted && startupPlan && !backendSpawnedStartup) {
+      if (!structuredLaunchAccepted && !structuredLaunch && startupPlan && !backendSpawnedStartup) {
         void ensureAgentStartupInTerminal({
           worktreeId: worktree.id,
           primaryTabId: activation === false ? null : activation.primaryTabId,

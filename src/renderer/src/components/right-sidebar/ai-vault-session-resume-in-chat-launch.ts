@@ -4,21 +4,21 @@ import { useAppStore } from '@/store'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { prepareAiVaultSessionForResume } from '@/lib/ai-vault-session-resume-preparation'
-import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
+import { launchAgentSession } from '@/lib/launch-agent-session'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorktree
 } from '@/lib/worktree-activation'
 
 export function activateAiVaultResumeWorkspace(workspaceId: string): void {
-  const workspaceScope = parseWorkspaceKey(workspaceId)
-  if (workspaceScope?.type === 'folder') {
-    activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
-    return
+  const scope = parseWorkspaceKey(workspaceId)
+  if (scope?.type === 'folder') {
+    activateAndRevealFolderWorkspace(scope.folderWorkspaceId)
+  } else {
+    activateAndRevealWorktree(workspaceId)
   }
-  activateAndRevealWorktree(workspaceId)
 }
 
 /** Adopt a vault conversation into a new structured chat. The route was decided by the
@@ -34,23 +34,18 @@ export async function resumeAiVaultSessionInNewChat(
     // Codex rows can live under a shared legacy home; the same preparation the terminal resume
     // runs re-pins them, and its result is what names the conversation the host will look for.
     const preparedSession = await prepareAiVaultSessionForResume(session)
-    const settlement = await adoptAgentSessionLaunchVerdict({
-      route: 'structured-native-chat',
+    const outcome = await launchAgentSession(useAppStore.getState(), {
       agent,
-      worktreeId,
-      resumeFrom: { providerSessionId: preparedSession.sessionId }
-    }).launch({})
-    if (settlement?.kind === 'failed') {
-      notifyAiVaultSessionResumeInChatFailure(settlement.error)
-      return
+      workspaceId: worktreeId,
+      resumeFrom: { providerSessionId: preparedSession.sessionId },
+      visibility: 'reveal',
+      launchSource: 'ai_vault_resume',
+      terminalFallback: false
+    })
+    if (outcome.kind === 'failed') {
+      notifyAiVaultSessionResumeInChatFailure(outcome.error)
     }
-    // Why: an unknown outcome is not a failure; the launch layer reconciles it on the next attempt.
-    if (settlement?.kind !== 'structured') {
-      return
-    }
-    if (useAppStore.getState().activeWorktreeId !== worktreeId) {
-      activateAiVaultResumeWorkspace(worktreeId)
-    }
+    // Why: unknown outcomes are deliberately silent; the launch layer reconciles them on retry.
   } catch (error) {
     notifyAiVaultSessionResumeInChatFailure(error)
   }

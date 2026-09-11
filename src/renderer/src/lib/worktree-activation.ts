@@ -330,12 +330,7 @@ export function activateAndRevealWorktree(
  */
 export function activateAndRevealWorkspace(
   workspaceId: string,
-  opts?: WorktreeActivationSurfaceSelection & {
-    executionHostId?: ExecutionHostId
-    revealInSidebar?: boolean
-    /** Worktree-only: folder workspaces are never filter-hidden. */
-    clearSidebarFilters?: boolean
-  }
+  opts?: WorktreeActivationOptions
 ): ActivateAndRevealResult | false {
   const workspaceScope = parseWorkspaceKey(workspaceId)
   if (workspaceScope?.type !== 'folder') {

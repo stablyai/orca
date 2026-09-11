@@ -1,10 +1,8 @@
 import { useAppStore } from '@/store'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
-import {
-  createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive,
-  isWebTerminalSurfaceTabId
-} from '@/runtime/web-runtime-session'
+import { isWebRuntimeSessionActive, isWebTerminalSurfaceTabId } from '@/runtime/web-runtime-session'
+import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
+import type { CreatedWebRuntimeSessionTerminal } from '@/runtime/web-runtime-session-types'
 import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync'
 import {
   beginWebRuntimeWakeTerminalRespawn,
@@ -22,22 +20,23 @@ import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcrip
 import { getConnectionId } from '@/lib/connection-context'
 import { toast } from 'sonner'
 
-export function ensureWebRuntimeWorktreeTerminalAfterWake(
+export async function spawnWebRuntimeAgentSurface(
   worktreeId: string,
   opts?: {
     runtimeEnvironmentId?: string | null
     startup?: WorktreeStartupPayload
     agent?: TuiAgent | null
+    cwd?: string | null
     activate?: boolean
   }
-): void {
+): Promise<CreatedWebRuntimeSessionTerminal | null> {
   const state = useAppStore.getState()
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
       : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    return
+    return null
   }
 
   const tabs = state.tabsByWorktree[worktreeId] ?? []
@@ -50,33 +49,33 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
         (isWebTerminalSurfaceTabId(tab.id) || tabHasLivePty(state.ptyIdsByTabId, tab.id))
     )
   ) {
-    return
+    return null
   }
 
   if (!launchAgent) {
     const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
     if (hasLivePty) {
-      return
+      return null
     }
 
     const hasMirroredHostTabs = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
     if (hasMirroredHostTabs) {
       // Why: the host session still owns these tabs — wait for the mirror to repopulate PTY handles instead of duplicating a terminal.
-      return
+      return null
     }
 
     if (getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) > 0) {
-      return
+      return null
     }
 
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
     if (tabs.length > 0 && renderableTabCount === 0) {
-      return
+      return null
     }
   }
 
   if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
-    return
+    return null
   }
 
   const startup = opts?.startup
@@ -90,35 +89,43 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
       })
     : {}
   // Why: sleep keeps tab rows but terminal.stop clears host PTYs, while a failed create receipt leaves a selected agent with no host surface.
-  void createWebRuntimeSessionTerminal({
-    worktreeId,
-    environmentId: runtimeEnvironmentId,
-    ...viewModeProps,
-    ...(startup
-      ? {
-          command: startup.command,
-          ...(startup.env ? { env: startup.env } : {}),
-          ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
-          ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
-          ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
-          ...(startup.startupCommandDelivery
-            ? { startupCommandDelivery: startup.startupCommandDelivery }
-            : {})
-        }
-      : launchAgent
-        ? { agent: launchAgent }
-        : {}),
-    activate: opts?.activate !== false,
-    selectWorktree: false
-  })
-    .then((outcome) => {
-      if (outcome.status === 'failed') {
-        toast.error(outcome.message, {
-          id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
-        })
-      }
+  try {
+    const created = await createWebRuntimeSessionTerminalResult({
+      worktreeId,
+      environmentId: runtimeEnvironmentId,
+      ...viewModeProps,
+      ...(startup
+        ? {
+            command: startup.command,
+            ...(startup.env ? { env: startup.env } : {}),
+            ...(startup.launchConfig ? { launchConfig: startup.launchConfig } : {}),
+            ...(startup.launchToken ? { launchToken: startup.launchToken } : {}),
+            ...(launchAgent ? { launchAgent, preparedAgentCommand: true } : {}),
+            ...(startup.startupCommandDelivery
+              ? { startupCommandDelivery: startup.startupCommandDelivery }
+              : {})
+          }
+        : launchAgent
+          ? { agent: launchAgent }
+          : {}),
+      ...(opts?.cwd ? { cwd: opts.cwd } : {}),
+      activate: opts?.activate !== false,
+      selectWorktree: false
     })
-    .finally(() => {
-      endWebRuntimeWakeTerminalRespawn(worktreeId)
-    })
+    if (created.outcome.status === 'failed') {
+      toast.error(created.outcome.message, {
+        id: `web-runtime-worktree-terminal:${runtimeEnvironmentId}:${worktreeId}`
+      })
+    }
+    return created
+  } finally {
+    endWebRuntimeWakeTerminalRespawn(worktreeId)
+  }
+}
+
+export function ensureWebRuntimeWorktreeTerminalAfterWake(
+  worktreeId: string,
+  opts?: Parameters<typeof spawnWebRuntimeAgentSurface>[1]
+): void {
+  void spawnWebRuntimeAgentSurface(worktreeId, opts)
 }

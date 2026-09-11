@@ -219,7 +219,6 @@ export async function executeWorktreeCreation(
       agentLaunchRoute,
       worktreeId: worktree.id,
       shouldActivateOnCompletion,
-      fallbackStartupOpt,
       activation,
       primaryTabId
     })

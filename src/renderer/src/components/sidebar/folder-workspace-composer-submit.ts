@@ -21,6 +21,7 @@ import {
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store'
+import { launchAgentSession } from '@/lib/launch-agent-session'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchPlatform,
@@ -206,69 +207,34 @@ export async function submitFolderWorkspaceCreate({
       : undefined
   onOpenChange(false)
   try {
+    if (structuredLaunch && quickAgent) {
+      const outcome = await launchAgentSession(useAppStore.getState(), {
+        agent: quickAgent,
+        workspaceId: folderWorkspaceKey(workspace.id),
+        prompt: launchDraftPrompt ?? note,
+        promptDelivery: launchDraftPrompt ? 'draft' : 'auto-submit',
+        tuiCustomization: { agentArgs },
+        launchPlatform,
+        initialSessionOptions: startupPlan?.sessionOptions,
+        visibility: 'reveal',
+        launchSource,
+        pendingFirstAgentMessageRename
+      })
+      // Unknown leaves the create complete but without a confirmed launch surface.
+      return outcome.kind !== 'visibility-unknown'
+    }
     let activation = activateAndRevealFolderWorkspace(workspace.id, {
       agent: quickAgent,
       ...(!structuredLaunch && startup ? { startup } : {}),
-      ...(structuredLaunch ? { providesInitialSurface: true } : {}),
       runtimeEnvironmentId
     })
-    let structuredLaunchAccepted = structuredLaunch
-    const settlement =
-      plan?.route === 'structured-native-chat'
-        ? await plan.launch(
-            {
-              legacyFallback: async () => {
-                if (pendingFirstAgentMessageRename) {
-                  await useAppStore
-                    .getState()
-                    .updateFolderWorkspace(workspace.id, { pendingFirstAgentMessageRename: true })
-                    .catch(() => undefined)
-                }
-                await preflightAgentTrust({
-                  agent: quickAgent,
-                  workspacePath: workspace.folderPath,
-                  connectionId: workspace.connectionId ?? projectGroup.connectionId
-                })
-                const fallbackActivation = activateAndRevealFolderWorkspace(workspace.id, {
-                  agent: quickAgent,
-                  ...(startup ? { startup } : {}),
-                  runtimeEnvironmentId
-                })
-                return {
-                  activation: fallbackActivation,
-                  primaryTabId:
-                    fallbackActivation === false ? null : fallbackActivation.primaryTabId
-                }
-              }
-            },
-            { worktreeId: folderWorkspaceKey(workspace.id) }
-          )
-        : null
-    if (settlement) {
-      // Why: the workspace exists either way. Unknown keeps reporting false and failed true, as
-      // the boolean did before the loop was shared; the launch layer owns the failure toast.
-      if (settlement.kind === 'visibility-unknown') {
-        return false
-      }
-      if (settlement.kind === 'failed' || settlement.kind === 'cancelled') {
-        return true
-      }
-      if (settlement.kind === 'refused-then-legacy') {
-        structuredLaunchAccepted = false
-        // Why: this flow's own fallback always activates; `??` only satisfies the shared type.
-        activation = settlement.activation ?? false
-      }
-    }
     if (
-      !structuredLaunchAccepted &&
       quickAgent &&
       startupPlan &&
       launchDraftPrompt &&
       activation !== false &&
       activation.primaryTabId
     ) {
-      // Why: draft launch context reaches only the TUI input; seed the
-      // chat-composer copy so it isn't invisible in the chat view.
       seedNativeChatLaunchDraftForAgentTab({
         tabId: activation.primaryTabId,
         agent: quickAgent,
@@ -276,7 +242,6 @@ export async function submitFolderWorkspaceCreate({
       })
     }
     if (
-      !structuredLaunchAccepted &&
       startupPlan &&
       (startupPlan.followupPrompt || startupPlan.draftPrompt) &&
       activation !== false

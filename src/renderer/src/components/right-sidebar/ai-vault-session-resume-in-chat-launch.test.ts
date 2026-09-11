@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  settleStructuredAgentLaunch: vi.fn(),
+  launchAgentSession: vi.fn(),
   prepareAiVaultSessionForResume: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
   activateAndRevealFolderWorkspace: vi.fn(),
@@ -9,8 +9,8 @@ const mocks = vi.hoisted(() => ({
   activeWorktreeId: 'other-worktree'
 }))
 
-vi.mock('@/lib/structured-agent-launch-settlement', () => ({
-  settleStructuredAgentLaunch: mocks.settleStructuredAgentLaunch
+vi.mock('@/lib/launch-agent-session', () => ({
+  launchAgentSession: mocks.launchAgentSession
 }))
 vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: mocks.prepareAiVaultSessionForResume
@@ -35,22 +35,23 @@ describe('resumeAiVaultSessionInNewChat', () => {
   })
 
   it('adopts the prepared conversation with no legacy fallback and reveals the workspace', async () => {
-    mocks.settleStructuredAgentLaunch.mockResolvedValue({ kind: 'structured', sessionId: 's' })
+    mocks.launchAgentSession.mockResolvedValue({ kind: 'structured', sessionId: 's', tabId: 'tab' })
 
     await resumeAiVaultSessionInNewChat(session, 'codex', 'worktree-1')
 
-    expect(mocks.settleStructuredAgentLaunch).toHaveBeenCalledWith(
-      'worktree-1',
-      'codex',
-      { resumeFrom: { providerSessionId: 'provider-1' } },
-      {}
-    )
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1')
+    expect(mocks.launchAgentSession).toHaveBeenCalledWith(expect.anything(), {
+      agent: 'codex',
+      workspaceId: 'worktree-1',
+      resumeFrom: { providerSessionId: 'provider-1' },
+      visibility: 'reveal',
+      launchSource: 'ai_vault_resume',
+      terminalFallback: false
+    })
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
   it('toasts the conflict message when the launch fails with that code', async () => {
-    mocks.settleStructuredAgentLaunch.mockResolvedValue({
+    mocks.launchAgentSession.mockResolvedValue({
       kind: 'failed',
       error: Object.assign(new Error('held'), { code: 'agent_session_conflict' })
     })
@@ -64,7 +65,7 @@ describe('resumeAiVaultSessionInNewChat', () => {
   })
 
   it('stays silent on an unknown outcome so the launch layer can reconcile it', async () => {
-    mocks.settleStructuredAgentLaunch.mockResolvedValue({
+    mocks.launchAgentSession.mockResolvedValue({
       kind: 'visibility-unknown',
       sessionId: 's'
     })

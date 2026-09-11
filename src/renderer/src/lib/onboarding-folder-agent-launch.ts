@@ -11,6 +11,8 @@ import {
   type OnboardingFolderAgentStartup
 } from '@/lib/onboarding-folder-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { launchAgentSession } from '@/lib/launch-agent-session'
+import { useAppStore } from '@/store'
 
 export type OnboardingFolderAgentLaunch = {
   agent: TuiAgent | null
@@ -59,30 +61,25 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   executionHostId: ExecutionHostId | undefined
   launch: OnboardingFolderAgentLaunch
 }): Promise<void> {
-  const reveal = (
-    startup: OnboardingFolderAgentStartup | undefined,
-    providesInitialSurface = false
-  ) =>
+  const { plan } = args.launch
+  const structured = plan?.route === 'structured-native-chat'
+  if (!structured) {
     activateAndRevealWorktree(args.worktreeId, {
       sidebarRevealBehavior: 'auto',
       ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
-      ...(startup ? { startup } : {}),
-      ...(providesInitialSurface ? { providesInitialSurface: true } : {})
+      ...(args.launch.startup ? { startup: args.launch.startup } : {})
     })
-  const { plan } = args.launch
-  const structured = plan?.route === 'structured-native-chat'
-  reveal(args.launch.startup, structured)
-  if (!structured) {
     return
   }
-  // Why: the outcome is not consumed; the workspace is already revealed and the launch layer toasts.
-  await plan.launch(
-    {
-      legacyFallback: async () => {
-        const activation = reveal(args.launch.fallbackStartup)
-        return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
-      }
-    },
-    { worktreeId: args.worktreeId }
-  )
+  // The launcher owns activation and the terminal refusal fallback for structured routes.
+  if (!args.launch.agent) {
+    return
+  }
+  await launchAgentSession(useAppStore.getState(), {
+    agent: args.launch.agent,
+    workspaceId: args.worktreeId,
+    initialSessionOptions: (args.launch.startup ?? args.launch.fallbackStartup)?.sessionOptions,
+    visibility: 'reveal',
+    launchSource: 'onboarding'
+  })
 }

@@ -28,8 +28,7 @@ const DIRECT_ROUTE_RESOLVER_CALL = /\b(?:resolveAgentLaunchRoute|structuredAgent
 // Why: adopting a verdict bypasses the resolver by design (a persisted quick-create request, a
 // resume whose gate already planned), so each adopter is pinned rather than trusted by convention.
 const VERDICT_ADOPTERS = [
-  'src/renderer/src/components/right-sidebar/ai-vault-session-resume-in-chat-launch.ts',
-  'src/renderer/src/lib/worktree-creation-structured-session.ts'
+  // Launch sites now route through launchAgentSession; no production caller adopts a verdict.
 ]
 
 async function productionFiles(): Promise<string[]> {
