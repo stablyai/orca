@@ -46,8 +46,9 @@ export function resolveSingleTabStripVisibility({
   stripHovered: boolean
   tabDragActive: boolean
 }): SingleTabStripVisibility {
-  // Why: client-hosted browser rows share the strip, so a lone tab beside a row is not a lone row.
-  const autoHidden = autoHideEnabled && groupTabCount <= 1 && clientHostedRowCount === 0
+  // Why: exactly one — an empty group's strip is its only visible way back to a tab, and
+  // client-hosted browser rows share the strip, so a lone tab beside a row is not a lone row.
+  const autoHidden = autoHideEnabled && groupTabCount === 1 && clientHostedRowCount === 0
   return {
     autoHidden,
     // Why: a tab drag needs the strip on screen in every group, or there is nothing to drop onto.

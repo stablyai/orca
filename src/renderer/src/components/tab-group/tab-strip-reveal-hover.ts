@@ -15,7 +15,9 @@ export function resolveTabStripRevealHover({
   clientY: number
   currentlyHovered: boolean
 }): boolean {
-  if (clientX < panelRect.left || clientX > panelRect.right) {
+  // Why: half-open on the right — a horizontal split puts its resize handle exactly on that
+  // boundary, and hovering the divider must not reveal the panel's strip.
+  if (clientX < panelRect.left || clientX >= panelRect.right) {
     return false
   }
   // Why: once open the strip itself must hold the hover, or a 30px zone would drop it mid-row.
@@ -82,6 +84,11 @@ export function useTabStripRevealHover({
       window.removeEventListener('pointermove', onPointerMove, true)
       if (frame !== 0) {
         cancelAnimationFrame(frame)
+      }
+      // Why: the next enabled run restarts from `hovered = false`, so a reveal left latched here —
+      // a worktree switched away mid-hover — would survive until the pointer re-crossed the zone.
+      if (hovered) {
+        onHoverChangeRef.current(false)
       }
     }
   }, [enabled, panelRef])
