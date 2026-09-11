@@ -48,9 +48,15 @@ const mocks = {
 
 function sendResult(
   settleAfterMs: number,
-  waitsForVerifiedDelivery: boolean
+  waitsForVerifiedDelivery: boolean,
+  awaitsConfirmation = true
 ): ReturnType<NativeChatInteractiveSend['sendAnswer']> {
-  return { settleAfterMs, waitsForVerifiedDelivery, confirmAnswered: mocks.confirmAnswered }
+  return {
+    settleAfterMs,
+    waitsForVerifiedDelivery,
+    awaitsConfirmation,
+    confirmAnswered: mocks.confirmAnswered
+  }
 }
 
 function renderCard(canSend = true): ReturnType<typeof render> {
@@ -365,6 +371,43 @@ describe('NativeChatInteractiveCard unconfirmed answers', () => {
 
     expect(mocks.confirmAnswered).toHaveBeenCalledOnce()
     expect(screen.getByText('Choose a shell?')).toBeInTheDocument()
+  })
+
+  // Codex and Grok resolve their own asks through a post-tool hook, so no
+  // confirmation signal is owed. Arming the deadline for them would restore a
+  // card over a question the agent already closed.
+  it('does not arm the deadline for an agent that owes no confirmation', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return sendResult(500, true, false)
+    })
+    renderCard()
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(500))
+    })
+
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+
+  it('does not confirm an answer for an agent that owes no confirmation', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return sendResult(500, true, false)
+    })
+    const rendered = renderCard()
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = undefined
+    rendered.rerender(cardElement())
+
+    expect(mocks.confirmAnswered).not.toHaveBeenCalled()
   })
 
   it('does not resurrect a question the user cancelled', () => {

@@ -148,6 +148,56 @@ describe('useNativeChatInteractiveSend', () => {
     expect(mocks.inferQuestionAnswered).toHaveBeenCalledOnce()
   })
 
+  // Codex steps its selector like Claude, but both inference gates reject a
+  // non-Claude payload, so the card must not hold the pane's wait for a
+  // confirmation that can never be granted.
+  it('reports that a Codex answer owes no confirmation', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'codex')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+
+    expect(sendResult?.awaitsConfirmation).toBe(false)
+
+    const onSettled = mocks.sendNativeChatAskAnswer.mock.calls[0]?.[3]
+    onSettled?.(true)
+    sendResult?.confirmAnswered()
+
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
+  it('reports that a Claude answer awaits confirmation', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+
+    expect(sendResult?.awaitsConfirmation).toBe(true)
+  })
+
+  it('reports no confirmation for a pasted-answer agent', () => {
+    const { result } = renderHook(() =>
+      useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'grok')
+    )
+
+    let sendResult: ReturnType<typeof result.current.sendAnswer> | undefined
+    act(() => {
+      sendResult = result.current.sendAnswer(PROMPT, [{ indices: [1] }])
+    })
+
+    expect(sendResult?.awaitsConfirmation).toBe(false)
+    sendResult?.confirmAnswered()
+    expect(mocks.inferQuestionAnswered).not.toHaveBeenCalled()
+  })
+
   it('does nothing when no option is answered', () => {
     const { result } = renderHook(() =>
       useNativeChatInteractiveSend('tab-1', PANE_KEY, 'pty-1', 'claude')

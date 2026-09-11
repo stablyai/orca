@@ -170,24 +170,26 @@ export function NativeChatInteractiveCard({
             return
           }
           submittingRef.current = true
-          const dismissAnsweredCard = (
-            confirmAnswered: () => void,
-            settleAfterMs: number
-          ): void => {
+          const dismissAnsweredCard = (result: ReturnType<typeof sendAnswer>): void => {
             setDismissedKey(cardKey)
             submittingRef.current = false
             setSubmitting(false)
             dismissTimerRef.current = null
+            clearConfirmationWait()
+            if (!result.awaitsConfirmation) {
+              // Why: this agent owes no confirmation, so a deadline could only
+              // resurrect a card over a question it already resolved.
+              return
+            }
             // Delivery is not acceptance: hold the pane's wait and bring the
             // card back if the ask never resolves (#16865).
-            clearConfirmationWait()
             awaitingConfirmationRef.current = {
               cardKey,
-              confirmAnswered,
+              confirmAnswered: result.confirmAnswered,
               timer: setTimeout(() => {
                 awaitingConfirmationRef.current = null
                 setDismissedKey(null)
-              }, nativeChatAnswerConfirmDeadlineMs(settleAfterMs))
+              }, nativeChatAnswerConfirmDeadlineMs(result.settleAfterMs))
             }
           }
           const keepRejectedAnswerVisible = (): void => {
@@ -213,7 +215,7 @@ export function NativeChatInteractiveCard({
             routing.selectorSelections,
             (delivered) => {
               if (delivered) {
-                dismissAnsweredCard(result.confirmAnswered, result.settleAfterMs)
+                dismissAnsweredCard(result)
               } else {
                 keepRejectedAnswerVisible()
               }
@@ -237,7 +239,7 @@ export function NativeChatInteractiveCard({
           // (which hides it and restores the composer).
           dismissTimerRef.current = setTimeout(() => {
             cancelPending()
-            dismissAnsweredCard(result.confirmAnswered, result.settleAfterMs)
+            dismissAnsweredCard(result)
           }, result.settleAfterMs)
         }}
         onCancel={() => {

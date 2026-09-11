@@ -5,7 +5,8 @@ import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
 import {
   resolveNativeChatTranscriptAgent,
-  shouldStepNativeChatAskAnswer
+  shouldStepNativeChatAskAnswer,
+  supportsNativeChatAnsweredInference
 } from '../../../../shared/native-chat-agent-support'
 import {
   buildAskAnswerKeys,
@@ -42,6 +43,11 @@ export type NativeChatInteractiveSend = {
   ) => {
     settleAfterMs: number
     waitsForVerifiedDelivery: boolean
+    /** True when this agent's answer resolves through the question-answered
+     *  inference, so a confirmation signal has something to clear. False for
+     *  agents that report their own resolution: holding their card for a
+     *  confirmation would wait on a signal no code path can send. */
+    awaitsConfirmation: boolean
     /** Clears the pane's question wait. Written bytes do not prove the agent
      *  accepted the answer, so the caller invokes this only once a confirmation
      *  signal lands (#16865). */
@@ -125,10 +131,16 @@ export function useNativeChatInteractiveSend(
     ): {
       settleAfterMs: number
       waitsForVerifiedDelivery: boolean
+      awaitsConfirmation: boolean
       confirmAnswered: () => void
     } => {
       if (!targetPtyId || !hasAskAnswer(prompt, selections)) {
-        return { settleAfterMs: 0, waitsForVerifiedDelivery: false, confirmAnswered: () => {} }
+        return {
+          settleAfterMs: 0,
+          waitsForVerifiedDelivery: false,
+          awaitsConfirmation: false,
+          confirmAnswered: () => {}
+        }
       }
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
@@ -141,17 +153,21 @@ export function useNativeChatInteractiveSend(
       // machines; Grok commits pasted text. OpenClaude follows Claude's path.
       const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
       const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
+      // Why: only Claude's answer needs an inferred resolution. Agents the
+      // inference rejects would hold the pane's wait behind a confirmation that
+      // can never be granted.
+      const infersAnswered = supportsNativeChatAnsweredInference(agent)
       // Why: pin the answered question's baseline BEFORE delivery. A late settle
       // callback (paced writes + remote acceptance can span seconds on SSH) must
       // not read the live status and mint a fresh baseline for a replacement
       // question that became current meanwhile — that would clear the new
       // question's wait. The server re-validates this captured baseline and
       // rejects a changed status, matching the terminal keystroke path.
-      const questionStatusBaseline = stepsAnswer
+      const questionStatusBaseline = infersAnswered
         ? useAppStore.getState().agentStatusByPaneKey[paneKey]
         : undefined
       let confirmed = false
-      const confirmAnswered = stepsAnswer
+      const confirmAnswered = infersAnswered
         ? (): void => {
             if (confirmed) {
               return
@@ -200,6 +216,7 @@ export function useNativeChatInteractiveSend(
       return {
         settleAfterMs: handle.settleAfterMs,
         waitsForVerifiedDelivery: onSettled !== undefined,
+        awaitsConfirmation: infersAnswered,
         confirmAnswered
       }
     },
