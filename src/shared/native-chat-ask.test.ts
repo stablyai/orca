@@ -168,6 +168,11 @@ describe('extractPendingAsk', () => {
 })
 
 describe('parseAskFromStatus', () => {
+  it('never treats async request_user_input as a blocking selector', () => {
+    expect(
+      parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT), 'request_user_input_async')
+    ).toBeNull()
+  })
   it('accepts the canonical shape from any tool name and rejects broken JSON', () => {
     expect(
       parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT), 'SomeNewTool')?.questions

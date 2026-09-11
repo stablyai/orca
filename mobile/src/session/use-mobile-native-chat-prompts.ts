@@ -4,6 +4,7 @@ import { parseAskFromStatus, resolveNativeChatAsk } from '../../../src/shared/na
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { detectAgentPermission, parseApprovalFromStatus } from './mobile-native-chat-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
+import { extractMobileAsyncAsk } from './mobile-native-chat-async-ask'
 
 export type MobileNativeChatPrompts = {
   permission: ReturnType<typeof detectAgentPermission>
@@ -51,7 +52,8 @@ export function useMobileNativeChatPrompts(args: {
     [askFromStatus, transcriptLoading, messages]
   )
   const askFromMessages = askFromStatus ? null : resolvedAsk
-  const detectedAsk = askFromStatus ?? askFromMessages
+  const asyncAsk = useMemo(() => extractMobileAsyncAsk(messages), [messages])
+  const detectedAsk = askFromStatus ?? askFromMessages ?? asyncAsk
 
   return {
     permission,
@@ -62,6 +64,10 @@ export function useMobileNativeChatPrompts(args: {
     // transcript fallback clears itself when the tool result lands, and it is the
     // only source left once the hook row goes stale and projects to `done` with
     // no interactivePrompt — gating it too strands a genuinely pending question.
-    ask: enabled ? ((blocked ? askFromStatus : null) ?? askFromMessages) : null
+    ask: enabled
+      ? ((blocked ? askFromStatus : null) ??
+        askFromMessages ??
+        (!permission && !transcriptLoading ? asyncAsk : null))
+      : null
   }
 }

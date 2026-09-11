@@ -66,6 +66,15 @@ describe('useMobileNativeChatAskDismiss', () => {
     ]
   }
 
+  it('shows a repeated async question with a different call id after dismissal', async () => {
+    const firstAsync = { ...first, asyncCallIds: ['call-1'] }
+    await mount({ prompt: firstAsync })
+    act(() => state?.dismissAsk())
+    expect(state?.showAsk).toBe(false)
+    await update({ prompt: { ...firstAsync, asyncCallIds: ['call-2'] } })
+    expect(state?.showAsk).toBe(true)
+  })
+
   it('shows a structurally different replacement without an intervening null', async () => {
     await mount({ prompt: first })
     act(() => state?.dismissAsk())
