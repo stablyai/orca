@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { RuntimeClient } from './client'
@@ -83,6 +83,57 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
       state: 'ready',
       degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
     })
+  })
+})
+
+// Why: `kill(pid, 0)` answers EPERM when the pid exists under another uid — an Orca the
+// CLI was pointed at with ORCA_USER_DATA_PATH, or one started with sudo. Reading that
+// refusal as absence reports a live app as a dead one
+// (docs/reference/ssh-execution-boundary.md).
+describe.skipIf(process.platform === 'win32')('CLI status pid fallback', () => {
+  async function statusWithUnreachableRuntime(
+    killError: NodeJS.ErrnoException
+  ): Promise<Awaited<ReturnType<RuntimeClient['getCliStatus']>>> {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-probe-'))
+    writeFileSync(
+      getRuntimeMetadataPath(userDataPath),
+      JSON.stringify({
+        runtimeId: 'runtime-unreachable',
+        pid: 424242,
+        // Nothing is listening here, so `status.get` fails and the pid probe decides.
+        transport: { kind: 'unix', endpoint: join(userDataPath, 'absent.sock') },
+        authToken: 'token',
+        startedAt: Date.now()
+      })
+    )
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw killError
+    })
+    try {
+      return await new RuntimeClient(userDataPath).getCliStatus()
+    } finally {
+      killSpy.mockRestore()
+    }
+  }
+
+  it('keeps an unsignalable app running rather than calling the bootstrap stale', async () => {
+    const status = await statusWithUnreachableRuntime(
+      Object.assign(new Error('kill EPERM'), { code: 'EPERM' })
+    )
+
+    expect(status.result.app).toMatchObject({ running: true, pid: 424242 })
+    expect(status.result.runtime.state).toBe('starting')
+    expect(status.result.graph.state).toBe('starting')
+  })
+
+  it('still reports a stale bootstrap when the host proves the pid is gone', async () => {
+    const status = await statusWithUnreachableRuntime(
+      Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })
+    )
+
+    expect(status.result.app).toMatchObject({ running: false, pid: null })
+    expect(status.result.runtime.state).toBe('stale_bootstrap')
+    expect(status.result.graph.state).toBe('not_running')
   })
 })
 
