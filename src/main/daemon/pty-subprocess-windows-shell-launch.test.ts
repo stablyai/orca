@@ -386,7 +386,7 @@ describe('createPtySubprocess', () => {
     )
   })
 
-  it('preserves a daemon-only user CODEX_HOME without dropping Git Bash integration', async () => {
+  it('applies the prepared real-home selection over daemon-only state with Git Bash integration', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -426,12 +426,54 @@ describe('createPtySubprocess', () => {
       expect.objectContaining({
         env: expect.objectContaining({
           CHERE_INVOKING: '1',
-          CODEX_HOME: 'C:\\UserCustom\\codex'
+          [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1'
         })
       })
     )
     const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
-    expect(spawnEnv[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBeUndefined()
+    expect(spawnEnv.CODEX_HOME).toBeUndefined()
+  })
+
+  it('applies the prepared real-home selection over daemon-only state for PowerShell', async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const previousCodexHome = process.env.CODEX_HOME
+    const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    process.env.CODEX_HOME = 'C:\\UserCustom\\codex'
+    process.env.ORCA_CODEX_HOME = 'C:\\Orca\\managed-home'
+
+    try {
+      await createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\jin\\repo',
+        shellOverride: 'powershell.exe',
+        env: { [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1' },
+        envToDelete: ['ORCA_CODEX_HOME']
+      })
+    } finally {
+      if (previousCodexHome === undefined) {
+        delete process.env.CODEX_HOME
+      } else {
+        process.env.CODEX_HOME = previousCodexHome
+      }
+      if (previousOrcaCodexHome === undefined) {
+        delete process.env.ORCA_CODEX_HOME
+      } else {
+        process.env.ORCA_CODEX_HOME = previousOrcaCodexHome
+      }
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(spawnEnv.CODEX_HOME).toBeUndefined()
+    expect(spawnEnv.ORCA_CODEX_HOME).toBeUndefined()
+    expect(spawnEnv[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBe('1')
   })
 
   it('rejects a missing explicit native Windows cwd before node-pty spawn', async () => {

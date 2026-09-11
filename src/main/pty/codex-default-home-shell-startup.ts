@@ -4,7 +4,7 @@ import { isWindowsGitBashShellPath } from '../git-bash'
 export const ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV = 'ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE'
 export const ORCA_CODEX_DEFAULT_HOME_UNSET_AFTER_PROFILE = '1'
 
-/** Keeps only an explicit, internally coherent reset request after daemon inheritance is merged. */
+/** Applies main's prepared default-home selection to one daemon child environment. */
 export function reconcileDaemonCodexDefaultHomeMarker(
   env: Record<string, string>,
   requestedEnv: Record<string, string> | undefined
@@ -14,15 +14,13 @@ export function reconcileDaemonCodexDefaultHomeMarker(
     delete env[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]
     return
   }
-  const effectiveCodexHome = env.CODEX_HOME?.trim()
-  if (
-    (requestedValue === ORCA_CODEX_DEFAULT_HOME_UNSET_AFTER_PROFILE && effectiveCodexHome) ||
-    (requestedValue !== ORCA_CODEX_DEFAULT_HOME_UNSET_AFTER_PROFILE &&
-      effectiveCodexHome !== requestedValue)
-  ) {
-    // Why: main cannot override user-owned environment inherited only by a persistent daemon.
-    delete env[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]
+  if (requestedValue === ORCA_CODEX_DEFAULT_HOME_UNSET_AFTER_PROFILE) {
+    delete env.CODEX_HOME
+  } else {
+    env.CODEX_HOME = requestedValue
   }
+  delete env.ORCA_CODEX_HOME
+  env[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV] = requestedValue
 }
 
 /** Drops the one-shot marker from shells whose startup path cannot consume it. */

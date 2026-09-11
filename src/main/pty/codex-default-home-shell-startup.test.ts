@@ -15,25 +15,43 @@ describe('reconcileDaemonCodexDefaultHomeMarker', () => {
     expect(env[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBe('1')
   })
 
-  it('drops an unset request rather than overriding a daemon-only user home', () => {
+  it('applies an unset request over a daemon-only user home', () => {
     const requestedEnv = { [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1' }
-    const env = { ...requestedEnv, CODEX_HOME: 'C:\\UserCustom\\codex' }
+    const env = {
+      ...requestedEnv,
+      CODEX_HOME: 'C:\\UserCustom\\codex',
+      ORCA_CODEX_HOME: 'C:\\Orca\\managed-home'
+    }
 
     reconcileDaemonCodexDefaultHomeMarker(env, requestedEnv)
 
-    expect(env).toEqual({ CODEX_HOME: 'C:\\UserCustom\\codex' })
+    expect(env).toEqual({ [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1' })
   })
 
-  it('keeps an explicitly requested default home only when the merged value agrees', () => {
+  it('applies an explicitly requested default home over daemon inheritance', () => {
     const requestedEnv = {
       CODEX_HOME: 'C:\\Users\\jin\\.codex',
       [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: 'C:\\Users\\jin\\.codex'
     }
-    const env = { ...requestedEnv }
+    const env = {
+      ...requestedEnv,
+      CODEX_HOME: 'c:/users/jin/.codex/',
+      ORCA_CODEX_HOME: 'C:\\UserCustom\\codex'
+    }
 
     reconcileDaemonCodexDefaultHomeMarker(env, requestedEnv)
 
+    expect(env.CODEX_HOME).toBe('C:\\Users\\jin\\.codex')
+    expect(env.ORCA_CODEX_HOME).toBeUndefined()
     expect(env[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBe('C:\\Users\\jin\\.codex')
+  })
+
+  it('preserves a daemon-only custom home when main sends no selection', () => {
+    const env = { CODEX_HOME: 'C:\\UserCustom\\codex' }
+
+    reconcileDaemonCodexDefaultHomeMarker(env, undefined)
+
+    expect(env).toEqual({ CODEX_HOME: 'C:\\UserCustom\\codex' })
   })
 
   it('drops a stale marker inherited without an explicit request', () => {
