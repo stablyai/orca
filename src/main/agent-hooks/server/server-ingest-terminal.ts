@@ -88,6 +88,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     ) {
       // Why: OSC has no child identity or lead boundary, so it cannot replace a persisted child-only proof before the lifecycle hook arrives.
       this.commitStatusRowMutation(mutationBefore, previous)
+      if (mutationBefore !== undefined) {
+        this.emitEnrichedStatus(previous)
+      }
       return
     }
     // Why: preserve the hook-completed turn stamp while OSC repaints the current state.

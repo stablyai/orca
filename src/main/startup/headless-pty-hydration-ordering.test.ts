@@ -78,12 +78,14 @@ describe('headless PTY registry hydration ordering', () => {
     const runtime = source.indexOf('const runtime = new OrcaRuntimeService(')
     const identityReader = source.indexOf('readObservedAgentStatusPaneIdentity:', runtime)
     const identitySubscription = source.indexOf('agentHookServer.subscribeEnrichedStatus(')
+    const hooksEnabled = source.indexOf('if (isAgentStatusHooksEnabled(', identitySubscription)
     const identityFlush = source.indexOf('observedStatusCapture.attach(runtime)', runtime)
 
     expect(runtime).toBeGreaterThanOrEqual(0)
     expect(identityReader).toBeGreaterThan(runtime)
     expect(identitySubscription).toBeGreaterThanOrEqual(0)
     expect(identitySubscription).toBeLessThan(runtime)
+    expect(hooksEnabled).toBeGreaterThan(identitySubscription)
     expect(identityFlush).toBeGreaterThan(runtime)
     expect(source.slice(identitySubscription, runtime)).toContain(
       'observedStatusCapture.observe(enriched)'
@@ -96,13 +98,17 @@ describe('headless PTY registry hydration ordering', () => {
     const hookStart = source.indexOf('await agentHookServer.start(', subscription)
     const runtime = source.indexOf('const runtime = new OrcaRuntimeService(')
     const handlers = source.indexOf('await registerHeadlessPtyRuntime(', runtime)
+    const identityRecovery = source.indexOf('await runtime.refreshRestoredOrchestrationAuthority()')
+    const workerRecovery = source.indexOf('await runtime.reconcileLegacyWorkerTerminals()')
     const replay = source.indexOf('observedStatusCapture.attach(runtime)', runtime)
 
     expect(subscription).toBeGreaterThanOrEqual(0)
     expect(hookStart).toBeGreaterThan(subscription)
     expect(runtime).toBeGreaterThan(hookStart)
     expect(handlers).toBeGreaterThan(runtime)
-    expect(replay).toBeGreaterThan(handlers)
+    expect(identityRecovery).toBeGreaterThan(handlers)
+    expect(workerRecovery).toBeGreaterThan(identityRecovery)
+    expect(replay).toBeGreaterThan(workerRecovery)
     expect(source.slice(subscription, runtime)).toContain('observedStatusCapture.observe(enriched)')
     expect(source.slice(replay)).toContain('observedStatusCapture.attach(runtime)')
   })

@@ -197,6 +197,31 @@ describe('the terminal handle a status row is stamped with', () => {
     )
   })
 
+  it('publishes only the remint observation for a Claude child-only row', () => {
+    const server = new AgentHookServer()
+    const enriched = vi.fn()
+    server.subscribeEnrichedStatus(enriched)
+    const payload = { state: 'working' as const, prompt: 'ship it', agentType: 'claude' as const }
+    ingest(server, { payload })
+    const row = server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY) as
+      | { claudeLeadBoundaryChildOnly?: true }
+      | undefined
+    if (!row) {
+      throw new Error('expected seeded status row')
+    }
+    row.claudeLeadBoundaryChildOnly = true
+    enriched.mockClear()
+
+    ingest(server, { payload })
+    expect(enriched).not.toHaveBeenCalled()
+
+    ingest(server, { paneKey: NEW_PANE_KEY, tabId: 'tab-reminted', payload })
+    expect(enriched).toHaveBeenCalledOnce()
+    expect(enriched).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: NEW_PANE_KEY, terminalHandle: HANDLE })
+    )
+  })
+
   it('does not renew freshness from a provider-session-only dismissal remnant', () => {
     const server = new AgentHookServer()
     const freshness = vi.fn()

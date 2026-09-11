@@ -190,10 +190,10 @@ async function startOrcadRuntime(
   // which is safe but silently discards accept records on every launch.
   initSshHostKeyStoreFile(profile.dataFile)
 
+  uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
+    observedStatusCapture.observe(enriched)
+  )
   if (isAgentStatusHooksEnabled(store.getSettings())) {
-    uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
-      observedStatusCapture.observe(enriched)
-    )
     await agentHookServer.start({ env: 'production', userDataPath: runtimeUserDataPath })
   }
 
@@ -258,9 +258,6 @@ async function startOrcadRuntime(
   // spawning an unauthenticated agent.
   await registerHeadlessPtyRuntime(runtime, undefined, () => store.getSettings(), undefined, store)
 
-  // PTY recovery binds terminal identities; only now can startup spool observations be fenced.
-  observedStatusCapture.attach(runtime)
-
   // Why: same post-registration reconciliation `--serve` performs. Skipping it leaves
   // restored orchestration rows claiming an authority this host never took over.
   // Why before the RPC server binds: a client host attaching first would find no pages to recover.
@@ -268,6 +265,9 @@ async function startOrcadRuntime(
 
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+
+  // Recovery binds terminal and dispatch identities; only now can startup observations be fenced.
+  observedStatusCapture.attach(runtime)
 
   const bindHost = resolveOrcadBindHost(options.bind)
   rpc = new OrcaRuntimeRpcServer({
