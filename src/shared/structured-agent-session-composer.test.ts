@@ -6,15 +6,59 @@ import {
 } from './structured-agent-session-composer'
 
 describe('structuredSlashCommands', () => {
-  // The composer menu and the dispatcher read this one list. When they disagreed,
+  const hostController = {
+    snapshot: [],
+    invokeAction: async () => true,
+    setOption: async () => true,
+    conversationCommands: ['clear', 'compact'] as const,
+    runConversationCommand: async () => ({ accepted: true, error: null })
+  }
+  const REFUSAL = /is not available in chat sessions/
+
+  // The composer menu and the dispatcher read the same policy. When they disagreed,
   // a Claude session was offered Codex-only tokens that missed the command guard
-  // and reached the model as literal prompt text instead of erroring.
-  it.each(['codex', 'claude'] as const)('offers %s only commands it also accepts', (agent) => {
-    const offered = structuredSlashCommands()
-    expect(offered.length).toBeGreaterThan(0)
-    for (const command of offered) {
-      expect(isStructuredAgentSessionComposerCommand(`/${command.name}`, agent)).toBe(true)
+  // and reached the model as literal prompt text instead of erroring. A row is
+  // honored either way now: the host answers it, or it passes through to the agent.
+  it.each(['codex', 'claude'] as const)(
+    'offers %s only commands the host answers or the agent runs',
+    async (agent) => {
+      const offered = structuredSlashCommands(['clear', 'compact'], agent)
+      expect(offered.length).toBeGreaterThan(0)
+      for (const command of offered) {
+        const outcome = await dispatchStructuredAgentSessionComposerCommand(`/${command.name}`, {
+          ...hostController,
+          agent
+        })
+        expect(outcome.error ?? '').not.toMatch(REFUSAL)
+      }
     }
+  )
+
+  // Codex reports no catalog of its own, so this fallback is its whole `/` menu —
+  // without the row, a command that now works is impossible to discover.
+  it('offers Codex the /goal the model acts on, described from the catalog', () => {
+    const offered = structuredSlashCommands(['clear', 'compact'], 'codex')
+    expect(offered.map((command) => command.name)).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact',
+      'goal'
+    ])
+    expect(offered.find((command) => command.name === 'goal')?.description).toBe(
+      'Set or view the goal'
+    )
+    // Picking it must reach the model, not the host's refusal.
+    expect(isStructuredAgentSessionComposerCommand('/goal', 'codex')).toBe(false)
+  })
+
+  it('adds nothing for an agent whose own harness expands its commands', () => {
+    expect(structuredSlashCommands(['clear', 'compact'], 'claude').map((c) => c.name)).toEqual([
+      'model',
+      'effort',
+      'clear',
+      'compact'
+    ])
   })
 
   it('offers only the commands a chat session can carry out', () => {

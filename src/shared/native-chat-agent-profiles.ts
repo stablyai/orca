@@ -50,6 +50,21 @@ export function getVerifiedNativeChatCommands(agent: AgentType): readonly SlashC
   return agent === 'grok' ? [] : getAgentSlashCommands(agent)
 }
 
+/** The mirror of the claimed set: catalog commands this agent acts on when they
+ *  arrive as message text. The picker offers these too, so a command the agent
+ *  implements is discoverable and not merely typable. */
+export function getTextDrivenNativeChatCommands(
+  agent: AgentType | null | undefined
+): readonly SlashCommandSuggestion[] {
+  if (!agent) {
+    return []
+  }
+  const names = new Set(getNativeChatAgentProfile(agent)?.textDrivenCommands ?? [])
+  return names.size === 0
+    ? []
+    : getVerifiedNativeChatCommands(agent).filter((command) => names.has(command.name))
+}
+
 /** Catalog commands the chat host answers itself. Whatever is left over reaches
  *  the agent as ordinary text, which is only correct where the agent implements
  *  the command — so an agent unclaims a command only via the profile above.

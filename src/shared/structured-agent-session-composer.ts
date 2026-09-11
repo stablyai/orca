@@ -1,4 +1,7 @@
-import { getHostClaimedNativeChatCommands } from './native-chat-agent-profiles'
+import {
+  getHostClaimedNativeChatCommands,
+  getTextDrivenNativeChatCommands
+} from './native-chat-agent-profiles'
 import type { AgentType } from './agent-status-types'
 import type { SessionOptionDescriptor, SessionOptionValue } from './native-chat-session-options'
 import type { SlashCommandSuggestion } from './native-chat-slash-commands'
@@ -50,15 +53,26 @@ function commandParts(text: string): { name: string; argument: string } | null {
   return match ? { name: match[1]!.toLowerCase(), argument: match[2]?.trim() ?? '' } : null
 }
 
-/** The commands the composer menu offers. Strictly what the dispatcher honors,
- *  so a menu pick is never answered with "not available". */
+/** The commands the composer menu offers when the host reports no catalog of its
+ *  own: the host's own commands, plus the ones this agent acts on from message
+ *  text. Both are honored — the first here, the second by the agent — so a menu
+ *  pick is never answered with "not available". */
 export function structuredSlashCommands(
-  commands: readonly AgentSessionConversationCommand[] = []
+  commands: readonly AgentSessionConversationCommand[] = [],
+  agent?: AgentType | null
 ): readonly SlashCommandSuggestion[] {
-  return [
+  const hostOwned = [
     ...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
     ...CONVERSATION_COMMANDS.filter((entry) =>
       commands.includes(entry.name as AgentSessionConversationCommand)
+    )
+  ]
+  // Why: a host with no catalog to report would otherwise hide the commands the
+  // agent itself implements, e.g. Codex's `/goal`.
+  return [
+    ...hostOwned,
+    ...getTextDrivenNativeChatCommands(agent).filter(
+      (entry) => !hostOwned.some((offered) => offered.name === entry.name)
     )
   ]
 }
