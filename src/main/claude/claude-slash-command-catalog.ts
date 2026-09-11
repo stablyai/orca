@@ -9,6 +9,11 @@ const MAX_ARGUMENT_HINT_LENGTH = 100
 /** The provider's own row text for one command, absent when it reported none. */
 type CommandDetail = Pick<AgentSessionSlashCommand, 'description' | 'argumentHint'>
 
+function commandName(value: unknown): string | undefined {
+  const name = typeof value === 'string' ? value.trim() : ''
+  return name.length > 0 && name.length <= MAX_NAME_LENGTH && !/\s/u.test(name) ? name : undefined
+}
+
 function names(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
@@ -18,54 +23,61 @@ function names(value: unknown): string[] {
     if (seen.size >= MAX_COMMANDS) {
       break
     }
-    const name = typeof entry === 'string' ? entry.trim() : ''
-    if (name.length > 0 && name.length <= MAX_NAME_LENGTH && !/\s/u.test(name)) {
+    const name = commandName(entry)
+    if (name !== undefined) {
       seen.add(name)
     }
   }
   return [...seen]
 }
 
-function descriptorNames(value: unknown): string[] {
-  return names(
-    Array.isArray(value)
-      ? value.map((entry) => (entry !== null && typeof entry === 'object' ? entry.name : undefined))
-      : []
-  )
-}
-
 /** A single picker row's worth of provider text: unusable values are dropped, not truncated. */
 function rowText(value: unknown, maxLength: number): string | undefined {
-  if (typeof value !== 'string') {
+  if (typeof value !== 'string' || value.length > maxLength) {
     return undefined
   }
   const collapsed = value.replace(/\s+/gu, ' ').trim()
   return collapsed.length > 0 && collapsed.length <= maxLength ? collapsed : undefined
 }
 
-function descriptorDetails(value: unknown): Map<string, CommandDetail> {
+function descriptorCatalog(value: unknown): {
+  names: string[]
+  details: Map<string, CommandDetail>
+} {
+  const names: string[] = []
+  const seen = new Set<string>()
   const details = new Map<string, CommandDetail>()
   if (!Array.isArray(value)) {
-    return details
+    return { names, details }
   }
   for (const entry of value) {
-    if (details.size >= MAX_COMMANDS) {
+    if (seen.size >= MAX_COMMANDS) {
       break
     }
-    if (entry === null || typeof entry !== 'object' || typeof entry.name !== 'string') {
+    if (entry === null || typeof entry !== 'object') {
       continue
     }
-    const description = rowText(entry.description, MAX_DESCRIPTION_LENGTH)
-    const argumentHint = rowText(entry.argumentHint, MAX_ARGUMENT_HINT_LENGTH)
+    const name = commandName(entry.name)
+    if (name === undefined) {
+      continue
+    }
+    if (!seen.has(name)) {
+      seen.add(name)
+      names.push(name)
+    }
+    const previous = details.get(name)
+    const description = previous?.description ?? rowText(entry.description, MAX_DESCRIPTION_LENGTH)
+    const argumentHint =
+      previous?.argumentHint ?? rowText(entry.argumentHint, MAX_ARGUMENT_HINT_LENGTH)
     if (description === undefined && argumentHint === undefined) {
       continue
     }
-    details.set(entry.name.trim(), {
+    details.set(name, {
       ...(description === undefined ? {} : { description }),
       ...(argumentHint === undefined ? {} : { argumentHint })
     })
   }
-  return details
+  return { names, details }
 }
 
 function carriesCommandCatalog(message: Record<string, unknown>): boolean {
@@ -105,9 +117,10 @@ export class ClaudeSlashCommandCatalog {
       'commands' in initialization &&
       Array.isArray(initialization.commands)
     ) {
-      this.details = descriptorDetails(initialization.commands)
+      const catalog = descriptorCatalog(initialization.commands)
+      this.details = catalog.details
       this.entries = this.describe(
-        descriptorNames(initialization.commands).map((name) => ({
+        catalog.names.map((name) => ({
           name,
           kind: 'command',
           kindUnspecified: true
@@ -143,9 +156,10 @@ export class ClaudeSlashCommandCatalog {
       message.subtype === 'commands_changed' &&
       Array.isArray(message.commands)
     ) {
-      this.details = descriptorDetails(message.commands)
+      const catalog = descriptorCatalog(message.commands)
+      this.details = catalog.details
       next = this.describe(
-        descriptorNames(message.commands)
+        catalog.names
           .filter((name) => !this.hidden.has(name))
           .map((name) =>
             this.hasSkillClassification

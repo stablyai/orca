@@ -156,6 +156,7 @@ it('bounds the row text a provider can put in the picker', () => {
       { name: 'long', description: 'x'.repeat(201), argumentHint: 'y'.repeat(101) },
       { name: 'wrong-type', description: 42, argumentHint: { text: 'no' } },
       { name: 'blank', description: '   ' },
+      { name: 'long-whitespace', description: `Visible${' '.repeat(201)}` },
       { name: 'wrapped', description: 'first line\n  second   line' }
     ]
   })
@@ -163,11 +164,51 @@ it('bounds the row text a provider can put in the picker', () => {
     { name: 'long', kind: 'command', kindUnspecified: true },
     { name: 'wrong-type', kind: 'command', kindUnspecified: true },
     { name: 'blank', kind: 'command', kindUnspecified: true },
+    { name: 'long-whitespace', kind: 'command', kindUnspecified: true },
     {
       name: 'wrapped',
       kind: 'command',
       kindUnspecified: true,
       description: 'first line second line'
+    }
+  ])
+})
+
+it('does not let malformed descriptor names consume the command detail budget', () => {
+  const catalog = new ClaudeSlashCommandCatalog(undefined, {
+    commands: [
+      ...Array.from({ length: 512 }, (_, index) => ({
+        name: `invalid name ${index}`,
+        description: 'Rejected with its name'
+      })),
+      { name: 'goal', description: 'Set or view the goal', argumentHint: '<goal>' }
+    ]
+  })
+  expect(catalog.commands).toEqual([
+    {
+      name: 'goal',
+      kind: 'command',
+      kindUnspecified: true,
+      description: 'Set or view the goal',
+      argumentHint: '<goal>'
+    }
+  ])
+})
+
+it('combines non-empty fields from duplicate descriptors without discarding earlier text', () => {
+  const catalog = new ClaudeSlashCommandCatalog(undefined, {
+    commands: [
+      { name: 'goal', description: 'Set or view the goal' },
+      { name: 'goal', argumentHint: '<goal>' }
+    ]
+  })
+  expect(catalog.commands).toEqual([
+    {
+      name: 'goal',
+      kind: 'command',
+      kindUnspecified: true,
+      description: 'Set or view the goal',
+      argumentHint: '<goal>'
     }
   ])
 })
