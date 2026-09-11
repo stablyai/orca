@@ -177,6 +177,20 @@ describe('capability gating', () => {
     expect(hostCalls.send).not.toHaveBeenCalled()
   })
 
+  it('refuses with a code a client can route on, not just a message it must parse', async () => {
+    const response = await call('agentSession.send', sendParams(), {
+      clientKind: 'runtime',
+      clientCapabilities: ['terminal.stream.v1']
+    })
+    expect(response).toMatchObject({
+      ok: false,
+      error: {
+        code: 'structured_agent_session_unsupported',
+        message: 'structured_agent_session_unsupported'
+      }
+    })
+  })
+
   it('rejects create intent before resolving host-owned fields for an old client', async () => {
     const worktree = 'id:workspace-1'
     const response = await call(

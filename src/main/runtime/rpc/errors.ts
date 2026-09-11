@@ -109,6 +109,9 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'runtime_timeout',
   'invalid_runtime_response',
   'capability_unsupported',
+  // The whole `agentSession.*` gate refusal. Coded so a client can route on it without matching
+  // the message; the message is unchanged so older clients still classify.
+  'structured_agent_session_unsupported',
   'relay_quota_exceeded',
   'dispatch_capability_invalid',
   'agent_unconfigured',

@@ -8,6 +8,7 @@
 // for old mobile clients while structured chat is enabled so they receive a fallback row, and that
 // path constructs the host. `agentSession.*` stays refused either way, which is what this gate is for.
 
+import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
@@ -16,6 +17,17 @@ import {
   supportsStructuredAgentSessionCapability,
   supportsStructuredAgentSessions
 } from './structured-agent-session-policy'
+
+/**
+ * Carries a code so a client can tell "this host refuses structured chat" apart from any other
+ * runtime fault. The message stays the bare token: older clients classify by matching it.
+ */
+function structuredSessionsUnsupported(): OrchestrationError {
+  return new OrchestrationError(
+    'structured_agent_session_unsupported',
+    'structured_agent_session_unsupported'
+  )
+}
 
 /**
  * In-process callers are the same build as the host, so they carry no negotiated
@@ -27,7 +39,7 @@ export function supportsStructuredSessions(ctx: RpcContext): boolean {
 
 export function requireStructuredCapability(ctx: RpcContext): void {
   if (!supportsStructuredSessions(ctx)) {
-    throw new Error('structured_agent_session_unsupported')
+    throw structuredSessionsUnsupported()
   }
 }
 
@@ -35,7 +47,7 @@ export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHo
   requireStructuredCapability(ctx)
   const host = getStructuredAgentSessionHost()
   if (!host) {
-    throw new Error('structured_agent_session_unsupported')
+    throw structuredSessionsUnsupported()
   }
   return host
 }
@@ -64,11 +76,11 @@ export function requireStructuredHost(ctx: RpcContext): StructuredAgentSessionHo
  */
 export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
   if (!supportsStructuredAgentSessionCapability(ctx)) {
-    throw new Error('structured_agent_session_unsupported')
+    throw structuredSessionsUnsupported()
   }
   const host = getStructuredAgentSessionHost()
   if (!host) {
-    throw new Error('structured_agent_session_unsupported')
+    throw structuredSessionsUnsupported()
   }
   return host
 }
