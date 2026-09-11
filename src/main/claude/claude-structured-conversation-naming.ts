@@ -40,7 +40,8 @@ export class ClaudeConversationNaming {
   ): Promise<AgentSessionDispatchOutcome> {
     return dispatchClaudeTurn(session, input).then((outcome) => {
       // Both states mean the provider took the message; `admitted` just settles its identity
-      // later, and naming needs the turn to exist, not its identity.
+      // later, and naming needs the turn to exist, not its identity. `accepted` is the recovery
+      // path where the write threw after the replay had already settled — a delivered turn.
       if (outcome.state === 'accepted' || outcome.state === 'admitted') {
         this.start(deps, session, input)
       }
