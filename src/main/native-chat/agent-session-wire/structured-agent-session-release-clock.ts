@@ -13,7 +13,9 @@
 export const STRUCTURED_AGENT_SESSION_RELEASE_GRACE_MS = 15_000
 
 export type StructuredAgentSessionReleaseClockDeps = {
-  /** Never evict mid-turn; a true answer re-arms the clock instead. */
+  /** Never evict mid-turn; a true answer re-arms the clock instead. This is also the only thing
+   *  keeping a pending approval answerable across a client-link drop — pinned by
+   *  `structured-agent-session-approval-link-drop.test.ts`. */
   isTurnActive: (sessionId: string) => boolean
   /** Re-checked at fire time: a holder may have arrived while the timer ran. */
   isHeld: (sessionId: string) => boolean
