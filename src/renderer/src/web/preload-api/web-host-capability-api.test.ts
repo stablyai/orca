@@ -38,4 +38,24 @@ describe('web preflight API agent detection', () => {
 
     expect(callRuntimeResult).toHaveBeenCalledWith('preflight.detectAgents', undefined)
   })
+
+  it('does not probe at all for a runtime that needs repair', async () => {
+    const context = {
+      projectRuntime: {
+        status: 'repair-required' as const,
+        repair: {
+          projectId: 'project-1',
+          preferredRuntime: { kind: 'wsl' as const, distro: null },
+          reason: 'wsl-distro-required' as const,
+          source: 'project-override' as const,
+          cacheKey: 'project-1:repair'
+        }
+      }
+    }
+
+    await expect(createPreflightApi().detectAgents(context)).resolves.toEqual([])
+    await expect(createPreflightApi().refreshAgents(context)).resolves.toMatchObject({ agents: [] })
+
+    expect(callRuntimeResult).not.toHaveBeenCalled()
+  })
 })
