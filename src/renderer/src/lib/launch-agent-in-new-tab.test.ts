@@ -786,8 +786,8 @@ describe('launchAgentInNewTab', () => {
   })
 
   it('marks failed submit-after-ready delivery as notified after readiness timeout toast', async () => {
-    mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
-      onTimeout?.()
+    mockPasteDraftWhenAgentReady.mockImplementation(({ onUndelivered }) => {
+      onUndelivered?.()
       return Promise.resolve(false)
     })
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' } as never] }
@@ -810,8 +810,8 @@ describe('launchAgentInNewTab', () => {
   })
 
   it('marks a cancelled submit-after-ready launch notified when the user closed the tab', async () => {
-    mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
-      onTimeout?.()
+    mockPasteDraftWhenAgentReady.mockImplementation(({ onUndelivered }) => {
+      onUndelivered?.()
       return Promise.resolve(false)
     })
     // User closed the tab before the agent became ready — it is gone from the list.
@@ -833,8 +833,8 @@ describe('launchAgentInNewTab', () => {
   })
 
   it('marks a cancelled submit-after-ready launch notified when the user switched worktrees', async () => {
-    mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
-      onTimeout?.()
+    mockPasteDraftWhenAgentReady.mockImplementation(({ onUndelivered }) => {
+      onUndelivered?.()
       return Promise.resolve(false)
     })
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' } as never] }
@@ -856,8 +856,8 @@ describe('launchAgentInNewTab', () => {
   })
 
   it('leaves a genuine launch failure unnotified so the caller surfaces it', async () => {
-    mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
-      onTimeout?.()
+    mockPasteDraftWhenAgentReady.mockImplementation(({ onUndelivered }) => {
+      onUndelivered?.()
       return Promise.resolve(false)
     })
     // PTY never spawned: a real failure, not a user cancellation.

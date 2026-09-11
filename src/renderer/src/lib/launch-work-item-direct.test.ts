@@ -544,7 +544,7 @@ describe('launchWorkItemDirect', () => {
         agent: 'claude',
         submit: true,
         forcePaste: true,
-        onTimeout: expect.any(Function)
+        onUndelivered: expect.any(Function)
       })
     )
     expect(mocks.seedNativeChatLaunchPrompt).toHaveBeenCalledWith({

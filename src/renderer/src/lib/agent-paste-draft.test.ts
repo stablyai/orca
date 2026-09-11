@@ -322,12 +322,12 @@ describe('pasteDraftWhenAgentReady', () => {
     // before the composer exists (the original bug), so the cursor signal must
     // not arm one. With process inspection failing, delivery times out instead.
     testState.inspectRuntimeTerminalProcess.mockResolvedValue(null)
-    const onTimeout = vi.fn()
+    const onUndelivered = vi.fn()
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
       agent: 'opencode',
-      onTimeout
+      onUndelivered
     })
     await flushMicrotasks()
 
@@ -345,7 +345,7 @@ describe('pasteDraftWhenAgentReady', () => {
     await vi.advanceTimersByTimeAsync(1000)
     await expect(promise).resolves.toBe(false)
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
-    expect(onTimeout).toHaveBeenCalledTimes(1)
+    expect(onUndelivered).toHaveBeenCalledTimes(1)
   })
 
   it('best-effort pastes for opencode at the hard timeout when its process is running', async () => {
@@ -543,19 +543,19 @@ describe('pasteDraftWhenAgentReady', () => {
     // never appears is a failed launch, and must not also burn the 20s cold-boot
     // composer window before the caller is told.
     testState.appState.ptyIdsByTabId = {}
-    const onTimeout = vi.fn()
+    const onUndelivered = vi.fn()
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
       agent: 'codex',
-      onTimeout
+      onUndelivered
     })
 
     await vi.advanceTimersByTimeAsync(8000)
     await flushMicrotasks(5)
 
     await expect(promise).resolves.toBe(false)
-    expect(onTimeout).toHaveBeenCalledTimes(1)
+    expect(onUndelivered).toHaveBeenCalledTimes(1)
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -596,7 +596,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('honors the fallback inspection deadline for pty-bound draft paste', async () => {
-    const onTimeout = vi.fn()
+    const onUndelivered = vi.fn()
     testState.inspectRuntimeTerminalProcess.mockReturnValue(new Promise(() => {}))
 
     const promise = pasteDraftToAgentPtyWhenReady({
@@ -606,7 +606,7 @@ describe('pasteDraftWhenAgentReady', () => {
       agent: 'codex',
       forcePaste: true,
       timeoutMs: 1,
-      onTimeout
+      onUndelivered
     })
     await flushMicrotasks()
 
@@ -615,7 +615,7 @@ describe('pasteDraftWhenAgentReady', () => {
     await vi.advanceTimersByTimeAsync(1000)
 
     await expect(promise).resolves.toBe(false)
-    expect(onTimeout).toHaveBeenCalledTimes(1)
+    expect(onUndelivered).toHaveBeenCalledTimes(1)
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
   })
 

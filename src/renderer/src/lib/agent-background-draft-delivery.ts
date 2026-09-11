@@ -1,6 +1,7 @@
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
+import { showAgentPasteCredentialPromptToast } from '@/lib/agent-paste-credential-prompt-notice'
 
 export function scheduleAgentBackgroundDraft(
   tabId: string,
@@ -12,6 +13,9 @@ export function scheduleAgentBackgroundDraft(
     content,
     agent,
     submit: true,
-    onTimeout: () => showAutomationPromptNotSentToast(agent)
+    onUndelivered: (failure) =>
+      failure === 'credential-prompt'
+        ? showAgentPasteCredentialPromptToast(agent, true)
+        : showAutomationPromptNotSentToast(agent)
   })
 }

@@ -5,6 +5,7 @@ import {
 } from '@/lib/agent-paste-draft'
 import { sendFollowupPromptWhenAgentReady } from '@/lib/agent-followup-delivery'
 import { showAutomationPromptNotSentToast } from '@/lib/agent-background-session-timeout-toast'
+import { showAgentPasteCredentialPromptToast } from '@/lib/agent-paste-credential-prompt-notice'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import {
@@ -313,7 +314,10 @@ async function deliverAgentStartupToTerminal(
       // planning is unavailable, so this paste is the first delivery attempt.
       forcePaste: true,
       // Why: surface a dropped draft instead of silently losing it.
-      onTimeout: () => showAutomationPromptNotSentToast(startup.agent)
+      onUndelivered: (failure) =>
+        failure === 'credential-prompt'
+          ? showAgentPasteCredentialPromptToast(startup.agent, true)
+          : showAutomationPromptNotSentToast(startup.agent)
     })
   }
 }

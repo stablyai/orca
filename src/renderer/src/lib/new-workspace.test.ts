@@ -352,7 +352,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     expect(mockShowAutomationPromptNotSentToast).not.toHaveBeenCalled()
   })
 
-  it('passes an onTimeout that surfaces the not-sent toast to the draft paste path', async () => {
+  it('passes an onUndelivered that surfaces the not-sent toast to the draft paste path', async () => {
     await ensureAgentStartupInTerminal({
       worktreeId: 'wt-1',
       startup: {
@@ -366,10 +366,10 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
     })
 
     const call = mockPasteDraftToAgentPtyWhenReady.mock.calls.at(-1)?.[0] as
-      | { onTimeout?: () => void }
+      | { onUndelivered?: () => void }
       | undefined
-    expect(call?.onTimeout).toBeTypeOf('function')
-    call?.onTimeout?.()
+    expect(call?.onUndelivered).toBeTypeOf('function')
+    call?.onUndelivered?.()
     expect(mockShowAutomationPromptNotSentToast).toHaveBeenCalledWith('claude')
   })
 
@@ -411,7 +411,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       content: 'review this before sending',
       agent: 'claude',
       forcePaste: true,
-      onTimeout: expect.any(Function)
+      onUndelivered: expect.any(Function)
     })
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
@@ -455,7 +455,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       content: 'Linear context draft',
       agent: 'codex',
       forcePaste: true,
-      onTimeout: expect.any(Function)
+      onUndelivered: expect.any(Function)
     })
   })
 
@@ -512,7 +512,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       content: 'https://github.com/stablyai/orca/pull/2051',
       agent: 'codex',
       forcePaste: true,
-      onTimeout: expect.any(Function)
+      onUndelivered: expect.any(Function)
     })
   })
 
@@ -594,7 +594,7 @@ describe('ensureAgentStartupInTerminal prompt delivery', () => {
       content: 'linked draft',
       agent: 'codex',
       forcePaste: true,
-      onTimeout: expect.any(Function)
+      onUndelivered: expect.any(Function)
     })
   })
 

@@ -4,9 +4,12 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import { isTerminalWaitWhitespace, startOfLastNonBlankLines } from './terminal-wait-tail-window'
+import {
+  isTerminalWaitWhitespace,
+  startOfLastNonBlankLines
+} from '../../shared/terminal-wait-tail-window'
 import { findCursorApprovalPromptIndex } from './terminal-cursor-approval-detection'
-import { findCredentialPromptIndex } from './terminal-credential-prompt-detection'
+import { findCredentialPromptIndex } from '../../shared/terminal-credential-prompt-detection'
 import { mayContainTerminalWaitBlockedSentinel } from './terminal-wait-blocked-sentinel'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
