@@ -27,6 +27,32 @@ describe('RelayRetrySchedule', () => {
     expect(schedule.settled).toBeNull()
   })
 
+  // Why this matters beyond the throw itself: the retry callback is the caller's whole recovery
+  // step (the origin pool's `handleDrain` reaches `onStatus` -> `webContents.send`). A throw used
+  // to escape the timer AND skip the resolve, parking every `settled` waiter on a promise nothing
+  // would settle while the schedule held no armed timer — dead with no re-entry.
+  it('settles and stays reschedulable when the retry throws', async () => {
+    vi.useFakeTimers()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const schedule = new RelayRetrySchedule(() => 0.5)
+    schedule.schedule(0, () => {
+      throw new Error('recovery step blew up')
+    })
+    const settled = schedule.settled!
+
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(settled).resolves.toBeUndefined()
+    expect(schedule.pending).toBe(false)
+    expect(consoleError).toHaveBeenCalled()
+
+    const next = vi.fn()
+    schedule.schedule(0, next)
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(next).toHaveBeenCalledTimes(1)
+    consoleError.mockRestore()
+  })
+
   it('settles on cancel without running the retry', async () => {
     vi.useFakeTimers()
     const schedule = new RelayRetrySchedule(() => 0.5)
