@@ -128,6 +128,22 @@ export function assertWorktreeDoesNotContainRegisteredWorktree(
   }
 }
 
+/**
+ * Whether the home guard was able to ask the machine that executes the removal.
+ *
+ * An execution host with no reported `$HOME` is `unknown`, not safe: the containment check is
+ * skipped entirely and only path SHAPES remain, and shapes do not know `/srv/homes/alice`,
+ * `/export/home/alice` or `D:\Profiles\bob`. The resolver answers `null` whenever the relay
+ * session is gone from `activeSessions` or never resolved its host env, which is an ordinary
+ * disconnect — and loss of contact is not permission to recursively delete
+ * (docs/reference/ssh-execution-boundary.md). Only the recursive-delete gates consult this;
+ * `isDangerousWorktreeRemovalPath` deliberately does not, because it also fences the registered
+ * `git worktree remove` path, which must stay usable while a session is mid-reconnect.
+ */
+function homeAuthorityAnswered(home: WorktreeRemovalHomeAuthority): boolean {
+  return home.kind !== 'executionHost' || Boolean(home.homePath)
+}
+
 export async function canSafelyRemoveOrphanedWorktreeDirectory(
   worktreePath: string,
   repoPath: string,
@@ -135,6 +151,9 @@ export async function canSafelyRemoveOrphanedWorktreeDirectory(
   statPath: StatPath = lstat,
   readPath: ReadPath = (path) => readFile(path, 'utf8')
 ): Promise<boolean> {
+  if (!homeAuthorityAnswered(home)) {
+    return false
+  }
   if (isDangerousWorktreeRemovalPath(worktreePath, repoPath, home)) {
     return false
   }
@@ -183,6 +202,9 @@ export async function canCleanupUnregisteredOrcaLeftoverDirectory(args: {
   // Why: without a surviving .git file, path shape alone is too weak to prove
   // ownership for recursive deletion; require persisted Orca-created evidence.
   if (!hasCurrentOrcaCreationProvenance(args.meta) && !hasLegacyOrcaCreationEvidence(args.meta)) {
+    return false
+  }
+  if (!homeAuthorityAnswered(args.home)) {
     return false
   }
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,6 +15,7 @@ import {
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta, mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+import { setWorktreeRemovalSshHostHomeResolver } from '../worktree-removal-execution-host-route'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -103,6 +104,10 @@ describe('registerWorktreeHandlers', () => {
 
   beforeEach(() => {
     runtimeStub = setupWorktreeHandlers()
+  })
+
+  afterEach(() => {
+    setWorktreeRemovalSshHostHomeResolver(() => null)
   })
 
   it('reports already-missing unregistered delete paths before teardown, hooks, or git removal', async () => {
@@ -421,7 +426,10 @@ describe('registerWorktreeHandlers', () => {
     }
   })
 
+  // The recursive-delete gate now requires the execution host to have reported its `$HOME`, so
+  // this test has to establish it before it can reach the symlink check it is actually about.
   it('refuses SSH orphan cleanup when remote .git is a symlink', async () => {
+    setWorktreeRemovalSshHostHomeResolver(() => '/remote/home/alice')
     const repo = {
       id: 'repo-ssh-symlink-git',
       path: '/remote/repo',

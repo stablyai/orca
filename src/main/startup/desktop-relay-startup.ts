@@ -23,10 +23,16 @@ export function startDesktopRelayService(runtimeRpc: OrcaRuntimeRpcServer): void
       onStatus: (status, cellUrl) => {
         state.desktopRelayStatus = status
         state.desktopRelayCellUrl = cellUrl
-        state.mainWindow?.webContents.send('mobile:relayStatusChanged', {
-          status,
-          ...(cellUrl === undefined ? {} : { cellUrl })
-        } satisfies MobileRelayStatusDetail)
+        // Why isDestroyed and not just the optional chain: `state.mainWindow` is nulled on
+        // 'closed', so between destroy and that event `webContents.send` throws
+        // "Object has been destroyed". This callback runs from inside a bare `setTimeout`
+        // recovery step, where a throw killed the whole retry chain.
+        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+          state.mainWindow.webContents.send('mobile:relayStatusChanged', {
+            status,
+            ...(cellUrl === undefined ? {} : { cellUrl })
+          } satisfies MobileRelayStatusDetail)
+        }
       }
     })
     state.desktopRelayService = relayService

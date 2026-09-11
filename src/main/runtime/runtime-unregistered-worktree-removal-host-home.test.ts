@@ -77,6 +77,34 @@ describe('removeRuntimeUnregisteredWorktree against an SSH host home', () => {
     expect(fsProvider.deletePath).not.toHaveBeenCalled()
   })
 
+  // The resolver answers null whenever the relay session left `activeSessions` or never resolved
+  // its host env — an ordinary disconnect. That skips the containment check entirely and leaves
+  // only path SHAPES, which do not know `/srv/homes/alice`. "Could not ask the host where its home
+  // is" is unverifiable, so the recursive delete has to fail closed.
+  it('refuses the recursive delete when the host never reported its home', async () => {
+    setWorktreeRemovalSshHostHomeResolver(() => null)
+    const fsProvider = provenOrphanFilesystem(HOST_HOME)
+
+    await expect(
+      removeRuntimeUnregisteredWorktree(removalArgs(HOST_HOME, fsProvider))
+    ).rejects.toThrow(`Refusing to delete unregistered worktree path: ${HOST_HOME}`)
+    expect(fsProvider.deletePath).not.toHaveBeenCalled()
+  })
+
+  // The stated cost of failing closed: an ordinary orphan is also declined until the host answers.
+  // Declining is recoverable — the row survives and the next connected removal proceeds — while a
+  // recursive delete of the wrong directory is not.
+  it('declines an ordinary orphan too while the home is unknown', async () => {
+    setWorktreeRemovalSshHostHomeResolver(() => null)
+    const worktreePath = `${HOST_HOME}/workspaces/leftover`
+    const fsProvider = provenOrphanFilesystem(worktreePath)
+
+    await expect(
+      removeRuntimeUnregisteredWorktree(removalArgs(worktreePath, fsProvider))
+    ).rejects.toThrow(`Refusing to delete unregistered worktree path: ${worktreePath}`)
+    expect(fsProvider.deletePath).not.toHaveBeenCalled()
+  })
+
   it('still deletes a proven orphan under that host home', async () => {
     setWorktreeRemovalSshHostHomeResolver(() => HOST_HOME)
     const worktreePath = `${HOST_HOME}/workspaces/leftover`

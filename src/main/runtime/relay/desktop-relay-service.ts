@@ -15,7 +15,7 @@ import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type { RelayDeviceBinding, RelayRevokeOutboxItem } from './relay-revoke-outbox'
 import { RelayRevokeOutboxFlusher } from './relay-revoke-outbox-flush'
 import { deriveRelayHostId } from './relay-http-client'
-import { RelayDemandLedger } from './relay-demand-ledger'
+import { RelayDemandLedger, refreshRelayDemandBestEffort } from './relay-demand-ledger'
 import { createRelayRegionPreferenceReader } from './relay-region-preference'
 import { pairingAuthorizationForContext } from './relay-pairing-authorization'
 import { buildPairingEndpointsResult } from './relay-pairing-endpoints-result'
@@ -290,7 +290,7 @@ export class DesktopRelayService {
       throw new Error('relay_disabled_for_device')
     }
     const release = this.demandLedger.acquireTransient(`${kind}:${deviceId}`, deviceId)
-    this.refreshDemand()
+    refreshRelayDemandBestEffort(() => this.refreshDemand())
     try {
       return await operation()
     } catch (error) {
@@ -299,12 +299,12 @@ export class DesktopRelayService {
       // reaches `standby` and clears the offline reason. The wait then ends with no cause at all
       // — the generic `relay_control_not_active` — when the flip is exactly the cause.
       if (!this.isRelayAllowedForDevice(deviceId)) {
-        throw new Error('relay_disabled_for_device')
+        throw new Error('relay_disabled_for_device', { cause: error })
       }
       throw error
     } finally {
       release()
-      this.refreshDemand()
+      refreshRelayDemandBestEffort(() => this.refreshDemand())
     }
   }
 

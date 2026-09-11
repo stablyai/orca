@@ -31,22 +31,25 @@ export async function dispatchWebRuntimeInitialTerminalBootstrap(
     return false
   }
   let outcome: WebRuntimeTerminalCreateOutcome
+  // Why the row read is inside the try too: a throw between the create and the latch decision
+  // left `creating` held forever — the mirror-frame release only ever clears `awaiting-mirror`,
+  // so every later dispatch for that workspace refused without creating until teardown.
   try {
     outcome = await createWebRuntimeSessionTerminal({ worktreeId, environmentId, activate: true })
+    // Why check the outcome: the create reports RPC and network failures as `{ status: 'failed' }`
+    // rather than throwing, so the catch below never sees them. Both arms report the same way.
+    if (outcome.status === 'failed') {
+      endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+      return false
+    }
+    if (Object.hasOwn(useAppStore.getState().tabsByWorktree, worktreeId)) {
+      endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
+    } else {
+      markWebRuntimeInitialTerminalBootstrapAwaitingMirror(environmentId, worktreeId)
+    }
   } catch (error) {
     endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
     throw error
-  }
-  // Why check the outcome: the create reports RPC and network failures as `{ status: 'failed' }`
-  // rather than throwing, so the catch above never sees them. Both arms report the same way.
-  if (outcome.status === 'failed') {
-    endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
-    return false
-  }
-  if (Object.hasOwn(useAppStore.getState().tabsByWorktree, worktreeId)) {
-    endWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
-  } else {
-    markWebRuntimeInitialTerminalBootstrapAwaitingMirror(environmentId, worktreeId)
   }
   return true
 }

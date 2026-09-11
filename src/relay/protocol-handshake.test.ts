@@ -61,6 +61,13 @@ describe('handshake framing', () => {
     expect(() => parseHandshakeMessage(bogus)).toThrow(/Unknown handshake type/)
   })
 
+  // `type` is peer-supplied, so it can be an object whose String() conversion throws — which
+  // replaced the one diagnostic this refusal exists to produce with a primitive-conversion error.
+  it('still names the refusal when the peer type cannot be stringified', () => {
+    const hostile = Buffer.from(JSON.stringify({ type: { toString: 1 } }))
+    expect(() => parseHandshakeMessage(hostile)).toThrow(/Unknown handshake type: object/)
+  })
+
   // The daemon logs the peer's version before any credential check, and `JSON.parse` can hand
   // back a value a template literal throws on. The parser is the one place every reader shares.
   it('rejects a version that is not a string on both arms that carry one', () => {
