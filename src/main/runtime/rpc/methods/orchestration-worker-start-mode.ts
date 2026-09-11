@@ -85,7 +85,6 @@ const BLOCKER_REASON: Record<
 > = {
   'reused-terminal': 'reused_terminal',
   'agent-without-structured-session': 'agent_without_structured_session',
-  'draft-prompt': 'structured_unsupported_on_host',
   'floating-workspace': 'structured_unsupported_on_host',
   'tui-launch-customization': 'tui_launch_customization',
   'remote-execution-host': 'remote_execution_host',

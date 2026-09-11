@@ -70,7 +70,6 @@ function depsWith(
 ): ClaudeStructuredSessionAdapterDeps {
   return {
     resolveLaunch: () => Promise.reject(new Error('unused')),
-    dispatchAckTimeoutMs: 50,
     readConversationName: () => storedName,
     storeConversationName: async (_sessionId, name) => {
       stored.push(name)
@@ -101,7 +100,7 @@ describe('Claude structured conversation naming', () => {
     )
     await naming.drain()
 
-    expect(outcome.state).toBe('accepted')
+    expect(outcome.state).toBe('admitted')
     expect(titles).toEqual([{ description: 'fix the lease probe', persist: true }])
     expect(stored).toEqual(['Fix the lease probe'])
   })
@@ -183,7 +182,7 @@ describe('Claude structured conversation naming', () => {
     const outcome = await naming.dispatchTurn(depsWith(stored), session, dispatchInput())
     await expect(naming.drain()).resolves.toBeUndefined()
 
-    expect(outcome.state).toBe('accepted')
+    expect(outcome.state).toBe('admitted')
     expect(stored).toEqual([])
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
@@ -209,7 +208,7 @@ describe('Claude structured conversation naming', () => {
     })
     await adapter.drainConversationNaming()
 
-    expect(outcome.state).toBe('accepted')
+    expect(outcome.state).toBe('admitted')
     expect(stored).toEqual(['Ship it review'])
     expect(claude.connections[0]?.calls).toContainEqual({
       subtype: 'generate_session_title',

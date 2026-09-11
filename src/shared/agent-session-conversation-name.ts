@@ -61,6 +61,7 @@ export function isAgentSessionConversationName(value: unknown): value is string 
   return (
     typeof value === 'string' &&
     value.length > 0 &&
-    value.length <= AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH
+    value.length <= AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH &&
+    normalizeAgentSessionConversationName(value) === value
   )
 }

@@ -210,8 +210,17 @@ export function adapterFor(
   readTranscriptLeaf?: ClaudeStructuredSessionAdapterDeps['readTranscriptLeaf'],
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle'],
   onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged'],
-  overrides: Partial<ClaudeStructuredSessionAdapterDeps> = {}
+  overridesOrOnDispatchSettledLate:
+    | Partial<ClaudeStructuredSessionAdapterDeps>
+    | ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate'] = {},
+  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 ): ClaudeStructuredSessionAdapter {
+  const overrides =
+    typeof overridesOrOnDispatchSettledLate === 'function' ? {} : overridesOrOnDispatchSettledLate
+  const settledLate =
+    typeof overridesOrOnDispatchSettledLate === 'function'
+      ? overridesOrOnDispatchSettledLate
+      : onDispatchSettledLate
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
       pathToClaudeCodeExecutable: 'claude',
@@ -228,7 +237,6 @@ export function adapterFor(
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
     ...(initTimeoutMs === undefined ? {} : { initTimeoutMs }),
-    dispatchAckTimeoutMs: 10,
     persistHandle:
       persistHandle ??
       (async (handle) => {
@@ -236,7 +244,8 @@ export function adapterFor(
       }),
     ...(onBackgroundTasksChanged ? { onBackgroundTasksChanged } : {}),
     ...(readTranscriptLeaf ? { readTranscriptLeaf } : {}),
-    ...overrides
+    ...overrides,
+    ...(settledLate ? { onDispatchSettledLate: settledLate } : {})
   })
 }
 
@@ -244,8 +253,16 @@ export async function acquired(
   claude: ReturnType<typeof fakeClaude>,
   launch: Partial<ClaudeStructuredLaunch> = {},
   events: ClaudeStructuredSessionEvent[] = [],
-  overrides: Partial<ClaudeStructuredSessionAdapterDeps> = {}
+  overridesOrOnDispatchSettledLate:
+    | Partial<ClaudeStructuredSessionAdapterDeps>
+    | ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate'] = {}
 ): Promise<ClaudeStructuredSessionAdapter> {
+  const overrides =
+    typeof overridesOrOnDispatchSettledLate === 'function' ? {} : overridesOrOnDispatchSettledLate
+  const settledLate =
+    typeof overridesOrOnDispatchSettledLate === 'function'
+      ? overridesOrOnDispatchSettledLate
+      : undefined
   const adapter = adapterFor(
     claude,
     launch,
@@ -255,7 +272,8 @@ export async function acquired(
     undefined,
     undefined,
     undefined,
-    overrides
+    overrides,
+    settledLate
   )
   await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
   return adapter

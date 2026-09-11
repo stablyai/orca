@@ -9,6 +9,7 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import { withLocalSessionTabCloseOwner } from '@/runtime/local-session-tab-close-owner'
 import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
 import { cancelStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
+import { clearStructuredAgentLaunchDraft } from '@/lib/structured-agent-session-launch-draft'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 
@@ -97,6 +98,9 @@ export function createWorkspaceTabCloseCommands({
         })
         .then(() => {
           closeUnifiedTab(item.id)
+          // Why: cancel above drops the seed only while the launch is still pending; a settled
+          // launch whose composer never adopted it would otherwise keep it until worktree removal.
+          clearStructuredAgentLaunchDraft(item.entityId)
           if (!opts?.skipEmptyCheck) {
             leaveWorktreeIfEmpty()
           }

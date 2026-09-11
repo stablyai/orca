@@ -64,6 +64,7 @@ export function useAgentRowConversationName(agent: DashboardAgentRow): string | 
     liveTab ?? agent.tab,
     agent.agentType,
     generatedTitlesEnabled,
-    paneLiveTitle
+    paneLiveTitle,
+    agent.entry.providerSession?.id
   )
 }

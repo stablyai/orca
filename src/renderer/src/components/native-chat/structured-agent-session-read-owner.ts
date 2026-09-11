@@ -75,7 +75,7 @@ function createReadOwner(
     emit()
   }
   const apply = (action: StructuredAgentSessionAction): void => {
-    const state = reduceStructuredAgentSession(snapshot.state, action)
+    const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
     if (state !== snapshot.state) {
       setSnapshot({ ...snapshot, state })
     }
