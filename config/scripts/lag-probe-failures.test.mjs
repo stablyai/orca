@@ -18,7 +18,7 @@ test('IPC polling records a rejection and permits the next poll', async () => {
       }
     }
   }
-  runInNewContext(`(${installRendererIpcProbe})()`, {
+  runInNewContext(`(${String(installRendererIpcProbe)})()`, {
     window,
     performance,
     Date,
@@ -60,7 +60,7 @@ test('socket closure rejects outstanding and subsequent requests without timeout
       this.onclose()
     }
   }
-  const connect = runInNewContext(`(${connectOrcaMainInspector})`, {
+  const connect = runInNewContext(`(${String(connectOrcaMainInspector)})`, {
     fetch: async () => ({ json: async () => [{ webSocketDebuggerUrl: 'ws://fixture' }] }),
     WebSocket: FakeSocket,
     setTimeout(callback) {
