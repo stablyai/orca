@@ -139,6 +139,16 @@ describe('agent session record read repair', () => {
     expect(loaded.state.unreadableRecords.has(SESSION)).toBe(false)
   })
 
+  it('drops a null name rather than the record', async () => {
+    await establishOwnedRecord()
+    await writeStoredName(null)
+
+    const loaded = await load()
+
+    expect(loaded.state.records.get(SESSION)?.conversationName).toBeUndefined()
+    expect(loaded.state.unreadableRecords.has(SESSION)).toBe(false)
+  })
+
   it('still quarantines the whole record when the lease is structurally invalid', async () => {
     await establishOwnedRecord()
     await writeStoredName('Fix\nthe lease probe')

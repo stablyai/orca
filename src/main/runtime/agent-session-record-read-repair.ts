@@ -12,7 +12,10 @@
  * quarantines the whole record, because nothing here can tell what the right value would have been.
  */
 
-import { normalizeAgentSessionConversationName } from '../../shared/agent-session-conversation-name'
+import {
+  isAgentSessionConversationName,
+  normalizeAgentSessionConversationName
+} from '../../shared/agent-session-conversation-name'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   isAgentSessionRecord,
@@ -33,11 +36,14 @@ function repairConversationName(value: unknown): Record<string, unknown> | null 
   if (!Object.hasOwn(stored, 'conversationName')) {
     return null
   }
-  // Same predicate the validator applies, so repair and validation can never disagree.
-  const normalized = normalizeAgentSessionConversationName(stored.conversationName)
-  if (normalized === stored.conversationName) {
+  // Use the validator's clause before normalizing so null cannot masquerade as canonical absence.
+  if (
+    stored.conversationName === undefined ||
+    isAgentSessionConversationName(stored.conversationName)
+  ) {
     return null
   }
+  const normalized = normalizeAgentSessionConversationName(stored.conversationName)
   const repaired = { ...stored }
   if (normalized === null) {
     delete repaired.conversationName
