@@ -132,6 +132,14 @@ export function migrateWorktreeIdentity(
       return false
     }
     let sessionChanged = false
+    /** Known and deliberately unresolved: when the target key ALREADY exists, the source wins and
+     *  the target's row is lost. `lastVisitedAtByWorktreeId` below is the one map that settles it
+     *  (`Math.max`), and its comment names the case — a partial migration leaves both identities
+     *  behind. There is no safe blanket rule here: "keep the target" is right when the target holds
+     *  a real closed-last-terminal tombstone (`tabsByWorktree[target] === []` is user intent, see
+     *  runtime/workspace-session-worktree-id.ts), and "keep the source" is right when the target row
+     *  is a stub, and nothing records which is newer. Reachable only by a repeated or partial
+     *  migration: on a normal rename this store holds rows under the old id alone. */
     const moveSessionKey = <T>(
       record: Record<string, T> | undefined,
       mapValue: (value: T) => T = (value) => value
