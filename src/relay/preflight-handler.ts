@@ -8,6 +8,11 @@ import { isPwshAvailableAsync } from '../main/pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../main/wsl'
 import { isGitBashAvailable } from '../main/git-bash'
 import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
+import {
+  getTuiAgentIdentityProbeArgs,
+  matchesTuiAgentIdentityProbe,
+  type TuiAgentIdentityProbe
+} from '../shared/tui-agent-identity-probe'
 
 const execFileAsync = promisify(execFile)
 
@@ -28,6 +33,7 @@ type AgentDetectionRuntime = NodeJS.Platform | 'wsl'
 type AgentDetectionCommand = {
   id: string
   cmd: string
+  identityProbe?: TuiAgentIdentityProbe
   requiredCommands?: readonly string[]
   unsupportedRuntimes?: readonly AgentDetectionRuntime[]
 }
@@ -35,6 +41,7 @@ type AgentDetectionCommand = {
 const SUPPORTED_POSIX_SHELLS = new Set(['sh', 'dash', 'bash', 'zsh', 'fish'])
 const CONSERVATIVE_SYSTEM_SHELL_DIRS = new Set(['/bin', '/usr/bin'])
 const AGENT_PATH_PREFIX = '__ORCA_AGENT_PATH__'
+const IDENTITY_REQUIRED_AGENT_IDS = new Set(['fx'])
 
 export class PreflightHandler {
   private dispatcher: RelayDispatcher
@@ -54,10 +61,12 @@ export class PreflightHandler {
   // Why: the client sends the command list rather than importing TUI_AGENT_CONFIG
   // on the relay side. This keeps the relay bundle minimal and makes the protocol
   // self-describing — the relay doesn't need to know the agent catalog.
-  private async detectAgents(params: Record<string, unknown>): Promise<{ agents: string[] }> {
+  private async detectAgents(
+    params: Record<string, unknown>
+  ): Promise<{ agents: string[]; identityProbes: 1 }> {
     const commands = params.commands as AgentDetectionCommand[]
     if (!Array.isArray(commands)) {
-      return { agents: [] }
+      return { agents: [], identityProbes: 1 }
     }
     const probeCommands = [
       ...new Set(
@@ -76,6 +85,17 @@ export class PreflightHandler {
     const foundCommands = new Set(
       results.filter((result) => result.installed).map(({ cmd }) => cmd)
     )
+    const identityResults = await Promise.all(
+      commands
+        .filter((command) => command.identityProbe && foundCommands.has(command.cmd))
+        .map(async (command) => ({
+          cmd: command.cmd,
+          verified: await this.matchesCommandIdentity(command)
+        }))
+    )
+    const identityVerifiedCommands = new Set(
+      identityResults.filter((result) => result.verified).map(({ cmd }) => cmd)
+    )
 
     return {
       agents: [
@@ -85,11 +105,15 @@ export class PreflightHandler {
               (command) =>
                 !isDetectionUnsupportedInRuntime(command, process.platform) &&
                 foundCommands.has(command.cmd) &&
+                (command.identityProbe
+                  ? identityVerifiedCommands.has(command.cmd)
+                  : !IDENTITY_REQUIRED_AGENT_IDS.has(command.id)) &&
                 (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
             )
             .map(({ id }) => id)
         )
-      ]
+      ],
+      identityProbes: 1
     }
   }
 
@@ -113,6 +137,13 @@ export class PreflightHandler {
       gitBashAvailable,
       hostPlatform: process.platform
     }
+  }
+
+  private async matchesCommandIdentity(command: AgentDetectionCommand): Promise<boolean> {
+    if (!command.identityProbe) {
+      return false
+    }
+    return matchesCommandIdentityForRelay(command.cmd, command.identityProbe)
   }
 
   // Why: SSH exec channels give the relay a minimal environment without shell
@@ -195,6 +226,42 @@ export async function isCommandOnPathForRelay(
   return false
 }
 
+export async function matchesCommandIdentityForRelay(
+  command: string,
+  probe: TuiAgentIdentityProbe,
+  options: RelayCommandLookupOptions = {}
+): Promise<boolean> {
+  const platform = options.platform ?? process.platform
+  if (platform === 'win32') {
+    return false
+  }
+  const env = options.env ?? process.env
+  const specs = buildCommandLookupSpecs(command, platform, env, options.accountLoginShell)
+
+  for (const spec of specs) {
+    const args = getTuiAgentIdentityProbeArgs(probe).map(shellQuote).join(' ')
+    const shellName = path.posix.basename(spec.file).toLowerCase()
+    const script =
+      shellName === 'fish'
+        ? buildFishIdentityProbeScript(command, args)
+        : buildShIdentityProbeScript(command, args)
+    try {
+      const { stdout, stderr } = await execFileAsync(spec.file, [spec.args[0] ?? '-lc', script], {
+        encoding: 'utf-8',
+        env: buildRelayCommandEnv(env, platform),
+        timeout: 5000
+      })
+      if (matchesTuiAgentIdentityProbe(probe, `${stdout}\n${stderr}`)) {
+        return true
+      }
+    } catch {
+      // Try the inherited-PATH fallback before withholding the ambiguous command.
+    }
+  }
+
+  return false
+}
+
 export function hasAbsoluteCommandPath(output: string, platform: NodeJS.Platform): boolean {
   const pathOps = platform === 'win32' ? win32 : path
   return output
@@ -217,6 +284,25 @@ function buildPosixCommandLookupSpec(command: string, shell: string): CommandLoo
     return { file: shell, args: ['-ilc', buildFishCommandLookupScript(command)] }
   }
   return { file: shell, args: [getShellCommandMode(shell), buildShCommandLookupScript(command)] }
+}
+
+function buildShIdentityProbeScript(command: string, args: string): string {
+  return [
+    buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+    'if [ -n "$resolved" ]; then',
+    `"$resolved" ${args}`,
+    'fi'
+  ].join('\n')
+}
+
+function buildFishIdentityProbeScript(command: string, args: string): string {
+  const quotedCommand = shellQuote(command)
+  return [
+    `set -l resolved (command -v ${quotedCommand} 2>/dev/null)`,
+    'if test -n "$resolved"',
+    `"$resolved" ${args}`,
+    'end'
+  ].join('\n')
 }
 
 function buildShCommandLookupScript(command: string): string {

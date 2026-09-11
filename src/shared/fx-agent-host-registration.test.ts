@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+  matchesTuiAgentIdentityProbe,
   resolveDetectedTuiAgentIds
 } from './tui-agent-detection-commands'
 import {
@@ -20,14 +21,38 @@ describe('fx terminal agent host registration', () => {
   it('detects bare fx on supported execution hosts but not native Windows', () => {
     const commands = KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) => command.id === 'fx')
 
-    expect(commands).toEqual([{ id: 'fx', cmd: 'fx', unsupportedRuntimes: ['win32'] }])
+    expect(commands).toEqual([
+      { id: 'fx', cmd: 'fx', identityProbe: 'vercel-fx', unsupportedRuntimes: ['win32'] }
+    ])
     expect(getTuiAgentDetectionProbeCommands(commands, 'darwin')).toEqual(['fx'])
     expect(getTuiAgentDetectionProbeCommands(commands, 'linux')).toEqual(['fx'])
     expect(getTuiAgentDetectionProbeCommands(commands, 'wsl')).toEqual(['fx'])
     expect(getTuiAgentDetectionProbeCommands(commands, 'win32')).toEqual([])
-    expect(resolveDetectedTuiAgentIds(commands, new Set(['fx']), 'linux')).toEqual(['fx'])
-    expect(resolveDetectedTuiAgentIds(commands, new Set(['fx']), 'wsl')).toEqual(['fx'])
-    expect(resolveDetectedTuiAgentIds(commands, new Set(['fx']), 'win32')).toEqual([])
+    expect(resolveDetectedTuiAgentIds(commands, new Set(['fx']), 'linux')).toEqual([])
+    expect(resolveDetectedTuiAgentIds(commands, new Set(['fx']), 'linux', new Set(['fx']))).toEqual(
+      ['fx']
+    )
+    expect(resolveDetectedTuiAgentIds(commands, new Set(['fx']), 'wsl', new Set(['fx']))).toEqual([
+      'fx'
+    ])
+    expect(resolveDetectedTuiAgentIds(commands, new Set(['fx']), 'win32', new Set(['fx']))).toEqual(
+      []
+    )
+  })
+
+  it('accepts only the Vercel fx help identity', () => {
+    expect(
+      matchesTuiAgentIdentityProbe(
+        'vercel-fx',
+        '𝒇x v0.0.8\nFast, native coding agent for the terminal.\n'
+      )
+    ).toBe(true)
+    expect(
+      matchesTuiAgentIdentityProbe(
+        'vercel-fx',
+        'fx 35.0.0\nTerminal JSON viewer and processor\nhttps://fx.wtf\n'
+      )
+    ).toBe(false)
   })
 
   it('launches the interactive CLI and delivers the initial prompt after startup', () => {
@@ -116,6 +141,9 @@ describe('fx terminal agent host registration', () => {
     expect(recognizeAgentProcessFromCommandLine('fx -r')).toEqual(interactive)
     expect(recognizeAgentProcessFromCommandLine('fx --resume last')).toEqual(interactive)
     expect(recognizeAgentProcessFromCommandLine('fx --resume-session-123')).toEqual(interactive)
+    expect(recognizeAgentProcessFromCommandLine('fx resume')).toEqual(interactive)
+    expect(recognizeAgentProcessFromCommandLine('fx resume last')).toEqual(interactive)
+    expect(recognizeAgentProcessFromCommandLine('fx resume session-123')).toEqual(interactive)
     expect(recognizeAgentProcessFromCommandLine('fx session resume last')).toEqual(interactive)
 
     for (const command of [
@@ -128,6 +156,7 @@ describe('fx terminal agent host registration', () => {
       'fx sessions',
       'fx session migrate abc',
       'fx -c status',
+      'fx resume last extra',
       'fx session resume last extra',
       'fx unknown-command',
       'fx --help'
@@ -139,6 +168,7 @@ describe('fx terminal agent host registration', () => {
   it('pins fx to the bare interactive executable and post-start injection', () => {
     expect(TUI_AGENT_CONFIG.fx).toMatchObject({
       detectCmd: 'fx',
+      detectIdentityProbe: 'vercel-fx',
       launchCmd: 'fx',
       expectedProcess: 'fx',
       promptInjectionMode: 'stdin-after-start',

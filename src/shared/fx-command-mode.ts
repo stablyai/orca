@@ -54,5 +54,8 @@ export function isInteractiveFxCommand(tokens: readonly string[]): boolean {
   if (positional.length === 0) {
     return true
   }
-  return positional.length <= 3 && positional[0] === 'session' && positional[1] === 'resume'
+  return (
+    (positional.length <= 2 && positional[0] === 'resume') ||
+    (positional.length <= 3 && positional[0] === 'session' && positional[1] === 'resume')
+  )
 }

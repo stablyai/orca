@@ -121,7 +121,7 @@ describe('preflight', () => {
   })
 
   it('sends agent detection commands through the SSH remote preflight path', async () => {
-    const request = vi.fn().mockResolvedValue({ agents: ['openclaude', 'fx'] })
+    const request = vi.fn().mockResolvedValue({ agents: ['openclaude', 'fx'], identityProbes: 1 })
     getActiveMultiplexerMock.mockReturnValue({
       isDisposed: () => false,
       request
@@ -135,11 +135,30 @@ describe('preflight', () => {
     expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
       commands: expect.arrayContaining([
         { id: 'openclaude', cmd: 'openclaude' },
-        { id: 'fx', cmd: 'fx', unsupportedRuntimes: ['win32'] },
+        {
+          id: 'fx',
+          cmd: 'fx',
+          identityProbe: 'vercel-fx',
+          unsupportedRuntimes: ['win32']
+        },
         { id: 'mistral-vibe', cmd: 'vibe' },
         { id: 'mistral-vibe', cmd: 'mistral-vibe' }
       ])
     })
+  })
+
+  it('withholds fx reported by an older SSH relay without identity-probe attestation', async () => {
+    const request = vi.fn().mockResolvedValue({ agents: ['openclaude', 'fx'] })
+    getActiveMultiplexerMock.mockReturnValue({
+      isDisposed: () => false,
+      request
+    })
+
+    registerPreflightHandlers()
+
+    await expect(
+      handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
+    ).resolves.toEqual(['openclaude'])
   })
 
   it('returns no remote agents when the SSH connection is unavailable', async () => {
