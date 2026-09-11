@@ -59,13 +59,15 @@ export function useCombinedDiffSectionLoadRegistry(
   loadSchedulerRef.current ??= createCombinedDiffLoadScheduler({
     loadSection: (index) => loadSectionRef.current(index)
   })
+  // Why here and not in the effect below: child effects run before this parent's, so StrictMode's
+  // replayed mount would leave a window where the ref reads false while the viewer is live.
+  registryLiveRef.current = true
 
   useEffect(() => {
     // Why: React StrictMode replays effect cleanup in dev; reset revives the scheduler for the replayed mount.
     const scheduler = loadSchedulerRef.current
     const reloadTimers = reloadTimersRef.current
     scheduler.reset()
-    registryLiveRef.current = true
     return () => {
       registryLiveRef.current = false
       clearPendingSectionReloadTimers(reloadTimers)
