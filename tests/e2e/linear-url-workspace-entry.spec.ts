@@ -97,6 +97,10 @@ async function releaseHeldLinearLookup(page: Page): Promise<void> {
 
 async function pasteLinearUrl(page: Page, input: ReturnType<Page['locator']>): Promise<void> {
   await page.evaluate((text) => window.api.ui.writeClipboardText(text), LINEAR_URL)
+  // X selection ownership is async; pasting before it lands delivers stale text.
+  await expect
+    .poll(() => page.evaluate(() => window.api.ui.readClipboardText()), { timeout: 5_000 })
+    .toBe(LINEAR_URL)
   await input.focus()
   await page.keyboard.press(pasteChord())
 }
