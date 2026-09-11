@@ -27,6 +27,7 @@ import type {
   AgentSessionSlashCommand,
   AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire'
+import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 
 export class AgentSessionAcquisitionRefusal extends Error {
@@ -220,6 +221,14 @@ export type StructuredAgentSessionAdapter = {
   /** Transcript path for journal recovery. Omit to let the existing session-file
    *  resolver discover it from the provider session id. */
   historyFilePath?(input: { identity: AgentSessionJournalIdentity }): Promise<string | null>
+  /** Provider history for restart reconciliation, bounded to what the provider
+   *  recorded after the journal's last committed item. Only the adapter can say
+   *  whether the read has a proven start and whether a turn is still running, so
+   *  it owns both flags. Omit where the provider records no boundary-consistent
+   *  history; an omitted window leaves every unsettled submission `unknown`. */
+  providerHistoryWindow?(input: {
+    identity: AgentSessionJournalIdentity
+  }): Promise<ProviderHistoryWindow | null>
   /** Gracefully stops the structured owner after its event stream is drained. */
   /** Returns true only after the provider child exit is proven. */
   closeSession?(sessionId: string): Promise<boolean>

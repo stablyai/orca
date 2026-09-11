@@ -32,6 +32,8 @@ import {
 } from './claude-structured-session-close'
 import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 export type {
@@ -163,6 +165,14 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })()
     return exit.settlementPromise
   }
+
+  /** Restart reconciliation reads the transcript a resume replays; only this map
+   *  can say whether a child is still appending to it. */
+  providerHistoryWindow = (input: { identity: AgentSessionJournalIdentity }) =>
+    resolveClaudeProviderHistoryWindow({
+      identity: input.identity,
+      hasLiveSession: this.sessions.has(input.identity.sessionId)
+    })
 
   private async persistSessionHandle(sessionId: string, session: ClaudeSession): Promise<void> {
     try {
