@@ -45,6 +45,13 @@ const SESSIONS: Fixture[] = [
     cwd: 'C:\\Work\\Orca\\App',
     filePath: 'C:\\Users\\Ada\\.claude\\four.jsonl',
     text: 'harbor windows lane'
+  },
+  // A space in the path, which is what a quoted operator value exists for.
+  {
+    id: 5,
+    cwd: '/Users/ada/My Project',
+    filePath: '/Users/ada/.claude/projects/c/five.jsonl',
+    text: 'harbor quay ledger'
   }
 ]
 
@@ -63,6 +70,8 @@ const QUERIES = [
   'harbor path:"/Users/ada/work"',
   'harbor repo:nothing-here',
   'harbor path:one.jsonl path:two.jsonl',
+  'harbor path:"/Users/ada/My Project"',
+  'harbor repo:"ada/My Project"',
   'harbor'
 ]
 
@@ -92,14 +101,14 @@ function asSession(fixture: Fixture): AiVaultSession {
   } as AiVaultSession
 }
 
-/** The panel's own answer, operators only: free text is FTS in the index. */
+/**
+ * The panel's own answer. The whole query, not the operators cut out of it: a
+ * whitespace split would cut a quoted value in half, and every fixture's preview
+ * holds `harbor`, so the free text the panel also applies selects all of them.
+ */
 function sidebarIds(query: string): string[] {
-  const operatorsOnly = query
-    .split(/\s+/)
-    .filter((token) => /^(repo|path):/i.test(token))
-    .join(' ')
   return filterAiVaultSessions(SESSIONS.map(asSession), {
-    query: operatorsOnly,
+    query,
     agents: ['claude'],
     scope: 'all',
     sort: 'updated',
