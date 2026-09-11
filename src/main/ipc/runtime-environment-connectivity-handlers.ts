@@ -142,8 +142,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
-      return getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id).refresh({
-        timeoutMs: args.timeoutMs,
+      return getRuntimeEnvironmentStatus(getUserDataPath(), environment.id, args.timeoutMs, {
         reconnect: true
       })
     }

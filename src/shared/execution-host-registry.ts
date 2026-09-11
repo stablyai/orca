@@ -168,7 +168,10 @@ function addRuntimeHost(
     ? 'disconnected'
     : snapshot?.verification === 'blocked'
       ? 'blocked'
-      : snapshot?.transport === 'disconnected' || snapshot?.transport === 'connecting'
+      : !runtimeStatus ||
+          snapshot?.verification === 'checking' ||
+          snapshot?.transport === 'disconnected' ||
+          snapshot?.transport === 'connecting'
         ? 'connecting'
         : snapshot?.transport === 'ready'
           ? compatibility?.kind === 'blocked'

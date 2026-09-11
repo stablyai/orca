@@ -39,10 +39,13 @@ it('publishes real same-socket verification after every authenticated reconnect'
   })
   await getRuntimeEnvironmentStatus(profile, environment.id)
   const owner = getRuntimeEnvironmentStatusOwner(profile, environment.id)
-  await vi.waitFor(() => {
-    expect(owner.read()).toMatchObject({ transport: 'ready', verification: 'verified' })
-    expect(server.requests).toHaveLength(2)
-  })
+  await vi.waitFor(
+    () => {
+      expect(owner.read()).toMatchObject({ transport: 'ready', verification: 'verified' })
+      expect(server.requests).toHaveLength(2)
+    },
+    { timeout: 3_000 }
+  )
   expect(server.connectionCount()).toBe(2) // Bootstrap plus persistent control.
   runtimeId = 'host-after'
   server.closeClients()

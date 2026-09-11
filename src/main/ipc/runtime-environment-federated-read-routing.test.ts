@@ -1,3 +1,4 @@
+import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -59,6 +60,7 @@ describe('federated read RPC transport routing', () => {
   })
 
   afterEach(() => {
+    resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 

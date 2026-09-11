@@ -39,7 +39,7 @@ export async function getRuntimeEnvironmentStatus(
   userDataPath: string,
   selector: string,
   timeoutMs?: number,
-  options?: { observeOnly?: true; signal?: AbortSignal }
+  options?: { observeOnly?: true; signal?: AbortSignal; reconnect?: true }
 ): Promise<RuntimeRpcResponse<RuntimeStatus>> {
   const environment = resolveEnvironment(userDataPath, selector)
   if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {

@@ -1,3 +1,4 @@
+import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -120,6 +121,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   afterEach(() => {
+    resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -325,36 +327,41 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
   })
 
-  it('returns shared-control diagnostics when saved remote runtime status throws', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-    getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
-      state: 'reconnecting',
-      pendingRequestCount: 0,
-      subscriptionCount: 1,
-      reconnectAttempt: 2,
-      lastConnectedAt: 123,
-      lastClose: { code: 1006, reason: '' },
-      lastError: 'closed'
-    })
-    sendRemoteRuntimeRequestMock.mockRejectedValue(new Error('socket closed'))
+  it.each(['runtimeEnvironments:getStatus', 'runtimeEnvironments:connect'])(
+    'preserves failure diagnostics and guidance on %s',
+    async (channel) => {
+      registerRuntimeEnvironmentHandlers(store as never)
+      getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue({
+        state: 'reconnecting',
+        pendingRequestCount: 0,
+        subscriptionCount: 1,
+        reconnectAttempt: 2,
+        lastConnectedAt: 123,
+        lastClose: { code: 1006, reason: '' },
+        lastError: 'closed'
+      })
+      sendRemoteRuntimeRequestMock.mockRejectedValue(
+        new Error('Could not connect to the remote Orca runtime.')
+      )
 
-    const add = handler<
-      { name: string; pairingCode: string },
-      { environment: { id: string; name: string } }
-    >('runtimeEnvironments:addFromPairingCode')
-    await add(null, { name: 'desk', pairingCode: pairingCode() })
+      const add = handler<
+        { name: string; pairingCode: string },
+        { environment: { id: string; name: string } }
+      >('runtimeEnvironments:addFromPairingCode')
+      await add(null, { name: 'desk', pairingCode: pairingCode() })
 
-    const getStatus = handler<
-      { selector: string; timeoutMs?: number },
-      { ok: false; error: { message: string; data?: { remoteControl?: { state: string } } } }
-    >('runtimeEnvironments:getStatus')
+      const getStatus = handler<
+        { selector: string; timeoutMs?: number },
+        { ok: false; error: { message: string; data?: { remoteControl?: { state: string } } } }
+      >(channel)
 
-    await expect(getStatus(null, { selector: 'desk' })).resolves.toMatchObject({
-      ok: false,
-      error: {
-        message: 'socket closed',
-        data: { remoteControl: { state: 'reconnecting' } }
-      }
-    })
-  })
+      await expect(getStatus(null, { selector: 'desk' })).resolves.toMatchObject({
+        ok: false,
+        error: {
+          message: expect.stringContaining('connect both devices to Tailscale'),
+          data: { remoteControl: { state: 'reconnecting' } }
+        }
+      })
+    }
+  )
 })

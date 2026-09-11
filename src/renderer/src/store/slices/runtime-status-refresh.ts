@@ -16,14 +16,18 @@ export async function refreshRuntimeEnvironmentStatus(
       timeoutMs
     })
     if (window.api.runtimeEnvironments.getStatusSnapshots) {
-      const snapshots = await window.api.runtimeEnvironments.getStatusSnapshots()
-      const snapshot = snapshots.find((entry) => entry.environmentId === environmentId)
-      if (snapshot) {
-        publish({
-          snapshot,
-          status: snapshot.verification === 'verified' ? snapshot.status : null,
-          checkedAt: snapshot.checkedAt
-        })
+      try {
+        const snapshots = await window.api.runtimeEnvironments.getStatusSnapshots()
+        const snapshot = snapshots.find((entry) => entry.environmentId === environmentId)
+        if (snapshot) {
+          publish({
+            snapshot,
+            status: snapshot.verification === 'verified' ? snapshot.status : null,
+            checkedAt: snapshot.checkedAt
+          })
+        }
+      } catch (error) {
+        console.error('Failed to read runtime host status snapshot:', error)
       }
       return response.ok
     }

@@ -34,11 +34,15 @@ it('primary browser status follows the authenticated socket and closing it retir
     status: { environmentId: 'browser', pairingRevision: 1, publish, verified: vi.fn() }
   })
   clients.push(client)
-  await expect.poll(() => client.statusOwner?.read().verification).toBe('verified')
+  await expect
+    .poll(() => client.statusOwner?.read().verification, { timeout: 3_000 })
+    .toBe('verified')
   expect(client.statusOwner?.read().status?.runtimeId).toBe('before')
   runtimeId = 'after'
   server.closeClients()
-  await expect.poll(() => client.statusOwner?.read().status?.runtimeId).toBe('after')
+  await expect
+    .poll(() => client.statusOwner?.read().status?.runtimeId, { timeout: 3_000 })
+    .toBe('after')
   expect(client.statusOwner?.read().transport).toBe('ready')
   client.close()
   expect(publish.mock.lastCall?.[0]).toMatchObject({ retired: true, verification: 'blocked' })

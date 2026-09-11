@@ -82,21 +82,24 @@ for (const topology of ['desktop', 'headless'] as const) {
     testRepoPath
   }, testInfo) => {
     test.setTimeout(180_000)
-    const headless =
-      topology === 'headless'
-        ? await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
-        : null
-    const offer = headless?.offer ?? (await createRuntimeDesktopPairingOffer(page))
-    await (headless
-      ? headless.client.call('repo.add', { path: testRepoPath })
-      : page.evaluate(async (path) => {
-          await window.api.repos.add({ path })
-          await window.__store?.getState().fetchRepos()
-        }, testRepoPath))
-    const proxy = await interruptibleHost(offer)
-    const client = await launchPairedElectronClient(offer, testInfo, 'Direct host')
+    let headless: Awaited<ReturnType<typeof launchHeadlessPairedRuntimeHost>> | null = null
+    let proxy: Awaited<ReturnType<typeof interruptibleHost>> | undefined
+    let client: Awaited<ReturnType<typeof launchPairedElectronClient>> | undefined
     let browser: Awaited<ReturnType<typeof launchPairedWebClient>> | undefined
     try {
+      headless =
+        topology === 'headless'
+          ? await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
+          : null
+      const offer = headless?.offer ?? (await createRuntimeDesktopPairingOffer(page))
+      await (headless
+        ? headless.client.call('repo.add', { path: testRepoPath })
+        : page.evaluate(async (path) => {
+            await window.api.repos.add({ path })
+            await window.__store?.getState().fetchRepos()
+          }, testRepoPath))
+      proxy = await interruptibleHost(offer)
+      client = await launchPairedElectronClient(offer, testInfo, 'Direct host')
       proxy.setOnline(false)
       const offlineId = await client.page.evaluate(async (pairingCode) => {
         const { environment } = await window.api.runtimeEnvironments.addFromPairingCode({
@@ -109,16 +112,16 @@ for (const topology of ['desktop', 'headless'] as const) {
         return environment.id
       }, proxy.offer.pairingUrl)
       await expect
-        .poll(() => statusEvidence(client.page, offlineId))
+        .poll(() => statusEvidence(client!.page, offlineId))
         .toMatchObject({ verification: 'unavailable' })
-      expect(await statusEvidence(client.page, client.environmentId)).toMatchObject({
+      expect(await statusEvidence(client!.page, client.environmentId)).toMatchObject({
         verification: 'verified'
       })
       proxy.setOnline(true)
       await expect
-        .poll(() => statusEvidence(client.page, offlineId), { timeout: 30_000 })
+        .poll(() => statusEvidence(client!.page, offlineId), { timeout: 30_000 })
         .toMatchObject({ verification: 'verified', transport: 'ready' })
-      const initial = await statusEvidence(client.page, offlineId)
+      const initial = await statusEvidence(client!.page, offlineId)
       await expect(client.page.getByText('Recovering host', { exact: true }).first()).toBeVisible()
       await client.page.screenshot({ path: testInfo.outputPath(`${topology}-recovered.png`) })
       browser = await launchPairedWebClient(electronApp, proxy.offer)
@@ -127,20 +130,23 @@ for (const topology of ['desktop', 'headless'] as const) {
         .toMatchObject({ verification: 'verified', transport: 'ready' })
       proxy.setOnline(false)
       await expect
-        .poll(() => statusEvidence(client.page, offlineId))
+        .poll(() => statusEvidence(client!.page, offlineId))
         .toMatchObject({ transport: 'disconnected' })
-      expect(await statusEvidence(client.page, client.environmentId)).toMatchObject({
+      await expect
+        .poll(() => statusEvidence(browser!.page), { timeout: 30_000 })
+        .toMatchObject({ transport: 'disconnected' })
+      expect(await statusEvidence(client!.page, client.environmentId)).toMatchObject({
         verification: 'verified',
         transport: 'ready'
       })
       proxy.setOnline(true)
       await expect
-        .poll(() => statusEvidence(client.page, offlineId), { timeout: 30_000 })
+        .poll(() => statusEvidence(client!.page, offlineId), { timeout: 30_000 })
         .toMatchObject({ verification: 'verified', transport: 'ready' })
       await expect
         .poll(() => statusEvidence(browser!.page), { timeout: 30_000 })
         .toMatchObject({ verification: 'verified', transport: 'ready' })
-      expect((await statusEvidence(client.page, offlineId))!.sequence).toBeGreaterThan(
+      expect((await statusEvidence(client!.page, offlineId))!.sequence).toBeGreaterThan(
         initial!.sequence
       )
       await browser.page.screenshot({
@@ -150,12 +156,12 @@ for (const topology of ['desktop', 'headless'] as const) {
         await window.api.runtimeEnvironments.disconnect({ selector })
       }, offlineId)
       await expect
-        .poll(() => statusEvidence(client.page, offlineId))
+        .poll(() => statusEvidence(client!.page, offlineId))
         .toMatchObject({ verification: 'blocked', transport: 'disconnected' })
     } finally {
       await browser?.dispose()
-      await client.dispose()
-      await proxy.close()
+      await client?.dispose()
+      await proxy?.close()
       await headless?.dispose()
     }
   })

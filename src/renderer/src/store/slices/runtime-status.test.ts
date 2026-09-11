@@ -723,6 +723,26 @@ describe('runtime-status slice', () => {
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(null)
   })
 
+  it('preserves successful reachability when reading its snapshot fails', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          getStatus: vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a')),
+          getStatusSnapshots: vi.fn().mockRejectedValue(new Error('IPC read failed'))
+        }
+      }
+    })
+    try {
+      const store = createSliceStore()
+      expect(await store.getState().refreshRuntimeEnvironmentStatus('env-a')).toBe(true)
+      expect(store.getState().runtimeStatusByEnvironmentId.has('env-a')).toBe(false)
+      expect(log).toHaveBeenCalled()
+    } finally {
+      log.mockRestore()
+    }
+  })
+
   it('hydrates saved environments through the single-environment refresh path', async () => {
     const getStatus = vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a'))
     const list = vi.fn().mockResolvedValue([
