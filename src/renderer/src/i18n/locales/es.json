@@ -14177,7 +14177,6 @@
           "8c3b621ddf": "Proyecto",
           "4a3986b200": "Estado",
           "770d458144": "Agrupar por",
-          "795cbf26e2": "Filtrar...",
           "4616ea39fd": "Ir al workspace",
           "threadListOptionsFiltered": "Opciones de lista de hilos, filtros activos",
           "showSearch": "Mostrar búsqueda",
@@ -14526,7 +14525,7 @@
         "label": "Worktree padre",
         "noParent": "Sin worktree padre",
         "description": "Anida este espacio de trabajo bajo otro en la barra lateral. No cambia la rama base.",
-        "searchPlaceholder": "Buscar espacios de trabajo...",
+        "searchPlaceholder": "Buscar worktrees...",
         "noMatches": "No hay coincidencias."
       }
     },

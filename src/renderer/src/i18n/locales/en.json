@@ -16242,7 +16242,6 @@
           "8c3b621ddf": "Project",
           "4a3986b200": "Status",
           "770d458144": "Group by",
-          "795cbf26e2": "Filter...",
           "4616ea39fd": "Jump to workspace",
           "markThreadRead": "Mark thread as read",
           "59b131fbd9": "Mark thread unread",
@@ -16880,7 +16879,7 @@
         "label": "Parent worktree",
         "noParent": "No parent",
         "description": "Nests this workspace under another in the sidebar. Does not change the base branch.",
-        "searchPlaceholder": "Search for workspaces...",
+        "searchPlaceholder": "Search for worktrees...",
         "noMatches": "No matches."
       },
       "browserPane": {

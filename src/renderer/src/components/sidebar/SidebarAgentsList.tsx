@@ -127,7 +127,7 @@ export default function SidebarAgentsList({
               'auto.components.activity.ActivityPrototypePage.searchAgent',
               'Search for agents...'
             )}
-            className="h-7 w-full border border-border/80 bg-background text-[11px] shadow-none placeholder:text-[10px] focus-visible:border-ring/70 focus-visible:ring-0 dark:border-white/15 dark:bg-white/[0.04]"
+            className="h-7 w-full border border-border/80 bg-background text-xs shadow-none placeholder:text-xs focus-visible:border-ring/70 focus-visible:ring-0 dark:border-white/15 dark:bg-white/[0.04]"
             aria-label={translate(
               'auto.components.activity.ActivityPrototypePage.search',
               'Search'
