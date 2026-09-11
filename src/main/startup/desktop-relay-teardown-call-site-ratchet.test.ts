@@ -14,6 +14,10 @@ import { describe, expect, it } from 'vitest'
  * This test is the compile error that swap cannot produce. Both directions matter: quit must not
  * regain the re-armable fence, and sign-out/relaunch must not lose it — collapsing them either way
  * destroys the distinction the defect came from.
+ *
+ * If you are here because this went red on a refactor that looks harmless, that is the intended
+ * trade: a ratchet that fails loudly on a benign change beats one that passes silently on a
+ * harmful one. Re-read which teardown your call site now runs before relaxing the pattern.
  */
 const STARTUP_DIR = __dirname
 const QUIT_MODULE = 'main-process-quit.ts'
