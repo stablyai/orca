@@ -95,7 +95,9 @@ export function installBrowserSessionPartitionPolicies(
   if (profile.userAgentMode !== 'native' && typeof sess.getUserAgent === 'function') {
     const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
     sess.setUserAgent(cleanUA)
-    setupGoogleAuthUserAgentOverride(sess)
+    setupGoogleAuthUserAgentOverride(sess, (request) =>
+      browserManager.resolveBrowserGuestRequestUserAgent(request)
+    )
   }
   if (options?.permissions === 'deny') {
     sess.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
@@ -195,7 +197,9 @@ export function applyBrowserSessionUserAgentModes(profiles: BrowserSessionProfil
       // Why: imported sessions need the same Chrome-shaped identity after app restart.
       const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
       sess.setUserAgent(cleanUA)
-      setupGoogleAuthUserAgentOverride(sess)
+      setupGoogleAuthUserAgentOverride(sess, (request) =>
+        browserManager.resolveBrowserGuestRequestUserAgent(request)
+      )
     } catch {
       /* session not available yet (e.g. unit tests or pre-ready) */
     }

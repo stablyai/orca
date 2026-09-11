@@ -255,7 +255,10 @@ describe('BrowserSessionRegistry persistence', () => {
     const profileSession = sessionFromPartitionMock.mock.results.at(-1)?.value
     expect(cleanElectronUserAgentMock).toHaveBeenCalledWith(RAW_ELECTRON_USER_AGENT)
     expect(profileSession.setUserAgent).toHaveBeenCalledWith(CLEAN_USER_AGENT)
-    expect(setupGoogleAuthUserAgentOverrideMock).toHaveBeenCalledWith(profileSession)
+    expect(setupGoogleAuthUserAgentOverrideMock).toHaveBeenCalledWith(
+      profileSession,
+      expect.any(Function)
+    )
   })
 
   it('leaves UA and client hints untouched for native-mode profiles', async () => {

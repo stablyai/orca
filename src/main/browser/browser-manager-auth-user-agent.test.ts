@@ -51,7 +51,8 @@ import {
 import {
   createViewportGuestFactory,
   flushViewportOps,
-  GUEST_CLEAN_UA
+  GUEST_CLEAN_UA,
+  GUEST_ELECTRON_UA
 } from './browser-manager-viewport-test-fixtures'
 
 const {
@@ -63,6 +64,12 @@ const {
   webContentsFromIdMock
 } = browserMocks
 const makeViewportGuest = createViewportGuestFactory(browserMocks)
+const MOBILE_VIEWPORT_OVERRIDE = {
+  width: 375,
+  height: 667,
+  deviceScaleFactor: 2,
+  mobile: true
+} as const
 
 describe('browserManager', () => {
   beforeEach(() => {
@@ -72,6 +79,49 @@ describe('browserManager', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('resolves request identity from the guest viewport and auth state', async () => {
+    const { guest } = makeViewportGuest(4245)
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'tab-request-identity',
+      webContentsId: guest.id as number,
+      rendererWebContentsId
+    })
+
+    // Ablation: with no mobile preset, the clean session identity is resolved.
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        url: 'https://example.com/logo.png',
+        webContentsId: guest.id as number,
+        currentUserAgent: GUEST_CLEAN_UA,
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toBe(GUEST_CLEAN_UA)
+
+    await browserManager.setViewportOverride('tab-request-identity', MOBILE_VIEWPORT_OVERRIDE)
+    await flushViewportOps()
+    const mobile = browserManager.resolveBrowserGuestRequestUserAgent({
+      url: 'https://example.com/logo.png',
+      webContentsId: guest.id as number,
+      currentUserAgent: GUEST_CLEAN_UA,
+      baseUserAgent: GUEST_ELECTRON_UA
+    })
+    expect(mobile).toContain('CriOS/134')
+    expect(mobile).toContain('iPhone')
+
+    // Negative control: auth-document fan-out remains Firefox even while mobile emulation is active.
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        url: 'https://www.gstatic.com/_/signin/log',
+        webContentsId: guest.id as number,
+        currentUserAgent: GUEST_ELECTRON_UA,
+        effectiveUserAgent: googleAuthUserAgent(),
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toBe(googleAuthUserAgent())
   })
 
   it('presents the Firefox UA on Google auth hosts and restores the base UA off them', async () => {
