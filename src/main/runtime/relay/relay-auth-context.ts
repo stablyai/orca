@@ -24,8 +24,15 @@ export async function readRelayAuthContext(
   // Why: refresh and org-selection can rewrite cloud linkage while the request
   // is in flight; identity must come from the post-refresh profile state.
   const refreshed = ensureActiveOrcaProfile(userDataPath)
+  // Why throw rather than return null, same argument as the unreadable session above:
+  // a profile switch landing inside this read is not a sign-out, and null spends the
+  // terminal SIGNED_OUT — latched by every paired phone, arming no retry — on a race
+  // the switch's own auth mutation re-reads moments later.
+  if (refreshed.profile.id !== active.profile.id) {
+    throw new Error('orca_profile_switched_during_read')
+  }
   const cloud = refreshed.profile.cloud
-  if (!cloud || refreshed.profile.id !== active.profile.id) {
+  if (!cloud) {
     return null
   }
   return {
