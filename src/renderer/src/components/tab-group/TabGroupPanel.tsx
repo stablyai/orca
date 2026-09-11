@@ -11,6 +11,7 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { isAutoHideSingleTabStripEnabled } from './auto-hide-single-tab-strip-preference'
 import { resolveSingleTabStripVisibility } from './single-tab-strip-visibility'
 import { useTabStripRevealHover } from './tab-strip-reveal-hover'
 import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
@@ -80,8 +81,8 @@ export default function TabGroupPanel({
   const clientHostedRows = ownsClientHostedRows
     ? worktreeClientHostedRows
     : EMPTY_CLIENT_HOSTED_ROWS
-  const autoHideSingleTabStrip = useAppStore(
-    (state) => state.settings?.autoHideSingleTabStrip === true
+  const autoHideSingleTabStrip = useAppStore((state) =>
+    isAutoHideSingleTabStripEnabled(state.settings)
   )
   const [stripHovered, setStripHovered] = useState(false)
   const { autoHidden: stripAutoHidden, revealed: stripRevealed } = resolveSingleTabStripVisibility({
