@@ -72,7 +72,10 @@ export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
       ? HANDSHAKE_STRING_FIELDS[t as HandshakeMessage['type']]
       : null
   if (required === null) {
-    throw new Error(`Unknown handshake type: ${String(t)}`)
+    // Why typeof and not String(t): a peer-supplied `{ "type": { "toString": 1 } }` makes String()
+    // itself throw "Cannot convert object to primitive value", replacing the one diagnostic this
+    // line exists to produce.
+    throw new Error(`Unknown handshake type: ${typeof t === 'string' ? t : typeof t}`)
   }
   for (const field of required) {
     if (typeof msg[field] !== 'string') {
