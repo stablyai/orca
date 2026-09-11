@@ -61,8 +61,8 @@ export function useOnboardingFlow(
     agentStatusHooksEnabled,
     setAgentStatusHooksEnabled,
     theme,
-    setTheme,
-    setThemeInteractive
+    setThemeFromPersistedSettings,
+    setTheme
   } = useOnboardingSettingsDraft()
   const [busyLabel, setBusyLabel] = useState<string | null>(null)
   const [, setError] = useState<string | null>(null)
@@ -162,10 +162,15 @@ export function useOnboardingFlow(
       linearStatusChecked
     })
 
+  // Why a ref: closing lifts the first-run hook deferral, and closeWith must stay stable.
+  const onboardingConsentRef = useRef({ agentStatusHooksEnabled })
+  onboardingConsentRef.current = { agentStatusHooksEnabled }
+
   const closeWith = useCloseWith({
     onOnboardingChange,
     startTimeRef,
-    setError
+    setError,
+    consentRef: onboardingConsentRef
   })
 
   const persistCurrentStep = usePersistCurrentStep({
@@ -198,7 +203,7 @@ export function useOnboardingFlow(
     setStepIndex,
     selectedAgent,
     themeStepEntryThemeRef,
-    setTheme,
+    setTheme: setThemeFromPersistedSettings,
     updateSettings,
     skipOptions
   })
@@ -217,7 +222,7 @@ export function useOnboardingFlow(
     agentStatusHooksEnabled,
     setAgentStatusHooksEnabled,
     theme,
-    setTheme: setThemeInteractive,
+    setTheme,
     busyLabel,
     detectedSet,
     isDetectingAgents,

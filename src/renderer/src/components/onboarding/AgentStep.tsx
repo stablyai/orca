@@ -207,6 +207,7 @@ export function AgentStep({
           enabled={agentStatusHooksEnabled}
           onEnabledChange={onAgentStatusHooksEnabledChange}
           detectedAgentIds={detectedSet}
+          isDetecting={isDetecting}
           disabledTuiAgents={disabledTuiAgents}
         />
       </div>

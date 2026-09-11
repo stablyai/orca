@@ -28,3 +28,12 @@ export type OnboardingState = {
   lastCompletedStep: number
   checklist: OnboardingChecklistState
 }
+
+/**
+ * Consent the wizard carries alongside an onboarding write, so main persists the preference,
+ * advances onboarding and authorizes the first-run install as one transaction. Kept out of
+ * `OnboardingState`: these are GlobalSettings fields, not onboarding progress.
+ */
+export type OnboardingConsent = {
+  agentStatusHooksEnabled?: boolean
+}

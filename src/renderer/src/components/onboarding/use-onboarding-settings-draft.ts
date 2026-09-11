@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 import { track } from '@/lib/telemetry'
-import { translate } from '@/i18n/i18n'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -130,16 +128,10 @@ export function useOnboardingSettingsDraft() {
     (enabled: boolean) => {
       agentStatusHooksInteractedRef.current = true
       setAgentStatusHooksEnabled(enabled)
-      // Why: dismiss and skip persist nothing, so uncheck -> Esc must not lose the choice.
-      void updateSettings({ agentStatusHooksEnabled: enabled }).catch((err: unknown) => {
-        toast.error(
-          translate(
-            'auto.components.onboarding.use.onboarding.flow.52acfbef51',
-            'Could not save progress'
-          ),
-          { description: err instanceof Error ? err.message : String(err) }
-        )
-      })
+      // Why persist on change: dismiss and skip persist nothing, so uncheck -> Esc must not lose
+      // the choice. Unchecked by itself never removes anything; main authorizes the install from
+      // the consent carried with the onboarding write, so this write failing cannot install.
+      void updateSettings({ agentStatusHooksEnabled: enabled })
     },
     [updateSettings]
   )
@@ -169,7 +161,9 @@ export function useOnboardingSettingsDraft() {
     agentStatusHooksEnabled,
     setAgentStatusHooksEnabled: setAgentStatusHooksEnabledInteractive,
     theme,
-    setTheme,
-    setThemeInteractive
+    setTheme: setThemeInteractive,
+    // Deliberately verbose: this one skips the interacted latch, so async settings hydration can
+    // still overwrite it. Only the theme-revert on skip may use it.
+    setThemeFromPersistedSettings: setTheme
   }
 }

@@ -10,7 +10,7 @@ describe('buildAgentStatusHookAffectedRows', () => {
     ).toEqual([])
   })
 
-  it('falls back to the Orca-managed home for codex, which has no literal config path', () => {
+  it('names both Codex lanes, because the real-home one writes the user\u2019s own files', () => {
     const rows = buildAgentStatusHookAffectedRows({
       detectedAgentIds: ['codex'],
       disabledTuiAgents: []
@@ -18,7 +18,9 @@ describe('buildAgentStatusHookAffectedRows', () => {
 
     expect(rows).toHaveLength(1)
     expect(rows[0].agent).toBe('codex')
-    expect(rows[0].location).toBe('Orca-managed Codex home')
+    expect(rows[0].location).toContain('~/.codex/hooks.json')
+    expect(rows[0].location).toContain('config.toml')
+    expect(rows[0].location).toContain('Orca-managed Codex home')
   })
 
   it('keeps only detected, enabled hook targets', () => {

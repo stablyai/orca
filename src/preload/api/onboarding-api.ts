@@ -1,12 +1,15 @@
-import type { OnboardingState } from '../../shared/onboarding-state-types'
+import type { OnboardingConsent, OnboardingState } from '../../shared/onboarding-state-types'
 
 export type OnboardingApi = {
   get: () => Promise<OnboardingState>
   // Why: main merges the checklist field-by-field, so a partial checklist is fine.
+  // `consent` rides along so main can persist the step-1 preference and authorize the first-run
+  // hook install in the same transaction as the advance.
   update: (
     updates: Partial<Omit<OnboardingState, 'checklist'>> & {
       checklist?: Partial<OnboardingState['checklist']>
-    }
+    },
+    consent?: OnboardingConsent
   ) => Promise<OnboardingState>
 }
 

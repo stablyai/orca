@@ -5,10 +5,12 @@ import type { AgentHookTarget } from './agent-hook-types'
 // (%APPDATA%\devin\config.json), and claude/grok/copilot/kimi/hermes honour env home overrides.
 // The real resolver is `getConfigPath()` in each `src/main/<agent>/hook-service.ts`.
 // Keyed by AgentHookTarget so a new target fails typecheck until someone supplies a location.
-export const AGENT_HOOK_CONFIG_LOCATIONS: Readonly<Record<AgentHookTarget, string | null>> = {
+export const AGENT_HOOK_CONFIG_LOCATIONS: Readonly<Record<AgentHookTarget, string>> = {
   claude: '~/.claude/settings.json',
   openclaude: '~/.openclaude/settings.json',
-  codex: null, // Orca manages its own Codex home, so there is no stable literal path to show.
+  // Two lanes: Orca's own Codex home, or — when the host's real home is the selected one — the
+  // user's ~/.codex, where the install also adds a trust entry to config.toml.
+  codex: '~/.codex/hooks.json + config.toml, or the Orca-managed Codex home',
   gemini: '~/.gemini/settings.json',
   antigravity: '~/.gemini/config/hooks.json',
   amp: '~/.config/amp/plugins/orca-agent-status.ts',

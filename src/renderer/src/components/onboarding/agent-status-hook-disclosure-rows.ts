@@ -1,5 +1,4 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
 import { AGENT_HOOK_CONFIG_LOCATIONS } from '../../../../shared/agent-hook-config-locations'
 import { AGENT_HOOK_TARGETS, type AgentHookTarget } from '../../../../shared/agent-hook-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -32,12 +31,7 @@ export function buildAgentStatusHookAffectedRows(input: {
     rows.push({
       agent,
       name: catalog.find((entry) => entry.id === agent)?.label ?? agent,
-      location:
-        AGENT_HOOK_CONFIG_LOCATIONS[agent] ??
-        translate(
-          'auto.components.onboarding.agent-status-hook-disclosure-rows.codexLocation',
-          'Orca-managed Codex home'
-        )
+      location: AGENT_HOOK_CONFIG_LOCATIONS[agent]
     })
   }
   return rows

@@ -4,20 +4,24 @@ import { useAppStore } from '@/store'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { OnboardingConsent, OnboardingState } from '../../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export async function persistStep(
   stepNumber: number,
-  updates: Partial<OnboardingState> = {}
+  updates: Partial<OnboardingState> = {},
+  consent?: OnboardingConsent
 ): Promise<OnboardingState> {
-  return window.api.onboarding.update({
-    flowVersion: ONBOARDING_FLOW_VERSION,
-    lastCompletedStep: Math.max(stepNumber, -1),
-    ...updates
-  })
+  return window.api.onboarding.update(
+    {
+      flowVersion: ONBOARDING_FLOW_VERSION,
+      lastCompletedStep: Math.max(stepNumber, -1),
+      ...updates
+    },
+    consent
+  )
 }
 
 function selectedAgentOrBlank(agent: TuiAgent | null): TuiAgent | 'blank' {
@@ -39,6 +43,9 @@ type CloseWithDeps = {
   onOnboardingChange: (state: OnboardingState) => void
   startTimeRef: { current: number }
   setError: (msg: string | null) => void
+  // Why a ref: closing also lifts the first-run hook deferral, so the close write has to carry the
+  // same consent the advance does — without re-identifying closeWith on every checkbox click.
+  consentRef: { current: OnboardingConsent }
 }
 
 export type DismissedExtras = {
@@ -68,7 +75,12 @@ export function trackOnboardingDismissed(
   track('onboarding_dismissed', buildOnboardingDismissedPayload(lastStepReached, dismissedExtras))
 }
 
-export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: CloseWithDeps) {
+export function useCloseWith({
+  onOnboardingChange,
+  startTimeRef,
+  setError,
+  consentRef
+}: CloseWithDeps) {
   // Why: onboarding closes exactly once. On the final notifications step both
   // the "Add your first project" handoff (completed) and a click-off/Escape
   // dismissal (dismissed) can reach closeWith, and next()'s persist window
@@ -89,13 +101,16 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
       closedRef.current = true
       let nextState: OnboardingState
       try {
-        nextState = await window.api.onboarding.update({
-          flowVersion: ONBOARDING_FLOW_VERSION,
-          closedAt: Date.now(),
-          outcome,
-          lastCompletedStep: outcome === 'completed' ? ONBOARDING_FINAL_STEP : -1,
-          checklist: { dismissed: outcome === 'dismissed' }
-        })
+        nextState = await window.api.onboarding.update(
+          {
+            flowVersion: ONBOARDING_FLOW_VERSION,
+            closedAt: Date.now(),
+            outcome,
+            lastCompletedStep: outcome === 'completed' ? ONBOARDING_FINAL_STEP : -1,
+            checklist: { dismissed: outcome === 'dismissed' }
+          },
+          consentRef.current
+        )
       } catch (err) {
         // Why: the persist failed, so onboarding did not actually close — clear
         // the latch so the user can retry the close action.
@@ -125,7 +140,7 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
       }
       return true
     },
-    [onOnboardingChange, startTimeRef, setError]
+    [consentRef, onOnboardingChange, startTimeRef, setError]
   )
 }
 
@@ -167,8 +182,6 @@ export function usePersistCurrentStep({
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
         await updateSettings({
           defaultTuiAgent,
-          // Belt and braces: recovers the choice if the on-change write from the checkbox rejected.
-          agentStatusHooksEnabled,
           ...applyAgentPermissionMode({
             mode: yoloPermissions ? 'yolo' : 'manual',
             agentDefaultArgs: settings.agentDefaultArgs,
@@ -178,9 +191,13 @@ export function usePersistCurrentStep({
         const choseAgent = defaultTuiAgent !== 'blank'
         const wasAlreadyChosen = onboardingChecklist.choseAgent
         onOnboardingChange(
-          await persistStep(1, {
-            checklist: { ...onboardingChecklist, choseAgent }
-          })
+          // Why the consent rides along: main persists it, advances, retires the first-run latch
+          // and only then installs, so a lost preference write can never install against the box.
+          await persistStep(
+            1,
+            { checklist: { ...onboardingChecklist, choseAgent } },
+            { agentStatusHooksEnabled }
+          )
         )
         if (choseAgent && !wasAlreadyChosen) {
           track('activation_checklist_item_completed', {

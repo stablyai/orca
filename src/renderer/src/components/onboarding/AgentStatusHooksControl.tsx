@@ -8,11 +8,13 @@ export function AgentStatusHooksControl({
   enabled,
   onEnabledChange,
   detectedAgentIds,
+  isDetecting = false,
   disabledTuiAgents
 }: {
   enabled: boolean
   onEnabledChange?: (enabled: boolean) => void
   detectedAgentIds: Iterable<TuiAgent>
+  isDetecting?: boolean
   disabledTuiAgents?: unknown
 }): React.JSX.Element {
   const label = translate(
@@ -22,8 +24,9 @@ export function AgentStatusHooksControl({
   const affected = buildAgentStatusHookAffectedRows({ detectedAgentIds, disabledTuiAgents })
 
   return (
-    <div className="flex shrink-0 flex-col gap-2">
-      <label className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border bg-muted/25 px-4 py-3 transition-colors hover:bg-muted/40">
+    // One card: the why line, disclosure, off-ramp and consequence all belong to this choice.
+    <div className="flex shrink-0 flex-col gap-2 rounded-lg border border-border bg-muted/25 px-4 py-3">
+      <label className="flex cursor-pointer items-center justify-between gap-4">
         <span className="flex min-w-0 items-center gap-3">
           <Checkbox
             checked={enabled}
@@ -34,7 +37,7 @@ export function AgentStatusHooksControl({
           <span className="min-w-0 text-sm font-medium text-foreground">{label}</span>
         </span>
       </label>
-      <p className="px-1 text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {translate(
           'auto.components.onboarding.AgentStatusHooksControl.why',
           "Enables Orca to track your CLI agents' statuses, so it can inform you when each is working, needs you, or is done. Also powers your notifications."
@@ -42,7 +45,7 @@ export function AgentStatusHooksControl({
       </p>
       {/* Sibling of the label, never nested inside it: a trigger under the label would toggle the checkbox. */}
       <Collapsible defaultOpen={false}>
-        <CollapsibleTrigger className="cursor-pointer px-1 text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:mb-2">
+        <CollapsibleTrigger className="cursor-pointer text-xs font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 data-[state=open]:mb-2">
           {translate(
             'auto.components.onboarding.AgentStatusHooksControl.disclosureSummary',
             'What Orca changes, and when'
@@ -50,16 +53,17 @@ export function AgentStatusHooksControl({
         </CollapsibleTrigger>
         <CollapsibleContent className="collapsible-height-content">
           {/* Capped height so a long detected-agent list cannot crush the flex-1 agent grid above. */}
-          <div className="scrollbar-sleek flex max-h-40 flex-col gap-2 overflow-y-auto px-1 pr-2">
+          <div className="scrollbar-sleek flex max-h-40 flex-col gap-2 overflow-y-auto pr-2">
             <DisclosureRow
               label={translate(
                 'auto.components.onboarding.AgentStatusHooksControl.whenLabel',
                 'When'
               )}
             >
+              {/* Must read true for a returning user too: the control cannot tell the cohorts apart. */}
               {translate(
                 'auto.components.onboarding.AgentStatusHooksControl.whenBody',
-                "When you continue from this step, for the agent CLIs found on your machine. Orca keeps them current on later launches. Agents you don't have are skipped, and nothing is written for them."
+                "For the agent CLIs found on your machine, kept current each time Orca starts. Agents you don't have are skipped, and nothing is written for them."
               )}
             </DisclosureRow>
             <DisclosureRow
@@ -68,21 +72,14 @@ export function AgentStatusHooksControl({
                 'Affected'
               )}
             >
-              {affected.length > 0 && (
-                <ul className="mb-1 space-y-0.5">
-                  {affected.map((row) => (
-                    <li key={row.agent} className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="text-foreground">{row.name}</span>
-                      <span className="font-mono text-[11px] text-muted-foreground">
-                        {row.location}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <AffectedAgents affected={affected} isDetecting={isDetecting} />
               {translate(
                 'auto.components.onboarding.AgentStatusHooksControl.affectedScriptNote',
                 "Plus a small script in ~/.orca/agent-hooks/. Status is reported to Orca on your machine, it isn't uploaded anywhere."
+              )}{' '}
+              {translate(
+                'auto.components.onboarding.AgentStatusHooksControl.affectedApproximate',
+                'This list is approximate — Orca checks your PATH again when it installs.'
               )}
             </DisclosureRow>
             <DisclosureRow
@@ -110,21 +107,68 @@ export function AgentStatusHooksControl({
           </div>
         </CollapsibleContent>
       </Collapsible>
-      <p className="px-1 text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground">
         {translate(
           'auto.components.onboarding.AgentStatusHooksControl.offRamp',
           'Turn this off any time in Settings → Agents.'
         )}
       </p>
       {!enabled && (
-        <p className="px-1 text-xs text-amber-700 dark:text-amber-200/90">
+        // Muted, not amber: turning hooks off is a legitimate choice, not an error.
+        <p className="text-xs text-muted-foreground">
+          <span className="text-foreground">
+            {translate(
+              'auto.components.onboarding.AgentStatusHooksControl.uncheckedConsequenceLead',
+              'Orca will fall back to reading terminal output.'
+            )}
+          </span>{' '}
           {translate(
             'auto.components.onboarding.AgentStatusHooksControl.uncheckedConsequence',
-            'Orca will fall back to reading terminal output. Resumed sessions show no status until you type, finished turns can stay stuck on "working", and Cursor reports nothing at all.'
+            'Resumed sessions show no status until you type, finished turns can stay stuck on "working", and Cursor reports nothing at all.'
           )}
         </p>
       )}
     </div>
+  )
+}
+
+function AffectedAgents({
+  affected,
+  isDetecting
+}: {
+  affected: ReturnType<typeof buildAgentStatusHookAffectedRows>
+  isDetecting: boolean
+}): React.JSX.Element {
+  // Why a distinct state: an empty list mid-detection reads as "nothing will be written".
+  if (isDetecting) {
+    return (
+      <p className="mb-1 text-foreground" data-agent-hook-detection="pending">
+        {translate(
+          'auto.components.onboarding.AgentStatusHooksControl.affectedDetecting',
+          'Still checking which agent CLIs are on your PATH…'
+        )}
+      </p>
+    )
+  }
+  if (affected.length === 0) {
+    return (
+      <p className="mb-1" data-agent-hook-detection="empty">
+        {translate(
+          'auto.components.onboarding.AgentStatusHooksControl.affectedNone',
+          'No agent CLIs found on your PATH, so nothing would be written right now.'
+        )}
+      </p>
+    )
+  }
+  return (
+    <ul className="mb-1 space-y-0.5" data-agent-hook-detection="done">
+      {affected.map((row) => (
+        <li key={row.agent} className="flex flex-wrap items-baseline gap-x-2">
+          <span className="text-foreground">{row.name}</span>
+          <span className="font-mono text-[11px] text-muted-foreground">{row.location}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

@@ -10,6 +10,7 @@
     "../src/main/agent-hooks/hooks-json-read.ts",
     "../src/main/agent-hooks/installer-utils.ts",
     "../src/main/agent-hooks/installer-utils-remote.ts",
+    "../src/main/agent-hooks/agent-status-hooks-enablement.ts",
     "../src/main/agent-hooks/local-agent-cli-presence.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",

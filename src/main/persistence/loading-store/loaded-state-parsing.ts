@@ -267,12 +267,16 @@ export class LoadedStateParsingOperations {
       this.runtime.loadNeedsSave = true
     }
 
+    // Why not `fileExistedOnLoad` alone: the recovery path above already counts a profile whose
+    // primary file is gone but whose backups survive as existing. Classifying it fresh would
+    // silently stop maintaining hooks it already has.
+    const profileExistedOnLoad = fileExistedOnLoad || hasStateBackup(dataFile)
     const migrated = this.cohorts.migrateManagedAgentHookFirstRunGate(
       this.cohorts.migrateTabSwitchKeybindings(
         this.cohorts.migrateTelemetry(result, fileExistedOnLoad),
         fileExistedOnLoad
       ),
-      fileExistedOnLoad
+      profileExistedOnLoad
     )
 
     // githubCache is a sidecar file now (see getGithubCacheFile); legacy in-file caches seed the session, then get stripped.

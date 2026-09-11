@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { OnboardingState } from '../../shared/onboarding-state-types'
+import type { OnboardingConsent, OnboardingState } from '../../shared/onboarding-state-types'
 import type { PreloadApi } from '../api-types'
 
 export const onboardingApi = {
@@ -7,6 +7,7 @@ export const onboardingApi = {
   update: (
     updates: Partial<Omit<OnboardingState, 'checklist'>> & {
       checklist?: Partial<OnboardingState['checklist']>
-    }
-  ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates)
+    },
+    consent?: OnboardingConsent
+  ): Promise<OnboardingState> => ipcRenderer.invoke('onboarding:update', updates, consent)
 } satisfies PreloadApi['onboarding']

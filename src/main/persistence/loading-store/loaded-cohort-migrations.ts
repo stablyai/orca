@@ -25,9 +25,10 @@ export class LoadedCohortMigrationOperations {
     }
   }
 
+  /** `profileExistedOnLoad` must match the loader's recovery evidence: primary file OR any backup. */
   migrateManagedAgentHookFirstRunGate(
     state: PersistedState,
-    fileExistedOnLoad: boolean
+    profileExistedOnLoad: boolean
   ): PersistedState {
     const existing = state.settings?.managedAgentHookFirstRunGate
     if (existing === 'pending' || existing === 'done') {
@@ -40,7 +41,7 @@ export class LoadedCohortMigrationOperations {
       settings: {
         ...state.settings,
         // Only a genuinely fresh profile still has an onboarding step 1 to pass, so only it defers.
-        managedAgentHookFirstRunGate: fileExistedOnLoad ? 'done' : 'pending'
+        managedAgentHookFirstRunGate: profileExistedOnLoad ? 'done' : 'pending'
       }
     }
   }
