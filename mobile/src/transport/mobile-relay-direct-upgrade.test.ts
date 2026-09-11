@@ -156,6 +156,26 @@ describe('existing direct pairing relay upgrade', () => {
     expect(deps.saveHost).not.toHaveBeenCalled()
   })
 
+  // Why 'forbidden': a desktop that predates pairing.getEndpoints has it on neither its mobile
+  // allowlist nor its dispatcher, and the allowlist gate answers first — so scope refusal, not
+  // absence, is what an old desktop actually sends. See pairing-relay-rpc-unavailable.ts.
+  it('cleans pending state and leaves direct access unchanged for a scope-refusing old desktop', async () => {
+    const deps = dependencies()
+    const client = clientWith([
+      {
+        id: 'rpc',
+        ok: false,
+        error: { code: 'forbidden', message: "Method 'pairing.getEndpoints' is not available" },
+        _meta: { runtimeId: 'runtime' }
+      }
+    ])
+
+    await expect(upgradeDirectMobileRelay({ client, host, dependencies: deps })).resolves.toBeNull()
+    expect(deps.clearJournal).toHaveBeenCalledWith(host.id)
+    expect(deps.writeBundle).not.toHaveBeenCalled()
+    expect(deps.saveHost).not.toHaveBeenCalled()
+  })
+
   it('retains the durable journal when relay registration is temporarily unavailable', async () => {
     const deps = dependencies()
     const client = clientWith([success({ v: 1, relay: null })])
