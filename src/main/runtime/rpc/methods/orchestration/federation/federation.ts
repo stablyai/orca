@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../../../core'
@@ -222,7 +223,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           }
           throw new Error(
             wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
+              ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
               : `Agent did not become ready (${wait.status}).`
           )
         }

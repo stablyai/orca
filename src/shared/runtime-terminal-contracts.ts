@@ -344,6 +344,7 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'agent-update-prompt'
   | 'agent-trust-workspace'
   | 'agent-cwd-prompt'
+  | 'agent-hooks-review-prompt'
   | 'agent-interactive-prompt'
   | 'agent-approval-prompt'
 

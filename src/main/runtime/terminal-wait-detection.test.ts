@@ -98,7 +98,7 @@ const LIVE_CODEX_PROMPTS: { name: string; lines: string[]; reason: string }[] = 
       '2. Trust all and continue',
       'Press enter to confirm or esc to go back'
     ],
-    reason: 'codex-hooks-review-prompt'
+    reason: 'agent-hooks-review-prompt'
   },
   {
     name: 'trust workspace',
@@ -195,7 +195,7 @@ describe('detectTerminalWaitBlockedReason live prompts', () => {
       'Press enter to confirm'
     ])
 
-    expect(detectTerminalWaitBlockedReason(waitText)).toBe('codex-hooks-review-prompt')
+    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-hooks-review-prompt')
   })
 })
 
@@ -248,6 +248,16 @@ describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
       reason: 'agent-interactive-prompt'
     },
     {
+      name: 'a Claude Code hooks review dialog',
+      lines: [
+        'Claude Code',
+        'Hooks need review',
+        'PreToolUse:Bash  .claude/hooks/guard.sh',
+        'Press enter to confirm'
+      ],
+      reason: 'agent-hooks-review-prompt'
+    },
+    {
       name: 'an Antigravity sandbox confirmation',
       lines: [
         'Antigravity CLI 1.0.3',
@@ -284,9 +294,17 @@ describe('detectTerminalWaitBlockedReason on non-Codex agents', () => {
   }
 })
 
-// Why: the Antigravity ready screen is recognized by header + model line + a lone '>' caret. Once the
-// model line stopped requiring a Gemini prefix, a startup dialog's own body satisfied it, so a pane
-// parked on the dialog read as ready -- the orchestrator would then type into a live prompt.
+// Antigravity readiness, and what this file does NOT claim about it.
+//
+// The detector recognizes a ready screen by header + a 'gemini'-prefixed model line + a lone '>'
+// caret. That is narrow: an Antigravity user on a non-Gemini model never reaches ready and the pane
+// wedges. Widening it was attempted and reverted -- every candidate rule was tuned against the
+// constructed fixtures below, and the last one let a live sign-in dialog read as ready (the
+// orchestrator then types the task prompt into an authentication dialog, which is strictly worse
+// than a timeout). No real Antigravity transcript exists in this repo; the cursor-agent rules are
+// derived from captures under src/main/runtime/__fixtures__ and Antigravity has no equivalent.
+// Widening the model rule needs one first. See the ratchet at the bottom of this block for the
+// shapes any replacement has to refuse.
 describe('Antigravity readiness does not absorb its own startup dialog', () => {
   const TRUST_DIALOG_WITH_CARET = [
     'Antigravity CLI 1.0.3',
@@ -326,33 +344,25 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
           '>'
         ],
         reason: 'agent-trust-workspace'
-      },
-      {
-        name: 'an update banner whose wording names no blocked reason',
-        lines: [
-          'Antigravity CLI 1.0.3',
-          'A new version is available',
-          'Press enter to continue',
-          '>'
-        ],
-        reason: null
       }
     ]
 
   for (const dialog of LIVE_DIALOGS_UNDER_THE_HEADER) {
-    it(`stays unready on ${dialog.name}`, () => {
+    it(`reports ${dialog.name} drawn under the header and stays unready`, () => {
       const waitText = waitTextFor(dialog.lines)
 
-      expect(isKnownReadyPromptPreview(waitText)).toBe(false)
       expect(detectTerminalWaitBlockedReason(waitText)).toBe(dialog.reason)
+      expect(isKnownReadyPromptPreview(waitText)).toBe(false)
     })
   }
 
-  it('keeps reporting a dialog that opens after the ready screen', () => {
+  // Discriminating: the Gemini model line and caret satisfy readiness, so only the dialog sitting
+  // *below* them keeps this unready. Drop the ordering rule and this goes green-to-red.
+  it('keeps reporting a dialog that opens after a Gemini ready screen', () => {
     const waitText = waitTextFor([
       'Antigravity CLI 1.0.3',
       'user@example.com (Antigravity Business)',
-      'Claude Sonnet 4.5 (High)',
+      'Gemini 3.5 Flash (High)',
       '~/orca/workspaces/orca/agy-dispatch-issue',
       '>',
       'Permission required',
@@ -364,42 +374,11 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-interactive-prompt')
   })
 
-  // Why: the chrome (account, model, workspace, caret) is redrawn around a modal, so every positive
-  // ready signal is present while the dialog is live -- only the header/dialog ordering rejects it.
-  it('stays unready when a trust dialog is drawn over a full ready chrome', () => {
-    const waitText = waitTextFor([
-      'Antigravity CLI 1.0.3',
-      'user@example.com (Antigravity Business)',
-      'Claude Sonnet 4.5 (High)',
-      '~/orca/workspaces/orca/agy-dispatch-issue',
-      'Do you trust the files in this folder?',
-      '1. Yes, I trust this folder',
-      '2. No, exit',
-      '>'
-    ])
-
-    expect(isKnownReadyPromptPreview(waitText)).toBe(false)
-    expect(detectTerminalWaitBlockedReason(waitText)).toBe('agent-trust-workspace')
-  })
-
-  it('still clears once the non-Gemini ready screen replaces the dialog', () => {
+  // Discriminating: a stale dialog above a reprinted Gemini ready screen must stop being reported,
+  // which is the whole point of the dismissed-modal rule.
+  it('clears once a Gemini ready screen replaces the dialog', () => {
     const waitText = waitTextFor([
       ...TRUST_DIALOG_WITH_CARET,
-      'Antigravity CLI 1.0.3',
-      'user@example.com (Antigravity Business)',
-      'Claude Sonnet 4.5 (High)',
-      '~/orca/workspaces/orca/agy-dispatch-issue',
-      '>'
-    ])
-
-    expect(isKnownReadyPromptPreview(waitText)).toBe(true)
-    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
-  })
-
-  // Why kept: the Gemini prefix was the whole model test before the workspace row anchored it, so a
-  // screen that used to reach ready without a workspace row still must.
-  it('clears on a Gemini ready screen that prints no workspace row', () => {
-    const waitText = waitTextFor([
       'Antigravity CLI 1.0.3',
       'user@example.com (Antigravity Business)',
       'Gemini 3.5 Flash (High)',
@@ -407,15 +386,36 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
     ])
 
     expect(isKnownReadyPromptPreview(waitText)).toBe(true)
+    expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
   })
 
-  // Why these five: their wording matches no blocked-reason rule, so the ordering defense cannot
-  // reach them -- readiness has to refuse them on its own or the orchestrator types into the dialog.
+  // Characterization, not a guard: records the wedge this file has not fixed. An Antigravity user on
+  // a non-Gemini model has no 'gemini' line, so readiness never resolves and the wait times out.
+  // Flipping this to true is the goal of the follow-up, and needs a captured transcript first.
+  it('does not yet recognize a non-Gemini ready screen (known wedge)', () => {
+    const waitText = waitTextFor([
+      'Antigravity CLI 1.0.3',
+      'user@example.com (Antigravity Business)',
+      'Claude Sonnet 4.5 (High)',
+      '~/orca/workspaces/orca/agy-dispatch-issue',
+      '>'
+    ])
+
+    expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+  })
+
+  // Ratchet, not a guard of today's code: these pass now only because none of them prints a 'gemini'
+  // model line. They exist so the next attempt to widen the model rule has to refuse them -- the
+  // reverted attempt accepted all five as ready on the strength of the account row alone (and an
+  // 'x@y.z' anywhere in the dialog body did just as well), and readiness is what gates typing the
+  // task prompt into the pane. A replacement must rest on positive evidence that the agent's input
+  // prompt is accepting input, not on absence-of-dialog plus an account row.
   const SILENT_STARTUP_DIALOGS: { name: string; lines: string[] }[] = [
     {
       name: 'an update banner',
       lines: [
         'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
         'A new version is available',
         '~/orca/workspaces/orca/agy-dispatch-issue',
         'Press enter to continue',
@@ -426,6 +426,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
       name: 'a sign-in dialog',
       lines: [
         'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
         'Sign in to continue',
         '~/orca/workspaces/orca/agy-dispatch-issue',
         '1. Open browser',
@@ -437,6 +438,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
       name: 'a model picker',
       lines: [
         'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
         'Select a model',
         '~/orca/workspaces/orca/agy-dispatch-issue',
         '1. Claude Sonnet 4.5',
@@ -448,6 +450,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
       name: 'a privacy notice',
       lines: [
         'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
         'We collect usage data to improve the product',
         '~/orca/workspaces/orca/agy-dispatch-issue',
         '1. Accept',
@@ -459,6 +462,7 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
       name: 'an onboarding theme picker',
       lines: [
         'Antigravity CLI 1.0.3',
+        'user@example.com (Antigravity Business)',
         'Welcome! Choose a theme',
         '~/orca/workspaces/orca/agy-dispatch-issue',
         '1. Dark',
@@ -469,24 +473,23 @@ describe('Antigravity readiness does not absorb its own startup dialog', () => {
   ]
 
   for (const dialog of SILENT_STARTUP_DIALOGS) {
-    it(`stays unready on ${dialog.name} that names no blocked reason`, () => {
+    it(`refuses ${dialog.name} whose wording names no blocked reason, account row and all`, () => {
       const waitText = waitTextFor(dialog.lines)
 
+      // No blocked-signal rule matches, so the ordering defense cannot reach these: readiness has to
+      // refuse them on its own or the orchestrator types into a live dialog.
       expect(detectTerminalWaitBlockedReason(waitText)).toBeNull()
       expect(isKnownReadyPromptPreview(waitText)).toBe(false)
     })
+
+    it(`refuses ${dialog.name} that merely narrates an email address`, () => {
+      const waitText = waitTextFor([
+        ...dialog.lines.slice(0, -1),
+        'contact support@antigravity.dev for help',
+        '>'
+      ])
+
+      expect(isKnownReadyPromptPreview(waitText)).toBe(false)
+    })
   }
-
-  // Why Windows: the workspace row anchors the model line, and it is a drive path there.
-  it('clears on a ready screen whose workspace row is a Windows path', () => {
-    const waitText = waitTextFor([
-      'Antigravity CLI 1.0.3',
-      'user@example.com (Antigravity Business)',
-      'GPT-5.1 (High)',
-      'C:\\Users\\me\\orca\\agy-dispatch-issue',
-      '>'
-    ])
-
-    expect(isKnownReadyPromptPreview(waitText)).toBe(true)
-  })
 })

@@ -3,9 +3,12 @@ import {
   isOpenCodeNativeTitle,
   type AgentStatus
 } from '../../shared/agent-detection'
-import { findAntigravityReadyPromptIndex } from './antigravity-ready-prompt-index'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import { startOfLastLines, startOfLastNonBlankLines } from './terminal-wait-tail-window'
+import {
+  isTerminalWaitWhitespace,
+  startOfLastLines,
+  startOfLastNonBlankLines
+} from './terminal-wait-tail-window'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
@@ -115,7 +118,46 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
   return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
 }
 
-// One combined scan for any wording that could belong to a live blocked prompt.
+function findAntigravityReadyPromptIndex(normalized: string): number | null {
+  const headerIndex = normalized.lastIndexOf('antigravity cli')
+  if (headerIndex === -1) {
+    return null
+  }
+  let lineStart = headerIndex
+  let modelIndex: number | null = null
+  let promptIndex: number | null = null
+
+  // Why: ready previews can include echoed paste after the header; scan line bounds directly instead of splitting the whole tail.
+  for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
+    if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
+      continue
+    }
+    let trimmedStart = lineStart
+    let trimmedEnd = cursor
+    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
+      trimmedStart += 1
+    }
+    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
+      trimmedEnd -= 1
+    }
+    if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
+      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
+        modelIndex = trimmedStart
+      }
+      if (
+        promptIndex === null &&
+        trimmedEnd - trimmedStart === 1 &&
+        normalized.charCodeAt(trimmedStart) === 62
+      ) {
+        promptIndex = trimmedStart
+      }
+    }
+    lineStart = cursor + 1
+  }
+
+  return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
+}
+
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
   /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
 
@@ -204,7 +246,8 @@ function findBlockedSignalInLiveWindow(
   }
   const hooksIndex = normalized.lastIndexOf('hooks need review')
   if (hooksIndex !== -1 && normalized.includes('press enter to confirm', hooksIndex)) {
-    candidates.push({ reason: 'codex-hooks-review-prompt', index: hooksIndex })
+    // Why neutral: this matcher never inspects the agent -- 'hooks need review' is not Codex-only wording.
+    candidates.push({ reason: 'agent-hooks-review-prompt', index: hooksIndex })
   }
   const trustIndex = Math.max(
     normalized.lastIndexOf('do you trust'),
@@ -266,7 +309,11 @@ function findBlockedSignalInLiveWindow(
     ).length
     if (decisionCount >= 2) {
       // Why neutral: an approval dialog with named choices identifies no agent; older hosts publish
-      // 'codex-interactive-prompt' here and clients alias the two (Rule 1 additive member).
+      // 'codex-interactive-prompt' here and clients alias the two. Rule 1 additive member --
+      // remote-wire-compatibility.md names RuntimeTerminalWaitBlockedReason as Rule 1 because no
+      // consumer switches exhaustively on it.
+      // Why alias rather than drop the old spelling: preserve the existing remote receipt value for
+      // mixed-version clients -- an older host still publishes codex-* on this path.
       candidates.push({ reason: 'agent-interactive-prompt', index: permissionPromptIndex })
     }
   }

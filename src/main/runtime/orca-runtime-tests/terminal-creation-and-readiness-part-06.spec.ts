@@ -512,28 +512,6 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  // Why: Antigravity drives non-Gemini models too; requiring a 'gemini' model line left those panes unready.
-  it('resolves tui-idle from a non-Gemini Antigravity ready prompt preview', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    runtime.onPtyData('pty-bg', antigravityReadyScreen('Claude Sonnet 4.5 (High)'), Date.now())
-
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
-    ).resolves.toMatchObject({
-      handle,
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running'
-    })
-  })
-
   it('resolves Antigravity ready prompts with newline-heavy pasted tails without splitting', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({

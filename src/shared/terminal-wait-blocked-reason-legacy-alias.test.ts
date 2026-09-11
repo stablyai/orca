@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { agentNeutralTerminalWaitBlockedReason } from './terminal-wait-blocked-reason-legacy-alias'
+import {
+  agentNeutralTerminalWaitBlockedReason,
+  describeTerminalWaitBlockedReason
+} from './terminal-wait-blocked-reason-legacy-alias'
 import type { RuntimeTerminalWaitBlockedReason } from './runtime-terminal-contracts'
 
 describe('agentNeutralTerminalWaitBlockedReason', () => {
@@ -7,22 +10,19 @@ describe('agentNeutralTerminalWaitBlockedReason', () => {
     ['codex-update-prompt', 'agent-update-prompt'],
     ['codex-trust-workspace', 'agent-trust-workspace'],
     ['codex-cwd-prompt', 'agent-cwd-prompt'],
+    ['codex-hooks-review-prompt', 'agent-hooks-review-prompt'],
     ['codex-interactive-prompt', 'agent-interactive-prompt']
   ] as const)('renames %s published by an older host to %s', (legacy, neutral) => {
     expect(agentNeutralTerminalWaitBlockedReason(legacy)).toBe(neutral)
   })
 
-  // Why no alias: this build still publishes both, so aliasing them would rename a live reason rather
-  // than reinterpret an older host's. ('codex just got an upgrade' names Codex; 'hooks need review'
-  // does not, and stays Codex-labelled only because no neutral spelling was minted for it.)
-  it.each(['codex-model-migration-prompt', 'codex-hooks-review-prompt'] as const)(
-    'leaves the agent-specific %s alone',
-    (reason) => {
-      expect(agentNeutralTerminalWaitBlockedReason(reason)).toBeNull()
-    }
-  )
+  // Why no alias: this build still publishes it, so aliasing it would rename a live reason rather
+  // than reinterpret an older host's -- and 'codex just got an upgrade' does name Codex.
+  it('leaves the agent-specific codex-model-migration-prompt alone', () => {
+    expect(agentNeutralTerminalWaitBlockedReason('codex-model-migration-prompt')).toBeNull()
+  })
 
-  it.each(['agent-approval-prompt', 'agent-trust-workspace'] as const)(
+  it.each(['agent-approval-prompt', 'agent-trust-workspace', 'agent-hooks-review-prompt'] as const)(
     'reports no alias for the already-neutral %s',
     (reason) => {
       expect(agentNeutralTerminalWaitBlockedReason(reason)).toBeNull()
@@ -37,6 +37,23 @@ describe('agentNeutralTerminalWaitBlockedReason', () => {
       expect(
         agentNeutralTerminalWaitBlockedReason(reason as RuntimeTerminalWaitBlockedReason)
       ).toBeNull()
+    }
+  )
+})
+
+// Why one formatter: the CLI's wait/show output and the worker and federation "Agent startup
+// blocked:" receipts all render this token, and only the CLI used to alias it.
+describe('describeTerminalWaitBlockedReason', () => {
+  it('names the neutral spelling beside a legacy token', () => {
+    expect(describeTerminalWaitBlockedReason('codex-trust-workspace')).toBe(
+      'codex-trust-workspace (agent-trust-workspace)'
+    )
+  })
+
+  it.each(['agent-trust-workspace', 'codex-model-migration-prompt'] as const)(
+    'renders %s unannotated',
+    (reason) => {
+      expect(describeTerminalWaitBlockedReason(reason)).toBe(reason)
     }
   )
 })

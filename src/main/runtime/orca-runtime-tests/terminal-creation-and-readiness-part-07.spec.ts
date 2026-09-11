@@ -85,37 +85,6 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  // Why: the user-reported wedge -- a non-Gemini Antigravity session never cleared its startup trust dialog.
-  it('resolves tui-idle when a stale trust prompt is followed by non-Gemini Antigravity readiness', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    runtime.onPtyData(
-      'pty-bg',
-      [
-        'Do you trust this workspace directory?\n',
-        'Press t to trust\n',
-        antigravityReadyScreen('Claude Sonnet 4.5 (High)'),
-        '\n'
-      ].join(''),
-      Date.now()
-    )
-
-    await expect(
-      runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
-    ).resolves.toMatchObject({
-      handle,
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running'
-    })
-  })
-
   it('resolves tui-idle when a stale Codex prompt is followed by the ready header', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -177,7 +146,7 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-hooks-review-prompt'
+      blockedReason: 'agent-hooks-review-prompt'
     })
   })
 
@@ -390,7 +359,7 @@ describe('OrcaRuntimeService', () => {
       condition: 'tui-idle',
       satisfied: false,
       status: 'running',
-      blockedReason: 'codex-hooks-review-prompt'
+      blockedReason: 'agent-hooks-review-prompt'
     })
   })
 

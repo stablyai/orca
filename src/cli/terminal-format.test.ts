@@ -225,28 +225,28 @@ describe('blocked-reason rendering against a mixed-version host', () => {
     }
   }
 
-  it('names the neutral reason beside a legacy token on both wait and show', () => {
-    expect(formatTerminalWait(waitResult('codex-trust-workspace'))).toContain(
-      'blockedReason: codex-trust-workspace (agent-trust-workspace)'
+  // Why one assertion over every reason: a test that only asserts the *absence* of an alias suffix
+  // passes when the aliasing code is deleted, so each case is paired with a legacy token that must
+  // gain one.
+  it.each([
+    ['codex-trust-workspace', 'codex-trust-workspace (agent-trust-workspace)'],
+    ['codex-update-prompt', 'codex-update-prompt (agent-update-prompt)'],
+    ['codex-cwd-prompt', 'codex-cwd-prompt (agent-cwd-prompt)'],
+    ['codex-hooks-review-prompt', 'codex-hooks-review-prompt (agent-hooks-review-prompt)'],
+    ['codex-interactive-prompt', 'codex-interactive-prompt (agent-interactive-prompt)'],
+    // This build published these itself, so there is nothing to reinterpret.
+    ['agent-trust-workspace', 'agent-trust-workspace'],
+    ['codex-model-migration-prompt', 'codex-model-migration-prompt']
+  ] as const)('renders %s as %s on both wait and show', (reason, rendered) => {
+    expect(formatTerminalWait(waitResult(reason)).split('\n').at(-1)).toBe(
+      `blockedReason: ${rendered}`
     )
-    expect(formatTerminalShow(showResult('codex-trust-workspace'))).toContain(
-      'agentWait: codex-trust-workspace (agent-trust-workspace) (via prompt-text)'
+    expect(formatTerminalShow(showResult(reason))).toContain(
+      `agentWait: ${rendered} (via prompt-text)`
     )
   })
 
-  it('adds nothing when this build published the reason itself', () => {
-    expect(formatTerminalWait(waitResult('agent-trust-workspace'))).toMatch(
-      /blockedReason: agent-trust-workspace$/
-    )
-    expect(formatTerminalShow(showResult('agent-trust-workspace'))).toContain(
-      'agentWait: agent-trust-workspace (via prompt-text)'
-    )
-  })
-
-  it('leaves an agent-specific legacy token and a reasonless wait alone', () => {
-    expect(formatTerminalWait(waitResult('codex-hooks-review-prompt'))).toMatch(
-      /blockedReason: codex-hooks-review-prompt$/
-    )
+  it('still describes a wait with no reason at all', () => {
     expect(formatTerminalShow(showResult(undefined))).toContain(
       'agentWait: interactive prompt (via prompt-text)'
     )
