@@ -36,6 +36,7 @@ const plan = (overrides: Partial<AgentSessionLaunchVerdict> = {}) =>
 
 const baseArgs = {
   plan: plan(),
+  agent: 'codex' as const,
   worktreeId: 'worktree-1',
   startup: { command: 'codex' } as never,
   pendingFirstAgentMessageRename: true,
@@ -94,6 +95,7 @@ describe('settleFullCreationStructuredLaunch', () => {
     })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('worktree-1', {
       sidebarRevealBehavior: 'auto',
+      agent: 'codex',
       createNewTerminalForStartup: true,
       startup: baseArgs.startup
     })
