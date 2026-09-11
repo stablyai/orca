@@ -1,3 +1,4 @@
+import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '../web-session-tab-rpc-timeout'
 import type { AppState } from '../../store'
 import type {
   RuntimeMobileSessionAgentTab,
@@ -70,9 +71,29 @@ export type SessionTabsPublicationEpochHistory = RetiredValueHistory & {
   /** Set by `noteSessionTabsPublicationEpoch` so eviction can release the key index. */
   environmentId?: string
   worktreeId?: string
+  /** Wall time of the last note, so eviction can tell a dead fence from a live one. */
+  notedAt?: number
 }
-/** Live worktrees refresh their entry on every accepted frame, so eviction reaches tombstones first. */
+/**
+ * Soft cap. Live worktrees refresh their entry on every accepted frame, so the oldest entry is
+ * always a retracted worktree's tombstone — which is exactly the fence that stops a sibling
+ * stream's late frame from a retired publisher being applied. Absence is fail-OPEN on both read
+ * paths (`hasRetiredValue` answers false for a missing entry, and the receive path then re-notes
+ * the epoch as current), so evicting a live fence re-opens the acceptance it exists to prevent.
+ *
+ * The cap therefore yields to `SESSION_TABS_PUBLICATION_FENCE_RETENTION_MS`: the map may exceed it
+ * while every entry is still young. Memory is then bounded by worktree churn WITHIN that window
+ * rather than by count, which is the bound that can be held without discarding the fence.
+ */
 export const MAX_SESSION_TABS_PUBLICATION_EPOCH_HISTORY = 512
+
+/**
+ * How long a tombstone can still be beaten by a frame in flight. A frame older than the tab RPC
+ * budget has already been abandoned by the transport, so 4x that budget is a fence that has
+ * outlived anything it could fence against. Chosen against the delivery window, not against a
+ * memory target — the count cap above is the memory target, and it is the one that yields.
+ */
+export const SESSION_TABS_PUBLICATION_FENCE_RETENTION_MS = 4 * WEB_SESSION_TAB_RPC_TIMEOUT_MS
 export type SessionTabsRecoveryState = { pendingCount: number }
 export type SessionTabsRemovalFence = {
   receivedFrame: number

@@ -122,6 +122,22 @@ function environmentsNamingWorktrees(environmentId: string): number {
   return count
 }
 
+// HOW TO ASSERT ON A COST, because the obvious way flakes.
+//
+// The first version of this file asserted a wall-clock ratio: indexed teardown had to be at least
+// 20x faster than the prefix sweep. It failed in the full suite at 22.3x — not because the property
+// broke, but because the box was loaded. A duration assertion fails for reasons unrelated to the
+// thing it claims to protect, and on a machine running many agents it will be retried away by
+// whoever sees it next, taking the real regression with it.
+//
+// So assert the STRUCTURAL FACT the duration was a proxy for. The cost here IS the enumeration:
+// the old teardown prefix-scanned every key of nine per-worktree maps. Spying on `.keys()` for
+// those maps and requiring that teardown never enumerates any of them pins that directly — exact,
+// load-independent, and it dies to the right mutation (restoring the sweep kills it) where a
+// timing bound would merely get slower.
+//
+// Generalise it: when you are about to assert on a duration, ask what structural fact the duration
+// is a proxy for, and assert that instead.
 describe('clearWebSessionTabsTrackingForEnvironment at workspace scale', () => {
   beforeEach(resetWebSessionTabsSnapshotFreshnessForTests)
 

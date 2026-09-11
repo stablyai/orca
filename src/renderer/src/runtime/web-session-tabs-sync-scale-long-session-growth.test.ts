@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   decideWebSessionTabsSnapshot,
@@ -8,6 +8,7 @@ import { clearWebSessionTabsTrackingForWorktree } from './web-session-tabs-sync/
 import { recordReceivedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking'
 import {
   MAX_SESSION_TABS_PUBLICATION_EPOCH_HISTORY,
+  SESSION_TABS_PUBLICATION_FENCE_RETENTION_MS,
   lastHostTerminalTabCountByWorktree,
   latestReceivedSessionTabsSnapshotByWorktree,
   latestSessionTabsSnapshotByWorktree,
@@ -40,17 +41,32 @@ function snapshotFor(worktree: string): RuntimeMobileSessionTabsResult {
   } as unknown as RuntimeMobileSessionTabsResult
 }
 
-/** Each cycle is one worktree observed then removed by the host, as a long session does for days. */
+/**
+ * Each cycle is one worktree observed then removed by the host, as a long session does for days.
+ *
+ * The clock advances with it, because that is what makes the session long — and because the cap
+ * deliberately yields to a fence that is still young enough to be beaten by a frame in flight
+ * (see SESSION_TABS_PUBLICATION_FENCE_RETENTION_MS). A count-only fixture measures the map at an
+ * instant, where nothing is evictable and no bound can hold without discarding a live fence.
+ */
 function driveWorktreeLifecycles(cycles: number): void {
   for (let i = 0; i < cycles; i += 1) {
     const worktree = `repo::/w/${i}`
     recordReceivedWebSessionTabsSnapshot(ENV, snapshotFor(worktree), undefined, `runtime-${i}`)
     clearWebSessionTabsTrackingForWorktree(ENV, worktree)
+    vi.advanceTimersByTime(SESSION_TABS_PUBLICATION_FENCE_RETENTION_MS / 8)
   }
 }
 
 describe('long-running session growth of session-tabs tracking maps', () => {
-  beforeEach(resetWebSessionTabsSnapshotFreshnessForTests)
+  beforeEach(() => {
+    vi.useFakeTimers()
+    resetWebSessionTabsSnapshotFreshnessForTests()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
 
   it('bounds the publication epoch tombstone history across 10k worktree lifecycles', () => {
     driveWorktreeLifecycles(CYCLES)
@@ -97,7 +113,11 @@ describe('long-running session growth of session-tabs tracking maps', () => {
       const worktree = `repo::/w/churn-${i}`
       recordReceivedWebSessionTabsSnapshot(ENV, snapshotFor(worktree))
       clearWebSessionTabsTrackingForWorktree(ENV, worktree)
+      // The clock moves with the churn: a fence is only evictable once it has outlived the
+      // delivery window, so an instantaneous fixture evicts nothing at all.
+      vi.advanceTimersByTime(SESSION_TABS_PUBLICATION_FENCE_RETENTION_MS / 8)
     }
+    vi.advanceTimersByTime(SESSION_TABS_PUBLICATION_FENCE_RETENTION_MS)
     expect(sessionTabsPublicationEpochHistoryByWorktree.size).toBe(
       MAX_SESSION_TABS_PUBLICATION_EPOCH_HISTORY
     )

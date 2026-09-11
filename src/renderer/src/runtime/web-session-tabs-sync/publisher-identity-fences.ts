@@ -2,6 +2,7 @@ import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope
 import { releaseSessionTabsEnvironmentKeyedWorktree } from './session-tabs-environment-key-index'
 import {
   MAX_SESSION_TABS_PUBLICATION_EPOCH_HISTORY,
+  SESSION_TABS_PUBLICATION_FENCE_RETENTION_MS,
   latestReceivedSessionTabsFrameByEnvironment,
   sessionTabsPublicationEpochHistoryByWorktree,
   sessionTabsRuntimeHistoryByEnvironment,
@@ -169,6 +170,7 @@ export function noteSessionTabsPublicationEpoch(
   ) as SessionTabsPublicationEpochHistory
   history.environmentId = environmentId
   history.worktreeId = worktreeId
+  history.notedAt = Date.now()
   // Re-insert so map order is least-recently-noted first: every accepted frame
   // renotes its epoch, so eviction reaches removed worktrees' tombstones first.
   sessionTabsPublicationEpochHistoryByWorktree.delete(key)
@@ -186,6 +188,15 @@ function evictOldestSessionTabsPublicationEpochHistory(): void {
       return
     }
     const oldest = sessionTabsPublicationEpochHistoryByWorktree.get(oldestKey)
+    // Why the cap yields: this entry is a fence, and absence is fail-open — dropping it lets the
+    // retired publisher's late frame be accepted and re-noted as current. Only a fence that has
+    // outlived the delivery window is safe to forget, so a map of young entries stays over the cap.
+    if (
+      oldest?.notedAt !== undefined &&
+      Date.now() - oldest.notedAt < SESSION_TABS_PUBLICATION_FENCE_RETENTION_MS
+    ) {
+      return
+    }
     sessionTabsPublicationEpochHistoryByWorktree.delete(oldestKey)
     if (oldest?.environmentId !== undefined && oldest.worktreeId !== undefined) {
       releaseSessionTabsEnvironmentKeyedWorktree(oldest.environmentId, oldest.worktreeId, oldestKey)
