@@ -543,6 +543,11 @@
               }
             }
           }
+        },
+        "quick": {
+          "notes": {
+            "saveFailed": "Failed to save quick note"
+          }
         }
       }
     },
@@ -1113,7 +1118,9 @@
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
         "shareSkillsTitle": "Share Skills",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "quickNotesTitle": "Quick Notes",
+        "quickNotesDescription": "Saved snippets of text you can copy to the clipboard."
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -3542,6 +3549,30 @@
           "TabBarQuickCommandHostLoadStatus": {
             "82e294f3ca": "Host unavailable",
             "7c129b08ff": "Loading host…"
+          },
+          "TabBarQuickNoteItem": {
+            "actions": "Quick note actions",
+            "edit": "Edit {{value0}}",
+            "remove": "Remove {{value0}}"
+          },
+          "TabBarQuickNotesButton": {
+            "deleteTitle": "Delete \"{{value0}}\"?",
+            "deleteDescription": "This quick note will be removed from your saved list.",
+            "delete": "Delete",
+            "addAria": "Add quick note",
+            "note": "Note",
+            "addTooltip": "Save a reusable note you can copy to the clipboard"
+          },
+          "TabBarQuickNotesMenu": {
+            "more": "More quick notes",
+            "copyNamed": "Copy quick note: {{value0}}",
+            "copy": "Copy quick note",
+            "note": "Note",
+            "copyTooltip": "Copy \"{{value0}}\" to the clipboard",
+            "searchPlaceholder": "Search quick notes...",
+            "noMatch": "No notes match",
+            "empty": "No notes",
+            "add": "Note"
           }
         }
       },
@@ -8209,7 +8240,9 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+          "quickNotesTitle": "Quick Notes",
+          "quickNotesDescription": "Saved snippets of text you can copy to the clipboard."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -10029,6 +10062,20 @@
               "d691c4e8d8": "Saved terminal commands that can be launched from any terminal, scoped globally or to a specific project.",
               "4c8945952b": "Quick Commands"
             }
+          },
+          "notes": {
+            "search": {
+              "title": "Quick Notes",
+              "description": "Reusable plain-text snippets; picking one from the tab bar copies it to the clipboard.",
+              "kwQuick": "quick",
+              "kwNote": "note",
+              "kwNotes": "notes",
+              "kwSnippet": "snippet",
+              "kwClipboard": "clipboard",
+              "kwCopy": "copy",
+              "kwText": "text",
+              "kwPaste": "paste"
+            }
           }
         },
         "repository": {
@@ -11839,6 +11886,25 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "QuickNotesList": {
+          "untitled": "Untitled",
+          "copied": "Copied",
+          "copyFailed": "Couldn't copy",
+          "copy": "Copy {{value0}}",
+          "edit": "Edit {{value0}}",
+          "noText": "No text",
+          "remove": "Remove {{value0}}",
+          "noSearchMatches": "No notes match this search.",
+          "none": "No notes saved.",
+          "hint": "Pick one from the Note button in the tab bar to copy it to the clipboard."
+        },
+        "QuickNotesPane": {
+          "search": "Search notes",
+          "deleteTitle": "Delete \"{{value0}}\"?",
+          "deleteDescription": "This quick note will be removed from your saved list.",
+          "delete": "Delete",
+          "add": "Add Note"
         }
       },
       "right": {
@@ -16885,6 +16951,25 @@
       "HostedReviewUnlinkMenuItem": {
         "label": "Unlink {{value0}} from workspace",
         "description": "Orca will hide {{value0}} {{value1}} details for this workspace. The {{value0}} and branch on {{value2}} won’t be changed."
+      },
+      "quick": {
+        "notes": {
+          "QuickNoteDialog": {
+            "editTitle": "Edit Quick Note",
+            "addTitle": "Add Quick Note",
+            "description": "Saved notes appear in the tab bar menu; picking one copies it to the clipboard.",
+            "labelField": "Label",
+            "labelPlaceholder": "Email signature",
+            "bodyField": "Text",
+            "bodyPlaceholder": "The text copied to your clipboard when you pick this note.",
+            "cancel": "Cancel",
+            "save": "Save"
+          },
+          "copyQuickNote": {
+            "copied": "\"{{value0}}\" copied",
+            "failed": "Failed to copy note"
+          }
+        }
       }
     },
     "i18n": {

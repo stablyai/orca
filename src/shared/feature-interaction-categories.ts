@@ -64,6 +64,7 @@ export const FEATURE_INTERACTION_CATEGORY_BY_ID = {
   notifications: 'settings',
   ports: 'resource_management',
   'quick-commands': 'launcher',
+  'quick-notes': 'launcher',
   'resource-manager': 'resource_management',
   'review-notes': 'review',
   ssh: 'setup',

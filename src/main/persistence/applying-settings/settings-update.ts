@@ -6,6 +6,7 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
+import { normalizeQuickNotes } from '../../../shared/quick-notes'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
@@ -104,6 +105,9 @@ export function updateSettings(
     sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
       updates.terminalQuickCommands
     )
+  }
+  if ('quickNotes' in updates) {
+    sanitizedUpdates.quickNotes = normalizeQuickNotes(updates.quickNotes)
   }
   if ('terminalCustomThemes' in updates) {
     sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(

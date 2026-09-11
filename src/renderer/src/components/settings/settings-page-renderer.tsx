@@ -30,6 +30,7 @@ import {
   renderFloatingWorkspaceSettingsSection,
   renderMobileEmulatorSettingsSection,
   renderQuickCommandsSettingsSection,
+  renderQuickNotesSettingsSection,
   renderTerminalSettingsSection
 } from './settings-interface-primary-section-renderers'
 import {
@@ -131,6 +132,7 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
                 {renderTasksSettingsSection(context)}
                 {renderTerminalSettingsSection(context)}
                 {renderQuickCommandsSettingsSection(context)}
+                {renderQuickNotesSettingsSection(context)}
                 {renderBrowserSettingsSection(context)}
                 {renderMobileEmulatorSettingsSection(context)}
                 {renderFloatingWorkspaceSettingsSection(context)}

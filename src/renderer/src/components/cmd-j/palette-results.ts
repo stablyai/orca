@@ -75,6 +75,7 @@ const SETTINGS_ALIASES: Record<string, string[]> = {
   appearance: ['theme', 'themes'],
   agents: ['ai agents'],
   'quick-commands': ['quick commands', 'quick command'],
+  'quick-notes': ['quick notes', 'quick note'],
   repo: ['repository settings', 'project settings'],
   integrations: ['gitlab', 'github', 'linear'],
   notifications: ['notification settings'],

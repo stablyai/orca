@@ -2,6 +2,7 @@ import { BrowserPane } from './BrowserPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
 import { MobileEmulatorSettingsPane } from './MobileEmulatorSettingsPane'
 import { QuickCommandsPane } from './QuickCommandsPane'
+import { QuickNotesPane } from './QuickNotesPane'
 import { TerminalPane } from './TerminalPane'
 import { SettingsSection } from './SettingsSection'
 import { translate } from '@/i18n/i18n'
@@ -57,6 +58,23 @@ export function renderQuickCommandsSettingsSection(
           addCommandIntentSignal={model.quickCommandAddIntentSignal}
         />
       ) : null}
+    </SettingsSection>
+  )
+}
+
+export function renderQuickNotesSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+  const { model, navigation, view } = context
+  return (
+    <SettingsSection
+      id="quick-notes"
+      title={translate('auto.components.settings.Settings.quickNotesTitle', 'Quick Notes')}
+      description={translate(
+        'auto.components.settings.Settings.quickNotesDescription',
+        'Saved snippets of text you can copy to the clipboard.'
+      )}
+      searchEntries={navigation.getSectionSearchEntries('quick-notes')}
+    >
+      {view.isSectionMounted('quick-notes') ? <QuickNotesPane settings={model.settings} /> : null}
     </SettingsSection>
   )
 }
