@@ -13562,6 +13562,24 @@
               }
             }
           }
+        },
+        "AgentStatusHooksControl": {
+          "label": "Enable agent status hooks",
+          "why": "Enables Orca to track your CLI agents' statuses, so it can inform you when each is working, needs you, or is done. Also powers your notifications.",
+          "disclosureSummary": "What Orca changes, and when",
+          "whenLabel": "When",
+          "whenBody": "When you continue from this step, for the agent CLIs found on your machine. Orca keeps them current on later launches. Agents you don't have are skipped, and nothing is written for them.",
+          "affectedLabel": "Affected",
+          "affectedScriptNote": "Plus a small script in ~/.orca/agent-hooks/. Status is reported to Orca on your machine, it isn't uploaded anywhere.",
+          "yourHooksLabel": "Your hooks",
+          "yourHooksBody": "Orca only adds or removes entries that point at its own script, hooks you wrote are left alone. These live in your agent's own config, so they run in every session, not just ones started from Orca. When Orca isn't running the hook exits immediately and can never block or deny a tool call.",
+          "turningOffLabel": "Turning off",
+          "turningOffBody": "Removes the entries Orca added and stops it reinstalling them on the next launch.",
+          "offRamp": "Turn this off any time in Settings → Agents.",
+          "uncheckedConsequence": "Orca will fall back to reading terminal output. Resumed sessions show no status until you type, finished turns can stay stuck on \"working\", and Cursor reports nothing at all."
+        },
+        "agent-status-hook-disclosure-rows": {
+          "codexLocation": "Orca-managed Codex home"
         }
       },
       "new": {

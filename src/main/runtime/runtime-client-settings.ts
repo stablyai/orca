@@ -17,6 +17,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { isManagedHookFirstRunGatePending } from '../agent-hooks/managed-hook-first-run-gate'
 import type { RuntimeStore } from './runtime-store-contract'
 
 export type RuntimeClientSettings = Pick<
@@ -136,11 +137,14 @@ export class RuntimeClientSettingsController {
     if (updates.worktreeVisibilityDefaults !== undefined) {
       this.notifyReposChanged?.()
     }
+    // Why the latch alone: RuntimeStore exposes no onboarding state, and the two retirement points
+    // make 'pending' equivalent to actively deferring.
     if (
-      (typeof updates.agentStatusHooksEnabled === 'boolean' &&
+      !isManagedHookFirstRunGatePending(settings) &&
+      ((typeof updates.agentStatusHooksEnabled === 'boolean' &&
         before !== updates.agentStatusHooksEnabled) ||
-      (updates.disabledTuiAgents !== undefined &&
-        !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents))
+        (updates.disabledTuiAgents !== undefined &&
+          !haveSameDisabledTuiAgents(beforeSettings.disabledTuiAgents, settings.disabledTuiAgents)))
     ) {
       await this.reconcileManagedAgentHooks()
     }

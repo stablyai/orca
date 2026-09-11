@@ -25,6 +25,26 @@ export class LoadedCohortMigrationOperations {
     }
   }
 
+  migrateManagedAgentHookFirstRunGate(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const existing = state.settings?.managedAgentHookFirstRunGate
+    if (existing === 'pending' || existing === 'done') {
+      return state
+    }
+    // Why: mark dirty so the frozen verdict persists; else a fresh install re-reads as "existing" after its file lands.
+    this.runtime.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        // Only a genuinely fresh profile still has an onboarding step 1 to pass, so only it defers.
+        managedAgentHookFirstRunGate: fileExistedOnLoad ? 'done' : 'pending'
+      }
+    }
+  }
+
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
     const existing = state.settings?.telemetry
     // Why: require all three invariants; keying on existedBeforeTelemetryRelease alone lets a partial block skip migration.

@@ -20,6 +20,10 @@ import {
   shouldContinueManagedHookStartup,
   shouldInstallStartupManagedAgentHook
 } from '../agent-hooks/managed-agent-hook-controls'
+import {
+  isManagedHookFirstRunGatePending,
+  isManagedHookInstallDeferredForFirstRun
+} from '../agent-hooks/managed-hook-first-run-gate'
 import { shouldInstallManagedHooks } from './configure-process'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { mainProcessState as state } from './main-process-state'
@@ -94,8 +98,23 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // and complete the legacy real-home sweep first — but awaiting it inline
   // stalled app init behind that session, so chain instead of blocking.
   const startupManagedHookSettings = store.getSettings()
+  // Why `!isServeMode`: a serve host never paints the wizard (paired clients keep onboarding in
+  // localStorage and there is no onboarding RPC), so it would defer forever.
+  const deferManagedHooksForFirstRun =
+    !state.isServeMode &&
+    isManagedHookInstallDeferredForFirstRun({
+      onboarding: store.getOnboarding(),
+      settings: startupManagedHookSettings
+    })
+  if (
+    !deferManagedHooksForFirstRun &&
+    isManagedHookFirstRunGatePending(startupManagedHookSettings)
+  ) {
+    store.updateSettings({ managedAgentHookFirstRunGate: 'done' })
+  }
   const shouldReconcileStartupManagedHooks =
     shouldInstallManagedHooks(is.dev) &&
+    !deferManagedHooksForFirstRun &&
     resolveStartupManagedHookAction(startupManagedHookSettings) === 'install'
   const realHomeCodexHookState =
     shouldReconcileStartupManagedHooks &&

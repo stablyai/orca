@@ -89,6 +89,7 @@ type SettingsChangedListener = (
 const store = {
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
+  getOnboarding: vi.fn(),
   getGitHubCache: vi.fn(),
   setGitHubCache: vi.fn(),
   onSettingsChanged: vi.fn(() => () => {})
@@ -117,6 +118,8 @@ describe('registerSettingsHandlers', () => {
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
+    // Default: a profile past onboarding step 1, so the first-run gate never defers.
+    store.getOnboarding.mockReset().mockReturnValue({ closedAt: null, lastCompletedStep: 5 })
     store.onSettingsChanged.mockClear()
   })
 
@@ -187,6 +190,68 @@ describe('registerSettingsHandlers', () => {
       updated,
       expect.objectContaining({ shouldContinue: expect.any(Function) })
     )
+  })
+
+  it('skips the hook reconcile while the first-run gate defers, but still persists the choice', async () => {
+    const before = {
+      agentStatusHooksEnabled: true,
+      disabledTuiAgents: [],
+      managedAgentHookFirstRunGate: 'pending'
+    }
+    const updated = { ...before, agentStatusHooksEnabled: false }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockReturnValue(updated)
+    store.getOnboarding.mockReturnValue({ closedAt: null, lastCompletedStep: -1 })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { agentStatusHooksEnabled: boolean }
+    ) => Promise<unknown>
+
+    const result = await handler(settingsInvokeEvent, { agentStatusHooksEnabled: false })
+
+    // Reconciling here would delete user-global hooks this fresh profile never wrote (STA-5679).
+    expect(applyAgentStatusHooksEnabledMock).not.toHaveBeenCalled()
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ agentStatusHooksEnabled: false }),
+      expect.anything()
+    )
+    expect(result).toBe(updated)
+  })
+
+  it('reconciles hooks once the first-run gate has lifted', async () => {
+    const before = {
+      agentStatusHooksEnabled: true,
+      disabledTuiAgents: [],
+      managedAgentHookFirstRunGate: 'pending'
+    }
+    const updated = { ...before, agentStatusHooksEnabled: false }
+    store.getSettings.mockReturnValue(before)
+    store.updateSettings.mockReturnValue(updated)
+    store.getOnboarding.mockReturnValue({ closedAt: null, lastCompletedStep: 1 })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: { agentStatusHooksEnabled: boolean }
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { agentStatusHooksEnabled: false })
+
+    expect(applyAgentStatusHooksEnabledMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops a renderer attempt to write the main-owned first-run latch', async () => {
+    store.getSettings.mockReturnValue({ managedAgentHookFirstRunGate: 'pending' })
+    store.updateSettings.mockReturnValue({ managedAgentHookFirstRunGate: 'pending' })
+    registerSettingsHandlers(store as never)
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      event: typeof settingsInvokeEvent,
+      args: Record<string, unknown>
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { managedAgentHookFirstRunGate: 'done' })
+
+    expect(store.updateSettings).toHaveBeenCalledWith({}, expect.anything())
   })
 
   it('rejects durable Active Server writes through generic settings:set', async () => {

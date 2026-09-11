@@ -484,6 +484,11 @@ export type GlobalSettings = {
   /** One-shot cohort marker for the tab-switch keybinding swap. 'pending' =
    *  pre-existing install (seed pins old chords, then flips to 'done'); 'done' = fresh install. */
   tabSwitchKeybindingSeed?: 'pending' | 'done'
+  /** One-shot first-run latch for managed agent status hooks. 'pending' = fresh profile that has
+   *  not yet passed onboarding step 1, so startup must not write user-global agent configs;
+   *  'done' = the gate has lifted (or never applied). Retired the first launch that does not
+   *  defer, so a manual wizard re-open can never re-arm it. Main-owned; never sent to a client. */
+  managedAgentHookFirstRunGate?: 'pending' | 'done'
   /** Local voice/dictation config. Optional for pre-voice profiles; getDefaultSettings() hydrates defaults via the persistence merge. */
   voice?: VoiceSettings
 }

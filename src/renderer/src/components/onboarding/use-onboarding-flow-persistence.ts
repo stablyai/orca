@@ -133,6 +133,7 @@ type PersistCurrentStepDeps = {
   currentStepId: StepId
   selectedAgent: TuiAgent | null
   yoloPermissions: boolean
+  agentStatusHooksEnabled: boolean
   theme: GlobalSettings['theme']
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
@@ -149,6 +150,7 @@ export function usePersistCurrentStep({
   currentStepId,
   selectedAgent,
   yoloPermissions,
+  agentStatusHooksEnabled,
   theme,
   settings,
   updateSettings,
@@ -165,6 +167,8 @@ export function usePersistCurrentStep({
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
         await updateSettings({
           defaultTuiAgent,
+          // Belt and braces: recovers the choice if the on-change write from the checkbox rejected.
+          agentStatusHooksEnabled,
           ...applyAgentPermissionMode({
             mode: yoloPermissions ? 'yolo' : 'manual',
             agentDefaultArgs: settings.agentDefaultArgs,
@@ -219,6 +223,7 @@ export function usePersistCurrentStep({
       return { ok: false }
     }
   }, [
+    agentStatusHooksEnabled,
     currentStepId,
     onboardingChecklist,
     onOnboardingChange,
