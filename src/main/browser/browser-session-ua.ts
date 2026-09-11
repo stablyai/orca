@@ -22,14 +22,38 @@ export function cleanElectronUserAgent(ua: string): string {
   )
 }
 
+export type BrowserSessionRequestUserAgentResolver = (args: {
+  url: string
+  webContentsId?: number
+  currentUserAgent?: string
+  effectiveUserAgent?: string
+  baseUserAgent: string
+}) => string | undefined
+
 // Why: Chromium already publishes one internally consistent client-hint identity through both
-// request headers and navigator.userAgentData. This handler only owns the host-scoped Firefox
-// exception; synthesizing Chrome brands here would make those two browser-owned surfaces disagree.
-export function setupGoogleAuthUserAgentOverride(sess: Session): void {
+// request headers and navigator.userAgentData. This handler owns the legacy User-Agent header on
+// the wire; synthesizing Chrome brands here would make those browser-owned surfaces disagree.
+export function setupGoogleAuthUserAgentOverride(
+  sess: Session,
+  resolveRequestUserAgent?: BrowserSessionRequestUserAgentResolver
+): void {
   const firefoxUa = googleAuthUserAgent()
 
   sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
     const headers = details.requestHeaders
+    const requestUserAgent = currentUserAgent(headers)
+    let effectiveUserAgent: string | undefined
+    try {
+      effectiveUserAgent = details.webContents?.getUserAgent()
+    } catch {
+      // The request can race guest teardown; the header and manager state still provide a fallback.
+    }
+    // The resolver is supplied by the browser manager so this layer can enforce viewport and
+    // auth identities without importing manager state into the session policy (which would cycle).
+    const baseUserAgent =
+      typeof sess.getUserAgent === 'function'
+        ? cleanElectronUserAgent(sess.getUserAgent())
+        : (requestUserAgent ?? '')
     if (isGoogleAuthUrl(details.url)) {
       // Why: present a Firefox identity on Google's sign-in hosts so the user logs
       // in inside the app and Google issues self-refreshing bound cookies. Strip
@@ -39,7 +63,27 @@ export function setupGoogleAuthUserAgentOverride(sess: Session): void {
       callback({ requestHeaders: headers })
       return
     }
-    if (currentUserAgent(headers) === firefoxUa) {
+    const userAgent =
+      // Requests from an auth document fan out to gstatic and other non-auth hosts. Preserve the
+      // Firefox identity already placed on those requests instead of switching them to Chrome.
+      requestUserAgent === firefoxUa
+        ? firefoxUa
+        : resolveRequestUserAgent
+          ? (resolveRequestUserAgent({
+              url: details.url,
+              webContentsId: details.webContentsId,
+              currentUserAgent: requestUserAgent,
+              effectiveUserAgent,
+              baseUserAgent
+            }) ??
+            (baseUserAgent || requestUserAgent))
+          : effectiveUserAgent === firefoxUa
+            ? firefoxUa
+            : baseUserAgent || requestUserAgent
+    if (userAgent) {
+      setUserAgentHeader(headers, userAgent)
+    }
+    if (userAgent === firefoxUa) {
       // Why: while the auth document is on screen the WebContents UA is Firefox,
       // so its cross-host subresource/XHR requests (gstatic, play.google.com, the
       // sign-in challenge endpoints) reach here carrying the Firefox UA yet still
