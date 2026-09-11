@@ -40,11 +40,15 @@ const MAX_CREDENTIAL_LINE_LENGTH = 512
 // segment before it is handled by the prefix rules, not here — a variable-length prefix inside
 // a noun alternation makes this whole pattern quadratic on long lines, and it runs per retained
 // tail line at streaming rate.
-const CREDENTIAL_NOUN_SOURCE =
+export const CREDENTIAL_NOUN_SOURCE =
   'password|passphrase|api[ _-]?keys?|access[ _-]tokens?|auth(?:orization)?[ _-]tokens?|bearer tokens?|personal access tokens?|secret keys?|client secrets?|one[- ]time (?:code|password)|otp|verification codes?|authentication codes?|security codes?|2fa codes?|device codes?|credentials?'
 
-const CREDENTIAL_NOUN_RE = new RegExp(CREDENTIAL_NOUN_SOURCE, 'gi')
-const CREDENTIAL_NOUN_ANYWHERE_RE = new RegExp(CREDENTIAL_NOUN_SOURCE, 'i')
+// Why the lookbehind: `candidate.credential`, `settings.apiKey` and `config.password` are property
+// accesses. The noun is what corroborates an otherwise-inert bottom row, so an identifier reading
+// as the noun is enough on its own to refuse a screen that is only printing source. Only `.` is
+// excluded, not all of `\w` — the env-var form (`OPENAI_API_KEY`) is a real ask.
+const CREDENTIAL_NOUN_RE = new RegExp(`(?<!\\.)(?:${CREDENTIAL_NOUN_SOURCE})`, 'gi')
+const CREDENTIAL_NOUN_ANYWHERE_RE = new RegExp(`(?<!\\.)(?:${CREDENTIAL_NOUN_SOURCE})`, 'i')
 
 // Why a vendor slot: real prompts read "enter your Anthropic API key" and
 // "paste your personal access token", not just "enter your API key".
@@ -81,16 +85,17 @@ const GIT_CREDENTIAL_RE = /^[^a-z0-9]{0,8}(?:username|password) for ['"]?[a-z][a
 // Why the lookbehind: `user.login`, `candidate.login` and `overrides.filter((login) =>` are
 // property accesses, not auth wording, and `\b` treats `.` as a boundary. Agents print this
 // repo's own source constantly.
-const AUTH_VERB_RE =
-  /(?<![.\w])(?:sign[ -]?in|signin|log[ -]?in|authenticate|authorized?|authorization|authentication)\b/i
+export const AUTH_VERB_SOURCE =
+  'sign[ -]?in|signin|log[ -]?in|authenticate|authorized?|authorization|authentication'
+const AUTH_VERB_RE = new RegExp(`(?<![.\\w])(?:${AUTH_VERB_SOURCE})\\b`, 'i')
 
 // Wording only a dialog addressing the user uses.
 // Why `waiting for you to` carries an auth continuation: bare "waiting for you to …" is how
 // every agent narrates waiting on a review, a branch choice or an approval.
-const AUTH_ACTION_FLOW_SOURCE =
+export const AUTH_ACTION_FLOW_SOURCE =
   'sign[ -]?in with|log[ -]?in with|authenticate with|authentication required|authorization required|sign[ -]?in required|login required|enter (?:the )?code|waiting for (?:authentication|authorization|you to (?:sign|log|authenticate|authoriz|finish|enter (?:the |your )?code))|open (?:this|the following) url|press enter to (?:open|sign)|paste (?:it|(?:the |your )?code) (?:here|below)'
 // Wording equally at home in a dialog and in narration about auth work.
-const AUTH_TOPIC_FLOW_SOURCE =
+export const AUTH_TOPIC_FLOW_SOURCE =
   'device code|verification code|two[ -]factor|2fa|authenticator app|mfa|\\d-digit code'
 
 const AUTH_FLOW_RE = new RegExp(
@@ -108,8 +113,11 @@ const AUTH_FLOW_RE = new RegExp(
  * summary (`• Root cause: authentication required from the vercel CLI`). Those are the shape a
  * false positive takes, and the reason is unconditional, so they must not read as a prompt.
  */
+// Why `/` and `*` are excluded from the decoration run: a dialog decorates its instruction with
+// box rules, bullets, carets and menu numbers, never with a comment marker. Without this,
+// `    // Sign in with the provider console to continue` reads as a dialog leading its row.
 const AUTH_ACTION_FLOW_LEADS_ROW_RE = new RegExp(
-  `^[^a-z0-9]{0,8}(?:(?:and|then|now|please|first|next|finally|you (?:must|need to|can))\\s+){0,2}(?:${AUTH_ACTION_FLOW_SOURCE})\\b`,
+  `^[^a-z0-9/*]{0,8}(?:(?:and|then|now|please|first|next|finally|you (?:must|need to|can))\\s+){0,2}(?:${AUTH_ACTION_FLOW_SOURCE})\\b`,
   'i'
 )
 

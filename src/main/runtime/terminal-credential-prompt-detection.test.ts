@@ -604,6 +604,17 @@ const LEGITIMATE_AGENT_SCREENS: readonly (readonly [string, string[]])[] = [
   // No caret, and the bottom row DOES lead with an action phrase, so the only thing keeping this
   // from reading as a live prompt is that `candidate.login` is a property access.
   [
+    'source comment leading with an action phrase, corroborated by the comment above it',
+    [
+      '    // See the authentication guide for details',
+      '    // Sign in with the provider console to continue'
+    ]
+  ],
+  [
+    'source rows where a .credential access is the only would-be credential noun',
+    ['    const owner = candidate.credential', '    Enter the code below to finish linking']
+  ],
+  [
     'source rows where a .login access is the only would-be auth verb',
     [
       '    const owner = candidate.login',
