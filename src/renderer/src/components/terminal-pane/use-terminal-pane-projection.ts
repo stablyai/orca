@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { CSSProperties } from 'react'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -19,6 +19,7 @@ import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-ac
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { resolvePaneAgentSessionId } from './pane-agent-session-id'
+import { useStructuredTabOwnerBinding } from '@/runtime/structured-tab-owner'
 
 export function useTerminalPaneProjection(controller: TerminalPaneMobileController) {
   const {
@@ -46,6 +47,9 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     shouldMeasureHiddenStartup,
     structuredSessionAgent,
     structuredSessionId,
+    structuredSessionOwnerHostId,
+    structuredSessionOwnerPairingRevision,
+    fallbackRuntimeEnvironmentId,
     tabId,
     sshReconnectOwnsTerminalErrors,
     systemPrefersDark,
@@ -151,7 +155,16 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     leafIds: getNativeChatLeafIds()
   })
   const structuredChatAgent = structuredSessionAgent ?? chatPaneResolvedAgent ?? chatPaneLaunchAgent
-  const structuredChatTarget = useMemo(() => ({ kind: 'local' as const }), [])
+  // The tab's stamped owner, not a hardcoded local: this portal and the pane overlay render the
+  // same session and must address the same host.
+  const structuredChatOwner = useStructuredTabOwnerBinding(
+    {
+      executionHostId: structuredSessionOwnerHostId,
+      runtimeOwnerPairingRevision: structuredSessionOwnerPairingRevision
+    },
+    fallbackRuntimeEnvironmentId
+  )
+  const structuredChatTarget = structuredChatOwner.target
   const chatPaneOwnsTabWideLaunchDraft = nativeChatLeafOwnsTabWideEvidence({
     ownerLeafId: getTabWideAgentHintLeafId(),
     leafId: chatPane?.leafId ?? null,
@@ -212,6 +225,11 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     chatPaneLaunchAgent,
     structuredChatAgent,
     structuredChatTarget,
+    structuredChatOwnerPairingRevision:
+      structuredChatOwner.owner.kind === 'environment'
+        ? structuredChatOwner.owner.pairingRevision
+        : undefined,
+    structuredChatOwnerPairingStale: structuredChatOwner.ownerPairingStale,
     structuredSessionId,
     chatPaneOwnsTabWideLaunchDraft,
     activePaneIsChatLeaf,

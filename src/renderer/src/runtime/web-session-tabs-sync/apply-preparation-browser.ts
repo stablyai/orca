@@ -5,6 +5,7 @@ import {
   browserWorkspaceHasRemoteEnvironmentPage,
   browserWorkspaceHasClientHostedEnvironmentPage
 } from './mirrored-browser-tabs'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { buildMirroredEditorTabs } from './tab-builders'
 import { buildMirroredAgentTabs, isReadyBrowserTab, isReadyEditorTab } from './terminal-surfaces'
 import { hostSnapshotAffirmsClientHostedPages } from '../host-session-snapshot-authority'
@@ -121,7 +122,8 @@ export function prepareWebSessionTabsSnapshotBrowser(
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length + mirroredEditorTabs.length,
     currentUnifiedTabs,
-    now
+    now,
+    base.options?.sessionOwnerHost ?? toRuntimeExecutionHostId(environmentId)
   )
   const mirroredEditorFileIds = new Set(mirroredEditorTabs.map((entry) => entry.file.id))
   const mirroredEditorHostTabIds = new Set(mirroredEditorTabs.map((entry) => entry.hostTabId))

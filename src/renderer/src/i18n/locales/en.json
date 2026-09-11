@@ -17242,6 +17242,7 @@
       "structuredSessionLaunchFailed": "Could not open {{value0}} chat",
       "structuredSessionLaunchPending": "Starting {{value0}} chat…",
       "structuredSessionCloseFailedDescription": "The terminal stayed open so the provider remains recoverable.",
+      "structuredSessionOwnerRepaired": "This chat\u2019s host was re-paired. Showing the last loaded transcript; sending is off.",
       "handoff": {
         "stage": {
           "finishingChat": "Finishing chat session…",

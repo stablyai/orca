@@ -56,6 +56,10 @@ export type Tab = {
   worktreeId: string
   /** Owning execution host when the same worktree id is visible from multiple hosts. */
   executionHostId?: ExecutionHostId
+  /** Pairing revision `executionHostId` carried when this tab's session was stamped; an environment
+   *  id is reused across re-pairings, so the id alone still names a host that became another
+   *  machine. Absent on tabs persisted before stamping — those keep the legacy derivation. */
+  runtimeOwnerPairingRevision?: number
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null

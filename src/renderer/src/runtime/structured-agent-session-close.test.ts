@@ -28,9 +28,12 @@ describe('closeStructuredAgentSession', () => {
     )
 
     expect(mocks.supportsCapability).not.toHaveBeenCalled()
-    expect(mocks.call).toHaveBeenCalledWith({ kind: 'local' }, 'agentSession.close', {
-      sessionId: 'codex-session-1'
-    })
+    expect(mocks.call).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'agentSession.close',
+      { sessionId: 'codex-session-1' },
+      {}
+    )
   })
 
   it('closes through a paired host that advertises the structured session surface', async () => {
@@ -38,9 +41,12 @@ describe('closeStructuredAgentSession', () => {
 
     await expect(closeStructuredAgentSession(target, 'claude-session-1')).resolves.toBe('closed')
 
-    expect(mocks.call).toHaveBeenCalledWith(target, 'agentSession.close', {
-      sessionId: 'claude-session-1'
-    })
+    expect(mocks.call).toHaveBeenCalledWith(
+      target,
+      'agentSession.close',
+      { sessionId: 'claude-session-1' },
+      {}
+    )
   })
 
   it('does not send an unknown method to a legacy paired host', async () => {

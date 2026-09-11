@@ -42,8 +42,17 @@ function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {
   return item.body.kind !== 'status' || !item.body.providerFrame
 }
 
-function ownerKey(sessionId: string, target: RuntimeClientTarget): string {
-  const targetKey = target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
+// The pairing revision is part of the identity: an environment id is reused across re-pairings, so
+// without it a same-id re-pair served the previous machine's transcript under a live pane.
+function ownerKey(
+  sessionId: string,
+  target: RuntimeClientTarget,
+  pairingRevision: number | undefined
+): string {
+  const targetKey =
+    target.kind === 'local'
+      ? 'local'
+      : `environment:${target.environmentId}@${pairingRevision ?? 'unpaired'}`
   return `${targetKey}:${sessionId}`
 }
 
@@ -280,9 +289,10 @@ function createReadOwner(
 
 export function getStructuredAgentSessionReadOwner(
   sessionId: string,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  pairingRevision?: number
 ): StructuredAgentSessionReadOwner {
-  const key = ownerKey(sessionId, target)
+  const key = ownerKey(sessionId, target, pairingRevision)
   let owner = owners.get(key)
   if (!owner) {
     owner = createReadOwner(key, sessionId, target)

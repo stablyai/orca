@@ -4,7 +4,7 @@ import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import { useStructuredTabOwnerBinding } from '@/runtime/structured-tab-owner'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
 
@@ -21,16 +21,19 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
   groupId,
   isActive,
   isFocusedGroup,
-  target,
+  fallbackRuntimeEnvironmentId,
   onFocusOwningGroup
 }: {
   tab: StructuredAgentSessionTab
   groupId: string | undefined
   isActive: boolean
   isFocusedGroup: boolean
-  target: RuntimeClientTarget
+  fallbackRuntimeEnvironmentId: string | null
   onFocusOwningGroup: ((groupId: string) => void) | undefined
 }): React.JSX.Element {
+  // The tab's stamp, never the worktree's current runtime owner: an open pane must keep addressing
+  // the host its session was launched on even after the worktree is remapped.
+  const binding = useStructuredTabOwnerBinding(tab, fallbackRuntimeEnvironmentId)
   return (
     <RetainedPaneHost
       groupId={groupId}
@@ -46,7 +49,11 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
         agent={tab.agentSessionAgent}
         isVisible={isActive}
         isFocusedGroup={isFocusedGroup}
-        target={target}
+        target={binding.target}
+        ownerPairingRevision={
+          binding.owner.kind === 'environment' ? binding.owner.pairingRevision : undefined
+        }
+        ownerPairingStale={binding.ownerPairingStale}
       />
     </RetainedPaneHost>
   )
@@ -69,10 +76,6 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       }))
     )
     const focusGroup = useAppStore((state) => state.focusGroup)
-    const target = useMemo(
-      () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId }),
-      [runtimeEnvironmentId]
-    )
     const focusOwningGroup = useCallback(
       (groupId: string) => focusGroup(worktreeId, groupId),
       [focusGroup, worktreeId]
@@ -104,7 +107,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
               groupActiveTabById.get(tab.groupId) === tab.id &&
               tab.groupId === activeGroupId
             )}
-            target={target}
+            fallbackRuntimeEnvironmentId={runtimeEnvironmentId}
             onFocusOwningGroup={focusOwningGroup}
           />
         ))}

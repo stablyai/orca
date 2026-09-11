@@ -258,7 +258,8 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
           worktree: 'id:wt-1',
           tabId: 'agent-session:codex-session-1',
           reason: 'user'
-        }
+        },
+        {}
       ]
     ])
   })

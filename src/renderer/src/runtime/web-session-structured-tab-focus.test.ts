@@ -13,6 +13,9 @@ function structuredTab(sessionId: string, sortOrder: number): Tab {
     groupId: GROUP_ID,
     worktreeId: WORKTREE_ID,
     contentType: 'agent-session',
+    // Already stamped for the publishing host, so this asserts steady-state identity rather than
+    // the one-off write that stamps a tab persisted before the owner rode on it.
+    executionHostId: 'runtime:environment-1',
     agentSessionAgent: 'codex',
     label: 'Codex Chat',
     customLabel: null,

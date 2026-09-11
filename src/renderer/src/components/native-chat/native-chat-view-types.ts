@@ -35,6 +35,11 @@ export type NativeChatStructuredViewProps = {
   groupId?: string
   sessionId: string
   target: RuntimeClientTarget
+  /** Pairing revision stamped on the tab; part of the read identity so a re-paired host cannot
+   *  serve its own transcript under this pane. */
+  ownerPairingRevision?: number
+  /** The stamped owner's environment was re-paired: show the cached transcript, refuse mutations. */
+  ownerPairingStale?: boolean
   agent: AgentType
   isVisible: boolean
   /** This pane's split group holds focus; a revealed sibling column must not take the caret. */

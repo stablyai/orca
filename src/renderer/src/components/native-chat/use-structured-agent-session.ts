@@ -6,7 +6,10 @@ import type {
   AgentSessionPromptResult
 } from '../../../../shared/agent-session-wire'
 import { useStructuredAgentSessionOutbox } from './use-structured-agent-session-outbox'
-import { useStructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
+import {
+  useStructuredAgentSessionMutate,
+  type StructuredAgentSessionMutate
+} from './use-structured-agent-session-mutate'
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
@@ -45,16 +48,30 @@ export type { StructuredPromptItem } from './structured-agent-session-message-pr
 export function useStructuredAgentSession(args: {
   sessionId: string
   target: RuntimeClientTarget
+  ownerPairingRevision?: number
+  ownerPairingStale?: boolean
   agent: AgentType
   isVisible: boolean
 }) {
-  const { agent, isVisible, sessionId, target } = args
+  const { agent, isVisible, ownerPairingStale = false, sessionId, target } = args
+  // A re-paired owner leaves the transcript exactly as last read and stops every write: the id now
+  // names a different machine, so re-reading or mutating would address a stranger's journal.
+  const live = isVisible && !ownerPairingStale
   // Declared first: the hold is what gives a restored session its provider child back, and the
   // read below is useless for sending until it lands.
-  useStructuredAgentSessionHold({ sessionId, target, surface: 'desktop-chat', enabled: isVisible })
-  const { state, loadingOlder, loadOlder } = useStructuredAgentSessionRead(args)
+  useStructuredAgentSessionHold({ sessionId, target, surface: 'desktop-chat', enabled: live })
+  const { state, loadingOlder, loadOlder } = useStructuredAgentSessionRead({
+    ...args,
+    isVisible: live
+  })
   const stateRef = useRef(state)
-  const { mutate, writeError } = useStructuredAgentSessionMutate({ sessionId, target, stateRef })
+  const { mutate: liveMutate, writeError } = useStructuredAgentSessionMutate({
+    sessionId,
+    target,
+    stateRef
+  })
+  const cachedMutate = useCallback(async () => null, [])
+  const mutate = ownerPairingStale ? (cachedMutate as StructuredAgentSessionMutate) : liveMutate
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
@@ -96,7 +113,7 @@ export function useStructuredAgentSession(args: {
   const backgroundTasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
 
   useEffect(() => {
-    if (!isVisible || !optionCatalog) {
+    if (!live || !optionCatalog) {
       return
     }
     let stale = false
@@ -117,7 +134,7 @@ export function useStructuredAgentSession(args: {
     return () => {
       stale = true
     }
-  }, [isVisible, optionCatalog, sessionId, state.fence, target, turnId])
+  }, [live, optionCatalog, sessionId, state.fence, target, turnId])
 
   const optionSnapshot = useMemo(
     () => structuredAgentSessionOptionSnapshot(optionState),
@@ -187,6 +204,8 @@ export function useStructuredAgentSession(args: {
   const { outbox } = outboxController
   const messages = useStructuredAgentSessionMessages(state.items, outbox, state.submissions)
   return {
+    /** Read-only view of the last transcript: this pane's owner is no longer the host on that id. */
+    cached: ownerPairingStale,
     conversationCommands:
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : [],
     runConversationCommand: (command: AgentSessionConversationCommand) =>
@@ -212,7 +231,7 @@ export function useStructuredAgentSession(args: {
     outbox,
     blockedClientMessageId: outboxController.blockedClientMessageId,
     send: (...input: Parameters<typeof outboxController.send>) =>
-      !commandPending.current && outboxController.send(...input),
+      !ownerPairingStale && !commandPending.current && outboxController.send(...input),
     retry: outboxController.retry,
     isWorking,
     workingStartedAt: turnTiming.workingStartedAt,

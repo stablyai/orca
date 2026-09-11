@@ -1,6 +1,8 @@
 import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { structuredAgentSessionOwnerCallFence } from '@/runtime/structured-agent-session-owner'
+import { structuredTabOwnerBinding } from '@/runtime/structured-tab-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 
 export function activateStructuredAgentSessionTab(args: {
@@ -17,14 +19,20 @@ export function activateStructuredAgentSessionTab(args: {
   state.focusGroup(args.worktreeId, tab.groupId)
   state.activateTab(tab.id, { worktreeId: args.worktreeId })
   state.setActiveTabType('agent-session', args.worktreeId)
-  const environmentId = getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
+  // The host this tab was stamped for, fenced on the revision it was stamped at: a re-pair must
+  // fail the call rather than activate a same-id tab on the machine that replaced it.
+  const binding = structuredTabOwnerBinding(
+    tab,
+    getRuntimeEnvironmentIdForWorktree(state, args.worktreeId)
+  )
   void callRuntimeRpc(
-    getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
+    binding.target,
     'session.tabs.activate',
     {
       worktree: toRuntimeWorktreeSelector(args.worktreeId),
       tabId: `agent-session:${tab.entityId}`
-    }
+    },
+    structuredAgentSessionOwnerCallFence(binding.owner)
   )
   return true
 }

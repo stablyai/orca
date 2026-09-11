@@ -28,6 +28,8 @@ export function TerminalPaneNativeChatPortal({
     resolveAgentForLeaf,
     structuredChatAgent,
     structuredChatTarget,
+    structuredChatOwnerPairingRevision,
+    structuredChatOwnerPairingStale,
     structuredSessionId,
     switchNativeChatToTerminal,
     tabId,
@@ -78,6 +80,8 @@ export function TerminalPaneNativeChatPortal({
           isVisible={isRendererVisible}
           isFocusedGroup={isActive && activePaneIsChatLeaf}
           target={structuredChatTarget}
+          ownerPairingRevision={structuredChatOwnerPairingRevision}
+          ownerPairingStale={structuredChatOwnerPairingStale}
           contextMenuActions={contextMenuActions}
         />
       ) : (

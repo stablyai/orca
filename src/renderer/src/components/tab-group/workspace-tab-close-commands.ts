@@ -5,7 +5,9 @@ import { requestEditorFileClose } from '../editor/editor-autosave'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { structuredAgentSessionOwnerCallFence } from '@/runtime/structured-agent-session-owner'
+import { structuredTabOwnerBinding } from '@/runtime/structured-tab-owner'
 import { withLocalSessionTabCloseOwner } from '@/runtime/local-session-tab-close-owner'
 import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-close'
 import { cancelStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
@@ -74,24 +76,30 @@ export function createWorkspaceTabCloseCommands({
     if (!item) {
       return
     }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
-      useAppStore.getState(),
-      worktreeId
-    )
     if (item.contentType === 'agent-session') {
       // Cancel pending creation and retire the host session before removing its tab.
       cancelStructuredAgentLaunch(worktreeId, item.entityId)
-      const target = getActiveRuntimeTarget({
-        activeRuntimeEnvironmentId: runtimeEnvironmentId
-      })
-      void closeStructuredAgentSession(target, item.entityId)
+      // Addressed at the tab's stamped owner and fenced on its revision: re-resolving the worktree
+      // here would retire whatever session now answers to this id on the replacement host.
+      const binding = structuredTabOwnerBinding(
+        item,
+        getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
+      )
+      const target = binding.target
+      const fence = structuredAgentSessionOwnerCallFence(binding.owner)
+      void closeStructuredAgentSession(target, item.entityId, fence)
         .then(() => {
           const closeHostTab = () =>
-            callRuntimeRpc(target, 'session.tabs.close', {
-              worktree: toRuntimeWorktreeSelector(worktreeId),
-              tabId: `agent-session:${item.entityId}`,
-              reason: 'user'
-            })
+            callRuntimeRpc(
+              target,
+              'session.tabs.close',
+              {
+                worktree: toRuntimeWorktreeSelector(worktreeId),
+                tabId: `agent-session:${item.entityId}`,
+                reason: 'user'
+              },
+              fence
+            )
           return target.kind === 'local'
             ? withLocalSessionTabCloseOwner(worktreeId, item.id, closeHostTab)
             : closeHostTab()

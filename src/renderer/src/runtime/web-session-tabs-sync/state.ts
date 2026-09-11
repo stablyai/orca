@@ -14,6 +14,7 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor'
@@ -74,6 +75,9 @@ export type WebSessionTabsSnapshotApplyOptions = {
   contentScope?: 'all' | 'agent-session'
   preserveLocalLayout?: boolean
   terminalPtyMode?: 'local' | 'remote'
+  /** Host stamped on the chat tabs this mirror publishes; the local structured mirror is not an
+   *  environment even though it is applied under an owner string. */
+  sessionOwnerHost?: ExecutionHostId
 }
 
 export type TrackedWebSessionTabsWorktree = {

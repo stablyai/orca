@@ -20,6 +20,8 @@ import type {
   MirroredAgentTab
 } from './state'
 import type { Tab } from '../../../../shared/tab-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import { stampStructuredTabOwner } from '../structured-tab-owner'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 
 export function isReadyTerminalTab(
@@ -58,7 +60,8 @@ export function buildMirroredAgentTabs(
   fallbackGroupId: string,
   sortOffset: number,
   currentUnifiedTabs: readonly Tab[],
-  now: number
+  now: number,
+  ownerHostId: ExecutionHostId = LOCAL_EXECUTION_HOST_ID
 ): MirroredAgentTab[] {
   const agentTabs = snapshot.tabs.filter(isAgentSessionTab)
   const occupiedIds = new Set(currentUnifiedTabs.map((tab) => tab.id))
@@ -113,6 +116,8 @@ export function buildMirroredAgentTabs(
         groupId: hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId,
         worktreeId: snapshot.worktree,
         contentType: 'agent-session',
+        // Pinned once: a same-id re-pair must not re-point an open pane at the replacement host.
+        ...stampStructuredTabOwner(existing, ownerHostId),
         agentSessionAgent: tab.agent,
         // Why: `title` is wire data typed `string`; a host that violates that must
         // degrade to the placeholder, not throw inside the snapshot patch.

@@ -199,13 +199,19 @@ describe('tab.close uses the unified active tab', () => {
       await vi.waitFor(() => expect(closeUnifiedTab).toHaveBeenCalledWith(tab.id))
       expect(mocks.closeStructuredAgentSession).toHaveBeenCalledWith(
         { kind: 'local' },
-        'chat-session'
+        'chat-session',
+        {}
       )
-      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'session.tabs.close', {
-        worktree: `id:${worktreeId}`,
-        tabId: 'agent-session:chat-session',
-        reason: 'user'
-      })
+      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+        { kind: 'local' },
+        'session.tabs.close',
+        {
+          worktree: `id:${worktreeId}`,
+          tabId: 'agent-session:chat-session',
+          reason: 'user'
+        },
+        {}
+      )
       expect(mocks.cancelStructuredAgentLaunch).toHaveBeenCalledTimes(1)
       expect(mocks.closeTerminalTab).not.toHaveBeenCalled()
     }

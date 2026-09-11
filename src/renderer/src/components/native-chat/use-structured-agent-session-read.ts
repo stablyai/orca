@@ -7,14 +7,15 @@ import {
 
 function useReadOwnerSnapshot(
   sessionId: string,
-  target: RuntimeClientTarget
+  target: RuntimeClientTarget,
+  ownerPairingRevision: number | undefined
 ): {
   owner: ReturnType<typeof getStructuredAgentSessionReadOwner>
   snapshot: StructuredAgentSessionReadSnapshot
 } {
   const owner = useMemo(
-    () => getStructuredAgentSessionReadOwner(sessionId, target),
-    [sessionId, target]
+    () => getStructuredAgentSessionReadOwner(sessionId, target, ownerPairingRevision),
+    [ownerPairingRevision, sessionId, target]
   )
   const snapshot = useSyncExternalStore(owner.subscribe, owner.getSnapshot, owner.getSnapshot)
   return { owner, snapshot }
@@ -23,10 +24,11 @@ function useReadOwnerSnapshot(
 export function useStructuredAgentSessionRead(args: {
   sessionId: string
   target: RuntimeClientTarget
+  ownerPairingRevision?: number
   isVisible?: boolean
 }) {
-  const { sessionId, target, isVisible = true } = args
-  const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target)
+  const { sessionId, target, ownerPairingRevision, isVisible = true } = args
+  const { owner, snapshot } = useReadOwnerSnapshot(sessionId, target, ownerPairingRevision)
 
   useEffect(() => (isVisible ? owner.activate() : undefined), [isVisible, owner])
 

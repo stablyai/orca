@@ -47,11 +47,12 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     structuredSessionAgent,
     isChatViewMode,
     structuredSessionId,
-    unifiedTabLabel
+    unifiedTabLabel,
+    structuredSessionOwnerHostId,
+    structuredSessionOwnerPairingRevision,
+    fallbackRuntimeEnvironmentId
   } = useAppStore(
-    useShallow((store) =>
-      selectUnifiedTerminalTabChatFields(store.unifiedTabsByWorktree, worktreeId, tabId)
-    )
+    useShallow((store) => selectUnifiedTerminalTabChatFields(store, worktreeId, tabId))
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
@@ -272,6 +273,9 @@ export function useTerminalPaneChatState(controller: TerminalPaneTitleController
     structuredSessionAgent,
     isChatViewMode,
     structuredSessionId,
+    structuredSessionOwnerHostId,
+    structuredSessionOwnerPairingRevision,
+    fallbackRuntimeEnvironmentId,
     nativeChatEnabled,
     effectiveChatViewMode,
     unifiedTabLabel,

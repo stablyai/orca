@@ -71,7 +71,8 @@ describe('activateStructuredAgentSessionTab', () => {
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'session.tabs.activate',
-      { worktree: 'id:wt-1', tabId: 'agent-session:session-1' }
+      { worktree: 'id:wt-1', tabId: 'agent-session:session-1' },
+      {}
     )
   })
 
@@ -83,7 +84,8 @@ describe('activateStructuredAgentSessionTab', () => {
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'environment', environmentId: 'env-1' },
       'session.tabs.activate',
-      { worktree: 'id:wt-1', tabId: 'agent-session:session-1' }
+      { worktree: 'id:wt-1', tabId: 'agent-session:session-1' },
+      {}
     )
   })
 })

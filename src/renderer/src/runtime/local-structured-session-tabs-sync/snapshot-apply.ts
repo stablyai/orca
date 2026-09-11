@@ -4,6 +4,7 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { WorktreeRuntimeOwnerState } from '../../lib/worktree-runtime-owner'
 import { getExecutionHostIdForWorktree } from '../../lib/worktree-runtime-owner'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsStorePatch
@@ -136,7 +137,9 @@ export function applyLocalStructuredSessionTabSnapshots<
       {
         contentScope: 'agent-session',
         preserveLocalLayout: true,
-        terminalPtyMode: 'local'
+        terminalPtyMode: 'local',
+        // This mirror runs under an owner string, not an environment: its chats belong to this box.
+        sessionOwnerHost: LOCAL_EXECUTION_HOST_ID
       }
     )
     next = patch === next ? next : ({ ...next, ...patch } as State)

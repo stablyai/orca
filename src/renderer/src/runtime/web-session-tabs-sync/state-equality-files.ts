@@ -94,6 +94,7 @@ export function tabEqual(a: Tab, b: Tab): boolean {
     a.groupId === b.groupId &&
     a.worktreeId === b.worktreeId &&
     a.executionHostId === b.executionHostId &&
+    a.runtimeOwnerPairingRevision === b.runtimeOwnerPairingRevision &&
     a.contentType === b.contentType &&
     a.agentSessionAgent === b.agentSessionAgent &&
     a.label === b.label &&

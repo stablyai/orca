@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { RotateCcw } from 'lucide-react'
 import { encodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
-import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { Button } from '@/components/ui/button'
@@ -23,6 +22,7 @@ import { useStructuredNativeChatPaneCommands } from './use-structured-native-cha
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
+import { useStructuredNativeChatComposerTransport } from './use-structured-native-chat-composer-transport'
 
 type StoppingBackgroundTasks = {
   sessionId: string
@@ -149,55 +149,23 @@ export function NativeChatStructuredSession(
       outboxHead.clientMessageId === controller.blockedClientMessageId)
       ? outboxHead
       : null
-  const structuredTransport = useMemo(
-    () => ({
-      send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
-        controller.send(
-          text,
-          attachments.map((attachment) => ({
-            path: attachment.path,
-            previewUri: attachment.path
-          }))
-        ),
-      dispatchCommand: (text: string) =>
-        dispatchStructuredAgentSessionComposerCommand(text, {
-          agent: props.agent,
-          snapshot: controller.optionSnapshot,
-          invokeAction: async (id) => {
-            setOptionPickerRequest((current) => ({ id, sequence: (current?.sequence ?? 0) + 1 }))
-            return true
-          },
-          setOption: controller.setStructuredOption,
-          conversationCommands: controller.conversationCommands,
-          runConversationCommand: controller.runConversationCommand
-        }),
-      optionsSurface: controller.optionSurface,
-      conversationCommands: controller.conversationCommands,
-      optionSnapshot: controller.optionSnapshot,
-      optionPickerRequest,
-      sessionCommands: controller.sessionCommands,
-      worktreeId: fileLinkContext?.worktreeId,
-      onError: setComposerError,
-      runtime: (props.target.kind === 'local' ? 'local' : 'remote') as 'local' | 'remote',
-      sessionId: props.sessionId,
-      runtimeEnvironmentId:
-        props.target.kind === 'local' ? null : (props.target.environmentId ?? null)
-    }),
-    [
-      controller,
-      fileLinkContext?.worktreeId,
-      optionPickerRequest,
-      props.agent,
-      props.sessionId,
-      props.target
-    ]
-  )
+  const structuredTransport = useStructuredNativeChatComposerTransport({
+    controller,
+    agent: props.agent,
+    sessionId: props.sessionId,
+    target: props.target,
+    worktreeId: fileLinkContext?.worktreeId,
+    optionPickerRequest,
+    setOptionPickerRequest,
+    onError: setComposerError
+  })
 
   return (
     <div
       ref={rootRef}
       data-native-chat-root="true"
       data-native-chat-working={controller.isWorking ? 'true' : 'false'}
+      data-native-chat-cached={controller.cached ? 'true' : 'false'}
       tabIndex={-1}
       onPointerDownCapture={(event) => {
         if (event.button === 2) {
@@ -328,6 +296,14 @@ export function NativeChatStructuredSession(
           </Button>
         </div>
       ) : null}
+      {controller.cached ? (
+        <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-muted-foreground">
+          {translate(
+            'components.native-chat.structuredSessionOwnerRepaired',
+            'This chat\u2019s host was re-paired. Showing the last loaded transcript; sending is off.'
+          )}
+        </p>
+      ) : null}
       {controller.error || composerError ? (
         <p className="mx-auto w-full max-w-4xl px-4 py-1 text-xs text-destructive">
           {controller.error ?? composerError}
@@ -390,7 +366,7 @@ export function NativeChatStructuredSession(
           paneKey={paneKey}
           targetPtyId={null}
           agent={props.agent}
-          canSend={!prompt}
+          canSend={!prompt && !controller.cached}
           // Stop, not status: only a provider-minted turn can be interrupted, so the button
           // must not flip while a dispatch is still unanswered.
           isWorking={controller.turnId !== null}

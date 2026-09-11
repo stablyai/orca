@@ -1,5 +1,10 @@
 import type { Tab } from '../../../../shared/tab-types'
 import type { AgentType } from '../../../../shared/agent-status-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRuntimeEnvironmentIdForWorktree,
+  type WorktreeRuntimeOwnerState
+} from '@/lib/worktree-runtime-owner'
 
 export type UnifiedTerminalTabChatFields = {
   unifiedTabId: string | undefined
@@ -7,6 +12,11 @@ export type UnifiedTerminalTabChatFields = {
   isChatViewMode: boolean
   structuredSessionId: string | null
   unifiedTabLabel: string | undefined
+  /** Owner stamp of the chat this terminal tab hosts; kept as scalars so the shallow selector holds. */
+  structuredSessionOwnerHostId: ExecutionHostId | undefined
+  structuredSessionOwnerPairingRevision: number | undefined
+  /** Legacy fallback for a tab persisted before stamping; the pane overlay uses the same one. */
+  fallbackRuntimeEnvironmentId: string | null
 }
 
 const terminalTabLookupByUnifiedTabs = new WeakMap<readonly Tab[], Map<string, Tab>>()
@@ -49,18 +59,18 @@ export function getCachedTerminalGroupIdForWorktree(
 }
 
 /**
- * The five unified-tab fields TerminalPane's chat state reads.
+ * The unified-tab fields TerminalPane's chat state reads.
  *
  * Why bundled: they used to be five `useAppStore` calls, so one publication paid
  * the lookup five times and held five listener slots for every mounted tab.
  */
 export function selectUnifiedTerminalTabChatFields(
-  unifiedTabsByWorktree: Record<string, Tab[]>,
+  state: WorktreeRuntimeOwnerState & { unifiedTabsByWorktree: Record<string, Tab[]> },
   worktreeId: string,
   terminalTabId: string
 ): UnifiedTerminalTabChatFields {
   const tab = getCachedUnifiedTerminalTabForWorktree(
-    unifiedTabsByWorktree,
+    state.unifiedTabsByWorktree,
     worktreeId,
     terminalTabId
   )
@@ -69,6 +79,9 @@ export function selectUnifiedTerminalTabChatFields(
     structuredSessionAgent: tab?.agentSessionAgent,
     isChatViewMode: tab?.viewMode === 'chat',
     structuredSessionId: tab?.structuredSessionId ?? null,
-    unifiedTabLabel: tab?.label
+    unifiedTabLabel: tab?.label,
+    structuredSessionOwnerHostId: tab?.executionHostId,
+    structuredSessionOwnerPairingRevision: tab?.runtimeOwnerPairingRevision,
+    fallbackRuntimeEnvironmentId: getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   }
 }

@@ -7,7 +7,8 @@ import { callStructuredAgentSession } from './structured-agent-session-client'
 
 export async function closeStructuredAgentSession(
   target: RuntimeClientTarget,
-  sessionId: string
+  sessionId: string,
+  options: { expectedEnvironmentPairingRevision?: number } = {}
 ): Promise<'closed' | 'unsupported'> {
   if (
     target.kind === 'environment' &&
@@ -18,6 +19,6 @@ export async function closeStructuredAgentSession(
   ) {
     return 'unsupported'
   }
-  await callStructuredAgentSession(target, 'agentSession.close', { sessionId })
+  await callStructuredAgentSession(target, 'agentSession.close', { sessionId }, options)
   return 'closed'
 }
