@@ -69,3 +69,11 @@ describe('notification routing', () => {
     expect(notificationCredentialRecoveryRoute(target!)).toBeNull()
   })
 })
+
+it('preserves the originating pane in the workspace route', () => {
+  const paneKey = 'tab-b:11111111-1111-4111-8111-111111111111'
+  expect(
+    getNotificationNavigationTarget({ hostId: 'host', worktreeId: 'folder:/work', paneKey })
+      ?.sessionTarget?.params
+  ).toEqual({ hostId: 'host', worktreeId: 'folder:/work', paneKey })
+})

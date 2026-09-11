@@ -140,6 +140,7 @@ export function pushNotificationRouteData(
   }
   return {
     hostId,
+    ...(payload.paneKey ? { paneKey: payload.paneKey } : {}),
     ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {})
   }
 }

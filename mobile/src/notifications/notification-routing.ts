@@ -49,7 +49,13 @@ export function getNotificationNavigationTarget(
   const credentialStatus = options.credentialStatusByHostId?.get(hostId)
   return {
     hostId,
-    sessionTarget: worktreeId ? mobileSessionRouteTarget({ hostId, worktreeId }) : null,
+    sessionTarget: worktreeId
+      ? mobileSessionRouteTarget({
+          hostId,
+          worktreeId,
+          paneKey: readNonEmptyString(record.paneKey) ?? undefined
+        })
+      : null,
     ...(credentialStatus === 'missing'
       ? { credentialRecovery: 're-pair' as const }
       : credentialStatus === 'temporarily-unavailable'

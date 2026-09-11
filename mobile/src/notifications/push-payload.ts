@@ -7,6 +7,7 @@ export type OrcaPushPayload = {
   readonly notificationId?: string
   readonly notificationSeq?: number
   readonly notificationEpoch?: string
+  readonly paneKey?: string
   readonly worktreeId?: string
 }
 
@@ -36,6 +37,7 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
     notificationId: readString(record.notificationId),
     notificationSeq: readSeq(record.notificationSeq),
     notificationEpoch: readString(record.notificationEpoch),
+    paneKey: readString(record.paneKey),
     worktreeId: readString(record.worktreeId)
   }
 }

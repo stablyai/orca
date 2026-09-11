@@ -62,8 +62,8 @@ const HOST_COMPONENT_NAMES = new Set([
   'View'
 ])
 
-const HEAD_MAIN_HOOK_SHA256 = '10071240ef9edafc2b9c8bed73be83dceaf7828e3b29f17dab55da020a7697a6'
-const HEAD_HOOK_BINDING_SHA256 = '1dadb8c3dc0573ea20659ce7251629669e618dd0effaeac3a4536b29c2e865a1'
+const HEAD_MAIN_HOOK_SHA256 = 'c3e33699e3e3fa7e24408f3d4946fcc451e9b9419442d985c4ccde01782e5114'
+const HEAD_HOOK_BINDING_SHA256 = '7f907e028893721d662eeee0aa9002ad1e00359948f39fb148d274596cd9b3c0'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
 const HEAD_CALLBACK_BODY_SHA256 = 'af7f3c62954250d4be7ee432ecd10dc2689792aad8230fed2d1d68bbc892d776'
@@ -472,7 +472,7 @@ describe('mobile session route extraction parity', () => {
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
-    expect(main.hooks).toHaveLength(266)
+    expect(main.hooks).toHaveLength(267)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     expect(main.callbacks).toHaveLength(77)

@@ -241,3 +241,18 @@ it('uses one delivery snapshot for sound and viewing even when settings change d
       .mock.calls.filter(([key]) => key === 'orca:notificationDeliveryPreferences')
   ).toHaveLength(1)
 })
+
+it.each(['apns', 'fcm'])(
+  'routes %s pane payload to the correct host, workspace and pane',
+  (provider) => {
+    const paneKey = 'tab-b:11111111-1111-4111-8111-111111111111'
+    const payload = { hostFingerprint, worktreeId: 'folder:/work', paneKey }
+    const data = provider === 'apns' ? { orca: payload } : payload
+    const routed = pushNotificationRouteData(data, [{ id: 'host', publicKeyB64 }], true)
+    expect(getNotificationNavigationTarget(routed)?.sessionTarget?.params).toEqual({
+      hostId: 'host',
+      worktreeId: 'folder:/work',
+      paneKey
+    })
+  }
+)
