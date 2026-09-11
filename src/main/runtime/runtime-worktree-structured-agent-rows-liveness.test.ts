@@ -2,19 +2,27 @@ import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sou
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-store-test-open'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../shared/runtime-types'
+import { AgentHookServer, _internals } from '../agent-hooks/server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 
+vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
+}))
+
 /**
- * The whole chain `worktree ps` walks: journal -> status feed -> agent rows -> worktree status.
+ * The whole chain `worktree ps` walks: journal -> status feed -> agent-status store -> agent rows
+ * -> worktree status.
  *
- * The feed's `published` map never retracts, so reading it as a roster reports every session the
- * app has ever opened. A closed chat that was waiting on an approval is the sharp edge: deliberate
- * close does not settle a pending prompt, so the retained summary stays `attention`, which maps to
- * a `blocked` row and merges the worktree to `permission` for the 30-minute freshness window.
+ * The feed's `published` map never retracts, so it cannot be the roster. A closed chat that was
+ * waiting on an approval is the sharp edge: deliberate close does not settle a pending prompt, so
+ * the retained summary stays `attention`, which maps to a `blocked` row and would merge the
+ * worktree to `permission`. The store is the roster: the host drops the row on close.
  */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
@@ -29,6 +37,7 @@ let root: string
 const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
+  _internals.resetCachesForTests()
   root = await mkdtemp(join(tmpdir(), 'orca-structured-ps-liveness-'))
 })
 
@@ -68,22 +77,32 @@ async function awaitingApproval() {
   const sessions = new Map([
     [
       SESSION,
-      { journal, params: { location: { workspaceId: WORKTREE_ID }, provider: 'codex' as const } }
+      {
+        journal,
+        hasProviderChild: true,
+        params: { location: { workspaceId: WORKTREE_ID }, provider: 'codex' as const }
+      }
     ]
   ])
+  const store = new AgentHookServer()
+  const published: AgentSessionStatusSummary[] = []
   const feed = new StructuredAgentSessionStatusFeed({
     sessions,
     getRecord: () => null,
-    now: () => Date.now()
+    now: () => Date.now(),
+    statusSink: () => ({
+      publish: (summary) => {
+        published.push(summary)
+        store.ingestStructuredStatus(summary)
+      },
+      forget: (sessionId) => store.dropStructuredStatus(sessionId)
+    })
   })
   feed.publish(SESSION, journal)
-  return { feed, sessions }
+  return { feed, sessions, store, published }
 }
 
-function worktreeFor(
-  feed: StructuredAgentSessionStatusFeed,
-  summaries = feed.liveSessionSummaries()
-): RuntimeWorktreePsSummary {
+function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
   const row = {
     worktreeId: WORKTREE_ID,
     status: 'inactive',
@@ -98,8 +117,7 @@ function worktreeFor(
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: { tabIds: new Set(), paneKeys: new Set(), ptyIds: new Set() },
       retainedSnapshots: [],
-      hookSnapshots: [],
-      structuredSummaries: summaries
+      hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,
     getSummary: (map, _paths, _missing, id) => map.get(id) ?? null
@@ -109,49 +127,62 @@ function worktreeFor(
 
 describe('worktree ps and a closed structured chat', () => {
   it('reports the blocked row while the session is still held', async () => {
-    const { feed } = await awaitingApproval()
-    const row = worktreeFor(feed)
+    const { store } = await awaitingApproval()
+    const row = worktreeFor(store)
     expect(row.agents).toHaveLength(1)
     expect(row.agents[0]?.state).toBe('blocked')
     expect(row.status).toBe('permission')
   })
 
-  it('stops reporting it once eviction forgets the session', async () => {
-    const { feed, sessions } = await awaitingApproval()
-    // `forget-session`, the last eviction step, does exactly this and nothing to the feed.
+  it('stops reporting it once close forgets the session', async () => {
+    const { feed, sessions, store } = await awaitingApproval()
+    // What the host does after eviction: the feed keeps its projection, the store drops the row.
     sessions.delete(SESSION)
+    feed.close(SESSION)
 
-    const row = worktreeFor(feed)
+    const row = worktreeFor(store)
     expect(row.agents).toHaveLength(0)
     expect(row.status).toBe('inactive')
   })
 
   it('keeps an aged host-held working state authoritative', async () => {
-    const { feed } = await awaitingApproval()
-    const aged = feed.liveSessionSummaries().map((summary) => ({
-      ...summary,
+    const { store, published } = await awaitingApproval()
+    const aged = {
+      ...published.at(-1)!,
       hostExecutionOwned: true as const,
       updatedAt: Date.now() - 30 * 60 * 1000 - 1,
       status: 'working' as const
-    }))
-    const row = worktreeFor(feed, aged)
+    }
+    store.ingestStructuredStatus(aged)
+    const row = worktreeFor(store)
     expect(row.agents).toHaveLength(1)
     expect(row.agents[0]?.state).toBe('working')
     expect(row.status).toBe('working')
-    expect(row.agents[0]?.updatedAt).toBe(aged[0]?.updatedAt)
+    expect(row.agents[0]?.updatedAt).toBe(aged.updatedAt)
   })
 
   it('keeps an aged host-held approval state authoritative', async () => {
-    const { feed } = await awaitingApproval()
-    const aged = feed.liveSessionSummaries().map((summary) => ({
-      ...summary,
+    const { store, published } = await awaitingApproval()
+    const aged = {
+      ...published.at(-1)!,
       hostExecutionOwned: true as const,
       updatedAt: Date.now() - 30 * 60 * 1000 - 1
-    }))
-    const row = worktreeFor(feed, aged)
+    }
+    store.ingestStructuredStatus(aged)
+    const row = worktreeFor(store)
     expect(row.agents).toHaveLength(1)
     expect(row.agents[0]?.state).toBe('blocked')
     expect(row.status).toBe('permission')
-    expect(row.agents[0]?.updatedAt).toBe(aged[0]?.updatedAt)
+    expect(row.agents[0]?.updatedAt).toBe(aged.updatedAt)
+  })
+
+  it('lets an aged approval decay once the host no longer owns the child', async () => {
+    const { store, published } = await awaitingApproval()
+    const { hostExecutionOwned: _owned, ...held } = published.at(-1)!
+    store.ingestStructuredStatus({ ...held, updatedAt: Date.now() - 30 * 60 * 1000 - 1 })
+    const row = worktreeFor(store)
+    expect(row.agents).toHaveLength(1)
+    expect(row.agents[0]?.state).toBe('blocked')
+    expect(row.status).toBe('inactive')
   })
 })

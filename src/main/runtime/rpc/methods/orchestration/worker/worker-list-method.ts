@@ -4,7 +4,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WORKER_LIST_CURSOR_EXPIRED_MESSAGE } from '../../../../orchestration/db/worker-terminal/worker-terminal-listing'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import {
   applyFederatedFleetObservations,
   readFederatedFleetSnapshots
@@ -24,7 +24,7 @@ import { projectWorkerFleet, type WorkerListPageParams } from './worker-list-pro
 import { exposeWorkerTerminalResource } from './worker-release-completion'
 import { WORKER_TERMINAL_LIST_STATES, WorkerListParams } from './worker-release-schemas'
 
-export const ORCHESTRATION_WORKER_LIST_METHOD: RpcMethod = defineMethod({
+export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
   name: 'orchestration.workerList',
   params: WorkerListParams,
   handler: async (params, { runtime }) => {

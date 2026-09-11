@@ -1,26 +1,11 @@
-import { z } from 'zod'
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import { remoteFileContentBudget } from './files-remote-content-budget'
-import { WorktreeSelector } from './files-target-schemas'
+import {
+  TerminalArtifactFile,
+  TerminalArtifactFileWrite
+} from '../../../../shared/rpc-contract/files-terminal-artifact-params'
 
-const TerminalArtifactFile = WorktreeSelector.extend({
-  grantId: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing terminal artifact grant')),
-  absolutePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing terminal artifact path'))
-})
-
-const TerminalArtifactFileWrite = TerminalArtifactFile.extend({
-  content: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-})
-
-export const FILE_TERMINAL_ARTIFACT_METHODS: RpcAnyMethod[] = [
+export const FILE_TERMINAL_ARTIFACT_METHODS = [
   defineMethod({
     name: 'files.readTerminalArtifact',
     params: TerminalArtifactFile,

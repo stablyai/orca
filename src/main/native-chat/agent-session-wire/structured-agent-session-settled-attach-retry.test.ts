@@ -310,16 +310,18 @@ describe('settled attach retry', () => {
     })
   })
 
-  it('restores an unknown submission without redispatch before a distinct send', async () => {
+  it('settles a submission the host restart left pending, and never redelivers it', async () => {
     expect((await host.attach(CALLER, hostTestAttachParams(null))).ok).toBe(true)
-    dispatch.mockRejectedValueOnce(new Error('socket closed'))
-    const body = hostTestMessage('possibly delivered')
+    // Admitted: written to the child, acknowledgement still outstanding. The
+    // restart below is the process fact that ends the wait, not a stopwatch.
+    dispatch.mockImplementationOnce(async () => ({ state: 'admitted' as const }))
+    const body = hostTestMessage('written before the host died')
     const unknownParams = {
       envelope: envelope('agentSession.send', { body }),
       body
     }
     const first = await host.send(CALLER, unknownParams)
-    expect(first).toMatchObject({ ok: true, value: { submission: { dispatchState: 'unknown' } } })
+    expect(first).toMatchObject({ ok: true, value: { submission: { dispatchState: 'pending' } } })
 
     await host.flushAllStreamedEvents()
     store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
@@ -360,6 +362,8 @@ describe('settled attach retry', () => {
       )?.dispatchState
     ).toBe('unknown')
 
+    // A restart ends the wait without proving the dead child never took the
+    // frame, so even an explicit retry replays rather than sending a second copy.
     const explicitRetry = await host.send(CALLER, {
       ...unknownParams,
       envelope: {
@@ -370,9 +374,9 @@ describe('settled attach retry', () => {
     })
     expect(explicitRetry).toMatchObject({
       ok: true,
-      value: { submission: { dispatchState: 'accepted' } }
+      value: { submission: { dispatchState: 'unknown' } }
     })
-    expect(dispatch).toHaveBeenCalledTimes(3)
+    expect(dispatch).toHaveBeenCalledTimes(2)
   })
 
   it('records proven acquisition cleanup as durable death evidence', async () => {

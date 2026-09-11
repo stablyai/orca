@@ -11,6 +11,7 @@ import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 import { selectNativeChatViewState } from './native-chat-view-state'
+import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
@@ -21,6 +22,7 @@ import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-co
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 
 type StoppingBackgroundTasks = {
   sessionId: string
@@ -30,6 +32,8 @@ type StoppingBackgroundTasks = {
 
 const NO_STOPPING_TASKS: ReadonlySet<string> = new Set()
 
+type ExpandedBackgroundTasks = { sessionId: string; expanded: boolean }
+
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
 }
@@ -38,9 +42,21 @@ export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
+  const launchDraftSignal = useNativeChatLaunchDraftSignal({
+    terminalTabId: props.tabId,
+    agent: props.agent,
+    messages: controller.messages,
+    // Why: the controller starts at `idle`, before any read; like the legacy view's unsettled
+    // phases, that empty list must not become the draft's turn baseline.
+    transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
+  })
   const [composerError, setComposerError] = useState<string | null>(null)
   const [stoppingBackgroundTasks, setStoppingBackgroundTasks] =
     useState<StoppingBackgroundTasks | null>(null)
+  // Held here, not in the strip: the strip unmounts whenever live work briefly
+  // drops to nothing, and its own state would collapse the list each time.
+  const [expandedBackgroundTasks, setExpandedBackgroundTasks] =
+    useState<ExpandedBackgroundTasks | null>(null)
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -99,6 +115,13 @@ export function NativeChatStructuredSession(
   const activeStoppingBackgroundTasks =
     stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
   const prompt = controller.prompts[0] ?? null
+  useNativeChatComposerRevealFocus({
+    rootRef,
+    composerRef,
+    isVisible: props.isVisible,
+    isFocusedGroup: props.isFocusedGroup,
+    composerReady: prompt === null
+  })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
   const questions =
     questionBody?.questions ??
@@ -115,12 +138,17 @@ export function NativeChatStructuredSession(
           }
         ]
       : [])
+  // Only the head of the outbox is ever dispatched, so it is the only entry a
+  // Retry can act on and the only one whose state can be holding the queue.
+  // Scanning past it named a message the user was not looking at and re-sent
+  // one from earlier in the session while their newest sat behind it.
+  const outboxHead = controller.outbox[0] ?? null
   const retryableOutboxEntry =
-    controller.outbox.find((entry) => entry.state === 'unconfirmed') ??
-    controller.outbox.find(
-      (entry) => entry.clientMessageId === controller.blockedClientMessageId
-    ) ??
-    null
+    outboxHead &&
+    (outboxHead.state === 'unconfirmed' ||
+      outboxHead.clientMessageId === controller.blockedClientMessageId)
+      ? outboxHead
+      : null
   const structuredTransport = useMemo(
     () => ({
       send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
@@ -196,7 +224,8 @@ export function NativeChatStructuredSession(
             isWorking={controller.isWorking}
             expandSignal={false}
             fontScale={fontScale.scale}
-            workingStartedAt={null}
+            workingStartedAt={controller.workingStartedAt}
+            settledTurns={controller.settledTurns}
             showTurnStatus
             turnActivity={controller.turnActivity}
             onLinkClick={onLinkClick}
@@ -304,13 +333,23 @@ export function NativeChatStructuredSession(
           {controller.error ?? composerError}
         </p>
       ) : null}
-      {controller.isMonitoringBackgroundTasks ? (
+      {controller.backgroundTasks.show ? (
         <NativeChatBackgroundTasksStatus
-          tasks={controller.backgroundTasks}
-          supportsTaskStop={controller.supportsBackgroundTaskStop}
-          supportsStopAll={controller.supportsBackgroundTaskStopAll}
+          isVisible={props.isVisible}
+          tasks={controller.backgroundTasks.tasks}
+          settledTasks={controller.backgroundTasks.settledTasks}
+          indicatorActive={controller.backgroundTasks.isMonitoring}
+          supportsTaskStop={controller.backgroundTasks.supportsStop}
+          supportsStopAll={controller.backgroundTasks.supportsStopAll}
           stoppingTaskIds={activeStoppingBackgroundTasks?.taskIds ?? NO_STOPPING_TASKS}
           stoppingAll={activeStoppingBackgroundTasks?.all ?? false}
+          expanded={
+            expandedBackgroundTasks?.sessionId === props.sessionId &&
+            expandedBackgroundTasks.expanded
+          }
+          onExpandedChange={(expanded) =>
+            setExpandedBackgroundTasks({ sessionId: props.sessionId, expanded })
+          }
           onStop={(taskId) => {
             const targetSessionId = props.sessionId
             setStoppingBackgroundTasks((current) => {
@@ -352,13 +391,16 @@ export function NativeChatStructuredSession(
           targetPtyId={null}
           agent={props.agent}
           canSend={!prompt}
-          isWorking={controller.isWorking}
+          // Stop, not status: only a provider-minted turn can be interrupted, so the button
+          // must not flip while a dispatch is still unanswered.
+          isWorking={controller.turnId !== null}
           onStop={() => {
             if (controller.turnId) {
               void controller.cancel(controller.turnId)
             }
           }}
           structuredTransport={structuredTransport}
+          launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft: true }}
         />
       )}
       {paneCommands.menu}

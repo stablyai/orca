@@ -32,9 +32,20 @@ function worktreePathFromId(worktreeId: string): string | null {
 }
 
 function tabToRemote(tab: TerminalTab, worktreePath: string): RemoteWorkspaceTerminalTab {
-  const { worktreeId: _worktreeId, pendingActivationSpawn: _pendingActivationSpawn, ...rest } = tab
+  // `recovery` joins the transient set for the same reason as
+  // pendingActivationSpawn: it describes THIS client's in-flight heal, and its
+  // timestamps are this machine's clock. On another client's row they would be
+  // compared against a foreign `Date.now()`. Nothing hands an unsanitized
+  // session to this boundary today; stripping here keeps that from mattering.
+  const {
+    worktreeId: _worktreeId,
+    pendingActivationSpawn: _pendingActivationSpawn,
+    recovery: _recovery,
+    ...rest
+  } = tab
   void _worktreeId
   void _pendingActivationSpawn
+  void _recovery
   return { ...rest, worktreePath }
 }
 

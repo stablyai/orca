@@ -47,7 +47,7 @@ function sampledProbe(samples: Record<string, number[]>) {
 function writeNoHintCache(path: string, expiresAt: number): void {
   writeFileSync(
     cachePath(path),
-    JSON.stringify({ v: 1, directorUrl: DIRECTOR, region: null, expiresAt })
+    JSON.stringify({ v: 2, directorUrl: DIRECTOR, region: null, expiresAt })
   )
 }
 
@@ -58,7 +58,7 @@ function cachePath(path: string): string {
 function writeCache(path: string, region: string, expiresAt = 999): void {
   writeFileSync(
     cachePath(path),
-    JSON.stringify({ v: 1, directorUrl: DIRECTOR, region, latencyMs: 100, expiresAt })
+    JSON.stringify({ v: 2, directorUrl: DIRECTOR, region, latencyMs: 100, expiresAt })
   )
 }
 
@@ -87,7 +87,7 @@ describe('Relay region preference', () => {
     expect(calls.filter((origin) => origin === US_SECONDARY)).toHaveLength(4)
     expect(calls.filter((origin) => origin === ASIA)).toHaveLength(4)
     expect(JSON.parse(readFileSync(cachePath(path), 'utf8'))).toMatchObject({
-      v: 1,
+      v: 2,
       directorUrl: DIRECTOR,
       region: 'asia-east2',
       latencyMs: 30
@@ -175,7 +175,7 @@ describe('Relay region preference', () => {
     ).resolves.toBeUndefined()
     // The withheld hint is remembered briefly so a reconnect does not re-probe.
     const cached = JSON.parse(readFileSync(cachePath(path), 'utf8'))
-    expect(cached).toEqual({ v: 1, directorUrl: DIRECTOR, region: null, expiresAt: 3_601_000 })
+    expect(cached).toEqual({ v: 2, directorUrl: DIRECTOR, region: null, expiresAt: 3_601_000 })
   })
 
   it('reuses the short-lived no-hint cache instead of re-probing on reconnect', async () => {

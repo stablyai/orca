@@ -60,6 +60,8 @@ export class StructuredAgentSessionSinkQueue {
     failed: this.failure !== null
   })
 
+  journalEpoch = (): string | null => this.target?.journal.epoch ?? null
+
   bindReadingControl(control: StructuredAgentSessionReadingControl): () => void {
     this.readingControl = control
     if (this.backpressured) {

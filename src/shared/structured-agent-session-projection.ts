@@ -3,17 +3,25 @@ import {
   normalizeOptionalField,
   normalizePromptField
 } from './agent-status-field-normalization'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalToolCallItem
-} from './agent-session-journal-types'
+import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
 } from './agent-status-types'
 import { describeToolInput } from './native-chat-tool-summary'
+import {
+  activeStructuredAgentSessionToolCall,
+  activeStructuredAgentSessionTurnId
+} from './structured-agent-session-live-turn'
+
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
+
+// Re-exported so the live-turn readers' existing consumers keep one import site.
+export {
+  activeStructuredAgentSessionToolCall,
+  activeStructuredAgentSessionTurnId
+} from './structured-agent-session-live-turn'
 
 function boundedText(payload: { head: string; truncated: boolean; byteLength: number }): string {
   return payload.truncated ? `${payload.head}\n… (${payload.byteLength} bytes)` : payload.head
@@ -52,6 +60,7 @@ function itemBlocks(item: AgentJournalRenderItem): {
           name: body.name,
           input: body.input,
           state: body.state,
+          ...(body.callId !== undefined ? { callId: body.callId } : {}),
           ...(body.mcpIdentity !== undefined ? { mcpIdentity: body.mcpIdentity } : {}),
           ...(body.exitCode !== undefined ? { exitCode: body.exitCode } : {}),
           ...(body.durationMs !== undefined ? { durationMs: body.durationMs } : {}),
@@ -104,7 +113,9 @@ function itemBlocks(item: AgentJournalRenderItem): {
       blocks: [{ type: 'text', text: `${body.question}\n${choices}`.trim() }]
     }
   }
-  if (body.turnLifecycle) {
+  // A turn record is timing, not content; a kind this build does not know is
+  // never painted as text either, so a newer host can add kinds freely.
+  if (body.kind !== 'status' || body.turnLifecycle) {
     return null
   }
   return {
@@ -154,24 +165,39 @@ export function projectStructuredItemToNativeChat(
   return message
 }
 
-export function activeStructuredAgentSessionTurnId(
-  items: readonly AgentJournalRenderItem[]
-): string | null {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
-    if (body?.kind === 'status' && body.turnLifecycle) {
-      return body.turnLifecycle.state === 'running' ? body.turnLifecycle.turnId : null
-    }
-  }
-  return null
-}
-
 export function hasPersistedStructuredAgentSessionTurn(
   items: readonly AgentJournalRenderItem[]
 ): boolean {
   return items.some(
     (item) =>
       item.body.kind === 'message' && (item.body.role === 'user' || item.body.role === 'assistant')
+  )
+}
+
+/**
+ * A send the host has journaled that the provider has neither opened a turn for nor refused.
+ *
+ * Codex declares `turn/started` within ~150ms, but Claude's running row can only be written once
+ * the SDK echoes the user message back — a 3.4s median and 18s at p90 on real journals. Waiting
+ * on that echo to call a session working leaves the whole gap reading idle in the chat and in
+ * every session list, so the send itself is the evidence.
+ *
+ * A live `unknown` still counts because an ambiguous adapter reply does not prove the provider
+ * stopped. A recovered `unknown` does not — it outlived the host generation that sent it, so
+ * there is nothing still running to report.
+ */
+export function hasUnansweredStructuredAgentSessionDispatch(
+  submissions: readonly AgentJournalSubmission[],
+  currentFence?: number | null
+): boolean {
+  return submissions.some(
+    (submission) =>
+      (currentFence == null || submission.fence >= currentFence) &&
+      (submission.dispatchState === 'pending' ||
+        (submission.dispatchState === 'unknown' &&
+          submission.recovered !== true &&
+          // Older hosts publish the recovery reason but omit the optional marker.
+          submission.reason !== 'host_restarted_before_acknowledgement'))
   )
 }
 
@@ -182,7 +208,9 @@ export function structuredAgentSessionTabId(sessionId: string): string {
 }
 
 export function projectStructuredAgentSessionStatus(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[] = [],
+  currentFence?: number | null
 ): StructuredAgentSessionProjectedStatus {
   if (
     items.some(
@@ -193,7 +221,10 @@ export function projectStructuredAgentSessionStatus(
   ) {
     return 'attention'
   }
-  return activeStructuredAgentSessionTurnId(items) ? 'working' : 'idle'
+  return activeStructuredAgentSessionTurnId(items) ||
+    hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
+    ? 'working'
+    : 'idle'
 }
 
 function messageProse(blocks: readonly NativeChatBlock[]): string {
@@ -233,24 +264,6 @@ export function latestStructuredAgentSessionAssistantMessage(
   return ''
 }
 
-/** The tool call the newest turn is still inside, or null when nothing is running.
- *  Scanning stops at the turn's own lifecycle row so an abandoned `running` call
- *  from an earlier crashed turn can never be reported as live work. */
-export function activeStructuredAgentSessionToolCall(
-  items: readonly AgentJournalRenderItem[]
-): AgentJournalToolCallItem | null {
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const body = items[index]?.body
-    if (body?.kind === 'status' && body.turnLifecycle) {
-      return null
-    }
-    if (body?.kind === 'tool-call' && body.state === 'running') {
-      return body
-    }
-  }
-  return null
-}
-
 /** The activity fields a sidebar row shows beside the prompt, named as the agent-status
  *  entry names them so the client can hand them straight to a row. */
 export type StructuredAgentSessionStatusProjection = {
@@ -270,12 +283,19 @@ export type StructuredAgentSessionStatusProjection = {
  *  the 8 KB body): a streamed reply re-projects on every journal checkpoint, so the frame
  *  has to stay small even though the row only ever renders one line of it. */
 export function projectStructuredAgentSessionStatusSummary(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  submissions: readonly AgentJournalSubmission[] = [],
+  currentFence?: number | null
 ): StructuredAgentSessionStatusProjection {
-  if (!hasPersistedStructuredAgentSessionTurn(items)) {
+  // A first send has no journalled message until the provider replays it, so the pending
+  // dispatch is also what makes a brand-new session listable at all.
+  if (
+    !hasPersistedStructuredAgentSessionTurn(items) &&
+    !hasUnansweredStructuredAgentSessionDispatch(submissions, currentFence)
+  ) {
     return { status: null, latestPrompt: '' }
   }
-  const status = projectStructuredAgentSessionStatus(items)
+  const status = projectStructuredAgentSessionStatus(items, submissions, currentFence)
   const activeToolCall = status === 'working' ? activeStructuredAgentSessionToolCall(items) : null
   const toolName = activeToolCall
     ? normalizeOptionalField(activeToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)

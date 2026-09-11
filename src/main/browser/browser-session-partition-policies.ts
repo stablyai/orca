@@ -9,7 +9,7 @@ import {
 } from './browser-session-proxy'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
-import { setupGoogleAuthUserAgentOverride } from './browser-session-ua'
+import { cleanElectronUserAgent, setupGoogleAuthUserAgentOverride } from './browser-session-ua'
 import { setBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import {
   allowsBrowserWebAuthnPermission,
@@ -92,7 +92,9 @@ export function installBrowserSessionPartitionPolicies(
   }
 
   browserManager.installCertificateRequestGuard(sess)
-  if (profile.userAgentMode !== 'native') {
+  if (profile.userAgentMode !== 'native' && typeof sess.getUserAgent === 'function') {
+    const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
+    sess.setUserAgent(cleanUA)
     setupGoogleAuthUserAgentOverride(sess)
   }
   if (options?.permissions === 'deny') {
@@ -189,6 +191,10 @@ export function applyBrowserSessionUserAgentModes(profiles: BrowserSessionProfil
       if (profile.userAgentMode === 'native') {
         continue
       }
+
+      // Why: imported sessions need the same Chrome-shaped identity after app restart.
+      const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
+      sess.setUserAgent(cleanUA)
       setupGoogleAuthUserAgentOverride(sess)
     } catch {
       /* session not available yet (e.g. unit tests or pre-ready) */

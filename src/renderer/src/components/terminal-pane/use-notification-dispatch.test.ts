@@ -31,6 +31,7 @@ type MockState = {
   settings: {
     experimentalTerminalAttention?: boolean
     notifications?: {
+      enabled?: boolean
       customSoundPath?: string | null
       customSoundId?: string | null
     }
@@ -341,18 +342,18 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markAgentCompletionPaneUnread).toHaveBeenCalledWith(paneKey)
   })
 
-  it('can mark terminal attention without dispatching an OS notification', () => {
+  it('offers attention-only completion to main for independent mobile delivery', () => {
+    mockState.settings.notifications = { ...mockState.settings.notifications, enabled: false }
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',
       terminalTitle: 'codex',
-      paneKey,
-      suppressOsNotification: true
+      paneKey
     })
 
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
     expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
-    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+    expect(window.api.notifications.dispatch).toHaveBeenCalled()
   })
 
   it('does not mark the visible focused pane unread', () => {

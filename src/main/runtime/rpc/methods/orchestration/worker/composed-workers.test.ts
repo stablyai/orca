@@ -476,9 +476,15 @@ describe('orchestration RPC methods', () => {
       )
     })
 
-    it.each(['codex-update-prompt', 'codex-trust-workspace'] as const)(
+    // Why the second column: an older host still publishes the codex-* token, and this receipt
+    // reaches the user verbatim -- so it names the neutral spelling the same way the CLI does.
+    it.each([
+      ['codex-update-prompt', 'codex-update-prompt (agent-update-prompt)'],
+      ['codex-trust-workspace', 'codex-trust-workspace (agent-trust-workspace)'],
+      ['agent-trust-workspace', 'agent-trust-workspace']
+    ] as const)(
       'returns a truthful readiness failure for %s',
-      async (blockedReason) => {
+      async (blockedReason, expectedReason) => {
         setup()
         mockCurrentWorkerStart()
         vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
@@ -500,7 +506,7 @@ describe('orchestration RPC methods', () => {
         expect(result).toMatchObject({
           state: 'failed',
           failedStage: 'agent_readiness',
-          lastError: `Agent startup blocked: ${blockedReason}`
+          lastError: `Agent startup blocked: ${expectedReason}`
         })
         expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
       }

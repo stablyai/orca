@@ -75,11 +75,15 @@ const EnvSchema = z.object({
   ORCA_RELAY_RUNTIME_SERVICE_ACCOUNT: z.string().email().optional(),
   ORCA_RELAY_DIRECTOR_URL: z.string().url().optional(),
   ORCA_RELAY_HEARTBEAT_AUDIENCE: z.string().url().optional(),
-  ORCA_RELAY_IMAGE_DIGEST: z.string().regex(/^sha256:[a-f0-9]{64}$/).optional(),
+  ORCA_RELAY_IMAGE_DIGEST: z
+    .string()
+    .regex(/^sha256:[a-f0-9]{64}$/)
+    .optional(),
   ORCA_RELAY_ADMIN_JWKS_URL: z.string().url().default('https://www.googleapis.com/oauth2/v3/certs'),
   ORCA_RELAY_DATABASE_POOL_MAX: z.coerce.number().int().positive().max(100).optional(),
   ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED: EnvironmentBooleanSchema,
   ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED: EnvironmentBooleanSchema,
+  ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT: z.coerce.number().int().min(0).max(100).default(0),
   ORCA_RELAY_PUBLIC_ASSIGNMENT_CONCURRENCY: z.coerce.number().int().positive().max(100).default(2),
   ORCA_RELAY_PUBLIC_STICKY_CONCURRENCY: z.coerce.number().int().positive().max(100).default(1),
   ORCA_RELAY_PUBLIC_STICKY_QUEUE_MAX: z.coerce.number().int().positive().max(4_096).default(64),
@@ -185,6 +189,7 @@ export type RelayConfig = {
   databasePoolMax: number
   publicAssignmentsEnabled: boolean
   regionalPlacementEnabled?: boolean
+  regionCorrectionCohortPercent?: number
   publicAssignmentConcurrency: number
   publicAssignmentQueueMax: number
   publicAssignmentWaitMs: number
@@ -332,6 +337,7 @@ export function loadRelayConfig(env: NodeJS.ProcessEnv = process.env): RelayConf
     databasePoolMax,
     publicAssignmentsEnabled: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENTS_ENABLED,
     regionalPlacementEnabled: parsed.ORCA_RELAY_REGIONAL_PLACEMENT_ENABLED,
+    regionCorrectionCohortPercent: parsed.ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT,
     publicAssignmentConcurrency: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENT_CONCURRENCY,
     publicAssignmentQueueMax: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENT_QUEUE_MAX,
     publicAssignmentWaitMs: parsed.ORCA_RELAY_PUBLIC_ASSIGNMENT_WAIT_MS,

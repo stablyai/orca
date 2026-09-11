@@ -95,6 +95,11 @@ const CENSUS: readonly CensusRow[] = [
     role: 'binds the hook server snapshot into the runtime deps'
   },
   {
+    path: 'main/orcad/orcad-entry.ts',
+    kind: 'wiring',
+    role: 'binds the same snapshot and structured sink into the headless orcad runtime deps'
+  },
+  {
     path: 'main/runtime/orca-runtime-state-fields.ts',
     kind: 'wiring',
     role: 'stores the snapshot deps on the runtime'
