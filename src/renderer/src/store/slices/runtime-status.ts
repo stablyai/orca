@@ -292,12 +292,12 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         get().applyRuntimeHostStatusSnapshot(entry.snapshot)
         return
       }
-      // A null entry here only ever comes from a failed status.get, which dials its own fresh
-      // socket — an unverifiable transport failure, never a host-answered "gone". Overwriting a
-      // recorded live verdict with it retires the host's session-tabs mirror and dims its sidebar
-      // rows for a host whose established flows are still delivering. Keep the live verdict; the
-      // status recheck ladder keeps probing and settles it on a real answer. A first-contact
-      // failure (no prior live status) still records null so host coverage completes. #19647
+      // A null entry with no snapshot only ever comes from a status.get that threw — an
+      // unverifiable transport failure, never a host-answered "gone". Publishing it would fire
+      // the disconnect toast and retire the host's session-tabs mirror while its established
+      // flows are still delivering. Keep the live verdict; the connection's status owner (#20003)
+      // holds the last verdict and retries until a real answer. A first-contact failure (no prior
+      // live status) still records null so host coverage completes. #19647
       if (entry.status === null && get().runtimeStatusByEnvironmentId.get(environmentId)?.status) {
         return
       }

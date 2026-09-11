@@ -498,20 +498,22 @@ test('paired client tab switch does not reconnect the remote runtime', async ({
       `[tab-switch-repro] connection generation across the flap: ${String(generationBeforeFlap)} -> ${String(generationAfterRecovery)}`
     )
 
-    // Writer contract (#19647), the fix under test: a status.get that could not reach the host is
-    // unverifiable, so the recorded live verdict survives the transport fault (no null published)
-    // and recovery is not a second connection (the connection generation never advances). These
-    // are the hard gate; both fail on the unfixed writer.
-    expect(
-      flapped.sawNullStatus,
-      'a failed status.get over a stalled link published status: null over a live verdict (#19647)'
-    ).toBe(false)
+    // Writer contract (#19647), the fix under test: recovery is not a second connection, so the
+    // connection generation never advances. This fails on the unfixed writer.
     expect(
       generationAfterRecovery,
       'recovery advanced the connection generation, so the session-tabs mirror was rebuilt (#19647)'
     ).toBe(generationBeforeFlap)
-    // The fix keeps the environment revivable rather than retiring it: the pane is never disposed
-    // and its host is never dropped from the mirror targets, so a later trigger can bring it back.
+    // `sawNullStatus` is DIAGNOSTIC here, not a gate. #20003 split the vocabulary: the store entry's
+    // `status` now means "verified on the current socket" and the owner's `snapshot.status` holds the
+    // last verdict, so `entry.status === null` during an outage no longer means the client declared
+    // the host gone. It also drives the mirror's own rebuild after the socket returns, so asserting
+    // it stays non-null would contradict the recovery this arm measures.
+    console.log(
+      `[tab-switch-repro] entry.status nulled during the flap (expected post-#20003): ${String(flapped.sawNullStatus)}`
+    )
+    // The fix keeps the environment revivable rather than retiring it: the pane is never disposed,
+    // so a later trigger can bring it back.
     const finalObservation = await observePane(
       client.page,
       target.webTabId,
