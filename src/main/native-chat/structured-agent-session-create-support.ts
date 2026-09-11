@@ -1,4 +1,9 @@
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import {
+  PROVIDER_LOGIN_REQUIRED_SUPPORT_REASON,
+  type StructuredAgentSessionCreateSupportReason
+} from '../../shared/structured-agent-session-create-support-reason'
+import type { StructuredProviderLoginVerdict } from './structured-agent-session-provider-login-preflight'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import {
   readClaudeManagedAccountGateSettings,
@@ -8,18 +13,19 @@ import {
 
 export type StructuredAgentSessionCreateSupport = {
   supported: boolean
-  reason?: 'agent' | 'remote' | 'wsl'
+  reason?: StructuredAgentSessionCreateSupportReason
 }
 
 /**
  * The create-support verdict, kept out of the runtime class file because that file is `@ts-nocheck`
  * — a call site there is not typechecked, so an auth-identity decision written inline would compile
- * however wrong it was. The runtime hands over the two facts it owns and this decides.
+ * however wrong it was. The runtime hands over the facts it owns and this decides.
  */
 export function resolveStructuredAgentSessionCreateSupport(input: {
   agent: 'claude' | 'codex'
   location: AgentSessionExecutionLocation
   adapterSupportsCreate: boolean
+  providerLogin: StructuredProviderLoginVerdict
   getSettings: () => ClaudeManagedAccountGateSettings
 }): StructuredAgentSessionCreateSupport {
   if (!input.adapterSupportsCreate) {
@@ -43,6 +49,11 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
     )
   ) {
     return { supported: false, reason: 'wsl' }
+  }
+  // Only a positively observed missing credential refuses. `unverifiable` is loss of evidence and
+  // must answer exactly as `present` does, or an unreadable probe becomes a denial of service.
+  if (input.providerLogin === 'missing') {
+    return { supported: false, reason: PROVIDER_LOGIN_REQUIRED_SUPPORT_REASON }
   }
   return { supported: true }
 }

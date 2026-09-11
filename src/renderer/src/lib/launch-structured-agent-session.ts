@@ -10,6 +10,7 @@ import {
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
+import type { StructuredAgentSessionCreateSupportReason } from '../../../shared/structured-agent-session-create-support-reason'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../shared/agent-session-definitive-refusal'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
@@ -44,7 +45,12 @@ class StructuredAgentSessionCreateError extends Error {
  * the shared allowlist, so no consumer has to remember to re-check a code.
  */
 export class StructuredAgentSessionCreateRefusalError extends StructuredAgentSessionCreateError {
-  constructor(message: string, code: string = 'structured_agent_session_unsupported') {
+  constructor(
+    message: string,
+    code: string = 'structured_agent_session_unsupported',
+    /** The host's `createSupport` reason, when the refusal came from that probe. */
+    readonly supportReason?: StructuredAgentSessionCreateSupportReason
+  ) {
     super(message, code)
     this.name = 'StructuredAgentSessionCreateRefusalError'
   }
@@ -135,6 +141,11 @@ const SELECTOR_NOT_RESOLVABLE_CODE = 'selector_not_found'
  */
 const CREATE_SUPPORT_RETRY_DELAYS_MS: readonly number[] = [50, 150, 300]
 
+type HostCreateSupport = {
+  supported: boolean
+  reason?: StructuredAgentSessionCreateSupportReason
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -148,23 +159,25 @@ function delay(ms: number): Promise<void> {
  * indistinguishable to the user from the gate refusing them. The retry is narrowed to that one
  * transient code so every other failure still refuses on the first ask.
  */
-async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): Promise<boolean> {
+async function hostSupportsCreate(
+  intent: StructuredAgentSessionLaunchIntent
+): Promise<HostCreateSupport> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      const support = await callStructuredAgentSession<{ supported: boolean; reason?: string }>(
+      const support = await callStructuredAgentSession<HostCreateSupport>(
         { kind: 'local' },
         'agentSession.createSupport',
         { worktree: intent.params.worktree, agent: intent.agent }
       )
-      return support.supported === true
+      return { supported: support.supported === true, reason: support.reason }
     } catch (error) {
       const retryDelayMs = CREATE_SUPPORT_RETRY_DELAYS_MS[attempt]
       if (
         retryDelayMs === undefined ||
         !hasRuntimeRpcErrorCode(error, SELECTOR_NOT_RESOLVABLE_CODE)
       ) {
-        // An unanswered probe is still not a yes.
-        return false
+        // An unanswered probe is still not a yes — and carries no reason to render.
+        return { supported: false }
       }
       await delay(retryDelayMs)
     }
@@ -178,11 +191,13 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
  * unresolvable-selector retry above along with the probe.
  */
 async function requireHostCreateSupport(intent: StructuredAgentSessionLaunchIntent): Promise<void> {
-  if (!(await hostSupportsCreate(intent))) {
+  const support = await hostSupportsCreate(intent)
+  if (!support.supported) {
     abandonStructuredAgentSessionLaunchIntent(intent)
     throw new StructuredAgentSessionCreateRefusalError(
       'structured_agent_session_unsupported',
-      'structured_agent_session_unsupported'
+      'structured_agent_session_unsupported',
+      support.reason
     )
   }
 }

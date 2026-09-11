@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
@@ -10,6 +10,31 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   app: { getPath: vi.fn(() => '/tmp') }
 }))
+
+/** The provider-login preflight reads the real host otherwise; pin it so this file keeps testing
+ *  the location and account gates alone. */
+const providerLoginEnv = { ANTHROPIC_API_KEY: 'test-key', CODEX_API_KEY: 'test-key' }
+const restoreProviderLoginEnv: (() => void)[] = []
+
+beforeEach(() => {
+  for (const [name, value] of Object.entries(providerLoginEnv)) {
+    const previous = process.env[name]
+    process.env[name] = value
+    restoreProviderLoginEnv.push(() => {
+      if (previous === undefined) {
+        delete process.env[name]
+      } else {
+        process.env[name] = previous
+      }
+    })
+  }
+})
+
+afterEach(() => {
+  for (const restore of restoreProviderLoginEnv.splice(0)) {
+    restore()
+  }
+})
 
 function managedAccount(id: string, managedAuthRuntime: 'host' | 'wsl') {
   return {

@@ -8,6 +8,12 @@ import { supportsClaudeStructuredLocation } from '../claude/claude-structured-lo
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { resolveStructuredAgentSessionCreateSupport } from '../native-chat/structured-agent-session-create-support'
 import {
+  probeStructuredAgentSessionProviderLogin,
+  resolveStructuredClaudeAccountHomePath,
+  resolveStructuredCodexPreflightHomePath,
+  type StructuredProviderLoginVerdict
+} from '../native-chat/structured-agent-session-provider-login-preflight'
+import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
   resolveStructuredAgentSessionAdoptionForCreate
 } from './structured-agent-session-create-adoption'
@@ -20,8 +26,6 @@ import { resolveTuiAgentLaunchEnv } from '../../shared/tui-agent-launch-defaults
 import { resolveStructuredLaunchSeedOptions } from '../../shared/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from './structured-agent-session-runtime'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
@@ -58,7 +62,7 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
     agent: 'claude' | 'codex'
-  ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
+  ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' | 'login' }> {
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
     return resolveStructuredAgentSessionCreateSupport({
       agent,
@@ -67,8 +71,49 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
         agent === 'claude'
           ? supportsClaudeStructuredLocation(location)
           : supportsCodexStructuredLocation(location),
+      providerLogin: await this.probeStructuredAgentSessionProviderLogin(agent, location),
       getSettings: () => this.requireStore().getSettings()
     })
+  }
+
+  /** Reads the account home a create would launch under. Anything this cannot resolve is
+   *  unverifiable, which never refuses. */
+  protected async probeStructuredAgentSessionProviderLogin(
+    agent: 'claude' | 'codex',
+    location: { wslDistro: string | null }
+  ): Promise<StructuredProviderLoginVerdict> {
+    let accountHomePath: string | null
+    try {
+      const launchEnv = resolveTuiAgentLaunchEnv(
+        agent,
+        this.requireStore().getSettings().agentDefaultEnv
+      )
+      accountHomePath =
+        agent === 'claude'
+          ? resolveStructuredClaudeAccountHomePath({
+              launchEnv,
+              managedConfigDir: this.getStructuredClaudeManagedConfigDirectory(location)
+            })
+          : resolveStructuredCodexPreflightHomePath({
+              launchEnv,
+              homeIsPreparedAtLaunch: Boolean(this.prepareCodexStructuredLaunchFn)
+            })
+    } catch {
+      return 'unverifiable'
+    }
+    return probeStructuredAgentSessionProviderLogin({
+      agent,
+      accountHomePath,
+      env: process.env
+    })
+  }
+
+  protected getStructuredClaudeManagedConfigDirectory(location: {
+    wslDistro: string | null
+  }): string | null {
+    return this.accounts.getClaudeConfigDirectory(
+      location.wslDistro ? { runtime: 'wsl', wslDistro: location.wslDistro } : { runtime: 'host' }
+    )
   }
 
   protected hasProviderSessionObservationSource(): boolean {
@@ -130,19 +175,12 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
     resumeFrom?: { providerSessionId: string }
   }): Promise<AgentSessionAttachParams> {
     if (input.agent === 'claude') {
-      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) => {
-        return (
-          launchEnv.CLAUDE_CONFIG_DIR?.trim() ||
-          this.accounts
-            .getClaudeConfigDirectory(
-              location.wslDistro
-                ? { runtime: 'wsl', wslDistro: location.wslDistro }
-                : { runtime: 'host' }
-            )
-            ?.trim() ||
-          join(homedir(), '.claude')
-        )
-      })
+      return this.resolveStructuredAgentSessionIntent(input, async ({ launchEnv, location }) =>
+        resolveStructuredClaudeAccountHomePath({
+          launchEnv,
+          managedConfigDir: this.getStructuredClaudeManagedConfigDirectory(location)
+        })
+      )
     }
     return this.resolveStructuredAgentSessionIntent(input, async ({ workspacePath, launchEnv }) => {
       // A create has no process yet, so the current selection is what it must follow.

@@ -3,6 +3,7 @@ import type { AgentSessionHandleProvider } from '../../../shared/agent-session-p
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
+import { PROVIDER_LOGIN_REQUIRED_SUPPORT_REASON } from '../../../shared/structured-agent-session-create-support-reason'
 import {
   StructuredAgentSessionLaunchCancelledError,
   type StructuredAgentLaunchReceipt
@@ -19,6 +20,27 @@ export function trackStructuredLaunchFailureToast(
       return
     }
     const agentLabel = structuredAgentLabel(agent)
+    if (
+      error instanceof StructuredAgentSessionCreateRefusalError &&
+      error.supportReason === PROVIDER_LOGIN_REQUIRED_SUPPORT_REASON
+    ) {
+      // Why: nothing on this client can fix it, so the message names the machine to fix it on.
+      toast.error(
+        translate(
+          'components.native-chat.structuredSessionHostNotSignedIn',
+          'Sign in to {{value0}} on the host',
+          { value0: agentLabel }
+        ),
+        {
+          description: translate(
+            'components.native-chat.structuredSessionHostNotSignedInDescription',
+            'The machine running this workspace has no {{value0}} login, so the chat would fail to authenticate. Sign in there, then try again.',
+            { value0: agentLabel }
+          )
+        }
+      )
+      return
+    }
     if (
       error instanceof StructuredAgentSessionCreateRefusalError &&
       (await refusalSettlement.catch(() => false))

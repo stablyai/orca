@@ -42,6 +42,7 @@ function support(
     agent: 'claude',
     location: LOCAL,
     adapterSupportsCreate: true,
+    providerLogin: 'present',
     getSettings: () => HOST_SELECTED,
     ...overrides
   })

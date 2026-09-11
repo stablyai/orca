@@ -21,6 +21,7 @@ import {
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
 } from '../../../../shared/structured-native-chat-launch-route'
+import type { StructuredAgentSessionCreateSupportReason } from '../../../../shared/structured-agent-session-create-support-reason'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { hasExplicitTuiLaunchCustomization } from '../../../../shared/tui-agent-launch-customization'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -38,6 +39,7 @@ export type WorkerStartModeReason =
   | 'wsl_execution_runtime'
   | 'codex_on_windows'
   | 'structured_unsupported_on_host'
+  | 'provider_login_missing'
 
 export type WorkerStartModeReceipt = {
   /** The mode the worker actually started in. */
@@ -76,7 +78,8 @@ const DOWNGRADE_DETAIL: Record<Exclude<WorkerStartModeReason, 'user_default'>, s
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  structured_unsupported_on_host: 'the execution host cannot create one here'
+  structured_unsupported_on_host: 'the execution host cannot create one here',
+  provider_login_missing: 'the execution host has no login for this agent'
 }
 
 const BLOCKER_REASON: Record<
@@ -95,12 +98,13 @@ const BLOCKER_REASON: Record<
 
 /** The host's own create-support verdict (`agentSession.createSupport`) in this vocabulary. */
 const HOST_SUPPORT_REASON: Record<
-  'agent' | 'remote' | 'wsl',
+  StructuredAgentSessionCreateSupportReason,
   Exclude<WorkerStartModeReason, 'user_default'>
 > = {
   agent: 'structured_unsupported_on_host',
   remote: 'remote_execution_host',
-  wsl: 'wsl_execution_runtime'
+  wsl: 'wsl_execution_runtime',
+  login: 'provider_login_missing'
 }
 
 export function decideWorkerStartMode(args: {
@@ -164,7 +168,7 @@ async function readStructuredCreateSupport(
   runtime: Pick<OrcaRuntimeService, 'getStructuredAgentSessionCreateSupport'>,
   worktreeId: string,
   agent: TuiAgent | undefined
-): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null> {
+): Promise<{ supported: boolean; reason?: StructuredAgentSessionCreateSupportReason } | null> {
   if (agent !== 'claude' && agent !== 'codex') {
     return { supported: false, reason: 'agent' }
   }
@@ -181,7 +185,7 @@ async function readStructuredCreateSupport(
  */
 export function downgradeWorkerStartModeForHost(
   receipt: WorkerStartModeReceipt,
-  support: { supported: boolean; reason?: 'agent' | 'remote' | 'wsl' } | null
+  support: { supported: boolean; reason?: StructuredAgentSessionCreateSupportReason } | null
 ): WorkerStartModeReceipt {
   if (receipt.mode !== 'structured' || support?.supported) {
     return receipt
