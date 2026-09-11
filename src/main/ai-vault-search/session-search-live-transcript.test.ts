@@ -193,16 +193,16 @@ it('indexes a file the session list already read past, once a whole read is aske
   // The append continued from a byte offset the index never saw, so it declined.
   expect(sessionsMatching('zygomorphic')).toEqual([])
 
-  const behind = store.takeStale()
-  expect(behind.map((candidate) => candidate.file.path)).toEqual([path])
-  for (const candidate of behind) {
-    requestWholeTranscriptRead(candidate.file.path)
-  }
+  // The index holds no row for this file at all, and that is the record: a
+  // path the file table does not name is read from the start by the next pass,
+  // which is what asks the reader to drop the session list's resume point.
+  expect(store.files()).toEqual([])
+  requestWholeTranscriptRead(path)
 
   const reread = await parseTranscript(path)
   expect(reread.stats).toMatchObject({ incremental: 0, fullParses: 1 })
   expect(errors).toEqual([])
   expect(sessionsMatching('zygomorphic')).toEqual([SESSION_ID])
   expect(sessionsMatching('opening')).toEqual([SESSION_ID])
-  expect(store.takeStale()).toEqual([])
+  expect(store.files().map((row) => row.state)).toEqual(['current'])
 })

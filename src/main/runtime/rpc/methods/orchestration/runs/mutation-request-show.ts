@@ -2,10 +2,10 @@ import {
   describeMutationRequestState,
   type OrchestrationMutationRequestShowResult
 } from '../../../../../../shared/orchestration-mutation-request'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { RequestShowParams } from '../../../../../../shared/rpc-contract/orchestration-runs-mutation-request-show-params'
 
-export const ORCHESTRATION_MUTATION_REQUEST_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
   defineMethod({
     name: 'orchestration.requestShow',
     params: RequestShowParams,

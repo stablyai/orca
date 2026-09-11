@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import {
   FolderWorkspaceCreate,
@@ -7,7 +7,7 @@ import {
   FolderWorkspaceUpdate
 } from '../../../../shared/rpc-contract/folder-workspace-params'
 
-export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
+export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
     name: 'folderWorkspace.list',
     params: null,

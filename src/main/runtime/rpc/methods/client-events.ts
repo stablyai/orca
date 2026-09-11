@@ -1,11 +1,11 @@
 import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ssh/ssh-target-registry'
 import { getPublicSshState } from '../../public-ssh-state'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
 
 let clientEventSubscriptionSeq = 0
 
-export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
+export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
     params: null,

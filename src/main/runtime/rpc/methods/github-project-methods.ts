@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { SlugRepo } from './github-repo-target-schemas'
 import {
   ClearProjectItemField,
@@ -17,7 +17,7 @@ import {
   SlugPullRequestUpdate
 } from '../../../../shared/rpc-contract/github-project-params'
 
-export const GITHUB_PROJECT_METHODS: RpcMethod[] = [
+export const GITHUB_PROJECT_METHODS = [
   defineMethod({
     name: 'github.project.listAccessible',
     params: GithubProjectListAccessibleParams,

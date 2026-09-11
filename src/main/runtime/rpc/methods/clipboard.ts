@@ -1,4 +1,4 @@
-import { defineMethod, type RpcContext, type RpcMethod } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import { saveClipboardImageBufferAsTempFile } from '../../../window/clipboard-image-temp-file'
 import { randomUUID } from 'node:crypto'
 import { recordMobileClipboardImagePath } from '../mobile-clipboard-image-provenance'
@@ -95,7 +95,7 @@ function assertValidBase64Content(value: string): void {
   }
 }
 
-export const CLIPBOARD_METHODS: RpcMethod[] = [
+export const CLIPBOARD_METHODS = [
   defineMethod({
     name: 'clipboard.saveImageAsTempFile',
     params: SaveImageAsTempFile,

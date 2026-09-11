@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   MarkPrReadyForReview,
   MergePr,
@@ -12,7 +12,7 @@ import {
   UpdatePrTitle
 } from '../../../../shared/rpc-contract/github-pull-request-update-params'
 
-export const GITHUB_PULL_REQUEST_UPDATE_METHODS: RpcMethod[] = [
+export const GITHUB_PULL_REQUEST_UPDATE_METHODS = [
   defineMethod({
     name: 'github.updatePRTitle',
     params: UpdatePrTitle,

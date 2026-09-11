@@ -6,7 +6,7 @@ import {
   callComputerSidecarSnapshot,
   resetComputerSidecarForTest
 } from '../../../computer/sidecar-client'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   Click,
   ComputerObserveTarget,
@@ -31,7 +31,7 @@ export function resetComputerSessionsForTest(): void {
   resetComputerSidecarForTest()
 }
 
-export const COMPUTER_METHODS: RpcMethod[] = [
+export const COMPUTER_METHODS = [
   defineMethod({
     name: 'computer.capabilities',
     params: ComputerCapabilitiesParams,

@@ -1,4 +1,4 @@
-import { defineMethod, type RpcContext, type RpcMethod } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import type { PluginPanelEntry } from '../../../../shared/plugins/plugin-panel-bridge'
 import { listPluginsForClients } from '../../../plugins/plugin-client-list'
 import type { PluginListEntry } from '../../../plugins/plugin-list-projection'
@@ -65,7 +65,7 @@ function bindRpcPanelOwner(service: PluginService, context: RpcContext): string 
   return ownerKey
 }
 
-export const PLUGIN_METHODS: readonly RpcMethod[] = [
+export const PLUGIN_METHODS = [
   defineMethod({
     name: 'plugins.list',
     params: null,

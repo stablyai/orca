@@ -13,7 +13,7 @@ import {
   FederationPullParams
 } from '../../../../../../shared/rpc-contract/orchestration-federation-relay-params'
 
-export const ORCHESTRATION_FEDERATION_RELAY_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
   defineMethod({
     name: 'orchestration.federationPull',
     params: FederationPullParams,

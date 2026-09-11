@@ -26,6 +26,7 @@ import {
 import {
   readResumableTranscript,
   readWholeTranscript,
+  requestWholeTranscriptRead,
   type TranscriptReadStats
 } from './session-transcript-reader'
 
@@ -104,29 +105,67 @@ export function createSessionParseStats(): SessionParseStats {
 export async function parseAgentSessionFileCached(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
-  stats?: SessionParseStats
+  stats?: SessionParseStats,
+  requireRead?: SessionParseReadRequirement
 ): Promise<AiVaultSession | null> {
   // The whole lookup-read-store sequence runs in the lane: a concurrent parse of
   // the same path shares this entry's resume point and its message channel.
   return inSessionParseFileLane(candidate.file.path, () =>
-    parseCachedInLane(candidate, platform, stats)
+    parseCachedInLane(candidate, platform, stats, requireRead)
+  )
+}
+
+/**
+ * What a caller other than the session list needs out of this parse.
+ *
+ * `any`: some bytes must be read. A cursor already at the file's current stat
+ * is dropped so the reader opens it; one that is merely behind is left alone,
+ * because an append is a read.
+ *
+ * `whole`: the file must be re-read from zero, for a consumer whose own cursor
+ * covers a span this one does not.
+ *
+ * Why it is a parameter and not two calls around this one: the decision reads
+ * cache state and then changes it, so outside the per-path lane an overlapping
+ * list parse can store its entry in between and the forced read silently
+ * degrades to a reuse.
+ */
+export type SessionParseReadRequirement = 'any' | 'whole'
+
+/**
+ * True when this cursor already sits at the transcript's current stat, so a
+ * parse would reuse the cached fold and read no bytes at all.
+ */
+function sessionParseCacheCoversTranscript(
+  candidate: SessionFileCandidate,
+  platform: NodeJS.Platform
+): boolean {
+  const { file } = candidate
+  const entry = getSessionParseCacheEntry(file.path)
+  return (
+    entry !== undefined &&
+    entry.platform === platform &&
+    entry.mtimeMs === file.mtimeMs &&
+    (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
   )
 }
 
 async function parseCachedInLane(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
-  stats?: SessionParseStats
+  stats?: SessionParseStats,
+  requireRead?: SessionParseReadRequirement
 ): Promise<AiVaultSession | null> {
   const { file } = candidate
+  if (
+    requireRead === 'whole' ||
+    (requireRead === 'any' && sessionParseCacheCoversTranscript(candidate, platform))
+  ) {
+    requestWholeTranscriptRead(file.path)
+  }
   const entry = getSessionParseCacheEntry(file.path)
 
-  const transcriptUnchanged =
-    entry !== undefined &&
-    entry.platform === platform &&
-    entry.mtimeMs === file.mtimeMs &&
-    (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
-  if (transcriptUnchanged) {
+  if (entry !== undefined && sessionParseCacheCoversTranscript(candidate, platform)) {
     if (sidecarUnchanged(entry.sidecar, file.sidecar)) {
       return reuseCachedSession(candidate, entry, stats)
     }

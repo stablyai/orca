@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { linearError } from '../../../linear/issue-context-errors'
 import { isLinearUuid } from '../../../../shared/linear/uuid'
 import {
@@ -28,7 +28,7 @@ function parseLinearWriteId(writeId: string | undefined): string | undefined {
   return writeId
 }
 
-export const LINEAR_AGENT_ACCESS_METHODS: RpcMethod[] = [
+export const LINEAR_AGENT_ACCESS_METHODS = [
   defineMethod({
     name: 'linear.saveIssue',
     params: LinearSaveIssue,

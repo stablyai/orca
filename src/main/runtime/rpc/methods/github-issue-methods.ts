@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   CreateIssue,
   Issue,
@@ -6,7 +6,7 @@ import {
   UpdateIssue
 } from '../../../../shared/rpc-contract/github-issue-params'
 
-export const GITHUB_ISSUE_METHODS: RpcMethod[] = [
+export const GITHUB_ISSUE_METHODS = [
   defineMethod({
     name: 'github.issue',
     params: Issue,

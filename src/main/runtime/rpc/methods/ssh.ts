@@ -4,7 +4,7 @@ import {
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
 } from '../../../ssh/ssh-target-registry'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { getPublicSshError, getPublicSshState } from '../../public-ssh-state'
 import type { SshTargetSummary } from '../../../../shared/ssh-types'
 import { SshTarget } from '../../../../shared/rpc-contract/ssh-params'
@@ -25,7 +25,7 @@ function listRegisteredSshTargetSummaries(): SshTargetSummary[] {
   })
 }
 
-export const SSH_METHODS: RpcMethod[] = [
+export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.getState',
     params: SshTarget,

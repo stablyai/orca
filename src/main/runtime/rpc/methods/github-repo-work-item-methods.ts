@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { RepoSelector } from './github-repo-target-schemas'
 import {
   IssuesList,
@@ -10,7 +10,7 @@ import {
   WorkItemsList
 } from '../../../../shared/rpc-contract/github-repo-work-item-params'
 
-export const GITHUB_REPO_WORK_ITEM_METHODS: RpcMethod[] = [
+export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.repoSlug',
     params: RepoSelector,

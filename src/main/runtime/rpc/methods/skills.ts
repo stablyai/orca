@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import type { z } from 'zod'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import { SkillDeleteRequestSchema } from '../../../../shared/skill-delete-contract'
@@ -64,7 +64,7 @@ function skillDeleteDependencies(
   }
 }
 
-export const SKILL_METHODS: RpcMethod[] = [
+export const SKILL_METHODS = [
   defineMethod({
     name: 'skills.discover',
     params: SkillsDiscoverParams,

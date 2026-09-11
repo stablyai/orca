@@ -1,11 +1,11 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   HostedReviewCreate,
   HostedReviewCreationEligibility,
   HostedReviewForBranch
 } from '../../../../shared/rpc-contract/hosted-review-params'
 
-export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
+export const HOSTED_REVIEW_METHODS = [
   defineMethod({
     name: 'hostedReview.forBranch',
     params: HostedReviewForBranch,

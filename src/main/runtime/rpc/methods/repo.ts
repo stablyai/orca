@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
 import { RepoSelector } from './github-repo-target-schemas'
@@ -24,7 +24,7 @@ import {
   RepoUpdate
 } from '../../../../shared/rpc-contract/repo-params'
 
-export const REPO_METHODS: RpcMethod[] = [
+export const REPO_METHODS = [
   defineMethod({
     name: 'repo.list',
     params: null,

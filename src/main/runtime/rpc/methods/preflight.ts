@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   detectRemoteAgents,
   detectRemoteWindowsTerminalCapabilities,
@@ -12,7 +12,7 @@ import {
   PreflightDetectRemoteWindowsTerminalCapabilities
 } from '../../../../shared/rpc-contract/preflight-params'
 
-export const PREFLIGHT_METHODS: RpcMethod[] = [
+export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.check',
     params: PreflightCheck,

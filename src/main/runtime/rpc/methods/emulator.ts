@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import path from 'node:path'
 import { z } from 'zod'
 import {
@@ -32,7 +32,7 @@ const InstallParams = z.object({
   worktree: z.string().optional()
 })
 
-export const EMULATOR_METHODS: RpcMethod[] = [
+export const EMULATOR_METHODS = [
   defineMethod({
     name: 'emulator.list',
     params: ListParams,

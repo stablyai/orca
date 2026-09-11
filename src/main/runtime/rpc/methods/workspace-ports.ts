@@ -1,10 +1,10 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   WorkspacePortKillParams,
   WorkspacePortScanParams
 } from '../../../../shared/rpc-contract/workspace-ports-params'
 
-export const WORKSPACE_PORT_METHODS: RpcMethod[] = [
+export const WORKSPACE_PORT_METHODS = [
   defineMethod({
     name: 'workspacePorts.scan',
     params: WorkspacePortScanParams,

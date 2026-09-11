@@ -1,4 +1,4 @@
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 import {
   AccountsUnsubscribeParams,
   AddClaudeFromConfigDirParams,
@@ -24,7 +24,7 @@ let accountsSubscriptionSeq = 0
 // captures an already-authenticated CLAUDE_CONFIG_DIR (no PTY) so the local
 // `orca account add` CLI can register accounts on a headless host; it is gated
 // to the local runtime connection, never a mobile device token. See #1438.
-export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
+export const ACCOUNT_METHODS = [
   defineMethod({
     name: 'accounts.list',
     params: ListAccountsParams,

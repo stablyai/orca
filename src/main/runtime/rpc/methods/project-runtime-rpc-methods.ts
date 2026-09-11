@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { projectRepoResultVisibilityForClient } from '../repo-visibility-projection'
 import {
   ProjectHostSetupClone,
@@ -9,7 +9,7 @@ import {
   ProjectUpdate
 } from '../../../../shared/rpc-contract/project-runtime-params'
 
-export const PROJECT_RUNTIME_METHODS: RpcMethod[] = [
+export const PROJECT_RUNTIME_METHODS = [
   defineMethod({
     name: 'project.list',
     params: null,

@@ -2,7 +2,7 @@ import {
   JIRA_PAYLOAD_CHUNK_CHARS,
   JIRA_PAYLOAD_MAX_CHARS
 } from '../../../../shared/jira-payload-stream'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 import {
   AssignableUsers,
   Connect,
@@ -34,7 +34,7 @@ function emitJiraPayload(value: unknown, emit: (result: unknown) => void): void 
   emit({ type: 'end' })
 }
 
-export const JIRA_METHODS: RpcAnyMethod[] = [
+export const JIRA_METHODS = [
   defineMethod({
     name: 'jira.connect',
     params: Connect,

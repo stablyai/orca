@@ -1,11 +1,11 @@
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import { remoteFileContentBudget } from './files-remote-content-budget'
 import {
   TerminalArtifactFile,
   TerminalArtifactFileWrite
 } from '../../../../shared/rpc-contract/files-terminal-artifact-params'
 
-export const FILE_TERMINAL_ARTIFACT_METHODS: RpcAnyMethod[] = [
+export const FILE_TERMINAL_ARTIFACT_METHODS = [
   defineMethod({
     name: 'files.readTerminalArtifact',
     params: TerminalArtifactFile,

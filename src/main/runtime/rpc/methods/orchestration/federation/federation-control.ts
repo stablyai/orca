@@ -1,6 +1,6 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
 import { readExactWorkerOutput } from '../worker/worker-output'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/pty-liveness-verdict'
@@ -16,7 +16,7 @@ import {
   FederationReadParams
 } from '../../../../../../shared/rpc-contract/orchestration-federation-control-params'
 
-export const ORCHESTRATION_FEDERATION_CONTROL_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
   defineMethod({
     name: 'orchestration.federationFleetSnapshot',
     params: FederationFleetSnapshotParams,

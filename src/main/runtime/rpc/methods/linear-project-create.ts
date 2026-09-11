@@ -1,7 +1,7 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { CreateProject } from '../../../../shared/rpc-contract/linear-project-create-params'
 
-export const LINEAR_PROJECT_CREATE_METHOD: RpcMethod = defineMethod({
+export const LINEAR_PROJECT_CREATE_METHOD = defineMethod({
   name: 'linear.createProject',
   params: CreateProject,
   handler: async (params, { runtime }) =>

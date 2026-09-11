@@ -1,5 +1,5 @@
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { defineMethod, defineStreamingMethod } from '../core'
 import {
   CreateTerminalTab,
   SessionTabsUnsubscribe,
@@ -19,7 +19,7 @@ import { isStructuredNativeChatEnabled } from './structured-agent-session-policy
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../ai-vault/structured-session-ownership'
 import { SessionTabsUnsubscribeAllParams } from '../../../../shared/rpc-contract/session-tabs-params'
 
-export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
+export const SESSION_TAB_METHODS = [
   defineMethod({
     name: 'session.tabs.list',
     params: WorktreeTabSelector,
