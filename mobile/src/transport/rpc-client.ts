@@ -1,19 +1,11 @@
 import type { BrowserScreencastFrame } from './browser-screencast-protocol'
 import { DirectRpcClient } from './direct-rpc-client'
-import type {
-  ConnectionLogSink,
-  ConnectionState,
-  ForegroundNudgeReason,
-  RpcResponse
-} from './types'
+import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
+import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'
 
-export type SendRequestOptions = {
-  timeoutMs?: number
-  /** Include the connect wait in the caller's timeout budget. */
-  budgetSpansConnect?: boolean
-  /** Reject instead of replaying the request after reconnect. */
-  failWhenDisconnected?: boolean
-}
+// Re-export shim: the options type moved to the port module with the sender it belongs to,
+// and re-exporting is what keeps that move from touching every importer.
+export type { SendRequestOptions } from './unvalidated-rpc-request-port'
 
 type SubscribeOptions = {
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
@@ -21,12 +13,9 @@ type SubscribeOptions = {
 
 type StreamingListener = (result: unknown) => void
 
-export type RpcClient = {
-  sendRequest: (
-    method: string,
-    params?: unknown,
-    options?: SendRequestOptions
-  ) => Promise<RpcResponse>
+// Still structurally carries the raw sender, so holding a client is still holding the port —
+// which is why the boundary is inventoried rather than merely declared.
+export type RpcClient = UnvalidatedRpcRequestPort & {
   subscribe: (
     method: string,
     params: unknown,
