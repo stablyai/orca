@@ -14,6 +14,17 @@
  * Phase 0 is the control: with both clients attached, does a terminal created on one reach the
  * other at all? Without it a later divergence cannot be attributed to the emptying.
  *
+ * KNOWN RED as of this commit, and the shape of the failure is the finding. Across 8 runs the
+ * close phases were all-or-nothing: either every retraction reached both clients in single-digit
+ * milliseconds, or none reached either client within 90 seconds — and phase 1a, which closes a
+ * terminal while others remain open, fails alongside phase 1b, so it is not about the workspace
+ * going empty. Creates always propagate, including the phase 2 create that lands in ~3ms on the
+ * very clients that just missed a close for 90s, so the subscription is demonstrably alive. Both
+ * clients failing together, while the host's own window shows the correct count, puts the fault
+ * on the host's publish-after-close rather than on any client's mirror. What the user sees: a
+ * terminal they closed on one machine stays in the tab bar on the other, pointing at a process
+ * that no longer exists, until some unrelated change to the workspace forces a republish.
+ *
  * Run:
  *   pnpm exec playwright test \
  *     tests/e2e/paired-two-client-emptied-workspace-reseed.spec.ts \
@@ -196,7 +207,40 @@ test('two paired clients stay in step with the host across an emptied workspace'
       )
     }
 
-    // ── Phase 1: A empties the workspace by hand. ──
+    // ── Phase 1a: A closes one terminal, but not the last one. ──
+    // Separated from the emptying below on purpose: it is the control that says whether a
+    // retraction propagates at all, so a failure in 1b can be attributed to the workspace going
+    // empty rather than to close retractions being broken in general.
+    const beforePartialClose = await readHostTerminalTabIds(clientA, worktreeId)
+    if (beforePartialClose.length > 1) {
+      await callEnvironment(clientA.page, clientA.environmentId, 'session.tabs.close', {
+        worktree: `id:${worktreeId}`,
+        tabId: beforePartialClose[0]!,
+        reason: 'user',
+        navigation: 'caller'
+      })
+      const remaining = beforePartialClose.length - 1
+      const partialA = await waitForClientToMatchHost(
+        clientA,
+        remaining,
+        worktreeId,
+        RETRACTION_BUDGET_MS
+      )
+      const partialB = await waitForClientToMatchHost(
+        clientB,
+        remaining,
+        worktreeId,
+        RETRACTION_BUDGET_MS
+      )
+      console.error(`[two-client] phase1a host=${remaining} A=${partialA}ms B=${partialB}ms`)
+      if (partialA === null || partialB === null) {
+        failures.push(
+          `phase1a: a client kept showing a terminal the host closed, with others still open (A=${partialA}, B=${partialB})`
+        )
+      }
+    }
+
+    // ── Phase 1b: A empties the workspace by hand. ──
     for (const hostTabId of await readHostTerminalTabIds(clientA, worktreeId)) {
       await callEnvironment(clientA.page, clientA.environmentId, 'session.tabs.close', {
         worktree: `id:${worktreeId}`,
@@ -218,13 +262,13 @@ test('two paired clients stay in step with the host across an emptied workspace'
     const emptyB = await waitForClientToMatchHost(clientB, 0, worktreeId, RETRACTION_BUDGET_MS)
     const hostOwnView = await readMirroredTabCount(orcaPage, worktreeId)
     console.error(
-      `[two-client] phase1 host=0 hostOwnView=${hostOwnView}` +
+      `[two-client] phase1b host=0 hostOwnView=${hostOwnView}` +
         ` A=${emptyA}ms(${await readWorkspaceRowState(clientA.page, worktreeId)})` +
         ` B=${emptyB}ms(${await readWorkspaceRowState(clientB.page, worktreeId)})`
     )
     if (emptyA === null || emptyB === null) {
       failures.push(
-        `phase1: a client kept showing terminals the host no longer has (A=${emptyA}, B=${emptyB})`
+        `phase1b: a client kept showing terminals the host no longer has (A=${emptyA}, B=${emptyB})`
       )
     }
 
@@ -232,10 +276,10 @@ test('two paired clients stay in step with the host across an emptied workspace'
     // both hold a row for it, so both know it was emptied rather than never initialized.
     await orcaPage.waitForTimeout(10_000)
     const hostAfterSettle = (await readHostTerminalTabIds(clientA, worktreeId)).length
-    console.error(`[two-client] phase1-settled host=${hostAfterSettle}`)
+    console.error(`[two-client] phase1b-settled host=${hostAfterSettle}`)
     if (hostAfterSettle !== 0) {
       failures.push(
-        `phase1: the emptied workspace grew ${hostAfterSettle} terminal(s) back on its own`
+        `phase1b: the emptied workspace grew ${hostAfterSettle} terminal(s) back on its own`
       )
     }
 
