@@ -1,3 +1,4 @@
+import { isDshConsoleTitle } from './dsh-console-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
@@ -87,6 +88,9 @@ export function isPiAgentTitle(title: string): boolean {
  * agents have different (or no) caching semantics.
  */
 function computeIsClaudeAgent(title: string): boolean {
+  if (isDshConsoleTitle(title)) {
+    return false
+  }
   if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
     return false
   }
@@ -132,6 +136,9 @@ export function isClaudeManagementTitle(title: string): boolean {
 }
 
 function computeAgentLabel(title: string): string | null {
+  if (isDshConsoleTitle(title)) {
+    return 'DSH Console'
+  }
   if (isClaudeManagementTitle(title)) {
     return null
   }

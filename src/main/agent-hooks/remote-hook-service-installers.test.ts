@@ -23,6 +23,7 @@ import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { dshConsoleHookService } from '../dsh-console/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
   installRemoteManagedAgentHooks,
@@ -688,13 +689,11 @@ describe('remote hook service installers', () => {
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toBe(0o755)
   })
 
-  // Why: Droid (and Copilot) each shipped a working installRemote but were never
-  // registered in REMOTE_MANAGED_HOOK_INSTALLERS, so their status silently never
-  // appeared over SSH (issue #7253). Guard the whole bug class, not one agent:
-  // every locally-managed hook service that implements installRemote MUST be
-  // wired into the remote installer.
+  // Why: unregistered installRemote services silently broke SSH status (#7253).
+  // Every locally managed service with installRemote must be registered remotely.
   it('registers every managed agent that implements installRemote in the remote installer (issue #7253)', () => {
     const servicesByAgent = new Map<string, { installRemote?: unknown }>([
+      ['dsh-console', dshConsoleHookService],
       ['claude', claudeHookService],
       ['openclaude', openClaudeHookService],
       ['codex', codexHookService],
@@ -712,9 +711,7 @@ describe('remote hook service installers', () => {
     ])
 
     // Guard against a service silently missing from the map above as new agents land.
-    for (const [agent] of MANAGED_AGENT_HOOK_INSTALLERS) {
-      expect(servicesByAgent.has(agent)).toBe(true)
-    }
+    expect(MANAGED_AGENT_HOOK_INSTALLERS.every(([agent]) => servicesByAgent.has(agent))).toBe(true)
 
     const registered = new Set<string>(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS)
     const missing: string[] = []

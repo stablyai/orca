@@ -36,6 +36,7 @@ export const AGENT_KIND_VALUES = [
   'kimi',
   'mistral-vibe',
   'qwen-code',
+  'dsh-console',
   'rovo',
   'hermes',
   'openclaw',

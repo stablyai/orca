@@ -17,7 +17,8 @@ const { execFile } = await import('node:child_process')
 const execFileMock = vi.mocked(execFile)
 const { execFile: actualExecFile } =
   await vi.importActual<typeof NodeChildProcess>('node:child_process')
-const { installManagedHooks, resolveRelayGrokHome } = await import('./managed-hook-runtime')
+const { installManagedHooks, resolveRelayGrokHome, resolveRelayDshHome } =
+  await import('./managed-hook-runtime')
 
 type ExecFileCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void
 
@@ -157,4 +158,22 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
 
     expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
   })
+})
+
+describe.runIf(process.platform !== 'win32')('resolveRelayDshHome', () => {
+  it('uses the execution host DSH_HOME and preserves spaces', async () => {
+    vi.stubEnv('SHELL', '/bin/zsh')
+    stubProbeOutput('/srv/DSH Home///\n')
+    await expect(resolveRelayDshHome('/home/orca')).resolves.toBe('/srv/DSH Home')
+    expect(execFileMock.mock.calls[0]?.[1]?.join(' ')).toContain('DSH_HOME')
+  })
+
+  it.each(['../relative\n', '/srv/one\n/srv/two\n'])(
+    'rejects an invalid remote home: %s',
+    async (output) => {
+      vi.stubEnv('SHELL', '/bin/sh')
+      stubProbeOutput(output)
+      await expect(resolveRelayDshHome('/home/orca')).resolves.toBe('/home/orca/.dsh')
+    }
+  )
 })

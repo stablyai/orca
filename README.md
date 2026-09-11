@@ -170,6 +170,8 @@ Agents drive Orca too — script every workflow with `orca worktree create`, `sn
 
 ## Supported Agents
 
+[DSH Console setup and compatibility](docs/reference/dsh-console.md)
+
 Works with **any CLI agent** — if it runs in a terminal, it runs in Orca.
 
 <p>

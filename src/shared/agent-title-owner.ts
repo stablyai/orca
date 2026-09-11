@@ -122,6 +122,10 @@ export function resolveCompatibleAgentTypeForOwner(
   ownerAgentType: AgentType | null | undefined,
   _options?: CompatibleAgentOwnerOptions
 ): AgentType | undefined {
+  // Published DSH Console shares Gemini's title glyphs, but the execution owner is authoritative.
+  if (incomingAgentType === 'gemini' && ownerAgentType === 'dsh-console') {
+    return 'dsh-console'
+  }
   if (!incomingAgentType) {
     return undefined
   }
@@ -146,6 +150,14 @@ export function normalizeCompatibleAgentTitleForOwner(
   ownerAgentType: AgentType | null | undefined,
   _options?: CompatibleAgentOwnerOptions
 ): string {
+  if (ownerAgentType === 'dsh-console' && getAgentLabel(title) === 'Gemini CLI') {
+    const state = detectAgentStatusFromTitle(title)
+    return state === 'working'
+      ? '⠋ DSH Console'
+      : state === 'permission'
+        ? 'DSH Console - action required'
+        : 'DSH Console ready'
+  }
   const ownerProfile = getSyntheticAgentTitleProfile(ownerAgentType)
   if (!ownerProfile?.titleIdentityGroup) {
     return title

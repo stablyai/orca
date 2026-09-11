@@ -12,8 +12,8 @@ import {
 } from './managed-hook-owner-identity'
 
 const execFileAsync = promisify(execFile)
-const GROK_HOME_MAX_LENGTH = 4096
-const GROK_HOME_PROBE_TIMEOUT_MS = 8_000
+const AGENT_HOME_MAX_LENGTH = 4096
+const AGENT_HOME_PROBE_TIMEOUT_MS = 8_000
 
 export type ManagedHookInstallSummary = {
   installers: number
@@ -31,10 +31,10 @@ function hasControlCharacter(value: string): boolean {
   })
 }
 
-function normalizeGrokHome(candidate: string): string | null {
+function normalizeAgentHome(candidate: string): string | null {
   if (
     candidate.length === 0 ||
-    candidate.length > GROK_HOME_MAX_LENGTH ||
+    candidate.length > AGENT_HOME_MAX_LENGTH ||
     candidate !== candidate.trim() ||
     !candidate.startsWith('/') ||
     candidate.includes('\\') ||
@@ -53,24 +53,34 @@ function resolveLoginShell(): string {
   return candidate
 }
 
-export async function resolveRelayGrokHome(home: string, signal?: AbortSignal): Promise<string> {
-  const fallback = defaultGrokHome(home)
+async function resolveRelayAgentHome(
+  variable: 'GROK_HOME' | 'DSH_HOME',
+  fallback: string,
+  signal?: AbortSignal
+): Promise<string> {
   try {
     const shell = resolveLoginShell()
     const shellName = basename(shell)
     const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
-    // Why: agent PTYs start login shells, so read the same profile-derived
-    // GROK_HOME without opening two additional SSH exec channels.
+    // Agent PTYs start login shells; resolve the same host-local profile override.
     const { stdout } = await execFileAsync(
       shell,
-      [mode, `printenv GROK_HOME | head -c ${GROK_HOME_MAX_LENGTH + 1}`],
-      { encoding: 'utf8', timeout: GROK_HOME_PROBE_TIMEOUT_MS, signal }
+      [mode, `printenv ${variable} | head -c ${AGENT_HOME_MAX_LENGTH + 1}`],
+      { encoding: 'utf8', timeout: AGENT_HOME_PROBE_TIMEOUT_MS, signal }
     )
-    return normalizeGrokHome(stdout.split(/\r?\n/, 1)[0] ?? '') ?? fallback
+    return normalizeAgentHome(stdout.replace(/\r?\n$/, '')) ?? fallback
   } catch {
     signal?.throwIfAborted()
     return fallback
   }
+}
+
+export function resolveRelayGrokHome(home: string, signal?: AbortSignal): Promise<string> {
+  return resolveRelayAgentHome('GROK_HOME', defaultGrokHome(home), signal)
+}
+
+export function resolveRelayDshHome(home: string, signal?: AbortSignal): Promise<string> {
+  return resolveRelayAgentHome('DSH_HOME', `${home.replace(/\/+$/, '')}/.dsh`, signal)
 }
 
 export async function installManagedHooks(options?: {
@@ -86,6 +96,9 @@ export async function installManagedHooks(options?: {
   }
   const home = homedir()
   const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
+  const dshHomeDir = agents.includes('dsh-console')
+    ? await resolveRelayDshHome(home, options?.signal)
+    : undefined
   options?.signal?.throwIfAborted()
   const hostIdentity = scopeManagedHookHostIdentity(
     await readManagedHookHostIdentity(),
@@ -100,6 +113,7 @@ export async function installManagedHooks(options?: {
         home,
         {
           grokHomeDir,
+          dshHomeDir,
           signal: options?.signal,
           agents
         }

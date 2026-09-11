@@ -82,7 +82,7 @@ const INVENTORY: readonly InventoryGroup[] = [
       'src/renderer/src/lib/agent-status.ts',
       'src/shared/agent-detection.ts',
       'src/shared/agent-title-identity.ts',
-      ['src/shared/agent-title-owner.ts', 2],
+      ['src/shared/agent-title-owner.ts', 3],
       ['src/shared/terminal-title-agent-type.ts', 2]
     ]
   },
@@ -333,7 +333,7 @@ const INVENTORY: readonly InventoryGroup[] = [
       ['src/renderer/src/lib/pane-agent-evidence.ts', 3],
       ['src/shared/agent-decorative-title-signature.ts', 2],
       'src/shared/agent-detection.ts',
-      ['src/shared/agent-title-owner.ts', 2],
+      ['src/shared/agent-title-owner.ts', 3],
       ['src/shared/agent-title-status.ts', 6]
     ]
   },

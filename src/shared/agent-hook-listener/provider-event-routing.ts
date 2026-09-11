@@ -38,6 +38,8 @@ export function isGrokIdleNotification(message: string | undefined): boolean {
 export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
   switch (source) {
+    case 'dsh-console':
+      return eventName === 'UserPromptSubmit'
     case 'claude':
       // Why: SessionStart lands an idle row (STA-3386) and must also drop stale
       // tool/prompt caches left by the pane's previous session.
@@ -136,6 +138,8 @@ export function extractToolFields(
 ): ToolSnapshot {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
+    case 'dsh-console':
+      return extractClaudeToolFields(eventName, hookPayload)
     case 'claude':
     // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
     // falls through

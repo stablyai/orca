@@ -1,4 +1,5 @@
 import type React from 'react'
+import { SquareTerminal } from 'lucide-react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -306,6 +307,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'dsh-console',
+    label: translate('auto.lib.agent.catalog.dsh_console_label', 'DSH Console'),
+    cmd: 'dsh-console',
+    homepageUrl: 'https://github.com/cofy-x/dsh-console#install'
   }
 ])
 
@@ -356,6 +363,9 @@ export function AgentIcon({
   }
   if (agent === 'opencode') {
     return <OpenCodeIcon size={size} />
+  }
+  if (agent === 'dsh-console') {
+    return <SquareTerminal size={size} aria-hidden />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   // Why: prefer the favicon bundled at build time so the icon renders without a

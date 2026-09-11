@@ -59,7 +59,7 @@ function shouldIgnoreInterruptIntent(
   agentType: AgentStatusEntry['agentType'],
   intent: AgentInterruptInputIntent
 ): boolean {
-  return agentType === 'droid' && intent === 'ctrl-c'
+  return agentType === 'dsh-console' || (agentType === 'droid' && intent === 'ctrl-c')
 }
 
 function canInferInterrupt(entry: AgentStatusEntry, intent: AgentInterruptInputIntent): boolean {

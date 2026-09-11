@@ -31,6 +31,7 @@ describe('agent session resume metadata', () => {
   it.each([
     ['claude', { session_id: 'claude-session' }, { key: 'session_id', id: 'claude-session' }],
     ['codex', { session_id: 'codex-session' }, { key: 'session_id', id: 'codex-session' }],
+    ['dsh-console', { session_id: 'dsh-session' }, { key: 'session_id', id: 'dsh-session' }],
     ['gemini', { session_id: 'gemini-session' }, { key: 'session_id', id: 'gemini-session' }],
     [
       'antigravity',
@@ -71,6 +72,7 @@ describe('agent session resume metadata', () => {
   it.each([
     ['claude', { key: 'session_id', id: 's1' }, ['claude', '--resume', 's1']],
     ['codex', { key: 'session_id', id: 's1' }, ['codex', 'resume', 's1']],
+    ['dsh-console', { key: 'session_id', id: 's1' }, ['dsh-console', '--resume', 's1']],
     ['gemini', { key: 'session_id', id: 's1' }, ['gemini', '--resume', 's1']],
     ['antigravity', { key: 'conversation_id', id: 's1' }, ['agy', '--conversation', 's1']],
     ['opencode', { key: 'session_id', id: 's1' }, ['opencode', '--session', 's1']],
