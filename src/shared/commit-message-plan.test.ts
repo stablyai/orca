@@ -201,6 +201,23 @@ describe('planCommitMessageGeneration', () => {
   it('keeps a leading-dash Antigravity prompt bound to --print instead of the sandbox flag', () => {
     const result = planCommitMessageGeneration(
       { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
+      '-fix: something'
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.plan.args.slice(0, 2)).toEqual([
+      '--print=-fix: something',
+      '--sandbox'
+    ])
+  })
+
+  // Why: pins argv construction only. Real agy 1.2.1 separately rejects a --print value
+  // that exactly matches a registered flag name (its own heuristic, independent of this
+  // fix) — verified `agy --print=--sandbox` still errors there. Real prompts are never
+  // literally a bare flag name, so this doesn't affect actual generation.
+  it('still glues an Antigravity prompt that collides with a flag name onto --print', () => {
+    const result = planCommitMessageGeneration(
+      { agentId: 'antigravity', model: 'Gemini 3.5 Flash (Medium)' },
       '--sandbox'
     )
 

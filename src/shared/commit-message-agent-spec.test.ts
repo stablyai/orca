@@ -588,6 +588,15 @@ describe('buildArgs (Antigravity)', () => {
   })
 
   it('binds a leading-dash prompt to --print instead of letting it parse as an option', () => {
+    const args = spec.buildArgs({ prompt: '-fix: something', model: 'Gemini 3.5 Flash (Medium)' })
+    expect(args[0]).toBe('--print=-fix: something')
+  })
+
+  // Why: pins argv construction only. Real agy 1.2.1 separately rejects a --print value
+  // that exactly matches a registered flag name (its own heuristic, independent of this
+  // fix) — verified `agy --print=--sandbox` still errors there. Real prompts are never
+  // literally a bare flag name, so this doesn't affect actual generation.
+  it('still glues a prompt that collides with a flag name onto --print', () => {
     const args = spec.buildArgs({ prompt: '--sandbox', model: 'Gemini 3.5 Flash (Medium)' })
     expect(args[0]).toBe('--print=--sandbox')
   })
