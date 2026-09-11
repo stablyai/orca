@@ -5,7 +5,10 @@ import type {
   AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { TranscriptMessageSink } from './session-transcript-consumers'
+import type {
+  TranscriptMessageSink,
+  TranscriptSessionIdentity
+} from './session-transcript-consumers'
 import type { SessionSidecarObservation } from './session-sidecar-stat'
 
 export type AiVaultScanOptions = {
@@ -103,6 +106,9 @@ export type ResumableSessionParseState = {
   consumeLineBytes?(line: Buffer): void
   // Lets a parser terminate an excluded transcript without draining the file.
   shouldStop?(): boolean
+  // What the fold knows about the session right now, for a consumer that has to
+  // commit before the read ends (see TranscriptSessionIdentity).
+  identity?(): TranscriptSessionIdentity | null
   clone(): ResumableSessionParseState
   // Refresh per-scan file metadata (mtime display string) without re-parsing.
   touchFile(file: FileWithMtime): void

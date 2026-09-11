@@ -4,6 +4,7 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
+  accumulatorSessionIdentity,
   cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
@@ -153,19 +154,13 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
       accumulator.title = metadataTitle
       state.titleSource = 'meta'
     }
-    const cwd = extractString(payload.cwd)
-    if (cwd) {
-      accumulator.cwd = cwd
-    }
+    accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
     return
   }
 
   if (record.type === 'turn_context' && payload) {
-    const cwd = extractString(payload.cwd)
-    if (cwd) {
-      accumulator.cwd = cwd
-    }
+    accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     const model = extractModel(payload)
     if (model) {
       accumulator.model = model
@@ -177,7 +172,7 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
 
-  if (record.type === 'response_item' && payload.type === 'message') {
+  if (record.type === 'response_item') {
     if (state.historyMode === 'paginated') {
       return
     }
@@ -285,7 +280,10 @@ function codexResumeStateFromParseState(
   return {
     consumeLine: (line) => consumeCodexRecordLine(state, line),
     consumeLineBytes: (line) => {
-      const timelineOnlyRecord = readCodexTimelineOnlyRecord(line)
+      const timelineOnlyRecord = readCodexTimelineOnlyRecord(
+        line,
+        state.accumulator.messages.active && state.historyMode !== 'paginated'
+      )
       if (timelineOnlyRecord) {
         updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
       } else {
@@ -293,6 +291,7 @@ function codexResumeStateFromParseState(
       }
     },
     shouldStop: () => state.rejectedWorkerSession,
+    identity: () => accumulatorSessionIdentity(state.accumulator),
     clone: () =>
       codexResumeStateFromParseState(cloneCodexParseState(state), codexHome, titleReader),
     touchFile: (file) => {
