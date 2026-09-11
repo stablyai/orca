@@ -17,7 +17,7 @@
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
-import { parseWslUncPath } from '../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslDrivePath } from '../shared/wsl-paths'
 
 export type PathOps = typeof posix
 
@@ -140,13 +140,26 @@ function isLikelyWindowsUserProfileDirectory(
 /**
  * WSL UNC aliases front a Linux filesystem, so POSIX home shapes — not
  * `<root>\Users` — are what protect `\\wsl.localhost\Ubuntu\home\alice`.
+ *
+ * Except under `/mnt/<letter>`: that tail is the distro's drvfs view of a Windows
+ * volume, so `\\wsl.localhost\Ubuntu\mnt\c\Users\bob` is the Windows profile with
+ * a Linux spelling. It takes the Windows rule on its drive form, which the UNC
+ * exclusion above would otherwise skip.
  */
 function isLikelyWslDistroHomeDirectory(resolvedWorktreePath: string, pathOps: PathOps): boolean {
   if (pathOps !== win32) {
     return false
   }
   const wsl = parseWslUncPath(resolvedWorktreePath)
-  return !!wsl && (wsl.linuxPath === '/' || isPosixHomeShape(trimTrailingSlash(wsl.linuxPath)))
+  if (!wsl) {
+    return false
+  }
+  const linuxPath = trimTrailingSlash(wsl.linuxPath)
+  const drivePath = toWindowsWslDrivePath(linuxPath)
+  if (drivePath) {
+    return isLikelyWindowsUserProfileDirectory(win32.resolve(drivePath), win32)
+  }
+  return wsl.linuxPath === '/' || isPosixHomeShape(linuxPath)
 }
 
 function isWslUncRemovalPath(resolvedWorktreePath: string): boolean {
