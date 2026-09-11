@@ -337,5 +337,14 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     }
   }
   const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-  return { body: { kind: 'status', text: bounded.text }, handled: true }
+  return {
+    body: {
+      kind: 'status',
+      text: bounded.text,
+      // Streaming reasoning is the live turn's reasoning; the settled item says so
+      // too, and the indicator reads the tail of the journal while it is still open.
+      ...(item.type === 'reasoning' ? { presentation: AGENT_JOURNAL_THINKING_PRESENTATION } : {})
+    },
+    handled: true
+  }
 }

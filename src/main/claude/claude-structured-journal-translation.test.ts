@@ -2,11 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalRenderItem,
-  AgentSessionJournalIdentity
+import {
+  AGENT_JOURNAL_THINKING_PRESENTATION,
+  type AgentJournalItemBody,
+  type AgentJournalItemIdentity,
+  type AgentJournalRenderItem,
+  type AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { activeStructuredAgentSessionTurnId } from '../../shared/structured-agent-session-projection'
@@ -568,7 +569,9 @@ describe('Claude structured journal translation', () => {
 
     expect(state.items.at(-1)?.body).toEqual({
       kind: 'status',
-      text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+      text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text,
+      // Marks the row as the model reasoning, so a client can label the live turn.
+      presentation: AGENT_JOURNAL_THINKING_PRESENTATION
     })
   })
 

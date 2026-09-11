@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THINKING_PRESENTATION } from '../../shared/agent-session-journal-types'
 import {
   briefToolArg,
   createToolInputDisplay,
@@ -592,12 +593,17 @@ describe('codex item bodies', () => {
       body: { kind: 'status', text, presentation: 'plan-document' },
       handled: true
     })
+    // A plan is a durable artifact, so it must never read as the model reasoning now.
+    expect(codexItemBody({ type: 'plan', id: 'plan-document', text })).not.toMatchObject({
+      presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+    })
   })
 
   it('renders reasoning as status and exposes an unknown item as a provider frame', () => {
     expect(codexItemBody({ type: 'reasoning', id: 'r', text: 'thinking' })).toEqual({
       kind: 'status',
-      text: 'thinking'
+      text: 'thinking',
+      presentation: AGENT_JOURNAL_THINKING_PRESENTATION
     })
     expect(codexItemBody({ type: 'reasoning', id: 'r' })).toBeNull()
     expect(codexItemBody({ type: 'agentMessage', id: 'm', text: '' })).toBeNull()
@@ -830,7 +836,11 @@ describe('codex item bodies', () => {
         summary: ['first', 'second'],
         content: [{ text: 'fallback' }]
       })
-    ).toEqual({ kind: 'status', text: 'first\nsecond' })
+    ).toEqual({
+      kind: 'status',
+      text: 'first\nsecond',
+      presentation: AGENT_JOURNAL_THINKING_PRESENTATION
+    })
   })
 
   it('refuses a value that is not a thread item at all', () => {
