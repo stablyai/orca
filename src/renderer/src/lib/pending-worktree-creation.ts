@@ -14,6 +14,7 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
+import type { StructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
 
 /** Two-phase status reported by the main process while a worktree is created.
  *  `preparing` covers renderer-side preflight before `createWorktree` starts;
@@ -79,6 +80,9 @@ export type WorktreeCreationRequest = {
   agent: TuiAgent | null
   /** Renderer-owned route decision captured at submit time and reused on retry. */
   agentLaunchRoute?: AgentLaunchRoute
+  /** Host pinned beside the route, so the launch that runs after the workspace exists keeps the one
+   *  the route was decided against. Optional: a request written before this existed still replays. */
+  agentSessionOwner?: StructuredAgentSessionOwner
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null

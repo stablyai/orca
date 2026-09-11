@@ -3,13 +3,15 @@ import type { AgentLaunchRouteStore } from './agent-launch-route-input'
 
 const mocks = vi.hoisted(() => ({
   buildAgentLaunchRouteInput: vi.fn(),
+  resolveProspectiveWorkspaceExecutionHostId: vi.fn(),
   resolveAgentLaunchRoute: vi.fn(),
   structuredAgentLaunchSupported: vi.fn(),
   settleStructuredAgentLaunch: vi.fn()
 }))
 
 vi.mock('@/lib/agent-launch-route-input', () => ({
-  buildAgentLaunchRouteInput: mocks.buildAgentLaunchRouteInput
+  buildAgentLaunchRouteInput: mocks.buildAgentLaunchRouteInput,
+  resolveProspectiveWorkspaceExecutionHostId: mocks.resolveProspectiveWorkspaceExecutionHostId
 }))
 vi.mock('@/lib/agent-launch-routing', () => ({
   resolveAgentLaunchRoute: mocks.resolveAgentLaunchRoute,
@@ -34,6 +36,7 @@ describe('planAgentSessionLaunch', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.buildAgentLaunchRouteInput.mockReturnValue(ROUTE_INPUT)
+    mocks.resolveProspectiveWorkspaceExecutionHostId.mockReturnValue('local')
     mocks.resolveAgentLaunchRoute.mockReturnValue('structured-native-chat')
     mocks.structuredAgentLaunchSupported.mockReturnValue(true)
     mocks.settleStructuredAgentLaunch.mockResolvedValue(STRUCTURED)

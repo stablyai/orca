@@ -78,7 +78,11 @@ export function workspaceKindForWorktreeId(worktreeId: string): ProspectiveWorks
   return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder' : 'git-worktree'
 }
 
-function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: ProspectiveWorkspace) {
+/** The host a launch would run on, resolved from a workspace that may not exist yet. */
+export function resolveProspectiveWorkspaceExecutionHostId(
+  store: AgentLaunchRouteStore,
+  workspace: ProspectiveWorkspace
+) {
   if (workspace.worktreeId) {
     return getExecutionHostIdForWorktree(store, workspace.worktreeId)
   }
@@ -186,7 +190,7 @@ export function buildAgentLaunchRouteInput(
   args: AgentLaunchRouteArgs
 ): AgentLaunchRoutingInput {
   const { agent, workspace, tuiCustomization } = args
-  const executionHostId = resolveExecutionHostId(store, workspace)
+  const executionHostId = resolveProspectiveWorkspaceExecutionHostId(store, workspace)
   return {
     agent,
     settings: store.settings,

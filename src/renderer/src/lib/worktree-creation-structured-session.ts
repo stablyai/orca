@@ -131,6 +131,8 @@ export async function launchStructuredWorktreeSession(
   const plan = adoptAgentSessionLaunchVerdict({
     route: args.agentLaunchRoute,
     agent,
+    // The worktree exists now and may resolve to a different host than it did at submit time.
+    ...(args.request.agentSessionOwner ? { owner: args.request.agentSessionOwner } : {}),
     ...(args.recoverUnknownLaunch
       ? {}
       : {

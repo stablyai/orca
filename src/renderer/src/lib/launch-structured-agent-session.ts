@@ -20,11 +20,18 @@ import {
   resolveWebSessionVisibleTabId
 } from '@/runtime/web-session-focus-intent'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-tabs-sync'
+import {
+  captureStructuredAgentSessionOwnerForHost,
+  type StructuredAgentSessionOwner
+} from '@/runtime/structured-agent-session-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 export type StructuredAgentSessionLaunchIntent = {
   sessionId: string
   worktreeId: string
   agent: AgentSessionHandleProvider
+  /** The host this session belongs to, fixed here so a retry can never land on a different one. */
+  owner: StructuredAgentSessionOwner
   params: StructuredAgentSessionCreateParams
 }
 
@@ -105,6 +112,10 @@ export function createStructuredAgentSessionLaunchIntent(
     sessionId,
     worktreeId,
     agent,
+    // Captured off the same store read, before any await: a re-pair mid-launch must not retarget it.
+    owner: captureStructuredAgentSessionOwnerForHost(
+      getExecutionHostIdForWorktree(state, worktreeId)
+    ),
     params: structuredAgentSessionCreateParams({
       sessionId,
       worktree: toRuntimeWorktreeSelector(worktreeId),

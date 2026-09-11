@@ -3,6 +3,7 @@ import type { StructuredAgentSessionResumeSource } from '../../../shared/structu
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   buildAgentLaunchRouteInput,
+  resolveProspectiveWorkspaceExecutionHostId,
   type AgentLaunchRouteArgs,
   type AgentLaunchRouteStore
 } from '@/lib/agent-launch-route-input'
@@ -19,6 +20,10 @@ import {
   type StructuredAgentLaunchSettlement
 } from '@/lib/structured-agent-launch-settlement'
 import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-session-launch'
+import {
+  captureStructuredAgentSessionOwnerForHost,
+  type StructuredAgentSessionOwner
+} from '@/runtime/structured-agent-session-owner'
 
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   resumeFrom?: StructuredAgentSessionResumeSource
@@ -38,6 +43,9 @@ export type AgentSessionLaunchVerdict = {
   promptDelivery?: NativeChatLaunchPromptDelivery
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
+  /** Pinned when the route was decided. Re-entry carries this one rather than re-deriving it from a
+   *  workspace that did not exist at planning time. */
+  owner?: StructuredAgentSessionOwner
 }
 
 export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
@@ -120,6 +128,9 @@ export function planAgentSessionLaunch(
   return adoptAgentSessionLaunchVerdict({
     route: resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request)),
     agent: request.agent,
+    owner: captureStructuredAgentSessionOwnerForHost(
+      resolveProspectiveWorkspaceExecutionHostId(store, request.workspace)
+    ),
     ...(request.workspace.worktreeId ? { worktreeId: request.workspace.worktreeId } : {}),
     ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),

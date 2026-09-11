@@ -80,6 +80,7 @@ function launchIntent(worktreeId: string, sessionId: string): StructuredAgentSes
     worktreeId,
     sessionId,
     agent: 'codex',
+    owner: { kind: 'local' },
     params: {
       envelope: {
         sessionId,
