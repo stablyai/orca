@@ -19,6 +19,10 @@ for (const mode of ['original-file', 'readonly-combined']) {
     )
     writeFileSync(fixture.absolutePath, original.replace('oldName', 'newName'))
     writeFileSync(path.join(fixture.repoPath, 'other.txt'), 'other file\n')
+    // Why pinned: side-by-side panes are half the window, and these tests drag across whole
+    // lines. A narrower CI display than a dev window leaves no scroll position that exposes
+    // both endpoints, so the drag silently lands on the sticky line-number column.
+    await orcaPage.setViewportSize({ width: 1600, height: 900 })
     await waitForSessionReady(orcaPage)
     await addAndActivateRepo(orcaPage, fixture.repoPath)
     await orcaPage.evaluate(() =>

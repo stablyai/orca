@@ -37,10 +37,23 @@ export async function diffTextSelectionPoints(code: Locator, text: string) {
     }
     const first = glyph(start)
     const last = glyph(start + text.length - 1)
+    // Why: a short viewport (CI runs smaller than a dev window) can leave the target rows below
+    // the fold, so the computed points hit whatever covers them instead of the diff.
+    const rowOf = (range: Range) =>
+      (range.startContainer.parentElement ?? null)?.closest('[data-line]') ?? null
+    for (const row of [rowOf(last), rowOf(first)]) {
+      // inline: 'nearest' — the default would scroll the row start under the sticky line-number column.
+      row?.scrollIntoView({ block: 'center', inline: 'nearest' })
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    }
     const viewport = code.getBoundingClientRect()
     const left = Math.min(first.getBoundingClientRect().left, last.getBoundingClientRect().left)
     const right = Math.max(first.getBoundingClientRect().right, last.getBoundingClientRect().right)
-    code.scrollLeft += left - viewport.left - Math.max(24, (viewport.width - (right - left)) / 2)
+    // Why measured and not a constant: the line-number column is sticky, so centering the glyph in
+    // a narrow pane slides it underneath the gutter and every point hit-tests as a line number.
+    const gutter = code.querySelector('[data-line-number-content]')?.getBoundingClientRect()
+    const inset = Math.max(24, gutter ? gutter.right - viewport.left + 8 : 0)
+    code.scrollLeft += left - viewport.left - Math.max(inset, (viewport.width - (right - left)) / 2)
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     const point = (range: Range, end: boolean) => {
       const rect = range.getBoundingClientRect()

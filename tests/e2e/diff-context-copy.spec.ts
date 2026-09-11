@@ -18,6 +18,10 @@ test('copies backwards selections with file and line context from each diff side
   )
   const modified = original.replaceAll('= ', '= 9')
   writeFileSync(fixture.absolutePath, modified)
+  // Why pinned: side-by-side panes are half the window, and these tests drag across whole
+  // lines. A narrower CI display than a dev window leaves no scroll position that exposes
+  // both endpoints, so the drag silently lands on the sticky line-number column.
+  await orcaPage.setViewportSize({ width: 1600, height: 900 })
   await waitForSessionReady(orcaPage)
   await addAndActivateRepo(orcaPage, fixture.repoPath)
   await orcaPage.evaluate(() =>
