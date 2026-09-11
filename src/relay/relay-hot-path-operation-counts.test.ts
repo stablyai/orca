@@ -78,27 +78,51 @@ function dispatcherWithClients(clientCount: number): {
 describe('relay hot-path operation counts', () => {
   afterEach(() => vi.useRealTimers())
 
-  // Why this matters: abortClient runs on every client close and every setWrite. It scans the
-  // whole controller map to find one client's keys, so closing N clients that each hold K
-  // in-flight requests costs K*N*(N+1)/2 key visits -- quadratic in the number of clients, not
-  // linear. Measured: 50 -> 5,100, 100 -> 20,200, 200 -> 80,400, 400 -> 320,800 (4x per doubling).
-  it('abortClient visits every controller, not just the target client', () => {
-    const aborts = new ClientRequestAborts()
-    const controllers = new CountingMap<string, AbortController>()
-    ;(aborts as unknown as { controllers: Map<string, AbortController> }).controllers = controllers
+  // Why this is the guard and not a duration: abortClient runs on every closeClient and every
+  // setWrite. Under the flat composite-key map it replaced, one client's teardown enumerated every
+  // controller in the relay, so a full churn of N clients holding K requests cost K*N*(N+1)/2 visits
+  // -- measured at 50 -> 5,100, 100 -> 20,200, 200 -> 80,400, 400 -> 320,800, exactly 4x per
+  // doubling. Teardown must now visit only what the client owns, and must not enumerate the client
+  // index at all: enumerating it *is* the old scan.
+  it('abortClient visits only the target client, and never enumerates the client index', () => {
     const clientCount = 40
     const inFlightPerClient = 4
+    const aborts = new ClientRequestAborts()
     for (let c = 1; c <= clientCount; c++) {
       for (let r = 1; r <= inFlightPerClient; r++) {
         aborts.create(c, r)
       }
     }
+    const byClient = (aborts as unknown as { byClient: Map<number, Map<number, AbortController>> })
+      .byClient
 
-    controllers.visits = 0
+    // The census must be able to find things: prove the maps really hold 160 controllers across 40
+    // buckets before asserting that a teardown only touches 4 of them.
+    expect(byClient.size).toBe(clientCount)
+    let totalControllers = 0
+    for (const bucket of byClient.values()) {
+      totalControllers += bucket.size
+    }
+    expect(totalControllers).toBe(clientCount * inFlightPerClient)
+
+    const index = new CountingMap<number, Map<number, AbortController>>()
+    for (const [k, v] of byClient) {
+      index.set(k, v)
+    }
+    const targetBucket = new CountingMap<number, AbortController>()
+    for (const [k, v] of byClient.get(1)!) {
+      targetBucket.set(k, v)
+    }
+    index.set(1, targetBucket)
+    ;(aborts as unknown as { byClient: Map<number, unknown> }).byClient = index
+    index.visits = 0
+    targetBucket.visits = 0
+
     aborts.abortClient(1)
 
-    // One client's teardown enumerated the whole map, not its own 4 entries.
-    expect(controllers.visits).toBe(clientCount * inFlightPerClient)
+    expect(targetBucket.visits).toBe(inFlightPerClient)
+    expect(index.visits).toBe(0)
+    expect(index.has(1)).toBe(false)
   })
 
   it('notifyLegacyCapacity costs exactly one ledger lookup per active client', () => {
