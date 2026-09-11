@@ -18,6 +18,7 @@
       "bundleIdentifier": "com.stably.orca.mobile",
       "buildNumber": "1",
       "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true,
         "NSLocalNetworkUsageDescription": "Orca connects to the desktop app on your LAN.",
         "NSMicrophoneUsageDescription": "Allow Orca to record voice dictation and transcribe it on your paired desktop.",
         "NSPhotoLibraryUsageDescription": "Allow Orca to attach photos from your library to a terminal session on your paired desktop.",
@@ -79,6 +80,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-localization",
+        {
+          "supportedLocales": ["en", "es", "ja", "ko", "zh-Hans"]
+        }
+      ],
       "./plugins/android-respect-rotation-lock.js",
       [
         "expo-splash-screen",
