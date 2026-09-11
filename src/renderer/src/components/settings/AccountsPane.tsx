@@ -78,6 +78,7 @@ export function AccountsPane({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const setRateLimitsFromPush = useAppStore((s) => s.setRateLimitsFromPush)
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
   const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
   const [miniMaxApiKeyDraft, setMiniMaxApiKeyDraft] = useState('')
@@ -263,6 +264,12 @@ export function AccountsPane({
           if (!snapshot.failedProviders?.includes('claude')) {
             setClaudeAccounts(snapshot.claude)
           }
+          // Why: remote snapshots carry refreshed usage after an account switch
+          // (see accounts.subscribe); local snapshots never set this field, so
+          // the desktop's own push-driven rateLimits state is left untouched.
+          if (snapshot.rateLimits) {
+            setRateLimitsFromPush(snapshot.rateLimits)
+          }
         },
         onError: (error) => {
           toast.error(
@@ -278,7 +285,7 @@ export function AccountsPane({
     return () => {
       watcher.close()
     }
-  }, [activeRuntimeEnvironmentId])
+  }, [activeRuntimeEnvironmentId, setRateLimitsFromPush])
 
   const runCodexAccountAction = createCodexAccountActionRunner({
     settings,
