@@ -57,6 +57,8 @@ type HighwaterMarkState = {
   firstCrossedAtMs: number
   lastEmittedAtMs: number
   lastWithinBandAtMs: number
+  /** When the renderer was first observed below the band; null while it is in band. */
+  belowBandSinceMs: number | null
 }
 const emittedHighwaterRatios = new Map<number, HighwaterMarkState>()
 const emittedPrivateHighwaterMarks = new Map<number, HighwaterMarkState>()
@@ -228,11 +230,11 @@ function recordRendererMemoryHighwater(
       if (!isHighwaterCensusDue(emittedHighwaterRatios, threshold, nowMs, ratio)) {
         continue
       }
-      const aboveMarkMinutes = stampHighwaterMark(emittedHighwaterRatios, threshold, nowMs)
+      const nearMarkMinutes = stampHighwaterMark(emittedHighwaterRatios, threshold, nowMs)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
         thresholdPct: Math.round(threshold * 100),
-        aboveMarkMinutes
+        nearMarkMinutes
       })
     }
   }
@@ -241,11 +243,11 @@ function recordRendererMemoryHighwater(
       if (!isHighwaterCensusDue(emittedPrivateHighwaterMarks, mark, nowMs, privateMB)) {
         continue
       }
-      const aboveMarkMinutes = stampHighwaterMark(emittedPrivateHighwaterMarks, mark, nowMs)
+      const nearMarkMinutes = stampHighwaterMark(emittedPrivateHighwaterMarks, mark, nowMs)
       recordRendererCrashBreadcrumb('renderer_memory_highwater', {
         ...profile,
         thresholdPrivateMB: mark,
-        aboveMarkMinutes
+        nearMarkMinutes
       })
     }
   }
@@ -272,21 +274,33 @@ function noteHighwaterBandResidency(
   value: number
 ): void {
   const state = emitted.get(mark)
-  if (state === undefined || value < mark * RENDERER_HIGHWATER_RECENSUS_BAND) {
+  if (state === undefined) {
     return
   }
-  const lapsed = nowMs - state.lastWithinBandAtMs > RENDERER_HIGHWATER_RECENSUS_MS
+  if (value < mark * RENDERER_HIGHWATER_RECENSUS_BAND) {
+    // Why stamp rather than re-anchor here: the spell has to be measured from observed samples.
+    emitted.set(mark, { ...state, belowBandSinceMs: state.belowBandSinceMs ?? nowMs })
+    return
+  }
+  // Why an observed spell and not elapsed time: a renderer that is simply not being sampled — a
+  // main thread wedged past the sample interval, or a suspend — has not left the band, and must
+  // not have its clock reset. Only samples we actually saw below the band count.
+  const lapsed =
+    state.belowBandSinceMs !== null &&
+    nowMs - state.belowBandSinceMs > RENDERER_HIGHWATER_RECENSUS_MS
   emitted.set(mark, {
     firstCrossedAtMs: lapsed ? nowMs : state.firstCrossedAtMs,
     lastEmittedAtMs: state.lastEmittedAtMs,
-    lastWithinBandAtMs: nowMs
+    lastWithinBandAtMs: nowMs,
+    belowBandSinceMs: null
   })
 }
 
 /**
- * Records this emission and returns minutes since the mark was first crossed. Why carry it in the
- * payload: a refresh replaces the retained crumb's `createdAt`, so without this "how long has the
- * renderer been over the mark" — the axis that identified the stale census — becomes unrecoverable.
+ * Records this emission and returns minutes the renderer has been *within the refresh band* of the
+ * mark (>=90% of it), not strictly above it — a renderer sitting at 577MB under a 600MB mark is
+ * the sustained-pressure signal worth reporting. Why carry it in the payload: a refresh replaces
+ * the retained crumb's `createdAt`, so without this the duration axis becomes unrecoverable.
  */
 function stampHighwaterMark(
   emitted: Map<number, HighwaterMarkState>,
@@ -294,7 +308,12 @@ function stampHighwaterMark(
   nowMs: number
 ): number {
   const firstCrossedAtMs = emitted.get(mark)?.firstCrossedAtMs ?? nowMs
-  emitted.set(mark, { firstCrossedAtMs, lastEmittedAtMs: nowMs, lastWithinBandAtMs: nowMs })
+  emitted.set(mark, {
+    firstCrossedAtMs,
+    lastEmittedAtMs: nowMs,
+    lastWithinBandAtMs: nowMs,
+    belowBandSinceMs: null
+  })
   return Math.round((nowMs - firstCrossedAtMs) / 60_000)
 }
 

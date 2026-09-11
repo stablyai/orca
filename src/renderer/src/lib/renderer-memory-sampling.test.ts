@@ -174,11 +174,11 @@ describe('renderer memory highwater census re-arming', () => {
 
   // A refresh replaces the retained crumb's own createdAt, so the census must carry how long the
   // renderer has been over the mark — that is the axis that identified the 21h-stale census.
-  it('reports minutes above the mark across refreshes', async () => {
+  it('reports minutes near the mark across refreshes', async () => {
     stubFootprint(658)
     await tick()
     await tick()
-    expect(censuses().at(-1)).toMatchObject({ thresholdPrivateMB: 600, aboveMarkMinutes: 0 })
+    expect(censuses().at(-1)).toMatchObject({ thresholdPrivateMB: 600, nearMarkMinutes: 0 })
 
     stubFootprint(577)
     for (let minute = 0; minute < 120; minute += 1) {
@@ -187,16 +187,16 @@ describe('renderer memory highwater census re-arming', () => {
 
     // Still over the band, so it refreshed — and it says how long it has been up there.
     expect(censuses().length).toBeGreaterThan(1)
-    expect(censuses().at(-1)).toMatchObject({ thresholdPrivateMB: 600, aboveMarkMinutes: 120 })
+    expect(censuses().at(-1)).toMatchObject({ thresholdPrivateMB: 600, nearMarkMinutes: 120 })
   })
 
   // Sawtooth (build, GC, build) is the ordinary shape of renderer memory. Two spikes hours apart
   // must not read as sustained pressure, or triage starts a leak hunt that has no leak.
-  it('re-anchors minutes-above-mark after a long spell below the band', async () => {
+  it('re-anchors minutes-near-mark after a long observed spell below the band', async () => {
     stubFootprint(658)
     await tick()
     await tick()
-    expect(censuses().at(-1)).toMatchObject({ aboveMarkMinutes: 0 })
+    expect(censuses().at(-1)).toMatchObject({ nearMarkMinutes: 0 })
 
     // 10 hours far below the band, then back up.
     stubFootprint(100)
@@ -209,7 +209,27 @@ describe('renderer memory highwater census re-arming', () => {
 
     // Not 602: the renderer spent those 600 minutes at 100MB.
     expect(censuses().at(-1)).toMatchObject({ thresholdPrivateMB: 600 })
-    expect(censuses().at(-1)?.aboveMarkMinutes).toBeLessThanOrEqual(2)
+    expect(censuses().at(-1)?.nearMarkMinutes).toBeLessThanOrEqual(2)
+  })
+
+  // A wedged main thread or a suspend stops the 60s sampler. That is not the renderer leaving the
+  // band — and it is exactly when the renderer is sickest, so the clock must not reset.
+  it('does not reset the clock when sampling itself stalls', async () => {
+    stubFootprint(658)
+    await tick()
+    await tick()
+    for (let minute = 0; minute < 30; minute += 1) {
+      await tick()
+    }
+    const beforeGap = censuses().at(-1)?.nearMarkMinutes as number
+    expect(beforeGap).toBeGreaterThanOrEqual(30)
+
+    // Sampler stalls for 8 hours, then resumes with the renderer still heavy.
+    nowMs += 8 * 60 * 60_000
+    await tick()
+    await tick()
+
+    expect(censuses().at(-1)?.nearMarkMinutes as number).toBeGreaterThan(beforeGap + 400)
   })
 
   it('emits at most one census per mark while a renderer oscillates around it', async () => {
