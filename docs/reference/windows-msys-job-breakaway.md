@@ -98,3 +98,58 @@ The gate should assert the same marker, the way `stagedRelayAddonIsUnpatched()`
 in `src/main/windows/windows-process-table.ts` already sniffs a patched addon by
 a binary import name. Symbol presence cannot distinguish patch revisions; a
 marker or an exported revision number can.
+
+## What a real Windows packaging run measures
+
+Run on `awin` (Windows 11 `10.0.26200`, x64, node `v24.18.0`, pnpm `12.0.0`)
+from a standalone clone of `inv18191-msys-job-breakaway` at `f9850f9bc57` with
+its **own** `node_modules` — not a symlink to another checkout — so the addon
+under test was built by that install (`conpty.node`, x64, marker present).
+
+`electron-builder --dir` for **win32-x64** takes the same-host branch and logs
+`OK — packaged ConPTY owns process trees`. Packaging for **win32-arm64** from
+the same x64 host takes the cross-arch branch and logs
+`skipped cross-platform or cross-arch package` followed by
+`OK — packaged ConPTY denies MSYS job breakaway`, so the marker half does run
+on a package the export half cannot load.
+
+Both halves fail packaging, not just log:
+
+| slice | addon put in front of the gate       | result                                                    |
+| ----- | ------------------------------------ | --------------------------------------------------------- |
+| x64   | the stale addon from a real checkout | exit 1, thrown from `verifyPackagedNodePtyJobOwnership`   |
+| arm64 | same-arch build, marker byte-patched | exit 1, thrown from `verifyPackagedConptyBreakawayMarker` |
+
+The stale addon reaches the export check and passes it, failing only on the
+marker — the export/marker split is doing real work, not duplicating a check.
+
+Isolating the afterPack gate needs `beforeBuild` stubbed out: with it active,
+`rebuild-native-deps.mjs` rebuilds the poisoned addon from patched source before
+`afterPack` ever sees it. That heal is the desired behaviour; it just means a
+poisoned `node_modules` alone cannot prove the packaged-side gate.
+
+## The layout the verifier assumes, against what it actually gets
+
+`packagedConptyPath()` resolves one path, and both real slices put an addon
+exactly there:
+
+```
+resources/node_modules/node-pty/build/Release/conpty.node
+```
+
+x64 ships nothing else that `loadNativeModule` would reach. **arm64 also ships
+`prebuilds/win32-arm64/conpty.node`, and that one has no marker.** The
+asymmetry is deliberate: `prunePackagedRuntimeNodeModules` deletes the
+unpatched prebuild only when `electronArch === process.arch`, because on a
+cross-arch package `build/Release` may hold the host's addon and deleting the
+target-arch prebuild would remove the only loadable binary.
+
+Two consequences for a cross-host or cross-arch Windows release, neither
+covered today:
+
+- The shipped `prebuilds/win32-<arch>/conpty.node` is unpatched and is what
+  `loadNativeModule` falls through to if `build/Release/conpty.node` fails to
+  load (wrong ABI, AV quarantine). The verifier never reads it.
+- When `build/Release/conpty.node` is absent, `verifyPackagedConptyBreakawayMarker`
+  warns and returns — and that is precisely the package whose only loadable
+  conpty is the unpatched prebuild.
