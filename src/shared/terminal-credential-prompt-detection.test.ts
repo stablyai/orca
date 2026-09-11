@@ -4,6 +4,7 @@
 // prompt into a credential field; a false positive only defers until the dialog is answered.
 import { describe, expect, it } from 'vitest'
 import {
+  CREDENTIAL_NOUN_RE_FOR_BUDGET,
   findCredentialPromptIndex,
   TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE
 } from './terminal-credential-prompt-detection'
@@ -60,6 +61,27 @@ describe('findCredentialPromptIndex', () => {
       const matched = lines.some((line) => TERMINAL_CREDENTIAL_PROMPT_SENTINEL_RE.test(line))
       expect(matched, name).toBe(true)
     }
+  })
+
+  it('keeps the lookbehind-bearing rules linear, not just the sentinel', () => {
+    // The sentinel is built from the RAW noun source and carries no lookbehind, so a budget that
+    // only exercises it is structurally blind to the rule that has one. Nor can this be measured
+    // through `findCredentialPromptIndex`: MAX_CREDENTIAL_LINE_LENGTH caps every row at 512, where
+    // a quadratic lookbehind is still only ~1.7x a linear one. Drive the regex directly and assert
+    // the complexity CLASS, so the cap stays a safety margin rather than the only thing holding.
+    const cost = (length: number): number => {
+      const line = `const owner = candidate.${'a'.repeat(length)}`
+      const started = performance.now()
+      for (let run = 0; run < 200; run += 1) {
+        CREDENTIAL_NOUN_RE_FOR_BUDGET.test(line)
+      }
+      return (performance.now() - started) / 200
+    }
+    cost(512)
+    const base = cost(1024)
+    const quadrupled = cost(4096)
+    // Linear: 4x the input, ~4x the cost. Quadratic is ~16x; unbounded measured 12.6x here.
+    expect(quadrupled).toBeLessThan(base * 8)
   })
 
   it('keeps the sentinel linear on adversarial lines', () => {

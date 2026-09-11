@@ -103,6 +103,10 @@ export const LIVE_CREDENTIAL_SURFACES: readonly TerminalCredentialPromptCase[] =
     ]
   ],
   ['vendor-qualified indented api-key ask', ['  Enter your Antigravity API key:']],
+  // A bracketed confirm default is a mainstream prompt convention (apt, readline, enquirer), so
+  // `[` and `]` must not read as code. `(y/N)` works too; both shapes are live prompts.
+  ['bracketed confirm default', ['? Authenticate with the CLI? [Y/n]']],
+  ['bracketed sign-in confirm', ['? Sign in with GitHub? [y/N]']],
   // sudo translates its prompt but never its `[sudo]` tag, and the only thing it asks for is a
   // password. An English-only rule here misses every non-English desktop.
   ['sudo password on a German system', ['[sudo] Passwort für neil:']],
