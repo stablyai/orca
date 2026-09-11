@@ -31,7 +31,7 @@ function renderModel(args: {
   fileContents?: Record<string, FileContent>
   editorDrafts?: Record<string, string>
   markdownViewMode?: Record<string, 'source' | 'rich' | 'preview'>
-  markdownRichModeSizeOverride?: Record<string, boolean>
+  markdownRichModeSizeOverridden?: boolean
   isChangesMode?: boolean
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }) {
@@ -43,7 +43,7 @@ function renderModel(args: {
     gitStatusEntries: args.gitStatusByWorktree?.[activeFile.worktreeId],
     gitBranchEntries: undefined,
     markdownViewMode: args.markdownViewMode ?? {},
-    markdownRichModeSizeOverride: args.markdownRichModeSizeOverride ?? {},
+    markdownRichModeSizeOverridden: args.markdownRichModeSizeOverridden ?? false,
     isChangesMode: args.isChangesMode ?? false,
     canOpenWorkspaceFileBrowser: true
   })
@@ -78,7 +78,7 @@ describe('getEditorPanelRenderModel HTML preview affordance', () => {
       gitStatusEntries: undefined,
       gitBranchEntries: undefined,
       markdownViewMode: {},
-      markdownRichModeSizeOverride: {},
+      markdownRichModeSizeOverridden: false,
       isChangesMode: false,
       canOpenWorkspaceFileBrowser: false
     })
@@ -184,7 +184,7 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
     const model = renderModel({
       markdownViewMode: { '/repo/README.md': 'rich' },
       editorDrafts: { '/repo/README.md': 'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1) },
-      markdownRichModeSizeOverride: { '/repo/README.md': true }
+      markdownRichModeSizeOverridden: true
     })
 
     expect(model.canExportMarkdownToPdf).toBe(true)
@@ -194,7 +194,7 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
     const model = renderModel({
       markdownViewMode: { '/repo/README.md': 'rich' },
       editorDrafts: { '/repo/README.md': 'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1) },
-      markdownRichModeSizeOverride: { '/repo/OTHER.md': true }
+      markdownRichModeSizeOverridden: false
     })
 
     expect(model.canExportMarkdownToPdf).toBe(false)

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcContext } from '../core'
+import { eraseRpcMethods, type RpcContext } from '../core'
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/orca-state', isPackaged: true }
@@ -41,7 +41,7 @@ function makeContext(overrides: {
 }
 
 function discoverMethod() {
-  const method = SKILL_METHODS.find((entry) => entry.name === 'skills.discover')
+  const method = eraseRpcMethods(SKILL_METHODS).find((entry) => entry.name === 'skills.discover')
   if (!method) {
     throw new Error('skills.discover method not registered')
   }
@@ -49,7 +49,7 @@ function discoverMethod() {
 }
 
 function installMethod() {
-  const method = SKILL_METHODS.find((entry) => entry.name === 'skills.install')
+  const method = eraseRpcMethods(SKILL_METHODS).find((entry) => entry.name === 'skills.install')
   if (!method) {
     throw new Error('skills.install method not registered')
   }
@@ -57,7 +57,7 @@ function installMethod() {
 }
 
 function method(name: string) {
-  const value = SKILL_METHODS.find((entry) => entry.name === name)
+  const value = eraseRpcMethods(SKILL_METHODS).find((entry) => entry.name === name)
   if (!value) {
     throw new Error(`${name} method not registered`)
   }

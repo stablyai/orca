@@ -194,22 +194,27 @@ describe('session tabs inventory RPC methods', () => {
     let resolveInventory!: (value: {
       snapshots: RuntimeMobileSessionTabsResult[]
       authoritative: true
+      changeSequence: number
     }) => void
-    const listeners: ((snapshot: RuntimeMobileSessionTabsResult) => void)[] = []
+    const listeners: ((
+      snapshot: RuntimeMobileSessionTabsResult,
+      changeSequence: number
+    ) => void)[] = []
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
-      listAllMobileSessionTabsInventory: vi.fn(
+      listAllMobileSessionTabsInventoryWithChangeSequence: vi.fn(
         () =>
           new Promise<{
             snapshots: RuntimeMobileSessionTabsResult[]
             authoritative: true
+            changeSequence: number
           }>((resolve) => {
             resolveInventory = resolve
           })
       ),
       onMobileSessionTabsChanged: vi.fn(
-        (listener: (snapshot: RuntimeMobileSessionTabsResult) => void) => {
+        (listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void) => {
           listeners.push(listener)
           return vi.fn()
         }
@@ -229,15 +234,18 @@ describe('session tabs inventory RPC methods', () => {
       }
     )
     await Promise.resolve()
-    listeners[0]?.({
-      worktree: 'wt-authoritative',
-      publicationEpoch: 'epoch-before-reload',
-      snapshotVersion: 2,
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null,
-      tabs: []
-    })
+    listeners[0]?.(
+      {
+        worktree: 'wt-authoritative',
+        publicationEpoch: 'epoch-before-reload',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      },
+      1
+    )
     expect(messages).toEqual([])
 
     resolveInventory({
@@ -252,18 +260,22 @@ describe('session tabs inventory RPC methods', () => {
           tabs: []
         }
       ],
-      authoritative: true
+      authoritative: true,
+      changeSequence: 1
     })
     await pending
-    listeners[0]?.({
-      worktree: 'wt-authoritative',
-      publicationEpoch: 'epoch-after-reload',
-      snapshotVersion: 2,
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null,
-      tabs: []
-    })
+    listeners[0]?.(
+      {
+        worktree: 'wt-authoritative',
+        publicationEpoch: 'epoch-after-reload',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      },
+      2
+    )
 
     expect(messages.map((message) => JSON.parse(message).result)).toEqual([
       {
@@ -287,19 +299,26 @@ describe('session tabs inventory RPC methods', () => {
   })
 
   it('lets authoritative empty inventory win over prior-epoch updates', async () => {
-    let resolveInventory!: (value: { snapshots: []; authoritative: true }) => void
-    const listeners: ((snapshot: RuntimeMobileSessionTabsResult) => void)[] = []
+    let resolveInventory!: (value: {
+      snapshots: []
+      authoritative: true
+      changeSequence: number
+    }) => void
+    const listeners: ((
+      snapshot: RuntimeMobileSessionTabsResult,
+      changeSequence: number
+    ) => void)[] = []
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
-      listAllMobileSessionTabsInventory: vi.fn(
+      listAllMobileSessionTabsInventoryWithChangeSequence: vi.fn(
         () =>
-          new Promise<{ snapshots: []; authoritative: true }>((resolve) => {
+          new Promise<{ snapshots: []; authoritative: true; changeSequence: number }>((resolve) => {
             resolveInventory = resolve
           })
       ),
       onMobileSessionTabsChanged: vi.fn(
-        (listener: (snapshot: RuntimeMobileSessionTabsResult) => void) => {
+        (listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void) => {
           listeners.push(listener)
           return vi.fn()
         }
@@ -328,10 +347,10 @@ describe('session tabs inventory RPC methods', () => {
       }
     )
     await Promise.resolve()
-    listeners[0]?.(snapshot(2))
-    listeners[0]?.(snapshot(3))
+    listeners[0]?.(snapshot(2), 1)
+    listeners[0]?.(snapshot(3), 2)
 
-    resolveInventory({ snapshots: [], authoritative: true })
+    resolveInventory({ snapshots: [], authoritative: true, changeSequence: 2 })
     await pending
 
     expect(messages.map((message) => JSON.parse(message).result)).toEqual([

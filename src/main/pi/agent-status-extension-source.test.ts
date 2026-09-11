@@ -1,18 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { createHarness, SELF_PID } from './agent-status-extension-test-harness'
+import {
+  AGENT_STATUS_EXTENSION_SELF_PID as SELF_PID,
+  createAgentStatusExtensionHarness as createHarness
+} from './agent-status-extension-test-harness'
 
 describe('getPiAgentStatusExtensionSource', () => {
   it('registers Prime hooks only in the event-emitting daemon worker', () => {
     const frontend = createHarness({
       kind: 'prime-agent',
-      env: {
-        PRIME_AGENT_INTERNAL_DAEMON_WORKER: undefined,
-        ORCA_PRIME_AGENT_STATUS_OWNED: String(SELF_PID - 1)
-      },
-      killImpl: () => {
-        throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' })
-      }
+      env: { PRIME_AGENT_INTERNAL_DAEMON_WORKER: undefined }
     })
     const worker = createHarness({
       kind: 'prime-agent',
@@ -20,8 +17,7 @@ describe('getPiAgentStatusExtensionSource', () => {
     })
 
     expect(frontend.handlers).toEqual({})
-    expect(frontend.killMock).not.toHaveBeenCalled()
-    expect(frontend.processEnv.ORCA_PRIME_AGENT_STATUS_OWNED).toBe(String(SELF_PID - 1))
+    expect(frontend.processEnv.ORCA_PI_STATUS_OWNED).toBeUndefined()
     expect(worker.handlers.agent_start).toBeTypeOf('function')
     expect(worker.processEnv.ORCA_PRIME_AGENT_STATUS_OWNED).toBe(String(SELF_PID))
   })
@@ -158,7 +154,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
       await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(2))
       const payloads = harness.fetchMock.mock.calls.map(
-        ([_, init]) => JSON.parse(String(init?.body)).payload
+        ([_event, init]) => JSON.parse(String(init?.body)).payload
       )
       expect(payloads).toEqual([
         { hook_event_name: 'session_start' },
@@ -211,7 +207,7 @@ describe('getPiAgentStatusExtensionSource', () => {
 
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(3))
     expect(
-      harness.fetchMock.mock.calls.map(([_, init]) => JSON.parse(String(init?.body)).payload)
+      harness.fetchMock.mock.calls.map(([_event, init]) => JSON.parse(String(init?.body)).payload)
     ).toEqual([
       { hook_event_name: 'agent_start', session_id: 'omp-session-8' },
       {
@@ -273,85 +269,6 @@ describe('getPiAgentStatusExtensionSource', () => {
       finishDeliveries[1]?.()
     }
   )
-
-  it.each(['pi', 'omp', 'prime-agent'] as const)(
-    'claims the pane for a restarted %s agent whose inherited owner PID is dead',
-    async (kind) => {
-      // Why: STA-5245 -- a restart leaves a dead owner PID in the inherited env.
-      // Without a liveness probe the guard suppresses every later load, so the
-      // pane never reports status again.
-      const ownerKey =
-        kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
-      const harness = createHarness({
-        kind,
-        pid: SELF_PID,
-        env: { [ownerKey]: String(SELF_PID - 1) },
-        killImpl: () => {
-          throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' })
-        }
-      })
-
-      expect(harness.killMock).toHaveBeenCalledWith(SELF_PID - 1, 0)
-      expect(harness.handlers.agent_end).toBeTypeOf('function')
-      expect(harness.processEnv[ownerKey]).toBe(String(SELF_PID))
-
-      await harness.callHook('agent_end')
-      expect(harness.fetchMock).toHaveBeenCalledTimes(1)
-    }
-  )
-
-  it('keeps suppressing status when the owner PID probe cannot prove death', () => {
-    // Why: EPERM means the owner exists but belongs to another user, so
-    // claiming the pane there would reintroduce double-reporting.
-    const harness = createHarness({
-      kind: 'pi',
-      pid: SELF_PID,
-      env: { ORCA_PI_STATUS_OWNED: String(SELF_PID - 1) },
-      killImpl: () => {
-        throw Object.assign(new Error('EPERM'), { code: 'EPERM' })
-      }
-    })
-
-    expect(harness.handlers).toEqual({})
-    expect(harness.processEnv.ORCA_PI_STATUS_OWNED).toBe(String(SELF_PID - 1))
-  })
-
-  it('claims the pane when the inherited owner PID is not a usable pid', () => {
-    // Why: a truncated/garbage marker is not evidence of a live owner.
-    const harness = createHarness({
-      kind: 'pi',
-      pid: SELF_PID,
-      env: { ORCA_PI_STATUS_OWNED: 'not-a-pid' }
-    })
-
-    expect(harness.killMock).not.toHaveBeenCalled()
-    expect(harness.handlers.agent_end).toBeTypeOf('function')
-    expect(harness.processEnv.ORCA_PI_STATUS_OWNED).toBe(String(SELF_PID))
-  })
-
-  it('claims the pane when the inherited owner PID exceeds safe integer precision', () => {
-    const harness = createHarness({
-      kind: 'pi',
-      pid: SELF_PID,
-      env: { ORCA_PI_STATUS_OWNED: '99999999999999999999999' }
-    })
-
-    expect(harness.killMock).not.toHaveBeenCalled()
-    expect(harness.handlers.agent_end).toBeTypeOf('function')
-    expect(harness.processEnv.ORCA_PI_STATUS_OWNED).toBe(String(SELF_PID))
-  })
-
-  it('claims the pane when the inherited owner PID exceeds the process API range', () => {
-    const harness = createHarness({
-      kind: 'pi',
-      pid: SELF_PID,
-      env: { ORCA_PI_STATUS_OWNED: String(2 ** 31) }
-    })
-
-    expect(harness.killMock).not.toHaveBeenCalled()
-    expect(harness.handlers.agent_end).toBeTypeOf('function')
-    expect(harness.processEnv.ORCA_PI_STATUS_OWNED).toBe(String(SELF_PID))
-  })
 
   it.each(['pi', 'omp', 'prime-agent'] as const)(
     'registers no status handlers for a nested %s subagent process',
@@ -564,12 +481,14 @@ describe('getPiAgentStatusExtensionSource', () => {
     await handlerCall
   })
 
-  it('leaves runtime shutdown to PTY teardown instead of reporting turn completion', () => {
+  it('leaves runtime shutdown to PTY teardown instead of reporting turn completion', async () => {
     const harness = createHarness({ kind: 'pi' })
 
-    // Why: Pi emits session_shutdown for reload/new/resume/fork while its PTY
-    // stays alive. agent_end is the only extension event that proves done.
-    expect(harness.handlers.session_shutdown).toBeUndefined()
+    // Why: Pi emits session_shutdown for reload/new/resume/fork while its PTY stays
+    // alive. agent_end is the only extension event that proves done, so the handler
+    // exists solely to release a dialog Pi tore down without a close.
+    await harness.callHook('session_shutdown')
+    expect(harness.fetchMock).not.toHaveBeenCalled()
   })
 
   it('bounds stalled delivery to one active request and the latest pending status', async () => {
@@ -725,10 +644,10 @@ describe('getPiAgentStatusExtensionSource', () => {
     }
   })
 
-  it('keeps reporting Pi-compatible agents once their agent_end handlers settle', async () => {
+  it('keeps polling Pi and Prime until their agent_end handlers settle', async () => {
     vi.useFakeTimers()
     try {
-      for (const kind of ['pi', 'omp', 'prime-agent'] as const) {
+      for (const kind of ['pi', 'prime-agent'] as const) {
         const harness = createHarness({ kind })
         let idle = false
         const context = { isIdle: vi.fn(() => idle) }
@@ -749,6 +668,16 @@ describe('getPiAgentStatusExtensionSource', () => {
 
   it('keeps immediate agent_end fallback for runtimes without an idle context', async () => {
     const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook('agent_end')
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+  })
+
+  it('does not report a non-terminal OMP agent_end without an idle context', async () => {
+    const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook('agent_end', { willContinue: true })
+    expect(harness.fetchMock).not.toHaveBeenCalled()
 
     await harness.callHook('agent_end')
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))

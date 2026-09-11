@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -113,7 +114,7 @@ describe('WSL CLI PowerShell boundary', () => {
         expect(exitResult.error).toBeUndefined()
         expect(exitResult.status).toBe(23)
       } finally {
-        await rm(root, { recursive: true, force: true })
+        await removeTree(root)
       }
     }
   )

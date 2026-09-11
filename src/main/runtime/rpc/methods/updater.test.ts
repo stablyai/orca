@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { eraseRpcMethods, type RpcMethodDeclaration } from '../core'
 import { configureRemoteServerUpdater } from '../../remote-server-updater'
 import { STATUS_METHODS } from './status'
 import { UPDATER_METHODS } from './updater'
@@ -10,8 +11,8 @@ const snapshot = {
   status: { state: 'available', version: '1.5.1', changelog: null }
 } as const
 
-function handler(methods: typeof UPDATER_METHODS, name: string) {
-  const method = methods.find((candidate) => candidate.name === name)
+function handler(methods: readonly RpcMethodDeclaration[], name: string) {
+  const method = eraseRpcMethods(methods).find((candidate) => candidate.name === name)
   if (!method) {
     throw new Error(`Missing method ${name}`)
   }

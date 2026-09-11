@@ -15,6 +15,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from './pty/posix-shell-startup-command'
 import { selectShellStartupFeatures } from './shell-startup-features'
 import { runZshPty } from './zsh-startup-hook-pty-harness'
 import { ZSH_WRAPPER_DIR_MARKER_FILE } from './shell-templates'
@@ -125,6 +126,16 @@ describePosix('zsh launch config', () => {
     const config = getShellLaunchConfig('/bin/zsh', ['history'])
 
     expect(config.env.ORCA_SHELL_FEATURES).toBe('history')
+  })
+
+  it('wraps a startup-only command without enabling shell readiness', async () => {
+    const { getShellLaunchConfig } = await importFreshLocalPtyShellReady()
+
+    const config = getShellLaunchConfig('/bin/zsh', [], 'codex')
+
+    expect(config.env.ORCA_SHELL_FEATURES).toBe('startup')
+    expect(config.env[POSIX_SHELL_STARTUP_COMMAND_ENV]).toBe('codex')
+    expect(config.supportsReadyMarker).toBe(false)
   })
 
   it('falls back to plain login zsh when the wrapper tree cannot be written', async () => {

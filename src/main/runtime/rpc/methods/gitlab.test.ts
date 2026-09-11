@@ -281,6 +281,30 @@ describe('gitlab RPC methods', () => {
     )
   })
 
+  it('accepts the negotiated ready-for-review update field', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateGitLabRepoMR: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('gitlab.updateMR', {
+        repo: 'id:repo-1',
+        iid: 8,
+        updates: { readyForReview: true }
+      })
+    )
+
+    expect(runtime.updateGitLabRepoMR).toHaveBeenCalledWith(
+      'id:repo-1',
+      8,
+      { readyForReview: true },
+      undefined
+    )
+    expect(response).toMatchObject({ ok: true, result: { ok: true } })
+  })
+
   it('normalizes GitLab issue list arguments to match desktop preload behavior', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

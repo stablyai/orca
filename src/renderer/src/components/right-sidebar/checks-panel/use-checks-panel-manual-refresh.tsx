@@ -117,7 +117,9 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
             worktreePath: activeWorktreePath,
             connectionId: activeConnectionId ?? undefined
           }
-          const status = await getRuntimeGitStatus(statusContext)
+          const status = await getRuntimeGitStatus(statusContext, {
+            admissionTier: 'interactive'
+          })
           const observedBranch = status.branch ?? (status.head ? null : undefined)
           updateWorktreeGitIdentity(activeWorktreeId, {
             head: status.head,
@@ -172,6 +174,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           repoPath: repo.path,
           repoId: repo.id,
           branch,
+          admissionTier: 'interactive',
           linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
           linkedGitLabMR,
@@ -212,7 +215,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           repoId: repo.id,
           worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber: linkedPR,
-          fallbackPRNumber: fallbackGitHubPRNumber
+          fallbackPRNumber: fallbackGitHubPRNumber,
+          reason: 'manual'
         })
       } finally {
         if (startedPRRefreshToken) {
@@ -226,6 +230,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         repoPath: repo.path,
         repoId: repo.id,
         branch,
+        admissionTier: 'interactive',
         linkedGitHubPR: linkedPR,
         fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
         linkedGitLabMR,

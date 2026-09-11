@@ -546,7 +546,7 @@ describe('ClaudeUsageStore', () => {
     expect(summary.estimatedCostUsd).toBeCloseTo(220.5)
   })
 
-  it('prices Sonnet long-context usage with threshold rates', async () => {
+  it('prices Sonnet 4.6 long-context usage at its flat 1M-window rates', async () => {
     const store = createStoreWithState({
       dailyAggregates: [
         {
@@ -569,7 +569,7 @@ describe('ClaudeUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    expect(summary.estimatedCostUsd).toBeCloseTo(8.07)
+    expect(summary.estimatedCostUsd).toBeCloseTo(6.615)
   })
 
   it('returns automation usage for a single matching worktree session', async () => {

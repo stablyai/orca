@@ -474,6 +474,31 @@ describe('launchAgentBackgroundSession', () => {
     )
     expect(onExit).toHaveBeenCalledWith('pty-1', 0)
     expect(unsubscribe).toHaveBeenCalled()
+    expect(state.markUnverifiedPtyLoss).not.toHaveBeenCalled()
+  })
+
+  it('keeps the tab bound to its PTY when contact was lost rather than observed', async () => {
+    // Same rule the terminal panes follow: a -1 sentinel retires the transport
+    // only. Clearing the binding would leave a reconnect with nothing to adopt
+    // and let orphan cleanup sweep a tab whose agent may still be running.
+    mockSubscribeToPtyExit.mockReturnValue(vi.fn())
+    const onExit = vi.fn()
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      onExit
+    })
+
+    const sidecar = mockSubscribeToPtyExit.mock.calls[0]?.[1] as (code: number) => void
+    sidecar(-1)
+
+    const tabId = expectReservedAgentBackgroundTabId(mockSpawn)
+    expect(state.clearTabPtyId).not.toHaveBeenCalled()
+    expect(state.markUnverifiedPtyLoss).toHaveBeenCalledWith(tabId)
+    expect(onExit).toHaveBeenCalledWith('pty-1', -1)
   })
 
   it('leaves no tab behind if PTY spawn fails', async () => {

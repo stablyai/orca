@@ -1,4 +1,5 @@
 import { type Mock, vi } from 'vitest'
+import type { computeWorktreePath } from './worktree-logic'
 import type { HandlerMap } from './worktrees-test-ipc-surface'
 
 /** Loose signature: one mock stands in for many unrelated module exports. */
@@ -32,6 +33,7 @@ export const findExistingWorktreeSymlinkPathsMock: ModuleMock = vi.fn()
 export const handleMock: Mock<(channel: string, handler: HandlerMap[string]) => void> = vi.fn()
 export const removeHandlerMock: ModuleMock = vi.fn()
 export const listWorktreesMock: StringArgMock = vi.fn()
+export const describeCreatedWorktreeMock: ModuleMock = vi.fn()
 export const parseWorktreeListMock: Mock<(output: string) => ParsedWorktreeRow[]> = vi.fn(
   (output: string) =>
     output
@@ -77,13 +79,7 @@ export const resolveSetupRunnerShellMock: ModuleMock = vi.fn()
 export const runHookMock: ModuleMock = vi.fn()
 export const hasHooksFileMock: ModuleMock = vi.fn()
 export const loadHooksMock: ModuleMock = vi.fn()
-export const computeWorktreePathMock: Mock<
-  (
-    sanitizedName: string,
-    repoPath: string,
-    settings: { nestWorkspaces: boolean; workspaceDir: string }
-  ) => string
-> = vi.fn()
+export const computeWorktreePathMock: Mock<typeof computeWorktreePath> = vi.fn()
 export const ensurePathWithinWorkspaceMock: StringArgMock = vi.fn()
 export const gitExecFileAsyncMock: GitArgvMock = vi.fn()
 export const getSshGitProviderMock: StringArgMock = vi.fn()
@@ -113,6 +109,9 @@ export const electronModuleMock = () => ({
 export const gitWorktreeModuleMock = () => ({
   listWorktrees: listWorktreesMock,
   listWorktreesStrict: listWorktreesMock,
+  listWorktreesSharedStrict: listWorktreesMock,
+  listWorktreesSharedStrictAllowingTrueEmpty: listWorktreesMock,
+  describeCreatedWorktree: describeCreatedWorktreeMock,
   parseWorktreeList: parseWorktreeListMock,
   assertWorktreeCleanForRemoval: assertWorktreeCleanForRemovalMock,
   addWorktree: addWorktreeMock,
@@ -134,7 +133,19 @@ export const gitRepoModuleMock = () => ({
   resolveDefaultBaseRefWithLocalGit: resolveDefaultBaseRefWithLocalGitMock,
   resolveDefaultBaseRefViaExec: resolveDefaultBaseRefViaExecMock,
   getDefaultRemote: getDefaultRemoteMock,
-  getBranchConflictKind: getBranchConflictKindMock
+  getBranchConflictKind: async (
+    repoPath: string,
+    branch: string,
+    base?: string,
+    options?: { wslDistro?: string },
+    allowLocalBranch?: () => Promise<boolean>
+  ) => {
+    // These handler tests stub ref presence; policy tests cover the absent-ref fast path.
+    if (allowLocalBranch && (await allowLocalBranch())) {
+      return null
+    }
+    return getBranchConflictKindMock(repoPath, branch, base, options)
+  }
 })
 
 export const githubClientModuleMock = () => ({

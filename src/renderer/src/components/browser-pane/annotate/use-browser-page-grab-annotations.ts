@@ -22,6 +22,7 @@ import {
   DEFAULT_BROWSER_ANNOTATION_PRIORITY,
   type BrowserOverlayViewport
 } from '../describe-page/browser-annotation-geometry'
+import { useBrowserPageAnnotationViewportTracking } from './use-browser-page-annotation-viewport-tracking'
 import { runBrowserGrabActionShortcut } from './browser-page-grab-action'
 import type { BrowserPageGrabToastState, GrabIntent } from '../describe-page/browser-page-types'
 
@@ -47,6 +48,8 @@ export function useBrowserPageGrabAnnotations({
   isActive,
   grab,
   containerRef,
+  trackingContainer,
+  trackingScroller,
   webviewRef,
   setBrowserOverlayViewport,
   browserAnnotationsLength,
@@ -63,6 +66,8 @@ export function useBrowserPageGrabAnnotations({
   isActive: boolean
   grab: GrabModeHook
   containerRef: MutableRefObject<HTMLDivElement | null>
+  trackingContainer?: HTMLDivElement | null
+  trackingScroller?: HTMLDivElement | null
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   browserAnnotationsLength: number
@@ -179,32 +184,17 @@ export function useBrowserPageGrabAnnotations({
     showGrabToast
   ])
 
-  useEffect(() => {
-    if (!isActive || (!pendingAnnotationPayload && browserAnnotationsLength === 0)) {
-      return
-    }
-
-    const observedContainer = containerRef.current
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined' || !observedContainer
-        ? null
-        : new ResizeObserver(() => {
-            setBrowserOverlayViewport((current) => ({ ...current, version: current.version + 1 }))
-          })
-    if (resizeObserver && observedContainer) {
-      resizeObserver.observe(observedContainer)
-    }
-
-    return () => {
-      resizeObserver?.disconnect()
-    }
-  }, [
-    browserAnnotationsLength,
-    containerRef,
+  useBrowserPageAnnotationViewportTracking({
     isActive,
-    pendingAnnotationPayload,
+    pendingAnnotation: pendingAnnotationPayload,
+    annotationCount: browserAnnotationsLength,
+    container: trackingContainer ?? containerRef.current,
+    scroller:
+      trackingScroller ??
+      containerRef.current?.querySelector<HTMLDivElement>('[data-browser-page-scroller]') ??
+      null,
     setBrowserOverlayViewport
-  ])
+  })
 
   const startGrabIntent = useCallback(
     (nextIntent: GrabIntent): void => {

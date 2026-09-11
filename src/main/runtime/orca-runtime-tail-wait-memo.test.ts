@@ -134,7 +134,7 @@ describe('onPtyData tail wait memoization', () => {
       ''
     )
     expect(blocked.fromTail).toBe(true)
-    expect(blocked.signal?.reason).toBe('codex-update-prompt')
+    expect(blocked.signal?.reason).toBe('agent-update-prompt')
   })
 
   it('does not rebuild or repeatedly scan an ordinary saturated tail', () => {

@@ -1,5 +1,12 @@
+import { resolveAutoAckTabTargets } from './agent-auto-ack-targets'
+export { resolveAutoAckTabTargets, type AutoAckTabTarget } from './agent-auto-ack-targets'
 import { useEffect, useRef } from 'react'
+import {
+  createAutoAckPresenceCheck,
+  subscribeAutoAckPresenceSignals
+} from './agent-auto-ack-presence'
 import { useAppStore } from '@/store'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
@@ -67,6 +74,20 @@ export function computeViewedAgentCompletionPaneKey(
   return state.unreadAgentCompletionPanes[targetKey] ? targetKey : null
 }
 
+function getAgentTurnTimestamp(
+  state: {
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>
+    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
+  },
+  paneKey: string
+): number | null {
+  return (
+    state.agentStatusByPaneKey[paneKey]?.stateStartedAt ??
+    state.retainedAgentsByPaneKey[paneKey]?.entry.stateStartedAt ??
+    null
+  )
+}
+
 export function shouldClearViewedAgentWorktreeUnread(
   state: {
     tabsByWorktree: Record<string, { id: string }[]>
@@ -108,6 +129,35 @@ export function shouldClearViewedAgentWorktreeUnread(
   return true
 }
 
+/**
+ * Manual mark-unread protections that no longer apply: the user moved to another pane, or the
+ * agent took a new turn. Exported for the startup-race test.
+ */
+export function computeLapsedManualUnreadProtections(
+  state: {
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>
+    retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
+    manuallyUnreadTurnsByPaneKey: Record<string, number>
+  },
+  activePaneKeys: ReadonlySet<string>
+): string[] {
+  const lapsed: string[] = []
+  for (const [paneKey, turnTimestamp] of Object.entries(state.manuallyUnreadTurnsByPaneKey)) {
+    if (!activePaneKeys.has(paneKey)) {
+      lapsed.push(paneKey)
+      continue
+    }
+    const currentTurn = getAgentTurnTimestamp(state, paneKey)
+    // Why keep on null: persisted UI hydrates before the status snapshot lands, so an active
+    // pane with no row yet is "not known", not "moved on"; wiping it would lose the mark-unread
+    // the user made before relaunch.
+    if (currentTurn !== null && currentTurn !== turnTimestamp) {
+      lapsed.push(paneKey)
+    }
+  }
+  return lapsed
+}
+
 type ViewedAgentAttentionActions = {
   acknowledgeAgents: (paneKeys: string[]) => void
   clearWorktreeUnread: (worktreeId: string) => void
@@ -146,39 +196,6 @@ export function acknowledgeViewedAgentAttention(
   }
 }
 
-export type AutoAckTabTarget = { tabId: string; worktreeId: string | null }
-
-/**
- * Tabs whose visible pane counts as "seen" right now, each paired with the worktree that owns it.
- *
- * Why the floating workspace is gated on panel visibility rather than `activeView`: the panel is an
- * overlay that sits above every view and stays mounted while closed, and its active tab never
- * becomes the global `activeTabId` — so neither the view nor the tab id can stand in for "on screen".
- */
-export function resolveAutoAckTabTargets(
-  state: {
-    activeView: string
-    activeTabId: string | null
-    activeWorktreeId: string | null
-    activeTabIdByWorktree: Record<string, string | null>
-  },
-  options: { floatingPanelVisible: boolean }
-): AutoAckTabTarget[] {
-  const targets: AutoAckTabTarget[] = []
-  if (state.activeView === 'terminal' && state.activeTabId) {
-    targets.push({ tabId: state.activeTabId, worktreeId: state.activeWorktreeId })
-  }
-  if (options.floatingPanelVisible) {
-    const floatingTabId = state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
-    // Why first-wins on a tab-id collision: tab ids can be claimed by two worktrees
-    // (see active-tab-owner-worktree), and acking under the wrong one strands its unread dot.
-    if (floatingTabId && !targets.some((target) => target.tabId === floatingTabId)) {
-      targets.push({ tabId: floatingTabId, worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
-    }
-  }
-  return targets
-}
-
 // Auto-ack an agent row as "seen" when the user is already on its tab, so the dashboard/Dock don't stay bold for an event they watched happen.
 // Scans live + retained maps: Codex's title-revert (pty-connection.ts:onAgentExited) migrates `done` rows to retained mid-race — see docs/codex-agent-row-bold-stuck.md.
 export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
@@ -200,7 +217,11 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
     let lastUnreadAgentCompletionPanes: unknown = undefined
 
     // `force` re-scans after a signal the store never sees: panel open/closed is React-local state.
-    const maybeAck = (options?: { force?: boolean }): void => {
+    const presence = createAutoAckPresenceCheck(
+      async () => window.api?.notifications?.getDesktopAwayState?.(),
+      () => maybeAck({ force: true, presenceConfirmed: true })
+    )
+    const maybeAck = (options?: { force?: boolean; presenceConfirmed?: boolean }): void => {
       const s = useAppStore.getState()
       const floatingWorkspaceActiveTabId =
         s.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
@@ -218,6 +239,16 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
         return
       }
 
+      // Presence signals force a rescan; unrelated writes must not retry an away result.
+      lastActiveView = s.activeView
+      lastActiveTabId = s.activeTabId
+      lastFloatingWorkspaceActiveTabId = floatingWorkspaceActiveTabId
+      lastAgentStatus = s.agentStatusByPaneKey
+      lastRetained = s.retainedAgentsByPaneKey
+      lastAcknowledged = s.acknowledgedAgentsByPaneKey
+      lastLayouts = s.terminalLayoutsByTabId
+      lastUnreadAgentCompletionPanes = s.unreadAgentCompletionPanes
+
       // Why: tab-active only proxies "seen"; gate on window visible+focused so away-time transitions don't silently clear the bold signal.
       if (typeof document !== 'undefined') {
         if (document.visibilityState !== 'visible') {
@@ -230,18 +261,40 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
       const targets = resolveAutoAckTabTargets(s, {
         floatingPanelVisible: floatingPanelVisibleRef.current
       })
+      // Why no protection reset here: zero targets just means nothing is on screen
+      // (Settings, browser, an overlay) — a transient view switch must not lapse an
+      // explicit mark-unread the user just made.
       if (targets.length === 0) {
         return
       }
-      // Why: advance refs only after gates pass, else the diff is consumed and a gated-out transition never re-acks when focus returns.
-      lastActiveView = s.activeView
-      lastActiveTabId = s.activeTabId
-      lastFloatingWorkspaceActiveTabId = floatingWorkspaceActiveTabId
-      lastAgentStatus = s.agentStatusByPaneKey
-      lastRetained = s.retainedAgentsByPaneKey
-      lastAcknowledged = s.acknowledgedAgentsByPaneKey
-      lastLayouts = s.terminalLayoutsByTabId
-      lastUnreadAgentCompletionPanes = s.unreadAgentCompletionPanes
+      // Browsers have no native idle capability; their visible/focused gates still apply.
+      if (!options?.presenceConfirmed && !isWebClientLocation()) {
+        const hasAttention = targets.some(({ tabId }) => {
+          const leafId = resolveActiveLeafId(s, tabId)
+          return (
+            computeAutoAckTargets(s, tabId, leafId).length > 0 ||
+            computeViewedAgentCompletionPaneKey(s, tabId, leafId) !== null
+          )
+        })
+        if (hasAttention) {
+          presence.request()
+          return
+        }
+      }
+
+      const activePaneKeys = new Set<string>()
+      for (const target of targets) {
+        const activeLeafId = resolveActiveLeafId(s, target.tabId)
+        if (activeLeafId) {
+          activePaneKeys.add(makePaneKey(target.tabId, activeLeafId))
+        }
+      }
+      // Protection lapses when the user moves on to another pane or the agent takes a new
+      // turn; a still-active pane with an unchanged turn keeps its explicit mark-unread.
+      const lapsedProtections = computeLapsedManualUnreadProtections(s, activePaneKeys)
+      if (lapsedProtections.length > 0) {
+        s.clearManuallyUnreadTurns(lapsedProtections)
+      }
 
       for (const target of targets) {
         // Why re-read: acking target[0] writes to the store, which re-enters this scan synchronously
@@ -249,7 +302,11 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
         const current = useAppStore.getState()
         const tabId = target.tabId
         const activeLeafId = resolveActiveLeafId(current, tabId)
-        const toAck = computeAutoAckTargets(current, tabId, activeLeafId)
+        const toAck = computeAutoAckTargets(current, tabId, activeLeafId).filter(
+          (paneKey) =>
+            current.manuallyUnreadTurnsByPaneKey[paneKey] !==
+            getAgentTurnTimestamp(current, paneKey)
+        )
         const activePaneKey = computeViewedAgentCompletionPaneKey(current, tabId, activeLeafId)
         if (toAck.length > 0 || activePaneKey) {
           const paneKeysToClear = new Set(toAck)
@@ -277,16 +334,15 @@ export function useAutoAckViewedAgent(floatingPanelVisible: boolean): void {
     maybeAck()
     // Subscribe to all store changes; the ref-equality guard above skips unrelated updates.
     const unsubscribe = useAppStore.subscribe(() => maybeAck())
-    // Why: focus/visibility don't flow through zustand, so re-run the scan on these DOM events when focus returns.
-    const onVisibility = (): void => maybeAck()
-    const onFocus = (): void => maybeAck()
-    document.addEventListener('visibilitychange', onVisibility)
-    window.addEventListener('focus', onFocus)
+    const stopPresenceSignals = subscribeAutoAckPresenceSignals(
+      () => maybeAck({ force: true }),
+      () => maybeAck({ force: true, presenceConfirmed: true })
+    )
     return () => {
+      presence.dispose()
       rescanRef.current = null
       unsubscribe()
-      document.removeEventListener('visibilitychange', onVisibility)
-      window.removeEventListener('focus', onFocus)
+      stopPresenceSignals()
     }
   }, [])
 

@@ -28,24 +28,26 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
     ? [...originalCommand, '--retry-request', requestId]
     : undefined
   const executable = originalCommand?.[0] ?? resolveOrchestrationCliExecutable()
+  // Why: a lost response usually carries no dispatch id, and the old code then emitted
+  // no read-only step at all — leaving retry as the only way to learn what happened.
   const queryCommand = dispatchId
     ? [executable, 'orchestration', 'worker-show', '--dispatch', dispatchId, '--json']
-    : undefined
+    : [executable, 'orchestration', 'request-show', '--request', requestId, '--json']
   const recovery = {
     orchestrationRequestId: requestId,
     ...(dispatchId ? { dispatchId } : {}),
-    ...(queryCommand ? { queryCommand } : {}),
+    queryCommand,
     ...(retryCommand ? { retryCommand } : {}),
     recoveryBlocked: !retryCommand,
     disposition: 'outcome_unknown',
     workerDeathInferred: false
   }
   const retryStep = retryCommand
-    ? `Run ${renderCommand(retryCommand)}.`
+    ? dispatchId
+      ? `After inspecting the Dispatch, if keyed recovery is still needed, run ${renderCommand(retryCommand)}. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate.`
+      : `If request-show reports completed or pending, run ${renderCommand(retryCommand)}. --retry-request reuses the same operation identity so Orca can replay, join, or safely recover it without starting a separate duplicate. If request-show reports absent, inspect the affected state before deciding whether to retry; absence does not prove a retry is safe.`
     : 'Recovery is blocked until the exact original command is available; no retry command was emitted.'
-  const nextSteps = queryCommand
-    ? [`Run ${renderCommand(queryCommand)} before retrying.`, retryStep]
-    : [retryStep]
+  const nextSteps = [`Run ${renderCommand(queryCommand)} before retrying.`, retryStep]
   const message = [
     stripUnsafeRetryAdvice(error.message, requestId),
     'The orchestration mutation may already have taken effect; do not assume it failed.',
@@ -163,6 +165,19 @@ export function renderCommand(
   const shell = resolveRecoveryShell(platform, env)
   const rendered = command.map((value) => quoteRecoveryArgument(value, shell)).join(' ')
   return shell === 'powershell' && rendered ? `& ${rendered}` : rendered
+}
+
+export function renderResolvedOrchestrationCommand(
+  command: string,
+  executable = resolveOrchestrationCliExecutable(),
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const parts = parseCommandLine(command)
+  if (parts?.[0] !== 'orca') {
+    return command
+  }
+  return renderCommand([executable, ...parts.slice(1)], platform, env)
 }
 
 function resolveRecoveryShell(

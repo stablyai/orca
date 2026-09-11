@@ -642,7 +642,11 @@ function createAdoptedDb(options: { settleWork: boolean }): {
   const dbPath = join(dir, 'orchestration.db')
 
   const before = new OrchestrationDb(dbPath)
-  const task = before.createTask({ spec: 'legacy assignment', createdByTerminalHandle: 'term_old' })
+  const task = before.createTask({
+    runId: 'run_legacy_local',
+    spec: 'legacy assignment',
+    createdByTerminalHandle: 'term_old'
+  })
   createRootDispatch(
     before,
     task.id,
@@ -650,6 +654,7 @@ function createAdoptedDb(options: { settleWork: boolean }): {
     'tab_old:33333333-3333-4333-8333-333333333333'
   )
   const recovery = before.insertMessage({
+    runId: 'run_legacy_local',
     from: 'term_old_worker',
     to: 'term_old',
     subject: 'recovered worker outcome',

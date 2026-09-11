@@ -56,7 +56,8 @@ export const createStaleWorktreeRefreshActions = (
             worktreeId: candidate.worktreeId,
             linkedPRNumber: candidate.linkedPRNumber ?? null,
             fallbackPRNumber: candidate.fallbackPRNumber ?? null,
-            fallbackPRSource: candidate.fallbackPRSource ?? null
+            fallbackPRSource: candidate.fallbackPRSource ?? null,
+            reason: 'active'
           })
         } else if (shouldEnqueueLocalPRRefresh(candidate)) {
           enqueueLocalGitHubPRRefresh({ candidate, reason: 'active', priority: 80 })

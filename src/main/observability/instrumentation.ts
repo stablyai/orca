@@ -21,7 +21,8 @@
 // itself becomes a `noopSpan` that swallows all calls — call sites do not
 // need to branch on whether tracing is on.
 
-import { withSpan, type ActiveSpan } from './tracer'
+import type { PreparedCheckoutOutcome } from '../../shared/worktree/create-types'
+import { startSpan, withSpan, type ActiveSpan } from './tracer'
 
 const GIT_FAST_SUCCESS_THRESHOLD_MS = 250
 const GIT_FAST_SUCCESS_WINDOW_MS = 60_000
@@ -173,15 +174,28 @@ export type GitSpanArgs = {
 /** Wrap a git execution in a `git.exec` span. Git accepts global options before
  *  the subcommand; promoting the parsed command to its own attribute makes it
  *  grep-friendly without copying the full args array into dashboards. */
-export async function withGitSpan<T>(meta: GitSpanArgs, fn: () => Promise<T>): Promise<T> {
+export async function withGitSpan<T>(
+  meta: GitSpanArgs,
+  fn: (span: ActiveSpan) => Promise<T>
+): Promise<T> {
   return withSpan(
     'git.exec',
     async (span) => {
       addGitAttributes(span, meta)
-      return await fn()
+      return await fn(span)
     },
     { attributes: { kind: 'git' }, shouldRecord: (record) => shouldRecordGitSpan(meta, record) }
   )
+}
+
+/** Start a git span whose lifetime follows a returned ChildProcess. */
+export function startGitSpan(meta: GitSpanArgs): ActiveSpan {
+  const span = startSpan('git.exec', {
+    attributes: { kind: 'git' },
+    shouldRecord: (record) => shouldRecordGitSpan(meta, record)
+  })
+  addGitAttributes(span, meta)
+  return span
 }
 
 export type WorktreeSpanArgs = {
@@ -189,10 +203,11 @@ export type WorktreeSpanArgs = {
   readonly path?: string
 }
 
-/** Wrap a worktree-setup phase in a `worktree.<stage>` span. */
+/** Wrap a worktree-setup phase in a `worktree.<stage>` span. The callback receives the span so a
+ *  create can attach its own phase breakdown; the git children alone leave the waits invisible. */
 export async function withWorktreeSpan<T>(
   meta: WorktreeSpanArgs,
-  fn: () => Promise<T>
+  fn: (span: ActiveSpan) => Promise<T>
 ): Promise<T> {
   return withSpan(
     `worktree.${meta.stage}`,
@@ -201,9 +216,77 @@ export async function withWorktreeSpan<T>(
       if (meta.path) {
         span.setAttribute('worktree.path', meta.path)
       }
-      return await fn()
+      return await fn(span)
     },
     { attributes: { kind: 'worktree' } }
+  )
+}
+
+type WorktreeCreatePhaseTiming = {
+  readonly phase: string
+  readonly startedAtMs: number
+  readonly durationMs: number
+}
+
+/** Wall-clock span covered by at least one phase. Create runs some phases concurrently, so summing
+ *  durations double-counts and would report overlap as coverage the phases never had. */
+function measuredWallClockMs(phases: readonly WorktreePhaseInterval[]): number {
+  const intervals = [...phases]
+    .map((phase) => [phase.startedAtMs, phase.startedAtMs + phase.durationMs] as const)
+    .sort((left, right) => left[0] - right[0])
+  let covered = 0
+  let openedAt: number | null = null
+  let closesAt = 0
+  for (const [start, end] of intervals) {
+    if (openedAt === null) {
+      openedAt = start
+      closesAt = end
+      continue
+    }
+    if (start <= closesAt) {
+      closesAt = Math.max(closesAt, end)
+      continue
+    }
+    covered += closesAt - openedAt
+    openedAt = start
+    closesAt = end
+  }
+  return openedAt === null ? 0 : covered + (closesAt - openedAt)
+}
+
+type WorktreePhaseInterval = Pick<WorktreeCreatePhaseTiming, 'startedAtMs' | 'durationMs'>
+
+/** Records a create's phase breakdown on its span. Phase names are already a closed vocabulary in
+ *  the recorder, so they are safe to key on; nothing here carries a branch name or a path. */
+export function addWorktreeCreatePhaseAttributes(
+  span: ActiveSpan,
+  timing: {
+    totalDurationMs: number
+    phases: readonly WorktreeCreatePhaseTiming[]
+    preparedCheckout?: PreparedCheckoutOutcome
+  }
+): void {
+  span.setAttribute('worktree.create.total_ms', Math.round(timing.totalDurationMs))
+  if (timing.preparedCheckout) {
+    span.setAttribute('worktree.create.prepared_checkout', timing.preparedCheckout.status)
+    if (timing.preparedCheckout.status === 'hit') {
+      // A retargeted hit still pays a reset, so it must not be read as a free hit.
+      span.setAttribute(
+        'worktree.create.prepared_checkout_retargeted',
+        timing.preparedCheckout.retargeted
+      )
+    } else {
+      span.setAttribute('worktree.create.prepared_checkout_miss', timing.preparedCheckout.reason)
+    }
+  }
+  for (const phase of timing.phases) {
+    span.setAttribute(`worktree.create.phase.${phase.phase}_ms`, Math.round(phase.durationMs))
+  }
+  // What the phases do not cover is the number that matters when create feels slow for no visible
+  // reason, so name it rather than leaving it to subtraction.
+  span.setAttribute(
+    'worktree.create.unattributed_ms',
+    Math.max(0, Math.round(timing.totalDurationMs - measuredWallClockMs(timing.phases)))
   )
 }
 

@@ -14,6 +14,7 @@ export function areDetectedWorktreeResultsEqual(
     current.repoId === next.repoId &&
     current.authoritative === next.authoritative &&
     current.source === next.source &&
+    current.unavailableReason === next.unavailableReason &&
     catalogRowsEqual(current.worktrees, next.worktrees)
   )
 }

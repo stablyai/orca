@@ -145,9 +145,9 @@ jobs:
 
       - name: Setup pnpm
         if: steps.freshness.outputs.should_build == 'true'
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       - name: Setup Node.js
         if: steps.freshness.outputs.should_build == 'true'

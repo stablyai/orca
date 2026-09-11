@@ -23,9 +23,9 @@ type FakeCurlChild = {
   }
 }
 
-export type Harness = {
-  fetchMock: ReturnType<typeof vi.fn>
+export type AgentStatusExtensionHarness = {
   killMock: ReturnType<typeof vi.fn>
+  fetchMock: ReturnType<typeof vi.fn>
   spawnMock: ReturnType<typeof vi.fn>
   spawnedChildren: FakeCurlChild[]
   fsMock: {
@@ -54,22 +54,20 @@ const BASE_ENV = {
 
 // Why: ownership keys on process.pid, so reload and child-process tests need
 // stable, distinct identities.
-export const SELF_PID = 4242
+export const AGENT_STATUS_EXTENSION_SELF_PID = 4242
 
-export function createHarness(args: {
+export function createAgentStatusExtensionHarness(args: {
   kind: 'pi' | 'omp' | 'prime-agent'
+  killImpl?: (pid: number, signal: number) => void
   env?: Record<string, string | undefined>
   pid?: number
   title?: string
-  argv?: string[]
+  argv?: readonly string[]
   existsSync?: (path: string) => boolean
   readFileSync?: (path: string, encoding: string) => string
   statSync?: (path: string) => { mtimeMs: number; size: number; ino: number }
   fetchImpl?: (...params: Parameters<typeof fetch>) => Promise<unknown>
-  // Owner-liveness probe the generated guard calls. Default: owner is alive,
-  // which keeps the nested-subagent suppression tests honest.
-  killImpl?: (pid: number, signal: number) => void
-}): Harness {
+}): AgentStatusExtensionHarness {
   const fetchMock = vi.fn(
     args.fetchImpl ??
       (async () => ({
@@ -127,7 +125,7 @@ export function createHarness(args: {
       ...(args.kind === 'prime-agent' ? { PRIME_AGENT_INTERNAL_DAEMON_WORKER: '1' } : {}),
       ...args.env
     },
-    pid: args.pid ?? SELF_PID,
+    pid: args.pid ?? AGENT_STATUS_EXTENSION_SELF_PID,
     title: args.title ?? 'node',
     argv: args.argv ?? ['node', '/usr/bin/orca']
   }

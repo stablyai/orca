@@ -3,11 +3,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   applyBrowserPageViewportLayout,
   ensureBrowserPageViewport,
+  getBrowserPageViewportScrollState,
   getBrowserOverlaySlotViewport,
   getBrowserPageViewportContainer,
   parkBrowserPageViewport,
   registerBrowserOverlaySlotViewport,
   removeBrowserPageViewport,
+  scrollBrowserPageViewport,
+  setBrowserPageViewportPresetSize,
   subscribeBrowserOverlaySlotViewport,
   syncBrowserPageChromeInset
 } from './browser-page-viewport'
@@ -23,6 +26,7 @@ function mountSlotViewport(workspaceTabId: string): HTMLDivElement {
 afterEach(() => {
   for (const id of ['page-1', 'page-2']) {
     removeBrowserPageViewport(id)
+    setBrowserPageViewportPresetSize(id, null)
   }
   for (const id of ['workspace-1']) {
     getBrowserOverlaySlotViewport(id)?.remove()
@@ -31,6 +35,78 @@ afterEach(() => {
 })
 
 describe('ensureBrowserPageViewport', () => {
+  it('provides a scroll surface for an oversized preset content host', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    const scroller = viewport.container.querySelector('[data-browser-page-scroller]')
+    const content = viewport.container.querySelector('[data-browser-page-content]')
+
+    expect(scroller).not.toBeNull()
+    expect(content).not.toBeNull()
+  })
+
+  it('sizes and clears the host surface without changing responsive defaults', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+
+    expect(viewport.content.style.width).toBe('100%')
+    expect(viewport.content.style.height).toBe('100%')
+    expect(viewport.scroller.style.overflow).toBe('')
+
+    setBrowserPageViewportPresetSize('page-1', { width: 1440, height: 900 })
+    expect(viewport.content.style.width).toBe('1440px')
+    expect(viewport.content.style.height).toBe('900px')
+    expect(viewport.scroller.style.overflow).toBe('auto')
+
+    setBrowserPageViewportPresetSize('page-1', null)
+    expect(viewport.content.style.width).toBe('100%')
+    expect(viewport.content.style.height).toBe('100%')
+    expect(viewport.scroller.style.overflow).toBe('')
+  })
+
+  it('restores a preset after the viewport shell is rebuilt', () => {
+    mountSlotViewport('workspace-1')
+    setBrowserPageViewportPresetSize('page-1', { width: 1024, height: 768 })
+    removeBrowserPageViewport('page-1')
+
+    const rebuilt = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    expect(rebuilt.content.style.width).toBe('1024px')
+    expect(rebuilt.content.style.height).toBe('768px')
+    expect(rebuilt.scroller.style.overflow).toBe('auto')
+  })
+
+  it('routes host wheel deltas to the preset scroller', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    setBrowserPageViewportPresetSize('page-1', { width: 1920, height: 1080 })
+
+    scrollBrowserPageViewport('page-1', 32, 48)
+
+    expect(viewport.scroller.scrollLeft).toBe(32)
+    expect(viewport.scroller.scrollTop).toBe(48)
+  })
+
+  it('reports host scroll position and available range for wheel routing', () => {
+    mountSlotViewport('workspace-1')
+    const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')!
+    Object.defineProperties(viewport.scroller, {
+      scrollLeft: { configurable: true, value: 12 },
+      scrollTop: { configurable: true, value: 18 },
+      scrollWidth: { configurable: true, value: 900 },
+      scrollHeight: { configurable: true, value: 700 },
+      clientWidth: { configurable: true, value: 500 },
+      clientHeight: { configurable: true, value: 400 }
+    })
+
+    expect(getBrowserPageViewportScrollState('page-1')).toEqual({
+      scrollLeft: 12,
+      scrollTop: 18,
+      maxScrollLeft: 400,
+      maxScrollTop: 300
+    })
+  })
+
   it('creates a flex viewport with chrome inset and container under the slot root', () => {
     const root = mountSlotViewport('workspace-1')
     const viewport = ensureBrowserPageViewport('page-1', 'workspace-1')

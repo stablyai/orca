@@ -2,11 +2,14 @@ import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isPtyIncarnationId, type PtyIncarnationId } from '../../shared/pty-incarnation'
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
+  SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR,
   SSH_SESSION_EXPIRED_ERROR,
   SshPtyAbsentFromRelayError,
+  SshPtyProvenExitedOnRelayError,
   isSshPtyIdentityMismatchError,
   isSshPtyNotFoundError
 } from './ssh-pty-errors'
+import { isProvenExitedPtyAttachRefusal } from '../../shared/pty-attach-absence-evidence'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import type { PtySpawnOptions, PtySpawnResult } from './types'
 import type { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
@@ -172,6 +175,8 @@ function sameSourceActivation(
 
 export type { PtySourceRecoveryRequest }
 
+const RESTORE_REQUIRED_ATTACH_ATTEMPTS = 2
+
 export async function reattachSshPtySession(args: {
   mux: SshChannelMultiplexer
   connectionId: string
@@ -235,6 +240,13 @@ export async function reattachSshPtySession(args: {
       // Why the class: the relay answered for this exact id, so callers holding a pane binding may
       // retire it and spawn fresh. Plain `SSH_SESSION_EXPIRED` cannot say that — a restarted relay
       // renumbers from pty-1, so the message alone is indistinguishable from a lost link.
+      //
+      // Why the subclass: the relay marks the one refusal it backed with a pid probe. Without the
+      // marker the answer is the "no such id" union, which is not evidence the shell ended, so the
+      // narrow class is minted only when the relay said so (docs/reference/ssh-execution-boundary.md).
+      if (isProvenExitedPtyAttachRefusal(error)) {
+        throw new SshPtyProvenExitedOnRelayError(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
+      }
       throw new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
     }
     throw error
@@ -270,8 +282,8 @@ export async function reattachSshPtySessionWithExitFence(
 
 /**
  * The full reattach path a spawn takes when it carries a sessionId: fence the
- * exit race, reject a session the relay can no longer restore, and commit or
- * roll back the source-activation lease.
+ * exit race, reopen a delivery the relay retired, and commit or roll back the
+ * source-activation lease.
  *
  * Lives here rather than in SshPtyProvider.spawn so the lease's commit and
  * rollback stay in one place — a caller that only wrapped the fence could
@@ -282,24 +294,44 @@ export async function reattachSshPtySessionForSpawn(
     acceptLivePty: (relayPtyId: string) => void
   }
 ): Promise<PtySpawnResult> {
-  let result: SshPtyReattachResult | undefined
-  try {
-    result = await reattachSshPtySessionWithExitFence(args)
-    if (result.sourceRecovery?.status === 'restoreRequired') {
-      throw new Error(
-        `${SSH_SESSION_EXPIRED_ERROR}: ${toRelaySshPtyId(args.connectionId, result.id)}`
-      )
+  let restoreRequiredReason = 'unknown'
+  // The relay retires the stale delivery as it answers restoreRequired, so the next attach opens a
+  // fresh one with full replay. One immediate retry keeps the ordinary reconnect off the renderer's
+  // 15s-cooldown pane-recovery ladder.
+  for (let attempt = 0; attempt < RESTORE_REQUIRED_ATTACH_ATTEMPTS; attempt++) {
+    let result: SshPtyReattachResult | undefined
+    try {
+      result = await reattachSshPtySessionWithExitFence(args)
+      if (result.sourceRecovery?.status === 'restoreRequired') {
+        restoreRequiredReason = result.sourceRecovery.reason
+        const lease = result.sourceActivationLease
+        // An unconfirmed cancellation must not stack a second delivery on the first.
+        if (lease && !(await lease.rollback())) {
+          break
+        }
+        continue
+      }
+      args.acceptLivePty(result.id)
+      result.sourceActivationLease?.commit()
+      const {
+        sourceActivationLease: _lease,
+        sourceRecovery: _sourceRecovery,
+        ...spawnResult
+      } = result
+      return spawnResult
+    } catch (error) {
+      result?.sourceActivationLease?.rollback()
+      throw error
     }
-    args.acceptLivePty(result.id)
-    result.sourceActivationLease?.commit()
-    const {
-      sourceActivationLease: _lease,
-      sourceRecovery: _sourceRecovery,
-      ...spawnResult
-    } = result
-    return spawnResult
-  } catch (error) {
-    result?.sourceActivationLease?.rollback()
-    throw error
   }
+  // Why not SSH_SESSION_EXPIRED: the relay only reaches a restoreRequired reply after finding the
+  // managed PTY and confirming its process is alive, so this is `unverifiable` about the delivery
+  // and positive evidence the PTY is live. Claiming expiry here made the caller retire the pane
+  // binding and cold-restore the agent into a second copy of a running session.
+  throw new Error(
+    `${SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR}: ${toRelaySshPtyId(
+      args.connectionId,
+      args.sessionId
+    )} ${restoreRequiredReason}`
+  )
 }

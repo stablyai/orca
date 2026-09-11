@@ -1,4 +1,5 @@
 import type { GitStatusEntry } from '../../../shared/git-status-types'
+import { collectGitStatusLineStatInputs } from '../../../shared/git-status-line-stat-inputs'
 import {
   applyLineStats,
   collectUntrackedAdditions,
@@ -8,6 +9,7 @@ import {
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
+import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 
 async function runNumstat(
   worktreePath: string,
@@ -50,23 +52,25 @@ export async function attachLineStats(
   if (entries.length === 0) {
     return true
   }
-  const hasStaged = entries.some((entry) => entry.area === 'staged')
-  const hasUnstaged = entries.some((entry) => entry.area === 'unstaged')
-  const untrackedPaths = entries
-    .filter((entry) => entry.area === 'untracked')
-    .map((entry) => entry.path)
+  const { hasStaged, hasUnstaged, untrackedPaths } = collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
     hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(emptyStats),
-    collectUntrackedAdditions(worktreePath, untrackedPaths, options.signal)
+    // Why: git took the guest path, but this read goes straight through Node's own namespace.
+    collectUntrackedAdditions(
+      resolveWorktreeFilesystemPath(worktreePath, options),
+      untrackedPaths,
+      options.signal
+    )
   ])
   for (const entry of entries) {
+    const area = entry.area
     applyLineStats(
       entry,
-      entry.area === 'staged'
+      area === 'staged'
         ? (stagedStats ?? emptyStats).get(entry.path)
-        : entry.area === 'unstaged'
+        : area === 'unstaged'
           ? (unstagedStats ?? emptyStats).get(entry.path)
           : untrackedStats.get(entry.path)
     )

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { createElement, useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -171,8 +171,8 @@ export default function EditorFileTab({
       if (!input) {
         return
       }
-      // Why: Radix closes the context menu after onSelect; defer focus so its
-      // teardown cannot steal focus back or blur-commit the newly mounted input.
+      // Why: the tab re-lays out around the input; focus on the next frame so
+      // that swap has settled before selecting text.
       renameFocusFrameRef.current = requestAnimationFrame(() => {
         renameFocusFrameRef.current = null
         if (renameInputRef.current !== input) {
@@ -281,9 +281,9 @@ export default function EditorFileTab({
           className={`w-3.5 h-3.5 mr-1.5 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : (
-        <FileIcon
-          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
-        />
+        createElement(FileIcon, {
+          className: `w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`
+        })
       )}
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">

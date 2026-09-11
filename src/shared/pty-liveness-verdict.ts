@@ -16,9 +16,15 @@ export const NO_OBSERVING_PROVIDER_REASON = 'no registered provider can observe 
 export const SSH_EXIT_UNCONFIRMED_REASON = 'the owning SSH host did not confirm the PTY exit'
 export const PTY_LIVE_NOTE = 'The PTY is live.'
 
+// Why: reasons reach these sentences from verdicts, receipts and relayed errors, and
+// some already end in a terminator — appending one blindly printed `...to failed..`.
+function endSentence(detail: string): string {
+  return /[.!?]$/u.test(detail.trimEnd()) ? detail.trimEnd() : `${detail.trimEnd()}.`
+}
+
 /** The one sentence every surface uses to admit a stop was not confirmed. */
 export function describeUnconfirmedStop(reason: string): string {
-  return `The PTY was not confirmed stopped: ${reason}.`
+  return `The PTY was not confirmed stopped: ${endSentence(reason)}`
 }
 
 /** Words a close whose PTY teardown was never confirmed, for a stop receipt. */
@@ -30,5 +36,5 @@ export function describeUnconfirmedAgentStop(close: {
     close.ptyStopVerdict === 'live'
       ? 'it is live'
       : (close.ptyStopReason ?? 'the stop outcome could not be verified')
-  return `The agent terminal was closed but its process could not be confirmed stopped: ${detail}.`
+  return `The agent terminal was closed but its process could not be confirmed stopped: ${endSentence(detail)}`
 }

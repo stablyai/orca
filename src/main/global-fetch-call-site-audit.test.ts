@@ -23,8 +23,11 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/orca-profiles/profile-cloud-client.ts', 1],
   ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],
   ['main/rate-limits/codex-fetcher.ts', 3],
+  ['main/runtime/push/push-gateway-client.ts', 1],
   ['main/runtime/relay/relay-http-client.ts', 2],
-  ['main/runtime/relay/relay-region-preference.ts', 3],
+  ['main/runtime/relay/relay-region-catalog-fetch.ts', 1],
+  ['main/runtime/relay/relay-region-preference.ts', 2],
+  ['main/runtime/relay/relay-region-probe.ts', 1],
   ['main/source-control/hosted-review-api-request.ts', 1],
   ['main/speech/openai-transcription-client.ts', 1],
   // Main HTTP port: one type declaration plus the Node fallback call. The fallback
@@ -42,7 +45,7 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP
   ['main/ipc/worktree-remote.ts', 2],
-  ['relay/git-handler.ts', 1],
+  ['relay/git-handler-fetch-operations.ts', 1],
   // fetch mentioned only in a comment
   ['main/ipc/feedback.ts', 1]
 ])

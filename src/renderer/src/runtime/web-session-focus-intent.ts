@@ -82,6 +82,11 @@ export function resolveWebSessionVisibleTabId(
     const tabId = state.activeTabIdByWorktree?.[worktreeId]
     return tabId && tabs.some((tab) => tab.id === tabId) ? tabId : null
   }
+  // Why: a structured chat tab has no per-worktree active-entity map to address it by, so the
+  // entityId lookup below would always miss. There is at most one per worktree here.
+  if (currentType === 'agent-session') {
+    return tabs.find((tab) => tab.contentType === 'agent-session')?.id ?? null
+  }
   const entityId =
     currentType === 'browser'
       ? state.activeBrowserTabIdByWorktree?.[worktreeId]
@@ -159,10 +164,12 @@ export function clearWebSessionFocusIntent(owner: WebSessionIntentOwner, worktre
 export function clearWebSessionFocusIntentIfMatches(
   owner: WebSessionIntentOwner,
   worktreeId: string,
-  hostTabId: string
+  hostTabId: string,
+  leafId?: string
 ): void {
   const key = focusIntentPartitionKey(owner, worktreeId)
-  if (pendingFocusByOwnerAndWorktree.get(key)?.hostTabId === hostTabId) {
+  const intent = pendingFocusByOwnerAndWorktree.get(key)
+  if (intent?.hostTabId === hostTabId && (leafId === undefined || intent.leafId === leafId)) {
     pendingFocusByOwnerAndWorktree.delete(key)
   }
 }

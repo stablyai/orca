@@ -10,6 +10,7 @@ import {
 } from './browser-clicked-link-routing'
 
 const FOREGROUND_FRAME_NAME = '__orca_clicked_link_foreground_test'
+const BACKGROUND_FRAME_NAME = '__orca_clicked_link_background_test'
 
 type RoutingGlobal = typeof globalThis & {
   __orcaBrowserClickedLinkRouting?: {
@@ -32,7 +33,7 @@ function resetRouting(): void {
 }
 
 function installRouting(isMac = true): void {
-  installBrowserClickedLinkRouting(FOREGROUND_FRAME_NAME, isMac, true)
+  installBrowserClickedLinkRouting(FOREGROUND_FRAME_NAME, BACKGROUND_FRAME_NAME, isMac, true)
 }
 
 function clickLink(
@@ -90,7 +91,7 @@ describe('browser clicked-link routing', () => {
     expect(clickLink(link, { metaKey: true }).open).not.toHaveBeenCalled()
     expect(clickLink(link, { ctrlKey: true }).open).toHaveBeenCalledWith(
       'https://example.com/reference',
-      FOREGROUND_FRAME_NAME
+      BACKGROUND_FRAME_NAME
     )
   })
 
@@ -102,12 +103,34 @@ describe('browser clicked-link routing', () => {
 
     expect(clickLink(link, { type: 'auxclick' }).open).toHaveBeenCalledWith(
       'https://example.com/reference',
-      FOREGROUND_FRAME_NAME
+      BACKGROUND_FRAME_NAME
     )
     expect(clickLink(link, { metaKey: true, shiftKey: true }).open).toHaveBeenCalledWith(
       'https://example.com/reference',
       FOREGROUND_FRAME_NAME
     )
+  })
+
+  it.each([true, false])('routes Shift+middle-click to the foreground (isMac=%s)', (isMac) => {
+    const link = document.createElement('a')
+    link.href = 'https://example.com/reference'
+    document.body.append(link)
+    installRouting(isMac)
+
+    const { event, open } = clickLink(link, { type: 'auxclick', shiftKey: true })
+    expect(event.defaultPrevented).toBe(true)
+    expect(open).toHaveBeenCalledWith(link.href, FOREGROUND_FRAME_NAME)
+
+    resetRouting()
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(
+      FOREGROUND_FRAME_NAME,
+      BACKGROUND_FRAME_NAME,
+      isMac,
+      true
+    )
+    const iframeClick = clickLink(link, { type: 'auxclick', shiftKey: true })
+    expect(iframeClick.event.defaultPrevented).toBe(true)
+    expect(iframeClick.open).toHaveBeenCalledWith(link.href, FOREGROUND_FRAME_NAME)
   })
 
   it('honors page cancellation and observes link rewrites before routing', () => {
@@ -180,21 +203,35 @@ describe('browser clicked-link routing', () => {
     const link = document.createElement('a')
     link.href = 'https://example.com/reference'
     document.body.append(link)
-    installBrowserClickedLinkRouting('__orca_clicked_link_old_fg', true, true)
-    installBrowserClickedLinkRouting('__orca_clicked_link_new_fg', false, true)
+    installBrowserClickedLinkRouting(
+      '__orca_clicked_link_old_fg',
+      '__orca_clicked_link_old_bg',
+      true,
+      true
+    )
+    installBrowserClickedLinkRouting(
+      '__orca_clicked_link_new_fg',
+      '__orca_clicked_link_new_bg',
+      false,
+      true
+    )
 
     expect(addEventListener.mock.calls.filter(([event]) => event === 'click')).toHaveLength(1)
     expect(clickLink(link, { ctrlKey: true }).open).toHaveBeenCalledWith(
       'https://example.com/reference',
-      '__orca_clicked_link_new_fg'
+      '__orca_clicked_link_new_bg'
     )
   })
 
   it('builds a self-contained isolated-world script', () => {
-    const script = buildBrowserClickedLinkRoutingScript(FOREGROUND_FRAME_NAME, false)
+    const script = buildBrowserClickedLinkRoutingScript(
+      FOREGROUND_FRAME_NAME,
+      BACKGROUND_FRAME_NAME,
+      false
+    )
 
     expect(script).toContain('installBrowserClickedLinkRouting')
-    expect(script).toContain(`"${FOREGROUND_FRAME_NAME}",false`)
+    expect(script).toContain(`"${FOREGROUND_FRAME_NAME}","${BACKGROUND_FRAME_NAME}",false`)
     expect(script).not.toContain('BrowserClickedLinkRoutingState')
   })
 
@@ -203,7 +240,12 @@ describe('browser clicked-link routing', () => {
     link.href = 'https://example.com/from-frame'
     link.target = '_blank'
     document.body.append(link)
-    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(
+      FOREGROUND_FRAME_NAME,
+      BACKGROUND_FRAME_NAME,
+      true,
+      true
+    )
 
     const { event, open } = clickLink(link)
 
@@ -216,20 +258,35 @@ describe('browser clicked-link routing', () => {
     blank.href = 'https://example.com/new-context'
     blank.target = '_blank'
     document.body.append(blank)
-    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(
+      FOREGROUND_FRAME_NAME,
+      BACKGROUND_FRAME_NAME,
+      true,
+      true
+    )
 
     expect(clickLink(blank, { metaKey: true }).open).toHaveBeenCalledWith(
       'https://example.com/new-context',
-      FOREGROUND_FRAME_NAME
+      BACKGROUND_FRAME_NAME
     )
 
-    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(
+      FOREGROUND_FRAME_NAME,
+      BACKGROUND_FRAME_NAME,
+      true,
+      true
+    )
     expect(clickLink(blank, { type: 'auxclick' }).open).toHaveBeenCalledWith(
       'https://example.com/new-context',
-      FOREGROUND_FRAME_NAME
+      BACKGROUND_FRAME_NAME
     )
 
-    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(
+      FOREGROUND_FRAME_NAME,
+      BACKGROUND_FRAME_NAME,
+      true,
+      true
+    )
     expect(clickLink(blank, { metaKey: true, shiftKey: true }).open).toHaveBeenCalledWith(
       'https://example.com/new-context',
       FOREGROUND_FRAME_NAME
@@ -243,7 +300,12 @@ describe('browser clicked-link routing', () => {
     const ordinary = document.createElement('a')
     ordinary.href = 'https://example.com/current'
     document.body.append(blank, ordinary)
-    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true, true)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(
+      FOREGROUND_FRAME_NAME,
+      BACKGROUND_FRAME_NAME,
+      true,
+      true
+    )
 
     expect(clickLink(blank, { ctrlKey: true }).open).not.toHaveBeenCalled()
     expect(clickLink(blank, { shiftKey: true }).open).not.toHaveBeenCalled()
@@ -257,8 +319,12 @@ describe('browser clicked-link routing', () => {
     frameLink.href = 'https://example.com/frame-synthetic'
     frameLink.target = '_blank'
     document.body.append(mainLink, frameLink)
-    installBrowserClickedLinkRouting(FOREGROUND_FRAME_NAME, true)
-    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(FOREGROUND_FRAME_NAME, true)
+    installBrowserClickedLinkRouting(FOREGROUND_FRAME_NAME, BACKGROUND_FRAME_NAME, true)
+    cleanupIframeRouting = installBrowserIframeClickedLinkRouting(
+      FOREGROUND_FRAME_NAME,
+      BACKGROUND_FRAME_NAME,
+      true
+    )
 
     expect(clickLink(mainLink, { metaKey: true }).open).not.toHaveBeenCalled()
     expect(clickLink(frameLink).open).not.toHaveBeenCalled()
@@ -266,9 +332,13 @@ describe('browser clicked-link routing', () => {
   })
 
   it('builds a self-contained iframe script with per-frame routing tokens', () => {
-    const script = buildBrowserIframeClickedLinkRoutingScript(FOREGROUND_FRAME_NAME, false)
+    const script = buildBrowserIframeClickedLinkRoutingScript(
+      FOREGROUND_FRAME_NAME,
+      BACKGROUND_FRAME_NAME,
+      false
+    )
 
     expect(script).toContain('installBrowserIframeClickedLinkRouting')
-    expect(script).toContain(`"${FOREGROUND_FRAME_NAME}",false`)
+    expect(script).toContain(`"${FOREGROUND_FRAME_NAME}","${BACKGROUND_FRAME_NAME}",false`)
   })
 })

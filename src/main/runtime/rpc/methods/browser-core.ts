@@ -1,5 +1,5 @@
-import { defineMethod, type RpcMethod } from '../core'
-import { BrowserTarget, requiredString } from '../schemas'
+import { defineMethod } from '../core'
+import { BrowserTarget } from '../schemas'
 import {
   Check,
   Drag,
@@ -31,14 +31,11 @@ import {
   Upload,
   Wait
 } from './browser-schemas'
-import { BrowserTabCreateParams } from './browser-tab-create-schema'
+import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-schema'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
+import { CertificateProceed } from '../../../../shared/rpc-contract/browser-core-params'
 
-const CertificateProceed = BrowserTarget.extend({
-  challengeId: requiredString('Missing required challengeId')
-})
-
-export const BROWSER_CORE_METHODS: RpcMethod[] = [
+export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.snapshot',
     params: BrowserTarget,
@@ -117,6 +114,11 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
       pairedDeviceId
         ? runtime.browserTabCreate(params, { pairedDeviceId, clientKind })
         : runtime.browserTabCreate(params, { clientKind })
+  }),
+  defineMethod({
+    name: 'browser.openUrl',
+    params: BrowserOpenUrlParams,
+    handler: async (params, { runtime }) => runtime.browserOpenUrlOnClient(params)
   }),
   defineMethod({
     name: 'browser.tabSetProfile',
