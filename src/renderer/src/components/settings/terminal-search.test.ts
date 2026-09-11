@@ -156,17 +156,17 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch(query, getAppearancePaneSearchEntries())).toBe(true)
   })
 
-  it('omits desktop-only import appearance entries when desktop-only controls are hidden', () => {
-    const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
-    const webEntries = getAppearancePaneSearchEntries({
-      showWarpImport: false,
-      showGhosttyImport: false
-    })
+  it.each(['ghostty', 'warp', 'yaml'])(
+    'omits desktop-only %s search results on web clients',
+    (query) => {
+      const desktopEntries = getAppearancePaneSearchEntries()
+      const webEntries = getAppearancePaneSearchEntries({ showDesktopThemeImports: false })
 
-    expect(desktopEntries.some((entry) => entry.title === 'Import from Warp')).toBe(true)
-    expect(webEntries.some((entry) => entry.title === 'Import from Warp')).toBe(false)
-    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(false)
-  })
+      expect(matchesSettingsSearch(query, desktopEntries)).toBe(true)
+      expect(matchesSettingsSearch(query, webEntries)).toBe(false)
+      expect(matchesSettingsSearch('font size', webEntries)).toBe(true)
+    }
+  )
 
   it('includes the system tray appearance entry only when desktop tray controls are shown', () => {
     const desktopEntries = getAppearancePaneSearchEntries({ showSystemTray: true })

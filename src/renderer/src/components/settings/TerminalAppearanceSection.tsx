@@ -34,7 +34,7 @@ import { GhosttyImportModal } from './GhosttyImportModal'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { WarpThemeImportModal } from './WarpThemeImportModal'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
-import { isWebClientLocation } from '@/hooks/useSettingsNavigationMetadata'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { translate } from '@/i18n/i18n'
 

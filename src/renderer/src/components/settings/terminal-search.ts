@@ -63,11 +63,10 @@ export {
 } from './terminal-window-setup-search'
 
 type TerminalAppearanceSearchOptions = {
-  showWarpImport?: boolean
-  showGhosttyImport?: boolean
+  showDesktopThemeImports?: boolean
 }
 
-const getTerminalAppearanceSearchEntriesCore = createLocalizedCatalog(
+const getTerminalAppearanceSearchEntriesWithoutImports = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     ...getTerminalTypographySearchEntries(),
     ...getTerminalCursorSearchEntries(),
@@ -79,11 +78,11 @@ const getTerminalAppearanceSearchEntriesCore = createLocalizedCatalog(
   ]
 )
 
-// Why: compose rather than filter — entry titles are localized, so matching on
-// an English title would leak the Warp entry back in under non-English locales.
-const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
+// Compose catalogs because translated titles cannot reliably identify desktop-only entries.
+const getTerminalAppearanceSearchEntriesWithImports = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
-    ...getTerminalAppearanceSearchEntriesCore(),
+    ...getTerminalAppearanceSearchEntriesWithoutImports(),
+    ...getTerminalGhosttyImportSearchEntries(),
     ...getTerminalWarpImportSearchEntries(),
     ...getTerminalYamlImportSearchEntries()
   ]
@@ -92,12 +91,9 @@ const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
 export function getTerminalAppearanceSearchEntries(
   options: TerminalAppearanceSearchOptions = {}
 ): SettingsSearchEntry[] {
-  return [
-    ...((options.showWarpImport ?? true)
-      ? getTerminalAppearanceSearchEntriesWithWarp()
-      : getTerminalAppearanceSearchEntriesCore()),
-    ...((options.showGhosttyImport ?? true) ? getTerminalGhosttyImportSearchEntries() : [])
-  ]
+  return (options.showDesktopThemeImports ?? true)
+    ? getTerminalAppearanceSearchEntriesWithImports()
+    : getTerminalAppearanceSearchEntriesWithoutImports()
 }
 
 export function getTerminalPaneSearchEntries(platform: {
