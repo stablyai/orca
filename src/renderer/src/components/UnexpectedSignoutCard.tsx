@@ -51,7 +51,6 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   const dismissForVersion = useAppStore((s) => s.dismissUnexpectedSignoutCard)
   const connecting = useAppStore((s) => s.orcaProfileConnecting)
   const connect = useAppStore((s) => s.connectCurrentOrcaProfile)
-  const updateStatus = useAppStore((s) => s.updateStatus)
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [preview] = useState(readPreviewFlag)
@@ -119,7 +118,6 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
 
   const email = authStatus?.cloud?.email?.trim() || null
   const canConnect = authStatus?.configured === true
-  const updateCardVisible = updateStatus.state !== 'idle' && updateStatus.state !== 'not-available'
 
   const handleDismiss = (): void => {
     if (preview) {
@@ -130,11 +128,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   }
 
   return (
-    <div
-      className={`fixed right-4 z-40 w-[360px] max-w-[calc(100vw-32px)] max-[480px]:left-4 max-[480px]:right-4 max-[480px]:w-auto ${
-        updateCardVisible ? 'bottom-[220px]' : 'bottom-10'
-      }`}
-    >
+    <div>
       <Card
         className="py-0 gap-0 shadow-floating"
         role="complementary"
