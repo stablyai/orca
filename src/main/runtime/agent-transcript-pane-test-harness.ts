@@ -16,6 +16,9 @@ export type TranscriptPaneOptions = {
   /** Simulates a PTY controller whose foreground probe never settles. */
   foregroundProbeHangs?: boolean
   onForegroundProbe?: () => void
+  /** The PTY grid the transcript was recorded on. Replaying a 120-column capture through an
+   *  80-column emulator rewraps every cursor-addressed row into a different screen. */
+  size?: { cols: number; rows: number }
 }
 
 export async function createTranscriptPane(
@@ -36,6 +39,7 @@ export async function createTranscriptPane(
     spawn: vi.fn().mockResolvedValue({ id: TRANSCRIPT_PANE_PTY_ID, incarnationId: 'inc-1' }),
     write: () => true,
     kill: () => true,
+    getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {
       options.onForegroundProbe?.()
       return options.foregroundProbeHangs === true

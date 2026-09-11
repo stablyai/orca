@@ -10,10 +10,13 @@ Real transcripts now exist. They were recorded from a live `agy` on macOS with
 `src/main/runtime/__fixtures__/`. `src/main/runtime/antigravity-readiness-transcripts.test.ts`
 replays them through the runtime.
 
-**Headline: on real output the current detector is inverted.** It refuses a genuinely ready screen
-and accepts a live model picker. The five attempts argued about which extra condition to add; none
-of them had noticed that the condition they all shared — a line beginning with the model name —
-never matches a real Antigravity ready screen at all.
+**Headline: on real output the first five detectors were inverted.** They refused a genuinely ready
+screen and accepted a live model picker. All five argued about which extra condition to add; none
+had noticed that the condition they all shared — a line beginning with the model name — never
+matches a real Antigravity ready screen at all.
+
+Attempt six, described in the last section, reads none of the identity, model or banner text. It
+asks only where the caret row sits relative to the composer's rule and to the end of the tail.
 
 ## Versions
 
@@ -54,6 +57,16 @@ operator's account state or configuration, which is out of bounds.
 | `antigravity-dialog-update-banner.txt`      | Cannot be forced; no update was pending during the session.                                                                                                                                |
 
 Each remains as a named, skipping case in the suite so it is visible rather than forgotten.
+
+### Still needed — the two open questions on this surface
+
+Both are about the busy lane, and both are the reason a rule was deliberately **not** written. Each
+is a capture the recorder could take, not a case it is barred from reaching.
+
+| Still needed                                      | What it would settle                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A successful turn completion**                  | This account's key cannot produce one — every turn ends `Agent execution terminated due to error`, which is what `antigravity-busy-turn-ended.txt` records. So it is unknown whether a finished, successful turn returns the composer to the bottom of the tail (→ reads ready) or leaves result text below it the way the error block does (→ wedges until the next repaint). **Both are consistent with every capture we have.** |
+| **A capture ending _inside_ the residual window** | Recording stopped between a frame park and the next spinner tick, so the transcript's own last row is the bare caret with the spinner still live above it. That would fix the line bound for a busy rule **empirically**, which is the only thing missing (§9). Without it, any "read the last N lines" rule is a guess about N, and guessing is what produced attempts one through five.                                          |
 
 ## What the transcripts show
 
@@ -104,6 +117,22 @@ proposed in PRs #15840 and #15852 — accept any line _beginning_ with `>` — w
 dialog and the model picker read as ready. On 1.2.0 the idle composer is a bare `>`; those PRs'
 1.1.17 mode-banner claim could not be reproduced here and may be mode-specific.
 
+**A bare `>` on its own is not sufficient either, and an earlier draft of this document was wrong
+to say it was.** `/model` is drawn in place _below_ the composer, so the empty composer's own bare
+`>` is still on the screen — and still in the derived tail — while the picker owns it:
+
+```
+────────────────────────── (120 cols)
+>                            ← the composer, idle and bare, under a live dialog
+Switch Model
+  Gemini 3.8 Flash
+> Gemini 3.7 Flash (current)
+```
+
+Presence of a bare `>` anywhere in the tail is therefore satisfied by
+`antigravity-dialog-model-picker.txt`. What separates the two is **position**: on a ready screen
+nothing follows the caret row, and on every in-place dialog the dialog's rows do.
+
 ### 4. There is no email account row, and the row can be switched off entirely
 
 For an API-key user the identity row reads literally `Gemini API key`. There is no `@`, no
@@ -124,7 +153,65 @@ The status row is written with absolute and relative moves (`ESC[13;99H`, `ESC[8
 `? for shortcuts` and `Gemini 3.7 Flash · low` end up on one derived line. Any rule that assumes
 one screen row equals one `\n`-delimited line is reading a different document than the user sees.
 
-## 8. Busy frames park the caret exactly like idle frames — the spinner is what differs
+### 7. The composer is a framed box, and dialogs are drawn under it
+
+Replaying each transcript through the main-process headless emulator at the grid it was recorded
+on (120x40, from the `.meta.json`) gives the screen the operator saw. Every main-screen capture
+has the same bottom structure:
+
+| Fixture               | rule                 | caret row | rule | what follows                       |
+| --------------------- | -------------------- | --------- | ---- | ---------------------------------- |
+| ready, API key        | `─`x120              | `>`       | ✓    | status row only                    |
+| ready, account hidden | `─`x120              | `>`       | ✓    | status row only                    |
+| dismissed `/model`    | `─`x120              | `>`       | ✓    | status row only                    |
+| `/model` picker       | `─`x120              | `>`       | ✓    | 9 dialog rows, then the status row |
+| command palette       | `─`x120              | `> /`     | ✓    | 7 dialog rows, then the status row |
+| trust dialog          | — (alternate screen) | —         | —    | —                                  |
+
+So on the screen the discriminator is "the composer box is the bottom structure", and on the
+derived tail — which keeps the opening rule and the caret row but loses the closing rule and the
+cursor-addressed status row — the same fact reads as **"the last line with content is a bare `>`,
+and the line above it is the composer's rule."** That is the rule attempt six ships.
+
+### 8. The first six transcripts end with the CLI tearing itself down — and that marker is a trap
+
+The original recorder had to stop `agy` to end each capture, and `agy` restores the terminal on the
+way out. All six of those fixtures end with `ESC[>4m ESC[=0;1u` (keyboard-mode restore) followed by
+cursor moves and `ESC[J`, or `ESC[?1049l`, and `antigravity-dialog-dismissed.txt` also prints a
+`Resume with -c (or command below):` footer.
+
+Those bytes are not a screen Orca's detector ever sees on a pane it is waiting on, and they erase
+rows the screen is being judged on — the ready fixture's own status row does not survive them. So
+the replay cuts them. **Which sequence marks the cut is not obvious, and the first choice was
+wrong.**
+
+`ESC[>4m ESC[=0;1u` appears exactly once, at the end, in all six of the original captures — which
+makes it look like a shutdown marker. It is not one. `agy` emits the same pair when it **enters**
+raw mode, and the two later captures show it plainly:
+
+| Capture                                               | `ESC[>4m ESC[=0;1u` offsets | `ESC[?2004l` offsets |
+| ----------------------------------------------------- | --------------------------- | -------------------- |
+| `antigravity-busy-mid-turn.txt` (5057 B)              | `[18, 1320]`                | none                 |
+| `antigravity-busy-turn-ended.txt` (5133 B)            | none                        | none                 |
+| `antigravity-ready-api-key-gemini-model.txt` (2192 B) | `[2161]`                    | `[2179]`             |
+
+Cutting at its last occurrence discarded 3.7 KB of `antigravity-busy-mid-turn.txt` — the entire
+turn — leaving a replay of the failed first launch, whose tail reads
+`Press ctrl+c or ctrl+d twice to exit.` And a guard asserting "the marker is present" fails outright
+on `antigravity-busy-turn-ended.txt`, which does not contain the pair at all.
+
+**The generalisable lesson, which matters more than the specific bytes: a six-file fixture set can
+make a coincidence look like a rule.** The marker appeared once, terminally, in every file
+available at the time, and nothing in that set could have contradicted it. Two more captures did.
+
+The marker is now `ESC[?2004l` (bracketed paste off), emitted once on exit in each of the six
+shutdown-inclusive captures and never in the two taken with the fixed recorder. The guard is
+inverted to the invariant that holds for both recorders and cannot silently no-op: **the replayed
+bytes must not contain the shutdown marker**, and the replay length must equal the marker offset,
+or the whole file when the marker is absent. The full bytes are replayed in one extra case, which
+pins that a pane whose `agy` has already exited is refused.
+
+### 9. Busy frames park the caret exactly like idle frames — the spinner is what differs
 
 The frame that ends a turn-in-progress and the frame that ends an idle screen park the cursor with
 the **same bytes**. Only the hint row differs, and the park erases it:
@@ -166,12 +253,43 @@ evidence supports one clause, and only one:
 
 That predicate already exists in this file for cursor-agent (`CURSOR_BUSY_SPINNER_RE`) and should be
 reused rather than reinvented. It must be scoped to the **last visible line**, not the whole tail:
-a first-run transcript prints `⠾ Signing in...` during startup, which would otherwise pin a ready
-screen as busy forever.
+`antigravity-busy-mid-turn.txt` prints `⣾  Signing in...` during its failed first launch, which a
+whole-tail scan would read as working forever.
 
 Nothing else in the capture distinguishes the two states. The hint row (`esc to cancel` versus
 `? for shortcuts`) is erased by the park in both cases, the park offsets are identical, and
 `ESC[?25l`/`ESC[?25h` fencing appears around every repaint, idle or busy.
+
+#### …but that clause, implemented, is dead code — and does not close the residual
+
+Implemented as written and mutation-checked, the clause changes no verdict, and **reverting it
+fails to make any test fail**. It is subsumed by the caret rule:
+
+- The caret rule requires the last visible line to **trim to exactly `>`**. Trimming strips only
+  codes 32 and 9–13, and no braille codepoint is in that set, so a braille glyph on that line
+  always survives to make the trimmed span longer than one character. Braille on the last visible
+  line therefore implies the caret rule has already returned `null`.
+- And in the residual window it is meant to close, the last visible line **is** the bare caret and
+  carries no braille, so the clause never fires there. A tail of
+  `banner / rule / "> …prompt" / "⣟  Generating..." / rule / ">"` still reads ready with the
+  clause present.
+
+So the residual is real but this clause is not its fix. Closing it by text alone requires reading
+**more than the last line**, and the bound for that is unpinned — the `Signing in` row above is
+exactly why an unbounded scan is unsafe, and no capture ends in the residual window to calibrate
+against. Attempt six therefore pins the gap as a failing-when-fixed test
+(`KNOWN GAP: the window between a frame park and the next tick still reads ready`) rather than
+shipping a clause that cannot reach it.
+
+**Decision: the gap stays pinned and open.** Not because it does not matter, but because closing it
+by text alone means picking a line bound that no capture calibrates, and a rule without a fixture
+behind it is the thing this whole document exists to stop. The exposure is one inter-tick interval,
+visible only to text-only callers; and the `⣾  Signing in...` row proves a whole-tail rule would be
+actively wrong rather than merely unproven. The capture that would close it is listed under
+[Still needed](#still-needed--the-two-open-questions-on-this-surface).
+
+Callers gated on sustained quiescence are unaffected in any case: spinner ticks keep arriving, so
+the pane is never quiet.
 
 ## Confirmed / refuted, by attempt
 
@@ -229,35 +347,75 @@ expressed against the model/caret positions, which is what 1.2 and 1.3b just inv
 | --- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | X1  | Does `agy` set an OSC title distinguishing busy from idle? | **No.** Not one OSC title sequence appears in any capture. Title-based readiness is unavailable for this agent                  |
 | X2  | Does it repaint with bare `\r`?                            | **Yes**, constantly, plus `ESC[K` and absolute cursor moves                                                                     |
-| X3  | Does the caret survive in the tail?                        | **Yes** — a bare `>` line is present in every ready capture                                                                     |
+| X3  | Does the caret survive in the tail?                        | **Yes** — a bare `>` line is present in every ready capture, and in the `/model` picker's too (§3)                              |
 | X4  | Banner-to-caret distance                                   | ~8 derived lines on a 120x40 PTY; the banner falls outside the 6-line preview window, so only the full retained tail can see it |
 | X5  | Pane title on the trust screen versus ready                | Identical: none                                                                                                                 |
 
-## Can attempt six be written?
+## Attempt six, and what each of its rules is standing on
 
-Yes — but not as a variation on any of the five. Every one of them refined a predicate over
-`\n`-delimited lines, and that is the layer where the evidence says the information is not.
+`findAntigravityReadyPromptIndex` now has three clauses and nothing else. Each one names the
+transcript that forces it.
 
-What the captures support:
+| Clause                                          | Why                                                                                    | Fixture                                                                                 |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| the tail contains `antigravity cli` _anywhere_  | only a gate, so the rule cannot fire on Codex/Cursor panes                             | both ready fixtures; `lastIndexOf` refuted by the trust dialog's own body text (§1.1b)  |
+| the last line with content trims to exactly `>` | dialogs paint their rows under the composer, so the caret stops ending the tail        | ready fixtures end on `>`; picker ends `G`, palette ends `> /`, trust ends its nav hint |
+| the line above it is a run of ≥8 `─`            | `>` alone also marks a dialog's selected row, and can end a model's own prose mid-turn | the composer rule is directly above the caret in all three ready-shaped captures        |
 
-- **The one stable, dialog-free ready marker is a line whose entire trimmed content is `>`.** It is
-  present in every ready capture and absent from every dialog capture, because a dialog's `>` always
-  carries its selected row's label. This is a much narrower rule than any attempt used, and it is
-  the only one that survived contact with the transcripts.
-- **Drop the model-row requirement.** It matches dialogs and not ready screens. Keeping it inverted
-  the detector.
-- **Do not require an account row.** It is optional by environment variable and carries no email for
-  API-key users.
-- **Do not anchor on `headerIndex`.** The banner is printed once and never reprinted.
-- **The blocked-signal path already works** for the trust dialog: `antigravity-dialog-trust-workspace.txt`
-  is correctly refused today, by wording, not by structure.
+Dropped, each because a transcript refuted it: the **model row** (§1 — the logo shares that line,
+so it never starts one, and the `/model` picker supplies the rows the ready screen could not), the
+**account row** (§4 — `Gemini API key` has no `@`, and `AGY_CLI_HIDE_ACCOUNT_INFO=1` deletes the
+row), and the **`headerIndex` anchor** (§5 — the banner is printed once and never reprinted).
 
-What is still unknown and should be captured before shipping: the sign-in, theme, privacy and
-update dialogs, and any ready screen where the composer is not idle (accept-edits and plan mode,
-which PRs #15840 and #15852 describe from a screenshot). A bare-`>` rule is only as good as the
-claim that those modes still end on a bare `>`; that claim is untested.
+The blocked-signal path is left alone: it already refuses `antigravity-dialog-trust-workspace.txt`
+on wording, and it is the only thing that names a reason for the refusal.
 
-The honest summary is that this is a screen-shaped problem being solved with line-shaped tools. A
-rule over the derived tail can be made much better than what ships today, but the durable fix is to
-ask the terminal emulator what the bottom row of the screen actually is, rather than inferring it
-from a byte stream that was written with cursor addressing.
+### What it fails safe on, and how
+
+Four screens could not be captured, plus two composer modes. In every one of them the rule
+reports **not ready**, which stalls a `tui-idle` wait rather than typing into a live dialog:
+
+| Unknown                                                | Behaviour                                                                                                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Business/OAuth ready screen                            | Ready, and correctly so — the rule reads no identity at all, so the account type cannot change the verdict                                       |
+| Non-Gemini model row                                   | Ready, same reason: no model text is read                                                                                                        |
+| Sign-in dialog                                         | Not ready, _unless_ it happens to end on a rule + bare `>`. Drawn on the alternate screen (§5), which has no composer                            |
+| Theme / privacy / update banner                        | Not ready: a banner owning the screen puts rows under the composer                                                                               |
+| Accept-edits and plan mode                             | Not ready: PRs #15840/#15852 describe a mode banner on the composer row, which is not a bare `>`. A wedge, not a mis-send                        |
+| A live turn (spinner running)                          | **Not ready**, and now capture-backed: `antigravity-busy-mid-turn.txt`'s tail ends on `⣟  Generating...`, with no bare caret anywhere in it (§9) |
+| The gap between a frame park and the next spinner tick | **Ready — a real open gap.** One tick wide, unreachable for quiescence-gated callers, pinned as a KNOWN GAP test (§9)                            |
+| A turn that has ended                                  | **Not ready** — pinned KNOWN DEFECT. `antigravity-busy-turn-ended.txt`'s tail ends on the error block, not the composer. See below               |
+
+The two that cost a wedge — the mode banners, and any 1.1.x that does not draw the composer box —
+are the price of the asymmetry: a false negative stalls one wait, a false positive types a user's
+prompt into a live dialog.
+
+### Why this is still not the emulator, and what it would take
+
+The durable fix is to ask an emulator what the bottom of the screen is. That was evaluated first
+and is not reachable from the readiness path as it stands:
+
+- `isKnownReadyPromptPreview` is a pure string predicate called from six sites
+  (`runtime-terminal-wait`, `runtime-terminal-idle-polls`, `runtime-terminal-agent-presence`,
+  `orca-runtime-stop-structured-session-process`, and the visible-read probe), all on the derived
+  tail, and most of them synchronously.
+- The main process _does_ keep a live per-PTY emulator (`headlessTerminals`, fed by
+  `trackHeadlessTerminalData` on every chunk), and `readHeadlessVisibleTerminalState` projects it
+  through `projectTerminalVisibleLines`. But the one readiness call site wired to it,
+  `startTuiIdleVisibleReadProbe`, only runs when the tail is **empty** — never for an Antigravity
+  pane that has printed a banner.
+- For PTYs in `providerSnapshotPreferredPtys` (restored panes, and remote sessions where main holds
+  only a suffix) the authoritative screen needs a provider RPC, so the emulator is not uniformly
+  available and a per-poll screen read is not free.
+
+Moving readiness onto the screen therefore means threading a `ptyId`-or-projection through those
+six call sites, giving the idle poll an async hop, and deciding the provider-snapshot lane's
+budget — a change to every agent's readiness, not just Antigravity's. Worth doing; too wide to
+ride along with a detector fix that has already been wrong five times.
+
+It is worth noting what it would buy, because it is narrower than it sounds: the emulator supplies
+a **clean, correctly-ordered screen**, but not a verdict. The predicate above still has to be
+written, and against these same six fixtures the screen version ("the composer box is the bottom
+structure") and the tail version ("the caret row ends the tail, under its rule") agree on all six.
+The one thing only the emulator can add is knowing a pane is on the **alternate screen**, which is
+where the trust and sign-in dialogs live — the single unknown this rule cannot reason about.

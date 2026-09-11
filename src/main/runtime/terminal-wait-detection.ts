@@ -118,44 +118,84 @@ function findCodexReadyPromptIndex(normalized: string): number | null {
   return readySegment.includes('model:') && readySegment.includes('directory:') ? headerIndex : null
 }
 
+const CARET_CHAR_CODE = 62
+const COMPOSER_RULE_CHAR_CODE = 0x2500
+// Why a floor: the rule spans the pane, so any plausible width clears this, while a stray
+// box-drawing glyph inside agent prose does not.
+const MIN_COMPOSER_RULE_GLYPHS = 8
+
+/**
+ * Antigravity's idle composer is a framed box — a pane-wide `─` rule, then a row holding only
+ * the caret — and every dialog it draws puts its own rows underneath that box. So the ready
+ * signal is positional: the caret row is the last thing in the tail, sitting directly under a
+ * rule. Each clause is pinned to a captured transcript in
+ * `docs/reference/antigravity-readiness-evidence.md` and replayed by
+ * `antigravity-readiness-transcripts.test.ts`.
+ *
+ * Deliberately absent, because real captures refuted them: a model row (the block-glyph logo
+ * shares that line, so it never starts one), an account row (`Gemini API key` has no `@`, and
+ * `AGY_CLI_HIDE_ACCOUNT_INFO=1` deletes the row), and a banner anchor (the banner is printed
+ * once and never reprinted, so it cannot order anything).
+ */
 function findAntigravityReadyPromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('antigravity cli')
-  if (headerIndex === -1) {
+  // Why includes, not lastIndexOf: the trust dialog's own body says "Antigravity CLI requires
+  // permission to read, edit, and execute files here", so the banner's last occurrence can land
+  // inside a dialog. This is only an "is this agy" gate; it anchors nothing.
+  if (!normalized.includes('antigravity cli')) {
     return null
   }
-  let lineStart = headerIndex
-  let modelIndex: number | null = null
-  let promptIndex: number | null = null
+  const caret = lastNonBlankLineBefore(normalized, normalized.length)
+  if (
+    caret === null ||
+    caret.end - caret.start !== 1 ||
+    normalized.charCodeAt(caret.start) !== CARET_CHAR_CODE
+  ) {
+    return null
+  }
+  // Why the rule above it: `>` alone also marks a dialog's selected row and can end a model's
+  // own prose mid-turn; only the composer prints it directly under the box rule.
+  const rule = lastNonBlankLineBefore(normalized, caret.start)
+  return rule !== null && isAntigravityComposerRule(normalized, rule.start, rule.end)
+    ? caret.start
+    : null
+}
 
-  // Why: ready previews can include echoed paste after the header; scan line bounds directly instead of splitting the whole tail.
-  for (let cursor = headerIndex; cursor <= normalized.length; cursor += 1) {
-    if (cursor < normalized.length && normalized.charCodeAt(cursor) !== 10) {
-      continue
+function isAntigravityComposerRule(value: string, start: number, end: number): boolean {
+  if (end - start < MIN_COMPOSER_RULE_GLYPHS) {
+    return false
+  }
+  for (let index = start; index < end; index += 1) {
+    if (value.charCodeAt(index) !== COMPOSER_RULE_CHAR_CODE) {
+      return false
     }
+  }
+  return true
+}
+
+/** Trimmed bounds of the last line with visible content that ends before `limit`. */
+function lastNonBlankLineBefore(
+  value: string,
+  limit: number
+): { start: number; end: number } | null {
+  let lineEnd = limit
+  for (;;) {
+    const lineStart = value.lastIndexOf('\n', lineEnd - 1) + 1
     let trimmedStart = lineStart
-    let trimmedEnd = cursor
-    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(normalized, trimmedStart)) {
+    let trimmedEnd = lineEnd
+    while (trimmedStart < trimmedEnd && isTerminalWaitWhitespace(value, trimmedStart)) {
       trimmedStart += 1
     }
-    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(normalized, trimmedEnd - 1)) {
+    while (trimmedEnd > trimmedStart && isTerminalWaitWhitespace(value, trimmedEnd - 1)) {
       trimmedEnd -= 1
     }
-    if (lineStart > headerIndex && trimmedStart < trimmedEnd) {
-      if (modelIndex === null && normalized.startsWith('gemini', trimmedStart)) {
-        modelIndex = trimmedStart
-      }
-      if (
-        promptIndex === null &&
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
-      ) {
-        promptIndex = trimmedStart
-      }
+    if (trimmedStart < trimmedEnd) {
+      return { start: trimmedStart, end: trimmedEnd }
     }
-    lineStart = cursor + 1
+    if (lineStart === 0) {
+      return null
+    }
+    lineEnd = lineStart - 1
   }
-
-  return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
 }
 
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
