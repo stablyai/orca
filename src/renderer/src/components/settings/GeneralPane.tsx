@@ -62,17 +62,22 @@ export function shouldShowProjectRuntimeSection(
   )
 }
 
+// Why: the row's own filter must match the same localized terms as the catalog that reveals the
+// section, or a non-English query shows the Navigation section with this row filtered out of it.
+function flattenNavigationSearchEntry(entry: GeneralSearchEntry | undefined): string[] {
+  return entry ? [entry.title, entry.description ?? '', ...(entry.keywords ?? [])] : []
+}
+
 export function getTabOrderControlSearchKeywords(
   navigationEntries: GeneralSearchEntry[] = getGeneralNavigationSearchEntries()
 ): string[] {
-  const tabOrderSearchEntry = navigationEntries[0]
-  return tabOrderSearchEntry
-    ? [
-        tabOrderSearchEntry.title,
-        tabOrderSearchEntry.description ?? '',
-        ...(tabOrderSearchEntry.keywords ?? [])
-      ]
-    : []
+  return flattenNavigationSearchEntry(navigationEntries[0])
+}
+
+export function getAutoHideSingleTabStripSearchKeywords(
+  navigationEntries: GeneralSearchEntry[] = getGeneralNavigationSearchEntries()
+): string[] {
+  return flattenNavigationSearchEntry(navigationEntries[2])
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -117,6 +122,9 @@ export function GeneralPane({
       activeRuntimeTarget.environmentId === sourceDefaultsSupportedRuntimeEnvironmentId)
   const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
   const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
+  const autoHideStripKeywords = getAutoHideSingleTabStripSearchKeywords(
+    generalNavigationSearchEntries
+  )
   const projectRuntimeSearchEntries = wslSupportedPlatform
     ? getGeneralProjectRuntimeSearchEntries()
     : []
@@ -167,7 +175,7 @@ export function GeneralPane({
             'auto.components.settings.GeneralPane.autoHideSingleTabStripDescription',
             'Collapse the tab bar until you hover the top edge of the pane.'
           )}
-          keywords={['tab', 'tab bar', 'hide', 'auto hide', 'single', 'strip']}
+          keywords={autoHideStripKeywords}
         >
           <SettingsSwitchRow
             label={translate(
