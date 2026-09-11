@@ -37,6 +37,7 @@ const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   copilot: 'sessionStart',
   hermes: 'pre_llm_call',
   devin: 'UserPromptSubmit',
+  zcode: 'UserPromptSubmit',
   opencode: 'SessionStart',
   'mimo-code': null,
   'command-code': null
