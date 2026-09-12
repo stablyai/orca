@@ -1,3 +1,4 @@
+import { sanitizeToolInput } from './native-chat-tool-input-sanitize'
 import {
   MAX_SUBAGENT_FIELD_CHARS,
   normalizeSubagentState
@@ -21,8 +22,6 @@ const MOBILE_BLOCK_CHAR_CAP = 4000
 // record can legally reach 2MB, and shipping that much markdown in one block
 // would freeze the phone.
 const MOBILE_TEXT_BLOCK_CHAR_CAP = 64_000
-const MOBILE_TOOL_INPUT_ITEMS_CAP = 20
-const MOBILE_TOOL_INPUT_NODE_CAP = 100
 // Why: a spawn group's roster is metadata, not a body — provider-supplied agent
 // paths and an open-string lifecycle whose schema declares no maximum, so a
 // journal from a newer build can carry more children and longer strings than
@@ -55,8 +54,7 @@ export function sanitizeNativeChatRpcBlock(
       : block
   }
   if (block.type === 'tool-call') {
-    const budget = { remaining: MOBILE_BLOCK_CHAR_CAP, nodes: MOBILE_TOOL_INPUT_NODE_CAP }
-    return { ...block, input: sanitizeToolInput(block.input, budget, 0) }
+    return { ...block, input: sanitizeToolInput(block.input) }
   }
   if (block.type === 'subagent-group') {
     return {
@@ -79,57 +77,4 @@ export function sanitizeNativeChatRpcBlock(
  *  what `unverifiable` records — clipping it would ship a truncated word. */
 function clipSubagentState(value: NativeChatSubagentState): NativeChatSubagentState {
   return value.length > MAX_SUBAGENT_FIELD_CHARS ? normalizeSubagentState(value) : value
-}
-
-function sanitizeToolInput(
-  value: unknown,
-  budget: { remaining: number; nodes: number },
-  depth: number
-): unknown {
-  budget.nodes--
-  if (budget.nodes < 0 || budget.remaining <= 0) {
-    return '… (truncated)'
-  }
-  if (typeof value === 'string') {
-    const length = Math.min(value.length, budget.remaining)
-    budget.remaining -= length
-    return length < value.length ? `${value.slice(0, length)}… (truncated)` : value
-  }
-  if (!value || typeof value !== 'object' || depth >= 5) {
-    return value && typeof value === 'object' ? '… (truncated)' : value
-  }
-  if (Array.isArray(value)) {
-    const result = value
-      .slice(0, MOBILE_TOOL_INPUT_ITEMS_CAP)
-      .map((item) => sanitizeToolInput(item, budget, depth + 1))
-    if (value.length > MOBILE_TOOL_INPUT_ITEMS_CAP) {
-      result.push('… (truncated)')
-    }
-    return result
-  }
-  const result: Record<string, unknown> = {}
-  let count = 0
-  for (const key in value) {
-    if (!Object.hasOwn(value, key)) {
-      continue
-    }
-    if (count >= MOBILE_TOOL_INPUT_ITEMS_CAP || budget.remaining <= 0) {
-      result['…'] = 'truncated'
-      break
-    }
-    let boundedKey = key.slice(0, Math.min(key.length, budget.remaining, 128))
-    // Why: sibling keys sharing a >=128-char (or budget-truncated) prefix collapse
-    // to the same bounded key; suffix collisions so neither field is silently lost.
-    if (Object.hasOwn(result, boundedKey)) {
-      boundedKey = `${boundedKey}~${count}`
-    }
-    budget.remaining -= boundedKey.length
-    result[boundedKey] = sanitizeToolInput(
-      (value as Record<string, unknown>)[key],
-      budget,
-      depth + 1
-    )
-    count++
-  }
-  return result
 }

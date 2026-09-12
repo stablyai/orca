@@ -299,6 +299,40 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(JSON.stringify(input)).toContain('truncated')
   })
 
+  it.each([false, true])(
+    'preserves late tool metadata through readSession string=%s',
+    async (string) => {
+      const source = { content: 'x'.repeat(5000), file_path: 'src/exact-target.ts' }
+      cachedResult.value = {
+        messages: [
+          {
+            ...makeMessage('ignored'),
+            blocks: [
+              {
+                type: 'tool-call',
+                name: 'Write',
+                input: string ? JSON.stringify(source) : source
+              }
+            ]
+          }
+        ]
+      }
+      const result = await readSessionHandler()(
+        { agent: 'codex', sessionId: 's' },
+        ctxWith('mobile')
+      )
+      const message = JSON.parse(
+        JSON.stringify((result as { messages: NativeChatMessage[] }).messages[0])
+      )
+      const input = message.blocks[0].input
+      expect(typeof input).toBe(string ? 'string' : 'object')
+      const projected = string ? JSON.parse(input) : input
+      expect(projected.file_path).toBe(source.file_path)
+      expect(projected.content).toContain('truncated')
+      expect(JSON.stringify(projected).length).toBeLessThan(5000)
+    }
+  )
+
   // The roster block reached mobile through a bare fall-through, uncapped, on the
   // one path that exists to keep the payload off the phone.
   it('bounds a spawn-group roster before sending it to mobile', async () => {
@@ -402,7 +436,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(encoded).toContain('truncated')
   })
 
-  it('keeps sibling tool-call keys that share a 128-char prefix distinct', async () => {
+  it('omits oversized sibling keys without renaming either key', async () => {
     const prefix = 'p'.repeat(128)
     cachedResult.value = {
       messages: [
@@ -427,9 +461,8 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     }
     const keys = Object.keys(block.input)
 
-    expect(keys).toHaveLength(2)
-    expect(new Set(keys).size).toBe(2)
-    expect(Object.values(block.input)).toEqual(expect.arrayContaining(['first', 'second']))
+    expect(keys).toEqual(['…'])
+    expect(block.input).toEqual({ '…': 'truncated' })
   })
 
   it('passes oversized tool output through intact for runtime (web/desktop) clients', async () => {

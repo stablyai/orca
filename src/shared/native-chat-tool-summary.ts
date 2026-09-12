@@ -1,3 +1,10 @@
+import {
+  defineToolInputValue,
+  ownToolInputValue,
+  ownToolArgParts,
+  selectToolInputPath,
+  TOOL_PRIMARY_KEYS
+} from './native-chat-tool-input-metadata'
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 
@@ -11,15 +18,7 @@ const MAX_TOOL_RUN_SUMMARY_PARTS = 3
 // `directory` is a scan root or a listed folder — it labels a row but is
 // deliberately absent from the file-target keys below, because a folder reaches
 // mobile as a tappable open-file link that can only fail.
-const PRIMARY_ARG_KEYS = [
-  'query',
-  'pattern',
-  'directory',
-  'command',
-  'cmd',
-  'url',
-  'description'
-] as const
+const PRIMARY_ARG_KEYS = TOOL_PRIMARY_KEYS
 const BRIEF_ARG_KEYS = ['query', 'pattern', 'directory', 'command', 'cmd'] as const
 // Only the keys that hold a shell command, so a search term or a listed folder
 // cannot stand in for one.
@@ -70,7 +69,7 @@ function describeNormalizedToolInput(input: unknown, path: string | null): strin
   if (path) {
     return summarizeToolPath(path)
   }
-  if (input && typeof input === 'object') {
+  if (isToolInputRecord(input)) {
     // Concrete target/action first; prose `description` only as a last resort.
     const primary = firstPrimaryToolArg(input as Record<string, unknown>, PRIMARY_ARG_KEYS)
     if (primary) {
@@ -132,30 +131,30 @@ export function toolFilePath(input: unknown): string | null {
 }
 
 function normalizedToolFilePath(input: unknown): string | null {
-  if (!input || typeof input !== 'object') {
+  if (!isToolInputRecord(input)) {
     return null
   }
-  const value = input as Record<string, unknown>
-  // A search call's `path` is usually the directory it scanned, so taking it as a
-  // target would label the row with the scan root and link to a folder. Costs the
-  // link on a file-scoped search; a dead link on every other search is worse.
-  const directory = isSearchToolInput(value) ? undefined : value.path
-  const path =
-    value.file_path ??
-    value.filePath ??
-    directory ??
-    value.notebook_path ??
-    firstPatchChangePath(value)
+  const selection = selectToolInputPath(
+    (key) => ownToolInputValue(input, key),
+    () => isSearchToolInput(input),
+    () => firstPatchChangePath(input)
+  )
+  const path = selection && selection !== 'unknown' ? selection.value : undefined
   return typeof path === 'string' && path.length > 0 ? path : null
 }
 
 function firstPatchChangePath(value: Record<string, unknown>): unknown {
-  if (!Array.isArray(value.changes)) {
+  const changes = ownToolInputValue(value, 'changes')
+  if (!Array.isArray(changes)) {
     return undefined
   }
-  for (const change of value.changes) {
-    if (typeof change === 'object' && change !== null && typeof change.path === 'string') {
-      return change.path
+  for (let index = 0; index < changes.length; index++) {
+    const change = ownToolInputValue(changes, index)
+    if (change !== null && typeof change === 'object') {
+      const path = ownToolInputValue(change, 'path')
+      if (typeof path === 'string') {
+        return path
+      }
     }
   }
   return undefined
@@ -163,7 +162,7 @@ function firstPatchChangePath(value: Record<string, unknown>): unknown {
 
 export function briefToolArg(input: unknown): string {
   const normalized = normalizeToolInput(input)
-  if (normalized && typeof normalized === 'object') {
+  if (isToolInputRecord(normalized)) {
     const path = toolFilePath(normalized)
     if (path) {
       const parts = path.split(/[\\/]/).filter(Boolean)
@@ -177,7 +176,7 @@ export function briefToolArg(input: unknown): string {
     // A blank primary key means the call has no brief argument; falling through
     // would stand its raw JSON in for one in the run header. Reaching here with a
     // string key means it was blank — a structured one still earns the preview.
-    if (BRIEF_ARG_KEYS.some((key) => typeof value[key] === 'string')) {
+    if (BRIEF_ARG_KEYS.some((key) => typeof ownToolInputValue(value, key) === 'string')) {
       return ''
     }
   }
@@ -218,7 +217,8 @@ function normalizeToolInput(input: unknown): unknown {
  *  rather than a file target. */
 function isSearchToolInput(value: Record<string, unknown>): boolean {
   return (
-    summarizePrimaryToolArg(value.query) !== null || summarizePrimaryToolArg(value.pattern) !== null
+    summarizePrimaryToolArg(ownToolInputValue(value, 'query')) !== null ||
+    summarizePrimaryToolArg(ownToolInputValue(value, 'pattern')) !== null
   )
 }
 
@@ -229,7 +229,7 @@ function firstPrimaryToolArg(
   keys: readonly string[]
 ): string | null {
   for (const key of keys) {
-    const summary = summarizePrimaryToolArg(value[key])
+    const summary = summarizePrimaryToolArg(ownToolInputValue(value, key))
     if (summary) {
       return summary
     }
@@ -255,8 +255,9 @@ function summarizePrimaryToolArg(input: unknown): string | null {
   if (typeof input === 'string' && input.trim()) {
     return summarizeToolInput(input)
   }
-  if (Array.isArray(input) && input.length > 0 && input.every((part) => typeof part === 'string')) {
-    return summarizeToolInput(input.join(' '))
+  const parts = ownToolArgParts(input)
+  if (parts) {
+    return summarizeToolInput(parts.join(' '))
   }
   return null
 }
@@ -325,7 +326,9 @@ function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object
       : value
   }
   if (!value || typeof value !== 'object') {
-    return value
+    return typeof value === 'function' || typeof value === 'symbol' || typeof value === 'bigint'
+      ? undefined
+      : value
   }
   if (seen.has(value)) {
     return '[circular]'
@@ -335,9 +338,10 @@ function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object
   }
   seen.add(value)
   if (Array.isArray(value)) {
-    const result = value
-      .slice(0, MAX_PREVIEW_COLLECTION_ITEMS)
-      .map((item) => boundedPreviewValue(item, depth + 1, seen))
+    const result: unknown[] = []
+    for (let index = 0; index < Math.min(value.length, MAX_PREVIEW_COLLECTION_ITEMS); index++) {
+      result.push(boundedPreviewValue(ownToolInputValue(value, index), depth + 1, seen))
+    }
     if (value.length > MAX_PREVIEW_COLLECTION_ITEMS) {
       result.push('…')
     }
@@ -350,10 +354,16 @@ function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object
       continue
     }
     if (count >= MAX_PREVIEW_COLLECTION_ITEMS) {
-      result['…'] = '…'
+      if (!Object.hasOwn(value, '…')) {
+        defineToolInputValue(result, '…', '…')
+      }
       break
     }
-    result[key] = boundedPreviewValue((value as Record<string, unknown>)[key], depth + 1, seen)
+    const descriptor = Object.getOwnPropertyDescriptor(value, key)
+    if (!descriptor || !('value' in descriptor)) {
+      continue
+    }
+    defineToolInputValue(result, key, boundedPreviewValue(descriptor.value, depth + 1, seen))
     count += 1
   }
   return result
