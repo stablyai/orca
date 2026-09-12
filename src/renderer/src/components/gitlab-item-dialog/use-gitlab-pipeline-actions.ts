@@ -5,6 +5,7 @@ import type { GitLabPipelineJob, GitLabWorkItem } from '../../../../shared/gitla
 import { showGitLabMutationError } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { routedGitLab } from '@/runtime/gitlab-runtime-routing'
 
 export function useGitLabPipelineActions(
   item: GitLabWorkItem | null,
@@ -37,7 +38,7 @@ export function useGitLabPipelineActions(
         [job.id]: { loading: true }
       }))
       try {
-        const result = await window.api.gl.jobTrace({
+        const result = await routedGitLab.jobTrace({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
@@ -82,7 +83,7 @@ export function useGitLabPipelineActions(
       }
       setRetryingJobId(job.id)
       try {
-        const result = await window.api.gl.retryJob({
+        const result = await routedGitLab.retryJob({
           ...repoSelector,
           jobId: job.id,
           projectRef: details?.item.projectRef ?? item.projectRef ?? null
