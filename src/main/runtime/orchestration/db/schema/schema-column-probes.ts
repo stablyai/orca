@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../orchestration-db'
+import { OUTSTANDING_MAILBOX_INDEX_SQL } from './migrate-v41'
 
 export function hasColumn(this: OrchestrationDb, table: string, column: string): boolean {
   const rows = this.db.pragma(`table_info(${table})`) as { name: string }[]
@@ -6,13 +7,8 @@ export function hasColumn(this: OrchestrationDb, table: string, column: string):
 }
 
 export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): void {
-  if (this.hasColumn('deliveries', 'mailbox_handle') && this.hasColumn('deliveries', 'status')) {
-    // Excluding '' trades the pre-v34 per-run one-outstanding backstop for downgraded binaries; the
-    // app-level BEGIN IMMEDIATE still serializes one process.
-    this.db.exec(`
-      CREATE UNIQUE INDEX IF NOT EXISTS idx_deliveries_one_outstanding
-        ON deliveries(mailbox_handle) WHERE status = 'outstanding' AND mailbox_handle != '';
-    `)
+  if (this.hasColumn('deliveries', 'mailbox_handle')) {
+    this.db.exec(OUTSTANDING_MAILBOX_INDEX_SQL)
   }
   const hasDeliveredAt = this.hasColumn('messages', 'delivered_at')
   if (hasDeliveredAt) {

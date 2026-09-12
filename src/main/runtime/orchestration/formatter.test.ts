@@ -187,7 +187,7 @@ describe('formatMessagesForInjection', () => {
 describe('formatMessagePointer', () => {
   it('formats a singular pointer without message content', () => {
     expect(formatMessagePointer(1, 'run:run_1')).toBe(
-      '\n[Orca orchestration notification] You have 1 orchestration message. Run `orca orchestration check --run run_1`.\n'
+      '\nYou have 1 orchestration message. Run `orca orchestration check --run run_1`.\n'
     )
   })
 

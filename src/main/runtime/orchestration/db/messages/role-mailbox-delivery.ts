@@ -132,13 +132,16 @@ export function acknowledgeMailboxDelivery(
         `Delivery ${params.deliveryId} does not belong to this mailbox. --ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.`
       )
     }
-    if (delivery.consumer_generation !== params.consumerGeneration || delivery.fenced === 1) {
+    if (
+      delivery.consumer_generation !== params.consumerGeneration ||
+      delivery.status === 'fenced'
+    ) {
       throw new OrchestrationError(
         'consumer_fenced',
         'This mailbox Delivery belongs to a fenced consumer generation.'
       )
     }
-    if (delivery.acknowledged_at !== null) {
+    if (delivery.status === 'acknowledged') {
       this.db.exec('COMMIT')
       return { delivery: exposeDeliveryTimestamps(delivery), duplicate: true }
     }
@@ -155,7 +158,9 @@ export function acknowledgeMailboxDelivery(
         .run(...messageIds)
     }
     this.db
-      .prepare("UPDATE deliveries SET acknowledged_at = datetime('now') WHERE id = ?")
+      .prepare(
+        "UPDATE deliveries SET status = 'acknowledged', acknowledged_at = datetime('now') WHERE id = ?"
+      )
       .run(delivery.id)
     const acknowledged = this.getDeliveryRaw(delivery.id) as DeliveryRow
     this.db.exec('COMMIT')
@@ -183,8 +188,7 @@ export function fenceUnacknowledgedMailboxDeliveries(
 ): void {
   this.db
     .prepare(
-      `UPDATE deliveries SET fenced = 1
-       WHERE mailbox_handle = ? AND acknowledged_at IS NULL AND fenced = 0`
+      "UPDATE deliveries SET status = 'fenced' WHERE mailbox_handle = ? AND status = 'outstanding'"
     )
     .run(mailboxHandle)
 }

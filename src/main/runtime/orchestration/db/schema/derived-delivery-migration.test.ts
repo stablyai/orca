@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration-db'
-import { restoreV40DeliverySchema } from './delivery-v40-test-fixture'
+import { dropDerivedDeliverySchema } from './derived-delivery-test-fixture'
 import { resolveOrchestrationMigrationStartVersion } from '../../orchestration-schema-version-skew'
 import { createRootDispatch } from '../root-dispatch-test-fixture'
 import { SCHEMA_VERSION } from '../contract-constants'
@@ -55,7 +55,7 @@ describe('derived delivery migration', () => {
     })
     connections.pop()!.close()
     const raw = new Database(path)
-    restoreV40DeliverySchema(raw)
+    dropDerivedDeliverySchema(raw)
     raw.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(old.id)
     raw.exec(`
       INSERT INTO deliveries (id, run_id, mailbox_handle, consumer_generation, message_ids, status, created_at, acknowledged_at)
@@ -69,9 +69,12 @@ describe('derived delivery migration', () => {
     expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
     expect(db.getDeliveryRaw('history_ack')).toMatchObject({
       acknowledged_at: '2026-01-02 00:00:00',
-      fenced: 0
+      status: 'acknowledged'
     })
-    expect(db.getDeliveryRaw('history_fence')).toMatchObject({ acknowledged_at: null, fenced: 1 })
+    expect(db.getDeliveryRaw('history_fence')).toMatchObject({
+      acknowledged_at: null,
+      status: 'fenced'
+    })
     expect(() => db.acknowledgeRunDelivery({ ...params, deliveryId: 'history_fence' })).toThrow(
       expect.objectContaining({ code: 'consumer_fenced' })
     )
@@ -104,16 +107,18 @@ describe('derived delivery migration', () => {
     const params = { runId: run.id, consumerGeneration: run.consumer_generation }
     const first = db.getDeliveryRaw(db.getOrCreateRunDelivery(params)!.delivery.id)!
     const insert = db.db.prepare(`INSERT INTO deliveries
-      (id, run_id, mailbox_handle, consumer_generation, message_ids, acknowledged_at, fenced)
+      (id, run_id, mailbox_handle, consumer_generation, message_ids, acknowledged_at, status)
       VALUES (?, ?, ?, ?, ?, ?, ?)`)
     const values = [run.id, `run:${run.id}`, run.consumer_generation, JSON.stringify([message.id])]
-    expect(() => insert.run('duplicate', ...values, null, 0)).toThrow(
+    expect(() => insert.run('duplicate', ...values, null, 'outstanding')).toThrow(
       'Mailbox already has an outstanding delivery'
     )
-    expect(() => insert.run('ack_history', ...values, '2026-01-01 00:00:00', 0)).not.toThrow()
-    expect(() => insert.run('fenced_history', ...values, null, 1)).not.toThrow()
+    expect(() =>
+      insert.run('ack_history', ...values, '2026-01-01 00:00:00', 'acknowledged')
+    ).not.toThrow()
+    expect(() => insert.run('fenced_history', ...values, null, 'fenced')).not.toThrow()
     db.markAsRead([message.id])
-    expect(() => insert.run('consumed_history', ...values, null, 0)).not.toThrow()
+    expect(() => insert.run('consumed_history', ...values, null, 'outstanding')).not.toThrow()
     expect(db.getDeliveryRaw(first.id)).toEqual(first)
     expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
   })
@@ -143,7 +148,7 @@ describe('derived delivery migration', () => {
       coordinatorPaneKey: 'other:22222222-2222-4222-9222-222222222222'
     })!
     expect(first.getDeliveryRaw(batch.delivery.id)).toMatchObject({
-      fenced: 1,
+      status: 'fenced',
       acknowledged_at: null
     })
     first.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject: 'next' })
@@ -219,7 +224,7 @@ describe('derived delivery migration', () => {
         })
       }
       expect(db.getDeliveryRaw(batch.delivery.id)).toMatchObject({
-        fenced: 1,
+        status: 'fenced',
         acknowledged_at: null
       })
       peer.insertMessage({ runId: run.id, from: 'coord', to: mailboxHandle, subject: 'next' })
@@ -234,6 +239,22 @@ describe('derived delivery migration', () => {
       ).toBe('next')
     }
   )
+
+  it('keeps the pre-v41 column and index shape a downgraded binary reads', () => {
+    const db = open(':memory:')
+    expect(
+      (db.db.pragma('table_info(deliveries)') as { name: string }[]).map((c) => c.name)
+    ).toContain('status')
+    const index = db.db
+      .prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_deliveries_one_outstanding'")
+      .get() as { sql: string }
+    expect(index.sql).not.toContain('UNIQUE')
+    expect(index.sql).toContain("status = 'outstanding' AND mailbox_handle != ''")
+    // Why: a v40 binary probes exactly these objects before trusting the stamp; nothing it needs is gone.
+    expect(resolveOrchestrationMigrationStartVersion(db.db, SCHEMA_VERSION, 40)).toBe(
+      SCHEMA_VERSION
+    )
+  })
 
   it('recreates a missing derived view on reopen without changing batch records', () => {
     const path = databasePath()

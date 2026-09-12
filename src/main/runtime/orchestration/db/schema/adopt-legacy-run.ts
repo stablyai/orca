@@ -57,10 +57,8 @@ export function adoptLegacyRunIfNeeded(this: OrchestrationDb): void {
 
   this.db
     .prepare(
-      this.hasColumn('deliveries', 'status')
-        ? `UPDATE deliveries SET status = 'fenced' WHERE run_id = ? AND status = 'outstanding'`
-        : `UPDATE deliveries SET fenced = 1
-           WHERE run_id = ? AND acknowledged_at IS NULL AND fenced = 0`
+      `UPDATE deliveries SET status = 'fenced'
+       WHERE run_id = ? AND status = 'outstanding'`
     )
     .run(LEGACY_RUN_ID)
   for (const table of [

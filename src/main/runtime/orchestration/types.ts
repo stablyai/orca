@@ -52,13 +52,15 @@ export type RunRow = {
   updated_at: string
 }
 
+export type DeliveryStatus = 'outstanding' | 'acknowledged' | 'fenced'
+
 export type DeliveryRow = {
   id: string
   run_id: string
   mailbox_handle: string | null
   consumer_generation: number
   message_ids: string
-  fenced: number
+  status: DeliveryStatus
   created_at: string
   acknowledged_at: string | null
 }

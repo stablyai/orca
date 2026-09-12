@@ -118,5 +118,5 @@ export function formatMessagePointer(
   const runFlag = mailboxHandle?.startsWith('run:')
     ? ` --run ${mailboxHandle.slice('run:'.length)}`
     : ''
-  return `\n[Orca orchestration notification] You have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
+  return `\nYou have ${count} orchestration ${noun}. Run \`${cliCommand} orchestration check${runFlag}\`.\n`
 }

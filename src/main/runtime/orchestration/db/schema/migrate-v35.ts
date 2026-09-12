@@ -40,15 +40,13 @@ export function migrateV35(this: OrchestrationDb, current: number): void {
     DROP TABLE IF EXISTS lifecycle_transition_receipts;
     ${ADDITIVE_LIFECYCLE_DELETE_TRIGGERS_SQL}
   `)
-  if (this.hasColumn('deliveries', 'status')) {
-    rebuildDeliveriesWithMailboxDefault.call(this)
-    recreateIndexMissingPredicate.call(
-      this,
-      'idx_deliveries_one_outstanding',
-      "mailbox_handle != ''",
-      ONE_OUTSTANDING_INDEX_SQL
-    )
-  }
+  rebuildDeliveriesWithMailboxDefault.call(this)
+  recreateIndexMissingPredicate.call(
+    this,
+    'idx_deliveries_one_outstanding',
+    "mailbox_handle != ''",
+    ONE_OUTSTANDING_INDEX_SQL
+  )
   recreateIndexMissingPredicate.call(
     this,
     'idx_messages_pending_pointer_enter',

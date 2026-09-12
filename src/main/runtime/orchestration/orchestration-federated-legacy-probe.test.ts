@@ -69,9 +69,9 @@ describe('federated mailbox legacy-adoption probe', () => {
         })
       } else {
         expect(
-          db.db.prepare("SELECT fenced FROM deliveries WHERE id = 'delivery_probe'").get()
+          db.db.prepare("SELECT status FROM deliveries WHERE id = 'delivery_probe'").get()
         ).toEqual({
-          fenced: 0
+          status: 'outstanding'
         })
       }
     }
@@ -115,9 +115,9 @@ describe('federated mailbox legacy-adoption probe', () => {
         })
       } else {
         expect(
-          db.db.prepare("SELECT fenced FROM deliveries WHERE id = 'delivery_probe'").get()
+          db.db.prepare("SELECT status FROM deliveries WHERE id = 'delivery_probe'").get()
         ).toEqual({
-          fenced: 1
+          status: 'fenced'
         })
       }
     }

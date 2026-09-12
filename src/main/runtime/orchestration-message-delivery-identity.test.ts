@@ -237,10 +237,10 @@ describe('STA-4325 message and delivery identity', () => {
     expect(all.count).toBe(3)
 
     const deliveryRowsBeforeAck = sqliteFor(db)
-      .prepare('SELECT id, acknowledged_at, message_ids FROM deliveries ORDER BY rowid')
+      .prepare('SELECT id, status, message_ids FROM deliveries ORDER BY rowid')
       .all() as { id: string; status: string; message_ids: string }[]
     expect(deliveryRowsBeforeAck).toEqual([
-      { id: first.deliveryId, acknowledged_at: null, message_ids: JSON.stringify(expectedIds) }
+      { id: first.deliveryId, status: 'outstanding', message_ids: JSON.stringify(expectedIds) }
     ])
     for (const id of expectedIds) {
       expect(db.getMessageById(id)).toMatchObject({ to_handle: `run:${run.id}`, read: 0 })
@@ -258,9 +258,9 @@ describe('STA-4325 message and delivery identity', () => {
       expect.arrayContaining(expectedIds)
     )
     expect(acknowledgedHistory.count).toBe(3)
-    expect(
-      sqliteFor(db).prepare('SELECT id, acknowledged_at FROM deliveries ORDER BY rowid').all()
-    ).toEqual([{ id: first.deliveryId, acknowledged_at: expect.any(String) }])
+    expect(sqliteFor(db).prepare('SELECT id, status FROM deliveries ORDER BY rowid').all()).toEqual(
+      [{ id: first.deliveryId, status: 'acknowledged' }]
+    )
     for (const id of expectedIds) {
       expect(db.getMessageById(id)?.read).toBe(1)
     }
@@ -488,8 +488,8 @@ describe('STA-4325 message and delivery identity', () => {
           deliveryId: firstPayload.result.deliveryId,
           replayed: true
         })
-        expect(sqliteFor(db).prepare('SELECT id, acknowledged_at FROM deliveries').all()).toEqual([
-          { id: firstPayload.result.deliveryId, acknowledged_at: null }
+        expect(sqliteFor(db).prepare('SELECT id, status FROM deliveries').all()).toEqual([
+          { id: firstPayload.result.deliveryId, status: 'outstanding' }
         ])
         expect(db.getMessageById(status.id)).toMatchObject({
           to_handle: `run:${run.id}`,

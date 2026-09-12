@@ -1,19 +1,11 @@
 # Orchestration delivery storage
 
-A message records whether it still needs attention (`read`). A delivery records a stable batch ID, ordered message IDs, mailbox, consumer generation, and creation time. Acknowledgement time records receipt. Fencing permanently revokes an unacknowledged batch when its consumer is replaced or legacy ownership is adopted, independently of message reads. Historical adoption can revoke a batch without changing its generation, so generation validation alone cannot replace this fact. There is no stored delivery status.
+A message records whether it still needs attention (`read`). A delivery is a stable batch receipt: ID, ordered message IDs, mailbox, consumer generation, creation time, and `status`. `status` only records terminal facts written by an explicit event: `acknowledged` when the consumer acks, `fenced` when the consumer is replaced or legacy ownership is adopted. `outstanding` means neither has happened; it does not mean the batch is still eligible.
 
-`outstanding_deliveries` is a SQLite view, not a table or cached projection. It selects batches that have not been acknowledged or fenced and still contain unread messages. Both consuming checks and notification eligibility query this view.
+Eligibility is derived, never stored. `outstanding_deliveries` is a SQLite view over batches that are `outstanding` and still contain at least one unread message. Consuming checks, replay, notification pointers, and the single-active-batch insert trigger all read this view. When lifecycle reconciliation marks a heartbeat read, its batch stops appearing without any delivery write, so a later `worker_done` is never hidden behind it. A partially read batch still replays its complete original membership under the same ID.
 
-When completion makes an earlier heartbeat obsolete, only the message changes. Its batch stops appearing in the view without a second write. Checking an old database with a fully read heartbeat batch requires no repair operation. A partially read batch still replays its complete original membership under the same ID.
+Creation and acknowledgement run under `BEGIN IMMEDIATE` and validate the current consumer inside that transaction: Run coordinators against the Run generation, workers against their local Dispatch or federated attachment, chosen explicitly by the caller because a loopback runtime has both. Worker validation also requires a live lifecycle state, so a settled worker cannot consume mail awaiting rerouting; remote states with unverifiable liveness stay eligible.
 
-Acknowledgement marks the batch's messages read and records `acknowledged_at` in one transaction. A first explicit acknowledgement after lifecycle suppression records the actual event; subsequent acknowledgements are idempotent. Suppression never invents an acknowledgement timestamp. An acknowledgement cannot consume newer messages outside the batch.
+## Compatibility
 
-Creation and acknowledgement use `BEGIN IMMEDIATE` and validate the current consumer inside that transaction. Worker validation also checks lifecycle state under the same lock, so a settled worker cannot consume mail awaiting rerouting. Run coordinators use the Run generation. Workers use the generation on their local Dispatch or federated attachment, according to the caller's existing routing. Loopback federation can contain both records, so the source is explicit. The insertion constraint consults the same view to prevent two outstanding batches in a mailbox, while allowing historical batches.
-
-## Migration and compatibility
-
-Schema v41 removes `deliveries.status` and its partial unique index. It preserves batch IDs, ordered membership, mailbox addresses, generations, creation times, and acknowledgement times. The old fenced status becomes a boolean fencing fact. The new view replaces stored eligibility; an insertion trigger replaces the old uniqueness backstop.
-
-This is a one-way local database upgrade for shipped versions that query the removed status column. Those versions cannot open the upgraded database. Rolling the app back requires a compatible pre-upgrade database backup; this migration does not create a backup. A future reverse migration would need to materialize the old status before using an older binary.
-
-Mixed client/server versions are a different boundary. The existing check RPC returns delivery IDs and messages, not the storage row's status. Its response shape and acknowledgement commands remain compatible, including on SSH and federated worker hosts. This migration is owned by the runtime that opens the database, not by a paired client.
+Schema v41 drops the unique constraint from `idx_deliveries_one_outstanding` (name and predicate unchanged) and adds the view and trigger. No column changes. An older binary that opens a v41 database keeps working: it sees a higher `user_version` and skips migration, its `status` queries still resolve, and the index it expects still exists.

@@ -113,7 +113,8 @@ export function applySchemaMigrationsV2ToV12(this: OrchestrationDb, current: num
           created_at            TEXT NOT NULL DEFAULT (datetime('now')),
           acknowledged_at       TEXT
         );
-        ${this.hasColumn('deliveries', 'fenced') ? '' : `CREATE UNIQUE INDEX IF NOT EXISTS idx_deliveries_one_outstanding ON deliveries(run_id) WHERE status = 'outstanding';`}
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_deliveries_one_outstanding
+          ON deliveries(run_id) WHERE status = 'outstanding';
     CREATE INDEX IF NOT EXISTS idx_deliveries_run_created
       ON deliveries(run_id, created_at);
 

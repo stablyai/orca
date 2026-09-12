@@ -70,7 +70,7 @@ describe('dispatch mailbox consumer fencing', () => {
     })
     const generationB = generationOf(dispatch.id)
     expect(generationB).toBe(generationA + 1)
-    expect(db.getDeliveryRaw(deliveryA!.delivery.id)?.fenced).toBe(1)
+    expect(db.getDeliveryRaw(deliveryA!.delivery.id)?.status).toBe('fenced')
 
     expect(() =>
       db.acknowledgeMailboxDelivery({
@@ -151,7 +151,7 @@ describe('dispatch mailbox consumer fencing', () => {
     })
 
     expect(generationOf(dispatchId)).toBe(1)
-    expect(db.getDeliveryRaw(stale!.delivery.id)?.fenced).toBe(1)
+    expect(db.getDeliveryRaw(stale!.delivery.id)?.status).toBe('fenced')
   })
 
   it('gives a federated attachment its own generation on the worker host', () => {
@@ -192,7 +192,7 @@ describe('dispatch mailbox consumer fencing', () => {
     })
 
     expect(db.getRemoteDispatchAttachment(dispatchId)?.consumer_generation).toBe(1)
-    expect((db.getDeliveryRaw(stale!.delivery.id) as DeliveryRow).fenced).toBe(1)
+    expect((db.getDeliveryRaw(stale!.delivery.id) as DeliveryRow).status).toBe('fenced')
   })
 
   it('starts a retry Dispatch on a fresh mailbox address rather than sharing the old one', () => {

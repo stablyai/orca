@@ -112,7 +112,7 @@ describe('OrchestrationDb legacy contract storage', () => {
     ).toMatchObject({
       run_id: adoptedRunId,
       mailbox_handle: `run:${LEGACY_RUN_ID}`,
-      fenced: 1
+      status: 'fenced'
     })
     expect(db.getDispatchContextById(fixture.currentDispatchId)).toMatchObject({
       run_id: fixture.currentRunId,

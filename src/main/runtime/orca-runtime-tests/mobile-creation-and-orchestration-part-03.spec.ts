@@ -62,7 +62,7 @@ describe('OrcaRuntimeService', () => {
         .map(([, data]) => data)
         .filter((data): data is string => typeof data === 'string')
       expect(payloads).toContain(
-        '\n[Orca orchestration notification] You have 1 orchestration message. Run `orca-dev orchestration check --run run_test`.\n'
+        '\nYou have 1 orchestration message. Run `orca-dev orchestration check --run run_test`.\n'
       )
       expect(payloads.some((data) => data.includes('reserved completion'))).toBe(false)
       expect(status.delivered_at).toEqual(expect.any(String))

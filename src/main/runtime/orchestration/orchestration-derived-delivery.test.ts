@@ -23,13 +23,6 @@ describe('delivery eligibility derived from messages', () => {
     return { run, params, message, first }
   }
 
-  it('does not store delivery status', () => {
-    setup()
-    expect(
-      (db.db.pragma('table_info(deliveries)') as { name: string }[]).map((c) => c.name)
-    ).not.toContain('status')
-  })
-
   it.each(['read mutation', 'lifecycle suppression', 'direct SQL'])(
     '%s changes eligibility without updating the batch',
     (path) => {
