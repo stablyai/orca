@@ -260,7 +260,10 @@ function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentSt
     writeSecureJsonFileWithinLimit(
       path,
       RuntimeEnvironmentStoreSchema.parse(store),
-      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
+      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
+      // Why: without the fsync, a crash can publish this name over unflushed bytes, and the
+      // NUL-filled file that survives blocks every later save.
+      { durable: true }
     )
   } catch (error) {
     if (error instanceof JsonStringifyByteLimitError) {
