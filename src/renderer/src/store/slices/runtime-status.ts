@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RuntimeStatusSlice } from './runtime-status-types'
 export type { RuntimeEnvironmentStatus, RuntimeStatusSlice } from './runtime-status-types'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
 import {
   clearRecentRuntimeCompatibilityFailure,
@@ -169,7 +170,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     if (previous?.snapshot && !status.snapshot) {
       return
     }
-    const previousVerifiedStatus = previous?.snapshot?.status ?? previous?.status
+    const previousVerifiedStatus = lastVerifiedRuntimeStatus(previous)
     const pairedDeviceId = status.status?.pairedDeviceId?.trim()
     // A new runtime id under a known previous one is a restart, not a first connect: the guests are
     // still ours to host, but only a fresh attach hands them back to the replacement runtime.
@@ -197,7 +198,13 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       // already issued against this very connection — a startup worktree scan that had
       // already answered was discarded, leaving those repos absent until an unrelated
       // refresh (#19241).
-      const connectionChanged = runtimeSessionStarted && previous !== undefined
+      // Why also on a same-runtime return: regaining contact is a new connection epoch, and
+      // it is the session mirror's "the host is back" trigger. The mirror used to be rebuilt
+      // as a side effect of having been destroyed when contact was lost; now that it is held
+      // through the outage, only this edge restores its subscription.
+      const reconnectedAfterLostContact = status.status !== null && previous?.status === null
+      const connectionChanged =
+        previous !== undefined && (runtimeSessionStarted || reconnectedAfterLostContact)
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
       const connectionGeneration = connectionChanged
         ? runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(
@@ -287,24 +294,25 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   },
 
   refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
-    refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (entry) => {
-      if (entry.snapshot) {
-        get().applyRuntimeHostStatusSnapshot(entry.snapshot)
-        return
-      }
-      // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
-      // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
-      get().setRuntimeEnvironmentStatus(environmentId, entry)
-      if (entry.status) {
-        // Why here: hydration can ask before the environment is reachable, and a restored
-        // client-hosted page only comes back once this desktop attaches as its host.
-        void ensureBrowserClientHostsForRestoredPages(get())
-        // Why alongside: the same restart that hands those rows back also restores rows the user
-        // already closed while this environment was down, so the closes it never heard have to be
-        // replayed before its persisted records can put them on screen again.
-        void replayClientHostedBrowserCloseIntents(environmentId, get())
-      }
-    }),
+    refreshRuntimeEnvironmentStatus(
+      environmentId,
+      timeoutMs,
+      (entry) => {
+        // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
+        // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
+        get().setRuntimeEnvironmentStatus(environmentId, entry)
+        if (entry.status) {
+          // Why here: hydration can ask before the environment is reachable, and a restored
+          // client-hosted page only comes back once this desktop attaches as its host.
+          void ensureBrowserClientHostsForRestoredPages(get())
+          // Why alongside: the same restart that hands those rows back also restores rows the user
+          // already closed while this environment was down, so the closes it never heard have to be
+          // replayed before its persisted records can put them on screen again.
+          void replayClientHostedBrowserCloseIntents(environmentId, get())
+        }
+      },
+      (snapshot) => get().applyRuntimeHostStatusSnapshot(snapshot)
+    ),
 
   hydrateRuntimeEnvironmentStatuses: createRuntimeStatusHydration({
     listEnvironments: () => window.api.runtimeEnvironments.list(),

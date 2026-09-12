@@ -17,6 +17,16 @@ export type RuntimeHostStatusSnapshot = {
   retired?: true
 }
 
+/**
+ * The last status the host actually answered with. The snapshot retains it across an
+ * unverifiable probe, so this survives a loss of contact; the entry's own `status` does not.
+ */
+export function lastVerifiedRuntimeStatus<Status = RuntimeStatus>(
+  entry: { status?: Status | null; snapshot?: { status: Status | null } | null } | null | undefined
+): Status | null {
+  return entry?.snapshot?.status ?? entry?.status ?? null
+}
+
 export type RuntimeHostStatusResponse = RuntimeRpcResponse<RuntimeStatus>
 
 export function runtimeHostStatusFailure(code: string, message: string): RuntimeRpcFailure {

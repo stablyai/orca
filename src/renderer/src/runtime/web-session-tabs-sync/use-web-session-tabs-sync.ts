@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
+import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
 import { useAppStore } from '../../store'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '../../lib/worktree-runtime-owner'
 import { useRuntimeSessionMirrorEnvironmentKey } from '../use-runtime-session-mirror-environment-key'
@@ -35,11 +36,14 @@ export function useWebSessionTabsSync(): void {
     getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
   )
   // Keep this subscription dependency: a runtime reconnect can retain the same environment id
-  // while replacing its runtime instance, which must restart the scoped stream.
+  // while replacing its runtime instance, which must restart the scoped stream. Read the last
+  // identity the host answered with, not `entry.status` — an unverifiable probe nulls that and
+  // cold-rebuilt this stream for a host that was still delivering.
   const activeWorktreeRuntimeId = useAppStore((state) => {
     const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
     return environmentId
-      ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.status?.runtimeId ?? null)
+      ? (lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(environmentId))
+          ?.runtimeId ?? null)
       : null
   })
   const activeWorktreeRuntimeConnectionGeneration = useAppStore((state) => {
