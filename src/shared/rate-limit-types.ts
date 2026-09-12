@@ -115,6 +115,13 @@ export type GrokAccountStatus = {
   error: string | null
 }
 
+export type AntigravityAccountStatus = {
+  signedIn: boolean
+  email: string | null
+  tokenFresh: boolean
+  error: string | null
+}
+
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null

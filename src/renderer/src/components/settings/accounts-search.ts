@@ -96,28 +96,29 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
+export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
-      'auto.components.settings.accounts.search.d819755b02',
-      'Use Gemini CLI credentials'
+      'auto.components.settings.accounts.search.antigravityTitle',
+      'Antigravity CLI Quota'
     ),
     description: translate(
-      'auto.components.settings.accounts.search.bada4a3218',
-      'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.'
+      'auto.components.settings.accounts.search.antigravityDescription',
+      'Sign-in and rate limits via Antigravity CLI for model quota usage.'
     ),
     keywords: [
-      ...translateSearchKeyword('auto.components.settings.accounts.search.e8e1ff3887', 'gemini'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.antigravity',
+        'antigravity'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.agy', 'agy'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.8630464352', 'cli'),
       ...translateSearchKeyword('auto.components.settings.accounts.search.933deaf732', 'oauth'),
       ...translateSearchKeyword(
         'auto.components.settings.accounts.search.7118d2f908',
         'credentials'
       ),
-      ...translateSearchKeyword(
-        'auto.components.settings.accounts.search.b7c2cee442',
-        'experimental'
-      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
       ...translateSearchKeyword(
         'auto.components.settings.accounts.search.e949b08ffb',
         'rate limit'
@@ -220,7 +221,7 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
-  ...getAccountsGeminiSearchEntries(),
+  ...getAccountsAntigravitySearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
   ...getAccountsGrokSearchEntries()

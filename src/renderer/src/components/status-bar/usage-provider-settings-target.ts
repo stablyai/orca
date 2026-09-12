@@ -8,18 +8,17 @@ export function getUsageProviderAccountsSectionId(
       return 'accounts-claude'
     case 'codex':
       return 'accounts-codex'
-    case 'gemini':
     case 'antigravity':
-      // Why: Antigravity usage currently shares Gemini's OAuth configuration.
-      return 'accounts-gemini'
+      return 'accounts-antigravity'
     case 'opencode-go':
       return 'accounts-opencode-go'
     case 'minimax':
       return 'accounts-minimax'
     case 'grok':
       return 'accounts-grok'
+    case 'gemini':
     case 'kimi':
-      // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle.
+      // Why: Orca must not mutate Kimi's CLI-owned credential lifecycle; Gemini is removed.
       return null
   }
 }

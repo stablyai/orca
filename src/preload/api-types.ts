@@ -1,5 +1,6 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
+  AntigravityAccountsApi,
   ClaudeAccountsApi,
   CodexAccountsApi,
   CodexConfigSyncApi,
@@ -141,6 +142,7 @@ export type PreloadApi = {
   rateLimits: RateLimitsApi
   minimaxCredentials: MinimaxCredentialsApi
   grokAccounts: GrokAccountsApi
+  antigravityAccounts: AntigravityAccountsApi
   ssh: SshApi
   automations: AutomationsApi
   wsl: RuntimeApi['wsl']

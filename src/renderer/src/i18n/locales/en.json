@@ -363,7 +363,10 @@
             "36761d9604": "Unknown keybinding action \"{{value0}}\" was ignored.",
             "d2e43e426a": "{{value0}} must be an object.",
             "fb290366b2": "Unavailable on web.",
-            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}"
+            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}",
+            "webAgentAccounts": {
+              "antigravityUnsupported": "Not available in web client"
+            }
           }
         },
         "runtime": {
@@ -8867,7 +8870,11 @@
             "b2c4e7f1a8": "endpoint",
             "3a9b6d2c4e": "api key",
             "5d8f1a3b7c": "china",
-            "7e2a4b8c1d": "overseas"
+            "7e2a4b8c1d": "overseas",
+            "agy": "agy",
+            "antigravity": "antigravity",
+            "antigravityDescription": "Sign-in and rate limits via Antigravity CLI for model quota usage.",
+            "antigravityTitle": "Antigravity CLI Quota"
           }
         },
         "advanced": {
@@ -11841,6 +11848,31 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "AntigravityAccountsSection": {
+          "title": "Antigravity CLI",
+          "description": "Configure Antigravity CLI provider settings and monitor quota.",
+          "loading": "Loading…",
+          "signedIn": "Signed in",
+          "signedInDetail": "Signed in. Orca reads the Antigravity CLI credentials stored on disk.",
+          "staleTokenDetail": "Credentials may need refresh — run agy in your terminal if quota updates fail.",
+          "notSignedIn": "Not signed in to Antigravity CLI",
+          "signInPrompt": "In a terminal, run agy login, then click Refresh quota here.",
+          "refreshQuota": "Refresh quota",
+          "enableOAuthTitle": "Use Antigravity CLI credentials",
+          "enableOAuthDescription": "Extracts OAuth credentials from your local Antigravity CLI installation to query model rate limits and quota.",
+          "enableOAuthLabel": "Enable Antigravity CLI quota tracking",
+          "enableOAuthSubtext": "Extracts OAuth credentials from your local Antigravity CLI installation to query model rate limits and quota for {{value0}}.",
+          "modelQuota": "Model Quota",
+          "sessionQuota": "Session Quota",
+          "sessionWindow": "5-Hour Window",
+          "resetsAt": "Resets {{when}}",
+          "usedPercent": "{{value0}}% used",
+          "managedAccounts": "Google Accounts",
+          "addAccount": "Add Google account",
+          "managedAccountsEmpty": "No Orca-managed accounts. Add one to track quota per Google account (sub2api-style), or keep using the local Antigravity CLI credentials below.",
+          "managedAccountNoData": "No quota data yet",
+          "removeAccount": "Remove account {{email}}"
         }
       },
       "right": {

@@ -93,3 +93,15 @@ export type ClaudeManagedAccountRuntimeSelection = {
   host: string | null
   wsl: Record<string, string | null>
 }
+
+/** A Google account signed in to Antigravity through Orca's own OAuth flow
+ *  (sub2api-style multi-account). Settings holds only metadata; the tokens
+ *  live in the main-process safeStorage vault. */
+export type AntigravityManagedAccount = {
+  id: string
+  email: string
+  projectId: string
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}

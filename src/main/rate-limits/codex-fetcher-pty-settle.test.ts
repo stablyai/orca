@@ -33,6 +33,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    vi.stubGlobal('fetch', vi.fn())
     resolveCodexCommandMock.mockReturnValue('codex')
   })
 

@@ -63,6 +63,7 @@ import { registerAgentTrustHandlers } from '../agent-trust'
 import { registerClaudeAccountHandlers } from '../claude-accounts'
 import { registerMiniMaxCredentialsHandlers } from '../minimax-credentials'
 import { registerGrokAccountHandlers } from '../grok-accounts'
+import { registerAntigravityAccountHandlers } from '../antigravity-accounts'
 import { registerUpdaterHandlers } from '../../window/attach-main-window-services'
 import {
   registerClipboardHandlers,
@@ -148,6 +149,10 @@ export function registerCoreHandlers(
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()
+  registerAntigravityAccountHandlers({
+    getSettings: () => store.getSettings(),
+    updateSettings: (patch) => store.updateSettings(patch)
+  })
   registerRateLimitHandlers(rateLimits, codexAccounts)
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)
