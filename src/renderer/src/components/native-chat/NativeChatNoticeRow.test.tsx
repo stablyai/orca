@@ -49,6 +49,7 @@ describe('notice rows', () => {
       'text-sm',
       'text-foreground'
     )
+    expect(screen.getByRole('heading', { name: 'Steps' }).parentElement).toHaveClass('tabular-nums')
   })
   it('shows provider notice text once while retaining its diagnostic disclosure', () => {
     renderStatus({
