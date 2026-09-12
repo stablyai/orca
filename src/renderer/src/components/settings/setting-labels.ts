@@ -4,6 +4,8 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalFontSize: 'Font Size',
   terminalFontFamily: 'Font Family',
   editorFontFamily: 'Editor Font Family',
+  editorFontWeight: 'Editor Font Weight',
+  editorLineHeight: 'Editor Line Height',
   terminalFontWeight: 'Font Weight',
   terminalLineHeight: 'Line Height',
   terminalScrollSensitivity: 'Normal Scroll Speed',

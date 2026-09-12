@@ -4,7 +4,11 @@ import type { editor } from 'monaco-editor'
 import { installMonacoEditorFindShortcut } from '@/components/editor/editor-shortcuts'
 import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monaco-content-sync'
 import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import {
+  computeEditorFontSize,
+  resolveEditorFontFamily,
+  resolveEditorFontWeight
+} from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import '@/lib/monaco-setup'
 import { useAppStore } from '@/store'
@@ -74,6 +78,7 @@ export function AutomationEditorPromptEditor({
 
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const fontFamily = resolveEditorFontFamily(settings)
+  const fontWeight = resolveEditorFontWeight(settings)
   const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
   const options = useMemo(
     () =>
@@ -81,9 +86,10 @@ export function AutomationEditorPromptEditor({
         ariaLabel,
         fontFamily,
         fontSize,
+        fontWeight,
         placeholder
       }),
-    [ariaLabel, fontFamily, fontSize, placeholder]
+    [ariaLabel, fontFamily, fontSize, fontWeight, placeholder]
   )
 
   const handleChange = useCallback(

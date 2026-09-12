@@ -52,6 +52,11 @@ export function buildDefaultSettings(args: {
     editorMinimapEnabled: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
+    // Why zero: the editor keeps following the terminal font weight unless the user opts in.
+    editorFontWeight: 0,
+    // Why zero: Monaco reads 0 as "compute from the font size", so the editor keeps its
+    // current spacing until the user opts in instead of silently re-flowing every file.
+    editorLineHeight: 0,
     editorWordWrap: true,
     richMarkdownSpellcheckEnabled: true,
     markdownReviewToolsEnabled: true,

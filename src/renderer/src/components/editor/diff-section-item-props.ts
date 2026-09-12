@@ -12,6 +12,8 @@ export type DiffSectionItemProps = {
   settings: {
     terminalFontSize?: number
     terminalFontFamily?: string
+    terminalFontWeight?: number
+    editorFontWeight?: number
     diffWordWrap?: boolean
     diffShowWhitespace?: boolean
   } | null

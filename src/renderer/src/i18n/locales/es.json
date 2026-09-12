@@ -8407,7 +8407,11 @@
             "editorFontFamily": "Fuente del editor",
             "editorFontFamilyDesc": "Fuente utilizada por los editores de archivos y vistas de diferencias. Dejar vacío para seguir la fuente de la terminal.",
             "externalWorktrees": "Worktrees externos",
-            "externalWorktreesDescription": "Elige si los worktrees creados fuera de Orca aparecen de forma predeterminada."
+            "externalWorktreesDescription": "Elige si los worktrees creados fuera de Orca aparecen de forma predeterminada.",
+            "editorFontWeight": "Peso de fuente del editor",
+            "editorFontWeightDesc": "Peso utilizado por los editores de archivos y vistas de diferencias. Dejar vacío para seguir el peso de fuente de la terminal.",
+            "editorLineHeight": "Interlineado del editor",
+            "editorLineHeightDesc": "Espaciado entre líneas en los editores de archivos, como múltiplo del tamaño de fuente. Dejar vacío para mantener el valor predeterminado del editor."
           }
         },
         "git": {
@@ -9860,6 +9864,14 @@
           "title": "Fuente del editor",
           "description": "Fuente utilizada por los editores de archivos y vistas de diferencias. Dejar vacío para seguir la fuente de la terminal.",
           "placeholder": "Igual que la fuente de la terminal"
+        },
+        "EditorFontWeightSetting": {
+          "title": "Peso de fuente del editor",
+          "description": "Peso utilizado por los editores de archivos y vistas de diferencias. Dejar vacío para seguir el peso de fuente de la terminal."
+        },
+        "EditorLineHeightSetting": {
+          "title": "Interlineado del editor",
+          "description": "Espaciado entre líneas en los editores de archivos, como múltiplo del tamaño de fuente. Dejar vacío para mantener el valor predeterminado del editor."
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

@@ -4,7 +4,11 @@ import type { editor as monacoEditor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
 import { detectLanguage } from '@/lib/language-detect'
 import { useAppStore } from '@/store'
-import { computeDiffEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import {
+  computeDiffEditorFontSize,
+  resolveEditorFontFamily,
+  resolveEditorFontWeight
+} from '@/lib/editor-font-zoom'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useDiffCommentDecorator } from '../diff-comments/useDiffCommentDecorator'
 import {
@@ -375,6 +379,7 @@ export function DiffSectionItem({
           diffWordWrap={settings?.diffWordWrap}
           diffShowWhitespace={settings?.diffShowWhitespace}
           editorFontFamily={resolveEditorFontFamily(settings)}
+          editorFontWeight={resolveEditorFontWeight(settings)}
           onCancelComment={() => setPopover(null)}
           onSubmitComment={handleSubmitComment}
           onRetrySection={retrySection}
