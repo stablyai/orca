@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
+import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
@@ -181,6 +182,23 @@ export function CommentRow({
     <div className="flex shrink-0 items-center gap-0.5">
       {presentation.useCardLayout ? null : queueButton}
       {hoverActions}
+      {/* Why: outside hoverActions so the link stays visible (and focusable) without hover. */}
+      {comment.url ? (
+        <button
+          type="button"
+          className="shrink-0 rounded p-1 text-muted-foreground/40 transition-colors hover:bg-accent hover:text-foreground"
+          title={translate(
+            'auto.components.right.sidebar.checks.panel.content.d3923d18fe',
+            'Go to comment'
+          )}
+          onClick={(event) => {
+            event.stopPropagation()
+            void window.api.shell.openUrl(comment.url)
+          }}
+        >
+          <ExternalLink className="size-3" />
+        </button>
+      ) : null}
     </div>
   ) : null
 
