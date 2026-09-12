@@ -636,13 +636,14 @@ describe('browserManager', () => {
   })
 
   // Why: a plain browsing tab must never attach a debugger (Cloudflare treats CDP as a bot signal);
-  // the only debugger wiring it keeps is the detach listener that invalidates the auth-host UA override.
+  // the only debugger wiring it keeps is detach + DevTools-close listeners, never an attach.
   it('never attaches a debugger to a browsing guest and drops its detach listener on unregister', () => {
     const debuggerHandlers = new Map<string, () => void>()
     const debuggerAttachMock = vi.fn()
     const guest = {
       id: 809,
       isDestroyed: vi.fn(() => false),
+      isDevToolsOpened: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       setBackgroundThrottling: guestSetBackgroundThrottlingMock,
       setWindowOpenHandler: guestSetWindowOpenHandlerMock,
@@ -676,9 +677,11 @@ describe('browserManager', () => {
     expect(debuggerAttachMock).not.toHaveBeenCalled()
     expect(guest.debugger.sendCommand).not.toHaveBeenCalled()
     expect(debuggerHandlers.has('detach')).toBe(true)
+    expect(guestOnMock).toHaveBeenCalledWith('devtools-closed', expect.any(Function))
 
     browserManager.unregisterGuest('browser-no-debugger')
     expect(debuggerHandlers.has('detach')).toBe(false)
+    expect(guestOffMock).toHaveBeenCalledWith('devtools-closed', expect.any(Function))
     expect(debuggerAttachMock).not.toHaveBeenCalled()
   })
 })
