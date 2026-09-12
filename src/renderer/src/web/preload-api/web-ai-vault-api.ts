@@ -1,3 +1,4 @@
+import { createSessionSearchClient } from '../../../../shared/ai-vault-search-client'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   AiVaultPrepareSessionResumeArgs,
@@ -20,7 +21,23 @@ import { noopUnsubscribe } from './web-storage'
 import { translate } from '@/i18n/i18n'
 
 export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
+  const search = createSessionSearchClient(
+    (method, params) => callRuntimeResult(method, params),
+    'relay'
+  )
   return {
+    searchSessions: (request, sshTargetId) => {
+      if (sshTargetId !== undefined) {
+        return Promise.reject(new Error('Select the transcript-owning runtime for search'))
+      }
+      return search.searchSessions(request)
+    },
+    searchStatus: (sshTargetId) => {
+      if (sshTargetId !== undefined) {
+        return Promise.reject(new Error('Select the transcript-owning runtime for search'))
+      }
+      return search.searchStatus()
+    },
     listSessions: (args?: AiVaultListArgs) => {
       const environment = requireActiveEnvironment()
       const executionHostId = toRuntimeExecutionHostId(environment.id)

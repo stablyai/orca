@@ -449,6 +449,14 @@ export class SshRelaySession {
     }
   }
 
+  async requestSessionSearch(method: string, params: Record<string, unknown>): Promise<unknown> {
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    return mux.request(method, params, { timeoutMs: 15_000 })
+  }
+
   async requestAiVaultSessionList(
     params: SshAiVaultRelayListParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}

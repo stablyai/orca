@@ -1,3 +1,4 @@
+import { registerAiVaultSearchHandlers } from './ai-vault-search'
 import { app, ipcMain } from 'electron'
 import {
   configureAiVaultSessionSources,
@@ -270,6 +271,7 @@ async function scanLocalAiVaultSessions(
 }
 
 export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): void {
+  registerAiVaultSearchHandlers()
   handlerOptions = options
   // Why: configure the SAME shared cache module the runtime RPC method uses so
   // there is exactly one cache instance and neither caller drops codex-home or
