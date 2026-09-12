@@ -5,21 +5,30 @@ export function getClaudeDailyTotal(entry: ClaudeUsageDailyPoint): number {
   return entry.inputTokens + entry.outputTokens + entry.cacheReadTokens + entry.cacheWriteTokens
 }
 
-function getIntensity(totalTokens: number, maxTokens: number): 0 | 1 | 2 | 3 | 4 {
-  if (totalTokens <= 0 || maxTokens <= 0) {
-    return 0
-  }
-  const ratio = totalTokens / maxTokens
-  if (ratio <= 0.25) {
-    return 1
-  }
-  if (ratio <= 0.5) {
-    return 2
-  }
-  if (ratio <= 0.75) {
-    return 3
-  }
-  return 4
+type UsageIntensity = 0 | 1 | 2 | 3 | 4
+
+/**
+ * Rank-based intensity: each non-zero level holds a quarter of the active days.
+ *
+ * Why: daily volume spans orders of magnitude across providers, so a linear
+ * ramp against the single best day left most active days at the faintest
+ * level and indistinguishable from idle ones.
+ * @param totals - Token totals of every day, zero for idle days.
+ * @returns Intensity per index of `totals`; idle days stay 0, the best day is 4.
+ */
+export function rankUsageIntensities(totals: number[]): UsageIntensity[] {
+  const active = totals.filter((total) => total > 0).sort((left, right) => left - right)
+  return totals.map((total) => {
+    if (total <= 0) {
+      return 0
+    }
+    // Ties share the higher rank so equal days never render differently.
+    let atOrBelow = active.length
+    while (atOrBelow > 0 && active[atOrBelow - 1] > total) {
+      atOrBelow -= 1
+    }
+    return Math.max(1, Math.ceil((atOrBelow / active.length) * 4)) as UsageIntensity
+  })
 }
 
 export function countActiveDays(days: string[]): number {
@@ -69,18 +78,9 @@ export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDail
     byDay.set(entry.day, current)
   }
 
-  let maxTokens = 0
-  // Why: usage history can be large enough to exceed V8's argument limit if
-  // every day is spread into Math.max.
-  for (const entry of byDay.values()) {
-    maxTokens = Math.max(maxTokens, entry.totalTokens)
-  }
-  return [...byDay.values()]
-    .sort((left, right) => left.day.localeCompare(right.day))
-    .map((entry) => ({
-      ...entry,
-      intensity: getIntensity(entry.totalTokens, maxTokens)
-    }))
+  const entries = [...byDay.values()].sort((left, right) => left.day.localeCompare(right.day))
+  const intensities = rankUsageIntensities(entries.map((entry) => entry.totalTokens))
+  return entries.map((entry, index) => ({ ...entry, intensity: intensities[index] ?? 0 }))
 }
 
 function formatLocalDay(date: Date): string {
