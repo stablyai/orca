@@ -34,6 +34,7 @@ vi.mock('lucide-react-native', () => ({
   ArrowDown: 'ArrowDown',
   ChevronsDownUp: 'ChevronsDownUp',
   ChevronsUpDown: 'ChevronsUpDown',
+  CornerLeftUp: 'CornerLeftUp',
   Square: 'Square'
 }))
 
@@ -259,6 +260,82 @@ describe('MobileNativeChatView', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('floating jump control', () => {
+    const prompt: NativeChatMessage = {
+      id: 'u1',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'explain' }],
+      timestamp: 0,
+      source: 'transcript'
+    }
+
+    function list(): ReactTestInstance {
+      return renderer!.root.find((node) => node.type === 'FlatList')
+    }
+
+    function jumpControls(): string[] {
+      return renderer!.root
+        .findAll(
+          (node) =>
+            node.type === 'Pressable' &&
+            ['Scroll to latest', 'Scroll to prompt'].includes(node.props.accessibilityLabel)
+        )
+        .map((node) => node.props.accessibilityLabel as string)
+    }
+
+    async function reportViewable(...keys: string[]): Promise<void> {
+      await act(async () => {
+        list().props.onViewableItemsChanged({
+          viewableItems: keys.map((key) => ({ key, index: null, isViewable: true, item: null })),
+          changed: []
+        })
+      })
+    }
+
+    async function scrollAwayFromBottom(): Promise<void> {
+      await act(async () => {
+        list().props.onScroll({
+          nativeEvent: {
+            contentOffset: { y: 400 },
+            contentSize: { height: 2000 },
+            layoutMeasurement: { height: 600 }
+          }
+        })
+      })
+    }
+
+    it('offers the prompt at the bottom of a reply taller than the screen', async () => {
+      const folded = [prompt, assistantTurn('a1', 'long answer')]
+      await render({ messages: folded, folded })
+      expect(jumpControls()).toEqual([])
+
+      await reportViewable('a1')
+      expect(jumpControls()).toEqual(['Scroll to prompt'])
+
+      await reportViewable('u1', 'a1')
+      expect(jumpControls()).toEqual([])
+    })
+
+    it('swaps to Scroll to latest away from the bottom, never showing both', async () => {
+      const folded = [prompt, assistantTurn('a1', 'long answer')]
+      await render({ messages: folded, folded })
+      await reportViewable('a1')
+
+      await scrollAwayFromBottom()
+
+      expect(jumpControls()).toEqual(['Scroll to latest'])
+    })
+
+    it('stays hidden when the loaded transcript has no prompt', async () => {
+      const folded = [assistantTurn('a1', 'paged in mid-session')]
+      await render({ messages: folded, folded })
+
+      await reportViewable('a1')
+
+      expect(jumpControls()).toEqual([])
+    })
   })
 
   describe('structured turn status wiring', () => {
