@@ -176,8 +176,15 @@ export function PierreDiffSurface({
   })
   // Why layout and not render: Pierre treats a new onPostRender identity as forceRender, so the
   // callback below must stay stable and read its chain from here. Writing during render is impure
-  // -- React can discard that work. useRef seeds the first render's chain, and this effect is
-  // declared before every consumer's own effects, so each Pierre post-render sees current values.
+  // -- React can discard that work.
+  //
+  // This does NOT guarantee a fresh chain on every emit, and it cannot: Pierre renders from its
+  // own layout effect in a child, and children commit before parents, so an emit can read the
+  // previous cycle's callbacks. useRef seeds the first mount. What keeps that harmless is that
+  // FileDiff.render early-returns without emitting when the diff, annotations, theme and range are
+  // all unchanged, so search-only and note-target-only updates never reach a stale chain. The one
+  // overlap -- content changing while a search is active -- can paint a frame of stale ranges; the
+  // next results tick corrects it.
   useLayoutEffect(() => {
     postRenderRef.current = {
       onPostRender,
