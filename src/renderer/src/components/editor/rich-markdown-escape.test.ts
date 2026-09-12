@@ -52,6 +52,22 @@ const ESCAPES_INSIDE_MARKS = [
   ['~~s\\*t~~']
 ]
 
+const ADJACENT_ESCAPES = [
+  ['\\*\\_'],
+  ['\\#\\%'],
+  ['a\\*\\*b'],
+  ['\\[x\\]\\[y\\]'],
+  ['\\~\\~strike\\~\\~'],
+  ['\\*\\*\\*']
+]
+
+/** Each row pairs a source with the characters the document shows for it. */
+const ADJACENT_ESCAPE_TEXT = [
+  ['\\*\\_', '*_'],
+  ['a\\*\\*b', 'a**b'],
+  ['a\\\\\\*b', 'a\\*b']
+]
+
 describe('backslash escape round trip', () => {
   it.each(ESCAPES)('preserves %j', (source) => {
     expect(roundTrip(source)).toBe(source)
@@ -72,6 +88,24 @@ describe('backslash escape round trip', () => {
   it('preserves an escape inside a list item and a heading', () => {
     const source = '# 100\\% done\n\n- Veri\\*Factu'
     expect(roundTrip(source)).toBe(source)
+  })
+})
+
+describe('adjacent escapes', () => {
+  it.each(ADJACENT_ESCAPES)('gives %j each escape its own backslash', (source) => {
+    expect(roundTrip(source)).toBe(source)
+  })
+
+  it.each(ADJACENT_ESCAPES)('keeps %j stable across three cycles', (source) => {
+    let current = source
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      current = roundTrip(current)
+    }
+    expect(current).toBe(source)
+  })
+
+  it.each(ADJACENT_ESCAPE_TEXT)('shows %j as %j', (source, text) => {
+    expect(documentText(source)).toBe(text)
   })
 })
 

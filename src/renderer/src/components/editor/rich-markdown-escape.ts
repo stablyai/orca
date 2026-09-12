@@ -1,17 +1,58 @@
 import { Mark } from '@tiptap/core'
+import { createMarkBoundaryWalkExtension } from './rich-markdown-mark-boundary-walk'
+import type { MarkdownNodeLike } from './rich-markdown-mark-boundary-walk'
+
+export const ESCAPE_MARK_NAME = 'richMarkdownEscape'
 
 const SOURCE_ATTRIBUTE = 'data-orca-markdown-escape-source'
 const MARKER_ATTRIBUTE = 'data-rich-markdown-escape'
 
+function escapeMarkOf(
+  node: MarkdownNodeLike
+): { type?: string; attrs?: Record<string, unknown> } | undefined {
+  if (node?.type !== 'text') {
+    return undefined
+  }
+  return (node.marks ?? []).find(
+    (mark): mark is { type?: string; attrs?: Record<string, unknown> } =>
+      typeof mark !== 'string' && mark?.type === ESCAPE_MARK_NAME
+  )
+}
+
 /**
- * Backslashes the escape carries ahead of its character. `source` is the escape's
- * original bytes and its last code unit is the character itself, which the marked
- * text node already holds, so only the run before it belongs to the prefix.
+ * The escape's original bytes, which carry one backslash per escaped character.
+ * A text node whose mark lost its attrs falls back to escaping what it holds.
  */
-function escapePrefix(node: { attrs?: Record<string, unknown> }): string {
-  const source = String(node.attrs?.source ?? '')
-  const prefix = source.slice(0, -1)
-  return /^\\+$/.test(prefix) ? prefix : '\\'
+function escapeSource(node: MarkdownNodeLike, mark: { attrs?: Record<string, unknown> }): string {
+  const source = String(mark.attrs?.source ?? '')
+  const text = node.text ?? ''
+  return source || Array.from(text, (character) => `\\${character}`).join('')
+}
+
+/**
+ * Rewrites each escaped text node to its original bytes and joins runs that sit
+ * next to each other. The boundary walk keys active marks by type and compares
+ * mark sets by type alone, so consecutive escape marks read as one continuous run
+ * and only the first one's delimiter is emitted. Carrying every backslash in the
+ * text rather than in a delimiter is what keeps each escape its own.
+ */
+export function expandEscapeSources(nodes: MarkdownNodeLike[]): MarkdownNodeLike[] {
+  const expanded: MarkdownNodeLike[] = []
+  for (const node of nodes) {
+    const mark = escapeMarkOf(node)
+    if (!mark) {
+      expanded.push(node)
+      continue
+    }
+    const text = escapeSource(node, mark)
+    const previous = expanded.at(-1)
+    if (previous && escapeMarkOf(previous)) {
+      expanded[expanded.length - 1] = { ...previous, text: (previous.text ?? '') + text }
+      continue
+    }
+    expanded.push({ ...node, text })
+  }
+  return expanded
 }
 
 /**
@@ -22,12 +63,13 @@ function escapePrefix(node: { attrs?: Record<string, unknown> }): string {
  * `\_x\_` back as emphasis. A mark rather than a node because the serializer's
  * boundary walk carries marks across text nodes only, so an inline node between
  * two marked runs closes and reopens the surrounding link or emphasis.
+ * `expandEscapeSources` puts the backslashes back on the way out.
  */
 export const RichMarkdownEscape = Mark.create({
-  name: 'richMarkdownEscape',
+  name: ESCAPE_MARK_NAME,
   inclusive: false,
-  // Why: two adjacent escapes keep separate source bytes, so merging them would
-  // emit one character's backslash for both.
+  // Why: two adjacent escapes keep separate source bytes, so merging them in the
+  // document would lose one character's backslash.
   spanning: false,
 
   addAttributes() {
@@ -47,12 +89,11 @@ export const RichMarkdownEscape = Mark.create({
     if (!source || !text) {
       return []
     }
-    return helpers.applyMark('richMarkdownEscape', [helpers.createTextNode(text)], { source })
+    return helpers.applyMark(ESCAPE_MARK_NAME, [helpers.createTextNode(text)], { source })
   },
-  // Why: the serializer derives a mark's delimiters by rendering it around a
-  // placeholder and splitting there, so the backslash has to precede the children
-  // rather than replace them.
-  renderMarkdown: (node, helpers) => `${escapePrefix(node)}${helpers.renderChildren(node)}`,
+  // Why: the escaped bytes travel in the text node, so the mark itself adds no
+  // delimiter; rendering no placeholder is what makes the walk emit none.
+  renderMarkdown: (node, helpers) => helpers.renderChildren(node),
 
   parseHTML() {
     return [{ tag: `span[${MARKER_ATTRIBUTE}]` }]
@@ -61,4 +102,10 @@ export const RichMarkdownEscape = Mark.create({
   renderHTML({ HTMLAttributes }) {
     return ['span', { ...HTMLAttributes, [MARKER_ATTRIBUTE]: '' }, 0]
   }
+})
+
+/** Puts each escape's backslashes back into the text the walk renders. */
+export const RichMarkdownEscapeSources = createMarkBoundaryWalkExtension({
+  name: 'richMarkdownEscapeSources',
+  rewriteNodes: expandEscapeSources
 })

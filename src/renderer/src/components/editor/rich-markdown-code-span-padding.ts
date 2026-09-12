@@ -1,4 +1,5 @@
-import { Extension } from '@tiptap/core'
+import { createMarkBoundaryWalkExtension } from './rich-markdown-mark-boundary-walk'
+import type { MarkdownNodeLike } from './rich-markdown-mark-boundary-walk'
 
 // Why: a private-use code point the serializer does not itself reserve — upstream
 // builds its mark-delimiter probe out of U+E000 and U+E001.
@@ -6,14 +7,6 @@ const PADDING_SENTINEL = String.fromCharCode(0xe002)
 // Why: the sentinel carries the code unit it hid, so a tab or a non-breaking space
 // comes back as itself rather than as an ASCII space.
 const MASKED_PADDING = new RegExp(`${PADDING_SENTINEL}([\\s\\S])${PADDING_SENTINEL}`, 'g')
-
-type MarkdownNodeLike = {
-  type?: string
-  text?: string
-  marks?: (string | { type?: string })[]
-}
-
-type BoundaryWalk = (nodes: MarkdownNodeLike[], ...rest: unknown[]) => unknown
 
 function hasCodeMark(node: MarkdownNodeLike): boolean {
   return (node.marks ?? []).some(
@@ -65,30 +58,10 @@ export function restoreCodeSpanPadding(markdown: string): string {
 }
 
 /**
- * Keeps a code span's padding inside its backticks. Registered at the lowest
- * priority so it runs after `Markdown` publishes the manager on the editor.
+ * Keeps a code span's padding inside its backticks.
  */
-export const RichMarkdownCodeSpanPadding = Extension.create({
+export const RichMarkdownCodeSpanPadding = createMarkBoundaryWalkExtension({
   name: 'richMarkdownCodeSpanPadding',
-  priority: 1,
-
-  onBeforeCreate() {
-    const manager = this.editor.markdown as unknown as Record<string, unknown> | undefined
-    if (!manager) {
-      return
-    }
-    const prototype = Object.getPrototypeOf(manager) as Record<string, unknown>
-    const walk = prototype.renderNodesWithMarkBoundaries as BoundaryWalk | undefined
-    if (typeof walk !== 'function') {
-      return
-    }
-    manager.renderNodesWithMarkBoundaries = function (
-      this: unknown,
-      nodes: MarkdownNodeLike[],
-      ...rest: unknown[]
-    ) {
-      const rendered = walk.call(this, maskCodeSpanPadding(nodes ?? []), ...rest)
-      return typeof rendered === 'string' ? restoreCodeSpanPadding(rendered) : rendered
-    } as BoundaryWalk
-  }
+  rewriteNodes: maskCodeSpanPadding,
+  rewriteOutput: restoreCodeSpanPadding
 })
