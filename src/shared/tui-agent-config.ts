@@ -225,6 +225,18 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
     preflightTrust: 'cursor'
   },
+  deepseek: {
+    detectCmd: 'deepseek',
+    // Why: the npm package installs both shims on PATH and the launcher runs as
+    // `deepseek-tui`, so without the alias PATH detection misses wrapped installs.
+    detectCmdAliases: ['deepseek-tui'],
+    // Why: `--skip-onboarding` stops the first-run onboarding flow from consuming the task text.
+    launchCmd: 'deepseek --skip-onboarding',
+    // Why: the `deepseek` dispatcher delegates the interactive session to a sibling
+    // `deepseek-tui` binary, so the foreground process is never named `deepseek`.
+    expectedProcess: 'deepseek-tui',
+    promptInjectionMode: 'stdin-after-start'
+  },
   droid: {
     detectCmd: 'droid',
     promptInjectionMode: 'argv',
