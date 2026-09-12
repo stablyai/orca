@@ -37,6 +37,7 @@ export type ChecksPanelManualRefreshInput = Pick<
   Pick<
     ChecksPanelContextState,
     | 'activeGitLabReview'
+    | 'activeReview'
     | 'fallbackGitHubPRNumber'
     | 'isFolder'
     | 'isGitLabReviewContext'
@@ -49,5 +50,5 @@ export type ChecksPanelManualRefreshInput = Pick<
     | 'prCacheKey'
     | 'prNumber'
   > &
-  Pick<ChecksPanelPollingState, 'fetchGitLabDetails'> &
+  Pick<ChecksPanelPollingState, 'fetchBitbucketDetails' | 'fetchGitLabDetails'> &
   Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'>

@@ -11903,7 +11903,9 @@
             "updateReactionFailed": "Failed to update reaction.",
             "gitlabMoreActions": "More MR actions",
             "gitlabUnlink": "Unlink MR",
-            "gitlabLinkAnother": "Link another MR"
+            "gitlabLinkAnother": "Link another MR",
+            "bitbucketCommentsDisabled": "Commenting requires a Bitbucket pull request.",
+            "bitbucketResolveUnsupported": "Resolving comments with AI is not supported for Bitbucket."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",

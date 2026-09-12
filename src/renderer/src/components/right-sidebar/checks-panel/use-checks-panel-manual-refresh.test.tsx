@@ -44,6 +44,7 @@ describe('useChecksPanelManualRefresh ordering', () => {
     const input: RefreshInput = {
       activeConnectionId: null,
       activeGitLabReview: null,
+      activeReview: null,
       activeWorktreeId: null,
       activeWorktreePath: null,
       activeWorktreePushTarget: null,
@@ -51,6 +52,7 @@ describe('useChecksPanelManualRefresh ordering', () => {
       branch: 'main',
       expireGitHubPRRefreshState: vi.fn(),
       fallbackGitHubPRNumber: null,
+      fetchBitbucketDetails: vi.fn(),
       fetchGitLabDetails: vi.fn(),
       fetchHostedReviewForBranch: vi.fn(),
       fetchPRChecks: vi.fn(async () => {

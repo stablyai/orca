@@ -30,6 +30,20 @@ function makeGitLabReview(overrides: Partial<HostedReviewInfo> = {}): HostedRevi
   }
 }
 
+function makeBitbucketReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo {
+  return {
+    provider: 'bitbucket',
+    number: 15,
+    title: 'Bitbucket PR',
+    state: 'open',
+    url: 'https://bitbucket.org/acme/widgets/pull-requests/15',
+    status: 'pending',
+    updatedAt: '2026-06-02T00:00:00Z',
+    mergeable: 'UNKNOWN',
+    ...overrides
+  }
+}
+
 describe('gitHubPRToChecksPanelReview', () => {
   // Why: the right-sidebar merge presenter reads these fields off the converted
   // review object. PR #4001 dropped them here, so review-required/merge-queue
@@ -73,6 +87,23 @@ describe('selectChecksPanelReview', () => {
         suppressedGitHubPR: null,
         linkedGitLabMR: 34,
         linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: null,
+        linkedGiteaPR: null
+      })
+    ).toBe(review)
+  })
+
+  it('uses Bitbucket hosted review metadata ahead of GitHub PR cache', () => {
+    const review = makeBitbucketReview({ number: 56 })
+
+    expect(
+      selectChecksPanelReview({
+        hostedReview: review,
+        pr: makePR({ number: 12 }),
+        linkedPR: null,
+        suppressedGitHubPR: null,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: 56,
         linkedAzureDevOpsPR: null,
         linkedGiteaPR: null
       })
