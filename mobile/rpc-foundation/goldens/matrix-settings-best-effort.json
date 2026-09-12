@@ -1,0 +1,496 @@
+{
+  "operation": "settings.task-preferences",
+  "family": "settings-best-effort",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "18f1dccead77f1301b82e8480c1eb1e29a88607b9fe096873a39f8863a09d632",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 2,
+  "values": {
+    "30dcc6c2791e": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true
+          }
+        }
+      }
+    ],
+    "5db909d58c6f": {
+      "preset": "assigned"
+    },
+    "86cae7d2eb05": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "transport failure",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "9c7e0ecdf09b": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": false
+            }
+          }
+        }
+      }
+    ],
+    "a11ef678ac34": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          }
+        }
+      }
+    ],
+    "a4cc6c82ee53": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "write": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "b26f6d594d62": [
+      {
+        "name": "defaultGitHubPreset",
+        "value": "assigned"
+      }
+    ],
+    "c48c361670b0": [
+      {
+        "name": "settings.update#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.update\",\"params\":{\"defaultTaskViewPreset\":\"assigned\"}}"
+      }
+    ],
+    "c8c488b25f28": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "$rpc": "null"
+            }
+          }
+        }
+      }
+    ],
+    "de2d142b9c07": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "error": {
+              "code": "refused",
+              "message": "outer refused"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      }
+    ],
+    "dfbe228314eb": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      }
+    ],
+    "e02c44633084": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "e4c31c436812": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "refused"
+            }
+          }
+        }
+      }
+    ],
+    "fe2d291961f4": [
+      {
+        "name": "settings.update#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.update"
+          },
+          {
+            "name": "params",
+            "value": {
+              "defaultTaskViewPreset": "assigned"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": false
+            }
+          }
+        }
+      }
+    ]
+  },
+  "recording": {
+    "scenario": "matrix-settings-best-effort",
+    "checkpoints": [
+      {
+        "id": "settings-task-write.prelude:optimistic",
+        "observation": {
+          "sender": "e02c44633084",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      },
+      {
+        "id": "settings-task-write.normal:settled",
+        "observation": {
+          "sender": "a11ef678ac34",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      },
+      {
+        "id": "settings-task-write.result-absent:settled",
+        "observation": {
+          "sender": "30dcc6c2791e",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      },
+      {
+        "id": "settings-task-write.result-null:settled",
+        "observation": {
+          "sender": "c8c488b25f28",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      },
+      {
+        "id": "settings-task-write.inner-ok-missing:settled",
+        "observation": {
+          "sender": "e4c31c436812",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      },
+      {
+        "id": "settings-task-write.inner-false-string-error:settled",
+        "observation": {
+          "sender": "9c7e0ecdf09b",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      },
+      {
+        "id": "settings-task-write.inner-false-object-error:settled",
+        "observation": {
+          "sender": "fe2d291961f4",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      },
+      {
+        "id": "settings-task-write.outer-refused:settled",
+        "observation": {
+          "sender": "de2d142b9c07",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      },
+      {
+        "id": "settings-task-write.method-not-found:settled",
+        "observation": {
+          "sender": "dfbe228314eb",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      },
+      {
+        "id": "settings-task-write.transport-rejection:settled",
+        "observation": {
+          "sender": "86cae7d2eb05",
+          "payloads": "c48c361670b0",
+          "settlements": "a4cc6c82ee53",
+          "state": "5db909d58c6f",
+          "effects": "b26f6d594d62"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,1748 @@
+{
+  "operation": "settings.repo-metadata",
+  "family": "settings.repo-metadata",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "18f1dccead77f1301b82e8480c1eb1e29a88607b9fe096873a39f8863a09d632",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 2,
+  "values": {
+    "071880b671a1": {
+      "hostLabelById": [["ssh:ssh-1", "SSH"]],
+      "hostPlatform": "linux",
+      "repoColorsByName": [
+        ["Local", "#6366f1"],
+        ["Remote", "#f97316"]
+      ],
+      "repoHostIdByRepoId": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ],
+      "repoIconsByName": [],
+      "repoIdsByName": [
+        ["Local", "repo-1"],
+        ["Remote", "repo-2"]
+      ]
+    },
+    "0accf38c1070": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "settings.get#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "17f4e5897116": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "1de50f3b4aac": {
+      "hostLabelById": [["ssh:ssh-1", "SSH"]],
+      "hostPlatform": {
+        "$rpc": "null"
+      },
+      "repoColorsByName": [
+        ["Local", "#6366f1"],
+        ["Remote", "#f97316"]
+      ],
+      "repoHostIdByRepoId": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ],
+      "repoIconsByName": [],
+      "repoIdsByName": [
+        ["Local", "repo-1"],
+        ["Remote", "repo-2"]
+      ]
+    },
+    "26692074e876": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        }
+      }
+    ],
+    "2bf0f26c9185": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "2c55a9809422": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 30000,
+          "error": {
+            "category": "Error",
+            "message": "Request timed out: settings.get",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 30000,
+          "error": {
+            "category": "Error",
+            "message": "Request timed out: host.platform",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "3d1e2998e81c": [
+      {
+        "name": "repoColorsByName",
+        "value": [
+          ["Local", "#6366f1"],
+          ["Remote", "#f97316"]
+        ]
+      },
+      {
+        "name": "repoIconsByName",
+        "value": []
+      },
+      {
+        "name": "repoIdsByName",
+        "value": [
+          ["Local", "repo-1"],
+          ["Remote", "repo-2"]
+        ]
+      },
+      {
+        "name": "repoHostIdByRepoId",
+        "value": [
+          ["repo-1", "local"],
+          ["repo-2", "ssh:ssh-1"]
+        ]
+      }
+    ],
+    "564017ad6e41": [
+      {
+        "name": "repoColorsByName",
+        "value": [
+          ["Local", "#6366f1"],
+          ["Remote", "#f97316"]
+        ]
+      },
+      {
+        "name": "repoIconsByName",
+        "value": []
+      },
+      {
+        "name": "repoIdsByName",
+        "value": [
+          ["Local", "repo-1"],
+          ["Remote", "repo-2"]
+        ]
+      },
+      {
+        "name": "repoHostIdByRepoId",
+        "value": [
+          ["repo-1", "local"],
+          ["repo-2", "ssh:ssh-1"]
+        ]
+      },
+      {
+        "name": "hostLabelById",
+        "value": [["ssh:ssh-1", "SSH"]]
+      },
+      {
+        "name": "hostPlatform",
+        "value": {
+          "$rpc": "null"
+        }
+      }
+    ],
+    "6134b73f18d0": {
+      "repoColorsByName": [
+        ["Local", "#6366f1"],
+        ["Remote", "#f97316"]
+      ],
+      "repoHostIdByRepoId": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ],
+      "repoIconsByName": [],
+      "repoIdsByName": [
+        ["Local", "repo-1"],
+        ["Remote", "repo-2"]
+      ]
+    },
+    "652e9534e16e": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "host.platform#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "816876f4042f": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "Connection lost",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "Connection lost",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "83b3ffbc60ed": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "settings.get#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "host.platform#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "83ef5f7039bf": [
+      {
+        "name": "repo.list#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}"
+      },
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "host.platform#1",
+        "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
+      }
+    ],
+    "bcb5d1795ffc": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "LogicalClientCutoverError",
+            "message": "RPC interrupted by connection migration",
+            "isRpcDeliveryUnknown": false
+          }
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "LogicalClientCutoverError",
+            "message": "RPC interrupted by connection migration",
+            "isRpcDeliveryUnknown": false
+          }
+        }
+      }
+    ],
+    "cb923c11ddca": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "cutover": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "cfebaa1d407b": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "disconnect": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "d1abf04c97e3": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 30000,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "d90e99979f09": [
+      {
+        "name": "repo.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "repo.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "connectionId": {
+                    "$rpc": "null"
+                  },
+                  "displayName": "Local",
+                  "id": "repo-1"
+                },
+                {
+                  "connectionId": "ssh-1",
+                  "displayName": "Remote",
+                  "id": "repo-2"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "ssh.listTargetSummaries#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "ssh.listTargetSummaries"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "targets": [
+                {
+                  "id": "ssh-1",
+                  "label": "SSH"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "host.platform#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "host.platform"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "platform": "linux"
+            }
+          }
+        }
+      }
+    ],
+    "e91286279b33": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "load": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "ec7bb9cef277": [
+      {
+        "name": "repoColorsByName",
+        "value": [
+          ["Local", "#6366f1"],
+          ["Remote", "#f97316"]
+        ]
+      },
+      {
+        "name": "repoIconsByName",
+        "value": []
+      },
+      {
+        "name": "repoIdsByName",
+        "value": [
+          ["Local", "repo-1"],
+          ["Remote", "repo-2"]
+        ]
+      },
+      {
+        "name": "repoHostIdByRepoId",
+        "value": [
+          ["repo-1", "local"],
+          ["repo-2", "ssh:ssh-1"]
+        ]
+      },
+      {
+        "name": "hostLabelById",
+        "value": [["ssh:ssh-1", "SSH"]]
+      },
+      {
+        "name": "hostPlatform",
+        "value": "linux"
+      }
+    ]
+  },
+  "recording": {
+    "scenario": "schedules-settings-repo-metadata-fulfilled",
+    "checkpoints": [
+      {
+        "id": "settings-repo-metadata-fulfilled.forward:sibling-pending",
+        "observation": {
+          "sender": "17f4e5897116",
+          "payloads": "83ef5f7039bf",
+          "settlements": "e91286279b33",
+          "state": "6134b73f18d0",
+          "effects": "3d1e2998e81c"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.forward:settled",
+        "observation": {
+          "sender": "d90e99979f09",
+          "payloads": "83ef5f7039bf",
+          "settlements": "2bf0f26c9185",
+          "state": "071880b671a1",
+          "effects": "ec7bb9cef277"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.reverse:sibling-pending",
+        "observation": {
+          "sender": "26692074e876",
+          "payloads": "83ef5f7039bf",
+          "settlements": "e91286279b33",
+          "state": "6134b73f18d0",
+          "effects": "3d1e2998e81c"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.reverse:settled",
+        "observation": {
+          "sender": "d90e99979f09",
+          "payloads": "83ef5f7039bf",
+          "settlements": "2bf0f26c9185",
+          "state": "071880b671a1",
+          "effects": "ec7bb9cef277"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.both-reject-forward:sibling-pending",
+        "observation": {
+          "sender": "0accf38c1070",
+          "payloads": "83ef5f7039bf",
+          "settlements": "e91286279b33",
+          "state": "6134b73f18d0",
+          "effects": "3d1e2998e81c"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.both-reject-forward:settled",
+        "observation": {
+          "sender": "83b3ffbc60ed",
+          "payloads": "83ef5f7039bf",
+          "settlements": "2bf0f26c9185",
+          "state": "1de50f3b4aac",
+          "effects": "564017ad6e41"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.both-reject-reverse:sibling-pending",
+        "observation": {
+          "sender": "652e9534e16e",
+          "payloads": "83ef5f7039bf",
+          "settlements": "e91286279b33",
+          "state": "6134b73f18d0",
+          "effects": "3d1e2998e81c"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.both-reject-reverse:settled",
+        "observation": {
+          "sender": "83b3ffbc60ed",
+          "payloads": "83ef5f7039bf",
+          "settlements": "2bf0f26c9185",
+          "state": "1de50f3b4aac",
+          "effects": "564017ad6e41"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.reject-peer-pending:sibling-pending",
+        "observation": {
+          "sender": "0accf38c1070",
+          "payloads": "83ef5f7039bf",
+          "settlements": "e91286279b33",
+          "state": "6134b73f18d0",
+          "effects": "3d1e2998e81c"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.reject-peer-pending:settled",
+        "observation": {
+          "sender": "0accf38c1070",
+          "payloads": "83ef5f7039bf",
+          "settlements": "e91286279b33",
+          "state": "6134b73f18d0",
+          "effects": "3d1e2998e81c"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.timeout:settled",
+        "observation": {
+          "sender": "2c55a9809422",
+          "payloads": "83ef5f7039bf",
+          "settlements": "d1abf04c97e3",
+          "state": "1de50f3b4aac",
+          "effects": "564017ad6e41"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.disconnect:settled",
+        "observation": {
+          "sender": "816876f4042f",
+          "payloads": "83ef5f7039bf",
+          "settlements": "cfebaa1d407b",
+          "state": "1de50f3b4aac",
+          "effects": "564017ad6e41"
+        }
+      },
+      {
+        "id": "settings-repo-metadata-fulfilled.client-cutover:settled",
+        "observation": {
+          "sender": "bcb5d1795ffc",
+          "payloads": "83ef5f7039bf",
+          "settlements": "cb923c11ddca",
+          "state": "1de50f3b4aac",
+          "effects": "564017ad6e41"
+        }
+      }
+    ]
+  }
+}

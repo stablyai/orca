@@ -1,0 +1,1149 @@
+{
+  "operation": "settings.home-providers",
+  "family": "settings.home-providers",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "18f1dccead77f1301b82e8480c1eb1e29a88607b9fe096873a39f8863a09d632",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 2,
+  "values": {
+    "13d58e42ea1c": [
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "preflight.check#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"preflight.check\"}"
+      },
+      {
+        "name": "linear.status#1",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"linear.status\"}"
+      }
+    ],
+    "2cfe071e77cd": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "settings.get#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "3b52deb98f39": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        }
+      }
+    ],
+    "40b162c1b21a": [
+      {
+        "name": "providers",
+        "value": {
+          "host-1": ["github"]
+        }
+      }
+    ],
+    "44136fa355b3": {},
+    "4f53cda18c2b": [],
+    "50274b2889df": {
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "57fc05304f41": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "glab": {
+                "installed": false
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "7481db6c50f8": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "settings.get#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        }
+      }
+    ],
+    "79b8c1b0d1d1": {
+      "host-1": ["github"]
+    },
+    "8871f1ea875e": {
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "disconnect": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "8b1b9b7a2c5b": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["bot-user"],
+                "visibleTaskProviders": ["github", "linear"]
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "950ea1b3a4be": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "settings.get#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "preflight.check#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-3",
+            "ok": true,
+            "result": {
+              "connected": false
+            }
+          }
+        }
+      }
+    ],
+    "98072a0a081c": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 30000,
+          "error": {
+            "category": "Error",
+            "message": "Request timed out: settings.get",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 30000,
+          "error": {
+            "category": "Error",
+            "message": "Request timed out: preflight.check",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 30000,
+          "error": {
+            "category": "Error",
+            "message": "Request timed out: linear.status",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "b822f26514d9": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "preflight.check#1 rejected",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "be3d5b12ba84": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "LogicalClientCutoverError",
+            "message": "RPC interrupted by connection migration",
+            "isRpcDeliveryUnknown": false
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "LogicalClientCutoverError",
+            "message": "RPC interrupted by connection migration",
+            "isRpcDeliveryUnknown": false
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "LogicalClientCutoverError",
+            "message": "RPC interrupted by connection migration",
+            "isRpcDeliveryUnknown": false
+          }
+        }
+      }
+    ],
+    "d4eeda0e5df4": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "Connection lost",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "preflight.check#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "preflight.check"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "Connection lost",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      },
+      {
+        "name": "linear.status#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "linear.status"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "undefined"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "Connection lost",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "fa1c6c5bbada": {
+      "load": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "cutover": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "schedules-settings-home-providers-fulfilled",
+    "checkpoints": [
+      {
+        "id": "settings-home-providers-fulfilled.forward:sibling-pending",
+        "observation": {
+          "sender": "8b1b9b7a2c5b",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "44136fa355b3",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.forward:settled",
+        "observation": {
+          "sender": "3b52deb98f39",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.reverse:sibling-pending",
+        "observation": {
+          "sender": "57fc05304f41",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "44136fa355b3",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.reverse:settled",
+        "observation": {
+          "sender": "3b52deb98f39",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.both-reject-forward:sibling-pending",
+        "observation": {
+          "sender": "2cfe071e77cd",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.both-reject-forward:settled",
+        "observation": {
+          "sender": "950ea1b3a4be",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.both-reject-reverse:sibling-pending",
+        "observation": {
+          "sender": "b822f26514d9",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.both-reject-reverse:settled",
+        "observation": {
+          "sender": "950ea1b3a4be",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.reject-peer-pending:sibling-pending",
+        "observation": {
+          "sender": "2cfe071e77cd",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.reject-peer-pending:settled",
+        "observation": {
+          "sender": "7481db6c50f8",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.timeout:settled",
+        "observation": {
+          "sender": "98072a0a081c",
+          "payloads": "13d58e42ea1c",
+          "settlements": "50274b2889df",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.disconnect:settled",
+        "observation": {
+          "sender": "d4eeda0e5df4",
+          "payloads": "13d58e42ea1c",
+          "settlements": "8871f1ea875e",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      },
+      {
+        "id": "settings-home-providers-fulfilled.client-cutover:settled",
+        "observation": {
+          "sender": "be3d5b12ba84",
+          "payloads": "13d58e42ea1c",
+          "settlements": "fa1c6c5bbada",
+          "state": "79b8c1b0d1d1",
+          "effects": "40b162c1b21a"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,1785 @@
+{
+  "operation": "workspace.file-inventory",
+  "family": "legacy-inventory",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "18f1dccead77f1301b82e8480c1eb1e29a88607b9fe096873a39f8863a09d632",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 2,
+  "values": {
+    "0a3be69f9399": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 360,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "third.ts"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "305c86832cd8": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "old": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "3390ae6d62f2": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 240
+        }
+      }
+    ],
+    "35af95861be6": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "old": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "select-b": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "reset-a": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "fresh": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "4f53cda18c2b": [],
+    "503748c2080e": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 240,
+          "settledAt": 360,
+          "error": {
+            "category": "Error",
+            "message": "transport failure",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "5386959d4549": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "old": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "select-b": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "reset-a": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "fresh": {
+        "status": "fulfilled",
+        "startedAt": 120,
+        "settledAt": 120,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "third": {
+        "status": "fulfilled",
+        "startedAt": 240,
+        "settledAt": 240,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "602e35a92eec": {
+      "files": []
+    },
+    "669922ce9786": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 360,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-4",
+            "ok": false
+          }
+        }
+      }
+    ],
+    "6713de8f80d3": [
+      {
+        "name": "files.searchPaths#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+      },
+      {
+        "name": "files.list#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+      }
+    ],
+    "704590c6cdbf": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 360,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": false
+            }
+          }
+        }
+      }
+    ],
+    "872323868410": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 360,
+          "value": {
+            "id": "frame-4",
+            "ok": true
+          }
+        }
+      }
+    ],
+    "9263e4ff521c": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 360,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": false
+            }
+          }
+        }
+      }
+    ],
+    "97ccce4248eb": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 120
+        }
+      }
+    ],
+    "a129552fdc6e": {
+      "files": ["third.ts"]
+    },
+    "a2895aaf51be": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 360,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "$rpc": "null"
+            }
+          }
+        }
+      }
+    ],
+    "ad0f58f0684c": [
+      {
+        "name": "files.searchPaths#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"old\",\"limit\":16}}"
+      },
+      {
+        "name": "files.list#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+      },
+      {
+        "name": "files.searchPaths#2",
+        "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.searchPaths\",\"params\":{\"worktree\":\"id:A\",\"query\":\"fresh\",\"limit\":16}}"
+      },
+      {
+        "name": "files.list#2",
+        "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.list\",\"params\":{\"worktree\":\"id:A\"}}"
+      }
+    ],
+    "b3b91a2d6c56": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 360,
+          "value": {
+            "id": "frame-4",
+            "ok": true,
+            "result": {
+              "error": "refused"
+            }
+          }
+        }
+      }
+    ],
+    "d99de913c78a": [
+      {
+        "name": "files.searchPaths#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "old",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 120,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 120,
+          "settledAt": 240,
+          "value": {
+            "id": "frame-2",
+            "ok": true,
+            "result": {
+              "files": [
+                {
+                  "relativePath": "old.ts"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "name": "files.searchPaths#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.searchPaths"
+          },
+          {
+            "name": "params",
+            "value": {
+              "limit": 16,
+              "query": "fresh",
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 240,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-3",
+            "ok": false
+          }
+        }
+      },
+      {
+        "name": "files.list#2",
+        "args": [
+          {
+            "name": "method",
+            "value": "files.list"
+          },
+          {
+            "name": "params",
+            "value": {
+              "worktree": "id:A"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 240,
+          "settledAt": 360,
+          "value": {
+            "error": {
+              "code": "refused",
+              "message": "outer refused"
+            },
+            "id": "frame-4",
+            "ok": false
+          }
+        }
+      }
+    ]
+  },
+  "recording": {
+    "scenario": "matrix-legacy-inventory",
+    "checkpoints": [
+      {
+        "id": "b1.prelude:old-pending",
+        "observation": {
+          "sender": "97ccce4248eb",
+          "payloads": "6713de8f80d3",
+          "settlements": "305c86832cd8",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.prelude:stale-arrived-fresh-pending",
+        "observation": {
+          "sender": "3390ae6d62f2",
+          "payloads": "ad0f58f0684c",
+          "settlements": "35af95861be6",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.prelude:third-query",
+        "observation": {
+          "sender": "3390ae6d62f2",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.normal:fresh-arrived",
+        "observation": {
+          "sender": "0a3be69f9399",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "a129552fdc6e",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.result-absent:fresh-arrived",
+        "observation": {
+          "sender": "872323868410",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.result-null:fresh-arrived",
+        "observation": {
+          "sender": "a2895aaf51be",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.inner-ok-missing:fresh-arrived",
+        "observation": {
+          "sender": "b3b91a2d6c56",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.inner-false-string-error:fresh-arrived",
+        "observation": {
+          "sender": "704590c6cdbf",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.inner-false-object-error:fresh-arrived",
+        "observation": {
+          "sender": "9263e4ff521c",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.outer-refused:fresh-arrived",
+        "observation": {
+          "sender": "d99de913c78a",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.method-not-found:fresh-arrived",
+        "observation": {
+          "sender": "669922ce9786",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      },
+      {
+        "id": "b1.transport-rejection:fresh-arrived",
+        "observation": {
+          "sender": "503748c2080e",
+          "payloads": "ad0f58f0684c",
+          "settlements": "5386959d4549",
+          "state": "602e35a92eec",
+          "effects": "4f53cda18c2b"
+        }
+      }
+    ]
+  }
+}

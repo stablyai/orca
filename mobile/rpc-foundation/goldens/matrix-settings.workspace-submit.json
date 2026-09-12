@@ -1,0 +1,739 @@
+{
+  "operation": "settings.workspace-submit",
+  "family": "settings.workspace-submit",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "aac38d698ff75ac4c8658addab48ef5a83617619",
+  "lockfileSha256": "7bcb20be34e3665506cb46b00c50e986be6c671b32d1a303e2e5d12cd7ab4cdf",
+  "recorderSha256": "18f1dccead77f1301b82e8480c1eb1e29a88607b9fe096873a39f8863a09d632",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 2,
+  "values": {
+    "0e315dbfe7a8": [
+      {
+        "name": "error",
+        "value": ""
+      },
+      {
+        "name": "selectedAgent",
+        "value": {
+          "id": "codex",
+          "label": "Codex"
+        }
+      },
+      {
+        "name": "agentOverridden",
+        "value": false
+      },
+      {
+        "name": "error",
+        "value": "Selected agent is disabled. Choose an enabled agent before creating."
+      }
+    ],
+    "13c996e4ec2b": {
+      "creating": true,
+      "error": "",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "19c5a22f57c5": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "refused"
+            }
+          }
+        }
+      },
+      {
+        "name": "worktree.create#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "worktree.create"
+          },
+          {
+            "name": "params",
+            "value": {
+              "createdWithAgent": "claude",
+              "displayName": "recorded",
+              "displayNameKind": "user",
+              "name": "recorded",
+              "repo": "id:repo-1",
+              "setupDecision": "inherit",
+              "startupAgent": "claude"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 600000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "1f2f2a0a5737": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "20a67073e822": [
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      },
+      {
+        "name": "worktree.create#1",
+        "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.create\",\"params\":{\"repo\":\"id:repo-1\",\"setupDecision\":\"inherit\",\"name\":\"recorded\",\"displayName\":\"recorded\",\"displayNameKind\":\"user\",\"startupAgent\":\"claude\",\"createdWithAgent\":\"claude\"}}"
+      }
+    ],
+    "2e8e352c8dd1": {
+      "creating": false,
+      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "settings": {
+        "disabledTuiAgents": ["claude"]
+      }
+    },
+    "35364e9332cb": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      }
+    ],
+    "41b24c27cb2d": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "$rpc": "null"
+            }
+          }
+        }
+      }
+    ],
+    "450706871c5d": [
+      {
+        "name": "error",
+        "value": ""
+      },
+      {
+        "name": "runtimeSettings",
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    ],
+    "4d460234095c": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": {
+                "message": "inner refused"
+              },
+              "ok": false
+            }
+          }
+        }
+      },
+      {
+        "name": "worktree.create#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "worktree.create"
+          },
+          {
+            "name": "params",
+            "value": {
+              "createdWithAgent": "claude",
+              "displayName": "recorded",
+              "displayNameKind": "user",
+              "name": "recorded",
+              "repo": "id:repo-1",
+              "setupDecision": "inherit",
+              "startupAgent": "claude"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 600000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ],
+    "5a6be9b97ba7": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true
+          }
+        }
+      }
+    ],
+    "6a24a7e95a3d": [
+      {
+        "name": "error",
+        "value": ""
+      },
+      {
+        "name": "runtimeSettings",
+        "value": {
+          "defaultLinearTeamSelection": {
+            "$rpc": "null"
+          },
+          "defaultRepoSelection": {
+            "$rpc": "null"
+          },
+          "defaultTaskSource": "github",
+          "defaultTaskViewPreset": "all",
+          "defaultTuiAgent": "codex",
+          "disabledTuiAgents": ["claude"],
+          "githubProjects": {},
+          "hostSettingOverrides": {},
+          "prBotAuthorOverrides": ["recorded-bot"],
+          "visibleTaskProviders": ["github"]
+        }
+      },
+      {
+        "name": "selectedAgent",
+        "value": {
+          "id": "codex",
+          "label": "Codex"
+        }
+      },
+      {
+        "name": "agentOverridden",
+        "value": false
+      },
+      {
+        "name": "error",
+        "value": "Selected agent is disabled. Choose an enabled agent before creating."
+      }
+    ],
+    "6dfef4ef572b": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "submit": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "7b1c9637063f": {
+      "creating": true,
+      "error": "",
+      "settings": {
+        "$rpc": "undefined"
+      }
+    },
+    "9c753d3a11f2": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "settings": {
+                "defaultLinearTeamSelection": {
+                  "$rpc": "null"
+                },
+                "defaultRepoSelection": {
+                  "$rpc": "null"
+                },
+                "defaultTaskSource": "github",
+                "defaultTaskViewPreset": "all",
+                "defaultTuiAgent": "codex",
+                "disabledTuiAgents": ["claude"],
+                "githubProjects": {},
+                "hostSettingOverrides": {},
+                "prBotAuthorOverrides": ["recorded-bot"],
+                "visibleTaskProviders": ["github"]
+              }
+            }
+          }
+        }
+      }
+    ],
+    "9e493785145e": [
+      {
+        "name": "settings.get#1",
+        "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+      }
+    ],
+    "b5bca9fe006b": {
+      "creating": false,
+      "error": "Selected agent is disabled. Choose an enabled agent before creating.",
+      "settings": {
+        "defaultLinearTeamSelection": {
+          "$rpc": "null"
+        },
+        "defaultRepoSelection": {
+          "$rpc": "null"
+        },
+        "defaultTaskSource": "github",
+        "defaultTaskViewPreset": "all",
+        "defaultTuiAgent": "codex",
+        "disabledTuiAgents": ["claude"],
+        "githubProjects": {},
+        "hostSettingOverrides": {},
+        "prBotAuthorOverrides": ["recorded-bot"],
+        "visibleTaskProviders": ["github"]
+      }
+    },
+    "c0cb3df4feef": [
+      {
+        "name": "error",
+        "value": ""
+      }
+    ],
+    "cd41018879b7": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "error": {
+              "code": "refused",
+              "message": "outer refused"
+            },
+            "id": "frame-1",
+            "ok": false
+          }
+        }
+      }
+    ],
+    "f117d93cf44a": {
+      "mount": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "$rpc": "undefined"
+        }
+      },
+      "submit": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "f60b502aa33d": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "rejected",
+          "startedAt": 0,
+          "settledAt": 0,
+          "error": {
+            "category": "Error",
+            "message": "transport failure",
+            "isRpcDeliveryUnknown": true
+          }
+        }
+      }
+    ],
+    "fa75111ee066": [
+      {
+        "name": "settings.get#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "settings.get"
+          },
+          {
+            "name": "params",
+            "value": {
+              "$rpc": "absent"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "$rpc": "absent"
+            }
+          }
+        ],
+        "settlement": {
+          "status": "fulfilled",
+          "startedAt": 0,
+          "settledAt": 0,
+          "value": {
+            "id": "frame-1",
+            "ok": true,
+            "result": {
+              "error": "inner refused",
+              "ok": false
+            }
+          }
+        }
+      },
+      {
+        "name": "worktree.create#1",
+        "args": [
+          {
+            "name": "method",
+            "value": "worktree.create"
+          },
+          {
+            "name": "params",
+            "value": {
+              "createdWithAgent": "claude",
+              "displayName": "recorded",
+              "displayNameKind": "user",
+              "name": "recorded",
+              "repo": "id:repo-1",
+              "setupDecision": "inherit",
+              "startupAgent": "claude"
+            }
+          },
+          {
+            "name": "options",
+            "value": {
+              "timeoutMs": 600000
+            }
+          }
+        ],
+        "settlement": {
+          "status": "pending",
+          "startedAt": 0
+        }
+      }
+    ]
+  },
+  "recording": {
+    "scenario": "matrix-settings.workspace-submit",
+    "checkpoints": [
+      {
+        "id": "settings-workspace-submit-fulfilled.prelude:settings-pending",
+        "observation": {
+          "sender": "1f2f2a0a5737",
+          "payloads": "9e493785145e",
+          "settlements": "f117d93cf44a",
+          "state": "13c996e4ec2b",
+          "effects": "c0cb3df4feef"
+        }
+      },
+      {
+        "id": "settings-workspace-submit-fulfilled.normal:settled",
+        "observation": {
+          "sender": "9c753d3a11f2",
+          "payloads": "9e493785145e",
+          "settlements": "6dfef4ef572b",
+          "state": "b5bca9fe006b",
+          "effects": "6a24a7e95a3d"
+        }
+      },
+      {
+        "id": "settings-workspace-submit-fulfilled.result-absent:settled",
+        "observation": {
+          "sender": "5a6be9b97ba7",
+          "payloads": "9e493785145e",
+          "settlements": "6dfef4ef572b",
+          "state": "2e8e352c8dd1",
+          "effects": "0e315dbfe7a8"
+        }
+      },
+      {
+        "id": "settings-workspace-submit-fulfilled.result-null:settled",
+        "observation": {
+          "sender": "41b24c27cb2d",
+          "payloads": "9e493785145e",
+          "settlements": "6dfef4ef572b",
+          "state": "2e8e352c8dd1",
+          "effects": "0e315dbfe7a8"
+        }
+      },
+      {
+        "id": "settings-workspace-submit-fulfilled.inner-ok-missing:settled",
+        "observation": {
+          "sender": "19c5a22f57c5",
+          "payloads": "20a67073e822",
+          "settlements": "f117d93cf44a",
+          "state": "7b1c9637063f",
+          "effects": "450706871c5d"
+        }
+      },
+      {
+        "id": "settings-workspace-submit-fulfilled.inner-false-string-error:settled",
+        "observation": {
+          "sender": "fa75111ee066",
+          "payloads": "20a67073e822",
+          "settlements": "f117d93cf44a",
+          "state": "7b1c9637063f",
+          "effects": "450706871c5d"
+        }
+      },
+      {
+        "id": "settings-workspace-submit-fulfilled.inner-false-object-error:settled",
+        "observation": {
+          "sender": "4d460234095c",
+          "payloads": "20a67073e822",
+          "settlements": "f117d93cf44a",
+          "state": "7b1c9637063f",
+          "effects": "450706871c5d"
+        }
+      },
+      {
+        "id": "settings-workspace-submit-fulfilled.outer-refused:settled",
+        "observation": {
+          "sender": "cd41018879b7",
+          "payloads": "9e493785145e",
+          "settlements": "6dfef4ef572b",
+          "state": "2e8e352c8dd1",
+          "effects": "0e315dbfe7a8"
+        }
+      },
+      {
+        "id": "settings-workspace-submit-fulfilled.method-not-found:settled",
+        "observation": {
+          "sender": "35364e9332cb",
+          "payloads": "9e493785145e",
+          "settlements": "6dfef4ef572b",
+          "state": "2e8e352c8dd1",
+          "effects": "0e315dbfe7a8"
+        }
+      },
+      {
+        "id": "settings-workspace-submit-fulfilled.transport-rejection:settled",
+        "observation": {
+          "sender": "f60b502aa33d",
+          "payloads": "9e493785145e",
+          "settlements": "6dfef4ef572b",
+          "state": "2e8e352c8dd1",
+          "effects": "0e315dbfe7a8"
+        }
+      }
+    ]
+  }
+}
