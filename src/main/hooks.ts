@@ -14,7 +14,6 @@ import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../shared/orca-yaml-hook-types'
 import type { Repo } from '../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
-
 import { runHookScriptWithDeadline } from './hook-script-deadline'
 
 const HOOK_TIMEOUT = 120_000 // 2 minutes
