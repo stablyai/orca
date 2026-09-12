@@ -3,7 +3,15 @@
 // or the script body that lands on the remote box. Local install behavior
 // is exercised through `installer-utils.test.ts` and the per-CLI status
 // audit; this file covers ONLY the SFTP-backed path added in commit #8.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { vi, describe, expect, it } from 'vitest'
@@ -182,6 +190,37 @@ function createFakeSftp(): { sftp: SFTPWrapper; fs: FakeFs } {
 }
 
 describe('ClaudeHookService.install', () => {
+  it.skipIf(process.platform === 'win32')(
+    'does not mutate a repository-managed settings symlink or create a backup',
+    () => {
+      const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-repo-settings-'))
+      vi.stubEnv('HOME', tmpHome)
+      vi.stubEnv('USERPROFILE', tmpHome)
+      try {
+        const repo = join(tmpHome, 'dotfiles')
+        const targetPath = join(repo, 'config', 'claude', 'settings.json')
+        const settingsPath = join(tmpHome, '.claude', 'settings.json')
+        const original = `${JSON.stringify({ hooks: { Stop: [] } }, null, 2)}\n`
+        mkdirSync(join(repo, '.git'), { recursive: true })
+        mkdirSync(join(repo, 'config', 'claude'), { recursive: true })
+        mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+        writeFileSync(targetPath, original)
+        symlinkSync(targetPath, settingsPath)
+
+        const status = new ClaudeHookService().install()
+
+        expect(status.state).toBe('not_installed')
+        expect(status.detail).toContain('repository-managed')
+        expect(readFileSync(targetPath, 'utf-8')).toBe(original)
+        expect(existsSync(`${targetPath}.bak`)).toBe(false)
+        expect(existsSync(`${settingsPath}.bak`)).toBe(false)
+      } finally {
+        vi.unstubAllEnvs()
+        rmSync(tmpHome, { recursive: true, force: true })
+      }
+    }
+  )
+
   it('installs managed hooks into Claude settings and preserves user Bedrock settings', () => {
     const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-hooks-'))
     vi.stubEnv('HOME', tmpHome)
