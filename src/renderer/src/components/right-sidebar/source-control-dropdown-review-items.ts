@@ -14,6 +14,7 @@ import {
 import type { PrimaryActionInputs } from './source-control-primary-action'
 import type { DropdownItem } from './source-control-dropdown-item-types'
 import type { DropdownActionContext } from './source-control-dropdown-action-context'
+import { createBlockedHint as resolveCreateBlockedHint } from './source-control-dropdown-copy'
 
 export type HostedReviewDropdownItems = {
   createPR: DropdownItem
@@ -37,35 +38,13 @@ export function buildHostedReviewDropdownItems(
   const { hostedReviewCreation, globalBusy, upstreamLoading, shouldForcePushWithLease } = ctx
   const createReviewCopy = reviewCopy(hostedReviewCreation?.provider)
 
-  const createBlockedHint = ((): string => {
-    switch (hostedReviewCreation?.blockedReason) {
-      case 'dirty':
-        return 'Commit changes first'
-      case 'detached_head':
-        return 'Check out a branch first'
-      case 'default_branch':
-        return 'Switch to a feature branch'
-      case 'no_upstream':
-        return 'Publish Branch'
-      case 'needs_push':
-        return 'Push first'
-      case 'needs_sync':
-        return shouldForcePushWithLease ? 'Force Push first' : 'Sync first'
-      case 'auth_required':
-        return `${createReviewCopy.authInstruction} in this environment`
-      case 'unsupported_provider':
-        return 'Unsupported provider'
-      case 'existing_review':
-        return `A ${createReviewCopy.reviewLabel} already exists`
-      case 'fork_head_unsupported':
-        return 'Fork head unsupported'
-      case 'base_not_on_remote':
-        return 'Base branch is not on the remote'
-      case null:
-      case undefined:
-        return upstreamLoading ? 'Checking branch status…' : 'Branch is not ready'
-    }
-  })()
+  const createBlockedHint = resolveCreateBlockedHint({
+    blockedReason: hostedReviewCreation?.blockedReason,
+    shouldForcePushWithLease,
+    upstreamLoading,
+    authInstruction: createReviewCopy.authInstruction,
+    reviewLabel: createReviewCopy.reviewLabel
+  })
 
   const createPR: DropdownItem = {
     kind: 'create_pr',

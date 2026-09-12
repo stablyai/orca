@@ -15,6 +15,7 @@ import {
   formatSyncLabel,
   formatUnpublishedForcePushTitle
 } from './source-control-dropdown-labels'
+import { rebaseItemCopy } from './source-control-dropdown-copy'
 
 export type RemoteDropdownItems = {
   push: DropdownItem
@@ -166,18 +167,11 @@ export function buildRemoteDropdownItems(ctx: DropdownActionContext): RemoteDrop
 
   const rebaseBaseLabel = rebaseBaseRef ? formatRebaseBaseRef(rebaseBaseRef) : null
   const hasRemoteBaseRef = rebaseBaseLabel?.includes('/') === true
+  const rebaseCopy = rebaseItemCopy({ rebaseBaseLabel, hasRemoteBaseRef, hasDirtyLocalChanges })
   const rebase: DropdownItem = {
     kind: 'rebase_base',
-    label: rebaseBaseLabel ? `Rebase from ${rebaseBaseLabel}` : 'Rebase from Base',
-    title: ((): string => {
-      if (!rebaseBaseLabel || !hasRemoteBaseRef) {
-        return 'Choose a remote base branch to rebase from'
-      }
-      if (hasDirtyLocalChanges) {
-        return 'Try rebasing; git may require committing or stashing local changes first'
-      }
-      return `Rebase current branch with latest commits from ${rebaseBaseLabel}`
-    })(),
+    label: rebaseCopy.label,
+    title: rebaseCopy.title,
     disabled: globalBusy || !rebaseBaseRef || !hasRemoteBaseRef
   }
 
