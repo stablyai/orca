@@ -34,6 +34,7 @@ import { editorShortcutMatches } from '../editor-shortcuts'
 import { usePierreDiffNoteNavigation } from './use-pierre-diff-note-navigation'
 import { canCommentOnPierreRange } from './pierre-diff-comment-range'
 import { withPierreDiffEditState } from './pierre-diff-edit-state'
+import { shouldFocusPierreDiffHost } from './pierre-diff-host-focus'
 
 export type PierreDiffInstance = PierreFileDiff<PierreDiffAnnotationData> &
   Partial<Pick<VirtualizedFileDiff, 'getLinePosition'>>
@@ -268,7 +269,9 @@ export function PierreDiffSurface({
       tabIndex={-1}
       className={className}
       onMouseDown={(event) => {
-        if (!event.currentTarget.contains(document.activeElement)) {
+        if (
+          shouldFocusPierreDiffHost(event.currentTarget, document.activeElement, event.nativeEvent)
+        ) {
           event.currentTarget.focus({ preventScroll: true })
         }
       }}

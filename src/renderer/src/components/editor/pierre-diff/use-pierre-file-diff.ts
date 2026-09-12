@@ -24,6 +24,9 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
   useLayoutEffect(() => {
     editableRef.current = editable
   }, [editable])
+  // Start true when the surface mounted editable so the blocking request path can paint once.
+  // Staging/unstaging sets this false while !editable, so the flip commit already gates `edit`.
+  const [primeReady, setPrimeReady] = useState(editable)
 
   useEffect(() => {
     if (!input) {
@@ -78,17 +81,47 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
     }
   }, [input, attempt])
 
-  // Why: staging or unstaging flips a row's editability without changing its content. Priming here
-  // keeps the guarantee the blocking path gives a surface that mounted editable -- entering edit
-  // mode with an unprimed AST makes Pierre highlight the whole file synchronously.
+  // Why: staging or unstaging flips a row's editability without changing its content. Priming
+  // here is not enough by itself -- Pierre's applyEdit runs in a child layout effect of the same
+  // commit, so `edit` must already be false on the flip render or it highlights the whole file
+  // synchronously. `primeReady` stays false while !editable, then this fills the AST and flips it.
   useEffect(() => {
-    if (!editable || !fileDiff) {
+    if (!editable) {
+      setPrimeReady(false)
+      return
+    }
+    if (!fileDiff) {
       return
     }
     const controller = new AbortController()
-    preparePierreDiffHighlight(fileDiff, controller.signal).catch(() => {})
+    preparePierreDiffHighlight(fileDiff, controller.signal).then(
+      () => {
+        if (!controller.signal.aborted) {
+          setPrimeReady(true)
+        }
+      },
+      (error: unknown) => {
+        if (
+          controller.signal.aborted ||
+          (error instanceof DOMException && error.name === 'AbortError')
+        ) {
+          return
+        }
+        setSnapshot((previous) =>
+          previous && previous.diff === fileDiff
+            ? { ...previous, error: error instanceof Error ? error.message : String(error) }
+            : previous
+        )
+      }
+    )
     return () => controller.abort()
   }, [editable, fileDiff])
 
-  return { fileDiff, error: snapshot?.input === input ? snapshot.error : null, retry, markEdited }
+  return {
+    fileDiff,
+    error: snapshot?.input === input ? snapshot.error : null,
+    retry,
+    markEdited,
+    editReady: !editable || primeReady
+  }
 }

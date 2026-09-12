@@ -131,7 +131,8 @@ export function DiffSectionItem({
     fileDiff,
     error: parseError,
     retry: retryParse,
-    markEdited
+    markEdited,
+    editReady
   } = usePierreFileDiff(diffInput, isEditable)
 
   // Why: virtualized rows unmount when scrolled away, so the draft must live in
@@ -245,7 +246,7 @@ export function DiffSectionItem({
           fileDiff={fileDiff}
           sideBySide={sideBySide}
           settings={settings}
-          isEditable={isEditable}
+          isEditable={isEditable && editReady}
           editStateKey={editStateKey}
           collapseUnchanged
           worktreeId={worktreeId ?? ''}
@@ -283,6 +284,7 @@ export function DiffSectionItem({
       handleUpdateComment,
       hasLineCommentAction,
       isEditable,
+      editReady,
       editStateKey,
       renderKey,
       pendingComment,

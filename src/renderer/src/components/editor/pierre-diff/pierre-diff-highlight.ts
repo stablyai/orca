@@ -6,8 +6,12 @@ import { createDiffHighlightPool } from './pierre-diff-highlight-pool'
  * the instance mapping in `clearInstanceRequests` -- it never calls `onHighlightError` on the
  * instance. Our renderer only learns of completion through those callbacks, so a cancelled task
  * would leave this promise pending forever and hang any caller awaiting it.
+ *
+ * Pierre's worker init timeout is 10s and also skips instance callbacks on failure, so this must
+ * outlive init plus a whole-file highlight. Resolving as success used to unprime editable mounts
+ * and cleanUpTasks would cancel the still-running worker if we were the only instance.
  */
-const HIGHLIGHT_SETTLE_CEILING_MS = 10_000
+const HIGHLIGHT_SETTLE_CEILING_MS = 30_000
 
 export function preparePierreDiffHighlight(
   diff: FileDiffMetadata,
@@ -30,11 +34,26 @@ export function preparePierreDiffHighlight(
     return Promise.resolve()
   }
   return new Promise((resolve, reject) => {
-    const ceiling = setTimeout(() => finish(), HIGHLIGHT_SETTLE_CEILING_MS)
-    const finish = (error?: unknown) => {
+    let settled = false
+    const ceiling = setTimeout(() => {
+      if (pool.getDiffResultCache(diff)) {
+        finish()
+        return
+      }
+      // Why not cleanUpTasks: the worker may still be running (init + highlight can exceed the
+      // old 10s cap). Detach-and-cancel made the next editable paint highlight on the main thread.
+      finish(new Error('Diff highlighting timed out. Retry this file.'), false)
+    }, HIGHLIGHT_SETTLE_CEILING_MS)
+    const finish = (error?: unknown, cancelTask = true) => {
       clearTimeout(ceiling)
       signal.removeEventListener('abort', abort)
-      pool.cleanUpTasks(renderer)
+      if (cancelTask) {
+        pool.cleanUpTasks(renderer)
+      }
+      if (settled) {
+        return
+      }
+      settled = true
       if (error !== undefined) {
         reject(error)
       } else {

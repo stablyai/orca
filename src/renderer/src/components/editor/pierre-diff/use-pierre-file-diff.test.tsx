@@ -132,16 +132,40 @@ it('surfaces a detached highlight failure so the retry affordance still appears'
 
 it('does not re-parse when only editability flips, but primes the highlight', async () => {
   vi.mocked(requestPierreFileDiff).mockResolvedValue(diff)
-  prepareHighlight.mockResolvedValue(undefined)
-  const { rerender } = renderHook(({ editable }) => usePierreFileDiff(input, editable), {
+  let finishPrime: (value: void) => void = () => {}
+  prepareHighlight.mockImplementation(() => new Promise<void>((resolve) => (finishPrime = resolve)))
+  const { result, rerender } = renderHook(({ editable }) => usePierreFileDiff(input, editable), {
     initialProps: { editable: false }
   })
   await act(async () => vi.runOnlyPendingTimers())
   expect(requestPierreFileDiff).toHaveBeenCalledTimes(1)
   expect(prepareHighlight).not.toHaveBeenCalled()
+  expect(result.current.editReady).toBe(true)
   await act(async () => rerender({ editable: true }))
-  // Staging/unstaging must not refetch identical content, but edit mode must not find an
-  // unprimed AST either -- Pierre would highlight the whole file synchronously.
+  // Staging/unstaging must not refetch identical content. The flip commit must also keep
+  // `edit` off until the AST is primed -- Pierre's applyEdit runs in a child layout effect
+  // of that same commit and would otherwise highlight the whole file synchronously.
   expect(requestPierreFileDiff).toHaveBeenCalledTimes(1)
   expect(prepareHighlight).toHaveBeenCalledWith(diff, expect.anything())
+  expect(result.current.editReady).toBe(false)
+  await act(async () => finishPrime())
+  expect(result.current.editReady).toBe(true)
+})
+
+it('surfaces a prime-on-flip highlight failure so the retry affordance still appears', async () => {
+  vi.mocked(requestPierreFileDiff).mockResolvedValue(diff)
+  let failPrime: (error: Error) => void = () => {}
+  prepareHighlight.mockImplementation(
+    () => new Promise((_, reject) => (failPrime = reject as (error: Error) => void))
+  )
+  const { result, rerender } = renderHook(({ editable }) => usePierreFileDiff(input, editable), {
+    initialProps: { editable: false }
+  })
+  await act(async () => vi.runOnlyPendingTimers())
+  await act(async () => rerender({ editable: true }))
+  expect(result.current.error).toBeNull()
+  await act(async () => failPrime(new Error('worker died')))
+  expect(result.current.error).toBe('worker died')
+  expect(result.current.fileDiff).toBe(diff)
+  expect(result.current.editReady).toBe(false)
 })

@@ -101,7 +101,8 @@ export default function DiffViewer({
     fileDiff,
     error: parseError,
     retry: retryParse,
-    markEdited
+    markEdited,
+    editReady
   } = usePierreFileDiff(diffInput, editable)
 
   const { registerDiffNavigator, unregisterDiffNavigator } = useDiffNavigatorRegistration()
@@ -270,7 +271,7 @@ export default function DiffViewer({
               fileDiff={fileDiff}
               sideBySide={sideBySide}
               settings={settings}
-              isEditable={Boolean(editable)}
+              isEditable={Boolean(editable) && editReady}
               editStateKey={modelKey}
               collapseUnchanged={false}
               worktreeId={worktreeId ?? ''}

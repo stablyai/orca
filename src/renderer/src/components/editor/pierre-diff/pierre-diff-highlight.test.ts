@@ -58,14 +58,41 @@ it('settles when the pool cancels a task without notifying the instance', async 
   vi.useFakeTimers()
   try {
     const promise = preparePierreDiffHighlight(diff, new AbortController().signal)
-    let settled = false
-    void promise.then(() => (settled = true))
-    await vi.advanceTimersByTimeAsync(9_000)
-    expect(settled).toBe(false)
+    const rejection = expect(promise).rejects.toThrow('timed out')
+    await vi.advanceTimersByTimeAsync(29_000)
+    expect(pool.cleanUpTasks).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(2_000)
+    await rejection
+    // Still-running work must keep its instance; cancelling it unprimes the editable paint.
+    expect(pool.cleanUpTasks).not.toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('treats a late cache fill as success instead of a timeout', async () => {
+  vi.useFakeTimers()
+  try {
+    const promise = preparePierreDiffHighlight(diff, new AbortController().signal)
+    pool.getDiffResultCache.mockReturnValue({})
+    await vi.advanceTimersByTimeAsync(30_000)
     await promise
-    expect(settled).toBe(true)
     expect(pool.cleanUpTasks).toHaveBeenCalled()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('still detaches when a timed-out highlight later notifies the instance', async () => {
+  vi.useFakeTimers()
+  try {
+    const promise = preparePierreDiffHighlight(diff, new AbortController().signal)
+    const renderer = pool.highlightDiffAST.mock.calls[0][0]
+    const rejection = expect(promise).rejects.toThrow('timed out')
+    await vi.advanceTimersByTimeAsync(30_000)
+    await rejection
+    renderer.onHighlightSuccess()
+    expect(pool.cleanUpTasks).toHaveBeenCalledWith(renderer)
   } finally {
     vi.useRealTimers()
   }
