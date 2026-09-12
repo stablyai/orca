@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
 import { getReachableRuntimeSessionMirrorTargets } from './runtime-session-mirror-targets'
+
+function makeStatus(runtimeId: string): RuntimeStatus {
+  return {
+    runtimeId,
+    rendererGraphEpoch: 0,
+    graphStatus: 'ready',
+    authoritativeWindowId: null,
+    liveTabCount: 0,
+    liveLeafCount: 0
+  }
+}
 
 const environments = [
   {
@@ -24,7 +36,7 @@ describe('getReachableRuntimeSessionMirrorTargets', () => {
           [
             'online-env',
             {
-              status: { runtimeId: 'runtime-online' },
+              status: makeStatus('runtime-online'),
               connectionGeneration: 3
             }
           ],
@@ -55,7 +67,7 @@ describe('getReachableRuntimeSessionMirrorTargets', () => {
         settings: { activeRuntimeEnvironmentId: 'missing-env' },
         runtimeEnvironments: environments,
         runtimeStatusByEnvironmentId: new Map([
-          ['missing-env', { status: { runtimeId: 'runtime-missing' } }]
+          ['missing-env', { status: makeStatus('runtime-missing') }]
         ])
       })
     ).toEqual([])
@@ -67,7 +79,7 @@ describe('getReachableRuntimeSessionMirrorTargets', () => {
         settings: { activeRuntimeEnvironmentId: 'offline-env' },
         runtimeEnvironments: environments,
         runtimeStatusByEnvironmentId: new Map([
-          ['offline-env', { status: { runtimeId: 'runtime-recovered' } }]
+          ['offline-env', { status: makeStatus('runtime-recovered') }]
         ])
       })
     ).toEqual([
