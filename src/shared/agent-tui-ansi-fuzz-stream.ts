@@ -10,7 +10,7 @@
 // garble bug):
 // - DECAWM (?7l) and IRM (CSI 4h): SerializeAddon does not re-emit them and
 //   rehydrateSequences (headless-emulator.ts buildRehydrateSequences) only
-//   covers alt-screen/bracketed-paste/app-cursor/mouse modes.
+//   covers alt-screen/bracketed-paste/app-cursor (mouse is not restored).
 // - Terminal queries (DA/DSR/DECRQM): the emulator is write-only by contract
 //   (headless-emulator.ts onQueryReply gating); replies are a separate
 //   authority problem with its own pinned tests (session.test.ts).
