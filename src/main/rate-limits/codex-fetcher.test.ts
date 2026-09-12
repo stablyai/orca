@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -53,80 +52,12 @@ import { probeCodexAuthPresence } from './codex-auth-presence'
 import { getActiveHiddenRateLimitPtyCount } from './hidden-pty-cleanup'
 import { getCmdExePath } from '../win32-utils'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
-
-function makeDisposable() {
-  return { dispose: vi.fn() }
-}
-
-function makeRpcChild() {
-  const child = new EventEmitter() as EventEmitter & {
-    stdout: EventEmitter
-    stderr: EventEmitter
-    stdin: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> }
-    kill: ReturnType<typeof vi.fn>
-    exitCode: number | null
-  }
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  // Why: like the real app-server, the fake dies on stdin EOF or a signal —
-  // the graceful shutdown path resolves only once the child reports exit.
-  const exitNow = (): void => {
-    child.exitCode = 0
-    child.emit('exit', 0, null)
-    child.emit('close', 0, null)
-  }
-  child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn(exitNow) })
-  child.exitCode = null
-  child.kill = vi.fn(() => {
-    exitNow()
-    return true
-  })
-  return child
-}
-
-function respondToRpcRateLimitRead(
-  rpcChild: ReturnType<typeof makeRpcChild>,
-  rateLimits: unknown
-): void {
-  rpcChild.stdin.write.mockImplementation((line: string) => {
-    const msg = JSON.parse(line) as { id?: number; method?: string }
-    if (msg.method === 'initialize') {
-      setTimeout(() => {
-        rpcChild.stdout.emit(
-          'data',
-          Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} })}\n`)
-        )
-      }, 0)
-    }
-    if (msg.method === 'account/rateLimits/read') {
-      setTimeout(() => {
-        rpcChild.stdout.emit(
-          'data',
-          Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { rateLimits } })}\n`)
-        )
-      }, 0)
-    }
-  })
-}
-
-function makePtyTerm() {
-  let dataHandler: ((data: string) => void) | null = null
-  let exitHandler: (() => void) | null = null
-  return {
-    onData: vi.fn((callback: (data: string) => void) => {
-      dataHandler = callback
-      return makeDisposable()
-    }),
-    onExit: vi.fn((callback: () => void) => {
-      exitHandler = callback
-      return makeDisposable()
-    }),
-    write: vi.fn(),
-    kill: vi.fn(),
-    emitData: (data: string) => dataHandler?.(data),
-    emitExit: () => exitHandler?.()
-  }
-}
+import {
+  makeDisposable,
+  makePtyTerm,
+  makeRpcChild,
+  respondToRpcRateLimitRead
+} from './codex-fetcher.test-fixtures'
 
 describe('fetchCodexRateLimits', () => {
   beforeEach(() => {
