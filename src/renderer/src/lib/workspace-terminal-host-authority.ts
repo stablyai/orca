@@ -17,8 +17,7 @@ import {
  *
  * - `live` — a remote execution host owns terminal creation here. It supplies the surface itself.
  * - `unverifiable` — the workspace has a remote execution host with a sync still in flight or not
- *   yet attempted. It is bounded: a sync that terminates without an answer resolves `none` rather
- *   than refusing forever (see resolveDirectSshAuthority).
+ *   yet attempted, or a failed sync. Only a successful hydration can lift that uncertainty.
  * - `none` — no remote host holds terminals here: either the workspace is local (this client *is*
  *   the execution host, and its own tab rows are the whole truth) or the host answered and holds
  *   nothing.
@@ -40,39 +39,19 @@ export type WorkspaceTerminalHostAuthorityState = WorktreeRuntimeOwnerState & {
   remoteWorkspaceSyncStatusByTargetId?: Record<string, RemoteWorkspaceSyncStatus>
 }
 
-/** A sync attempt that has stopped without an answer. `unverifiable` is the honest verdict about the
- *  host, but holding it forever is not a verdict — it is a refusal to act, so nothing would ever
- *  lift it. Four paths reach here: local-hydration timeout, a null `remoteWorkspace.get`, a falsy
- *  apply token, and never connecting at all.
- *
- *  Known gap: this floor was reasoned about when hydration was add-only, so "un-hydrated" implied
- *  "the host never answered". A snapshot whose rows could not be placed now revokes hydration
- *  (remote-workspace-snapshot-apply.ts), so a target that later lands on `offline`/`error` reaches
- *  this floor having *demonstrably* answered with tabs. Seeding is then authorised over live host
- *  terminals. That is not a regression — before the revocation existed the same target was marked
- *  hydrated and `synced`, which reached `none` sooner — but the floor should learn to tell a
- *  revoked target from one that never answered. Tracked for the SSH-v3 consolidation, where a
- *  single authoritative liveness source replaces this pair. */
-const TERMINATED_WITHOUT_ANSWER_PHASES = new Set(['offline', 'error'])
-
 function resolveDirectSshAuthority(
   state: WorkspaceTerminalHostAuthorityState,
   targetId: string
 ): WorkspaceTerminalHostAuthority {
   const phase = state.remoteWorkspaceSyncStatusByTargetId?.[targetId]?.phase
-  if (state.remoteWorkspaceHydratedTargetIds?.has(targetId)) {
-    // Why: the same pair use-app-session-persistence.ts gates uploads on. A conflicting snapshot
-    // means the client's picture is not the host's, so it is no basis for deciding the host holds
-    // nothing.
-    return phase === 'conflict' ? 'unverifiable' : 'none'
+  // A failed or conflicting pull cannot establish the host's current inventory.
+  if (phase === 'offline' || phase === 'error' || phase === 'conflict') {
+    return 'unverifiable'
   }
-  if (phase !== undefined && TERMINATED_WITHOUT_ANSWER_PHASES.has(phase)) {
-    // The bounded floor. Without it a single failed sync leaves every git worktree on this target
-    // terminal-less and its sleeping agents unresumable for the rest of the app session — strictly
-    // worse than the pre-gate behaviour, and only escapable by creating a tab by hand. Declining to
-    // seed is meant to be a wait, not a permanent refusal.
+  if (state.remoteWorkspaceHydratedTargetIds?.has(targetId)) {
     return 'none'
   }
+
   // Not connected, still pulling, or not yet attempted — "we could not ask", never "nothing there".
   return 'unverifiable'
 }

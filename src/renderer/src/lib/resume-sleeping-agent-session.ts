@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { resolveWorktreeOperationRouteResult } from './worktree-operation-route'
 import {
   agentProviderSessionsEqual,
   type SleepingAgentSessionRecord
@@ -94,9 +95,39 @@ function activeOrQueuedResumeClaimsProviderSession(
   state: ReturnType<typeof useAppStore.getState>,
   samePaneOwnsRecovery: boolean
 ): boolean {
-  const worktreeTabIds = new Set(
-    (state.tabsByWorktree[record.worktreeId] ?? []).map((tab) => tab.id)
+  const tabWorktrees = new Map(
+    Object.entries(state.tabsByWorktree).flatMap(([worktreeId, tabs]) =>
+      tabs.map((tab) => [tab.id, worktreeId] as const)
+    )
   )
+  const recordRoute = resolveWorktreeOperationRouteResult(state, record.worktreeId)
+  const matchesScope = (
+    tabId: string,
+    providerSession: SleepingAgentSessionRecord['providerSession'] | undefined
+  ): boolean => {
+    const worktreeId = tabWorktrees.get(tabId)
+    if (!worktreeId) {
+      return false
+    }
+    if (worktreeId === record.worktreeId) {
+      return true
+    }
+    // Across workspaces, the exact transcript supplies the account namespace missing from the ID.
+    if (
+      !record.providerSession.transcriptPath ||
+      providerSession?.transcriptPath !== record.providerSession.transcriptPath
+    ) {
+      return false
+    }
+    const route = resolveWorktreeOperationRouteResult(state, worktreeId)
+    return (
+      recordRoute.kind === 'resolved' &&
+      route.kind === 'resolved' &&
+      recordRoute.route.executionHostId !== null &&
+      recordRoute.route.executionHostId === route.route.executionHostId &&
+      recordRoute.route.runtimeEnvironmentId === route.route.runtimeEnvironmentId
+    )
+  }
   for (const entry of Object.values(state.agentStatusByPaneKey)) {
     // Why: only an owned pane needs its record; hidden/live panes still dedupe by status.
     if (samePaneOwnsRecovery && entry.paneKey === record.paneKey) {
@@ -131,8 +162,8 @@ function activeOrQueuedResumeClaimsProviderSession(
     }
     if (
       entry.state !== 'done' &&
-      worktreeTabIds.has(tabId ?? '') &&
-      entry.worktreeId === record.worktreeId
+      matchesScope(tabId ?? '', entry.providerSession) &&
+      entry.worktreeId === tabWorktrees.get(tabId ?? '')
     ) {
       return true
     }
@@ -140,7 +171,7 @@ function activeOrQueuedResumeClaimsProviderSession(
 
   for (const [tabId, startup] of Object.entries(state.pendingStartupByTabId)) {
     if (
-      worktreeTabIds.has(tabId) &&
+      matchesScope(tabId, startup.resumeProviderSession) &&
       startup.launchAgent === record.agent &&
       agentProviderSessionsEqual(
         record.agent,
@@ -154,8 +185,8 @@ function activeOrQueuedResumeClaimsProviderSession(
 
   for (const [tabId, claim] of Object.entries(state.automaticAgentResumeClaimsByTabId)) {
     if (
-      worktreeTabIds.has(tabId) &&
-      claim.worktreeId === record.worktreeId &&
+      matchesScope(tabId, claim.providerSession) &&
+      claim.worktreeId === tabWorktrees.get(tabId) &&
       claim.launchAgent === record.agent &&
       agentProviderSessionsEqual(record.agent, claim.providerSession, record.providerSession)
     ) {
