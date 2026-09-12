@@ -9,6 +9,7 @@ import type { Automation, AutomationRun } from '../../../../shared/automations-t
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
 import type { AutomationDispatchContext } from './automation-row-action-dispatch'
 import type { AutomationListRow } from './automation-list-row-identity'
@@ -44,13 +45,29 @@ vi.mock('@/store', () => ({
   }
 }))
 
+function makeRepo(overrides: Partial<Repo> = {}): Repo {
+  return {
+    id: 'repo-1',
+    displayName: 'Repo 1',
+    badgeColor: '#000000',
+    addedAt: 1,
+    path: '/workspace/repo-1',
+    projectGroupId: null,
+    ...overrides
+  }
+}
+
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
     id: 'auto-1',
+    name: 'Test automation',
+    prompt: 'Test prompt',
+    precheck: null,
+    agentId: 'claude',
     projectId: 'repo-1',
     executionTargetType: 'local',
     executionTargetId: 'local',
-    schedulerOwner: 'client',
+    schedulerOwner: 'local_host_service',
     workspaceMode: 'existing',
     workspaceId: 'folder-ws-1',
     baseBranch: 'main',
@@ -60,7 +77,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
     dtstart: Date.now(),
     enabled: true,
     nextRunAt: Date.now() + 10000,
-    missedRunPolicy: 'run_once',
+    missedRunPolicy: 'run_once_within_grace',
     missedRunGraceMinutes: 10,
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -77,12 +94,21 @@ function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
     status: 'dispatched',
     trigger: 'manual',
     workspaceId: 'folder-ws-1',
+    sessionKind: 'terminal',
+    chatSessionId: null,
+    terminalSessionId: null,
+    terminalPaneKey: null,
+    terminalPtyId: null,
+    outputSnapshot: null,
+    precheckResult: null,
+    usage: null,
+    error: null,
+    startedAt: null,
+    dispatchedAt: null,
     createdAt: Date.now(),
-    updatedAt: Date.now(),
     ...overrides
   }
 }
-
 function makeWorktree(id: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
     id,
@@ -159,8 +185,9 @@ describe('expandProjectFolderOnAutomationRun', () => {
       },
       folderWorkspaces: [folderWorkspace],
       projectGroups: [rootGroup, childGroup],
-      worktrees: [],
-      repoMap: new Map<string, Repo>(),
+      repos: [],
+      worktreesByRepo: {},
+      allWorktrees: () => [],
       uncollapseSidebarGroups: mocks.uncollapseSidebarGroups
     }
   })
@@ -170,7 +197,8 @@ describe('expandProjectFolderOnAutomationRun', () => {
 
     expect(mocks.uncollapseSidebarGroups).toHaveBeenCalledWith([
       'project-group:group-root',
-      'project-group:group-child'
+      'project-group:group-child',
+      'host:local'
     ])
   })
 
@@ -179,46 +207,26 @@ describe('expandProjectFolderOnAutomationRun', () => {
 
     expect(mocks.uncollapseSidebarGroups).toHaveBeenCalledWith([
       'project-group:group-root',
-      'project-group:group-child'
+      'project-group:group-child',
+      'host:local'
     ])
   })
 
   it('uncollapses project groups and repo key for git worktrees (#20113)', () => {
-    const repo: Repo = {
+    const repo = makeRepo({
       id: 'repo-1',
-      name: 'Repo 1',
-      path: '/workspace/repo-1',
-      isBare: false,
-      isArchived: false,
-      sortOrder: 1,
+      displayName: 'Repo 1',
       projectGroupId: 'group-child'
-    }
-    const worktree: Worktree = {
-      id: 'wt-1',
-      repoId: 'repo-1',
-      path: '/workspace/repo-1/wt-1',
-      displayName: 'Feature worktree',
-      branch: 'feature',
-      head: '123456',
-      isBare: false,
-      isMainWorktree: false,
-      comment: '',
-      linkedIssue: null,
-      linkedPR: null,
-      linkedLinearIssue: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: null,
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 1,
-      lastActivityAt: 1
-    }
+    })
+    const worktree: Worktree = makeWorktree('wt-1', {
+      displayName: 'Feature worktree'
+    })
 
     mockStoreState = {
       ...mockStoreState,
-      worktrees: [worktree],
-      repoMap: new Map([['repo-1', repo]]),
+      repos: [repo],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      allWorktrees: () => [worktree],
       groupBy: 'repo'
     }
 
@@ -309,8 +317,9 @@ describe('createAutomationRunActions integration', () => {
           updatedAt: 1
         }
       ],
-      worktrees: [],
-      repoMap: new Map(),
+      repos: [],
+      worktreesByRepo: {},
+      allWorktrees: () => [],
       uncollapseSidebarGroups: mocks.uncollapseSidebarGroups,
       recordFeatureInteraction: mocks.recordFeatureInteraction
     }
@@ -321,8 +330,8 @@ describe('createAutomationRunActions integration', () => {
     const row: AutomationListRow = {
       key: 'row-1',
       automation,
-      type: 'automation',
-      isFirstGroupRow: true
+      hostLabel: 'local',
+      usageSummary: null
     }
 
     const context = {
@@ -330,15 +339,7 @@ describe('createAutomationRunActions integration', () => {
         projectHostSetups: [],
         sshConnectionStates: new Map(),
         runtimeStatusByEnvironmentId: new Map(),
-        repoForRow: () => ({
-          id: 'repo-1',
-          name: 'Repo 1',
-          path: '/workspace/repo-1',
-          isBare: false,
-          isArchived: false,
-          sortOrder: 1,
-          projectGroupId: 'group-1'
-        }),
+        repoForRow: () => makeRepo({ id: 'repo-1', projectGroupId: 'group-1' }),
         worktreeForRow: () => makeWorktree('folder-ws-1')
       },
       local: {
@@ -362,18 +363,19 @@ describe('createAutomationRunActions integration', () => {
 
     const actions = createAutomationRunActions(context)
     await actions.runNow(row)
-
-    expect(mocks.uncollapseSidebarGroups).toHaveBeenCalledWith(['project-group:group-1'])
+    expect(mocks.uncollapseSidebarGroups).toHaveBeenCalledWith([
+      'project-group:group-1',
+      'host:local'
+    ])
   })
-
   it('triggers folder uncollapse when rerunAutomationRun dispatches successfully (#20113)', async () => {
     const automation = makeAutomation({ workspaceId: 'folder-ws-1' })
     const run = makeRun({ workspaceId: 'folder-ws-1' })
     const row: AutomationListRow = {
       key: 'row-1',
       automation,
-      type: 'automation',
-      isFirstGroupRow: true
+      hostLabel: 'local',
+      usageSummary: null
     }
 
     const context = {
@@ -381,15 +383,7 @@ describe('createAutomationRunActions integration', () => {
         projectHostSetups: [],
         sshConnectionStates: new Map(),
         runtimeStatusByEnvironmentId: new Map(),
-        repoForRow: () => ({
-          id: 'repo-1',
-          name: 'Repo 1',
-          path: '/workspace/repo-1',
-          isBare: false,
-          isArchived: false,
-          sortOrder: 1,
-          projectGroupId: 'group-1'
-        }),
+        repoForRow: () => makeRepo({ id: 'repo-1', projectGroupId: 'group-1' }),
         worktreeForRow: () => makeWorktree('folder-ws-1')
       },
       local: {
@@ -414,6 +408,9 @@ describe('createAutomationRunActions integration', () => {
     const actions = createAutomationRunActions(context)
     await actions.rerunAutomationRun(row, run)
 
-    expect(mocks.uncollapseSidebarGroups).toHaveBeenCalledWith(['project-group:group-1'])
+    expect(mocks.uncollapseSidebarGroups).toHaveBeenCalledWith([
+      'project-group:group-1',
+      'host:local'
+    ])
   })
 })

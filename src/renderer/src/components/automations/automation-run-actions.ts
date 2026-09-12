@@ -1,11 +1,9 @@
 import { toast } from 'sonner'
 import type { AutomationRun } from '../../../../shared/automations-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
-import type { WorktreeGroupBy } from '../sidebar/worktree-list/grouping/row-types'
+import {
+  getSettingsFocusedExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { getFolderWorkspaceRevealGroupKeys } from '../sidebar/worktree-list/navigation/folder-reveal'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -28,20 +26,17 @@ export function expandProjectFolderOnAutomationRun(
     return
   }
   try {
-    const store = useAppStore.getState() as {
-      settings?: { expandProjectFolderOnAutomationRun?: boolean }
-      folderWorkspaces?: readonly FolderWorkspace[]
-      projectGroups?: readonly ProjectGroup[]
-      worktrees?: readonly Worktree[]
-      repoMap?: ReadonlyMap<string, Repo>
-      groupBy?: WorktreeGroupBy
-      workspaceStatuses?: readonly WorkspaceStatusDefinition[]
-      defaultHostId?: ExecutionHostId
-      uncollapseSidebarGroups?: (keys: readonly string[]) => void
-    }
+    const store = useAppStore.getState()
     if (store.settings?.expandProjectFolderOnAutomationRun === false) {
       return
     }
+    const worktrees =
+      typeof store.allWorktrees === 'function'
+        ? store.allWorktrees()
+        : Object.values(store.worktreesByRepo ?? {}).flat()
+    const repoMap = new Map((store.repos ?? []).map((r) => [r.id, r]))
+    const defaultHostId = getSettingsFocusedExecutionHostId(store.settings)
+
     const keys = getFolderWorkspaceRevealGroupKeys(
       workspaceId,
       store.folderWorkspaces ?? [],
@@ -49,9 +44,9 @@ export function expandProjectFolderOnAutomationRun(
       {
         groupBy: store.groupBy,
         workspaceStatuses: store.workspaceStatuses,
-        defaultHostId: store.defaultHostId,
-        worktrees: store.worktrees,
-        repoMap: store.repoMap,
+        defaultHostId,
+        worktrees,
+        repoMap,
         executionHostId
       }
     )
