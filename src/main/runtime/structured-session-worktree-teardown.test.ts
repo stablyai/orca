@@ -541,16 +541,20 @@ describe('worktree teardown and structured agent sessions', () => {
       records: [record('s1', WORKTREE), record('s2', WORKTREE)],
       closeGates: { s1: firstClose }
     })
-    const error = await killAllProcessesForWorktree(
-      WORKTREE,
-      destructiveDeps({ timeoutMs: 5 })
-    ).catch((thrown: Error) => thrown.message)
-    expect(error).toContain('could not confirm these closed: 2 agent sessions (claude)')
-    releaseFirstClose()
-    await new Promise((resolve) => {
-      setTimeout(resolve, 25)
-    })
-    expect(host.closed).toEqual(['s1'])
+    vi.useFakeTimers()
+    try {
+      const outcome = killAllProcessesForWorktree(
+        WORKTREE,
+        destructiveDeps({ timeoutMs: 5 })
+      ).catch((thrown: Error) => thrown.message)
+      await vi.advanceTimersByTimeAsync(5)
+      expect(await outcome).toContain('could not confirm these closed: 2 agent sessions (claude)')
+      releaseFirstClose()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(host.closed).toEqual(['s1'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('leaves the terminals already stopped when it refuses over a stuck session', async () => {
