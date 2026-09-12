@@ -2,9 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import {
   CONPTY_DA1_RESPONSE,
+  CONPTY_DA1_RESPONSE_WITHOUT_SIXEL,
   DEFAULT_DA1_RESPONSE,
+  SIXEL_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers,
+  resolveDa1Response,
   sendTerminalOscColorQueryReplies
 } from './terminal-capability-replies'
 
@@ -19,6 +22,28 @@ function createElement(width: number, height: number): HTMLElement {
     })
   } as unknown as HTMLElement
 }
+
+describe('resolveDa1Response', () => {
+  it('omits sixel unless an image handler is attached', () => {
+    expect(DEFAULT_DA1_RESPONSE).toBe('\x1b[?62;9;22c')
+    expect(SIXEL_DA1_RESPONSE).toBe('\x1b[?62;4;9;22c')
+    expect(resolveDa1Response()).toBe(DEFAULT_DA1_RESPONSE)
+    expect(resolveDa1Response({ hasImageSupport: false })).toBe(DEFAULT_DA1_RESPONSE)
+    expect(resolveDa1Response({ hasImageSupport: true })).toBe(SIXEL_DA1_RESPONSE)
+  })
+
+  it('keeps the ConPTY identity and only adds its sixel bit when an image handler is attached', () => {
+    expect(resolveDa1Response({ isNativeWindowsConpty: true })).toBe(
+      CONPTY_DA1_RESPONSE_WITHOUT_SIXEL
+    )
+    expect(resolveDa1Response({ isNativeWindowsConpty: true, hasImageSupport: false })).toBe(
+      CONPTY_DA1_RESPONSE_WITHOUT_SIXEL
+    )
+    expect(resolveDa1Response({ isNativeWindowsConpty: true, hasImageSupport: true })).toBe(
+      CONPTY_DA1_RESPONSE
+    )
+  })
+})
 
 describe('installTerminalCapabilityReplyHandlers', () => {
   it('answers primary DA1 with the default xterm-compatible response', async () => {
@@ -36,6 +61,28 @@ describe('installTerminalCapabilityReplyHandlers', () => {
 
       expect(sendInput).toHaveBeenCalledTimes(1)
       expect(sendInput).toHaveBeenCalledWith(DEFAULT_DA1_RESPONSE)
+      expect(sendInput.mock.calls[0]?.[0]).not.toContain(';4;')
+    } finally {
+      disposable.dispose()
+      term.dispose()
+    }
+  })
+
+  it('answers primary DA1 with the sixel-capable identity when that response is selected', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    const sendInput = vi.fn<(data: string) => boolean>(() => true)
+    const disposable = installTerminalCapabilityReplyHandlers({
+      terminal: term as never,
+      parser: term.parser,
+      sendInput,
+      isReplaying: () => false,
+      da1Response: SIXEL_DA1_RESPONSE
+    })
+
+    try {
+      await writeTerminal(term, '\x1b[c')
+
+      expect(sendInput).toHaveBeenCalledWith(SIXEL_DA1_RESPONSE)
     } finally {
       disposable.dispose()
       term.dispose()
