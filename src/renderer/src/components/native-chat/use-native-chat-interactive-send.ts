@@ -3,13 +3,8 @@ import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AgentType } from '../../../../shared/native-chat-types'
+import { resolveNativeChatAskAnswerBuilder } from '../../../../shared/native-chat-agent-support'
 import {
-  resolveNativeChatTranscriptAgent,
-  shouldStepNativeChatAskAnswer
-} from '../../../../shared/native-chat-agent-support'
-import {
-  buildAskAnswerKeys,
-  buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer,
   type AskAnswerSelection,
@@ -93,10 +88,10 @@ export function useNativeChatInteractiveSend(
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
       const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
-      // Claude and Codex ignore pasted labels but have different selector state
-      // machines; Grok commits pasted text. OpenClaude follows Claude's path.
-      const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
-      const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
+      // Claude, Codex, and Grok ignore pasted labels but have different selector
+      // state machines. OpenClaude follows Claude's path.
+      const answerBuilder = resolveNativeChatAskAnswerBuilder(agent)
+      const stepsAnswer = answerBuilder !== null
       // Why: pin the answered question's baseline BEFORE delivery. A late settle
       // callback (paced writes + remote acceptance can span seconds on SSH) must
       // not read the live status and mint a fresh baseline for a replacement
@@ -132,9 +127,7 @@ export function useNativeChatInteractiveSend(
         ? sendNativeChatAskAnswer(
             settings,
             targetPtyId,
-            buildsCodexAnswer
-              ? buildCodexAskAnswerKeys(prompt, selections)
-              : buildAskAnswerKeys(prompt, selections),
+            answerBuilder!(prompt, selections),
             onSettled
           )
         : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
