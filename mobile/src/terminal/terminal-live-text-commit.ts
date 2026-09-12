@@ -1,4 +1,5 @@
 import { getTerminalLiveSpecialKeyBytes } from './terminal-live-input'
+import { readUtf8CodePointAt } from '../../../src/shared/utf8-byte-limits'
 
 export type TerminalLiveSpecialKeyDecision =
   | { readonly kind: 'ignore' }
@@ -79,5 +80,7 @@ export function getTerminalLiveAccessoryLocalEditText({
     return fieldText
   }
 
-  return Array.from(fieldText).slice(0, -1).join('')
+  const end = fieldText.length
+  const width = end > 1 && readUtf8CodePointAt(fieldText, end - 2) > 0xffff ? 2 : 1
+  return fieldText.slice(0, -width)
 }
