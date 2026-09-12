@@ -3,10 +3,7 @@ import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../../../../shared/worktree/host-qualified-identity'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import WorktreeCard, { type ActiveSurfaceVariant } from '../../WorktreeCard'
 import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 import type { WorktreeGroupBy } from '../grouping/row-types'
@@ -23,6 +20,7 @@ import type { LineageToggleHandler } from '../../worktree-lineage-toggle-handler
 import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from './option-dom'
+import { isActiveWorkspaceRow } from '../../active-workspace-row'
 import type { WorktreePointerDrag, WorktreeRowDragState } from '../drag/row-state'
 
 export type WorktreeItemRowContext = {
@@ -142,11 +140,7 @@ export function renderWorktreeItemRow(
     (ctx.worktreePointerDragRef.current?.latestStatusDropTarget?.target.lineageParentId ===
       itemRow.worktree.id ||
       ctx.nativeLineageDropTargetId === itemRow.worktree.id)
-  const isActiveWorktree =
-    ctx.activeWorktreeId === itemRow.worktree.id &&
-    (!ctx.activeWorkspaceExecutionHostId ||
-      worktreeIdentity ===
-        composeWorktreeHostIdentity(ctx.activeWorkspaceExecutionHostId, itemRow.worktree.id))
+  const isActiveWorktree = isActiveWorkspaceRow(ctx, itemRow.worktree)
   return (
     <div
       key={itemRow.rowKey}

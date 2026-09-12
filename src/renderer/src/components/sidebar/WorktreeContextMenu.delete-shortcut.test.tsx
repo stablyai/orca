@@ -83,6 +83,8 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 const defaultStoreState = {
+  activeWorktreeId: 'repo::wt-1',
+  activeWorkspaceExecutionHostId: null,
   updateWorktreeMeta: vi.fn(),
   setWorktreesPinnedAndReveal: vi.fn(),
   workspaceStatuses: [],
@@ -196,6 +198,28 @@ describe('WorktreeContextMenu delete shortcut display', () => {
     const shortcuts = container.querySelectorAll('[data-testid="dropdown-menu-shortcut"]')
     const deleteShortcuts = Array.from(shortcuts).filter((el) => el.textContent === '⌘⇧⌫')
     expect(deleteShortcuts.length).toBe(1)
+  })
+
+  it('omits the delete shortcut badge on rows other than the active workspace', () => {
+    const worktree = {
+      id: 'repo::wt-2',
+      repoId: 'repo',
+      name: 'wt-2',
+      path: '/path/to/wt-2',
+      isMainWorktree: false
+    } as unknown as Worktree
+
+    const container = renderContextMenu(worktree)
+    const target = container.querySelector('[data-worktree-context-menu-scope]') as HTMLElement
+    act(() => {
+      target.dispatchEvent(
+        new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })
+      )
+    })
+
+    const shortcuts = container.querySelectorAll('[data-testid="dropdown-menu-shortcut"]')
+    const deleteShortcuts = Array.from(shortcuts).filter((el) => el.textContent === '⌘⇧⌫')
+    expect(deleteShortcuts.length).toBe(0)
   })
 
   it('omits the delete shortcut on disabled Delete Worktree for primary checkout', () => {

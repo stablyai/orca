@@ -7,9 +7,9 @@ import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-hist
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import {
-  deleteHoveredWorkspaceImmediately,
-  resolveHoveredWorkspaceDeleteTarget
-} from '../components/sidebar/hovered-workspace-delete'
+  deleteCurrentWorkspaceImmediately,
+  resolveCurrentWorkspaceDeleteTarget
+} from '../components/sidebar/current-workspace-delete'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -221,12 +221,12 @@ export function createAppCommandHandlers(
           return false
         }
         const store = useAppStore.getState()
-        const target = resolveHoveredWorkspaceDeleteTarget(store)
+        const target = resolveCurrentWorkspaceDeleteTarget(store)
         if (!target) {
           return false
         }
         return claim('workspace.delete', () => {
-          deleteHoveredWorkspaceImmediately(store, target)
+          deleteCurrentWorkspaceImmediately(store, target)
         })
       }
     ],
