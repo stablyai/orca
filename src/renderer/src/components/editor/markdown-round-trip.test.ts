@@ -26,6 +26,27 @@ function roundTripMarkdown(content: string): string {
   }
 }
 
+function countInlineMathNodes(content: string): number {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
+    contentType: 'markdown'
+  })
+  try {
+    let count = 0
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'inlineMath') {
+        count += 1
+      }
+    })
+    return count
+  } finally {
+    editor.destroy()
+  }
+}
+
 function markdownAfterTextReplace(content: string, search: string, replacement: string): string {
   const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
@@ -338,6 +359,28 @@ describe('rich markdown round trip', () => {
       `<details class="orca-details" data-orca-toggle="${variant}" open>\n<summary></summary>\n\n\n\n</details>`
     )
     expect(slashCommandSelectionParent(commandId)).toBe('detailsSummary')
+  })
+
+  it('keeps backslash-escaped characters instead of dropping them on load', () => {
+    // Why: marked emits `escape` tokens that Tiptap's parser otherwise discards, deleting the character.
+    expect(roundTripMarkdown('cost was \\$1,200, rate 5\\*, file\\_name, see \\[note\\].\n')).toBe(
+      'cost was $1,200, rate 5*, file_name, see [note].'
+    )
+  })
+
+  it('keeps escaped dollars inside table cells', () => {
+    expect(roundTripMarkdown('| Item | Amount |\n|---|---|\n| Fee | \\$500 |\n')).toContain('$500')
+  })
+
+  it('keeps dollar amounts as text instead of inline math', () => {
+    const content = 'from $10 to $20, then (deficit −$509,542 by end-2020) entered 2021 at $0'
+    expect(countInlineMathNodes(content)).toBe(0)
+    expect(roundTripMarkdown(`${content}\n`)).toBe(content)
+  })
+
+  it('still parses inline math that touches its dollar signs', () => {
+    expect(countInlineMathNodes('Energy is $E = mc^2$ here, and $x_1$ too.')).toBe(2)
+    expect(roundTripMarkdown('Energy is $E = mc^2$ here.\n')).toBe('Energy is $E = mc^2$ here.')
   })
 
   it('preserves markdown tables', () => {

@@ -50,6 +50,27 @@ const RichMarkdownLink = Link.extend({
   priority: 90
 })
 
+// Why: upstream treats any same-line `$…$` pair as LaTeX, so "from $10 to $20" or
+// "at $0" became math atoms that also trim the text between the signs. Pandoc's
+// rule keeps money as text: both `$` must touch the formula and the closing one
+// must not be followed by a digit.
+const INLINE_MATH_PATTERN = /^\$(?![\s$])([^$\n]*?[^\s$\\])\$(?!\d)/
+
+const RichMarkdownInlineMath = InlineMath.extend({
+  markdownTokenizer: {
+    name: 'inlineMath',
+    level: 'inline',
+    start: (src: string) => src.indexOf('$'),
+    tokenize: (src: string) => {
+      const match = src.match(INLINE_MATH_PATTERN)
+      if (!match) {
+        return undefined
+      }
+      return { type: 'inlineMath', raw: match[0], latex: match[1].trim() }
+    }
+  }
+})
+
 const RichMarkdownCode = Code.extend({
   // Why: Markdown supports linked code labels, so code cannot exclude the link
   // mark even though it should still stay exclusive with emphasis marks.
@@ -230,7 +251,7 @@ export function createRichMarkdownExtensions({
     TableRow,
     TableHeader,
     TableCell,
-    InlineMath.configure({
+    RichMarkdownInlineMath.configure({
       katexOptions: {
         throwOnError: false
       }

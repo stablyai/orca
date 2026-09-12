@@ -74,11 +74,24 @@ export function reconcileSerializedMarkdown({
   }
 
   // Branch 4: run the divergent-base patch entirely in LF space.
+  // Why: getMarkdown emits no trailing newline while the source usually has one, so an end-of-document
+  // hunk (whose trailing context is dmp's end-of-text padding) lands after the source's newline, fails
+  // the branch-6 proof, and canonicalizes the whole file. Patch the bodies and re-attach the newline run.
+  const sourceTrailingNewlines = originalSourceLf.match(/\n+$/)?.[0] ?? ''
+  const baseTrailingNewlines = baseLf.match(/\n+$/)?.[0] ?? ''
+  const editedTrailingNewlines = editedLf.match(/\n+$/)?.[0] ?? ''
+  const sourceBody = stripTrailingNewlines(originalSourceLf)
+  const baseBody = stripTrailingNewlines(baseLf)
+  const editedBody = stripTrailingNewlines(editedLf)
+  // Same rule as branch 2: an edit that changes the trailing run is semantic and rides on top of the source's own run.
+  const reconciledTrailingNewlines =
+    (editedTrailingNewlines === baseTrailingNewlines ? '' : editedTrailingNewlines) +
+    sourceTrailingNewlines
   // Why: dmp's half-match accelerator ignores the diff deadline (100ms+ on repeated seeds), so bail to canonical for highly repetitive replacements.
-  if (hasRepeatedHalfMatchSeed(baseLf, editedLf)) {
+  if (hasRepeatedHalfMatchSeed(baseBody, editedBody)) {
     return restoreEol(editedLf, eol)
   }
-  let diffs = makeDiff(baseLf, editedLf, {
+  let diffs = makeDiff(baseBody, editedBody, {
     checkLines: true,
     timeout: RECONCILE_DIFF_TIMEOUT_SECONDS
   })
@@ -87,17 +100,18 @@ export function reconcileSerializedMarkdown({
     diffs = cleanupSemantic(diffs)
     diffs = cleanupEfficiency(diffs)
   }
-  const patches = makePatches(baseLf, diffs)
+  const patches = makePatches(baseBody, diffs)
   // Why: applyPatches decodes starts as UTF-8 offsets even though makePatches returns UTF-16 indices; encode against the divergent text being patched so decoding preserves the fuzzy-match seed.
   const utf8Offsets = getUtf8OffsetsAtCodeUnitIndices(
-    originalSourceLf,
+    sourceBody,
     patches.flatMap((patch) => [patch.start1, patch.start2])
   )
   for (const patch of patches) {
     patch.start1 = utf8Offsets.get(patch.start1) ?? 0
     patch.start2 = utf8Offsets.get(patch.start2) ?? 0
   }
-  const [reconciledLf, results] = applyPatches(patches, originalSourceLf)
+  const [reconciledBody, results] = applyPatches(patches, sourceBody)
+  const reconciledLf = reconciledBody + reconciledTrailingNewlines
 
   // Branch 5: a hunk failed to locate in the non-canonical source → unreliable fuzzy match, fall back to canonical.
   if (results.some((applied) => !applied)) {

@@ -13,6 +13,17 @@ import {
   marked
 } from 'marked'
 
+/** Rewrites escape tokens in place (marked fills caller-owned arrays for table cells). */
+function preserveEscapedCharacters(tokens: Token[]): Token[] {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]
+    if (token.type === 'escape') {
+      tokens[index] = { type: 'text', raw: token.raw, text: token.text, escaped: false }
+    }
+  }
+  return tokens
+}
+
 export function createTiptapMarkedFacade(): typeof marked {
   const registry = new Marked()
 
@@ -25,6 +36,12 @@ export function createTiptapMarkedFacade(): typeof marked {
         ...options,
         extensions: registry.defaults.extensions
       })
+    }
+
+    // Why: Tiptap's markdown parser has no case for marked's `escape` token, so
+    // `\$`, `\*`, `\_`, `\[` would be deleted from the document on load.
+    inlineTokens(src: string, tokens: Token[] = []): Token[] {
+      return preserveEscapedCharacters(super.inlineTokens(src, tokens))
     }
   }
 
