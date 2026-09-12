@@ -712,6 +712,27 @@ describe('Session', () => {
       expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
     })
 
+    it('shell-foreground kill stays on the plain path', () => {
+      createSession()
+      subprocess.foregroundProcess = 'zsh'
+      session.kill()
+      expect(subprocess.killed).toBe(true)
+      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
+    })
+
+    it('recognized agent foreground kill routes through the descendant sweep without launchAgent', () => {
+      // Why: a hand-typed `claude` leaks its detached MCP children if teardown trusts launchAgent alone.
+      createSession()
+      subprocess.foregroundProcess = 'claude'
+      session.kill()
+      expect(killWithDescendantSweepMock).toHaveBeenCalledWith(
+        subprocess.pid,
+        expect.any(Function),
+        expect.objectContaining({ ownsRoot: expect.any(Function) })
+      )
+      expect(subprocess.killed).toBe(false)
+    })
+
     it('agent kill routes through the descendant sweep with the subprocess as root', () => {
       createSession({ launchAgent: 'claude' })
       session.kill()
