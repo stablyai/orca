@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
     generatedAt: now,
     cards: []
   })),
+  activateAndRevealWorktree: vi.fn(),
   offRevealAgent: vi.fn(),
   offAckAgent: vi.fn(),
   offPopoutOpenChanged: vi.fn(),
@@ -41,7 +42,8 @@ vi.mock('@/lib/activate-tab-and-focus-pane', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
+  activateAndRevealWorkspace: mocks.activateAndRevealWorkspace,
+  activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
 vi.mock('./build-dashboard-snapshot', () => ({
@@ -324,6 +326,31 @@ describe('useDashboardPopoutBridge', () => {
     expect(mocks.offAckAgent).toHaveBeenCalledTimes(1)
     expect(mocks.offPopoutOpenChanged).toHaveBeenCalledTimes(1)
     expect(mocks.offSnapshotRequested).toHaveBeenCalledTimes(1)
+  })
+
+  it('reveal activates the worktree through the full activation helper before focusing the pane', async () => {
+    mocks.activateAndRevealWorkspace.mockReturnValue({ primaryTabId: null })
+    await act(async () => root.render(<Harness enabled />))
+
+    const reveal = mocks.onRevealAgent.mock.calls[0]?.[0] as (args: {
+      repoId: string
+      worktreeId: string
+      tabId: string
+      leafId: string | null
+    }) => void
+    expect(reveal).toBeTypeOf('function')
+
+    await act(async () => {
+      reveal({ repoId: 'repo-1', worktreeId: 'wt-1', tabId: 'tab-1', leafId: 'leaf-1' })
+    })
+
+    // Why: bare setActiveWorktree skips setActiveView('terminal') and the
+    // initial-terminal/session-resume guards a remote worktree needs.
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', undefined)
+    expect(mocks.activateTabAndFocusPane).toHaveBeenCalledWith('tab-1', 'leaf-1', {
+      flashFocusedPane: true
+    })
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
   })
 })
 

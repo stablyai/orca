@@ -1,6 +1,7 @@
 import type { FocusTerminalPaneDetail } from '@/constants/terminal'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
+import { clearPendingPaneFocus } from '@/lib/pending-pane-focus'
 import { flashFocusedPaneRim } from './focused-pane-rim-flash'
 
 type FocusTerminalPaneManager = {
@@ -47,6 +48,9 @@ export function handleFocusTerminalPaneDetail(
     return
   }
   manager.setActivePane(resolution.numericPaneId, { focus: true })
+  // Why: the live listener handled it; drop any parked copy so a pane mounting
+  // late does not re-fire the same focus.
+  clearPendingPaneFocus(tabId)
   if (detail.scrollToBottomIfOutputSinceLastView) {
     scrollToBottomIfOutputSinceLastView?.(resolution.numericPaneId)
   }
