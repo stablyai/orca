@@ -424,6 +424,8 @@ describe('successful client accept timing', () => {
       ) as { connId: string; connTicket: string }
       // The desktop's data leg is the attach window this is meant to expose.
       now += 23
+      const session = h.registry.get({ userId: identity.sub, relayHostId: identity.relayHostId })!
+      const ownerProbe = vi.spyOn(session.pendingConns, 'has')
       const accepted = await h.registry.acceptHostData(
         hostData as unknown as WebSocket,
         connOpen.connId,
@@ -432,6 +434,7 @@ describe('successful client accept timing', () => {
       )
 
       expect(accepted).toBe(true)
+      expect(ownerProbe).toHaveBeenCalledOnce()
       expect(h.observer.recordClientAcceptCompleted).toHaveBeenCalledWith({
         totalMs: 49,
         stageMs: { assignment: 5, credential: 7, activity: 11, attach: 23, basis: 3 }

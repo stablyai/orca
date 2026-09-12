@@ -511,16 +511,20 @@ export class HostSessionRegistry {
     connTicket: string,
     generation: number
   ): Promise<boolean> {
-    const owner = [...this.sessions.values()].find((candidate) =>
-      candidate.pendingConns.has(connId)
-    )
+    let owner: HostSession | undefined
+    for (const candidate of this.sessions.values()) {
+      if (candidate.pendingConns.has(connId)) {
+        owner = candidate
+        break
+      }
+    }
     const release = owner ? this.beginIdleWork(owner.relayHostId) : () => {}
     if (!release) {
       socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'idle cutover in progress')
       return false
     }
     try {
-      return await this.acceptHostDataUnfenced(socket, connId, connTicket, generation)
+      return await this.acceptHostDataUnfenced(socket, connId, connTicket, generation, owner)
     } finally {
       release()
     }
@@ -530,11 +534,9 @@ export class HostSessionRegistry {
     socket: WebSocket,
     connId: string,
     connTicket: string,
-    generation: number
+    generation: number,
+    session: HostSession | undefined
   ): Promise<boolean> {
-    const session = [...this.sessions.values()].find((candidate) =>
-      candidate.pendingConns.has(connId)
-    )
     const pending = session?.pendingConns.get(connId)
     if (
       !session ||
