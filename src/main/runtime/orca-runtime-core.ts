@@ -93,7 +93,8 @@ export const SSH_PANE_RECOVERY_GRACE_MS = 30_000
 // Why: long enough that a keystroke burst to a proven-dead leaf probes once,
 // short enough that a recreated session id regains writability quickly even if
 // its runtime record (which also invalidates the verdict) is late.
-export const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
+// PROVEN_ABSENT_LEAF_PTY_TTL_MS imported from proven-absent-leaf-pty-verdicts.ts (#12660).
+export { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './proven-absent-leaf-pty-verdicts'
 
 export const TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS = 2_000
 

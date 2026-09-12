@@ -1,6 +1,10 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithResolveTerminalPane } from './orca-runtime-resolve-terminal-pane'
-import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './orca-runtime-core'
+import {
+  PROVEN_ABSENT_LEAF_PTY_TTL_MS,
+  pruneProvenAbsentLeafPtyVerdicts,
+  recordProvenAbsentLeafPtyVerdict
+} from './proven-absent-leaf-pty-verdicts'
 import type { RuntimeTerminalSend } from '../../shared/runtime-types'
 import type { RuntimeAgentPromptWriteOptions } from './runtime-terminal-contracts'
 import {
@@ -21,6 +25,8 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
 
   /** True only on controller-proven absence; live, unknown, and probe errors all answer false. */
   protected isLeafPtyProvenAbsent(ptyId: string): Promise<boolean> {
+    // Why: expired entries only dropped on re-probe leave process-lifetime growth (#12660).
+    pruneProvenAbsentLeafPtyVerdicts(this.provenAbsentLeafPtyVerdicts)
     // Why hasPty and not ptysById: graph sync mirrors a connected record for
     // every leaf ptyId — including a prior process's — so runtime records can't
     // distinguish live from stale. The controller's exact-id hasPty is the
@@ -50,7 +56,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         if ((await probeLiveness(ptyId)) !== false) {
           return false
         }
-        this.provenAbsentLeafPtyVerdicts.set(ptyId, Date.now())
+        recordProvenAbsentLeafPtyVerdict(this.provenAbsentLeafPtyVerdicts, ptyId)
         return true
       } catch {
         // Why: a failed probe is unknown, and unknown never rejects a write.
