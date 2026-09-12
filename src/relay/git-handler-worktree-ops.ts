@@ -1,4 +1,5 @@
 import * as path from 'node:path'
+import { runWithGitIndexLockRetry } from '../shared/git-index-lock-retry'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree/base-ref'
 import { windowsLongPathGitArgs } from '../shared/windows-long-path-git-args'
 import type { GitExec } from './git-handler-ops'
@@ -162,7 +163,8 @@ export async function worktreeIsCleanOp(
 export async function commitChangesRelay(
   git: GitExec,
   worktreePath: string,
-  message: string
+  message: string,
+  signal?: AbortSignal
 ): Promise<{ success: boolean; error?: string }> {
   // Why: defense-in-depth. The IPC handler at src/main/ipc/filesystem.ts validates
   // the message, but a relay caller (future automation, or an SSH client connecting
@@ -173,7 +175,9 @@ export async function commitChangesRelay(
   }
 
   try {
-    await git(['commit', '-m', message], worktreePath)
+    // Why: the signal governs the lock wait and retry backoff only. A commit that has started
+    // must finish even if the client times out or drops (hooks can outlive the RPC timeout).
+    await runWithGitIndexLockRetry(() => git(['commit', '-m', message], worktreePath), signal)
     return { success: true }
   } catch (error) {
     // Why: surface whichever channel carries the useful message. Pre-commit/GPG
