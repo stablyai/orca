@@ -52,6 +52,8 @@ export function buildDefaultSettings(args: {
     editorMinimapEnabled: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
+    // Why zero: the editor keeps following the terminal font weight unless the user opts in.
+    editorFontWeight: 0,
     editorWordWrap: true,
     richMarkdownSpellcheckEnabled: true,
     markdownReviewToolsEnabled: true,

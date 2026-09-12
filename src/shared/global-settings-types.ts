@@ -89,6 +89,8 @@ export type GlobalSettings = {
   editorMinimapEnabled: boolean
   /** Opt-in code-editor font; empty (the default) keeps following `terminalFontFamily`. */
   editorFontFamily?: string
+  /** Opt-in code-editor font weight; 0 (the default) keeps following `terminalFontWeight`. */
+  editorFontWeight?: number
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */

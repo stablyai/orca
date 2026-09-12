@@ -1,3 +1,5 @@
+import { normalizeTerminalFontWeight } from '../../../shared/terminal-fonts'
+
 const EDITOR_FONT_ZOOM_MIN = -6
 const EDITOR_FONT_ZOOM_MAX = 18
 const EDITOR_FONT_ZOOM_STEP = 1
@@ -49,4 +51,41 @@ export function resolveEditorFontFamilyOrInherit(
   settings?: EditorFontFamilySettings | null
 ): string | undefined {
   return settings?.editorFontFamily?.trim() || settings?.terminalFontFamily || undefined
+}
+
+export type EditorFontWeightSettings = {
+  editorFontWeight?: number
+  terminalFontWeight?: number
+}
+
+/**
+ * Why: the editor weight is opt-in and defaults to 0, so an unset value must keep
+ * following the terminal weight exactly as before the setting existed. Returns a
+ * string because that is the type Monaco's `fontWeight` editor option accepts.
+ */
+export function resolveEditorFontWeight(settings?: EditorFontWeightSettings | null): string {
+  const editorFontWeight = settings?.editorFontWeight
+  const weight =
+    typeof editorFontWeight === 'number' && editorFontWeight > 0
+      ? editorFontWeight
+      : settings?.terminalFontWeight
+
+  return String(normalizeTerminalFontWeight(weight))
+}
+
+export type EditorFontSettings = EditorFontFamilySettings & EditorFontWeightSettings
+
+/**
+ * Why grouped: every Monaco surface sets family and weight together, so resolving
+ * them in one call keeps option objects (and their import lists) from growing a
+ * line per typography knob.
+ */
+export function resolveEditorFontOptions(settings?: EditorFontSettings | null): {
+  fontFamily: string
+  fontWeight: string
+} {
+  return {
+    fontFamily: resolveEditorFontFamily(settings),
+    fontWeight: resolveEditorFontWeight(settings)
+  }
 }

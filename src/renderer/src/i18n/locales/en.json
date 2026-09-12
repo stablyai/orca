@@ -9652,7 +9652,10 @@
             "sidebar": "sidebar",
             "867dddea41": "pinned",
             "5250cf0e48": "pin",
-            "afa37a34e1": "close"
+            "afa37a34e1": "close",
+            "editorFontWeight": "Editor Font Weight",
+            "editorFontWeightDesc": "Weight used by file editors and diff views. Leave empty to follow the terminal font weight.",
+            "editorFontWeightKw": "weight"
           }
         },
         "git": {
@@ -11160,6 +11163,11 @@
           "title": "Editor Font Family",
           "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
+        },
+        "EditorFontWeightSetting": {
+          "title": "Editor Font Weight",
+          "description": "Weight used by file editors and diff views. Leave empty to follow the terminal font weight.",
+          "placeholder": "Same as terminal font weight"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

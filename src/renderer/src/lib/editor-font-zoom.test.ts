@@ -4,7 +4,8 @@ import {
   computeDiffEditorFontSize,
   computeEditorFontSize,
   resolveEditorFontFamily,
-  resolveEditorFontFamilyOrInherit
+  resolveEditorFontFamilyOrInherit,
+  resolveEditorFontWeight
 } from './editor-font-zoom'
 
 describe('editor font zoom', () => {
@@ -64,5 +65,26 @@ describe('resolveEditorFontFamilyOrInherit', () => {
         terminalFontFamily: 'Menlo'
       })
     ).toBe('Fira Code')
+  })
+})
+
+describe('resolveEditorFontWeight', () => {
+  it('follows the terminal weight when no editor override is set', () => {
+    expect(resolveEditorFontWeight({ terminalFontWeight: 400 })).toBe('400')
+    expect(resolveEditorFontWeight({ editorFontWeight: 0, terminalFontWeight: 400 })).toBe('400')
+  })
+
+  it('uses the opt-in editor weight override instead of the terminal weight', () => {
+    expect(resolveEditorFontWeight({ editorFontWeight: 300, terminalFontWeight: 600 })).toBe('300')
+  })
+
+  it('falls back to the default terminal weight when neither weight is set', () => {
+    expect(resolveEditorFontWeight(undefined)).toBe('500')
+    expect(resolveEditorFontWeight({})).toBe('500')
+  })
+
+  it('clamps out-of-range overrides into the supported 100-900 band', () => {
+    expect(resolveEditorFontWeight({ editorFontWeight: 5000 })).toBe('900')
+    expect(resolveEditorFontWeight({ editorFontWeight: 50 })).toBe('100')
   })
 })
