@@ -12,10 +12,23 @@ import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wi
 const MODEL_PAGE_LIMIT = 100
 const MAX_MODEL_PAGES = 20
 
+export type CodexModelCatalog = Pick<AgentSessionOptionsResult, 'models'> | null | undefined
+
 export function restoredCodexSessionOptions(
-  options: Readonly<Record<string, string>> | undefined
+  options: Readonly<Record<string, string>> | undefined,
+  catalog: CodexModelCatalog
 ): Map<string, string> {
-  return new Map(Object.entries(options ?? {}).filter(([key]) => isCodexTurnOptionKey(key)))
+  const restored = new Map(
+    Object.entries(options ?? {}).filter(
+      ([key, value]) => isCodexTurnOptionKey(key) && (key !== 'model' || value.length > 0)
+    )
+  )
+  const model = restored.get('model')
+  if (model && !codexCatalogAdmitsModel(catalog, model)) {
+    restored.delete('model')
+    restored.delete('effort')
+  }
+  return restored
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -102,13 +115,8 @@ export async function readCodexStructuredSessionOptions(input: {
       break
     }
   }
-  if (input.current.model && !models.some((model) => model.id === input.current.model)) {
-    models.push({
-      id: input.current.model,
-      label: input.current.model,
-      isDefault: false,
-      efforts: []
-    })
+  if (cursor) {
+    throw new Error(`codex app-server model enumeration exceeded ${MAX_MODEL_PAGES} pages`)
   }
   const model = input.current.model ?? models.find((entry) => entry.isDefault)?.id ?? models[0]?.id
   if (!model) {
@@ -120,12 +128,23 @@ export async function readCodexStructuredSessionOptions(input: {
   }
 }
 
+/** Returns the final admission decision, including unavailable evidence's permissive case. */
+export function codexCatalogAdmitsModel(catalog: CodexModelCatalog, modelId: string): boolean {
+  const models = catalog?.models ?? []
+  // An empty list identifies no model, so it is not evidence against one — a
+  // CLI unable to answer model/list must not have every model refused under it.
+  // Do not turn this into a refusal.
+  return models.length === 0 || models.some((model) => model.id === modelId)
+}
+
 export function reportedCodexThreadOptions(
-  opened: CodexOpenedThread
+  opened: CodexOpenedThread,
+  catalog: CodexModelCatalog
 ): CodexSession['reportedOptions'] {
+  const modelAdmitted = !opened.model || codexCatalogAdmitsModel(catalog, opened.model)
   return {
-    ...(opened.model ? { model: opened.model } : {}),
-    ...(opened.effort ? { effort: opened.effort } : {})
+    ...(opened.model && modelAdmitted ? { model: opened.model } : {}),
+    ...(opened.effort && modelAdmitted ? { effort: opened.effort } : {})
   }
 }
 
