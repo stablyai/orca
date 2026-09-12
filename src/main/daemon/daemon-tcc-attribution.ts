@@ -1,8 +1,12 @@
+import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
+import { promisify } from 'node:util'
 import { getDaemonPidPath } from './daemon-spawner'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import { readVerifiedDaemonPid } from './daemon-pid-identity'
 import { PROTOCOL_VERSION } from './types'
+
+const execFileAsync = promisify(execFile)
 
 // 'severed': macOS can no longer resolve the daemon's TCC responsible process, so
 // Accessibility/Automation grants on Orca silently stop covering its terminals (STA-3491).
@@ -30,6 +34,19 @@ function getMacDaemonTccAttributionCacheKey(
     return JSON.stringify([socketPath, tokenPath, protocolVersion, pidRecord, spawnerExists])
   } catch {
     return null
+  }
+}
+
+export async function checkMacProcessTccAttributionIntact(pid: number): Promise<boolean> {
+  try {
+    await execFileAsync('/usr/bin/codesign', ['-v', `+${pid}`], { timeout: 2_000 })
+    return true
+  } catch (err: unknown) {
+    const execErr = err as { code?: unknown; killed?: boolean }
+    if (typeof execErr?.code === 'number' && !execErr.killed) {
+      return false
+    }
+    return true
   }
 }
 
@@ -67,21 +84,23 @@ export async function getMacDaemonTccAttributionHealth(
     if (!parsedPid) {
       return 'unknown'
     }
-    if (parsedPid.spawnerExecPath) {
-      return existsSync(parsedPid.spawnerExecPath) ? 'intact' : 'severed'
+    if (!parsedPid.spawnerExecPath) {
+      return 'unknown'
     }
-    return 'unknown'
+    if (!existsSync(parsedPid.spawnerExecPath)) {
+      return 'severed'
+    }
+    const intact = await checkMacProcessTccAttributionIntact(parsedPid.pid)
+    return intact ? 'intact' : 'severed'
   })()
   if (cacheKey) {
     cachedMacDaemonTccAttributionHealth = { key: cacheKey, pending }
   }
-  const health = await pending
-  if (
-    health === 'unknown' &&
-    cachedMacDaemonTccAttributionHealth?.key === cacheKey &&
-    cachedMacDaemonTccAttributionHealth.pending === pending
-  ) {
-    cachedMacDaemonTccAttributionHealth = null
+  try {
+    return await pending
+  } finally {
+    if (cachedMacDaemonTccAttributionHealth?.pending === pending) {
+      cachedMacDaemonTccAttributionHealth = null
+    }
   }
-  return health
 }

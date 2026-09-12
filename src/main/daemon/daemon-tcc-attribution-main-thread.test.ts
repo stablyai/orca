@@ -12,11 +12,19 @@ const PS_STARTED_AT_MS = Date.parse(PS_START)
 const { execFileMock, execFileSyncMock, psCommandLine, psError } = vi.hoisted(() => ({
   execFileMock: vi.fn(
     (
-      _file: string,
+      file: string,
       _args: readonly string[],
       _options: unknown,
       callback: (error: Error | null, stdout: string, stderr: string) => void
-    ) => callback(psError.value, psError.value ? '' : `${PS_START} ${psCommandLine.value}\n`, '')
+    ) => {
+      if (file === 'ps' && psError.value) {
+        return callback(psError.value, '', '')
+      }
+      if (file === '/usr/bin/codesign' || file === 'codesign') {
+        return callback(null, '', '')
+      }
+      return callback(null, `${PS_START} ${psCommandLine.value}\n`, '')
+    }
   ),
   execFileSyncMock: vi.fn(() => ''),
   psCommandLine: { value: '' },
@@ -137,15 +145,18 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
         getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)
       ])
     ).resolves.toEqual(['intact', 'intact'])
-    await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
-      'intact'
-    )
 
     expect(execFileSyncMock).not.toHaveBeenCalled()
-    expect(execFileMock).toHaveBeenCalledTimes(1)
+    expect(execFileMock).toHaveBeenCalledTimes(2)
     expect(execFileMock).toHaveBeenCalledWith(
       'ps',
       ['-p', String(process.pid), '-o', 'lstart=', '-o', 'command='],
+      expect.anything(),
+      expect.any(Function)
+    )
+    expect(execFileMock).toHaveBeenCalledWith(
+      '/usr/bin/codesign',
+      ['-v', `+${process.pid}`],
       expect.anything(),
       expect.any(Function)
     )
@@ -154,13 +165,13 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
     await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
       'intact'
     )
-    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenCalledTimes(4)
 
     rmSync(spawnerExecPath)
     await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
       'severed'
     )
-    expect(execFileMock).toHaveBeenCalledTimes(3)
+    expect(execFileMock).toHaveBeenCalledTimes(5)
   })
 
   it('retries an indeterminate identity inspection', async () => {
@@ -176,7 +187,7 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
     )
 
     expect(execFileSyncMock).not.toHaveBeenCalled()
-    expect(execFileMock).toHaveBeenCalledTimes(2)
+    expect(execFileMock).toHaveBeenCalledTimes(3)
   })
 
   it('fails open for a legacy pid record without app-version metadata', async () => {
