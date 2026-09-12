@@ -6,7 +6,7 @@ import type {
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
-import { dedupeCodexSessionsBySessionId } from './codex-session-root-dedup'
+import { CodexSessionCollection, dedupeCodexSessionsBySessionId } from './codex-session-root-dedup'
 import {
   createAntigravityWorkspaceResolver,
   readLocalAntigravityHistory,
@@ -211,7 +211,7 @@ async function parseSessionCandidates(args: {
   signal?: AbortSignal
   antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
 }): Promise<AiVaultSession[]> {
-  const sessions: AiVaultSession[] = []
+  const sessions = new CodexSessionCollection()
   let index = 0
 
   while (index < args.candidates.length) {
@@ -221,7 +221,7 @@ async function parseSessionCandidates(args: {
     }
 
     const remaining = args.candidates.length - index
-    const needed = Math.max(args.limit - sessions.length, 1)
+    const needed = Math.max(args.limit - sessions.size, 1)
     const batchSize = Math.min(SESSION_PARSE_CONCURRENCY, needed, remaining)
     const batch = args.candidates.slice(index, index + batchSize)
     const results = await Promise.all(
@@ -241,14 +241,9 @@ async function parseSessionCandidates(args: {
         recordSessionScanIssue(args.issues, result.issue)
       }
       if (result.session) {
-        sessions.push(result.session)
+        sessions.add(result.session)
       }
     }
-
-    // Why: cross-volume backfill copies have no shared inode, so collapse
-    // parsed aliases before they can crowd the unique-session parse budget.
-    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
-    sessions.splice(0, sessions.length, ...uniqueSessions)
 
     index += batchSize
   }
@@ -256,7 +251,7 @@ async function parseSessionCandidates(args: {
   // An abort can land while the final batch settles; observe it here so a
   // partial parse is never cached or returned as a complete scan.
   throwIfAiVaultScanCancelled(args.signal)
-  return sessions
+  return [...sessions.values()]
 }
 
 async function parseSessionCandidate(
@@ -303,15 +298,14 @@ function withSessionExecutionHost(
 }
 
 function canStopParsingSessions(
-  sessions: AiVaultSession[],
+  sessions: CodexSessionCollection,
   limit: number,
   nextCandidateMtimeMs: number | undefined
 ): boolean {
-  if (sessions.length < limit || typeof nextCandidateMtimeMs !== 'number') {
+  if (sessions.size < limit || typeof nextCandidateMtimeMs !== 'number') {
     return false
   }
-  const visibleCutoff = sessions
-    .map(sessionSortTime)
+  const visibleCutoff = Array.from(sessions.values(), sessionSortTime)
     .sort((left, right) => right - left)
     .at(limit - 1)
 
