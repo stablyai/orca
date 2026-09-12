@@ -125,11 +125,14 @@ describe('browser RPC methods', () => {
     )
 
     expect(runtime.browserSnapshot).toHaveBeenCalledWith({ worktree: 'id:wt-1' })
-    expect(runtime.browserGoto).toHaveBeenCalledWith({
-      worktree: 'id:wt-1',
-      page: 'page-1',
-      url: 'https://example.com'
-    })
+    expect(runtime.browserGoto).toHaveBeenCalledWith(
+      {
+        worktree: 'id:wt-1',
+        page: 'page-1',
+        url: 'https://example.com'
+      },
+      { clientKind: undefined }
+    )
     expect(runtime.browserTabCreate).toHaveBeenCalledWith(
       {
         worktree: 'id:wt-1',

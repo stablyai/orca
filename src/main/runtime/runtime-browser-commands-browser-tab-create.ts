@@ -6,6 +6,7 @@ import {
   publishCreatedBrowserSessionTab,
   resolveBrowserTabCreateFocus
 } from './browser-tab-create-publication'
+import { guardPairedBrowserNavigation } from './browser-file-url-confinement'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { BrowserError } from '../browser/browser-error'
 import { randomUUID } from 'node:crypto'
@@ -45,6 +46,12 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
         : await this.host.resolveWorktreeSelector(params.worktree)
       : undefined
     const worktreeId = worktree?.id
+    await guardPairedBrowserNavigation({
+      url,
+      pairedCaller: Boolean(caller?.pairedDeviceId),
+      placementKind: params.placement?.kind,
+      resolveWorktree: async () => worktree
+    })
     const sessionPartition = browserSessionRegistry.resolveKnownPartition(params.profileId)
     if (!sessionPartition) {
       throw new BrowserError(
