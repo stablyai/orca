@@ -26,6 +26,13 @@ import {
 
 let tempRoots: string[] = []
 
+// Captured at module load, before seedSession() redirects the home dir. The
+// redirect outlives each test, so it has to be undone once the fixtures are gone.
+const originalHomeEnv: Record<string, string | undefined> = {
+  HOME: process.env.HOME,
+  USERPROFILE: process.env.USERPROFILE
+}
+
 function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
 }
@@ -43,7 +50,10 @@ async function seedSession(sessionId: string, turns: number): Promise<string> {
   }))
   const filePath = join(projectDir, `${sessionId}.jsonl`)
   await writeFile(filePath, jsonLines(records))
+  // os.homedir() reads USERPROFILE on Windows and HOME on POSIX, so the fixture
+  // home has to override both for the resolver to land inside the temp dir.
   process.env.HOME = root
+  process.env.USERPROFILE = root
   return filePath
 }
 
@@ -73,6 +83,13 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
+  for (const [key, value] of Object.entries(originalHomeEnv)) {
+    if (value === undefined) {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  }
 })
 
 describe('readNativeChatTranscriptCached', () => {
