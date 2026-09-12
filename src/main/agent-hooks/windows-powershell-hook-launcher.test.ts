@@ -36,8 +36,8 @@ describe('windows PowerShell hook launcher', () => {
     expect(WINDOWS_POWERSHELL_HOOK_SWITCHES).not.toMatch(/-ExecutionPolicy/i)
     expect(switches).not.toMatch(/-ExecutionPolicy/i)
     // Why: measured exit 126 for the denied switch paired with -EncodedCommand.
-    expect(WINDOWS_POWERSHELL_HOOK_SWITCHES).toBe('-NoProfile')
-    expect(switches).toBe(`${getWindowsPowerShellExecutablePath()} -NoProfile`)
+    expect(WINDOWS_POWERSHELL_HOOK_SWITCHES).toBe('-NoProfile -NonInteractive')
+    expect(switches).toBe(`${getWindowsPowerShellExecutablePath()} -NoProfile -NonInteractive`)
   })
 
   it('pins the exact launcher shape so a flag cannot come back unnoticed', () => {
@@ -46,8 +46,8 @@ describe('windows PowerShell hook launcher', () => {
     // it. Restoring either denied switch re-breaks every hook on an AV host.
     const command = wrapWindowsPowerShellEncodedCommand('exit 0')
 
-    expect(WINDOWS_POWERSHELL_HOOK_SWITCHES).toBe('-NoProfile')
-    expect(command).toMatch(/ -NoProfile -EncodedCommand [A-Za-z0-9+/=]+$/)
+    expect(WINDOWS_POWERSHELL_HOOK_SWITCHES).toBe('-NoProfile -NonInteractive')
+    expect(command).toMatch(/ -NoProfile -NonInteractive -EncodedCommand [A-Za-z0-9+/=]+$/)
   })
 
   it('keeps the execution-policy bypass, in the payload where AV cannot read it', () => {

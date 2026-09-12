@@ -69,7 +69,7 @@ describe('getWindowsManagedLifecycleHook', () => {
     const hook = getWindowsManagedLifecycleHook(UNSAFE_SCRIPT_PATH, { gitBashAvailable: true })
 
     expect(hook.args).toBeUndefined()
-    expect(hook.command).toMatch(/\/powershell\.exe -NoProfile -EncodedCommand /)
+    expect(hook.command).toMatch(/\/powershell\.exe -NoProfile -NonInteractive -EncodedCommand /)
     expect(hook.command).not.toContain(UNSAFE_SCRIPT_PATH)
     expect(hook.command.replace(/-EncodedCommand \S+$/, '')).not.toMatch(/\\| \/[a-zA-Z]+( |$)/)
 
@@ -84,7 +84,7 @@ describe('getWindowsManagedLifecycleHook', () => {
     // rejects `||` as a statement separator (measured) — every event would be a parse error.
     const hook = getWindowsManagedLifecycleHook(SAFE_SCRIPT_PATH, { gitBashAvailable: false })
 
-    expect(hook.command).toMatch(/\/powershell\.exe -NoProfile -EncodedCommand /)
+    expect(hook.command).toMatch(/\/powershell\.exe -NoProfile -NonInteractive -EncodedCommand /)
   })
 
   it('is still recognized as managed by createManagedCommandMatcher (#14825)', () => {
@@ -427,7 +427,9 @@ describe('ClaudeHookService.install', () => {
         for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
           const hook = settings.hooks[eventName]?.[0]?.hooks?.[0]
           expect(hook?.args).toBeUndefined()
-          expect(hook?.command).toMatch(/\/powershell\.exe -NoProfile -EncodedCommand /)
+          expect(hook?.command).toMatch(
+            /\/powershell\.exe -NoProfile -NonInteractive -EncodedCommand /
+          )
           expect(hook?.command).not.toContain(scriptPath)
 
           const encoded = hook?.command.match(/-EncodedCommand (\S+)$/)?.[1]
