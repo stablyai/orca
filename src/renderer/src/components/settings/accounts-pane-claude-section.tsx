@@ -4,6 +4,7 @@ import { selectClaudeProviderAccount } from '@/runtime/runtime-provider-accounts
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
+import { AccountsPaneRemoteActionWrapper } from './accounts-pane-remote-action-wrapper'
 import { ClaudeIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
 import {
@@ -11,6 +12,7 @@ import {
   providerAccountIsActiveInView
 } from './provider-account-visibility'
 import { formatAccountTimestamp, getClaudeAccountRuntimeLabel } from './accounts-pane-runtime'
+
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 
 export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
@@ -74,34 +76,52 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() =>
-                void runClaudeAccountAction('adding', () =>
-                  window.api.claudeAccounts.add({
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
-                )
-              }
-              disabled={
-                // Why: interactive `claude login` needs a desktop browser and
-                // would authenticate against this device, not the server.
-                isRemoteAccountScope ||
-                claudeAction !== 'idle' ||
-                wslCapabilitiesLoading ||
-                accountRuntimeUnavailable
-              }
-              className="gap-1.5"
-            >
-              {claudeAction === 'adding' ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Plus className="size-3" />
+            <AccountsPaneRemoteActionWrapper
+              isRemote={isRemoteAccountScope}
+              notice={translate(
+                'auto.components.settings.AccountsPane.remoteAddClaudeNotice',
+                'Accounts on {{value0}} must be added in a terminal on that server. Run: orca account add --agent claude',
+                { value0: accountRuntimeSentenceLabel }
               )}
-              {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
-            </Button>
+              tooltip={translate(
+                'auto.components.settings.AccountsPane.remoteAddClaudeTooltip',
+                'Add accounts on {{value0}} by running: orca account add --agent claude',
+                { value0: accountRuntimeSentenceLabel }
+              )}
+              actionLabel={translate(
+                'auto.components.settings.AccountsPane.b0e948a4f9',
+                'Add Account'
+              )}
+            >
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() =>
+                  void runClaudeAccountAction('adding', () =>
+                    window.api.claudeAccounts.add({
+                      runtime: accountRuntime.runtime,
+                      wslDistro: accountRuntime.wslDistro
+                    })
+                  )
+                }
+                disabled={
+                  // Why: interactive `claude login` needs a desktop browser and
+                  // would authenticate against this device, not the server.
+                  isRemoteAccountScope ||
+                  claudeAction !== 'idle' ||
+                  wslCapabilitiesLoading ||
+                  accountRuntimeUnavailable
+                }
+                className="gap-1.5"
+              >
+                {claudeAction === 'adding' ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Plus className="size-3" />
+                )}
+                {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+              </Button>
+            </AccountsPaneRemoteActionWrapper>
             {claudeAction === 'adding' ? (
               <Button
                 variant="ghost"
@@ -238,33 +258,51 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                       </span>
                     </button>
                     <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void runClaudeAccountAction(
-                            `reauth:${account.id}`,
-                            () =>
-                              window.api.claudeAccounts.reauthenticate({
-                                accountId: account.id
-                              }),
-                            getProviderAccountRuntime(account)
-                          )
-                        }}
-                        disabled={isRemoteAccountScope || isBusy}
-                        className="h-6 px-2 text-muted-foreground hover:text-foreground"
-                      >
-                        {isReauthing ? (
-                          <Loader2 className="size-3 animate-spin" />
-                        ) : (
-                          <RefreshCw className="size-3" />
+                      <AccountsPaneRemoteActionWrapper
+                        isRemote={isRemoteAccountScope}
+                        notice={translate(
+                          'auto.components.settings.AccountsPane.remoteReauthClaudeNotice',
+                          'Re-authenticate accounts on {{value0}} by running: orca account add --agent claude',
+                          { value0: accountRuntimeSentenceLabel }
                         )}
-                        {translate(
+                        tooltip={translate(
+                          'auto.components.settings.AccountsPane.remoteReauthClaudeTooltip',
+                          'Re-authenticate accounts on {{value0}} by running: orca account add --agent claude',
+                          { value0: accountRuntimeSentenceLabel }
+                        )}
+                        actionLabel={translate(
                           'auto.components.settings.AccountsPane.8a0f870153',
                           'Re-authenticate'
                         )}
-                      </Button>
+                      >
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void runClaudeAccountAction(
+                              `reauth:${account.id}`,
+                              () =>
+                                window.api.claudeAccounts.reauthenticate({
+                                  accountId: account.id
+                                }),
+                              getProviderAccountRuntime(account)
+                            )
+                          }}
+                          disabled={isRemoteAccountScope || isBusy}
+                          className="h-6 px-2 text-muted-foreground hover:text-foreground"
+                        >
+                          {isReauthing ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : (
+                            <RefreshCw className="size-3" />
+                          )}
+                          {translate(
+                            'auto.components.settings.AccountsPane.8a0f870153',
+                            'Re-authenticate'
+                          )}
+                        </Button>
+                      </AccountsPaneRemoteActionWrapper>
                       <Button
                         variant="ghost"
                         size="xs"

@@ -6489,7 +6489,15 @@
           "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
           "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
           "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
-          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
+          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
+          "remoteAddClaudeNotice": "Accounts on {{value0}} must be added in a terminal on that server. Run: orca account add --agent claude",
+          "remoteAddClaudeTooltip": "Add accounts on {{value0}} by running: orca account add --agent claude",
+          "remoteReauthClaudeNotice": "Re-authenticate accounts on {{value0}} by running: orca account add --agent claude",
+          "remoteReauthClaudeTooltip": "Re-authenticate accounts on {{value0}} by running: orca account add --agent claude",
+          "remoteReauthCodexNotice": "Re-authenticate accounts on {{value0}} by running: orca account add --agent codex",
+          "remoteReauthCodexTooltip": "Re-authenticate accounts on {{value0}} by running: orca account add --agent codex",
+          "remoteAddCodexNotice": "Accounts on {{value0}} must be added in a terminal on that server. Run: orca account add --agent codex",
+          "remoteAddCodexTooltip": "Add accounts on {{value0}} by running: orca account add --agent codex"
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
