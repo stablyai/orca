@@ -18,6 +18,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     repo,
     inPinnedSection,
     hideRepoBadge,
+    showProjectName,
     hostContextLabel,
     affiliateListMode,
     flushSurface,
@@ -77,6 +78,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showRepoIdentityInTitle && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
   const showRepoBadgeInMetaRow =
     !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
+  const showProjectNameLabel = Boolean(showProjectName) && showInlineRepoBadge
   const showHostContextBadge = !compactCards && !!hostContextLabel
   const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
   const showBranch =
@@ -264,6 +266,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   return {
     showPinnedRepoIcon,
     showInlineRepoBadge,
+    showProjectNameLabel,
     showRepoBadgeInMetaRow,
     showHostContextBadge,
     showIdentityInNewCard,
