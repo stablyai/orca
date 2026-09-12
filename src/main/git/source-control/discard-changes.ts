@@ -3,11 +3,11 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../../../shared/git-discard-path-safety'
+import { partitionTrackedPathSpecs } from '../../../shared/git-tracked-pathspecs'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
-import { partitionTrackedPathSpecs } from '../../../shared/git-tracked-pathspecs'
 import { bulkPathspecCommands, literalPathspec } from './git-pathspec'
 
 /**
