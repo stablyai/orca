@@ -20,6 +20,14 @@ describe('detectLanguage', () => {
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
 
+  it('maps MATLAB .m and LaTeX family extensions', () => {
+    expect(detectLanguage('sim/plot_results.m')).toBe('matlab')
+    expect(detectLanguage('C:\\thesis\\main.TEX')).toBe('latex')
+    expect(detectLanguage('paper/chapter.ltx')).toBe('latex')
+    expect(detectLanguage('styles/custom.sty')).toBe('latex')
+    expect(detectLanguage('classes/report.cls')).toBe('latex')
+  })
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')
