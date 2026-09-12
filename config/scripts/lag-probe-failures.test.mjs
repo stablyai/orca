@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
+import { test } from 'vitest'
 import { runInNewContext } from 'node:vm'
 import { installRendererIpcProbe } from './main-blocking-probe.mjs'
 import { connectOrcaMainInspector } from './orca-main-inspector-connection.mjs'

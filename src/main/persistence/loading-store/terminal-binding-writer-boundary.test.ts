@@ -3,13 +3,9 @@ import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 /**
- * `persistPtyBinding` skips its clone and flush when the requested binding already matches memory
- * and `lastDurableWriteGeneration` says memory is on disk. That counter is only trustworthy while
- * every writer of a binding value bumps the write generation in the same operation. This test
- * keeps the audited list of such writers from growing silently.
- *
- * It is a tripwire, not the audit: a writer that reaches a binding record through an alias is
- * invisible to the regex. The audit table lives in the persistence writer audit.
+ * Pins direct binding assignments so new writers cannot bypass durability review silently.
+ * This is only a syntax tripwire: aliases, deletes and replacement objects can evade it.
+ * Behavioral durability coverage lives in persistence-flush-and-save-scheduling.test.ts.
  */
 const TERMINAL_BINDING_WRITER_ALLOWLIST: readonly string[] = readFileSync(
   join(__dirname, '__fixtures__', 'terminal-binding-writer-allowlist.txt'),
@@ -97,7 +93,8 @@ describe('terminal binding writer boundary', () => {
       'New writer of a terminal binding value. It must bump the persistence write generation ' +
         '(scheduleSave, flushOrThrow, or setWorkspaceSession) in the same operation, or ' +
         "persistPtyBinding's fast path can skip a flush it needed. " +
-        'See the persistence writer audit.'
+        'Verify durability in persistence-flush-and-save-scheduling.test.ts; ' +
+        'this scanner does not prove the writer advances the generation.'
     ).toEqual([])
   })
 
