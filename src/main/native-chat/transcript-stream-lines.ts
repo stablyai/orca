@@ -20,7 +20,12 @@ export async function decodeTranscriptStream(
   let consumedBytes = 0
 
   for await (const chunk of stream) {
-    pending += typeof chunk === 'string' ? chunk : decoder.write(Buffer.from(chunk))
+    const decoded = typeof chunk === 'string' ? chunk : decoder.write(Buffer.from(chunk))
+    pending += decoded
+    // A partial record cannot finish until the new chunk contains a newline.
+    if (!decoded.includes('\n')) {
+      continue
+    }
     let newlineIndex = pending.indexOf('\n')
     while (newlineIndex !== -1) {
       const segment = pending.slice(0, newlineIndex + 1)
