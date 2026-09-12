@@ -85,8 +85,11 @@ function refusedRedelivery(
  *
  * The null default claims no cause, because at that point we know none: all it
  * asserts is the one thing every rejection shares.
+ *
+ * Exported because a client without an outbox needs the same copy: the rule about
+ * which reasons a person may read is a property of the reason, not of the queue.
  */
-function rejectionNotice(reason: string | null): string {
+export function structuredAgentSessionRejectionNotice(reason: string | null): string {
   if (reason === null) {
     return 'Message was not sent.'
   }
@@ -144,7 +147,7 @@ export function disposeStructuredAgentSessionSendResult(
   if (submission.dispatchState === 'rejected') {
     return {
       entries: replaceEntryState(input, 'queued'),
-      error: rejectionNotice(submission.reason),
+      error: structuredAgentSessionRejectionNotice(submission.reason),
       blockedClientMessageId: input.entry.clientMessageId,
       retryWithFreshClientMessageId: input.entry.clientMessageId
     }

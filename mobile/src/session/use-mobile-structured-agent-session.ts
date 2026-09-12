@@ -10,6 +10,7 @@ import {
 } from '../../../src/shared/structured-agent-session-outbox'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../src/shared/structured-agent-session-projection'
 import {
@@ -115,7 +116,7 @@ export function useMobileStructuredAgentSession(args: {
       if (result.status === 'unknown') {
         // Prompt/option/cancel plans cannot redispatch an unknown ledger row;
         // issue a fresh id so a retry can be admitted after the user checks the
-        // stream. Sends rotate operation ids on retry below.
+        // stream. Sends keep theirs — see `mobile-structured-send-delivery.ts`.
         operationIdsRef.current.delete(key)
         return result
       }
@@ -191,8 +192,9 @@ export function useMobileStructuredAgentSession(args: {
         return 'rejected'
       }
       const key = `${sessionKey}:agentSession.send:${JSON.stringify(fields)}`
-      const priorOperationId = operationIdsRef.current.get(key)
-      const clientOperationId = retainOperationId(key, priorOperationId)
+      // No `retryUnknown`: the host never re-delivers a recorded send whatever the
+      // flag says, so asking would only skip the cached answer and re-read the same
+      // row. Reusing the retained id is what keeps the retry a replay.
       const result = await requestStructuredAgentSessionMutation<AgentSessionSendResult>({
         client,
         method: 'agentSession.send',
@@ -200,21 +202,17 @@ export function useMobileStructuredAgentSession(args: {
         sessionId,
         expectedRuntimeFence: currentFence,
         fields,
-        clientOperationId,
-        ...(priorOperationId ? { retryUnknown: true } : {}),
+        clientOperationId: retainOperationId(key, operationIdsRef.current.get(key)),
         timeoutMs
       })
-      if (result.status === 'accepted') {
+      const delivery = mobileStructuredSendDelivery(result)
+      if (delivery.operationIdSpent) {
         operationIdsRef.current.delete(key)
-        return 'accepted'
       }
-      if (result.status === 'unknown') {
-        operationIdsRef.current.delete(key)
-        return 'unknown'
+      if (delivery.error !== null) {
+        onSendError(delivery.error)
       }
-      operationIdsRef.current.delete(key)
-      onSendError(result.message === 'Request not sent' ? 'Message not sent' : result.message)
-      return 'rejected'
+      return delivery.outcome
     },
     [
       agent,

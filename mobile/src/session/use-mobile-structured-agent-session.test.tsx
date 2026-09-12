@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  AgentJournalDispatchState,
   AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../../src/shared/agent-session-journal-types'
@@ -9,6 +10,7 @@ import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-sessi
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
+import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 function ok(result: unknown) {
@@ -138,15 +140,19 @@ function runningStatusItem(): AgentJournalRenderItem {
   }
 }
 
+function sendResult(dispatchState: AgentJournalDispatchState, reason: string | null = null) {
+  return ok({
+    ok: true,
+    replayed: false,
+    fence: 3,
+    cursor: { epoch: 'epoch-1', sequence: 1 },
+    value: structuredSendResultFixture(dispatchState, reason)
+  })
+}
+
 async function defaultSendRequest(method: string, params?: Record<string, unknown>) {
   if (method === 'agentSession.send') {
-    return ok({
-      ok: true,
-      replayed: false,
-      fence: 3,
-      cursor: { epoch: 'epoch-1', sequence: 1 },
-      value: { turnId: 'turn-1' }
-    })
+    return sendResult('accepted')
   }
   if (method === 'agentSession.options') {
     return ok({
@@ -673,7 +679,7 @@ describe('useMobileStructuredAgentSession', () => {
     expect(retryId).not.toBe(firstId)
   })
 
-  it('uses a fresh operation id when a send delivery is ambiguous', async () => {
+  it('keeps one operation id across an ambiguous send and its unknown replays', async () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -681,26 +687,36 @@ describe('useMobileStructuredAgentSession', () => {
     act(() => listener?.(snapshotEvent(3)))
     let attempts = 0
     sendRequest.mockImplementation(async (method, params) => {
-      if (method === 'agentSession.send' && attempts++ === 0) {
+      if (method !== 'agentSession.send') {
+        return defaultSendRequest(method, params)
+      }
+      // Ack-loss first, then the durable row the host replays: both say the
+      // provider may have the message, so neither may release the id.
+      attempts += 1
+      if (attempts === 1) {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
       }
-      return defaultSendRequest(method, params)
+      return sendResult('unknown')
     })
 
     await act(async () => {
       expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('retry me')).toBe('accepted')
+      // Never 'accepted': a replayed unknown is not an acknowledgement, and
+      // reporting one clears the composer as if the message had landed.
+      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
+      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
     })
 
     const calls = sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send')
-    expect(calls).toHaveLength(2)
-    expect(calls[0]![1]).not.toHaveProperty('retryUnknown')
-    expect(calls[1]![1]).not.toHaveProperty('retryUnknown')
-    const firstId = (calls[0]![1] as { envelope: { clientOperationId: string } }).envelope
-      .clientOperationId
-    const retryId = (calls[1]![1] as { envelope: { clientOperationId: string } }).envelope
-      .clientOperationId
-    expect(retryId).not.toBe(firstId)
+    expect(calls).toHaveLength(3)
+    const ids = calls.map(
+      ([, params]) =>
+        (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId
+    )
+    // One id for all three: each retry is a replay the host answers from the
+    // ledger. A rotated id would be a second delivery of the same message.
+    expect(new Set(ids).size).toBe(1)
+    expect(calls.every(([, params]) => !('retryUnknown' in (params as object)))).toBe(true)
   })
 
   it('keeps structured option changes dispatched after unknown delivery', async () => {
