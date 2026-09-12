@@ -234,17 +234,6 @@ function branchEntryToQueueItem(
   }
 }
 
-function compareQueueItems(
-  first: MobileDiffReviewQueueItem,
-  second: MobileDiffReviewQueueItem
-): number {
-  return (
-    SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
-    Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
-    first.filePath.localeCompare(second.filePath, undefined, { numeric: true })
-  )
-}
-
 export function buildMobileDiffReviewQueue(
   input: BuildMobileDiffReviewQueueInput
 ): MobileDiffReviewQueueItem[] {
@@ -263,14 +252,24 @@ export function buildMobileDiffReviewQueue(
     }
     commentsForPath = (path) => commentsByPath.get(path) ?? emptyComments
   }
-  return [
+  const queue = [
     ...input.statusEntries.map((entry) =>
       statusEntryToQueueItem(entry, commentsForPath(entry.path), input.reviewState)
     ),
     ...input.branchEntries.map((entry) =>
       branchEntryToQueueItem(entry, input, commentsForPath(entry.path))
     )
-  ].sort(compareQueueItems)
+  ]
+  if (queue.length > 1) {
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    queue.sort(
+      (first, second) =>
+        SCOPE_SORT_ORDER[first.scope] - SCOPE_SORT_ORDER[second.scope] ||
+        Number(first.isGeneratedOrLockFile) - Number(second.isGeneratedOrLockFile) ||
+        collator.compare(first.filePath, second.filePath)
+    )
+  }
+  return queue
 }
 
 export function filterMobileDiffReviewQueue(
