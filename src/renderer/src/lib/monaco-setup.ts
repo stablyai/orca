@@ -39,18 +39,9 @@ globalThis.MonacoEnvironment = {
   }
 }
 
-// Why: Monaco here is a viewer/diff surface, not a type checker — users edit
-// real code in their own IDE. The sandboxed TS worker cannot resolve imports
-// to project files, so semantic validation produces a long tail of false
-// positives (unresolved modules 2307/2792, unused-import fades 6133/6138/
-// 6192/6196/6198/6205, missing names 2304/2305, bogus type mismatches 2322/
-// 2339/2345/2571/2724, implicit-any 7006/7016/7026/7031/7053/18046/18048).
-// Syntax validation is also noisy in the diff viewer: with `renderSideBySide`
-// off (or during partial hunks), Monaco feeds the worker concatenated
-// original+modified text that isn't a valid TS program, producing fake
-// parse errors like "',' expected (1005)". Disable all three categories —
-// we keep tokenization (colorization) which is what actually gives useful
-// reading affordance here.
+// Why: Monaco remains a quiet editor surface, not Orca's source of diagnostics.
+// Edit tabs now hydrate bounded TS/JS workspace models for hover/definition,
+// but diff and partial-hunk surfaces can still produce noisy false positives.
 const diagnosticsOptions = {
   noSemanticValidation: true,
   noSuggestionDiagnostics: true,
@@ -58,6 +49,23 @@ const diagnosticsOptions = {
 }
 monacoTS.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 monacoTS.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
+const typeScriptModeConfiguration = {
+  completionItems: true,
+  hovers: false,
+  documentSymbols: true,
+  definitions: false,
+  references: true,
+  documentHighlights: true,
+  rename: true,
+  diagnostics: false,
+  documentRangeFormattingEdits: true,
+  signatureHelp: true,
+  onTypeFormattingEdits: true,
+  codeActions: true,
+  inlayHints: true
+}
+monacoTS.typescriptDefaults.setModeConfiguration(typeScriptModeConfiguration)
+monacoTS.javascriptDefaults.setModeConfiguration(typeScriptModeConfiguration)
 
 // Why: .tsx/.jsx files share the base 'typescript'/'javascript' language ids
 // in Monaco's registry (there is no separate 'typescriptreact' id), so the
@@ -67,12 +75,21 @@ monacoTS.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 // an emit transform (we never emit — this is a read-only language service).
 monacoTS.typescriptDefaults.setCompilerOptions({
   ...monacoTS.typescriptDefaults.getCompilerOptions(),
-  jsx: monacoTS.JsxEmit.Preserve
+  allowJs: true,
+  allowNonTsExtensions: true,
+  jsx: monacoTS.JsxEmit.Preserve,
+  moduleResolution: monacoTS.ModuleResolutionKind.NodeJs,
+  noEmit: true
 })
 monacoTS.javascriptDefaults.setCompilerOptions({
   ...monacoTS.javascriptDefaults.getCompilerOptions(),
+  allowJs: true,
+  allowNonTsExtensions: true,
+  checkJs: false,
   jsx: monacoTS.JsxEmit.Preserve
 })
+monacoTS.typescriptDefaults.setEagerModelSync(true)
+monacoTS.javascriptDefaults.setEagerModelSync(true)
 
 registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)

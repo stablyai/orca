@@ -29,6 +29,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'qrcode',
   'ssh2',
   'tweetnacl',
+  'typescript-api',
   'ws',
   'yaml',
   'zod'
@@ -209,10 +210,19 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
 }
 
 function createPackagedRuntimeNodeModuleResources(electronPlatformName = process.platform) {
-  return collectPackagedRuntimePackages(electronPlatformName).map(([packageName, packageDir]) => ({
+  const packages = collectPackagedRuntimePackages(electronPlatformName)
+  const resources = packages.map(([packageName, packageDir]) => ({
     from: packageDir,
     to: join('node_modules', ...packageName.split('/'))
   }))
+  const typescriptPackage = packages.find(([packageName]) => packageName === 'typescript')
+  if (typescriptPackage) {
+    resources.push({
+      from: typescriptPackage[1],
+      to: join('node_modules', 'typescript-api')
+    })
+  }
+  return resources
 }
 
 function normalizeAsarEntryPath(entry) {
@@ -466,18 +476,32 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electron
 // Why source maps: they embed the original sources (megabytes for @linear/sdk alone) and
 // nothing in the packaged app turns on Node's source-map support, so they are never read.
 // Orca's own main-process maps live outside node_modules and ship as a separate release artifact.
-function isPrunableTypeOrSourceMapArtifact(filename) {
-  return TYPE_DECLARATION_ARTIFACT_RE.test(filename) || JS_SOURCE_MAP_ARTIFACT_RE.test(filename)
-}
-
-// Why one walk: pruneMatchingFiles only ever deletes files, so passes over the same tree
-// commute — a second recursive traversal costs seconds for no extra deletions.
+// Why the typescript/typescript-api lib exemption: the main-process TypeScript Language Service
+// resolves lib.*.d.ts at runtime (see typescript-language-service.ts), so those specific
+// declaration files must survive pruning even though every other .d.ts is compile-time only.
 function prunePackagedRuntimeTypeAndSourceMapArtifacts(resourcesDir) {
   const nodeModulesDir = join(resourcesDir, 'node_modules')
   if (!existsSync(nodeModulesDir)) {
     return
   }
-  pruneMatchingFiles(nodeModulesDir, isPrunableTypeOrSourceMapArtifact)
+  const typescriptLibDirs = new Set([
+    join(nodeModulesDir, 'typescript', 'lib'),
+    join(nodeModulesDir, 'typescript-api', 'lib')
+  ])
+  pruneMatchingFiles(nodeModulesDir, (filename, filePath) => {
+    if (JS_SOURCE_MAP_ARTIFACT_RE.test(filename)) {
+      return true
+    }
+    if (!TYPE_DECLARATION_ARTIFACT_RE.test(filename)) {
+      return false
+    }
+    for (const libDir of typescriptLibDirs) {
+      if (filePath.startsWith(libDir)) {
+        return false
+      }
+    }
+    return true
+  })
 }
 
 function prunePackagedSherpaOnnx(resourcesDir, electronPlatformName) {
@@ -526,7 +550,7 @@ function pruneMatchingFiles(directory, shouldPrune) {
     const entryPath = join(directory, entry.name)
     if (entry.isDirectory()) {
       pruneMatchingFiles(entryPath, shouldPrune)
-    } else if (entry.isFile() && shouldPrune(entry.name)) {
+    } else if (entry.isFile() && shouldPrune(entry.name, entryPath)) {
       rmSync(entryPath, { force: true })
     }
   }
