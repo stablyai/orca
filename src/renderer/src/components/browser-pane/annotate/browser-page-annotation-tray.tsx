@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { CircleCheck, Copy, MessageSquarePlus, Pencil, Send, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -54,15 +54,15 @@ export function BrowserPageAnnotationTray({
   const [editComment, setEditComment] = useState('')
   const [editIntent, setEditIntent] = useState<BrowserAnnotationIntent>('change')
 
-  // Why: a delete or clear while a row is mid-edit must not leave edit state pointing at nothing.
-  useEffect(() => {
-    if (
-      editingAnnotationId &&
-      !browserAnnotations.some((annotation) => annotation.id === editingAnnotationId)
-    ) {
-      setEditingAnnotationId(null)
-    }
-  }, [browserAnnotations, editingAnnotationId])
+  // Why: a delete or clear while a row is mid-edit must not leave edit state pointing at
+  // nothing. Adjusting during render (React's endorsed pattern) resets it before the stale
+  // row can paint, instead of correcting it a frame later in an effect.
+  if (
+    editingAnnotationId &&
+    !browserAnnotations.some((annotation) => annotation.id === editingAnnotationId)
+  ) {
+    setEditingAnnotationId(null)
+  }
 
   const handleStartEdit = (annotation: BrowserPageAnnotation): void => {
     setEditingAnnotationId(annotation.id)
