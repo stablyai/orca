@@ -48,6 +48,12 @@ describe('estimateCostUsd cache-write TTL rates', () => {
   it('still returns null for unknown models', () => {
     expect(estimateCostUsd('gpt-5', 0, 0, 0, 1_000_000, 1_000_000)).toBeNull()
   })
+
+  it('prices the Fable 5.1 model id with the existing Fable rates', () => {
+    expect(
+      estimateCostUsd('claude-fable-5-1', 1_000_000, 1_000_000, 1_000_000, 1_000_000)
+    ).toBeCloseTo(73.5)
+  })
 })
 
 // Published Claude Sonnet 5 rates (platform.claude.com/docs/en/about-claude/pricing):
