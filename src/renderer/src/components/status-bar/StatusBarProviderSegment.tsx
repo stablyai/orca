@@ -55,7 +55,9 @@ function WindowLabel({
 // the roster trigger and ProviderDetailsMenu so the dot's has-data condition
 // and markup can't drift between the two.
 export function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX.Element {
-  const hasData = Boolean(p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length)
+  const hasData = Boolean(
+    p.isUnlimited || p.session || p.weekly || p.fableWeekly || p.monthly || p.buckets?.length
+  )
   return (
     <span className="inline-flex items-center gap-1 text-muted-foreground">
       <span
@@ -197,7 +199,7 @@ export function ProviderSegment({
   const tightest = getTightestUsageSection(p)
 
   // Fetching with no prior data
-  if (p.status === 'fetching' && !tightest) {
+  if (p.status === 'fetching' && !tightest && !p.isUnlimited) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -216,7 +218,7 @@ export function ProviderSegment({
   }
 
   // Error with no data
-  if (p.status === 'error' && !tightest) {
+  if (p.status === 'error' && !tightest && !p.isUnlimited) {
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
@@ -232,7 +234,11 @@ export function ProviderSegment({
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {mode === 'verbose' ? (
+      {p.isUnlimited ? (
+        <span className="text-[11px] font-medium">
+          {translate('auto.components.status.bar.StatusBar.unlimitedUsage', 'Unlimited')}
+        </span>
+      ) : mode === 'verbose' ? (
         <>
           {tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />

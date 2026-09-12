@@ -470,6 +470,45 @@ describe('RateLimitService', () => {
     )
   })
 
+  it('caches an outgoing unlimited Codex account across an account switch', async () => {
+    const service = new RateLimitService()
+    service.setInactiveCodexAccountsResolver(() => [
+      inactiveCodexAccount('account-unlimited', '/tmp/account-unlimited/home')
+    ])
+
+    const unlimited: ProviderRateLimits = {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      isUnlimited: true,
+      planType: 'business',
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(unlimited)
+      .mockResolvedValueOnce(okProvider('codex', 40, Date.now()))
+
+    await service.refresh()
+    await service.refreshForCodexAccountChange('account-unlimited')
+
+    expect(service.getState().inactiveCodexAccounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          accountId: 'account-unlimited',
+          rateLimits: expect.objectContaining({
+            session: null,
+            weekly: null,
+            isUnlimited: true,
+            planType: 'business'
+          })
+        })
+      ])
+    )
+  })
+
   it('does not cache an outgoing Codex account that has no usage windows', async () => {
     const service = new RateLimitService()
     service.setInactiveCodexAccountsResolver(() => [

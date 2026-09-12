@@ -49,15 +49,16 @@ export function InlineUsageBars({
         }
       : null
   ].filter((window): window is { key: string; used: number; label: string } => window !== null)
+  const visibleUsageWindows = limits.isUnlimited ? [] : usageWindows
 
   return (
     <div
       className={`grid w-full items-center gap-1.5 ${isFetching ? 'animate-pulse' : ''}`}
       style={{
-        gridTemplateColumns: `repeat(${Math.max(1, usageWindows.length)}, minmax(0, 1fr))`
+        gridTemplateColumns: `repeat(${Math.max(1, visibleUsageWindows.length)}, minmax(0, 1fr))`
       }}
     >
-      {usageWindows.map((window) => (
+      {visibleUsageWindows.map((window) => (
         <div key={window.key} className="flex min-w-0 items-center gap-1">
           <div className="h-[4px] min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
             {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
@@ -71,7 +72,11 @@ export function InlineUsageBars({
           </span>
         </div>
       ))}
-      {usageWindows.length === 0 && limits.status === 'error' ? (
+      {limits.isUnlimited ? (
+        <span className="text-[10px] text-muted-foreground">
+          {translate('auto.components.status.bar.StatusBar.unlimitedUsage', 'Unlimited')}
+        </span>
+      ) : usageWindows.length === 0 && limits.status === 'error' ? (
         <span className="text-[10px] text-muted-foreground">
           {translate('auto.components.status.bar.StatusBar.f19a63e7cd', 'Sign in to see usage')}
         </span>
@@ -81,7 +86,13 @@ export function InlineUsageBars({
 }
 
 export function isUnavailableInactiveUsage(limits: ProviderRateLimits | null | undefined): boolean {
-  return limits?.status === 'error' && !limits.session && !limits.weekly && !limits.fableWeekly
+  return (
+    limits?.status === 'error' &&
+    !limits.isUnlimited &&
+    !limits.session &&
+    !limits.weekly &&
+    !limits.fableWeekly
+  )
 }
 
 export function InlineUsageSignInAction({
