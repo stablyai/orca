@@ -30,7 +30,13 @@ const SUPPRESSED_REACT_DOCTOR_DIAGNOSTICS = new Map([
     'react-doctor(no-adjust-state-on-prop-change)',
     new Set([
       'src/renderer/src/components/use-task-page-github-issue-draft.ts',
-      'src/renderer/src/components/use-task-page-jira-creation-state.ts'
+      'src/renderer/src/components/use-task-page-jira-creation-state.ts',
+      // Why: the composer's autocomplete state (mention, slash, active index) tracks the live
+      // Tiptap editor rather than a prop. It is recomputed on every editor update and selection
+      // change, and the agent is read through a ref, so a changed agent cannot leave the
+      // suggestion list stale on screen. A source-level disable is not usable here: the base
+      // oxlint scan runs without this plugin and reports the directive as unused.
+      'src/renderer/src/components/terminal-pane/TerminalRichInput.tsx'
     ])
   ],
   [

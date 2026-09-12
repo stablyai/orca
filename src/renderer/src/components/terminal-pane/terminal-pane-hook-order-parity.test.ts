@@ -6,7 +6,7 @@ import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 
 const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
-  /^(?:TerminalPane\.tsx|use-terminal-pane-(?:chat-state|close-actions|context-actions|controller|foundation|global-listeners|layout-bindings|layout-persistence|lifecycle-stage|mobile-actions|paste-listeners|process-exit-actions|projection|reconciliation|startup-actions|store-actions|store-bindings|title-effects|title-state)\.ts)$/
+  /^(?:TerminalPane\.tsx|use-terminal-pane-(?:chat-state|close-actions|context-actions|controller|foundation|global-listeners|layout-bindings|layout-persistence|lifecycle-stage|mobile-actions|paste-listeners|process-exit-actions|projection|reconciliation|rich-input|startup-actions|store-actions|store-bindings|title-effects|title-state)\.ts)$/
 // Rebased onto main after the workbench surface-per-workspace and deferred
 // split-cwd changes; the pane session-ID projection added one render hook (230 hooks).
 // Then 27 stable-action `useAppStore` subscriptions folded into four
@@ -18,8 +18,9 @@ const TERMINAL_PANE_HOOK_SOURCE_PATTERN =
 // paused notice that read it (207 hooks, still 8 useMemo).
 // Then host-authoritative layout removal added two `useRef`s in reconciliation
 // (last host layout leaf set, retired leaf set) (209 hooks, still 8 useMemo).
+// Rich input adds one state and three callbacks (213 hooks, still 8 useMemo).
 const PRE_REFACTOR_HOOK_ORDER_SHA256 =
-  'f6de13ab7d6d130444c50fec2cfe097851ee1b7ecf0f3a2cbdc082c2e8e8838b'
+  'e12c8105078da9c200887e7311e87c63fe738e28128eb8863beaeb2c22a34005'
 
 const sourceFiles = readdirSync(__dirname)
   .filter((name) => TERMINAL_PANE_HOOK_SOURCE_PATTERN.test(name))
@@ -84,7 +85,7 @@ function readFlattenedHookOrder(): string[] {
 describe('TerminalPane refactor hook parity', () => {
   it('preserves the recursively flattened render hook order', () => {
     const hooks = readFlattenedHookOrder()
-    expect(hooks).toHaveLength(209)
+    expect(hooks).toHaveLength(213)
     expect(hooks.filter((hook) => hook === 'useMemo')).toHaveLength(8)
     expect(createHash('sha256').update(hooks.join('\n')).digest('hex')).toBe(
       PRE_REFACTOR_HOOK_ORDER_SHA256
@@ -92,7 +93,7 @@ describe('TerminalPane refactor hook parity', () => {
   })
 
   it('aggregates every extracted hook stage', () => {
-    expect(sourceFiles).toHaveLength(20)
+    expect(sourceFiles).toHaveLength(21)
     expect(sourceFiles).toContain('TerminalPane.tsx')
     expect(sourceFiles).toContain('use-terminal-pane-controller.ts')
   })
