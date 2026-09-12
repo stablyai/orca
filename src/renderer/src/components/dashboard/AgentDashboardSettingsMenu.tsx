@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { SettingsSegmentedControl, SettingsSwitch } from '../settings/SettingsFormControls'
 import type { AgentDashboardMode } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
+import { platformModifierClickLabel } from '../dashboard-popout/agent-card-activation'
 
 type AgentDashboardSettingsMenuProps = {
   /** Called after the mode switches to pop-out so the host can hand the board
@@ -30,6 +31,9 @@ export function AgentDashboardSettingsMenu({
 }: AgentDashboardSettingsMenuProps): React.JSX.Element {
   const mode = useAppStore((s) => s.settings?.experimentalAgentDashboardMode ?? 'in-window')
   const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
+  const clickOpensWorktree = useAppStore(
+    (s) => s.settings?.experimentalAgentDashboardCardClickOpensWorktree === true
+  )
   const updateSettings = useAppStore((s) => s.updateSettings)
 
   const handleModeChange = (next: AgentDashboardMode): void => {
@@ -125,6 +129,35 @@ export function AgentDashboardSettingsMenu({
               void updateSettings({ experimentalAgentDashboardShowIdle: !showIdle })
             }}
             ariaLabel={translate('dashboardPopout.settings.showIdle', 'Show idle agents')}
+          />
+        </div>
+        <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5">
+          <span className="min-w-0 space-y-0.5">
+            <span className="block text-[12px] font-medium leading-4 text-foreground">
+              {translate(
+                'dashboardPopout.settings.cardClickOpensWorktree',
+                'Open the worktree on click'
+              )}
+            </span>
+            <span className="block text-[11px] leading-4 text-muted-foreground">
+              {translate(
+                'dashboardPopout.settings.cardClickOpensWorktreeCopy',
+                'Clicking a card opens the worktree and {{modifierClick}} shows the live preview. Off: click previews, {{modifierClick}} opens the worktree.',
+                { modifierClick: platformModifierClickLabel() }
+              )}
+            </span>
+          </span>
+          <SettingsSwitch
+            checked={clickOpensWorktree}
+            onChange={() => {
+              void updateSettings({
+                experimentalAgentDashboardCardClickOpensWorktree: !clickOpensWorktree
+              })
+            }}
+            ariaLabel={translate(
+              'dashboardPopout.settings.cardClickOpensWorktree',
+              'Open the worktree on click'
+            )}
           />
         </div>
       </DropdownMenuContent>

@@ -11,6 +11,7 @@ vi.mock('@/store', () => ({
       settings: {
         experimentalAgentDashboardMode: 'in-window'
         experimentalAgentDashboardShowIdle: boolean
+        experimentalAgentDashboardCardClickOpensWorktree: boolean
       }
       updateSettings: typeof updateSettings
     }) => unknown
@@ -18,7 +19,8 @@ vi.mock('@/store', () => ({
     selector({
       settings: {
         experimentalAgentDashboardMode: 'in-window',
-        experimentalAgentDashboardShowIdle: false
+        experimentalAgentDashboardShowIdle: false,
+        experimentalAgentDashboardCardClickOpensWorktree: false
       },
       updateSettings
     })
@@ -67,5 +69,25 @@ describe('AgentDashboardSettingsMenu', () => {
     act(() => toggle?.click())
 
     expect(updateSettings).toHaveBeenCalledWith({ experimentalAgentDashboardShowIdle: true })
+  })
+
+  it('owns the card-click action setting', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => {
+      root?.render(<AgentDashboardSettingsMenu onSwitchToPopout={vi.fn()} onOpenChange={vi.fn()} />)
+    })
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Open the worktree on click"]'
+    )
+    expect(toggle).not.toBeNull()
+
+    act(() => toggle?.click())
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      experimentalAgentDashboardCardClickOpensWorktree: true
+    })
   })
 })

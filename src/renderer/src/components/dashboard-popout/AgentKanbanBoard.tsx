@@ -13,6 +13,7 @@ import { installWindowVisibilityInterval } from '@/lib/window-visibility-interva
 import { AgentKanbanCard } from './AgentKanbanCard'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
 import { AgentTerminalDialog, type AgentRevealArgs } from './AgentTerminalDialog'
+import { agentCardClickOpensWorktree } from './agent-card-activation'
 import {
   EMPTY_DASHBOARD_FILTERS,
   filterDashboardCards,
@@ -71,13 +72,15 @@ function KanbanColumn({
   cards,
   repoIconsByRepoId,
   now,
-  onOpenTerminal
+  clickOpensWorktree,
+  onActivate
 }: {
   bucket: DashboardBucket
   cards: DashboardCard[]
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
-  onOpenTerminal: (card: DashboardCard) => void
+  clickOpensWorktree: boolean
+  onActivate: (card: DashboardCard, event: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
   return (
     // Why: attention no longer tints the whole column — the cards inside carry
@@ -103,7 +106,8 @@ function KanbanColumn({
               card={card}
               repoIcon={repoIconsByRepoId?.[card.repoId] ?? null}
               now={now}
-              onOpenTerminal={onOpenTerminal}
+              clickOpensWorktree={clickOpensWorktree}
+              onActivate={onActivate}
             />
           ))
         )}
@@ -229,6 +233,26 @@ export function AgentKanbanBoard({
     },
     [onAckAgent]
   )
+  // Why: the setting chooses what a plain click does and the platform modifier
+  // does the other thing, so the two actions are always one click away.
+  const clickOpensWorktree = snapshot.cardClickOpensWorktree === true
+  const handleCardActivate = useCallback(
+    (card: DashboardCard, event: React.MouseEvent<HTMLButtonElement>) => {
+      if (!agentCardClickOpensWorktree(event, clickOpensWorktree)) {
+        handleOpenTerminal(card)
+        return
+      }
+      onAckAgent(card.paneKey)
+      onRevealAgent({
+        repoId: card.repoId,
+        worktreeId: card.worktreeId,
+        executionHostId: card.executionHostId,
+        tabId: card.tabId,
+        leafId: card.leafId
+      })
+    },
+    [clickOpensWorktree, handleOpenTerminal, onAckAgent, onRevealAgent]
+  )
   // Watching the open dialog counts as seeing state changes as they happen —
   // without this, an agent finishing while you watch would re-flag its card.
   useEffect(() => {
@@ -290,7 +314,8 @@ export function AgentKanbanBoard({
                 cards={grouped[bucket]}
                 repoIconsByRepoId={snapshot.repoIconsByRepoId}
                 now={now}
-                onOpenTerminal={handleOpenTerminal}
+                clickOpensWorktree={clickOpensWorktree}
+                onActivate={handleCardActivate}
               />
             ))}
           </div>
