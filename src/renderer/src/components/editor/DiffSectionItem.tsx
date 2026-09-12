@@ -242,7 +242,9 @@ export function DiffSectionItem({
     () =>
       fileDiff ? (
         <>
-          {parseError ? <PierreDiffLoading error={parseError} onRetry={retryParse} /> : null}
+          {parseError ? (
+            <PierreDiffLoading error={parseError} onRetry={retryParse} overlay />
+          ) : null}
           <PierreDiffSurface
             key={renderKey ?? editStateKey}
             fileDiff={fileDiff}
