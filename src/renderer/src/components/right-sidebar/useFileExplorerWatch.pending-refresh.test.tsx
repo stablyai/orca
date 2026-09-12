@@ -110,6 +110,56 @@ describe('useFileExplorerWatch pending refreshes', () => {
     expect(refreshDir).not.toHaveBeenCalled()
   })
 
+  it('resyncs on reopen after hiding Files with no pending refresh', async () => {
+    const unsubscribe = vi.fn()
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: {
+        fs: {
+          onFsChanged: vi.fn((handler: WatchHandler) => {
+            mainWatchHandler = handler
+            return unsubscribe
+          })
+        }
+      }
+    })
+    const hook = renderWatch()
+    expect(unsubscribe).not.toHaveBeenCalled()
+
+    hook.rerender({ visiblePath: null })
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(refreshTree).not.toHaveBeenCalled()
+
+    hook.rerender({ visiblePath: '/repo' })
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+
+    expect(refreshTree).toHaveBeenCalledOnce()
+    expect(refreshDir).not.toHaveBeenCalled()
+  })
+
+  it('does not resync from a worktree switch that already drops the cache', async () => {
+    const hook = renderWatch('/repo')
+    hook.rerender({ visiblePath: '/other' })
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(refreshTree).not.toHaveBeenCalled()
+
+    hook.rerender({ visiblePath: '/repo' })
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(refreshTree).not.toHaveBeenCalled()
+  })
+
+  it('does not resync after hiding Files and revealing a different worktree', async () => {
+    const hook = renderWatch('/repo')
+    hook.rerender({ visiblePath: null })
+    hook.rerender({ visiblePath: '/other' })
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(refreshTree).not.toHaveBeenCalled()
+
+    hook.rerender({ visiblePath: '/repo' })
+    await act(async () => vi.advanceTimersByTimeAsync(0))
+    expect(refreshTree).not.toHaveBeenCalled()
+  })
+
   it('flushes main SSH batches on the next turn without another debounce window', async () => {
     ownerRef.current = { kind: 'ssh', connectionId: 'ssh-1' }
     renderWatch()

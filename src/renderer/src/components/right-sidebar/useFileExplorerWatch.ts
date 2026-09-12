@@ -122,6 +122,7 @@ export function useFileExplorerWatch({
   const deferredRef = useRef<FsChangedPayload[]>([])
   const resyncWatchKeysRef = useRef(new Set<string>())
   const activeResyncByWatchKeyRef = useRef(new Map<string, () => void>())
+  const subscribedWatchKeyRef = useRef<string | null>(null)
 
   // Why: a ref bridges processPayload to the flush effect so it can replay deferred payloads without re-subscribing (design §6.2).
   const processPayloadRef = useRef<((payload: FsChangedPayload) => void) | null>(null)
@@ -142,6 +143,16 @@ export function useFileExplorerWatch({
       currentWorktreeId,
       normalizeRuntimePathForComparison(currentWorktreePath)
     ])
+
+    // Why: cleanup always queues; drop a different previous key so a switch
+    // that already resetAndLoad does not keep a second full read.
+    if (
+      subscribedWatchKeyRef.current !== null &&
+      subscribedWatchKeyRef.current !== currentWatchKey
+    ) {
+      resyncWatchKeys.delete(subscribedWatchKeyRef.current)
+    }
+    subscribedWatchKeyRef.current = currentWatchKey
 
     // Why: one scheduler per subscription covers BOTH remote transports (the
     // Electron fs:changed bus and the runtime-RPC subscription below), and its
@@ -264,11 +275,10 @@ export function useFileExplorerWatch({
       if (activeResyncByWatchKey.get(currentWatchKey) === scheduler.requestFullRefresh) {
         activeResyncByWatchKey.delete(currentWatchKey)
       }
-      const hadDeferredEvents = deferredRef.current.length > 0
-      if (scheduler.cancel() || hadDeferredEvents) {
-        // The tree cache survives Files being hidden, so remember work canceled after receipt.
-        resyncWatchKeys.add(currentWatchKey)
-      }
+      scheduler.cancel()
+      // Why: the tree cache survives Files being hidden; a switch's next effect
+      // drops this key because resetAndLoad already ran.
+      resyncWatchKeys.add(currentWatchKey)
       deferredRef.current = []
       processPayloadRef.current = null
     }
