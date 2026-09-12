@@ -1,6 +1,7 @@
 // What one `agentSession.send` writes, and when a user's Retry is allowed to
 // put the same message on the wire a second time.
 
+import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -137,13 +138,15 @@ describe('send', () => {
     expect(dispatch).toHaveBeenCalledTimes(2)
   })
 
-  it('refuses to redeliver a retry for a turn the provider already owns', async () => {
+  it('refuses to redeliver a retry for a message the provider may already hold', async () => {
     await attach()
+    // A dead child ends the wait without proving non-delivery: the message was
+    // already written to that child's stdin.
     dispatch.mockImplementationOnce(async () => ({
       state: 'unknown' as const,
-      reason: 'codex app-server started a turn it did not name in time'
+      reason: DISPATCH_DOUBT_PROVIDER_EXITED
     }))
-    const body = hostTestMessage('a turn codex owns but did not name')
+    const body = hostTestMessage('a message the provider may already hold')
     const params = { envelope: envelope('agentSession.send', { body }), body }
 
     const first = await host.send(CALLER, params)
@@ -151,8 +154,8 @@ describe('send', () => {
       ok: true,
       value: { submission: { dispatchState: 'unknown' } }
     })
-    // The turn is running; a second delivery would be a duplicate, so Retry
-    // replays the recorded outcome instead of re-sending.
+    // The reason is not on the fail-closed allowlist, so Retry replays the
+    // recorded outcome instead of putting the message on the wire again.
     await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
       ok: true,
       value: { submission: { dispatchState: 'unknown' } }

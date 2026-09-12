@@ -10,6 +10,7 @@ import {
 } from './codex-structured-acquisition-lifecycle'
 import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 import { codexProcessIdentity, codexProviderHandleLink } from './codex-structured-owner-identity'
@@ -77,6 +78,7 @@ export async function acquireCodexStructuredSession(input: {
       ? acquireInput.identity.providerHandle.threadId
       : null
   const subagentExecutions = new CodexSubagentExecutions()
+  const dispatchEchoes = createCodexDispatchEchoes()
   const translator = acquireInput.events
     ? createCodexJournalTranslator({
         sink: acquireInput.events,
@@ -85,7 +87,14 @@ export async function acquireCodexStructuredSession(input: {
         primaryThreadId: () => primaryThreadId,
         subagentExecutions,
         bindPromptItemId: (journalItemId, threadId, promptKey) =>
-          acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey)
+          acquisition.prompts.bindJournalItemId(journalItemId, threadId, promptKey),
+        onUserMessageEcho: (clientMessageId, providerIdentity) => {
+          // Only a send THIS session admitted; an echo from history restore or
+          // another client names no submission of ours to settle.
+          if (dispatchEchoes.settle(clientMessageId)) {
+            deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
+          }
+        }
       })
     : null
   const open = deps.openConnection ?? openCodexAppServerConnection
@@ -207,7 +216,7 @@ export async function acquireCodexStructuredSession(input: {
       prompts: acquisition.prompts,
       options: restoredCodexSessionOptions(acquireInput.options),
       reportedOptions: reportedCodexThreadOptions(opened),
-      turnIdWaiters: [],
+      dispatchEchoes,
       translator,
       backgroundTasks: new CodexBackgroundTaskTracker(opened.threadId, subagentExecutions),
       forceCloseUnexpected: (reason) =>

@@ -1,3 +1,4 @@
+import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type {
@@ -101,7 +102,7 @@ describe('Codex structured session close lifecycle', () => {
       prompts,
       options: new Map(),
       reportedOptions: {},
-      turnIdWaiters: [],
+      dispatchEchoes: createCodexDispatchEchoes(),
       translator
     } as CodexSession
     const sessions = new Map([['session-1', session]])

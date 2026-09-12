@@ -25,13 +25,6 @@ export const DISPATCH_DOUBT_PERSISTENCE_FAILED = 'dispatch_result_persistence_fa
 /** A retry was durably armed but had not yet recorded its dispatch outcome. */
 export const DISPATCH_DOUBT_RETRY_IN_PROGRESS = 'dispatch_retry_in_progress'
 
-/** Codex owns a turn it started but did not name, because its turn-start still
- *  settles on a deadline. Delete this once Codex settles on the app-server's
- *  turn-start response instead; until then this reason is never re-delivered,
- *  which is what the allowlist below already does by omitting it. */
-export const DISPATCH_DOUBT_CODEX_TURN_UNNAMED =
-  'codex app-server started a turn it did not name in time'
-
 /** The transport refused the frame; the underlying error follows the colon. */
 export const DISPATCH_DOUBT_WRITE_FAILED = 'provider_write_failed'
 
