@@ -4,6 +4,10 @@ import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-
 import { addWslEnvKeys } from '../wsl-env'
 import { parseWslPath } from '../wsl'
 import { isWindowsGitBashShellPath } from '../git-bash'
+import {
+  ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV,
+  scrubCodexDefaultHomeMarkerForWindowsShell
+} from '../pty/codex-default-home-shell-startup'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
@@ -67,9 +71,12 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
 
   const shellBasename = pathWin32.basename(plan.shellPath).toLowerCase()
   const codexLaunchPreflightCommand = env.ORCA_CODEX_LAUNCH_PREFLIGHT
+  const useGitBashShellReadyWrapper = env[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV] !== undefined
+  scrubCodexDefaultHomeMarkerForWindowsShell(env, plan.shellPath)
   if (
-    codexLaunchPreflightCommand &&
-    (shellBasename === 'cmd.exe' || isWindowsGitBashShellPath(plan.shellPath))
+    (codexLaunchPreflightCommand || useGitBashShellReadyWrapper) &&
+    ((shellBasename === 'cmd.exe' && Boolean(codexLaunchPreflightCommand)) ||
+      isWindowsGitBashShellPath(plan.shellPath))
   ) {
     if (shellBasename === 'cmd.exe') {
       // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
@@ -81,7 +88,8 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
       plan.defaultCwd,
       plan.launchWslContext,
       spawn.command,
-      codexLaunchPreflightCommand
+      codexLaunchPreflightCommand,
+      useGitBashShellReadyWrapper
     )
     plan.shellArgs = resolved.shellArgs
     plan.effectiveCwd = resolved.effectiveCwd

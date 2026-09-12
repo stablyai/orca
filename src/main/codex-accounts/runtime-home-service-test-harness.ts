@@ -161,7 +161,10 @@ export function setupRuntimeHomeTest(): void {
   testState.shellStartupEnvProbeSupported = true
   vi.doMock('../pty/shell-startup-env', async () => ({
     ...(await vi.importActual<typeof ShellStartupEnv>('../pty/shell-startup-env')),
-    isShellStartupEnvProbeSupported: () => testState.shellStartupEnvProbeSupported
+    isShellStartupEnvProbeSupported: () => testState.shellStartupEnvProbeSupported,
+    // Why: the lane reads this, not the raw probe flag. Keeping the one knob
+    // authoritative stops a win32-forcing case from silently re-enabling it.
+    isLaunchEnvOverrideVisible: () => testState.shellStartupEnvProbeSupported
   }))
   testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-runtime-home-'))
   testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))

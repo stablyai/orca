@@ -13,6 +13,11 @@ import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'
 import { stripLegacyTerminalShimEnv } from '../../../pty/legacy-terminal-shim-dir'
 import { mergePersistedWindowsPath } from '../../../pty/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/codex-shell-launch-preflight'
+import {
+  ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV,
+  ORCA_CODEX_DEFAULT_HOME_UNSET_AFTER_PROFILE
+} from '../../../pty/codex-default-home-shell-startup'
+import { hasCustomCodexHomeOverride } from '../../../codex/codex-real-home-path'
 import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
 import type { BuildPtyHostEnvOptions } from './types'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'
@@ -193,6 +198,9 @@ export function buildPtyHostEnv(
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
   }
 
+  // Why: this is a one-shot shell-startup instruction, never inherited state.
+  delete baseEnv[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]
+
   // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
   if (opts.skipCodexHomeEnv) {
     delete baseEnv.CODEX_HOME
@@ -218,6 +226,16 @@ export function buildPtyHostEnv(
   } else if (opts.stripInheritedOrcaCodexHome) {
     stripInheritedOrcaCodexHomeOverride(baseEnv)
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+    if (
+      process.platform === 'win32' &&
+      opts.isWsl !== true &&
+      !hasCustomCodexHomeOverride(baseEnv)
+    ) {
+      // Windows profiles load after spawn; preserve whether the selected
+      // system-default lane explicitly named ~/.codex or left it implicit.
+      baseEnv[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV] =
+        baseEnv.CODEX_HOME?.trim() || ORCA_CODEX_DEFAULT_HOME_UNSET_AFTER_PROFILE
+    }
   } else {
     delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
   }

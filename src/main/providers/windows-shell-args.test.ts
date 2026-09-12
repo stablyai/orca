@@ -308,6 +308,23 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(result.startupCommandDeliveredInShellArgs).toBeUndefined()
   })
 
+  it('keeps Git Bash shell integration when only the default-home reset is needed', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice',
+      'C:\\Users\\alice',
+      undefined,
+      undefined,
+      undefined,
+      true
+    )
+
+    expect(result.shellArgs[1]).toContain('--rcfile')
+    const bashRcfile = readFileSync(getGitBashRcfilePath(result.shellArgs[1]), 'utf8')
+    expect(bashRcfile).toContain('ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE')
+    expect(bashRcfile).toContain('printf "\\033]133;C\\007"')
+  })
+
   it('quotes a spaced preflight path through each shell environment', () => {
     const cmd = resolveWindowsShellLaunchArgs(
       'cmd.exe',

@@ -9,6 +9,7 @@ import { delimiter, join } from 'node:path'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../pty/legacy-terminal-shim-dir'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
+import { ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV } from '../pty/codex-default-home-shell-startup'
 import { registerPtyHandlers } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -343,6 +344,19 @@ describe('registerPtyHandlers', () => {
         // The daemon compares its own merged values before deleting CODEX_HOME.
         expect(spawnOptions.envToDelete).not.toContain('CODEX_HOME')
       })
+      it('sends the one-shot reset marker through a native Windows daemon launch', async () => {
+        await withWin32Platform(async () => {
+          const spawnOptions = await daemonSpawnAndGetOptions(
+            {},
+            () => null,
+            () => ({ codexSystemDefaultRealHomeEnabled: true }) as never,
+            { CODEX_HOME: 'C:\\Orca\\managed-home', ORCA_CODEX_HOME: 'C:\\Orca\\managed-home' }
+          )
+
+          expect(spawnOptions.env[ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]).toBe('1')
+          expect(spawnOptions.envToDelete).not.toContain(ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV)
+        })
+      })
       it('preserves a daemon-inherited user CODEX_HOME for real-home routing', async () => {
         const spawnOptions = await daemonSpawnAndGetOptions(
           {},
@@ -356,9 +370,11 @@ describe('registerPtyHandlers', () => {
       it('does not strip the daemon-inherited CODEX_HOME when the flag is OFF', async () => {
         const spawnOptions = await daemonSpawnAndGetOptions({}, () => null, undefined, {
           CODEX_HOME: '/managed/home',
-          ORCA_CODEX_HOME: '/managed/home'
+          ORCA_CODEX_HOME: '/managed/home',
+          [ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV]: '1'
         })
         expect(spawnOptions.envToDelete ?? []).not.toEqual(expect.arrayContaining(['CODEX_HOME']))
+        expect(spawnOptions.envToDelete).toContain(ORCA_CODEX_DEFAULT_HOME_AFTER_PROFILE_ENV)
       })
       it('strips inherited Claude child-session stamps from daemon spawns', async () => {
         // Why: a daemon forked from inside a Claude Code session inherits these

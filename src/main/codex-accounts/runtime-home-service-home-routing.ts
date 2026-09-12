@@ -14,12 +14,12 @@ import {
   type CodexAccountSelectionTarget
 } from './runtime-selection'
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
+import { isLaunchEnvOverrideVisible } from '../pty/shell-startup-env'
 import {
   hasRecordedLegacySharedCodexPane,
   getCodexPaneAccount,
   type CodexPaneHomeRoute
 } from '../codex/codex-pane-account-registry'
-import { isShellStartupEnvProbeSupported } from '../pty/shell-startup-env'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
@@ -144,15 +144,12 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   }
 
   // Why: real-home routing applies only to the host system-default selection.
-  // Managed accounts run in their own homes; Windows (no shell-startup probe)
-  // and custom CODEX_HOMEs stay on the mirror until cleanup can be tracked
-  // across old homes.
+  // Managed accounts run in their own homes. Custom CODEX_HOMEs stay on the
+  // mirror until cleanup can be tracked across old homes -- Orca may mutate
+  // ~/.codex only because that is the one path it can clean on downgrade.
   isHostSystemDefaultRealHomeSelected(launchEnv?: NodeJS.ProcessEnv): boolean {
     const settings = this.store.getSettings()
-    if (
-      normalizeCodexRuntimeSelection(settings).host !== null ||
-      !isShellStartupEnvProbeSupported()
-    ) {
+    if (normalizeCodexRuntimeSelection(settings).host !== null || !isLaunchEnvOverrideVisible()) {
       return false
     }
     return !hasCustomCodexHomeOverrideForLaunch(launchEnv)
