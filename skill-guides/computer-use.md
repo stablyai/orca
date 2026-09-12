@@ -73,7 +73,8 @@ ORCA computer drag --app <app> --from-x 100 --from-y 100 --to-x 300 --to-y 300 -
 Use `--no-screenshot` only when pixels are not needed. Use `--text-stdin` or `--value-stdin` for sensitive text so payloads do not land in shell history. On Linux and Windows, action payloads still pass through a short-lived local operation file, so avoid sending secrets unless the user explicitly asked for them:
 
 POSIX-shell example (use the equivalent stdin mechanism without command-history exposure in
-PowerShell or cmd.exe):
+PowerShell or cmd.exe). cmd.exe does not treat `'` as a quoting character; unquoted and
+double-quoted arguments stay shell-neutral, while single-quoted JSON is POSIX/PowerShell only:
 
 ```bash
 printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index> --value-stdin --json
