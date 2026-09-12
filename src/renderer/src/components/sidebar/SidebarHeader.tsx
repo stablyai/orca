@@ -3,7 +3,9 @@ import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { SidebarHeaderActions } from './sidebar-header-actions'
+import { applySidebarActivityToggle } from './sidebar-activity-toggle'
 import { Button } from '@/components/ui/button'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Sparkles, Bell } from 'lucide-react'
@@ -22,8 +24,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
   useTranslation()
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
   const groupBy = useAppStore((s) => s.groupBy)
-  const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const activityShortcut = useOptionalShortcutLabel('sidebar.activity.toggle')
   const agentsViewActive = sidebarBody === 'agents'
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
@@ -44,6 +46,9 @@ const SidebarHeader = React.memo(function SidebarHeader({
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
   )
+  const activityTooltip = activityShortcut
+    ? `${activityLabel} (${activityShortcut})`
+    : activityLabel
 
   return (
     <div className="mt-2 flex h-8 min-w-0 items-center justify-between gap-1.5 px-2">
@@ -80,7 +85,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
                     )}
                     aria-label={activityLabel}
                     aria-pressed={agentsViewActive}
-                    onClick={() => setSidebarBody?.(agentsViewActive ? 'workspaces' : 'agents')}
+                    onClick={() => applySidebarActivityToggle(useAppStore.getState())}
                   >
                     <Bell className="size-3.5" strokeWidth={2.25} />
                   </Button>
@@ -88,7 +93,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
               </span>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {activityLabel}
+              {activityTooltip}
             </TooltipContent>
           </Tooltip>
           <PopoverContent

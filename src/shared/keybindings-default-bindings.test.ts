@@ -437,4 +437,36 @@ describe('keybindings', () => {
       })
     ).toBe(true)
   })
+
+  it('binds the activity view toggle to Mod+Shift+Y on every platform', () => {
+    const binding = {
+      key: 'y',
+      code: 'KeyY',
+      meta: true,
+      control: false,
+      alt: false,
+      shift: true
+    }
+    const ctrlBinding = { ...binding, meta: false, control: true }
+
+    expect(getEffectiveKeybindingsForAction('sidebar.activity.toggle', 'darwin')).toEqual([
+      'Mod+Shift+Y'
+    ])
+    expect(getEffectiveKeybindingsForAction('sidebar.activity.toggle', 'linux')).toEqual([
+      'Mod+Shift+Y'
+    ])
+    expect(getEffectiveKeybindingsForAction('sidebar.activity.toggle', 'win32')).toEqual([
+      'Mod+Shift+Y'
+    ])
+    expect(formatKeybindingList(['Mod+Shift+Y'], 'darwin')).toBe('⌘⇧Y')
+    expect(keybindingMatchesAction('sidebar.activity.toggle', binding, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('sidebar.activity.toggle', ctrlBinding, 'linux')).toBe(true)
+    expect(keybindingMatchesAction('sidebar.activity.toggle', ctrlBinding, 'win32')).toBe(true)
+
+    const definition = getKeybindingDefinition('sidebar.activity.toggle')
+    expect(definition?.title).toBe('Toggle Activity View')
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['activity', 'sidebar', 'toggle'])
+    )
+  })
 })
