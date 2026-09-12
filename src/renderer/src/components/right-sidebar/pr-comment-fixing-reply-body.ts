@@ -1,3 +1,4 @@
+import { replaceHtmlComments } from '../../../../shared/html-comment-replacement'
 import type { PRComment } from '../../../../shared/github/comment-types'
 
 /** Posted when a selected review comment is sent to AI. */
@@ -24,8 +25,7 @@ const ACK_SNIPPET_MAX_LENGTH = 72
 
 /** First readable line of a comment body, minus HTML comments and markdown markers. */
 function summarizePRCommentBody(body: string): string {
-  const line = body
-    .replace(/<!--[\s\S]*?-->/g, ' ')
+  const line = replaceHtmlComments(body, ' ')
     .split('\n')
     .map((candidate) =>
       candidate
