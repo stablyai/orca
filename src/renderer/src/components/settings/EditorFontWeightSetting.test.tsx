@@ -29,7 +29,8 @@ describe('EditorFontWeightSetting', () => {
   it('renders the inheriting state as an empty field without re-rendering forever', () => {
     const { input } = renderSetting(0)
     expect(input.value).toBe('')
-    expect(input.getAttribute('placeholder')).toBe('Same as terminal font weight')
+    // The placeholder is the live terminal weight, so the empty row still shows what it inherits.
+    expect(input.getAttribute('placeholder')).toBe('500')
   })
 
   it('shows the pinned weight when the editor opts out of the terminal weight', () => {

@@ -10698,8 +10698,7 @@
         },
         "EditorFontWeightSetting": {
           "title": "Graisse de la police de l'éditeur",
-          "description": "Graisse utilisée par les éditeurs de fichiers et les vues de diff. Laissez vide pour suivre la graisse de la police du terminal.",
-          "placeholder": "Identique à la graisse du terminal"
+          "description": "Graisse utilisée par les éditeurs de fichiers et les vues de diff. Laissez vide pour suivre la graisse de la police du terminal."
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} serveurs jumelés",

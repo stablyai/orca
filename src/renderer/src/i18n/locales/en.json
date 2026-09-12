@@ -11166,8 +11166,7 @@
         },
         "EditorFontWeightSetting": {
           "title": "Editor Font Weight",
-          "description": "Weight used by file editors and diff views. Leave empty to follow the terminal font weight.",
-          "placeholder": "Same as terminal font weight"
+          "description": "Weight used by file editors and diff views. Leave empty to follow the terminal font weight."
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

@@ -9935,8 +9935,7 @@
         },
         "EditorFontWeightSetting": {
           "title": "编辑器字体粗细",
-          "description": "文件编辑器和差异视图使用的字体粗细，留空则跟随终端字体粗细。",
-          "placeholder": "与终端字体粗细相同"
+          "description": "文件编辑器和差异视图使用的字体粗细，留空则跟随终端字体粗细。"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

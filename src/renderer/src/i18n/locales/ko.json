@@ -9870,8 +9870,7 @@
         },
         "EditorFontWeightSetting": {
           "title": "편집기 글꼴 두께",
-          "description": "파일 편집기 및 diff 보기에서 사용되는 글꼴 두께입니다. 비워두면 터미널 글꼴 두께를 따릅니다.",
-          "placeholder": "터미널 글꼴 두께와 동일"
+          "description": "파일 편집기 및 diff 보기에서 사용되는 글꼴 두께입니다. 비워두면 터미널 글꼴 두께를 따릅니다."
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

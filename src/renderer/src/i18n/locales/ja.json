@@ -9865,8 +9865,7 @@
         },
         "EditorFontWeightSetting": {
           "title": "エディターフォントの太さ",
-          "description": "ファイルエディターと差分ビューで使用されるフォントの太さ。空の場合はターミナルフォントの太さに従います。",
-          "placeholder": "ターミナルフォントの太さと同じ"
+          "description": "ファイルエディターと差分ビューで使用されるフォントの太さ。空の場合はターミナルフォントの太さに従います。"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "ペアリング済みサーバー {{value0}} 台",

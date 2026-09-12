@@ -29,10 +29,9 @@ export function EditorFontWeightSetting({
       ? normalizeTerminalFontWeight(editorFontWeight)
       : undefined
 
-  // Why the terminal weight as the shown default: this setting has no fixed default
-  // of its own — leaving it empty inherits whatever the terminal is on — so surfacing
-  // the live inherited number reads like the terminal's own weight field instead of
-  // leaving the user to guess what "same as terminal" currently resolves to.
+  // Why the terminal weight is the placeholder: this setting has no fixed default of
+  // its own — leaving it empty inherits whatever the terminal is on — so the greyed
+  // number shows what the editor resolves to today without claiming to be a default.
   const inheritedWeight = normalizeTerminalFontWeight(settings.terminalFontWeight)
 
   return (
@@ -57,16 +56,12 @@ export function EditorFontWeightSetting({
           'Weight used by file editors and diff views. Leave empty to follow the terminal font weight.'
         )}
         value={value}
-        defaultValue={inheritedWeight}
         min={TERMINAL_FONT_WEIGHT_MIN}
         max={TERMINAL_FONT_WEIGHT_MAX}
         step={TERMINAL_FONT_WEIGHT_STEP}
         integer
         suffix="100-900"
-        placeholder={translate(
-          'auto.components.settings.EditorFontWeightSetting.placeholder',
-          'Same as terminal font weight'
-        )}
+        placeholder={String(inheritedWeight)}
         onChange={(next) => updateSettings({ editorFontWeight: normalizeTerminalFontWeight(next) })}
         onClear={() => updateSettings({ editorFontWeight: 0 })}
       />

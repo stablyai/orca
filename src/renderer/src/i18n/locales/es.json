@@ -9865,8 +9865,7 @@
         },
         "EditorFontWeightSetting": {
           "title": "Peso de fuente del editor",
-          "description": "Peso utilizado por los editores de archivos y vistas de diferencias. Dejar vacío para seguir el peso de fuente de la terminal.",
-          "placeholder": "Igual que el peso de la terminal"
+          "description": "Peso utilizado por los editores de archivos y vistas de diferencias. Dejar vacío para seguir el peso de fuente de la terminal."
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
