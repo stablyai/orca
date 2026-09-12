@@ -5,6 +5,7 @@ import {
 import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   isAgentInterruptInputIntent,
+  isNavigationEscapeIntent,
   type AgentInterruptInferenceRequest
 } from '../../../shared/agent-interrupt-intent'
 import {
@@ -14,34 +15,7 @@ import {
 import { AGENT_STATUS_STALE_AFTER_MS, type AgentType } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
-import { OPEN_PROVIDER_WORK_HOOK_EVENTS } from './server-constants'
 import { AgentHookServerRowOwnership } from './server-row-ownership'
-
-// Why: these TUIs also close an overlay on a bare Escape (Claude's /btw composer, OMP/Pi's
-// focused-child and settings views), so one press cannot mean "interrupt" on its own (#13547, #9208).
-// Sibling policy for agents whose first Escape is a cancel lives in the double-Escape gate below.
-const ESCAPE_ALSO_NAVIGATES_AGENT_TYPES: ReadonlySet<AgentType> = new Set([
-  'claude',
-  'omp',
-  'pi',
-  'prime-agent'
-])
-
-/** Hook silence while the provider still owes a result is evidence work is running, not that the
- *  turn was interrupted — so an ambiguous single Escape may not retire the row. */
-function isNavigationEscapeWhileProviderWorkOpen(
-  existing: EnrichedAgentHookEventPayload,
-  agentType: AgentType | undefined,
-  intent: AgentInterruptInferenceRequest['intent']
-): boolean {
-  return (
-    intent === 'plain-escape' &&
-    agentType !== undefined &&
-    ESCAPE_ALSO_NAVIGATES_AGENT_TYPES.has(agentType) &&
-    existing.hookEventName !== undefined &&
-    OPEN_PROVIDER_WORK_HOOK_EVENTS.has(existing.hookEventName)
-  )
-}
 
 export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
@@ -97,9 +71,9 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     ) {
       return false
     }
-    // Why: only the provider's own closing hook may retire a row whose work is still open;
-    // an Escape there is as likely to have dismissed an overlay as to have stopped the turn.
-    if (isNavigationEscapeWhileProviderWorkOpen(existing, agentType, request.intent)) {
+    // Why: re-checked here, not only in the renderer, so a stale or direct inference request
+    // cannot route around the renderer's skip and synthesize a false stopped row.
+    if (isNavigationEscapeIntent(agentType, request.intent)) {
       return false
     }
     // Why: a 'working' pane can be child-driven; Ctrl+C doesn't stop background children, so inferring done would retire live child rows.

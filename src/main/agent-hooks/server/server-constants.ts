@@ -17,27 +17,6 @@ export const TOOL_PROGRESS_HOOK_EVENTS = new Set([
   'PostToolUse',
   'PostToolUseFailure'
 ])
-
-// Why: events after which the provider still owes a result, for the agent types whose TUI also
-// binds a bare Escape to navigation. A row sitting on one of these has not seen the event that
-// retires it (PostToolUse / tool_execution_end / agent_end), so hook silence there is work still
-// running, not an interrupt. Closed by construction: Claude ships PreToolUse as its only
-// tool-opening hook, and Orca generates the pi/omp/prime-agent extension itself
-// (main/pi/agent-status-handler-source.ts), so neither can add one without a change here.
-// The last two are only ever reached in their still-working form — the guard runs after the
-// `state === 'working'` gate, which already drops a denied approval's peers and `is_idle` end.
-export const OPEN_PROVIDER_WORK_HOOK_EVENTS: ReadonlySet<string> = new Set([
-  'PreToolUse',
-  'tool_call',
-  'tool_execution_start',
-  // Why: OMP grants approval and runs the tool; the brief gap before tool_execution_start is
-  // still an open tool. A denial also lands here, and over-holding it costs only the wait for
-  // the agent's own next event — the safe side of a guard whose whole point is not to fake a done.
-  'tool_approval_resolved',
-  // Why: Pi's modal can close over a tool that is still running. is_idle:true maps to `done` and
-  // never reaches here, so this entry only ever catches the is_idle:false / still-working case.
-  'ui_prompt_end'
-])
 export const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
 // Why: bound file growth from PTYs that never re-attach; 7 days is the "still relevant?" horizon beyond which entries shouldn't resurrect on hydrate.

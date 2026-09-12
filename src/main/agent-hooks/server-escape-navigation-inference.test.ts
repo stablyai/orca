@@ -206,7 +206,9 @@ describe('navigation Escape during an open tool call', () => {
     expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
   })
 
-  it('still infers a Claude Escape once the tool call has closed', () => {
+  // Why: the closed tool call is the case the old event-name gate let through. The rule no longer
+  // reads the hook event at all — for these agents a plain Escape is never evidence a turn ended.
+  it('refuses a Claude Escape even once the tool call has closed', () => {
     const server = new AgentHookServer()
     ingest(server, {
       source: 'claude',
@@ -218,11 +220,40 @@ describe('navigation Escape during an open tool call', () => {
     })
 
     vi.setSystemTime(1_200)
-    expect(pressInterruptKey(server, 'plain-escape')).toBe(true)
-    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
-      state: 'done',
-      interrupted: true
+    expect(pressInterruptKey(server, 'plain-escape')).toBe(false)
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
+  })
+
+  it('refuses a Claude Escape on a row that never saw a tool call', () => {
+    const server = new AgentHookServer()
+    ingest(server, {
+      source: 'claude',
+      hookEventName: 'UserPromptSubmit',
+      state: 'working',
+      prompt: 'migrate the schema',
+      agentType: 'claude'
     })
+
+    vi.setSystemTime(1_200)
+    expect(pressInterruptKey(server, 'plain-escape')).toBe(false)
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
+  })
+
+  // Why: an OSC-parsed row carries no hookEventName; the agent-type rule still covers it, where the
+  // old event-name gate fell through ungated.
+  it('refuses an Escape on a row with no hook event at all', () => {
+    const server = new AgentHookServer()
+    ingest(server, {
+      source: 'omp',
+      hookEventName: '',
+      state: 'working',
+      prompt: 'refactor the parser',
+      agentType: 'omp'
+    })
+
+    vi.setSystemTime(1_200)
+    expect(pressInterruptKey(server, 'plain-escape')).toBe(false)
+    expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({ state: 'working' })
   })
 
   it('still infers Ctrl+C during an open tool call', () => {
@@ -356,15 +387,16 @@ describe('navigation Escape during an open tool call', () => {
   })
 })
 
-/** The guard has to hold on the path a real agent CLI uses, not only on ingestRemote: the
- *  loopback listener is what stamps `hookEventName` for a locally launched agent. */
+/** The rule has to hold on the path a real agent CLI uses, not only on ingestRemote: the loopback
+ *  listener is what a locally launched agent posts to. */
 describe('navigation Escape over the loopback hook listener', () => {
   it.each([
-    ['PreToolUse', false, 'working'],
-    ['PostToolUse', true, 'done']
+    ['PreToolUse', 'plain-escape', false, 'working'],
+    ['PostToolUse', 'plain-escape', false, 'working'],
+    ['PreToolUse', 'ctrl-c', true, 'done']
   ])(
-    'a Claude row last seen on %s answers %s to a single Escape',
-    async (hookEventName, expectedInference, expectedState) => {
+    'a Claude row last seen on %s answers %s with %s',
+    async (hookEventName, intent, expectedInference, expectedState) => {
       vi.useRealTimers()
       const server = new AgentHookServer()
       await server.start({ env: 'production' })
@@ -388,7 +420,9 @@ describe('navigation Escape over the loopback hook listener', () => {
           )
         }
 
-        expect(pressInterruptKey(server, 'plain-escape')).toBe(expectedInference)
+        expect(pressInterruptKey(server, intent as AgentInterruptInputIntent)).toBe(
+          expectedInference
+        )
         expect(server.getStatusSnapshotForPane(PANE)[0]).toMatchObject({
           state: expectedState,
           ...(expectedInference ? { interrupted: true } : {})

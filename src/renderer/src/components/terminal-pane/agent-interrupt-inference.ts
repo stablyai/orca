@@ -4,6 +4,7 @@ import {
 } from '../../../../shared/agent-status-types'
 import {
   AGENT_INTERRUPT_SETTLE_MS,
+  isNavigationEscapeIntent,
   type AgentInterruptInferenceRequest,
   type AgentInterruptInputIntent
 } from '../../../../shared/agent-interrupt-intent'
@@ -57,9 +58,15 @@ function shouldFlushInterruptImmediately(
 
 function shouldIgnoreInterruptIntent(
   agentType: AgentStatusEntry['agentType'],
-  intent: AgentInterruptInputIntent
+  intent: AgentInterruptInputIntent,
+  state: AgentStatusEntry['state']
 ): boolean {
-  return agentType === 'droid' && intent === 'ctrl-c'
+  return (
+    (agentType === 'droid' && intent === 'ctrl-c') ||
+    // Why: skip a round-trip main will refuse anyway. Scoped to 'working' so Claude's
+    // AskUserQuestion dismissal — a 'waiting' row — still reaches inferQuestionAnswered.
+    (state === 'working' && isNavigationEscapeIntent(agentType, intent))
+  )
 }
 
 function canInferInterrupt(entry: AgentStatusEntry, intent: AgentInterruptInputIntent): boolean {
@@ -234,7 +241,7 @@ export function createAgentInterruptInference({
         clearPending()
         return
       }
-      if (shouldIgnoreInterruptIntent(baseline.agentType, intent)) {
+      if (shouldIgnoreInterruptIntent(baseline.agentType, intent, entry.state)) {
         clearPending()
         return
       }
