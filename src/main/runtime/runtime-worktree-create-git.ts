@@ -11,7 +11,11 @@ import {
   getSelectedReviewLookupHints,
   type SelectedReviewBranchInput
 } from './selected-review-branch'
-import { hasLocalGitOptions, normalizeLocalBranchName } from './runtime-worktree-selection'
+import {
+  hasLocalGitOptions,
+  isLocalBranchCheckedOut,
+  normalizeLocalBranchName
+} from './runtime-worktree-selection'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 
 export async function resolveCreateBranchName(
@@ -72,7 +76,11 @@ export async function canCheckoutExistingLocalBranch(
     }
   }
   const worktrees = await listWorktrees(repoPath, gitOptions)
-  return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
+  return !(await isLocalBranchCheckedOut(
+    branchName,
+    worktrees.map((worktree) => worktree.branch),
+    (args) => gitExecFileAsync(args, { cwd: repoPath, ...gitOptions })
+  ))
 }
 
 export function getLocalGitHubPrForBranch(

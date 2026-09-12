@@ -1,5 +1,28 @@
-import { describe, expect, it } from 'vitest'
-import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { describe, expect, it, vi } from 'vitest'
+import {
+  isLocalBranchCheckedOut,
+  runtimeRepoMatchesExecutionHost
+} from './runtime-worktree-selection'
+
+describe('isLocalBranchCheckedOut', () => {
+  it('asks Git to disambiguate canonically equivalent Linear branch names', async () => {
+    const branchName = 'feature/수신-기반'
+    const nfcRef = `refs/heads/${branchName.normalize('NFC')}`
+    const nfdRef = `refs/heads/${branchName.normalize('NFD')}`
+    const runGit = vi
+      .fn()
+      .mockResolvedValueOnce({ stdout: `abc123 ${nfcRef}\n` })
+      .mockResolvedValueOnce({ stdout: `abc123 ${nfdRef}\n` })
+
+    await expect(
+      isLocalBranchCheckedOut(branchName.normalize('NFD'), [nfcRef], runGit)
+    ).resolves.toBe(true)
+    await expect(
+      isLocalBranchCheckedOut(branchName.normalize('NFD'), [nfcRef], runGit)
+    ).resolves.toBe(false)
+    expect(runGit).toHaveBeenNthCalledWith(1, ['show-ref', '--verify', '--', nfdRef])
+  })
+})
 
 describe('runtimeRepoMatchesExecutionHost', () => {
   it('matches an unstamped SSH repo against its own host (#11163)', () => {

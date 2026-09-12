@@ -73,6 +73,33 @@ export function normalizeLocalBranchName(branchName: string | undefined): string
   return branchName?.replace(/^refs\/heads\//, '') ?? ''
 }
 
+export async function isLocalBranchCheckedOut(
+  branchName: string,
+  worktreeBranches: readonly string[],
+  runGit: (args: string[]) => Promise<{ stdout: string }>
+): Promise<boolean> {
+  const requestedRef = `refs/heads/${normalizeLocalBranchName(branchName)}`
+  const checkedOutRefs = worktreeBranches.map(
+    (branch) => `refs/heads/${normalizeLocalBranchName(branch)}`
+  )
+  if (checkedOutRefs.includes(requestedRef)) {
+    return true
+  }
+  if (!checkedOutRefs.some((ref) => ref.normalize('NFC') === requestedRef.normalize('NFC'))) {
+    return false
+  }
+  try {
+    // Why: macOS Git may resolve NFD input to an NFC on-disk ref, while Linux can store both.
+    const { stdout } = await runGit(['show-ref', '--verify', '--', requestedRef])
+    const separator = stdout.indexOf(' ')
+    const resolvedRef = separator === -1 ? '' : stdout.slice(separator + 1).trim()
+    return !resolvedRef || checkedOutRefs.includes(resolvedRef)
+  } catch {
+    // Why: a failed probe cannot prove that reusing the branch is safe.
+    return true
+  }
+}
+
 export function getExplicitWorktreeIdSelector(selector: string | undefined): string | null {
   if (!selector?.startsWith('id:')) {
     return null
