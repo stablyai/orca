@@ -27,6 +27,7 @@ const NON_DEFAULT_LOCALE_LOADERS: Record<
 > = {
   es: () => import('./locales/es.json'),
   fr: () => import('./locales/fr.json'),
+  gl: () => import('./locales/gl.json'),
   ja: () => import('./locales/ja.json'),
   ko: () => import('./locales/ko.json'),
   zh: () => import('./locales/zh.json')

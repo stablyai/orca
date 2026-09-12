@@ -39,6 +39,11 @@ const LOCALE_CONFIG = {
     targetLanguage: 'fr',
     displayName: 'French',
     cacheFile: '.fr-catalog-cache.json'
+  },
+  gl: {
+    targetLanguage: 'gl',
+    displayName: 'Galician',
+    cacheFile: '.gl-catalog-cache.json'
   }
 }
 
