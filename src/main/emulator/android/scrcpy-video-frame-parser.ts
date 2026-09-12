@@ -72,5 +72,12 @@ export function parseScrcpyVideoFrames(buffer: RelayFrameBuffer): ScrcpyVideoFra
     })
   }
 
+  if (frames.length > 0 && buffer.length > 0) {
+    const pendingHead = buffer.peek(1)
+    // Compact only mostly consumed allocations larger than the reusable Buffer slab.
+    if (pendingHead.buffer.byteLength > Math.max(Buffer.poolSize, pendingHead.length * 2)) {
+      buffer.append(Buffer.from(buffer.drain()))
+    }
+  }
   return frames
 }
