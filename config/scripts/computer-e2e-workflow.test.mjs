@@ -99,6 +99,7 @@ describe('computer-use e2e workflow', () => {
       'src/main/computer/computer-provider-unavailable-message.test.ts',
       'src/main/computer/sidecar-client.test.ts',
       'src/main/computer/macos-native-provider-client.test.ts',
+      'tests/e2e/helpers/computer-coordinate-click-driver.unit.test.ts',
       'src/main/computer/macos-native-provider-socket.test.ts',
       'src/main/computer/macos-computer-use-permissions.test.ts',
       'src/main/computer/macos-computer-use-permission-status.test.ts',
@@ -361,6 +362,8 @@ describe('computer-use e2e workflow', () => {
       expect.arrayContaining([
         'tests/e2e/computer-linux.e2e.ts',
         'tests/e2e/helpers/computer-cli-driver.ts',
+        'tests/e2e/helpers/computer-coordinate-click-driver.ts',
+        'tests/e2e/helpers/computer-coordinate-click-driver.unit.test.ts',
         'tests/e2e/helpers/computer-driver.ts'
       ])
     )

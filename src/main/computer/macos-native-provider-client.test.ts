@@ -159,6 +159,45 @@ describe('MacOSNativeProviderClient', () => {
     await expect(secondCall).resolves.toEqual(capabilities)
   })
 
+  it('preserves structured helper error data on rejection', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const call = client.capabilities()
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+    const request = JSON.parse(socket.writes[0]!) as { id: number }
+
+    const rejection = expect(call).rejects.toMatchObject({
+      name: 'RuntimeClientError',
+      code: 'window_not_focused',
+      data: {
+        deliveredPresses: 1,
+        phase: 'after-press',
+        probeNilReason: 'hit-test-miss'
+      }
+    })
+    socket.emit(
+      'data',
+      `${JSON.stringify({
+        id: request.id,
+        ok: false,
+        error: {
+          code: 'window_not_focused',
+          message: 'coordinate click aborted',
+          data: {
+            deliveredPresses: 1,
+            phase: 'after-press',
+            probeNilReason: 'hit-test-miss'
+          }
+        }
+      })}\n`
+    )
+
+    await rejection
+  })
+
   it('starts a replacement socket after the active helper connection errors', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()

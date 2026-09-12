@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'vitest'
 import type {
   ComputerActionResult,
   ComputerListAppsResult,
@@ -15,8 +15,10 @@ import {
 } from './helpers/computer-driver'
 import {
   clickCapturedTextEditOpenDialog,
+  deliveredFinalPressAbort,
   doubleClickTextEditWord
 } from './helpers/computer-coordinate-click-driver'
+import { CliCommandError, runOrcaCliAllowFailure } from './helpers/computer-cli-driver'
 
 const isMac = process.platform === 'darwin'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
@@ -29,6 +31,23 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
 
   afterAll(async () => {
     await killTextEdit()
+  })
+
+  afterEach(async () => {
+    // Close a TextEdit modal that a failed test left open.
+    try {
+      await runOrcaCli([
+        'computer',
+        'hotkey',
+        '--app',
+        'TextEdit',
+        '--key',
+        'Escape',
+        '--no-screenshot'
+      ])
+    } catch {
+      // Best-effort only; TextEdit may already be gone.
+    }
   })
 
   test('list-apps includes TextEdit', async () => {
@@ -187,7 +206,8 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
     )
     expect(textTarget).toBeGreaterThanOrEqual(0)
 
-    await runOrcaCli([
+    // Accept only a delivered final press that later postconditions verify.
+    const setupClick = await runOrcaCliAllowFailure([
       'computer',
       'click',
       '--app',
@@ -195,8 +215,12 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
       '--element-index',
       String(textTarget),
       '--restore-window',
-      '--no-screenshot'
+      '--no-screenshot',
+      '--json'
     ])
+    if (!setupClick.ok && !deliveredFinalPressAbort(setupClick.failure.stdout, 1)) {
+      throw new CliCommandError(setupClick.failure)
+    }
 
     await runOrcaCli([
       'computer',
