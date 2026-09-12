@@ -141,7 +141,9 @@ describe('CliSection project runtime defaults', () => {
       })
     )
     expect(capturedPanel.props?.command).toBe(ORCA_CLI_SKILL_INSTALL_COMMAND)
+    expect(capturedPanel.props?.command).not.toContain('-y')
     expect(capturedPanel.props?.installedCommand).toBe(ORCA_CLI_SKILL_UPDATE_COMMAND)
+    expect(capturedPanel.props?.installedCommand).not.toContain('-y')
     expect(capturedPanel.props?.terminalRuntime).toEqual({
       runtime: 'wsl',
       wslDistro: 'Ubuntu',

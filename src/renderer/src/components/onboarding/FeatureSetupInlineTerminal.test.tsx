@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render } from '@testing-library/react'
 import { FeatureSetupInlineTerminal } from './FeatureSetupInlineTerminal'
 
 const mocks = vi.hoisted(() => ({
@@ -59,6 +59,10 @@ describe('FeatureSetupInlineTerminal', () => {
     mocks.terminalProps = null
     mocks.buildCommand.mockClear()
     mocks.buildSetupCommand.mockClear()
+  })
+
+  afterEach(() => {
+    cleanup()
   })
 
   it('runs the command through the resolved WSL runtime', () => {

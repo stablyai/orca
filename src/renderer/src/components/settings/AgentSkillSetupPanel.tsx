@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Copy, Loader2, RefreshCw, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
-import { IntegrationStatusPill } from '../integration-status-pill'
-import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
+import { InlineSetupTerminalStallNotice } from '../onboarding/InlineSetupTerminalStallNotice'
+import { useInlineSetupTerminalStall } from '../onboarding/use-inline-setup-terminal-stall'
 import { AgentSkillSetupFailureNotice } from './AgentSkillSetupFailureNotice'
+import { AgentSkillSetupPresenceStatus } from './AgentSkillSetupPresenceStatus'
 import { createTerminalSnapshot, type SkillTerminalSnapshot } from './agent-skill-terminal-snapshot'
 import type { AgentSkillSetupPanelProps } from './agent-skill-setup-panel-props'
 import { Button } from '../ui/button'
@@ -66,6 +67,7 @@ export function AgentSkillSetupPanel({
   const [setupAttemptRunning, setSetupAttemptRunning] = useState(false)
   const [setupCommandFailedCode, setSetupCommandFailedCode] = useState<number | null>(null)
   const setupAttemptRunningRef = useRef(false)
+  const setupStalled = useInlineSetupTerminalStall(setupAttemptRunning)
   const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(
     Boolean(preInstallNotice && !installed)
   )
@@ -249,6 +251,17 @@ export function AgentSkillSetupPanel({
             : translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
       ) : null}
+      {terminalOpen ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={handleTerminalExit}
+          disabled={terminalOpening}
+        >
+          {translate('auto.components.settings.AgentSkillSetupPanel.cancelSetup', 'Cancel')}
+        </Button>
+      ) : null}
       {terminalOpening ? (
         <p className="basis-full text-[12px] leading-snug text-muted-foreground">
           {openingHint ??
@@ -275,10 +288,20 @@ export function AgentSkillSetupPanel({
         {hideHeader ? (
           <>
             {error ? <p className="text-[12px] text-destructive">{error}</p> : null}
-            {/* hideHeader drops the title row; keep freshness so guided hubs still surface updates. */}
-            {installed && freshnessSkillName && setupCommandFailedCode === null ? (
+            {/* hideHeader drops the title row; keep presence/freshness so guided hubs still surface updates. */}
+            {setupCommandFailedCode !== null ||
+            setupStalled ||
+            setupAttemptRunning ||
+            (installed && freshnessSkillName) ? (
               <div className="mb-2">
-                <SkillFreshnessStatusPill skillName={freshnessSkillName} />
+                <AgentSkillSetupPresenceStatus
+                  setupFailed={setupCommandFailedCode !== null}
+                  stalled={setupStalled}
+                  installing={setupAttemptRunning}
+                  loading={loading}
+                  installed={installed}
+                  freshnessSkillName={freshnessSkillName}
+                />
               </div>
             ) : null}
           </>
@@ -293,39 +316,14 @@ export function AgentSkillSetupPanel({
             <div className="min-w-0 flex-1 self-center">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
-                {setupCommandFailedCode !== null ? (
-                  <IntegrationStatusPill tone="attention">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.setupFailed',
-                      'Setup failed'
-                    )}
-                  </IntegrationStatusPill>
-                ) : loading && !installed ? (
-                  <IntegrationStatusPill tone="neutral">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.68a468752e',
-                      'Checking...'
-                    )}
-                  </IntegrationStatusPill>
-                ) : installed ? (
-                  freshnessSkillName ? (
-                    <SkillFreshnessStatusPill skillName={freshnessSkillName} />
-                  ) : (
-                    <IntegrationStatusPill tone="connected">
-                      {translate(
-                        'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
-                        'Installed'
-                      )}
-                    </IntegrationStatusPill>
-                  )
-                ) : (
-                  <IntegrationStatusPill tone="attention">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.5289300939',
-                      'Not installed'
-                    )}
-                  </IntegrationStatusPill>
-                )}
+                <AgentSkillSetupPresenceStatus
+                  setupFailed={setupCommandFailedCode !== null}
+                  stalled={setupStalled}
+                  installing={setupAttemptRunning}
+                  loading={loading}
+                  installed={installed}
+                  freshnessSkillName={freshnessSkillName}
+                />
               </div>
               {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
             </div>
@@ -337,6 +335,7 @@ export function AgentSkillSetupPanel({
           ) : null}
           {actionRow}
           <AgentSkillSetupFailureNotice exitCode={setupCommandFailedCode} />
+          <InlineSetupTerminalStallNotice stalled={setupStalled} />
           {actionHint ? <div className="mt-2">{actionHint}</div> : null}
           {!installed && preInstallNotice && preInstallNoticeVisible ? (
             <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
@@ -395,14 +394,14 @@ export function AgentSkillSetupPanel({
             title={terminalTitle}
             description={translate(
               'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
-              'Press Enter to run the command.'
+              'Press Enter to run the command, then answer the install prompts in this terminal.'
             )}
             ariaLabel={terminalAriaLabel}
             terminalHeightPx={terminalHeightPx}
             shellOverride={terminalSnapshot.shellOverride}
             terminalTopMarginPx={8}
             descriptionPaddingClassName="px-4 py-2"
-            autoScrollIntoView={false}
+            autoScrollIntoView
             onTerminalExit={handleTerminalExit}
             onCommandFinished={handleSetupCommandFinished}
           />
