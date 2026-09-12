@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../shared/wsl-paths'
 import { listRunningWslDistrosAsync } from './wsl'
 
 export function filterPathsToWslDistros(
@@ -19,5 +19,6 @@ export async function filterPathsToRunningWslDistrosAsync(
   if (process.platform !== 'win32') {
     return [...paths]
   }
-  return filterPathsToWslDistros(paths, await listRunningWslDistrosAsync())
+  const runningDistros = paths.some(isWslUncPath) ? await listRunningWslDistrosAsync() : []
+  return filterPathsToWslDistros(paths, runningDistros)
 }
