@@ -21,6 +21,7 @@ import {
   type AutomationRunTerminalObserver
 } from './run-completion-watcher'
 import { createAutomationRunWriter, type AutomationRunWriter } from './automation-run-writer'
+import { reportAutomationScheduleDrift } from './schedule-drift-report'
 import {
   describeScheduledRefusal,
   recordRefusedAutomationRun,
@@ -110,6 +111,7 @@ export class AutomationService {
       void this.evaluateDueRuns()
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
+    reportAutomationScheduleDrift(this.store.listAutomations())
     // Why: headless serve never gets a renderer-ready IPC, but due runs still
     // need the same startup catch-up pass desktop gets after renderer attach.
     if (this.rendererReady || this.headlessDispatcher) {
