@@ -7,6 +7,8 @@ import { RESET_KITTY_KEYBOARD_PROTOCOL } from '../../../../shared/terminal-mode-
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { resolveLocalhostHttpLinkDisplayUrl } from '@/lib/http-link-routing'
+import { classifyExternalAppUrl } from '../../../../shared/external-app-url'
+import { getTerminalCustomAppSchemeOpenHint } from './terminal-link-open-hints'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { PRIMARY_SELECTION_MAX_LENGTH } from '@/lib/primary-selection'
 
@@ -67,6 +69,11 @@ export async function formatTerminalUrlTooltip(
   openLinkHint: string,
   sourceOwner: HttpLinkSourceOwner
 ): Promise<string | null> {
+  const classified = classifyExternalAppUrl(url)
+  if (classified.ok && classified.kind === 'custom') {
+    // Why: custom schemes never use Orca/browser routing; avoid HTTP-style hints (#13225).
+    return `${url} (${getTerminalCustomAppSchemeOpenHint()})`
+  }
   const labeledUrl = await resolveLocalhostHttpLinkDisplayUrl(url, sourceOwner)
   if (!labeledUrl) {
     return null

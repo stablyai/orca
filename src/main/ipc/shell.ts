@@ -8,13 +8,14 @@ import type {
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
-import type { Store } from '../persistence'
+import { openExternalAppUrlWithUserApproval } from '../external-app-url-open'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
   launchExternalEditor,
   resolveExternalEditorLaunchSpec,
   resolveVsCodeRemoteSshLaunchSpec
 } from '../external-editor-launch'
+import type { Store } from '../persistence'
 import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
 
 export { EXTERNAL_EDITOR_CLI_COMMAND }
@@ -153,19 +154,8 @@ export function registerShellHandlers(store: Store): void {
       openInExternalEditor(store, request)
   )
 
-  ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
-    let parsed: URL
-    try {
-      parsed = new URL(rawUrl)
-    } catch {
-      return
-    }
-
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return
-    }
-
-    return shell.openExternal(parsed.toString())
+  ipcMain.handle('shell:openUrl', async (_event, rawUrl: string) => {
+    await openExternalAppUrlWithUserApproval(rawUrl)
   })
 
   ipcMain.handle('shell:openFilePath', async (_event, filePath: string): Promise<boolean> => {
