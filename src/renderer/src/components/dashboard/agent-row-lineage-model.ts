@@ -111,20 +111,16 @@ export function buildAgentRowLineageTree<T extends AgentLineageSourceRow>(
 
   const normalizedChildrenByParentPaneKey = new Map(childrenByParentPaneKey)
   const normalizedChildPaneKeys = new Set(childPaneKeys)
+  const promotedPaneKeys = new Set<string>()
   for (const row of unreachableRows) {
-    if (!rootRows.some((rootRow) => rootRow.paneKey === row.paneKey)) {
-      rootRows.push(row)
+    if (promotedPaneKeys.has(row.paneKey)) {
+      continue
     }
+    promotedPaneKeys.add(row.paneKey)
+    rootRows.push(row)
     normalizedChildPaneKeys.delete(row.paneKey)
+    // Every child of a reachable parent is reachable, so only these parent lists need removal.
     normalizedChildrenByParentPaneKey.delete(row.paneKey)
-    for (const [parentPaneKey, siblings] of normalizedChildrenByParentPaneKey) {
-      const visibleSiblings = siblings.filter((sibling) => sibling.paneKey !== row.paneKey)
-      if (visibleSiblings.length === 0) {
-        normalizedChildrenByParentPaneKey.delete(parentPaneKey)
-      } else if (visibleSiblings.length !== siblings.length) {
-        normalizedChildrenByParentPaneKey.set(parentPaneKey, visibleSiblings)
-      }
-    }
   }
 
   return {
