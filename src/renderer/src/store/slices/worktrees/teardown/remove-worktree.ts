@@ -8,6 +8,7 @@ import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { readableIpcErrorMessage } from '@/lib/ipc-error-message'
+import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import {
   resolveWorktreeOperationRouteResult,
@@ -307,6 +308,9 @@ export function createRemoveWorktree(
         options?.allowUnverifiedPtyStop === true
       )
       const locked = isLockedWorktreeRemovalError(error)
+      // Why (#19334): the refusal is the only failure a retry can clear by waiving rather than by
+      // fixing state, so the toast needs to know it may offer that choice.
+      const canWaiveArchiveHook = isArchiveHookRemovalError(error)
       set((s) => ({
         deleteStateByWorktreeId: {
           ...s.deleteStateByWorktreeId,
@@ -316,6 +320,7 @@ export function createRemoveWorktree(
             error,
             canForceDelete: forceDeleteReason !== null,
             forceDeleteReason,
+            ...(canWaiveArchiveHook ? { canWaiveArchiveHook: true } : {}),
             ...(locked ? { lockReason: getLockedWorktreeRemovalReason(error) } : {})
           }
         }

@@ -102,6 +102,13 @@ function showDeleteFailureToast(): void {
     ),
     canForceDelete: true,
     forceDeleteReason: 'dirty',
+    onDeleteAnyway: () =>
+      toast.error(
+        translate(
+          'auto.components.settings.DevToolsPane.deleteAnywayClicked',
+          'Delete Anyway clicked'
+        )
+      ),
     onViewChanges: () =>
       toast.message(
         translate(

@@ -36,6 +36,7 @@ export async function dispatchWorktreeRemoval(args: {
       hostId,
       force,
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
+      allowFailedArchiveHook: options?.allowFailedArchiveHook === true,
       skipArchive,
       ...snapshotPruneBatch
     })
@@ -50,6 +51,9 @@ export async function dispatchWorktreeRemoval(args: {
       ...(effectiveHostId ? { hostId: effectiveHostId } : {}),
       force,
       allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
+      // Why only when set, unlike the IPC branch: this crosses a version boundary, and a host
+      // that predates the gate drops unknown params silently. Send it when it means something.
+      ...(options?.allowFailedArchiveHook === true ? { allowFailedArchiveHook: true } : {}),
       runHooks: !skipArchive
     },
     { timeoutMs: 60_000 }

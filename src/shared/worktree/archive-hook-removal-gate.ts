@@ -55,6 +55,11 @@ export function formatArchiveHookFailure(failure: ArchiveHookFailure): string {
   ].join(' ')
 }
 
+/** Recognise the refusal on a surface that only has the message, e.g. a renderer toast. */
+export function isArchiveHookRemovalError(error: string): boolean {
+  return error.includes(ARCHIVE_HOOK_FAILED_REMOVAL_PREFIX)
+}
+
 /** Shape both the local and the SSH archive runners answer with. */
 export type ArchiveHookRunResult = {
   success: boolean
