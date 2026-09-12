@@ -153,11 +153,11 @@ export function useMarkdownPreviewComponents({
 
         return <img {...props} src={resolvedSrc} alt={alt ?? ''} onClick={handleImageClick} />
       },
+      // Why: render language-mermaid fenced blocks as live diagrams (htmlLabels
+      // on; MermaidBlock sanitizes with foreignObject-preserving config).
       code: ({ className, children, ...props }) => {
         if (/language-mermaid/.test(className || '')) {
-          return (
-            <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
-          )
+          return <MermaidBlock content={String(children).trimEnd()} isDark={isDark} />
         }
         return (
           <code className={className} {...props}>
