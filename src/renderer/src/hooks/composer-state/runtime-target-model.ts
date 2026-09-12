@@ -9,6 +9,7 @@ import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-she
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/project-host-setup-options'
 import type { WorkspaceCreationTargetResolution } from '@/lib/project-host-workspace-target'
+import type { AgentDetectionTarget } from '../useDetectedAgents'
 
 export type ComposerRuntimeTargetModel = {
   isProjectGroupTarget: boolean
@@ -17,11 +18,7 @@ export type ComposerRuntimeTargetModel = {
   folderTargetRuntimeEnvironmentId: string | null
   folderTargetConnectionId: string | null
   folderTargetIsRemote: boolean
-  folderTargetAgentDetectionTarget:
-    | { kind: 'runtime'; environmentId: string; connectionId?: undefined }
-    | { kind: 'ssh'; connectionId: string; environmentId?: undefined }
-    | { kind: 'local'; environmentId?: undefined; connectionId?: undefined }
-    | undefined
+  folderTargetAgentDetectionTarget: AgentDetectionTarget | undefined
   folderTargetSshState: SshConnectionState | null
   folderTargetSshStatus: SshConnectionStatus | null
   folderTargetRequiresConnection: boolean
