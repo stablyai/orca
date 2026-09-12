@@ -43,8 +43,10 @@ allowBuilds:
   '@swc/core': false
   '@vscode/windows-process-tree': false
   agent-browser: false
+  core-js: false
   cpu-features: true
   electron-winstaller: false
+  es5-ext: false
   esbuild: true
   msw: false
   node-pty: true

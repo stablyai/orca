@@ -31,6 +31,7 @@ const NON_IMAGE_BINARY_EXTENSIONS = [
   '.webm',
   // Documents
   '.doc',
+  '.epub',
   '.docx',
   '.pdf',
   '.ppt',
