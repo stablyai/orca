@@ -93,6 +93,19 @@ describe('PtyHandler', () => {
     expect(handler.retainedStartupCommandCount).toBe(0)
   })
 
+  it('does not retry a failed live XTVERSION reply without echo containment', async () => {
+    const reply = '\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\'
+    const { id } = await spawnPty()
+    const term = mockPtySpawn.mock.results[0]?.value
+    term.write.mockImplementationOnce(() => {
+      throw new Error('EIO')
+    })
+
+    dispatcher.callNotification('pty.data', { id, data: reply })
+
+    expect(term.write).toHaveBeenCalledTimes(1)
+  })
+
   it.skipIf(process.platform === 'win32')(
     'emits shell-ready markers for renderer-delivered startup commands',
     async () => {

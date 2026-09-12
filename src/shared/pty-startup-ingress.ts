@@ -6,7 +6,10 @@ import {
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
-import { deliverTerminalQueryReplyPayload } from './terminal-query-reply-delivery'
+import {
+  deliverTerminalQueryReplyPayload,
+  type TerminalQueryReplyPayloadDelivery
+} from './terminal-query-reply-delivery'
 import {
   combinePtyIngressSourceSpans,
   slicePtyIngressSourceSpan,
@@ -95,9 +98,14 @@ export class PtyStartupIngress {
 
   // Query replies stay ordered when an earlier cooked-echo-risk reply is held (#13137, #13892).
   answerLiveQueryReply(reply: string): boolean {
+    return this.deliverLiveQueryReply(reply) === 'wrote'
+  }
+
+  /** Separates recognition from write success for owners that must never queue a stale reply. */
+  deliverLiveQueryReply(reply: string): TerminalQueryReplyPayloadDelivery {
     return !this.closed && reply.length > 0
       ? deliverTerminalQueryReplyPayload(reply, this.delivery)
-      : false
+      : 'unrecognized'
   }
 
   drainAndClose(): number {

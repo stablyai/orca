@@ -4,8 +4,10 @@ import {
   needsCookedEchoSafeQueryReply
 } from './terminal-query-reply'
 
+export type TerminalQueryReplyPayloadDelivery = 'unrecognized' | 'wrote' | 'write-failed'
+
 /**
- * True when `delivery` wrote the WHOLE payload.
+ * Recognizes a whole reply payload and reports whether any write landed.
  *
  * Only a payload made entirely of cooked-echo-risk replies is taken. Those need their
  * echo shapes armed around the write, and they are what a program sits blocked on, so
@@ -20,14 +22,14 @@ import {
 export function deliverTerminalQueryReplyPayload(
   data: string,
   delivery: Pick<PtyStartupReplyDelivery, 'answer'>
-): boolean {
+): TerminalQueryReplyPayloadDelivery {
   const replies = extractOnlyTerminalQueryReplies(data)
   if (!replies || !replies.every(needsCookedEchoSafeQueryReply)) {
-    return false
+    return 'unrecognized'
   }
-  let accepted = false
+  let wroteAny = false
   for (const reply of replies) {
-    accepted = delivery.answer(reply) || accepted
+    wroteAny = delivery.answer(reply) || wroteAny
   }
-  return accepted
+  return wroteAny ? 'wrote' : 'write-failed'
 }

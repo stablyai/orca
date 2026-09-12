@@ -71,10 +71,11 @@ describe('isTerminalQueryReply', () => {
   })
 
   it('routes only cooked-echo-risk replies through the ECHO-safe write path', () => {
-    // Color-scheme private DSR + OSC color — cooked prompt paint risk (#13137).
+    // Color replies and XTVERSION can echo or cross startup ownership.
     expect(needsCookedEchoSafeQueryReply('\x1b[?997;1n')).toBe(true)
     expect(needsCookedEchoSafeQueryReply('\x1b[?997;2n')).toBe(true)
     expect(needsCookedEchoSafeQueryReply('\x1b]11;rgb:00/00/00\x07')).toBe(true)
+    expect(needsCookedEchoSafeQueryReply('\x1bP>|xterm.js(6.1.0-beta.287)\x1b\\')).toBe(true)
     // Latency-critical CPR / public DSR / DA stay immediate (#7329).
     expect(needsCookedEchoSafeQueryReply('\x1b[3;1R')).toBe(false)
     expect(needsCookedEchoSafeQueryReply('\x1b[0n')).toBe(false)
