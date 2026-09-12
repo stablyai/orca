@@ -62,7 +62,7 @@ on:
         required: false
         type: string
       canary-run-id:
-        description: Successful same-commit canary run required for batch-apply
+        description: Successful same-code canary in this rehome control generation; reusable across batches
         required: false
         type: string
       confirmation:
