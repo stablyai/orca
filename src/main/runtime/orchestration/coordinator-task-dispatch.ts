@@ -8,19 +8,17 @@ import {
   parseAllowStaleBaseFromSpec
 } from './coordinator-stale-base-flag'
 import { isAgentPromptStalledError } from '../agent-prompt-submission-verification'
+import { DISPATCH_HEARTBEAT_STALE_AFTER_MS } from '../../../shared/orchestration-heartbeat-freshness'
 
 /** `dispatched-unobserved`: the preamble landed but the worker's turn start was never observed. */
 export type TaskDispatchResult = 'dispatched' | 'dispatched-unobserved' | 'stale-base-refused'
 
-// Why: 10 min = documented heartbeat cadence (5 min) × 2, so one missed heartbeat is the earliest a dispatch can look stale.
-const HUNG_THRESHOLD_MS = 10 * 60 * 1000
-
 // Why: warn only, never auto-fail — a false positive (slow but correct worker) costs more than a false negative (hung worker holding a slot); see R6 of DESIGN_DOC_PREAMBLE_FIX.md.
 export function warnStaleDispatches(db: OrchestrationDb, onLog: (msg: string) => void): void {
-  const thresholdIso = new Date(Date.now() - HUNG_THRESHOLD_MS).toISOString()
+  const thresholdIso = new Date(Date.now() - DISPATCH_HEARTBEAT_STALE_AFTER_MS).toISOString()
   const stale = db.getStaleDispatches(thresholdIso)
   for (const ctx of stale) {
-    const minutes = Math.round(HUNG_THRESHOLD_MS / 60000)
+    const minutes = Math.round(DISPATCH_HEARTBEAT_STALE_AFTER_MS / 60000)
     onLog(
       `Warning: worker ${ctx.assignee_handle ?? '<unknown>'} on task ${ctx.task_id} has not sent a heartbeat in ~${minutes} min (dispatch ${ctx.id})`
     )
