@@ -357,4 +357,86 @@ describe('runSourceControlAgentActionStart', () => {
       vi.stubGlobal('console', originalConsole)
     }
   })
+
+  // #19379: the dialog seeds a blank field, so '' must mean "no per-action override" rather than
+  // "launch with no arguments" — otherwise every launch action strips the agent's own defaults.
+  it('falls back to the agent default arguments when the action specifies none', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-1' })
+
+    await runSourceControlAgentActionStart(
+      buildArgs({ selectedAgent: 'gemini', agentArgs: '', promptDelivery: 'auto-submit' })
+    )
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'gemini', agentArgs: '--yolo' })
+    )
+  })
+
+  it('honors a configured empty default as an explicit opt-out', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-1' })
+
+    await runSourceControlAgentActionStart(
+      buildArgs({
+        selectedAgent: 'gemini',
+        agentArgs: '',
+        promptDelivery: 'auto-submit',
+        settings: { agentDefaultArgs: { gemini: '' } } as never
+      })
+    )
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agentArgs: '' })
+    )
+  })
+
+  it('keeps an explicit action argument instead of the agent default', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-1' })
+
+    await runSourceControlAgentActionStart(
+      buildArgs({ selectedAgent: 'gemini', agentArgs: '--sandbox', promptDelivery: 'auto-submit' })
+    )
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
+      expect.objectContaining({ agentArgs: '--sandbox' })
+    )
+  })
+
+  it('resolves the default for an injected onStart launcher too', async () => {
+    mocks.onStart.mockResolvedValue(true)
+
+    await runSourceControlAgentActionStart(
+      buildArgs({
+        selectedAgent: 'gemini',
+        agentArgs: '',
+        promptDelivery: 'auto-submit',
+        onStart: mocks.onStart
+      })
+    )
+
+    expect(mocks.onStart).toHaveBeenCalledWith(
+      expect.objectContaining({ agent: 'gemini', agentArgs: '--yolo' })
+    )
+  })
+
+  // Why: resolving for the launch must not leak into the stored recipe, or an untouched field would
+  // silently pin the current default and stop tracking a later global change.
+  it('saves the untouched argument field rather than the resolved default', async () => {
+    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-1' })
+    mocks.onSaveAgentDefault.mockResolvedValue(undefined)
+
+    await runSourceControlAgentActionStart(
+      buildArgs({
+        selectedAgent: 'gemini',
+        agentArgs: '',
+        promptDelivery: 'auto-submit',
+        saveTargetValue: 'global'
+      })
+    )
+
+    expect(mocks.onSaveAgentDefault).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'global' }),
+      'resolveComments',
+      expect.objectContaining({ agentId: 'gemini', agentArgs: '' })
+    )
+  })
 })

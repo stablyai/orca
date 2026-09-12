@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import { resolveSourceControlAgentSaveTarget } from './source-control-agent-action-dialog-support'
+import { resolveSourceControlActionLaunchArgs } from '@/lib/source-control-action-launch-args'
 
 type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
@@ -74,6 +75,9 @@ export async function runSourceControlAgentActionStart({
   onLaunched,
   onClose
 }: RunSourceControlAgentActionStartArgs): Promise<boolean> {
+  // Why: the saved recipe below keeps the raw field, so resolving here never rewrites stored settings.
+  const effectiveAgentArgs =
+    resolveSourceControlActionLaunchArgs(selectedAgent, agentArgs, settings?.agentDefaultArgs) ?? ''
   let launched = false
   let launchFailureNotified = false
   let launchAcceptedNotified = false
@@ -88,7 +92,7 @@ export async function runSourceControlAgentActionStart({
     launched = await onStart({
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
-      agentArgs
+      agentArgs: effectiveAgentArgs
     })
     if (launched) {
       notifyLaunchAccepted()
@@ -99,7 +103,7 @@ export async function runSourceControlAgentActionStart({
       worktreeId,
       groupId: groupId ?? worktreeId,
       prompt: trimmedCommandInput,
-      agentArgs,
+      agentArgs: effectiveAgentArgs,
       promptDelivery,
       launchPlatform,
       launchSource

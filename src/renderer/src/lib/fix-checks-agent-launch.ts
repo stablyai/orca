@@ -15,6 +15,7 @@ import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
+import { resolveSourceControlActionLaunchArgs } from './source-control-action-launch-args'
 import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   renderSourceControlActionCommandTemplate
@@ -201,7 +202,11 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       worktreeId: targetWorktreeId,
       groupId: args.groupId ?? targetWorktreeId,
       prompt: commandInput,
-      agentArgs: recipe.agentArgs,
+      agentArgs: resolveSourceControlActionLaunchArgs(
+        agent,
+        recipe.agentArgs,
+        store.settings?.agentDefaultArgs
+      ),
       promptDelivery: 'submit-after-ready',
       launchPlatform,
       launchSource: args.launchSource
@@ -242,7 +247,11 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
     launchSource: args.launchSource,
     telemetrySource: args.telemetrySource,
     promptDelivery: 'submit-after-ready',
-    agentArgs: recipe.agentArgs,
+    agentArgs: resolveSourceControlActionLaunchArgs(
+      agentOverride.kind === 'agent' ? agentOverride.agent : null,
+      recipe.agentArgs,
+      store.settings?.agentDefaultArgs
+    ),
     ...(agentOverride.kind === 'agent' ? { agentOverride: agentOverride.agent } : {}),
     openModalFallback: args.openModalFallback
   })
