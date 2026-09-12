@@ -10,9 +10,9 @@ export function startOfLocalDay(timestamp: number): number {
 }
 
 export function floorToMinute(timestamp: number): number {
-  const date = new Date(timestamp)
-  date.setSeconds(0, 0)
-  return date.getTime()
+  // Why: recomposing local wall-clock fields resolves an ambiguous DST fall-back minute to the
+  // earlier offset, moving the result backwards in absolute time.
+  return timestamp - (timestamp % 60_000)
 }
 
 export function cronMatches(rule: ParsedCron, timestamp: number): boolean {
