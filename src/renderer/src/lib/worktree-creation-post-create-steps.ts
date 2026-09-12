@@ -33,11 +33,28 @@ export type WorktreePostCreateStepsArgs = {
   fallbackStartupOpt: WorktreeStartupPayload | undefined
 }
 
+/** Names the failing step in one log line, replacing a per-step catch per message. */
+type PostCreateStage =
+  | 'activate-and-reveal'
+  | 'seed-initial-terminal'
+  | 'seed-after-wake-terminal'
+  | 'launch-structured-session'
+
 /** Carries what already landed out of a step that throws, so settlement keeps it. */
 type PostCreateProgress = {
+  stage: PostCreateStage
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
   structuredLaunchAccepted: boolean
+}
+
+function toCompleteOutcome(progress: PostCreateProgress): WorktreePostCreateOutcome {
+  return {
+    kind: 'complete',
+    activation: progress.activation,
+    primaryTabId: progress.primaryTabId,
+    structuredLaunchAccepted: progress.structuredLaunchAccepted
+  }
 }
 
 function openCreatedWorkspaceSurface(
@@ -46,6 +63,7 @@ function openCreatedWorkspaceSurface(
 ): void {
   const { request, result } = args
   if (args.shouldActivateOnCompletion && !args.structuredLaunch) {
+    progress.stage = 'activate-and-reveal'
     const activation = activateAndRevealWorktree(args.worktreeId, {
       sidebarRevealBehavior: 'auto',
       ...(request.agent !== null ? { agent: request.agent } : {}),
@@ -63,6 +81,7 @@ function openCreatedWorkspaceSurface(
   const hasExplicitTerminalWork = Boolean(
     args.startupOpt || result.setup || request.issueCommand || result.defaultTabs
   )
+  progress.stage = 'seed-initial-terminal'
   progress.primaryTabId =
     request.agent !== null && !hasExplicitTerminalWork
       ? null
@@ -80,6 +99,7 @@ function openCreatedWorkspaceSurface(
           }
         )
   if (!args.structuredLaunch && !args.backendSpawned) {
+    progress.stage = 'seed-after-wake-terminal'
     ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
       startup: args.startupOpt,
       agent: request.agent,
@@ -98,8 +118,9 @@ async function settleCreatedWorkspace(
     agentLaunchRoute !== 'structured-native-chat' ||
     !isAgentSessionHandleProvider(args.request.agent)
   ) {
-    return { kind: 'complete', ...progress }
+    return toCompleteOutcome(progress)
   }
+  progress.stage = 'launch-structured-session'
   const structuredSession = await launchStructuredWorktreeSession({
     creationId: args.creationId,
     request: args.request,
@@ -119,7 +140,7 @@ async function settleCreatedWorkspace(
   if (structuredSession.visibilityUnknown) {
     return { kind: 'awaiting-visibility' }
   }
-  return { kind: 'complete', ...progress }
+  return toCompleteOutcome(progress)
 }
 
 /**
@@ -157,10 +178,10 @@ function recoverRevealedWorkspaceSurface(
         result.setup,
         request.issueCommand,
         result.defaultTabs,
-        {
-          ...(request.agent !== null ? { callerProvidesSurface: true } : {}),
-          ...(args.backendSpawned ? { backendStartupTerminalSpawned: true } : {})
-        }
+        // No callerProvidesSurface here: activation is what would have provided it and it
+        // threw, so an agent create with no startup plan must still get a real terminal
+        // rather than the zero-tab pre-seed branch.
+        args.backendSpawned ? { backendStartupTerminalSpawned: true } : {}
       )
     }
     if (!args.backendSpawned) {
@@ -184,6 +205,7 @@ export async function runWorktreePostCreateSteps(
   args: WorktreePostCreateStepsArgs
 ): Promise<WorktreePostCreateOutcome> {
   const progress: PostCreateProgress = {
+    stage: 'activate-and-reveal',
     activation: false,
     primaryTabId: null,
     structuredLaunchAccepted: args.structuredLaunch
@@ -191,8 +213,13 @@ export async function runWorktreePostCreateSteps(
   try {
     return await settleCreatedWorkspace(args, progress)
   } catch (error) {
-    console.error('worktree create: post-create step failed', args.worktreeId, error)
+    console.error(
+      'worktree create: post-create step failed',
+      progress.stage,
+      args.worktreeId,
+      error
+    )
     recoverRevealedWorkspaceSurface(args, progress)
-    return { kind: 'complete', ...progress }
+    return toCompleteOutcome(progress)
   }
 }

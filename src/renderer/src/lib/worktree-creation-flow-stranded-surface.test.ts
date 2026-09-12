@@ -366,6 +366,55 @@ describe('a throw in the post-create tail still completes the creation', () => {
     expect(store.activePendingCreationId).toBe('creation-2')
   })
 
+  // Why: the merged per-step version passed callerProvidesSurface in its activation catch, so
+  // an agent create with no startup plan hit the zero-tab pre-seed branch and recovered nothing.
+  // Activation is what would have provided that surface, and it threw.
+  it('activating branch: an agent create with no startup plan still recovers a real terminal', async () => {
+    const request = makeRequest({ agent: 'claude' })
+    seedPendingCreation(request)
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('recovered-tab')
+    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+      throw new Error('activation exploded')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {}
+    )
+    expect(seedAgentTabStateAfterWorktreeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryTabId: 'recovered-tab' })
+    )
+    expectSettledAndRevealed()
+  })
+
+  // The single catch still names which step failed, so the field breadcrumb survives the
+  // collapse from one catch per step to one catch for the tail.
+  it('names the failing step in the log breadcrumb', async () => {
+    store.activeView = 'tasks'
+    const request = makeRequest()
+    seedPendingCreation(request)
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
+    vi.mocked(ensureWebRuntimeWorktreeTerminalAfterWake).mockImplementation(() => {
+      throw new Error('after-wake exploded')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(console.error).toHaveBeenCalledWith(
+      'worktree create: post-create step failed',
+      'seed-after-wake-terminal',
+      'wt-1',
+      expect.any(Error)
+    )
+  })
+
   it('control: with no throw the same flow completes and reveals the workspace', async () => {
     store.activeView = 'tasks'
     const request = makeRequest()
