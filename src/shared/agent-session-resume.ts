@@ -23,7 +23,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'kimi',
   'muse',
   'zcode',
-  'dsh'
+  'dsh',
+  'bob'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -207,7 +208,11 @@ export function extractAgentProviderSession(
     case 'droid':
     // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
     // falls through
-    case 'kimi': {
+    case 'kimi':
+    // Why: Bob's hook `session_id` is its rootTaskId — the exact value `bob --resume` takes
+    // (round-tripped on 2.0.2: the id from SessionStart restored the conversation).
+    // falls through
+    case 'bob': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
@@ -337,5 +342,11 @@ export function getAgentResumeArgv(
     // workspace. DSH keys sessions by workspace path, so callers must keep the cwd.
     case 'dsh':
       return providerSession.key === 'session_id' ? ['dsh-tui', '--resume', id] : null
+    // Why: `bob chat` takes the task id with -r/--resume; --trust for the same first-launch
+    // trust select the fresh-launch command skips.
+    case 'bob':
+      return providerSession.key === 'session_id'
+        ? ['bob', 'chat', '--trust', '--resume', id]
+        : null
   }
 }
