@@ -1,0 +1,121 @@
+{
+  "baseline": "e80fae0c4d",
+  "regression": "bcba08b3e4",
+  "entries": [
+    {
+      "id": "retired-names-refused-read",
+      "description": "A refused retired-name read preserves the prior registry on the reference branch.",
+      "status": "reference-only",
+      "branch": {
+        "sha": "1043e1ebd3",
+        "file": "mobile/src/worktree/native-host-workspace-creation-read-operations.ts",
+        "line": 40
+      },
+      "main": {
+        "sha": "aac38d698f",
+        "file": "mobile/src/worktree/use-retired-worktree-names.ts",
+        "line": 47
+      }
+    },
+    {
+      "id": "linear-select-workspace-refusal",
+      "description": "The reference branch surfaces a refused Linear workspace selection.",
+      "status": "reference-only",
+      "branch": {
+        "sha": "1043e1ebd3",
+        "file": "mobile/src/tasks/native-host-task-linear-operations.ts",
+        "line": 24
+      },
+      "main": {
+        "sha": "aac38d698f",
+        "file": "mobile/src/tasks/mobile-tasks-filter-pickers.tsx",
+        "line": 173
+      }
+    },
+    {
+      "id": "malformed-error-operation-name",
+      "description": "Malformed outer error without a message gets a named Task provider request failed fallback on the reference branch; main constructs Error from the missing message.",
+      "status": "reference-only",
+      "branch": {
+        "sha": "1043e1ebd3",
+        "file": "mobile/src/tasks/native-host-task-detail-operations.ts",
+        "line": 106
+      },
+      "main": {
+        "sha": "aac38d698f",
+        "file": "mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx",
+        "line": 58
+      }
+    },
+    {
+      "id": "stop-ref-layout-effect",
+      "description": "The reference branch updates the Stop route ref in a layout effect instead of during render.",
+      "status": "reference-only",
+      "branch": {
+        "sha": "1043e1ebd3",
+        "file": "mobile/src/session/use-mobile-native-chat-stop.ts",
+        "line": 34
+      },
+      "main": {
+        "sha": "aac38d698f",
+        "file": "mobile/src/session/use-mobile-native-chat-stop.ts",
+        "line": 27
+      }
+    },
+    {
+      "id": "b1-stale-files-inventory",
+      "description": "Reference source bug fixed: generation and identity guards prevent reset loads poisoning a later same-workspace inventory.",
+      "status": "reference-only",
+      "branch": {
+        "sha": "1043e1ebd3",
+        "file": "mobile/src/session/native-host-session-native-chat-operations.ts",
+        "line": 106
+      },
+      "main": {
+        "sha": "aac38d698f",
+        "file": "mobile/src/session/use-mobile-native-chat-file-search.ts",
+        "line": 94
+      }
+    },
+    {
+      "id": "b2-null-project-mutation",
+      "description": "Reference source bug fixed: retain main per-site acceptance and rejection of null Project mutation results.",
+      "status": "reference-only",
+      "branch": {
+        "sha": "1043e1ebd3",
+        "file": "mobile/src/tasks/native-host-task-project-mutation-operations.ts",
+        "line": 211
+      },
+      "main": {
+        "sha": "aac38d698f",
+        "file": "mobile/src/tasks/use-mobile-tasks-project-file-merge-actions.tsx",
+        "line": 220
+      }
+    },
+    {
+      "id": "b3-linear-settlement-order",
+      "description": "Reference source bug fixed: await both raw responses before interpreting issue refusal so comments transport rejection wins.",
+      "status": "reference-only",
+      "branch": {
+        "sha": "1043e1ebd3",
+        "file": "mobile/src/tasks/native-host-task-detail-operations.ts",
+        "line": 72
+      },
+      "main": {
+        "sha": "aac38d698f",
+        "file": "mobile/src/tasks/use-mobile-tasks-item-detail-loading.tsx",
+        "line": 189
+      }
+    },
+    {
+      "id": "new-workspace-runtime-context-null-settings-typeerror",
+      "status": "ticket",
+      "description": "useNewWorkspaceRuntimeContext throws an unhandled TypeError when settings.get fulfills with a null/absent result: .settings is read off a cast with no guard and the void async effect has no catch",
+      "main": {
+        "sha": "aac38d698f",
+        "file": "mobile/src/components/use-new-workspace-runtime-context.ts",
+        "line": 53
+      }
+    }
+  ]
+}
