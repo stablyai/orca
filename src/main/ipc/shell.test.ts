@@ -670,7 +670,24 @@ describe('registerShellHandlers', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
-    it.each(['cursor', 'zed', 'code --reuse-window'])(
+    it('opens an SSH target with Cursor, a VS Code fork that speaks Remote-SSH', async () => {
+      sshTargets.set('ssh-1', createSshTarget())
+      resolveCliCommandMock.mockReturnValueOnce('/usr/local/bin/cursor')
+      const handler = getHandler('shell:openInExternalEditor')
+
+      await expect(
+        handler({}, { path: '/srv/project', command: 'cursor', connectionId: 'ssh-1' })
+      ).resolves.toEqual({ ok: true })
+      expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith(
+        '/usr/local/bin/cursor',
+        ['--remote', 'ssh-remote+builder', '/srv/project'],
+        {
+          detachedGui: false
+        }
+      )
+    })
+
+    it.each(['zed', 'subl', 'code --reuse-window'])(
       'rejects the unsupported SSH launcher %s',
       async (command) => {
         sshTargets.set('ssh-1', createSshTarget())
