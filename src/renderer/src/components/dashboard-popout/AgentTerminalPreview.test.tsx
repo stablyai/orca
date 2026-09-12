@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
 const terminalHarness = vi.hoisted(() => ({
   instances: [] as {
@@ -10,6 +10,7 @@ const terminalHarness = vi.hoisted(() => ({
     writeCallbacks: (() => void)[]
     onDataListener: ((data: string) => void) | null
     dispose: ReturnType<typeof vi.fn>
+    focus: Mock
     resize: ReturnType<typeof vi.fn>
     reset: ReturnType<typeof vi.fn>
     paste: ReturnType<typeof vi.fn>
@@ -553,7 +554,52 @@ describe('AgentTerminalPreview', () => {
     expect(terminal.input).not.toHaveBeenCalled()
   })
 
-  it('keeps the existing terminal visible while a resync snapshot is captured', async () => {
+  it('closes the preview on the configured pane-close shortcut', async () => {
+    platformState.value = 'darwin'
+    const onClose = vi.fn()
+    render(<AgentTerminalPreview ptyId="pty-1" onClose={onClose} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'w',
+      code: 'KeyW',
+      metaKey: true,
+      cancelable: true
+    })
+    const handled = terminal.customKeyHandler!(keydown)
+
+    expect(handled).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(terminal.input).not.toHaveBeenCalled()
+    expect(input).not.toHaveBeenCalled()
+  })
+  it('keeps unrelated pane shortcuts from closing the preview', async () => {
+    platformState.value = 'darwin'
+    const onClose = vi.fn()
+    render(<AgentTerminalPreview ptyId="pty-1" onClose={onClose} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'k',
+      code: 'KeyK',
+      metaKey: true,
+      cancelable: true
+    })
+    const handled = terminal.customKeyHandler!(keydown)
+
+    expect(handled).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(terminal.input).not.toHaveBeenCalled()
+    expect(input).not.toHaveBeenCalled()
+  })
+
+  it('keeps the existing terminal visible without taking focus during resync', async () => {
     let resolveRefresh!: (value: {
       snapshot: { data: string; cols: number; rows: number; seq: number }
       replay: string[]
@@ -572,6 +618,12 @@ describe('AgentTerminalPreview', () => {
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     const terminal = terminalHarness.instances[0]!
+    expect(terminal.focus).not.toHaveBeenCalled()
+    expect(view.container.firstElementChild).toHaveClass(
+      'focus-within:ring-1',
+      'focus-within:ring-inset',
+      'focus-within:ring-ring'
+    )
 
     act(() => emitData?.({ type: 'resync', ptyId: 'pty-1' }))
     await waitFor(() => expect(connect).toHaveBeenCalledTimes(2))
@@ -591,6 +643,7 @@ describe('AgentTerminalPreview', () => {
     expect(terminalHarness.instances).toHaveLength(1)
     expect(terminal.dispose).not.toHaveBeenCalled()
     expect(view.queryByText(/No live terminal/)).not.toBeInTheDocument()
+    expect(terminal.focus).not.toHaveBeenCalled()
   })
 
   it('disposes a stale terminal when resync confirms the pty is gone', async () => {

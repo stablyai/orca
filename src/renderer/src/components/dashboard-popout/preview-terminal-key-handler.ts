@@ -28,6 +28,7 @@ export function installPreviewTerminalKeyHandler(args: {
   terminal: Terminal
   claimImeKeyEvent: (event: KeyboardEvent) => boolean
   pasteClipboardText: (activeElement: Element | null, source: 'keyboard') => void
+  onClose?: () => void
   sendInput: (data: string) => void
   /** Everything but optionKeyLocations, which this installer tracks itself. */
   getShortcutContext: () => Omit<PreviewShortcutContext, 'optionKeyLocations'>
@@ -193,14 +194,16 @@ export function installPreviewTerminalKeyHandler(args: {
         nativeOnlyShortcutTracker.armKeyDown(event)
         event.stopImmediatePropagation()
         return false
-      // Why: pane-scoped chords have no target in a preview dialog. Swallow them
-      // — a pane never sends these bytes to the shell, and xterm would encode
-      // e.g. Ctrl+Shift+D as a bare Ctrl+D. Listed one by one rather than under a
-      // `default` so a newly added action has to be classified here, not
-      // silently swallowed.
+      // The pane-close action maps cleanly to dismissing this preview; it
+      // never closes the real pane or writes bytes to its PTY.
+      case 'closeActivePane':
+        args.onClose?.()
+        return consumeEvent(event)
+      // Why: the remaining pane-scoped chords have no target in a preview.
+      // Swallow them so xterm cannot encode an app chord as terminal input.
+      // List them explicitly so every new action must be classified.
       case 'clearActivePane':
       case 'clearPaneTitle':
-      case 'closeActivePane':
       case 'copySelection':
       case 'equalizePaneSizes':
       case 'focusPane':

@@ -53,11 +53,13 @@ function clamp(value: number, min: number, max: number): number {
 export function AgentTerminalPreview({
   ptyId,
   terminalInput = null,
+  onClose,
   className
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
   terminalInput?: DashboardCardTerminalInput | null
+  onClose?: () => void
   className?: string
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -70,6 +72,7 @@ export function AgentTerminalPreview({
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
+  const onCloseRef = useRef(onClose)
   const { terminalTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
@@ -93,7 +96,8 @@ export function AgentTerminalPreview({
     settingsRef.current = settings
     macOptionAsAltRef.current = macOptionAsAlt
     terminalInputRef.current = terminalInput
-  }, [settings, macOptionAsAlt, terminalInput])
+    onCloseRef.current = onClose
+  }, [settings, macOptionAsAlt, terminalInput, onClose])
 
   useEffect(() => {
     setPtyGone(false)
@@ -202,6 +206,7 @@ export function AgentTerminalPreview({
         claimImeKeyEvent: (event) => imeBridge?.claimKeyEvent(event) ?? false,
         pasteClipboardText: (activeElement, source) =>
           void pasteClipboardText(activeElement, source),
+        onClose: () => onCloseRef.current?.(),
         // Why: route through terminal.input so the chord's bytes carry core's user-input signal, like typed keys.
         sendInput: (data) => terminal?.input(data),
         getShortcutContext: () => ({
@@ -312,7 +317,6 @@ export function AgentTerminalPreview({
       }
       scheduleFit()
       gridClaim.schedule()
-      terminal.focus()
     }
 
     const setup = async (replaceExisting = false): Promise<void> => {
@@ -418,12 +422,11 @@ export function AgentTerminalPreview({
 
   return (
     // Why: a size FIXED by the viewport (not shrink-to-fit) + overflow-hidden
-    // keeps the dialog stable no matter how wide/tall the pane's serialized
     // buffer is. The terminal keeps the pane's true dimensions and is scaled/
     // clipped to fit; createPreviewBoxFit anchors the end that shows the cursor.
     <div
       className={cn(
-        'relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5',
+        'relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5 outline-none focus-within:ring-1 focus-within:ring-inset focus-within:ring-ring',
         className
       )}
       style={terminalTheme?.background ? { backgroundColor: terminalTheme.background } : undefined}
