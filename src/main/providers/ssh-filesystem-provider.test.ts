@@ -300,7 +300,7 @@ describe('SshFilesystemProvider', () => {
         stream.resume()
         return stream
       })
-      const sftp = { createWriteStream, end: vi.fn() }
+      const sftp = Object.assign(new PassThrough(), { createWriteStream, end: vi.fn() })
       const createSftp = vi.fn().mockResolvedValue(sftp)
       provider = new SshFilesystemProvider('conn-1', mux as never, createSftp as never)
       const dir = mkdtempSync(join(tmpdir(), 'orca-sftp-upload-session-'))
