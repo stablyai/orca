@@ -20,11 +20,9 @@ import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
 import { startPtyBindingSpan, type PtyBindingOrigin } from './pty-binding-span'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
-import { isBindingDurable, recordDurableBinding } from './pty-binding-durability-records'
 
 type PtyBindingPersistenceOperationsRuntime = Pick<
   StoreRuntimeState,
-  | 'durableBindingRecords'
   | 'flushOrThrow'
   | 'lastDurableWriteGeneration'
   | 'pendingWrite'
@@ -96,16 +94,7 @@ export class PtyBindingPersistenceOperations {
       args,
       session,
       bindingWorktreeId,
-      !runtime.quitFlushStarted &&
-        (runtime.lastDurableWriteGeneration >= runtime.writeGeneration ||
-          isBindingDurable(
-            runtime.durableBindingRecords,
-            paneKey,
-            session,
-            args.ptyId,
-            args.incarnationId,
-            runtime.lastDurableWriteGeneration
-          ))
+      !runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
     )
     span.setEligibility(verdict)
     if (verdict.eligible) {
@@ -142,14 +131,6 @@ function writePtyBinding(
     }
     applyPtyBinding(args, session, bindingWorktreeId, paneKey)
     runtime.flushOrThrow()
-    // Why: the global generation is held below by any unrelated dirty state, so remember what
-    // this flush put on disk for this pane alone.
-    recordDurableBinding(runtime.durableBindingRecords, paneKey, {
-      session,
-      ptyId: args.ptyId,
-      incarnationId: args.incarnationId,
-      generation: runtime.writeGeneration
-    })
   } catch (err) {
     if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
       runtime.state.workspaceSession = sessionBeforeBinding

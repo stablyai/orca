@@ -584,25 +584,30 @@ describe('Store', () => {
       expect(flushSpy).not.toHaveBeenCalled()
     })
 
-    it('stays on the fast lane while unrelated state is dirty', async () => {
-      const store = await createStore()
-      store.setWorkspaceSession(boundSession())
-      expect(store.persistPtyBinding(binding)).toBe(true)
-      // A workspace switch dirties unrelated state constantly; the binding is still on disk.
-      store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
-      const flushSpy = vi.spyOn(store, 'flushOrThrow')
+    it.each([undefined, 'ssh:ssh-1', 'runtime:runtime-1'])(
+      'flushes unrelated dirty state once, then skips unchanged reattachments on %s',
+      async (hostId) => {
+        const store = await createStore()
+        store.setWorkspaceSession(boundSession(), hostId)
+        expect(store.persistPtyBinding(binding, hostId)).toBe(true)
+        store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
+        const flushSpy = vi.spyOn(store, 'flushOrThrow')
 
-      expect(store.persistPtyBinding(binding)).toBe(true)
-      expect(store.persistPtyBinding(binding)).toBe(true)
+        expect(store.persistPtyBinding(binding, hostId)).toBe(true)
+        expect(store.persistPtyBinding(binding, hostId)).toBe(true)
 
-      expect(flushSpy).not.toHaveBeenCalled()
-    })
+        expect(flushSpy).toHaveBeenCalledTimes(1)
+        expect((readDataFile() as PersistedState).repos.some((repo) => repo.id === 'r-dirty')).toBe(
+          true
+        )
+      }
+    )
 
     it('flushes again once the session object is replaced', async () => {
       const store = await createStore()
       store.setWorkspaceSession(boundSession())
       store.persistPtyBinding(binding)
-      // A renderer publish installs a fresh session object, so the record no longer describes it.
+      // A renderer publish schedules another save, so global durability must be re-established.
       store.setWorkspaceSession({ ...store.getWorkspaceSession() })
       store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
       const flushSpy = vi.spyOn(store, 'flushOrThrow')
