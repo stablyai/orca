@@ -227,6 +227,7 @@ export function NativeChatStructuredSession(
             workingStartedAt={controller.workingStartedAt}
             settledTurns={controller.settledTurns}
             showTurnStatus
+            showLiveTurnActivity={prompt === null}
             turnActivity={controller.turnActivity}
             onLinkClick={onLinkClick}
             allowFileUriLinks={onLinkClick !== undefined}

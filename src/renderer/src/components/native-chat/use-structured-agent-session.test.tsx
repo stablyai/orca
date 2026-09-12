@@ -105,6 +105,7 @@ describe('useStructuredAgentSession working state', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fence = 3
+    items = []
     submissions = []
     mocks.call.mockResolvedValue(null)
   })
@@ -159,6 +160,47 @@ describe('useStructuredAgentSession working state', () => {
     )
 
     expect(result.current.isWorking).toBe(false)
+  })
+
+  it('keeps a prompted provider turn working and cancellable beneath presentation policy', () => {
+    items = [
+      {
+        itemId: 'turn-1',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'turn', turnId: 'provider-turn', state: 'running' }
+      },
+      {
+        itemId: 'question-1',
+        revision: 1,
+        sequence: 2,
+        observedAt: 2,
+        body: {
+          kind: 'question',
+          question: 'Which approach?',
+          options: [{ id: 'focused', label: 'Focused' }],
+          resolution: {
+            state: 'pending',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null
+          }
+        }
+      }
+    ]
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'codex',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+
+    expect(result.current.isWorking).toBe(true)
+    expect(result.current.turnId).toBe('provider-turn')
+    expect(result.current.prompts).toHaveLength(1)
   })
 })
 
