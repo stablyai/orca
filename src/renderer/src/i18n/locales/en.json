@@ -15579,7 +15579,9 @@
             "bf648471c5": "Creating…",
             "53bbe3dab4": "Imported {{value0}} cookies from file.",
             "c5f0e4d3b2a1": "Imported {{value0}} cookies from {{value1}} ({{value2}}).",
-            "d6a1f5e4c3b2": "Imported {{value0}} cookies from {{value1}}."
+            "d6a1f5e4c3b2": "Imported {{value0}} cookies from {{value1}}.",
+            "clearHistory": "Clear History",
+            "clearHistorySuccess": "Browsing history cleared"
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "Attach to AI",
@@ -15601,7 +15603,11 @@
             "address": {
               "bar": {
                 "suggestions": {
-                  "87fcdd0da9": "{{value0}} Search"
+                  "87fcdd0da9": "{{value0}} Search",
+                  "removeSuggestion": "Remove from history",
+                  "history": "History",
+                  "clearHistory": "Clear history",
+                  "clearHistorySuccess": "Browsing history cleared"
                 }
               }
             }
