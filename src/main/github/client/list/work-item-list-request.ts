@@ -24,8 +24,9 @@ export function buildWorkItemListRequest(args: {
   limit: number
   query: ParsedTaskQuery
   page: number
+  noCache?: boolean
 }): WorkItemListRequest {
-  const { kind, ownerRepo, limit, query, page } = args
+  const { kind, ownerRepo, limit, query, page, noCache } = args
   const searchParts: string[] = []
 
   if (kind === 'issue') {
@@ -73,8 +74,10 @@ export function buildWorkItemListRequest(args: {
     return {
       args: [
         'api',
-        '--cache',
-        '120s',
+        // Why: gh serves this request from its own 120s response cache. A user-forced refresh must not
+        // replay it, so the cache pair is omitted here instead of being spliced out by index at each
+        // call site, where it was coupled to this array's layout (#19632).
+        ...(noCache ? [] : ['--cache', '120s']),
         `search/issues?q=${encodeURIComponent(searchParts.join(' '))}&sort=created&order=desc&per_page=${limit}&page=${page}`,
         '--jq',
         '.items'

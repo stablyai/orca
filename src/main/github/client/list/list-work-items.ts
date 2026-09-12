@@ -58,6 +58,7 @@ export async function listWorkItems(
           limit,
           requestedPage,
           connectionId,
+          noCache,
           localGitOptions
         )
 
