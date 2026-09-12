@@ -3,7 +3,10 @@ import {
   CLIPBOARD_IMAGE_MAX_PIXELS,
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
 } from '../../shared/clipboard-image'
-import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import {
+  decodeWindowsClipboardFilePath,
+  readWindowsClipboardImageFileAsPng
+} from './clipboard-windows-image-file'
 
 function fileNameW(filePath: string): Buffer {
   return Buffer.from(`${filePath}\0`, 'utf16le')
@@ -278,5 +281,23 @@ describe('readWindowsClipboardImageFileAsPng', () => {
         openFile: vi.fn().mockResolvedValue(oversizedPng)
       })
     ).rejects.toThrow('Clipboard image is too large')
+  })
+})
+
+describe('decodeWindowsClipboardFilePath', () => {
+  it('returns any fully qualified single-item path, not only images', () => {
+    expect(decodeWindowsClipboardFilePath(clipboardFormats('C:\\Users\\me\\report.pdf'))).toBe(
+      'C:\\Users\\me\\report.pdf'
+    )
+  })
+
+  it('fails closed for multi-item copies and malformed FileNameW', () => {
+    expect(decodeWindowsClipboardFilePath(clipboardFormats('C:\\a.txt', 2))).toBeNull()
+    expect(
+      decodeWindowsClipboardFilePath({
+        fileNameW: Buffer.from('relative.txt\0', 'utf16le'),
+        shellIdListArray: Buffer.alloc(0)
+      })
+    ).toBeNull()
   })
 })

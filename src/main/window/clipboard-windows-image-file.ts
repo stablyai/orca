@@ -65,7 +65,11 @@ function decodeFileNameW(value: Buffer): string | null {
   if (!filePath || filePath.includes('\0') || !isFullyQualifiedWindowsPath(filePath)) {
     return null
   }
-  return IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase()) ? filePath : null
+  return filePath
+}
+
+export function isWindowsClipboardImageFile(filePath: string): boolean {
+  return IMAGE_FILE_EXTENSION_SET.has(win32.extname(filePath).toLowerCase())
 }
 
 function hasAtMostOneShellItem(value: Buffer): boolean {
@@ -152,15 +156,23 @@ async function readStableFile(
   return bytesRead === expectedSize ? buffer.subarray(0, bytesRead) : null
 }
 
-export async function readWindowsClipboardImageFileAsPng(
-  { fileNameW, shellIdListArray }: WindowsClipboardImageFileFormats,
-  { createImageFromBuffer, openFile }: WindowsClipboardImageFileDeps
-): Promise<Buffer | null> {
+// Why: Explorer exposes a copied file only through FileNameW (first item) plus the CIDA item count.
+export function decodeWindowsClipboardFilePath({
+  fileNameW,
+  shellIdListArray
+}: WindowsClipboardImageFileFormats): string | null {
   if (!hasAtMostOneShellItem(shellIdListArray)) {
     return null
   }
-  const filePath = decodeFileNameW(fileNameW)
-  if (!filePath) {
+  return decodeFileNameW(fileNameW)
+}
+
+export async function readWindowsClipboardImageFileAsPng(
+  formats: WindowsClipboardImageFileFormats,
+  { createImageFromBuffer, openFile }: WindowsClipboardImageFileDeps
+): Promise<Buffer | null> {
+  const filePath = decodeWindowsClipboardFilePath(formats)
+  if (!filePath || !isWindowsClipboardImageFile(filePath)) {
     return null
   }
 
