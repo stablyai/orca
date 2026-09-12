@@ -114,6 +114,13 @@ export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-comman
 // status.worktreeCreateIdempotency carries the optional host retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+// Why (#19334): "accepts --run-hooks" and "refuses to delete when the archive hook fails" were
+// indistinguishable from the outside — both take the flag and behave identically on success, so
+// the only way to tell an unfixed host apart was to fail a hook and see whether the checkout
+// survived. Lifecycle integrations keep teardown evidence inside the checkout and cannot risk
+// that. Advertised unconditionally: every build carrying this constant has the gate.
+export const WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY =
+  'worktree.archive-failure-blocking.v1' as const
 export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
 export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentials.v1' as const
 // Why: older hosts cannot reconcile terminal.create's mutation after losing the reply, so clients may only retry unknown outcomes when advertised.
@@ -278,6 +285,7 @@ export const RUNTIME_CAPABILITIES = [
   TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,

@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
         canForceDelete?: boolean
         forceDeleteReason?: 'dirty' | null
         lockReason?: string | null
+        canWaiveArchiveHook?: boolean
         executionHostId?: ExecutionHostId | null
       }
     >
@@ -629,6 +630,44 @@ describe('delete worktree flow', () => {
     expect(mocks.state.openModal).not.toHaveBeenCalled()
     expect(toast.info).toHaveBeenCalledWith('No deletable workspaces selected', {
       description: 'Refresh Space and try again if the workspace list looks stale.'
+    })
+  })
+
+  // #19334: a waived delete is still a delete — the caller's bookkeeping has to hear about it, or a
+  // batch/Space-panel list keeps showing the workspace it just removed.
+  it('reports a Delete Anyway success to the caller like a force retry', async () => {
+    mocks.state.settings = { skipDeleteWorktreeConfirm: true }
+    mocks.state.removeWorktree
+      .mockImplementationOnce(async () => {
+        mocks.state.deleteStateByWorktreeId['wt-1'] = {
+          isDeleting: false,
+          error: 'Archive hook failed for worktree: /w/one — exited 23.',
+          canForceDelete: false,
+          forceDeleteReason: null,
+          canWaiveArchiveHook: true
+        }
+        return { ok: false, error: 'Archive hook failed for worktree: /w/one — exited 23.' }
+      })
+      .mockResolvedValueOnce({ ok: true })
+    setWorktrees([{ id: 'wt-1', displayName: 'one' }])
+    const onDeleted = vi.fn()
+
+    expect(runWorktreeBatchDelete(['wt-1'], { onDeleted })).toBe(true)
+
+    await vi.waitFor(() => expect(showDeleteWorktreeFailureToast).toHaveBeenCalled())
+    const toastOptions = vi.mocked(showDeleteWorktreeFailureToast).mock.calls[0]?.[0]
+    expect(toastOptions?.canWaiveArchiveHook).toBe(true)
+    toastOptions?.onDeleteAnyway()
+
+    await vi.waitFor(() => {
+      // The waiver rides its own option; force stays whatever the original attempt used.
+      expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(
+        2,
+        { id: 'wt-1', executionHostId: null },
+        false,
+        { allowFailedArchiveHook: true }
+      )
+      expect(onDeleted).toHaveBeenCalledWith([{ id: 'wt-1', executionHostId: null }])
     })
   })
 })

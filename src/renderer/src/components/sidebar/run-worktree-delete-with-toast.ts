@@ -95,6 +95,10 @@ export function runWorktreeDeleteWithToast(
                 return
               }
               commitWaivedFocus()
+              // Same channel as the Force Delete retry below: it means "a retry started from this
+              // toast completed the delete", and callers hang their bookkeeping off it. Without
+              // this a batch or Space-panel delete keeps showing the workspace it just removed.
+              options.onForceDeleted?.(target)
             })
             .catch((err: unknown) => {
               toast.error(
