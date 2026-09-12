@@ -14,6 +14,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('src/routes/index.astro')).toBe('astro')
   })
 
+  it('maps XAML files to the Monaco built-in xml language id (case-insensitive)', () => {
+    expect(detectLanguage('src/App.xaml')).toBe('xml')
+    expect(detectLanguage('C:\\repo\\Views\\MAINWINDOW.XAML')).toBe('xml')
+  })
+
   it('maps Nim files to the nim language id', () => {
     expect(detectLanguage('src/main.nim')).toBe('nim')
     expect(detectLanguage('tasks/build.nims')).toBe('nim')
