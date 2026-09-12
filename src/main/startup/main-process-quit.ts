@@ -71,7 +71,11 @@ function installBeforeQuitHandler(): void {
       })
     }
     state.isQuitting = true
-    state.desktopRelayService?.fenceAndCloseNow()
+    // Why stop() and not the fence: the fence is re-armable by design (sign-out
+    // waits for the next auth mutation), so at quit a settling mint, an invite
+    // expiry or a power-resume could still reopen a broker. Quit is terminal,
+    // and the provider null below already ends pairing even on a vetoed quit.
+    state.desktopRelayService?.stop()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
     state.unsubscribeAgentAwakeStatusChanges = null
