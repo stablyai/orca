@@ -27,6 +27,7 @@ import { refreshWebRuntimeSessionTabsSnapshot } from './web-runtime-session-snap
 export async function activateWebRuntimeSessionTab(args: {
   worktreeId: string
   tabId: string
+  leafId?: string
   environmentId?: string | null
 }): Promise<boolean> {
   return (await callWebRuntimeSessionTabMethod('session.tabs.activate', args)) === 'applied'
@@ -56,6 +57,7 @@ async function callWebRuntimeSessionTabMethod(
   args: {
     worktreeId: string
     tabId: string
+    leafId?: string
     environmentId?: string | null
     reason?: RuntimeSessionTabCloseReason
     publicationEpoch?: string | null
@@ -124,6 +126,8 @@ async function callWebRuntimeSessionTabMethod(
               // Why: the additive navigation target protects new hosts while notifyClients:false protects old hosts.
               notifyClients: false,
               navigation: 'caller' as const,
+              // Why: additive — old hosts ignore it and still activate the tab, new hosts land on the exact pane.
+              ...(args.leafId ? { leafId: args.leafId } : {}),
               // Why: every caller here is a tab click, shortcut, or palette pick —
               // the gesture that is supposed to wake a slept pane.
               intent: 'user' as const

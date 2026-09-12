@@ -7,7 +7,6 @@ import type {
 import { safelyRevealWindow } from '../window/focus-existing-window'
 import { isBackgroundLaunch } from '../window/foreground-activation-policy'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { buildNotificationOptions } from './notification-options'
 import { getEffectiveNotificationSoundId } from './notification-sound-selection'
 import {
@@ -72,9 +71,11 @@ export function deliverNativeNotification(
   }
   notification.on('failed', failedHandler)
 
-  // Why: worktreeId is formatted "repoId::worktreePath"; without the separator we can't extract a repoId, so skip the click-to-navigate binding.
-  if (args.worktreeId && args.worktreeId.includes('::')) {
-    const repoId = getRepoIdFromWorktreeId(args.worktreeId)
+  if (args.worktreeId) {
+    // Why: worktreeId is formatted "repoId::worktreePath"; folder workspaces carry no repo, so activate by workspace id alone.
+    const repoId = args.worktreeId.includes('::')
+      ? getRepoIdFromWorktreeId(args.worktreeId)
+      : undefined
     clickHandler = () => {
       release()
       const win = getTrustedUIRendererWindow()
@@ -85,22 +86,13 @@ export function deliverNativeNotification(
         app.focus({ steal: true })
       }
       safelyRevealWindow(win)
+      // Why: one ordered intent — activation may load asynchronously, so the renderer focuses the pane itself once the workspace resolves.
       win.webContents.send('ui:activateWorktree', {
-        repoId,
-        worktreeId: args.worktreeId
+        ...(repoId ? { repoId } : {}),
+        worktreeId: args.worktreeId,
+        notificationPaneKey: args.paneKey ?? null,
+        ...(args.executionHostId ? { executionHostId: args.executionHostId } : {})
       })
-      // Why: focusTerminal targets the pane by stable leafId so split-pane notifications land on the exact pane.
-      const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
-      if (paneTarget) {
-        win.webContents.send('ui:focusTerminal', {
-          tabId: paneTarget.tabId,
-          worktreeId: args.worktreeId,
-          leafId: paneTarget.leafId,
-          ackPaneKeyOnSuccess: args.paneKey,
-          flashFocusedPane: true,
-          scrollToBottomIfOutputSinceLastView: true
-        })
-      }
     }
     notification.on('click', clickHandler)
   }

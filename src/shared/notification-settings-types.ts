@@ -1,4 +1,5 @@
 import type { AgentStatusState, AgentType } from './agent-status-types'
+import type { ExecutionHostId } from './execution-host'
 
 export type NotificationSettings = {
   enabled: boolean
@@ -31,6 +32,8 @@ export type NotificationDispatchRequest = {
   worktreeId?: string
   /** Stable `${tabId}:${leafId}` terminal pane key for click-to-focus routing. */
   paneKey?: string
+  /** Execution owner captured with the pane so duplicate workspace ids stay unambiguous. */
+  executionHostId?: ExecutionHostId
   repoLabel?: string
   worktreeLabel?: string
   hasMultipleActiveRepos?: boolean

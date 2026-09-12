@@ -1,4 +1,4 @@
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { AppState } from '../../store/types'
@@ -21,12 +21,22 @@ function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<stri
   return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
 }
 
+/** A notification click carries no repoId for folder workspaces, and names its execution owner. */
+export type NotifiedWorktreeActivation = Omit<
+  Extract<RuntimeClientEvent, { type: 'activateWorktree' }>,
+  'repoId'
+> & {
+  repoId?: string
+  notificationPaneKey?: string | null
+  executionHostId?: ExecutionHostId
+}
+
 export type WorktreeEventRuntime = {
   worktreeChangeRefreshQueue: WorktreeChangeRefreshQueue
   activateNotifiedWorktree: (
-    event: Extract<RuntimeClientEvent, { type: 'activateWorktree' }>,
-    options: { allowRuntimeEnvironment: boolean }
-  ) => Promise<void>
+    event: NotifiedWorktreeActivation,
+    options: { allowRuntimeEnvironment: boolean; isCurrentLocalIntent?: () => boolean }
+  ) => Promise<boolean>
 }
 
 export function createWorktreeEventRuntime(
@@ -138,27 +148,58 @@ export function createWorktreeEventRuntime(
       worktreeId,
       setup,
       startup,
-      defaultTabs
-    }: Extract<RuntimeClientEvent, { type: 'activateWorktree' }>,
-    options: { allowRuntimeEnvironment: boolean }
-  ): Promise<void> => {
+      defaultTabs,
+      notificationPaneKey,
+      executionHostId
+    }: NotifiedWorktreeActivation,
+    options: { allowRuntimeEnvironment: boolean; isCurrentLocalIntent?: () => boolean }
+  ): Promise<boolean> => {
     if (!options.allowRuntimeEnvironment && isRuntimeEnvironmentActive()) {
       // Why: local CLI worktree events carry local ids; runtime activation comes via the remote stream, allowed separately.
-      return
+      return false
     }
-    const existedBeforeFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
+    if (notificationPaneKey !== undefined && !executionHostId) {
+      // Why: notifications must name their owner; an unscoped fetch can select a same-id workspace on another host.
+      return false
+    }
+    if (!repoId) {
+      // Why: folder workspaces have no repo to fetch, so activate the workspace id directly.
+      return (
+        activateAndRevealWorkspace(worktreeId, {
+          ...(executionHostId ? { executionHostId } : {}),
+          ...(notificationPaneKey !== undefined ? { providesInitialSurface: true } : {})
+        }) !== false
+      )
+    }
+    const getKnownWorktree = (): boolean =>
+      Boolean(
+        executionHostId
+          ? useAppStore.getState().getKnownWorktreeById(worktreeId, executionHostId)
+          : useAppStore.getState().getKnownWorktreeById(worktreeId)
+      )
+    const existedBeforeFetch = getKnownWorktree()
     // Why: fetch first so activation can resolve the CLI-created worktree; it arrived from main, not yet in renderer state.
-    await useAppStore.getState().fetchWorktrees(repoId)
-    const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
+    await (executionHostId
+      ? useAppStore.getState().fetchWorktrees(repoId, { executionHostId })
+      : useAppStore.getState().fetchWorktrees(repoId))
+    if (options.isCurrentLocalIntent && !options.isCurrentLocalIntent()) {
+      // Why: a newer click superseded this one while the fetch was in flight.
+      return false
+    }
+    const existsAfterFetch = getKnownWorktree()
     // Why: use the canonical activation path so the CLI switch records a back/forward visit, or the nav buttons ignore it.
-    activateAndRevealWorktree(worktreeId, {
-      ...(setup ? { setup } : {}),
-      ...(startup ? { startup } : {}),
-      ...(defaultTabs ? { defaultTabs } : {}),
-      ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
-      // Why: this activation came from the host runtime stream; echoing it back can create a selection loop.
-      notifyHostRuntime: false
-    })
+    return (
+      activateAndRevealWorktree(worktreeId, {
+        ...(setup ? { setup } : {}),
+        ...(startup ? { startup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {}),
+        ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
+        ...(executionHostId ? { executionHostId } : {}),
+        ...(notificationPaneKey !== undefined ? { providesInitialSurface: true } : {}),
+        // Why: this activation came from the host runtime stream; echoing it back can create a selection loop.
+        notifyHostRuntime: false
+      }) !== false
+    )
   }
 
   return { worktreeChangeRefreshQueue, activateNotifiedWorktree }
