@@ -118,7 +118,11 @@ export function PierreDiffSurface({
   // a late parse completing must not yank that caret. Group identity is read
   // from a ref so this stays once-per-mount (autoFocusHost is the only trigger).
   useLayoutEffect(() => {
-    if (!autoFocusHost) {
+    // Why read-only only: the regression this fixes is Cmd+F/F7 being dead on a diff opened from
+    // the sidebar, which needs the light-DOM host focused. An editable surface must NOT get that
+    // -- Pierre's contenteditable lives in a shadow root, and focusing the host blurs it, so every
+    // keystroke is dropped. Editable diffs already worked before this effect existed.
+    if (!autoFocusHost || isEditable) {
       return
     }
     const host = containerRef.current
@@ -134,7 +138,7 @@ export function PierreDiffSurface({
       return
     }
     host.focus({ preventScroll: true })
-  }, [autoFocusHost])
+  }, [autoFocusHost, isEditable])
   const onEditChangeRef = useRef(onEditChange)
   const {
     searchBar,
