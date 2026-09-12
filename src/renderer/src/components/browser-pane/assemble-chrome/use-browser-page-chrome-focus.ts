@@ -5,6 +5,7 @@ import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import {
   consumeBrowserFocusRequest,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  peekBrowserFocusRequest,
   type BrowserFocusRequestDetail
 } from '../host-guest/browser-focus'
 import { browserOverlayOwnsShortcutTarget } from '../describe-page/browser-overlay-shortcut-target'
@@ -60,6 +61,9 @@ export function useBrowserPageChromeFocus({
       if (!input) {
         return false
       }
+      if (!keepAddressBarFocusRef.current) {
+        consumeBrowserFocusRequest(browserTabId)
+      }
       guestFocus.blur()
       input.focus()
       if (selection) {
@@ -71,7 +75,7 @@ export function useBrowserPageChromeFocus({
       }
       return document.activeElement === input
     },
-    [addressBarInputRef, guestFocus]
+    [addressBarInputRef, browserTabId, guestFocus]
   )
 
   const focusGuestNow = useCallback(() => {
@@ -188,14 +192,16 @@ export function useBrowserPageChromeFocus({
   }, [chromeShortcutScope, focusAddressBarNow, keybindings, workspaceId])
 
   useEffect(() => {
-    if (!isActive) {
+    const focusTarget = peekBrowserFocusRequest(browserTabId)
+    if (focusTarget === 'webview' && (!isActive || chromeShortcutScope === 'inactive')) {
+      consumeBrowserFocusRequest(browserTabId)
       return
     }
-    const focusTarget = consumeBrowserFocusRequest(browserTabId)
-    if (!focusTarget) {
+    if (!isActive || !focusTarget) {
       return
     }
     if (focusTarget === 'address-bar') {
+      consumeBrowserFocusRequest(browserTabId)
       return startAddressBarFocusGrab()
     }
     // Why: lowering the latch is not enough — a grab already in flight would spend its remaining
@@ -204,12 +210,21 @@ export function useBrowserPageChromeFocus({
     let cancelled = false
     let frameId = 0
     let attempts = 0
+    const cancelPendingFocus = (): void => {
+      consumeBrowserFocusRequest(browserTabId)
+    }
+    window.addEventListener('pointerdown', cancelPendingFocus, true)
     const runFocus = (): void => {
       if (cancelled) {
         return
       }
+      if (peekBrowserFocusRequest(browserTabId) !== 'webview') {
+        return
+      }
       attempts += 1
-      if (!focusGuestNow() && attempts < ADDRESS_BAR_FOCUS_FRAMES) {
+      if (focusGuestNow()) {
+        consumeBrowserFocusRequest(browserTabId)
+      } else if (attempts < ADDRESS_BAR_FOCUS_FRAMES) {
         frameId = window.requestAnimationFrame(runFocus)
       }
     }
@@ -218,8 +233,16 @@ export function useBrowserPageChromeFocus({
     return () => {
       cancelled = true
       window.cancelAnimationFrame(frameId)
+      window.removeEventListener('pointerdown', cancelPendingFocus, true)
     }
-  }, [browserTabId, cancelAddressBarFocusGrab, focusGuestNow, isActive, startAddressBarFocusGrab])
+  }, [
+    browserTabId,
+    cancelAddressBarFocusGrab,
+    chromeShortcutScope,
+    focusGuestNow,
+    isActive,
+    startAddressBarFocusGrab
+  ])
 
   useEffect(() => {
     if (!isActive) {
