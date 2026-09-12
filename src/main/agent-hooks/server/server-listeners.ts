@@ -15,6 +15,8 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerState } from './server-state'
+import type { AgentStatusSubject } from '../../../shared/agent-status-subject'
+import { agentStatusSubjectKey } from '../../../shared/agent-status-subject'
 
 export abstract class AgentHookServerListeners extends AgentHookServerState {
   /**
@@ -164,7 +166,13 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   }
 
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
-    const entry = this.state.lastStatusByPaneKey.get(paneKey)
+    return this.statusEntriesForPaneKey(this.resolvePaneKeyAlias(paneKey)).map(
+      toAgentStatusIpcPayload
+    )
+  }
+
+  getStatusSnapshotForSubject(subject: AgentStatusSubject): AgentStatusIpcPayload[] {
+    const entry = this.state.lastStatusByPaneKey.get(agentStatusSubjectKey(subject))
     return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []
   }
 
@@ -184,11 +192,12 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   } {
     const statuses: AgentHookStatusChangeEntry[] = []
     const providerSessions: AgentHookProviderSessionIdentity[] = []
-    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
+    for (const [statusKey, entry] of this.state.lastStatusByPaneKey) {
       const enriched = entry as EnrichedAgentHookEventPayload
       if (enriched.providerSession) {
         providerSessions.push({
-          paneKey,
+          subject: enriched.subject,
+          paneKey: enriched.paneKey,
           sessionId: enriched.providerSession.id,
           ...(enriched.providerSession.transcriptPath
             ? { transcriptPath: enriched.providerSession.transcriptPath }
@@ -198,10 +207,11 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
       }
       if (!enriched.providerSessionOnly) {
         statuses.push({
-          paneKey,
+          subject: enriched.subject,
+          paneKey: enriched.paneKey,
           state: enriched.payload.state,
           receivedAt: enriched.receivedAt,
-          observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+          observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(statusKey)
         })
       }
     }

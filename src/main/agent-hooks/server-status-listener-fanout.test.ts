@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { agentStatusSubjectKey } from '../../shared/agent-status-subject'
 import {
   buildBody,
   PANE,
@@ -93,12 +94,13 @@ describe('AgentHookServer listener replay', () => {
 
     expect(statuses).toHaveBeenCalledWith([])
     expect(sessions).toHaveBeenCalledWith([
-      {
+      expect.objectContaining({
+        subject: expect.objectContaining({ kind: 'pty', paneKey: PANE }),
         paneKey: PANE,
         sessionId: 'pi-session-1',
         transcriptPath: '/tmp/pi-session-1.jsonl',
         worktreeId: 'wt-1'
-      }
+      })
     ])
   })
 
@@ -394,7 +396,9 @@ describe('AgentHookServer listener replay', () => {
     ])
     expect(statusListener).toHaveBeenCalledOnce()
     expect(server.getStatusSnapshot()).toEqual([expect.objectContaining({ paneKey: otherTabPane })])
-    expect([...evidenceObservedAtByPaneKey.keys()]).toEqual([otherTabPane])
+    expect([...evidenceObservedAtByPaneKey.keys()]).toEqual([
+      agentStatusSubjectKey(server.getStatusSnapshot()[0]!.subject!)
+    ])
   })
 
   it('batches connection cleanup and retains sibling and local statuses', () => {

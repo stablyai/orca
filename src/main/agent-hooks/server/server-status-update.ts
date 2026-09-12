@@ -10,6 +10,7 @@ import { INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS } from './server-constants
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
+import { agentStatusSubjectKey } from '../../../shared/agent-status-subject'
 import {
   attachClaudeChildOnlyBoundary,
   attachClaudePermissionToolUseId,
@@ -27,21 +28,24 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload
   ): EnrichedAgentHookEventPayload {
-    if (payload.hookEventName === 'UserPromptSubmit') {
+    const subject = this.statusSubjectFor(payload)
+    const statusKey = this.statusKeyFor({ ...payload, subject })
+    const subjectPayload = { ...payload, subject }
+    if (subjectPayload.hookEventName === 'UserPromptSubmit') {
       // Why: the prompt boundary is authoritative even when text is unchanged; its next OSC working row must not inherit the prior cron/background turn stamp.
-      this.activeHookTurnCompletedAtByPaneKey.delete(payload.paneKey)
+      this.activeHookTurnCompletedAtByPaneKey.delete(statusKey)
     }
-    let previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
+    let previous = this.statusEntryFor(subjectPayload)
     const rowBefore = mutationBefore ?? previous
     const terminalHandle =
-      payload.terminalHandle ??
-      (previous?.terminalHandle && this.sameTerminalOwner(previous, payload)
+      subjectPayload.terminalHandle ??
+      (previous?.terminalHandle && this.sameTerminalOwner(previous, subjectPayload)
         ? previous.terminalHandle
         : undefined)
     const terminalOwnedPayload =
-      terminalHandle === payload.terminalHandle ? payload : { ...payload, terminalHandle }
+      terminalHandle === subjectPayload.terminalHandle
+        ? subjectPayload
+        : { ...subjectPayload, terminalHandle }
     const connectionClearWatermark = terminalOwnedPayload.connectionId
       ? this.connectionTimestampWatermarkById.get(terminalOwnedPayload.connectionId)
       : undefined
@@ -62,9 +66,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
         ...this.attachStatusTiming(terminalOwnedPayload, now),
         observation: this.stampObservation(terminalOwnedPayload, origin, now)
       }
-      this.clearAssistantMessageRetry(enriched.paneKey)
-      this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
-      this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+      this.clearAssistantMessageRetry(statusKey)
+      this.runtimeObservedStatusPaneKeys.delete(statusKey)
+      this.setStatusEntry(enriched)
       this.commitStatusRowMutation(rowBefore, enriched)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
@@ -79,7 +83,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
             ...terminalOwnedPayload,
             payload: reconcileRemoteCodexState(
               this.state,
-              terminalOwnedPayload.paneKey,
+              statusKey,
               terminalOwnedPayload.hookEventName,
               terminalOwnedPayload.toolAgentId,
               terminalOwnedPayload.payload,
@@ -117,7 +121,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (boundaryReconciledPrevious !== previous) {
       previous = boundaryReconciledPrevious
       if (previous) {
-        this.state.lastStatusByPaneKey.set(previous.paneKey, previous)
+        this.setStatusEntry(previous)
         this.scheduleStatusPersist()
       }
     }
@@ -180,7 +184,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
           Date.now() - previous.receivedAt <= INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS))
     ) {
       if (effectivePayload.payload.agentType === 'codex') {
-        markCodexLeadTurnInterrupted(this.state, effectivePayload.paneKey)
+        markCodexLeadTurnInterrupted(this.state, statusKey)
       }
       this.commitStatusRowMutation(rowBefore, previous)
       return previous
@@ -189,7 +193,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       effectivePayload.payload.state !== 'done' ||
       effectivePayload.payload.lastAssistantMessage
     ) {
-      this.clearAssistantMessageRetry(effectivePayload.paneKey)
+      this.clearAssistantMessageRetry(statusKey)
     }
     onAccepted?.()
     if (!identity.inheritedFromActivePane) {
@@ -205,18 +209,15 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       typeof enriched.payload.turnCompletedAt === 'number' &&
       Number.isFinite(enriched.payload.turnCompletedAt)
     ) {
-      this.activeHookTurnCompletedAtByPaneKey.set(
-        enriched.paneKey,
-        enriched.payload.turnCompletedAt
-      )
+      this.activeHookTurnCompletedAtByPaneKey.set(statusKey, enriched.payload.turnCompletedAt)
     }
     // Why: an identity-matched event can still leave the aggregate backed only by another restored child; keep liveness reconciliation eligible.
     if (enriched.restoredUnconfirmed) {
-      this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
+      this.runtimeObservedStatusPaneKeys.delete(statusKey)
     } else {
-      this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
+      this.runtimeObservedStatusPaneKeys.add(statusKey)
     }
-    this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+    this.setStatusEntry(enriched)
     this.commitStatusRowMutation(rowBefore, enriched)
     // Why skipped for structured rows: the serializer drops them, so the whole walk and stringify
     // can only ever reproduce the last file — once per debounce window for a streaming chat.
@@ -233,6 +234,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     mutationBefore?: EnrichedAgentHookEventPayload,
     emitEnrichedStatus = false
   ): void {
+    const statusKey = agentStatusSubjectKey(previous.subject)
     const connectionClearWatermark = previous.connectionId
       ? this.connectionTimestampWatermarkById.get(previous.connectionId)
       : undefined
@@ -256,9 +258,9 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       stateStartedAt,
       observation: this.stampObservation(payload, 'osc', now)
     }
-    const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(refreshed.paneKey)
-    this.runtimeObservedStatusPaneKeys.add(refreshed.paneKey)
-    this.state.lastStatusByPaneKey.set(refreshed.paneKey, refreshed)
+    const firstRuntimeObservation = !this.runtimeObservedStatusPaneKeys.has(statusKey)
+    this.runtimeObservedStatusPaneKeys.add(statusKey)
+    this.setStatusEntry(refreshed)
     this.commitStatusRowMutation(mutationBefore ?? previous, refreshed)
     this.scheduleStatusPersist()
     // A dismissed row may retain only provider resume identity. Its preserved payload can still
@@ -271,6 +273,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       this.notifyStatusChangeListeners()
     }
     this.emitStatusFreshnessObservation({
+      subject: refreshed.subject,
       paneKey: refreshed.paneKey,
       state: refreshed.payload.state,
       receivedAt: refreshed.receivedAt,

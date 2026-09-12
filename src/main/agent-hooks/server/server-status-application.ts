@@ -24,9 +24,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     now = Date.now(),
     observedAt?: number
   ): EnrichedAgentHookEventPayload {
-    const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
+    const previous = this.statusEntryFor(payload)
     const commandCodeNewTurn =
       previous !== undefined &&
       isCommandCodeNewTurnWhileWorking({
@@ -46,6 +44,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     // Why: `stateStartedAt` tracks the current state, while `receivedAt` tracks every arrival.
     return {
       ...payload,
+      subject: this.statusSubjectFor(payload),
       receivedAt: now,
       evidenceObservedAt: observedAt ?? this.resolveEvidenceObservedAt(payload, previous, now),
       stateStartedAt
@@ -65,10 +64,12 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     now: number
   ): number {
     const remembered =
-      previous?.evidenceObservedAt ?? this.evidenceObservedAtByPaneKey.get(payload.paneKey)
+      previous?.evidenceObservedAt ??
+      this.evidenceObservedAtByPaneKey.get(this.statusKeyFor(payload))
     const observedAt = payload.isReplay === true && remembered !== undefined ? remembered : now
-    this.evidenceObservedAtByPaneKey.delete(payload.paneKey)
-    this.evidenceObservedAtByPaneKey.set(payload.paneKey, observedAt)
+    const statusKey = this.statusKeyFor(payload)
+    this.evidenceObservedAtByPaneKey.delete(statusKey)
+    this.evidenceObservedAtByPaneKey.set(statusKey, observedAt)
     while (this.evidenceObservedAtByPaneKey.size > MAX_REMEMBERED_EVIDENCE_OBSERVATIONS) {
       const oldest = this.evidenceObservedAtByPaneKey.keys().next().value
       if (typeof oldest !== 'string') {
@@ -105,7 +106,8 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
       payload.promptInteractionKey.trim().length > 0
         ? payload.promptInteractionKey.trim()
         : undefined
-    const previousDedupe = this.promptSentDedupeByPaneKey.get(payload.paneKey)
+    const statusKey = this.statusKeyFor(payload)
+    const previousDedupe = this.promptSentDedupeByPaneKey.get(statusKey)
     const isCompletedTurnBoundary =
       previousStatus?.payload.state === 'done' && payload.payload.state === 'working'
     if (
@@ -130,7 +132,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     ) {
       return
     }
-    this.promptSentDedupeByPaneKey.set(payload.paneKey, {
+    this.promptSentDedupeByPaneKey.set(statusKey, {
       agentKind,
       promptHash,
       promptInteractionKey
@@ -156,7 +158,7 @@ export abstract class AgentHookServerStatusApplication extends AgentHookServerSt
     origin: AgentStatusObservationOrigin,
     observedAt: number
   ): AgentStatusObservation {
-    return this.observations.observe(payload.paneKey, {
+    return this.observations.observe(this.statusKeyFor(payload), {
       origin,
       observedAt,
       // Why: reuse the listener's own per-provider classifier; a second list of raw event-name

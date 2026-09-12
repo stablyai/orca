@@ -15,7 +15,7 @@ function seedLocalIdentity(server: AgentHookServer): void {
       providerSession: PROVIDER_SESSION,
       payload: { state: 'working', prompt: 'test', agentType: 'gemini' }
     },
-    'seed-connection'
+    null
   )
   server.ingestTerminalStatus({
     paneKey: PANE,

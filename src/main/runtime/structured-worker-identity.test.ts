@@ -91,6 +91,12 @@ describe('structured worker identity', () => {
     expect(structuredWorkerPaneKeyBelongsToSession(null, SESSION_ID)).toBe(false)
   })
 
+  it('rejects the deterministic public status key as a worker credential', () => {
+    const statusPaneKey = structuredAgentSessionPaneKey(SESSION_ID)
+
+    expect(structuredWorkerPaneKeyBelongsToSession(statusPaneKey, SESSION_ID)).toBe(false)
+  })
+
   it('derives a pane key whose leaf passes the terminal leaf check', () => {
     const paneKey = mintStructuredWorkerPaneKey(SESSION_ID)
     const parsed = parsePaneKey(paneKey)
@@ -160,6 +166,18 @@ describe('structured worker identity registry', () => {
       registry.rehydrate({
         terminal_handle: mintStructuredWorkerHandle(),
         pane_key: mintStructuredWorkerPaneKey('some-other-session-id'),
+        process_incarnation: structuredWorkerProcessIncarnation(SESSION_ID),
+        worktree_id: 'wt_1',
+        host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })
+      })
+    ).toBeNull()
+  })
+
+  it('refuses to rehydrate the derivable public status key as a worker credential', () => {
+    expect(
+      registry.rehydrate({
+        terminal_handle: mintStructuredWorkerHandle(),
+        pane_key: structuredAgentSessionPaneKey(SESSION_ID),
         process_incarnation: structuredWorkerProcessIncarnation(SESSION_ID),
         worktree_id: 'wt_1',
         host_scope: JSON.stringify({ kind: 'local', hostId: 'local' })

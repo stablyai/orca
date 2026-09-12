@@ -12,21 +12,27 @@ import type {
 } from './server-types'
 import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
+import { agentStatusSubjectKey } from '../../../shared/agent-status-subject'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
   protected serializeStatusFile(): string {
     const entries: Record<string, PersistedAgentHookEventPayload> = {}
+    const subjectEntries: PersistedAgentHookEventPayload[] = []
     const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
+    const subjectAuthorityCommitments: PersistedAgentHookAuthorityCommitment[] = []
     const conflictedCommitments = new Set<string>()
-    for (const [paneKey, commitment] of this.persistedAuthorityCommitmentsByPaneKey) {
-      authorityCommitments[paneKey] = { ...commitment }
+    for (const commitment of this.persistedAuthorityCommitmentsByPaneKey.values()) {
+      authorityCommitments[commitment.paneKey] = { ...commitment }
+      subjectAuthorityCommitments.push({ ...commitment })
     }
-    for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
+    for (const payload of this.state.lastStatusByPaneKey.values()) {
+      const paneKey = payload.paneKey
       // Why: never persist invalid keys (matches the hydrate-path invariant).
       if (!isValidPaneKey(paneKey)) {
         continue
       }
       const enrichedPayload = payload as EnrichedAgentHookEventPayload
+      const statusKey = agentStatusSubjectKey(enrichedPayload.subject)
       // Why: the session journal is the durable truth for a structured row and the host republishes
       // it on restore; a persisted copy would hydrate unconfirmed and fight that republish.
       if (enrichedPayload.structuredHost) {
@@ -50,12 +56,13 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
       } = enrichedPayload
       const launchTokenHash = launchToken?.trim()
         ? createHash('sha256').update(launchToken.trim()).digest('hex')
-        : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+        : this.hydratedLaunchTokenHashByPaneKey.get(statusKey)
       entries[paneKey] = {
         ...persistedPayload,
         ...(childOnlyBoundary ? { claudeLeadBoundaryChildOnly: true } : {}),
         ...(launchTokenHash ? { launchTokenHash } : {})
       }
+      subjectEntries.push(entries[paneKey]!)
       const commitment = this.toAuthorityEvidence(payload, launchTokenHash)
       if (commitment && !conflictedCommitments.has(paneKey)) {
         const existing = authorityCommitments[paneKey]
@@ -70,7 +77,9 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
     const file: LastStatusFile = {
       version: LAST_STATUS_FILE_VERSION,
       entries,
-      authorityCommitments
+      subjectEntries,
+      authorityCommitments,
+      subjectAuthorityCommitments
     }
     return JSON.stringify(file)
   }

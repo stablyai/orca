@@ -104,7 +104,15 @@ function statusFeed(): StructuredAgentSessionStatusFeed {
             lastActivityAt: () => 2,
             snapshot: () => ({ items: STATUS_ITEMS })
           } as unknown as AgentSessionJournal,
-          params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
+          params: {
+            location: {
+              executionHostId: 'local' as const,
+              wslDistro: null,
+              workspaceId: 'workspace-1',
+              workspaceKind: 'git-worktree' as const
+            },
+            provider: 'codex' as const
+          }
         }
       ]
     ]),

@@ -13,7 +13,7 @@ import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
-import { PANE_KEY } from './agent-hook-listener-test-harness'
+import { PANE_KEY, PANE_STATUS_KEY } from './agent-hook-listener-test-harness'
 
 describe('shared agent-hook-listener', () => {
   let state: HookListenerState
@@ -326,7 +326,7 @@ describe('shared agent-hook-listener', () => {
         agent_id: 'a1',
         agent_type: 'general-purpose'
       })
-      clearPaneCacheState(state, PANE_KEY)
+      clearPaneCacheState(state, PANE_STATUS_KEY)
       const stop = claudeEvent({ hook_event_name: 'Stop' })
       expect(stop?.payload.state).toBe('done')
       expect(stop?.payload.subagents).toBeUndefined()
@@ -478,7 +478,7 @@ describe('shared agent-hook-listener', () => {
     })
 
     it('removes a snapshot-seeded child missing from a present background_tasks list', () => {
-      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
+      seedClaudeSubagentRosterFromSnapshots(state, PANE_STATUS_KEY, [
         { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
       ])
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
@@ -495,7 +495,7 @@ describe('shared agent-hook-listener', () => {
     })
 
     it('keeps a snapshot-seeded child working while background_tasks still lists it', () => {
-      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
+      seedClaudeSubagentRosterFromSnapshots(state, PANE_STATUS_KEY, [
         { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
       ])
       claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
@@ -588,7 +588,7 @@ describe('shared agent-hook-listener', () => {
         agent_type: 'probe'
       })
       claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'aprobe-1' })
-      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+      markClaudeLeadTurnInterrupted(state, PANE_STATUS_KEY)
 
       const idled = claudeEvent({
         hook_event_name: 'TeammateIdle',
@@ -604,7 +604,7 @@ describe('shared agent-hook-listener', () => {
       // snapshot (from a build that kept idle rows) is a finished child, so
       // hydration must drop it — otherwise restart would re-pile the exact
       // squatting rows this fix removes.
-      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
+      seedClaudeSubagentRosterFromSnapshots(state, PANE_STATUS_KEY, [
         {
           id: 'aprobe2-6d3cb5b52120b7bf',
           state: 'idle',
@@ -663,7 +663,7 @@ describe('shared agent-hook-listener', () => {
       expect(wait?.payload.state).toBe('waiting')
       expect(wait?.payload.interactivePrompt).toBeDefined()
 
-      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_STATUS_KEY)).toEqual({ state: 'working' })
 
       // Why: a child-driven refresh re-emits the cached lead state; the linger
       // bug would come back if it could resurrect the dismissed question.
@@ -690,9 +690,9 @@ describe('shared agent-hook-listener', () => {
         tool_input: { questions: [{ question: 'Continue?' }] }
       })
 
-      clearClaudeAnsweredQuestionWait(state, PANE_KEY)
+      clearClaudeAnsweredQuestionWait(state, PANE_STATUS_KEY)
 
-      expect(state.lastToolByPaneKey.get(PANE_KEY)).toMatchObject({
+      expect(state.lastToolByPaneKey.get(PANE_STATUS_KEY)).toMatchObject({
         lastAssistantMessage: 'raw command output',
         lastAssistantMessageIsToolOutput: true
       })
@@ -712,11 +712,11 @@ describe('shared agent-hook-listener', () => {
 
       // Why: the lead already finished; the answer resumes the child, so the
       // emitted state is gated up to working only while that child still runs.
-      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_STATUS_KEY)).toEqual({
         state: 'working',
         turnCompletedAt: expect.any(Number)
       })
-      expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({
+      expect(state.claudeLeadStateByPaneKey.get(PANE_STATUS_KEY)).toEqual({
         state: 'done',
         turnCompletedAt: expect.any(Number)
       })
@@ -726,7 +726,7 @@ describe('shared agent-hook-listener', () => {
     })
 
     it('falls back to working when no lead record exists', () => {
-      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_STATUS_KEY)).toEqual({ state: 'working' })
     })
   })
 })

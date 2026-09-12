@@ -13,6 +13,7 @@ import {
   CODEX_SUBAGENT_POLL_MS
 } from './server-constants'
 import { AgentHookServerStatusUpdate } from './server-status-update'
+import { agentStatusSubjectKey } from '../../../shared/agent-status-subject'
 
 type CodexSubagentPoll = {
   source: AgentHookSource
@@ -52,21 +53,22 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (source !== 'codex') {
       return
     }
-    this.codexSubagentPollScheduler.clear(original.paneKey)
-    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+    const statusKey = agentStatusSubjectKey(original.subject)
+    this.codexSubagentPollScheduler.clear(statusKey)
+    if (!hasCodexTranscriptSubagents(this.state, statusKey)) {
       return
     }
-    this.codexSubagentPollScheduler.schedule(original.paneKey, { source, body, original })
+    this.codexSubagentPollScheduler.schedule(statusKey, { source, body, original })
   }
 
-  private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
+  private runCodexSubagentPoll(statusKey: string, poll: CodexSubagentPoll): void {
     const { source, body, original } = poll
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
     if (
-      paneKey !== original.paneKey ||
+      statusKey !== agentStatusSubjectKey(original.subject) ||
       !this.server ||
-      this.state.lastStatusByPaneKey.get(original.paneKey) !== original
+      this.state.lastStatusByPaneKey.get(statusKey) !== original
     ) {
       return
     }
@@ -94,7 +96,8 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
-    this.clearAssistantMessageRetry(original.paneKey)
+    const statusKey = agentStatusSubjectKey(original.subject)
+    this.clearAssistantMessageRetry(statusKey)
     if (!discoveryReady) {
       const discovery = preparePendingGrokResultDiscovery(source, body)
       if (discovery) {
@@ -113,13 +116,13 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     }
     const timer = setTimeout(() => {
       try {
-        this.assistantMessageRetryTimers.delete(original.paneKey)
+        this.assistantMessageRetryTimers.delete(statusKey)
         this.applyAssistantMessageRetry(source, body, original, attempt + 1, discoveryReady)
       } catch (err) {
         console.error('[agent-hooks] assistant message retry failed:', err)
       }
     }, ASSISTANT_MESSAGE_RETRY_MS)
-    this.assistantMessageRetryTimers.set(original.paneKey, timer)
+    this.assistantMessageRetryTimers.set(statusKey, timer)
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
@@ -132,7 +135,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     nextAttempt: number,
     requireExactOriginal: boolean
   ): void {
-    const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
+    const current = this.state.lastStatusByPaneKey.get(agentStatusSubjectKey(original.subject)) as
       | EnrichedAgentHookEventPayload
       | undefined
     if (

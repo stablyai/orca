@@ -9,6 +9,7 @@ import {
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH
 } from './agent-status-types'
 import { describeToolInput } from './native-chat-tool-summary'
+import { makePaneKey } from './stable-pane-id'
 import {
   activeStructuredAgentSessionToolCall,
   activeStructuredAgentSessionTurnId
@@ -346,5 +347,5 @@ export function structuredAgentSessionPaneKey(sessionId: string): string {
   const bytes = sha256(new TextEncoder().encode(sessionId))
   const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')
   const leaf = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
-  return `${structuredAgentSessionTabId(sessionId)}:${leaf}`
+  return makePaneKey(structuredAgentSessionTabId(sessionId), leaf)
 }

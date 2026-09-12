@@ -18,6 +18,7 @@ import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { isValidPiProviderSessionOnly } from './server-status-identity'
 import { AgentHookServerIngestStructured } from './server-ingest-structured'
+import { agentStatusSubjectKey } from '../../../shared/agent-status-subject'
 
 export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestStructured {
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
@@ -71,14 +72,6 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
       return
     }
-    // Why: fence relay spool replay at main so stale generations cannot overwrite hydrated state.
-    if (envelope.isReplay === true) {
-      const expectedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
-      const actualLaunchTokenHash = launchTokenHash(envelope.launchToken)
-      if (expectedLaunchTokenHash && actualLaunchTokenHash !== expectedLaunchTokenHash) {
-        return
-      }
-    }
     if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
       return
     }
@@ -110,6 +103,24 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       (envelope.compactTrigger === 'manual' || envelope.compactTrigger === 'auto')
         ? envelope.compactTrigger
         : undefined
+    const worktreeId =
+      envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
+        ? envelope.worktreeId.trim()
+        : undefined
+    const subject = this.legacyPtyStatusSubjectFor({
+      paneKey,
+      worktreeId,
+      connectionId: trimmedConnectionId
+    })
+    const statusKey = agentStatusSubjectKey(subject)
+    // Why: fence relay spool replay at main so stale generations cannot overwrite hydrated state.
+    if (envelope.isReplay === true) {
+      const expectedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(statusKey)
+      const actualLaunchTokenHash = launchTokenHash(envelope.launchToken)
+      if (expectedLaunchTokenHash && actualLaunchTokenHash !== expectedLaunchTokenHash) {
+        return
+      }
+    }
     const statusDisposition = this.getAgentStatusDisposition(paneKey, {
       source,
       rawSource: envelope.source,
@@ -125,12 +136,8 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       // Why: same rebind as the HTTP path — a retired pane taking a new turn is a new session.
       // Why paneKey, not envelope.paneKey: alias resolution already mapped it to the
       // stable pane, so the rebind cannot land on a legacy key.
-      this.observations.rebind(paneKey)
+      this.observations.rebind(statusKey)
     }
-    const worktreeId =
-      envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
-        ? envelope.worktreeId.trim()
-        : undefined
     const promptInteractionKey =
       typeof envelope.promptInteractionKey === 'string' &&
       envelope.promptInteractionKey.trim().length > 0
@@ -162,9 +169,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
     let normalizedPayload = restoreShedStatusFields(
       validatedPayload,
       envelope.shedFields,
-      this.state.lastStatusByPaneKey.get(paneKey)?.payload
+      this.state.lastStatusByPaneKey.get(statusKey)?.payload
     )
-    const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
+    const previousStatus = this.state.lastStatusByPaneKey.get(statusKey)
     let acceptedCompactCompletion = false
     if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {
       // Why: PreCompact is never registered and proves nothing (an aborted compact emits it alone);
@@ -187,7 +194,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       if (
         isClaudeCompactCompletionConsumed(
           this.state.claudeConsumedCompactPromptIdByPaneKey,
-          paneKey,
+          statusKey,
           providerPromptId
         ) ||
         !canAcceptClaudeCompactCompletion(previousStatus, {
@@ -201,7 +208,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       }
       markClaudeCompactCompletionConsumed(
         this.state.claudeConsumedCompactPromptIdByPaneKey,
-        paneKey,
+        statusKey,
         providerPromptId
       )
       // Why: an older relay built this payload before the boundary flag existed, so it arrives as a
@@ -233,7 +240,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       normalizedPayload.agentType === 'claude' &&
       typeof envelope.claudeRunningNonAgentTask === 'boolean' &&
       // Why: reconnect replay may seed a restarted listener, but cannot override any observation made by this runtime.
-      (envelope.isReplay !== true || !this.runtimeObservedStatusPaneKeys.has(paneKey))
+      (envelope.isReplay !== true || !this.runtimeObservedStatusPaneKeys.has(statusKey))
     // Why: run the HTTP path's warn-once version/env-mismatch diagnostics with this.env as expected.
     warnOnHookEnvOrVersionMismatch(this.state, {
       version: envelope.version,
@@ -241,6 +248,7 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       expectedEnv: this.env
     })
     const event = {
+      subject,
       paneKey,
       source,
       launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
@@ -271,9 +279,9 @@ export abstract class AgentHookServerIngestRemote extends AgentHookServerIngestS
       applyClaudeBackgroundWork
         ? () => {
             if (envelope.claudeRunningNonAgentTask) {
-              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+              this.state.claudeRunningNonAgentTaskPaneKeys.add(statusKey)
             } else {
-              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+              this.state.claudeRunningNonAgentTaskPaneKeys.delete(statusKey)
             }
           }
         : undefined

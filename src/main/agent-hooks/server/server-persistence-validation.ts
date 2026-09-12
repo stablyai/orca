@@ -10,6 +10,11 @@ import { normalizeClaudePromptId } from '../../../shared/agent-hook-listener/lis
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { AgentHookAuthorityEvidence, EnrichedAgentHookEventPayload } from './server-types'
 import { isValidPaneKey, isValidPiProviderSessionOnly } from './server-status-identity'
+import {
+  agentStatusSubjectFromLegacyPane,
+  agentStatusSubjectsEqual,
+  parseAgentStatusSubject
+} from '../../../shared/agent-status-subject'
 
 export function dropHydratedIdleClaudeSubagents(
   payload: ParsedAgentStatusPayload
@@ -99,6 +104,15 @@ export function sanitizeHydratedEntry(
     return null
   }
   const source = isAgentHookSource(record.source) ? record.source : undefined
+  const parsedSubject = parseAgentStatusSubject(record.subject)
+  const subject =
+    parsedSubject?.kind === 'pty' && parsedSubject.paneKey === paneKey
+      ? parsedSubject
+      : agentStatusSubjectFromLegacyPane({
+          paneKey,
+          worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
+          connectionId
+        })
   const providerPromptId =
     source === 'claude' ? normalizeClaudePromptId(record.providerPromptId) : undefined
   const compactTrigger =
@@ -106,6 +120,7 @@ export function sanitizeHydratedEntry(
       ? record.compactTrigger
       : undefined
   return {
+    subject,
     paneKey,
     source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
@@ -163,7 +178,17 @@ export function sanitizePersistedAuthorityCommitment(
   ) {
     return null
   }
+  const parsedSubject = parseAgentStatusSubject(record.subject)
+  const subject =
+    parsedSubject?.kind === 'pty' && parsedSubject.paneKey === paneKey
+      ? parsedSubject
+      : agentStatusSubjectFromLegacyPane({
+          paneKey,
+          worktreeId: typeof record.worktreeId === 'string' ? record.worktreeId : undefined,
+          connectionId: connectionId as string | null
+        })
   return Object.freeze({
+    subject,
     paneKey,
     launchTokenHash,
     connectionId: connectionId as string | null,
@@ -178,6 +203,7 @@ export function authorityCommitmentsMatch(
   right: AgentHookAuthorityEvidence
 ): boolean {
   return (
+    agentStatusSubjectsEqual(left.subject, right.subject) &&
     left.paneKey === right.paneKey &&
     left.launchTokenHash === right.launchTokenHash &&
     left.connectionId === right.connectionId &&

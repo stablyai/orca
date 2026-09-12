@@ -10,6 +10,7 @@ import {
 import { warnOnHookEnvOrVersionMismatch } from './agent-hook-listener/listener-limits'
 import { resolveHookSource } from './agent-hook-listener/source-routing'
 import { makePaneKey } from './stable-pane-id'
+import { agentStatusSubjectFromLegacyPane, agentStatusSubjectKey } from './agent-status-subject'
 
 const PANE = makePaneKey('tab-hooks', '11111111-1111-4111-8112-111111111111')
 const MOVED_PANE = makePaneKey('tab-hooks', '22222222-2222-4222-8222-222222222222')
@@ -220,7 +221,11 @@ describe('agent hook extraction boundaries', () => {
     expect(event).toBeNull()
     expect(state.lastPromptByPaneKey.has(PANE)).toBe(false)
     expect(state.lastToolByPaneKey.has(PANE)).toBe(false)
-    expect(state.lastStatusByPaneKey.has(PANE)).toBe(true)
+    expect(
+      state.lastStatusByPaneKey.has(
+        agentStatusSubjectKey(agentStatusSubjectFromLegacyPane({ paneKey: PANE }))
+      )
+    ).toBe(true)
   })
 
   it('clears warning, provider, and lifecycle caches together', () => {

@@ -10,16 +10,13 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     const paneKeysToClear = new Set<string>()
     const statusPaneKeysToClear = new Set<string>()
     const statusRowsToClear: EnrichedAgentHookEventPayload[] = []
-    for (const key of this.state.lastStatusByPaneKey.keys()) {
+    for (const [key, rawRow] of this.state.lastStatusByPaneKey) {
       if (paneCacheKeyMatchesTab(key, tabId)) {
         paneKeysToClear.add(key)
-        statusPaneKeysToClear.add(key)
-        const row = this.state.lastStatusByPaneKey.get(key) as
-          | EnrichedAgentHookEventPayload
-          | undefined
-        if (row) {
-          statusRowsToClear.push(row)
-        }
+        const row = rawRow as EnrichedAgentHookEventPayload
+        paneKeysToClear.add(row.paneKey)
+        statusPaneKeysToClear.add(row.paneKey)
+        statusRowsToClear.push(row)
       }
     }
     for (const key of this.state.lastPromptByPaneKey.keys()) {
@@ -103,44 +100,52 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   clearPaneState(paneKey: string, options?: { emitStatusRowMutation?: boolean }): void {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
     const paneKeys = new Set([paneKey, resolvedPaneKey])
+    const statusKeys = new Set(this.statusKeysForPaneKey(resolvedPaneKey))
     // Why: only persist when a status entry was actually evicted; dropping prompt/tool caches doesn't change the file.
-    const previousStatus = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
-    const hadStatus = previousStatus !== undefined
-    this.clearAssistantMessageRetry(resolvedPaneKey)
-    this.clearCodexSubagentPoll(resolvedPaneKey)
-    clearPaneCacheState(this.state, resolvedPaneKey)
-    this.activeHookTurnCompletedAtByPaneKey.delete(resolvedPaneKey)
-    this.currentAuthorityObservations.delete(resolvedPaneKey)
-    this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
-    this.restartedStatusLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
-    // Why: the pane itself is gone, so its observation clock describes nothing a later pane owns.
-    this.evidenceObservedAtByPaneKey.delete(resolvedPaneKey)
+    const previousStatuses = Array.from(statusKeys).flatMap((statusKey) => {
+      const entry = this.state.lastStatusByPaneKey.get(statusKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      return entry ? [entry] : []
+    })
+    const hadStatus = previousStatuses.length > 0
     let clearedAlias = false
     for (const [legacyPaneKey, alias] of this.legacyPaneKeyAliases) {
       if (alias.stablePaneKey === resolvedPaneKey) {
         this.legacyPaneKeyAliases.delete(legacyPaneKey)
         paneKeys.add(legacyPaneKey)
         paneKeys.add(alias.stablePaneKey)
-        clearPaneCacheState(this.state, legacyPaneKey)
-        this.activeHookTurnCompletedAtByPaneKey.delete(legacyPaneKey)
-        this.currentAuthorityObservations.delete(legacyPaneKey)
-        this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
-        this.restartedStatusLaunchTokenHashByPaneKey.delete(legacyPaneKey)
-        this.evidenceObservedAtByPaneKey.delete(legacyPaneKey)
+        for (const statusKey of this.statusKeysForPaneKey(legacyPaneKey)) {
+          statusKeys.add(statusKey)
+        }
         clearedAlias = true
       }
+    }
+    for (const statusKey of statusKeys) {
+      this.clearAssistantMessageRetry(statusKey)
+      this.clearCodexSubagentPoll(statusKey)
+      clearPaneCacheState(this.state, statusKey)
+      this.activeHookTurnCompletedAtByPaneKey.delete(statusKey)
+      this.currentAuthorityObservations.delete(statusKey)
+      this.promptSentDedupeByPaneKey.delete(statusKey)
+      this.evidenceObservedAtByPaneKey.delete(statusKey)
+      this.runtimeObservedStatusPaneKeys.delete(statusKey)
+    }
+    for (const legacyPaneKey of paneKeys) {
+      // Legacy unscoped cache entries can survive a version upgrade until their next event.
+      clearPaneCacheState(this.state, legacyPaneKey)
+      this.restartedStatusLaunchTokenHashByPaneKey.delete(legacyPaneKey)
     }
     const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
     if (clearedAlias) {
       this.notifyPaneKeyAliasPersistenceListener()
     }
     if (options?.emitStatusRowMutation !== false) {
-      this.commitStatusRowMutation(previousStatus, undefined)
+      for (const previousStatus of previousStatuses) {
+        this.commitStatusRowMutation(previousStatus, undefined)
+      }
     }
     if (hadStatus || authorityChanged) {
-      this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       this.emitPaneStatusCleared({ paneKey: resolvedPaneKey })

@@ -154,7 +154,7 @@ describe('agent hook spool', () => {
         launchToken,
         payload: started.payload
       },
-      'spool-test'
+      null
     )
     expect(first.getStatusSnapshot()).toHaveLength(1)
     first.flushStatusPersistSync()

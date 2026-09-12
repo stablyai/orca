@@ -6,6 +6,11 @@ import type { EnrichedAgentHookEventPayload, PaneKeyAliasPersistenceListener } f
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import { isValidPaneKey } from './server-status-identity'
 import { AgentHookServerAuthorityEvidence } from './server-authority-evidence'
+import {
+  agentStatusSubjectKey,
+  makePtyAgentStatusSubject,
+  parseAgentStatusSubjectKey
+} from '../../../shared/agent-status-subject'
 
 export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAuthorityEvidence {
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
@@ -142,45 +147,94 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
     const existing = this.legacyPaneKeyAliases.get(physicalPaneKey)
     const normalizedPtyId = ptyId?.trim() || existing?.ptyId || null
-    const previousStatus = this.state.lastStatusByPaneKey.get(previousOwnerPaneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
-    const hadStatus = previousStatus !== undefined
+    const owner = parsePaneKey(toPaneKey)
+    const previousStatuses = this.statusEntriesForPaneKey(previousOwnerPaneKey).filter(
+      (status) => status.subject.kind === 'pty'
+    )
+    const statusKeys = this.statusKeysForPaneKeys(new Set([previousOwnerPaneKey]))
+    const transferredStatuses: {
+      previous: EnrichedAgentHookEventPayload
+      transferred: EnrichedAgentHookEventPayload
+    }[] = []
+    const hadPersistedAuthority = Array.from(
+      this.persistedAuthorityCommitmentsByPaneKey.values()
+    ).some((evidence) => evidence.paneKey === previousOwnerPaneKey)
+    // A cache may have been populated before typed subjects were introduced.
     movePaneCacheState(this.state, previousOwnerPaneKey, toPaneKey)
-    const movedStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
-    if (movedStatus) {
-      const owner = parsePaneKey(toPaneKey)
-      this.state.lastStatusByPaneKey.set(toPaneKey, {
-        ...movedStatus,
-        paneKey: toPaneKey,
-        tabId: owner?.tabId
-      })
-    }
-    const transferredStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
-    const hydratedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(previousOwnerPaneKey)
-    if (hydratedLaunchTokenHash) {
-      this.hydratedLaunchTokenHashByPaneKey.delete(previousOwnerPaneKey)
-      this.hydratedLaunchTokenHashByPaneKey.set(toPaneKey, hydratedLaunchTokenHash)
-    }
-    const persistedAuthority = this.persistedAuthorityCommitmentsByPaneKey.get(previousOwnerPaneKey)
-    if (persistedAuthority) {
-      const owner = parsePaneKey(toPaneKey)
-      this.persistedAuthorityCommitmentsByPaneKey.delete(previousOwnerPaneKey)
-      this.persistedAuthorityCommitmentsByPaneKey.set(
-        toPaneKey,
-        Object.freeze({
-          ...persistedAuthority,
+    for (const oldStatusKey of statusKeys) {
+      const oldSubject = parseAgentStatusSubjectKey(oldStatusKey)
+      if (oldSubject?.kind !== 'pty' || oldSubject.paneKey !== previousOwnerPaneKey) {
+        continue
+      }
+      const { kind: _kind, paneKey: _paneKey, ...scope } = oldSubject
+      const subject = makePtyAgentStatusSubject(scope, toPaneKey)
+      const newStatusKey = agentStatusSubjectKey(subject)
+      const previousStatus = this.state.lastStatusByPaneKey.get(oldStatusKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      movePaneCacheState(this.state, oldStatusKey, newStatusKey)
+      if (previousStatus) {
+        const transferred = {
+          ...previousStatus,
+          subject,
           paneKey: toPaneKey,
-          ...(owner?.tabId ? { tabId: owner.tabId } : {})
-        })
-      )
-    }
-    if (this.runtimeObservedStatusPaneKeys.delete(previousOwnerPaneKey)) {
-      this.runtimeObservedStatusPaneKeys.add(toPaneKey)
+          tabId: owner?.tabId
+        }
+        this.state.lastStatusByPaneKey.set(newStatusKey, transferred)
+        transferredStatuses.push({ previous: previousStatus, transferred })
+      }
+      const hydratedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(oldStatusKey)
+      if (hydratedLaunchTokenHash) {
+        this.hydratedLaunchTokenHashByPaneKey.delete(oldStatusKey)
+        this.hydratedLaunchTokenHashByPaneKey.set(newStatusKey, hydratedLaunchTokenHash)
+      }
+      const persistedAuthority = this.persistedAuthorityCommitmentsByPaneKey.get(oldStatusKey)
+      if (persistedAuthority) {
+        this.persistedAuthorityCommitmentsByPaneKey.delete(oldStatusKey)
+        this.persistedAuthorityCommitmentsByPaneKey.set(
+          newStatusKey,
+          Object.freeze({
+            ...persistedAuthority,
+            subject,
+            paneKey: toPaneKey,
+            ...(owner?.tabId ? { tabId: owner.tabId } : {})
+          })
+        )
+      }
+      if (this.runtimeObservedStatusPaneKeys.delete(oldStatusKey)) {
+        this.runtimeObservedStatusPaneKeys.add(newStatusKey)
+      }
+      const activeTurnCompletedAt = this.activeHookTurnCompletedAtByPaneKey.get(oldStatusKey)
+      if (activeTurnCompletedAt !== undefined) {
+        this.activeHookTurnCompletedAtByPaneKey.delete(oldStatusKey)
+        this.activeHookTurnCompletedAtByPaneKey.set(newStatusKey, activeTurnCompletedAt)
+      }
+      const evidenceObservedAt = this.evidenceObservedAtByPaneKey.get(oldStatusKey)
+      if (evidenceObservedAt !== undefined) {
+        this.evidenceObservedAtByPaneKey.delete(oldStatusKey)
+        this.evidenceObservedAtByPaneKey.set(newStatusKey, evidenceObservedAt)
+      }
+      const authorityObservation = this.currentAuthorityObservations.get(oldStatusKey)
+      if (authorityObservation) {
+        this.currentAuthorityObservations.delete(oldStatusKey)
+        this.currentAuthorityObservations.set(
+          newStatusKey,
+          Object.freeze({
+            ...authorityObservation,
+            subject,
+            paneKey: toPaneKey,
+            ...(owner?.tabId ? { tabId: owner.tabId } : {})
+          })
+        )
+      }
+      const promptDedupe = this.promptSentDedupeByPaneKey.get(oldStatusKey)
+      if (promptDedupe !== undefined) {
+        this.promptSentDedupeByPaneKey.delete(oldStatusKey)
+        this.promptSentDedupeByPaneKey.set(newStatusKey, promptDedupe)
+      }
+      this.clearAssistantMessageRetry(oldStatusKey)
+      this.clearCodexSubagentPoll(oldStatusKey)
+      this.observations.forget(oldStatusKey)
     }
     const restartedTokenHash =
       this.restartedStatusLaunchTokenHashByPaneKey.get(previousOwnerPaneKey)
@@ -189,32 +243,6 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     if (restartedTokenHash) {
       this.restartedStatusLaunchTokenHashByPaneKey.set(toPaneKey, restartedTokenHash)
     }
-    const activeTurnCompletedAt = this.activeHookTurnCompletedAtByPaneKey.get(previousOwnerPaneKey)
-    if (activeTurnCompletedAt !== undefined) {
-      this.activeHookTurnCompletedAtByPaneKey.delete(previousOwnerPaneKey)
-      this.activeHookTurnCompletedAtByPaneKey.set(toPaneKey, activeTurnCompletedAt)
-    }
-    const evidenceObservedAt = this.evidenceObservedAtByPaneKey.get(previousOwnerPaneKey)
-    if (evidenceObservedAt !== undefined) {
-      this.evidenceObservedAtByPaneKey.delete(previousOwnerPaneKey)
-      this.evidenceObservedAtByPaneKey.set(toPaneKey, evidenceObservedAt)
-    }
-    const authorityObservation = this.currentAuthorityObservations.get(previousOwnerPaneKey)
-    if (authorityObservation) {
-      const owner = parsePaneKey(toPaneKey)
-      this.currentAuthorityObservations.delete(previousOwnerPaneKey)
-      this.currentAuthorityObservations.set(
-        toPaneKey,
-        Object.freeze({ ...authorityObservation, paneKey: toPaneKey, tabId: owner?.tabId })
-      )
-    }
-    const promptDedupe = this.promptSentDedupeByPaneKey.get(previousOwnerPaneKey)
-    if (promptDedupe !== undefined) {
-      this.promptSentDedupeByPaneKey.delete(previousOwnerPaneKey)
-      this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
-    }
-    this.clearAssistantMessageRetry(previousOwnerPaneKey)
-    this.clearCodexSubagentPoll(previousOwnerPaneKey)
     // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
     this.legacyPaneKeyAliases.set(physicalPaneKey, {
       stablePaneKey: toPaneKey,
@@ -225,12 +253,10 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     this.boundPaneKeyAliases()
     this.closedAgentStatusPaneKeys.delete(toPaneKey)
     this.notifyPaneKeyAliasPersistenceListener()
-    this.commitStatusRowMutation(
-      previousStatus,
-      transferredStatus,
-      options?.emitStatusRowMutation !== false
-    )
-    if (hadStatus || persistedAuthority) {
+    for (const { previous, transferred } of transferredStatuses) {
+      this.commitStatusRowMutation(previous, transferred, options?.emitStatusRowMutation !== false)
+    }
+    if (previousStatuses.length > 0 || hadPersistedAuthority) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }

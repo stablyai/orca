@@ -11,11 +11,13 @@ import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import { normalizeClaudePromptId } from './agent-hook-listener/listener-limits'
 import type { HookListenerState } from './agent-hook-listener/listener-state'
+import { movePaneCacheState } from './agent-hook-listener/listener-state'
 import { extractPromptText } from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
 import { readString } from './agent-hook-listener/tool-input-preview'
+import { agentStatusSubjectFromLegacyPane, agentStatusSubjectKey } from './agent-status-subject'
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 export function normalizeHookPayload(
   state: HookListenerState,
@@ -29,8 +31,13 @@ export function normalizeHookPayload(
     return null
   }
   const { record, paneKey, hookPayloadRecord, tabId, worktreeId, launchToken } = envelope
+  const subject = agentStatusSubjectFromLegacyPane({ paneKey, worktreeId, connectionId: null })
+  const statusKey = agentStatusSubjectKey(subject)
+  if (statusKey !== paneKey) {
+    movePaneCacheState(state, paneKey, statusKey)
+  }
   if (source === 'claude') {
-    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
+    state.claudeUnconfirmedRestoredStatusPaneKeys.delete(statusKey)
   }
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
@@ -58,7 +65,7 @@ export function normalizeHookPayload(
   ) {
     return null
   }
-  const previousStatus = state.lastStatusByPaneKey.get(paneKey)
+  const previousStatus = state.lastStatusByPaneKey.get(statusKey)
   // Why: only a MANUAL completion claims anything, so only it may write compact-scoped state. An
   // auto compact runs inside a turn that resumes and emits its own Stop; running the ownership
   // guard for it would burn the pane's consumed-compact slot on an event that maps to nothing.
@@ -74,7 +81,7 @@ export function normalizeHookPayload(
       if (
         isClaudeCompactCompletionConsumed(
           state.claudeConsumedCompactPromptIdByPaneKey,
-          paneKey,
+          statusKey,
           providerPromptId
         ) ||
         !canAcceptClaudeCompactCompletion(previousStatus, {
@@ -88,14 +95,14 @@ export function normalizeHookPayload(
       }
       markClaudeCompactCompletionConsumed(
         state.claudeConsumedCompactPromptIdByPaneKey,
-        paneKey,
+        statusKey,
         providerPromptId
       )
     }
     // Why: the compact's own event carries no prompt; keep the pane's label from the turn it
     // summarized rather than blanking the row as it clears.
-    if (previousStatus?.payload.prompt && !state.lastPromptByPaneKey.has(paneKey)) {
-      state.lastPromptByPaneKey.set(paneKey, previousStatus.payload.prompt)
+    if (previousStatus?.payload.prompt && !state.lastPromptByPaneKey.has(statusKey)) {
+      state.lastPromptByPaneKey.set(statusKey, previousStatus.payload.prompt)
     }
   }
 
@@ -106,7 +113,7 @@ export function normalizeHookPayload(
     source,
     eventName,
     promptText,
-    paneKey,
+    paneKey: statusKey,
     hookPayload: hookPayloadRecord,
     envelope: record,
     extractedPrompt
@@ -122,12 +129,13 @@ export function normalizeHookPayload(
       ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
       : null)
   const restoredUnconfirmed =
-    source === 'claude' && state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
+    source === 'claude' && state.claudeUnconfirmedRestoredStatusPaneKeys.delete(statusKey)
   if (!transportPayload) {
     return null
   }
 
   return {
+    subject,
     paneKey,
     source,
     launchToken,
@@ -162,8 +170,8 @@ export function normalizeHookPayload(
     ...(source === 'claude'
       ? {
           claudeRunningNonAgentTask:
-            state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-            state.claudeActiveSessionCronPaneKeys.has(paneKey)
+            state.claudeRunningNonAgentTaskPaneKeys.has(statusKey) ||
+            state.claudeActiveSessionCronPaneKeys.has(statusKey)
         }
       : {}),
     ...(providerSession ? { providerSession } : {}),

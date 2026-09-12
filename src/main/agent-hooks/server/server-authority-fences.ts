@@ -25,16 +25,19 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     }
     this.recordRetiredPaneFence(paneKeys, retiredAliases)
     const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
-    const retiredRows = [...paneKeys].flatMap((key) => {
+    const statusKeys = this.statusKeysForPaneKeys(paneKeys)
+    const retiredRows = [...statusKeys].flatMap((key) => {
       const row = this.state.lastStatusByPaneKey.get(key) as
         | EnrichedAgentHookEventPayload
         | undefined
       return row ? [row] : []
     })
     const hadStatus = retiredRows.length > 0
-    for (const key of paneKeys) {
-      this.markPaneClosedForAgentStatus(key)
-      this.restartedStatusLaunchTokenHashByPaneKey.delete(key)
+    for (const paneKeyToClose of paneKeys) {
+      this.markPaneClosedForAgentStatus(paneKeyToClose)
+      this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKeyToClose)
+    }
+    for (const key of statusKeys) {
       this.clearAssistantMessageRetry(key)
       this.clearCodexSubagentPoll(key)
       clearPaneCacheState(this.state, key)
@@ -136,26 +139,32 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
         statusChanged = true
       }
       this.legacyPaneKeyAliases.delete(legacyPaneKey)
-      clearPaneCacheState(this.state, legacyPaneKey)
-      this.activeHookTurnCompletedAtByPaneKey.delete(legacyPaneKey)
-      this.currentAuthorityObservations.delete(legacyPaneKey)
-      this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
-      if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
-        statusChanged = true
-        clearedStatusPaneKeys.add(entry.stablePaneKey)
-        clearedStatusRows.set(
-          entry.stablePaneKey,
-          this.state.lastStatusByPaneKey.get(entry.stablePaneKey) as EnrichedAgentHookEventPayload
-        )
-      }
+      const statusKeys = new Set(this.statusKeysForPaneKey(legacyPaneKey))
       if (shouldClearStablePaneKey) {
-        // Why: hydrated rows live under the stable key; if this PTY dies before ptyPaneKey rebuilds, alias cleanup is the only evictor.
-        clearPaneCacheState(this.state, entry.stablePaneKey)
-        this.activeHookTurnCompletedAtByPaneKey.delete(entry.stablePaneKey)
-        this.runtimeObservedStatusPaneKeys.delete(entry.stablePaneKey)
-        this.currentAuthorityObservations.delete(entry.stablePaneKey)
-        this.promptSentDedupeByPaneKey.delete(entry.stablePaneKey)
+        for (const statusKey of this.statusKeysForPaneKey(entry.stablePaneKey)) {
+          statusKeys.add(statusKey)
+        }
       }
+      if (statusKeys.size > 0) {
+        statusChanged = true
+        clearedStatusPaneKeys.add(shouldClearStablePaneKey ? entry.stablePaneKey : legacyPaneKey)
+        for (const statusKey of statusKeys) {
+          const row = this.state.lastStatusByPaneKey.get(statusKey) as
+            | EnrichedAgentHookEventPayload
+            | undefined
+          if (row) {
+            clearedStatusRows.set(statusKey, row)
+          }
+        }
+      }
+      for (const statusKey of statusKeys) {
+        clearPaneCacheState(this.state, statusKey)
+        this.activeHookTurnCompletedAtByPaneKey.delete(statusKey)
+        this.runtimeObservedStatusPaneKeys.delete(statusKey)
+        this.currentAuthorityObservations.delete(statusKey)
+        this.promptSentDedupeByPaneKey.delete(statusKey)
+      }
+      clearPaneCacheState(this.state, legacyPaneKey)
       aliasChanged = true
     }
     if (aliasChanged) {
@@ -188,12 +197,9 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
         changed = true
       }
     }
-    for (const paneKey of paneKeys) {
-      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-      changed = this.hydratedLaunchTokenHashByPaneKey.delete(paneKey) || changed
-      changed = this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey) || changed
-      changed = this.persistedAuthorityCommitmentsByPaneKey.delete(paneKey) || changed
-      changed = this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey) || changed
+    for (const statusKey of this.statusKeysForPaneKeys(paneKeys)) {
+      changed = this.hydratedLaunchTokenHashByPaneKey.delete(statusKey) || changed
+      changed = this.persistedAuthorityCommitmentsByPaneKey.delete(statusKey) || changed
     }
     return changed
   }

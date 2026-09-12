@@ -11,7 +11,14 @@
 // republishes them.
 
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionExecutionLocation,
+  AgentSessionRecord
+} from '../../../shared/agent-session-record'
+import {
+  makeStructuredAgentStatusSubject,
+  type AgentStatusSubject
+} from '../../../shared/agent-status-subject'
 import { normalizeOptionalField } from '../../../shared/agent-status-field-normalization'
 import { AGENT_MODEL_MAX_LENGTH } from '../../../shared/agent-status-types'
 import {
@@ -31,7 +38,7 @@ export type StructuredAgentSessionStatusSubscriber = {
 
 type StatusFeedSession = {
   journal: AgentSessionJournal
-  params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] }
+  params: { location: AgentSessionExecutionLocation; provider: AgentSessionRecord['provider'] }
   hasProviderChild?: boolean
   fence?: number
 }
@@ -40,8 +47,8 @@ type StatusFeedSession = {
  *  mobile, the hook store's own fanout). `forget` is the roster edge the broadcast cache
  *  deliberately never has. */
 export type StructuredAgentSessionStatusSink = {
-  publish: (summary: AgentSessionStatusSummary) => void
-  forget: (sessionId: string) => void
+  publish: (subject: AgentStatusSubject, summary: AgentSessionStatusSummary) => void
+  forget: (subject: AgentStatusSubject) => void
 }
 
 export type StructuredAgentSessionStatusFeedDeps = {
@@ -110,6 +117,7 @@ export function createStructuredAgentSessionHostStatusFeed(args: {
 export class StructuredAgentSessionStatusFeed {
   private readonly subscribers = new Map<string, StructuredAgentSessionStatusSubscriber>()
   private readonly published = new Map<string, AgentSessionStatusSummary>()
+  private readonly publishedSubjects = new Map<string, AgentStatusSubject>()
   // Task progress must not sort and scan an unchanged conversation. Journal identity owns cleanup.
   private readonly journalProjections = new WeakMap<
     AgentSessionJournal,
@@ -145,8 +153,12 @@ export class StructuredAgentSessionStatusFeed {
 
   /** The sink lists what is running; a forgotten session must not be in it. */
   forget(sessionId: string): void {
+    const subject = this.publishedSubjects.get(sessionId)
+    if (!subject) {
+      return
+    }
     try {
-      this.deps.statusSink?.()?.forget(sessionId)
+      this.deps.statusSink?.()?.forget(subject)
     } catch (error) {
       console.warn('[structured-session-status] status sink forget failed', error)
     }
@@ -177,7 +189,12 @@ export class StructuredAgentSessionStatusFeed {
       type: 'status',
       session: retained
     })
-    this.sink(retained)
+    const location = this.deps.sessions.get(sessionId)?.params.location
+    if (location) {
+      this.sink(retained, location)
+    } else {
+      this.sinkSubject(retained, this.publishedSubjects.get(sessionId))
+    }
   }
 
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */
@@ -193,7 +210,7 @@ export class StructuredAgentSessionStatusFeed {
     }
     this.published.set(sessionId, summary)
     this.broadcast({ type: 'status', session: summary })
-    this.sink(summary)
+    this.sink(summary, session.params.location)
     try {
       this.deps.onStatusChanged?.(summary, { replay: options?.replay === true })
     } catch (error) {
@@ -262,9 +279,30 @@ export class StructuredAgentSessionStatusFeed {
   }
 
   /** A failing sink must never cost the subscribers their status event. */
-  private sink(summary: AgentSessionStatusSummary): void {
+  private sink(
+    summary: AgentSessionStatusSummary,
+    location: AgentSessionExecutionLocation | undefined
+  ): void {
+    const sink = this.deps.statusSink?.()
+    if (!sink || !location) {
+      return
+    }
+    const subject = makeStructuredAgentStatusSubject(location, summary.sessionId)
+    this.publishedSubjects.set(summary.sessionId, subject)
+    this.sinkSubject(summary, subject, sink)
+  }
+
+  private sinkSubject(
+    summary: AgentSessionStatusSummary,
+    subject: AgentStatusSubject | undefined,
+    resolvedSink?: StructuredAgentSessionStatusSink
+  ): void {
+    const sink = resolvedSink ?? this.deps.statusSink?.()
+    if (!sink || !subject) {
+      return
+    }
     try {
-      this.deps.statusSink?.()?.publish(summary)
+      sink.publish(subject, summary)
     } catch (error) {
       console.warn('[structured-session-status] status sink publish failed', error)
     }

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
 import { AgentHookServer, CLOSED_AGENT_STATUS_TAB_IDS_MAX, _internals } from './server'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { agentStatusSubjectKey } from '../../shared/agent-status-subject'
 import {
   buildBody,
   PANE,
@@ -76,6 +77,12 @@ describe('AgentHookServer listener replay', () => {
         },
         'conn-1'
       )
+      const statusKeyByPane = new Map(
+        server
+          .getStatusSnapshot()
+          .filter((row) => row.subject)
+          .map((row) => [row.paneKey, agentStatusSubjectKey(row.subject!)])
+      )
       server.registerPaneKeyAlias('tab-1:0', sameTabPane, 'pty-1')
       const state = server._getStateForTests()
       state.lastPromptByPaneKey.set(PANE, 'cached prompt')
@@ -108,9 +115,13 @@ describe('AgentHookServer listener replay', () => {
       expect(internals.promptSentDedupeByPaneKey.get(siblingPrefixPane)).toEqual({
         promptHash: 'sibling'
       })
-      expect(internals.runtimeObservedStatusPaneKeys.has(PANE)).toBe(false)
-      expect(internals.runtimeObservedStatusPaneKeys.has(sameTabPane)).toBe(false)
-      expect(internals.runtimeObservedStatusPaneKeys.has(siblingPrefixPane)).toBe(true)
+      expect(internals.runtimeObservedStatusPaneKeys.has(statusKeyByPane.get(PANE)!)).toBe(false)
+      expect(internals.runtimeObservedStatusPaneKeys.has(statusKeyByPane.get(sameTabPane)!)).toBe(
+        false
+      )
+      expect(
+        internals.runtimeObservedStatusPaneKeys.has(statusKeyByPane.get(siblingPrefixPane)!)
+      ).toBe(true)
       expect(statusListener).toHaveBeenCalledTimes(1)
       expect(statusListener).toHaveBeenCalledWith([
         expect.objectContaining({ state: 'working', observedInCurrentRuntime: true })

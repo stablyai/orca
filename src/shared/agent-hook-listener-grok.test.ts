@@ -54,6 +54,7 @@ describe('shared agent-hook-listener', () => {
       {
         paneKey: PANE_KEY,
         tabId: 'tab-1',
+        worktreeId: 'wt',
         payload: {
           hookEventName: 'pre_tool_use',
           toolName: 'run_terminal_cmd',

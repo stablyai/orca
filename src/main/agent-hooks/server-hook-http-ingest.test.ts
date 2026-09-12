@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { agentStatusSubjectKey } from '../../shared/agent-status-subject'
 import { buildBody, PANE, LEAF_2, LEAF_3 } from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
@@ -239,6 +240,7 @@ describe('AgentHookServer listener replay', () => {
         session_crons: [{ id: 'cron-1', status: 'running' }]
       })
       const waiting = server.getStatusSnapshot()[0]
+      const statusKey = agentStatusSubjectKey(waiting.subject!)
 
       await postClaudeHook({
         hook_event_name: 'PreToolUse',
@@ -249,8 +251,8 @@ describe('AgentHookServer listener replay', () => {
       })
 
       expect(server.getStatusSnapshot()[0]).toEqual(waiting)
-      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
-      expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
+      expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(statusKey)).toBe(true)
+      expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(statusKey)).toBe(true)
     } finally {
       server.stop()
     }

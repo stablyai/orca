@@ -11,6 +11,8 @@ import type { AgentStatusIpcPayload, AgentType } from '../../../shared/agent-sta
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AGENT_PROMPT_SENT_AGENT_KINDS, TOOL_PROGRESS_HOOK_EVENTS } from './server-constants'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
+import { parseAgentStatusSubjectKey } from '../../../shared/agent-status-subject'
+import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 
 export function agentTypeToPromptSentAgentKind(agentType: AgentType | undefined): AgentKind {
   const normalized = agentType?.trim().toLowerCase()
@@ -53,6 +55,7 @@ export function toAgentStatusIpcPayload(
   entry: EnrichedAgentHookEventPayload
 ): AgentStatusIpcPayload {
   return {
+    subject: entry.subject,
     paneKey: entry.paneKey,
     ...(entry.launchToken ? { launchToken: entry.launchToken } : {}),
     tabId: entry.tabId,
@@ -87,7 +90,14 @@ export function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload)
 
 export function paneCacheKeyTabId(key: string): string | null {
   const paneKey = key.split('\0', 1)[0] ?? key
-  return parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
+  const subject = parseAgentStatusSubjectKey(paneKey)
+  if (subject?.kind === 'structured-session') {
+    return structuredAgentSessionTabId(subject.sessionId)
+  }
+  const legacyPaneKey = subject?.kind === 'pty' ? subject.paneKey : paneKey
+  return (
+    parsePaneKey(legacyPaneKey)?.tabId ?? parseLegacyNumericPaneKey(legacyPaneKey)?.tabId ?? null
+  )
 }
 
 export function paneCacheKeyMatchesTab(key: string, tabId: string): boolean {

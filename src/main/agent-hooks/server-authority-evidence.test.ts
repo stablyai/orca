@@ -36,14 +36,19 @@ describe('AgentHookServer authority evidence', () => {
     const commitments = server.getHydratedAuthorityCommitments()
 
     expect(commitments).toEqual([
-      {
+      expect.objectContaining({
+        subject: expect.objectContaining({
+          kind: 'pty',
+          executionHostId: 'ssh:ssh-target',
+          paneKey: PANE_KEY
+        }),
         paneKey: PANE_KEY,
         launchTokenHash: expect.stringMatching(/^[a-f0-9]{64}$/),
         tabId: 'tab-authority',
         worktreeId: 'repo::before',
         connectionId: 'ssh-target',
         observedAt: 100
-      }
+      })
     ])
     expect(Object.isFrozen(commitments)).toBe(true)
     expect(Object.isFrozen(commitments[0])).toBe(true)
@@ -55,7 +60,11 @@ describe('AgentHookServer authority evidence', () => {
         connectionId: 'ssh-target',
         terminalProvenance: 'restored'
       })
-    ).toEqual({ paneKey: PANE_KEY, source: 'hydrated_commitment' })
+    ).toMatchObject({
+      subject: expect.objectContaining({ kind: 'pty', paneKey: PANE_KEY }),
+      paneKey: PANE_KEY,
+      source: 'hydrated_commitment'
+    })
 
     server.ingestRemote(
       {
@@ -113,7 +122,11 @@ describe('AgentHookServer authority evidence', () => {
         connectionId: 'ssh-target',
         terminalProvenance: 'current_runtime'
       })
-    ).toEqual({ paneKey: PANE_KEY, source: 'current_hook' })
+    ).toMatchObject({
+      subject: expect.objectContaining({ kind: 'pty', paneKey: PANE_KEY }),
+      paneKey: PANE_KEY,
+      source: 'current_hook'
+    })
 
     server.ingestRemote(
       {
@@ -133,7 +146,7 @@ describe('AgentHookServer authority evidence', () => {
         connectionId: 'ssh-target',
         terminalProvenance: 'restored'
       })
-    ).toEqual({ paneKey: PANE_KEY, source: 'current_hook' })
+    ).toBeNull()
 
     server.ingestRemote(
       {
@@ -165,7 +178,11 @@ describe('AgentHookServer authority evidence', () => {
         connectionId: 'ssh-target',
         terminalProvenance: 'restored'
       })
-    ).toEqual({ paneKey: PANE_KEY, source: 'hydrated_commitment' })
+    ).toMatchObject({
+      subject: expect.objectContaining({ kind: 'pty', paneKey: PANE_KEY }),
+      paneKey: PANE_KEY,
+      source: 'hydrated_commitment'
+    })
 
     server.clearPaneState(PANE_KEY)
 
@@ -218,6 +235,10 @@ describe('AgentHookServer authority evidence', () => {
         connectionId: 'ssh-target',
         terminalProvenance: 'restored'
       })
-    ).toEqual({ paneKey: PANE_KEY, source: 'current_hook' })
+    ).toMatchObject({
+      subject: expect.objectContaining({ kind: 'pty', paneKey: PANE_KEY }),
+      paneKey: PANE_KEY,
+      source: 'current_hook'
+    })
   })
 })

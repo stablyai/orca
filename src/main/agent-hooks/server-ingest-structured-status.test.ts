@@ -4,6 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import {
+  makeStructuredAgentStatusSubject,
+  type AgentStatusSubject
+} from '../../shared/agent-status-subject'
+import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../shared/structured-agent-session-projection'
@@ -213,6 +217,105 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     const byPane = new Map(server.getStatusSnapshot().map((row) => [row.paneKey, row]))
     expect(byPane.get(PANE)?.structuredHost).toBeUndefined()
     expect(byPane.get(STRUCTURED_PANE)?.structuredHost).toBe('owned')
+  })
+
+  it('keeps identical legacy pane keys from two SSH targets as separate subjects', () => {
+    const server = new AgentHookServer()
+    for (const target of ['target-a', 'target-b']) {
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          worktreeId: 'repo-1::/workspace/app',
+          payload: { state: 'working', prompt: target, agentType: 'codex' }
+        },
+        target
+      )
+    }
+
+    expect(server.getStatusSnapshot()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          paneKey: PANE,
+          prompt: 'target-a',
+          subject: expect.objectContaining({ executionHostId: 'ssh:target-a' })
+        }),
+        expect.objectContaining({
+          paneKey: PANE,
+          prompt: 'target-b',
+          subject: expect.objectContaining({ executionHostId: 'ssh:target-b' })
+        })
+      ])
+    )
+    expect(server.getStatusSnapshot()).toHaveLength(2)
+  })
+
+  it('addresses colliding structured session ids by their full execution scope', () => {
+    const server = new AgentHookServer()
+    const subjectA = makeStructuredAgentStatusSubject(
+      {
+        executionHostId: 'runtime:host-a',
+        wslDistro: null,
+        workspaceId: 'repo-1::/workspace/app',
+        workspaceKind: 'git-worktree'
+      },
+      SESSION
+    )
+    const subjectB = makeStructuredAgentStatusSubject(
+      { ...subjectA, executionHostId: 'runtime:host-b' },
+      SESSION
+    )
+
+    server.ingestStructuredStatus(subjectA, summary({ latestPrompt: 'host-a' }))
+    server.ingestStructuredStatus(subjectB, summary({ latestPrompt: 'host-b' }))
+
+    expect(server.getStatusSnapshot()).toHaveLength(2)
+    expect(server.getStatusSnapshotForSubject(subjectA)[0]).toMatchObject({
+      paneKey: STRUCTURED_PANE,
+      prompt: 'host-a',
+      subject: subjectA
+    })
+    expect(server.getStatusSnapshotForSubject(subjectB)[0]).toMatchObject({ prompt: 'host-b' })
+
+    server.dropStructuredStatus(subjectA)
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ prompt: 'host-b', subject: subjectB })
+    ])
+  })
+
+  it('rejects a malformed or mismatched typed structured subject', () => {
+    const server = new AgentHookServer()
+    const malformed = {
+      kind: 'future',
+      executionHostId: 'runtime:host-a',
+      wslDistro: null,
+      workspaceId: 'repo-1::/workspace/app',
+      workspaceKind: 'git-worktree',
+      sessionId: SESSION
+    } as unknown as AgentStatusSubject
+    const mismatched = makeStructuredAgentStatusSubject(
+      {
+        executionHostId: 'runtime:host-a',
+        wslDistro: null,
+        workspaceId: 'repo-1::/workspace/app',
+        workspaceKind: 'git-worktree'
+      },
+      'different-session'
+    )
+    const mismatchedWorkspace = makeStructuredAgentStatusSubject(
+      {
+        executionHostId: 'runtime:host-a',
+        wslDistro: null,
+        workspaceId: 'repo-2::/workspace/other',
+        workspaceKind: 'git-worktree'
+      },
+      SESSION
+    )
+
+    server.ingestStructuredStatus(malformed, summary())
+    server.ingestStructuredStatus(mismatched, summary())
+    server.ingestStructuredStatus(mismatchedWorkspace, summary())
+
+    expect(server.getStatusSnapshot()).toEqual([])
   })
 })
 

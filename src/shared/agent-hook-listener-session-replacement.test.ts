@@ -4,11 +4,16 @@ import {
   createHookListenerState,
   type HookListenerState
 } from './agent-hook-listener/listener-state'
+import { agentStatusSubjectFromLegacyPane, agentStatusSubjectKey } from './agent-status-subject'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '44444444-4444-4444-8444-444444444444'
 const SESSION_A = 'session-a'
 const SESSION_B = 'session-b'
+
+function statusKeyForPane(paneKey: string): string {
+  return agentStatusSubjectKey(agentStatusSubjectFromLegacyPane({ paneKey }))
+}
 
 function claudeEvent(
   state: HookListenerState,
@@ -38,19 +43,21 @@ describe('Claude session replacement voids the replaced session claims', () => {
   it('voids a session cron gate held by the previous session', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('cron-gate', LEAF_ID)
+    const statusKey = statusKeyForPane(paneKey)
 
     stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
-    expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(true)
+    expect(state.claudeActiveSessionCronPaneKeys.has(statusKey)).toBe(true)
 
     const replaced = stop(state, paneKey, SESSION_B)
 
-    expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(false)
+    expect(state.claudeActiveSessionCronPaneKeys.has(statusKey)).toBe(false)
     expect(replaced?.payload.state).toBe('done')
   })
 
   it('voids a one-shot subagent the previous session was still running', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('roster-void', LEAF_ID)
+    const statusKey = statusKeyForPane(paneKey)
 
     claudeEvent(state, paneKey, {
       hook_event_name: 'UserPromptSubmit',
@@ -62,11 +69,11 @@ describe('Claude session replacement voids the replaced session claims', () => {
       session_id: SESSION_A,
       agent_id: 'achild-0000000000000001'
     })
-    expect(state.claudeSubagentRosterByPaneKey.get(paneKey)?.size).toBe(1)
+    expect(state.claudeSubagentRosterByPaneKey.get(statusKey)?.size).toBe(1)
 
     const replaced = stop(state, paneKey, SESSION_B)
 
-    expect(state.claudeSubagentRosterByPaneKey.has(paneKey)).toBe(false)
+    expect(state.claudeSubagentRosterByPaneKey.has(statusKey)).toBe(false)
     expect(replaced?.payload.state).toBe('done')
     expect(replaced?.payload.subagents ?? []).toEqual([])
   })
@@ -74,6 +81,7 @@ describe('Claude session replacement voids the replaced session claims', () => {
   it('keeps a confirmed teammate across the replacement — a lead swap cannot end an in-process teammate', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('teammate-kept', LEAF_ID)
+    const statusKey = statusKeyForPane(paneKey)
 
     // Anchor the owning session on a LEAD event first. Subagent/teammate events branch out of
     // normalizeClaudeEvent before the void ever runs, so without this the replacement below finds
@@ -100,18 +108,18 @@ describe('Claude session replacement voids the replaced session claims', () => {
       agent_id: 'arev-0000000000000001',
       agent_type: 'rev'
     })
-    const tracked = state.claudeSubagentRosterByPaneKey.get(paneKey)?.get('arev-0000000000000001')
+    const tracked = state.claudeSubagentRosterByPaneKey.get(statusKey)?.get('arev-0000000000000001')
     expect(tracked?.confirmedTeammate).toBe(true)
     expect(tracked?.state).toBe('working')
-    expect(state.claudeSessionOwnerByPaneKey.get(paneKey)).toBe(SESSION_A)
+    expect(state.claudeSessionOwnerByPaneKey.get(statusKey)).toBe(SESSION_A)
 
     stop(state, paneKey, SESSION_B)
 
     // The replacement really happened, so the surviving row below is the guard's doing.
-    expect(state.claudeSessionOwnerByPaneKey.get(paneKey)).toBe(SESSION_B)
+    expect(state.claudeSessionOwnerByPaneKey.get(statusKey)).toBe(SESSION_B)
 
     expect(
-      state.claudeSubagentRosterByPaneKey.get(paneKey)?.get('arev-0000000000000001')?.state
+      state.claudeSubagentRosterByPaneKey.get(statusKey)?.get('arev-0000000000000001')?.state
     ).toBe('working')
   })
 
@@ -121,29 +129,31 @@ describe('Claude session replacement voids the replaced session claims', () => {
     // open live-shell product question inside this change. See PLAN-STA-4612 §6.3.
     const state = createHookListenerState()
     const paneKey = makePaneKey('bg-gate-kept', LEAF_ID)
+    const statusKey = statusKeyForPane(paneKey)
 
     stop(state, paneKey, SESSION_A, {
       background_tasks: [{ type: 'bash', status: 'running', id: 'bash_1' }]
     })
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)).toBe(true)
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(statusKey)).toBe(true)
 
     const replaced = claudeEvent(state, paneKey, {
       hook_event_name: 'PostToolUse',
       session_id: SESSION_B
     })
 
-    expect(state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)).toBe(true)
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(statusKey)).toBe(true)
     expect(replaced?.payload.state).toBe('working')
   })
 
   it('voids nothing when the session id is unchanged', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('same-session', LEAF_ID)
+    const statusKey = statusKeyForPane(paneKey)
 
     stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
     const same = stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
 
-    expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(true)
+    expect(state.claudeActiveSessionCronPaneKeys.has(statusKey)).toBe(true)
     expect(same?.payload.state).toBe('working')
   })
 
@@ -152,6 +162,7 @@ describe('Claude session replacement voids the replaced session claims', () => {
     // session_id reaches the same extraction path as the lead's.
     const state = createHookListenerState()
     const paneKey = makePaneKey('child-session', LEAF_ID)
+    const statusKey = statusKeyForPane(paneKey)
 
     stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
     claudeEvent(state, paneKey, {
@@ -160,24 +171,26 @@ describe('Claude session replacement voids the replaced session claims', () => {
       agent_id: 'achild-0000000000000009'
     })
 
-    expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(true)
-    expect(state.claudeSessionOwnerByPaneKey.get(paneKey)).toBe(SESSION_A)
+    expect(state.claudeActiveSessionCronPaneKeys.has(statusKey)).toBe(true)
+    expect(state.claudeSessionOwnerByPaneKey.get(statusKey)).toBe(SESSION_A)
   })
 
   it('voids nothing when the event carries no session id', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('no-session', LEAF_ID)
+    const statusKey = statusKeyForPane(paneKey)
 
     stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
     stop(state, paneKey, '')
 
-    expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(true)
-    expect(state.claudeSessionOwnerByPaneKey.get(paneKey)).toBe(SESSION_A)
+    expect(state.claudeActiveSessionCronPaneKeys.has(statusKey)).toBe(true)
+    expect(state.claudeSessionOwnerByPaneKey.get(statusKey)).toBe(SESSION_A)
   })
 
   it('does not anchor an ignored compact SessionStart', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('compact-owner', LEAF_ID)
+    const statusKey = statusKeyForPane(paneKey)
 
     stop(state, paneKey, SESSION_A, { session_crons: [{ id: 'cron-1' }] })
     expect(
@@ -190,12 +203,13 @@ describe('Claude session replacement voids the replaced session claims', () => {
 
     stop(state, paneKey, SESSION_B)
 
-    expect(state.claudeActiveSessionCronPaneKeys.has(paneKey)).toBe(false)
+    expect(state.claudeActiveSessionCronPaneKeys.has(statusKey)).toBe(false)
   })
 
   it('leaves the lead-state record to the incoming fold rather than deleting it', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('lead-untouched', LEAF_ID)
+    const statusKey = statusKeyForPane(paneKey)
 
     stop(state, paneKey, SESSION_A)
     claudeEvent(state, paneKey, {
@@ -204,6 +218,6 @@ describe('Claude session replacement voids the replaced session claims', () => {
       prompt: 'new conversation'
     })
 
-    expect(state.claudeLeadStateByPaneKey.get(paneKey)?.state).toBe('working')
+    expect(state.claudeLeadStateByPaneKey.get(statusKey)?.state).toBe('working')
   })
 })

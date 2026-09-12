@@ -3,6 +3,7 @@ import { AgentHookServer } from './server'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import { selectFreshExplicitAgentStatus } from '../runtime/runtime-hook-agent-row-selection'
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
+import { agentStatusSubjectKey } from '../../shared/agent-status-subject'
 
 const PANE_KEY = 'tab-handle:33333333-3333-4333-8333-333333333333'
 const HANDLE = 'term_identity'
@@ -56,11 +57,16 @@ describe('the terminal handle a status row is stamped with', () => {
       'ssh-b'
     )
 
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      connectionId: 'ssh-b',
+    const rows = server.getStatusSnapshot()
+    expect(rows).toHaveLength(2)
+    expect(rows.find((row) => row.connectionId === 'ssh-a')).toMatchObject({
+      terminalHandle: HANDLE,
+      worktreeId: 'worktree'
+    })
+    expect(rows.find((row) => row.connectionId === 'ssh-b')).toMatchObject({
       worktreeId: 'other-worktree'
     })
-    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('terminalHandle')
+    expect(rows.find((row) => row.connectionId === 'ssh-b')).not.toHaveProperty('terminalHandle')
   })
 
   it('is never persisted, because it belongs to the runtime that issued it', () => {
@@ -88,6 +94,7 @@ describe('the terminal handle a status row is stamped with', () => {
     )
     const mutations: Parameters<Parameters<typeof server.subscribeStatusRowMutations>[0]>[0][] = []
     server.subscribeStatusRowMutations((mutation) => mutations.push(mutation))
+    const beforeSubject = server.getStatusSnapshot()[0]!.subject
 
     ingest(server, { paneKey: NEW_PANE_KEY, tabId: 'tab-reminted' })
 
@@ -100,8 +107,18 @@ describe('the terminal handle a status row is stamped with', () => {
     ])
     expect(mutations).toEqual([
       {
-        before: { paneKey: PANE_KEY, worktreeId: 'worktree', terminalHandle: HANDLE },
-        after: { paneKey: NEW_PANE_KEY, worktreeId: 'worktree', terminalHandle: HANDLE }
+        before: expect.objectContaining({
+          subject: beforeSubject,
+          paneKey: PANE_KEY,
+          worktreeId: 'worktree',
+          terminalHandle: HANDLE
+        }),
+        after: expect.objectContaining({
+          subject: expect.objectContaining({ kind: 'pty', paneKey: NEW_PANE_KEY }),
+          paneKey: NEW_PANE_KEY,
+          worktreeId: 'worktree',
+          terminalHandle: HANDLE
+        })
       }
     ])
 
@@ -148,7 +165,11 @@ describe('the terminal handle a status row is stamped with', () => {
       },
       wslHookRelayConnectionId('Debian')
     )
-    expect(server.getStatusSnapshot()[0]).not.toHaveProperty('terminalHandle')
+    const wrongDistro = server
+      .getStatusSnapshot()
+      .find((row) => row.connectionId === wslHookRelayConnectionId('Debian'))
+    expect(wrongDistro).toMatchObject({ prompt: 'wrong distro' })
+    expect(wrongDistro).not.toHaveProperty('terminalHandle')
   })
 
   it('renews duplicate OSC evidence without publishing another semantic row', () => {
@@ -205,7 +226,13 @@ describe('the terminal handle a status row is stamped with', () => {
     server.subscribeStatusRowMutations(mutations)
     const payload = { state: 'working' as const, prompt: 'ship it', agentType: 'claude' as const }
     ingest(server, { payload })
-    const row = server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY) as
+    const subject = server.getStatusSnapshot()[0]!.subject
+    if (!subject) {
+      throw new Error('expected typed status subject')
+    }
+    const row = server
+      ._getStateForTests()
+      .lastStatusByPaneKey.get(agentStatusSubjectKey(subject)) as
       | { claudeLeadBoundaryChildOnly?: true }
       | undefined
     if (!row) {
@@ -223,8 +250,18 @@ describe('the terminal handle a status row is stamped with', () => {
     expect(enriched).toHaveBeenCalledOnce()
     expect(mutations).toHaveBeenCalledOnce()
     expect(mutations).toHaveBeenCalledWith({
-      before: { paneKey: PANE_KEY, worktreeId: 'worktree', terminalHandle: HANDLE },
-      after: { paneKey: NEW_PANE_KEY, worktreeId: 'worktree', terminalHandle: HANDLE }
+      before: expect.objectContaining({
+        subject,
+        paneKey: PANE_KEY,
+        worktreeId: 'worktree',
+        terminalHandle: HANDLE
+      }),
+      after: expect.objectContaining({
+        subject: expect.objectContaining({ kind: 'pty', paneKey: NEW_PANE_KEY }),
+        paneKey: NEW_PANE_KEY,
+        worktreeId: 'worktree',
+        terminalHandle: HANDLE
+      })
     })
     expect(enriched).toHaveBeenCalledWith(
       expect.objectContaining({ paneKey: NEW_PANE_KEY, terminalHandle: HANDLE })

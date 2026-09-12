@@ -13,6 +13,7 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerListeners } from './server-listeners'
+import { agentStatusSubjectKey } from '../../../shared/agent-status-subject'
 
 function toMutationIdentity(
   row: EnrichedAgentHookEventPayload | null | undefined
@@ -21,6 +22,7 @@ function toMutationIdentity(
     return null
   }
   return {
+    subject: row.subject,
     paneKey: row.paneKey,
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
     ...(row.terminalHandle ? { terminalHandle: row.terminalHandle } : {})
@@ -61,7 +63,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     }
   }
 
-  protected getStatusPaneKeyForTerminalHandle(terminalHandle: string): string | undefined {
+  protected getStatusKeyForTerminalHandle(terminalHandle: string): string | undefined {
     return this.paneKeyByTerminalHandle.get(terminalHandle)
   }
 
@@ -106,12 +108,13 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
   ): boolean {
     if (
       before?.terminalHandle &&
-      this.paneKeyByTerminalHandle.get(before.terminalHandle) === before.paneKey
+      this.paneKeyByTerminalHandle.get(before.terminalHandle) ===
+        agentStatusSubjectKey(before.subject)
     ) {
       this.paneKeyByTerminalHandle.delete(before.terminalHandle)
     }
     if (after?.terminalHandle) {
-      this.paneKeyByTerminalHandle.set(after.terminalHandle, after.paneKey)
+      this.paneKeyByTerminalHandle.set(after.terminalHandle, agentStatusSubjectKey(after.subject))
     }
     if (!emit || semanticRowJson(before) === semanticRowJson(after)) {
       return false

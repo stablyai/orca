@@ -5,6 +5,10 @@ import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
+import {
+  parseAgentStatusSubject,
+  type AgentStatusSubject
+} from '../../../shared/agent-status-subject'
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
   ingestTerminalStatus(event: {
@@ -14,6 +18,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     worktreeId?: string
     connectionId?: string | null
     terminalHandle?: string
+    subject?: AgentStatusSubject
     payload: ParsedAgentStatusPayload
   }): void {
     const physicalPaneKey = event.paneKey.trim()
@@ -57,30 +62,41 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       typeof event.terminalHandle === 'string' && event.terminalHandle.trim().length > 0
         ? event.terminalHandle.trim()
         : undefined
+    const suppliedSubject = parseAgentStatusSubject(event.subject)
+    let subject =
+      suppliedSubject?.kind === 'pty' && suppliedSubject.paneKey === paneKey
+        ? suppliedSubject
+        : this.legacyPtyStatusSubjectFor({ paneKey, worktreeId, connectionId })
     let mutationBefore: EnrichedAgentHookEventPayload | undefined
-    const indexedPaneKey = terminalHandle
-      ? this.getStatusPaneKeyForTerminalHandle(terminalHandle)
+    const indexedStatusKey = terminalHandle
+      ? this.getStatusKeyForTerminalHandle(terminalHandle)
       : undefined
-    if (indexedPaneKey && indexedPaneKey !== paneKey) {
-      const indexedStatus = this.state.lastStatusByPaneKey.get(indexedPaneKey) as
+    if (indexedStatusKey) {
+      const indexedStatus = this.state.lastStatusByPaneKey.get(indexedStatusKey) as
         | EnrichedAgentHookEventPayload
         | undefined
       if (
         indexedStatus &&
+        indexedStatus.paneKey !== paneKey &&
         indexedStatus.terminalHandle === terminalHandle &&
         this.sameTerminalOwner(indexedStatus, { connectionId, worktreeId })
       ) {
         mutationBefore = indexedStatus
-        this.transferPaneAuthority(indexedPaneKey, paneKey, event.ptyId, Date.now(), {
+        this.transferPaneAuthority(indexedStatus.paneKey, paneKey, event.ptyId, Date.now(), {
           authorityVerified: true,
           emitStatusRowMutation: false
         })
         paneKey = this.resolvePaneKeyAlias(paneKey)
+        subject = this.legacyPtyStatusSubjectFor({ paneKey, worktreeId, connectionId })
       }
     }
-    const previous = this.state.lastStatusByPaneKey.get(paneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
+    const previous = this.statusEntryFor({
+      subject,
+      paneKey,
+      worktreeId,
+      connectionId,
+      payload: event.payload
+    })
     if (
       previous?.claudeLeadBoundaryChildOnly === true &&
       previous.payload.agentType === 'claude' &&
@@ -96,7 +112,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     // Why: preserve the hook-completed turn stamp while OSC repaints the current state.
     const preserveActiveTurnStamp =
       previous?.payload.turnCompletedAt !== undefined &&
-      previous.payload.turnCompletedAt === this.activeHookTurnCompletedAtByPaneKey.get(paneKey)
+      previous.payload.turnCompletedAt ===
+        this.activeHookTurnCompletedAtByPaneKey.get(this.statusKeyFor(previous))
     if (
       !previous?.restoredUnconfirmed &&
       previous?.connectionId === connectionId &&
@@ -133,6 +150,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
     this.applyNormalizedStatus(
       {
+        subject,
         paneKey,
         tabId,
         worktreeId,

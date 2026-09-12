@@ -123,6 +123,7 @@ describe('shared agent-hook-listener', () => {
       {
         paneKey: PANE_KEY,
         tabId: 'tab-1',
+        worktreeId: 'wt',
         hook_event_name: 'PreToolUse',
         payload: {
           toolCall: {

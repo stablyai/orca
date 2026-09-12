@@ -46,8 +46,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
       if (this.endpointDir) {
         drainAgentHookSpool({
           endpointDir: this.endpointDir,
-          getPersistedLaunchTokenHash: (paneKey) =>
-            this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
+          getPersistedLaunchTokenHash: (paneKey) => this.hydratedLaunchTokenHashForPaneKey(paneKey),
           ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
         })
       }
@@ -112,7 +111,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerRuntimeEnv
           if (statusDisposition === 'restart') {
             // Why: a retired pane accepting a new turn is a different agent session behind the
             // same key — later observations must not be ordered against the retired one.
-            this.observations.rebind(event.paneKey)
+            this.observations.rebind(this.statusKeyFor(event))
           }
           this.recordCurrentAuthorityObservation(event)
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)

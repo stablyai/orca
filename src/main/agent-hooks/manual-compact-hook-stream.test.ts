@@ -6,6 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../relay/agent-hook-server'
 import { seedClaudeSubagentRosterFromSnapshots } from '../../shared/agent-hook-listener/providers/claude-roster-state'
 import type { AgentHookRelayEnvelope } from '../../shared/agent-hook-relay'
+import {
+  agentStatusSubjectFromLegacyPane,
+  agentStatusSubjectKey
+} from '../../shared/agent-status-subject'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
@@ -71,8 +75,10 @@ function legacyRelayCompactEnvelope(
  *  the turn had spawned — restored from disk, so proof of nothing. */
 function seedHydratedStuckPane(server: AgentHookServer, receivedAt: number) {
   const state = server._getStateForTests()
+  const subject = agentStatusSubjectFromLegacyPane({ paneKey: PANE_KEY })
   const subagents = [{ id: 'child-1', state: 'working', startedAt: 0, agentType: 'general' }]
-  state.lastStatusByPaneKey.set(PANE_KEY, {
+  state.lastStatusByPaneKey.set(agentStatusSubjectKey(subject), {
+    subject,
     paneKey: PANE_KEY,
     source: 'claude',
     connectionId: null,
@@ -342,7 +348,13 @@ describe('manual Claude compact hook stream', () => {
     })
     server.ingestRemote(turnEnvelope(), 'conn-a')
     server.ingestRemote(legacyRelayCompactEnvelope('done'), 'conn-a')
-    const applied = server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)
+    const applied = server
+      ._getStateForTests()
+      .lastStatusByPaneKey.get(
+        agentStatusSubjectKey(
+          agentStatusSubjectFromLegacyPane({ paneKey: PANE_KEY, connectionId: 'conn-a' })
+        )
+      )
     expect(applied?.payload.state).toBe('done')
 
     server.ingestRemote(legacyRelayCompactEnvelope('done'), 'conn-a')
@@ -350,7 +362,15 @@ describe('manual Claude compact hook stream', () => {
     // Why: the deleted ownership cache used to reject a repeat; a same-owner guard alone would
     // accept it and keep refreshing the row, so suppression is keyed on the consumed compact id.
     expect(emitted).toEqual(['UserPromptSubmit:working', 'PostCompact:done'])
-    expect(server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)).toBe(applied)
+    expect(
+      server
+        ._getStateForTests()
+        .lastStatusByPaneKey.get(
+          agentStatusSubjectKey(
+            agentStatusSubjectFromLegacyPane({ paneKey: PANE_KEY, connectionId: 'conn-a' })
+          )
+        )
+    ).toBe(applied)
     unsubscribe()
   })
 

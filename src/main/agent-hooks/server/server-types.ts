@@ -7,9 +7,11 @@ import type {
 import type { AgentStatusObservation } from '../../../shared/agent-status-observation'
 import type { AgentKind } from '../../../shared/telemetry-events'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { AgentStatusSubject } from '../../../shared/agent-status-subject'
 
 // Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
-export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
+export type EnrichedAgentHookEventPayload = Omit<AgentHookEventPayload, 'subject'> & {
+  subject: AgentStatusSubject
   receivedAt: number
   /** When this evidence was first observed, as distinct from `receivedAt`. A relay reconnect
    *  replays cached rows and `receivedAt` must restamp to clear the connection watermark, so
@@ -43,6 +45,7 @@ export type PersistedAgentHookEventPayload = Omit<
 }
 
 export type PersistedAgentHookAuthorityCommitment = {
+  subject: AgentStatusSubject
   paneKey: string
   launchTokenHash: string
   connectionId: string | null
@@ -52,6 +55,7 @@ export type PersistedAgentHookAuthorityCommitment = {
 }
 
 export type AgentHookStatusChangeEntry = {
+  subject: AgentStatusSubject
   paneKey: string
   state: AgentStatusState
   receivedAt: number
@@ -64,6 +68,7 @@ export type AgentHookStatusFreshnessObservation = AgentHookStatusChangeEntry & {
 }
 
 export type AgentHookProviderSessionIdentity = {
+  subject: AgentStatusSubject
   paneKey: string
   sessionId: string
   transcriptPath?: string
@@ -71,6 +76,7 @@ export type AgentHookProviderSessionIdentity = {
 }
 
 export type AgentHookAuthorityEvidence = Readonly<{
+  subject: AgentStatusSubject
   paneKey: string
   launchTokenHash: string
   connectionId: string | null
@@ -80,6 +86,8 @@ export type AgentHookAuthorityEvidence = Readonly<{
 }>
 
 export type AgentHookAuthorityAttestation = Readonly<{
+  /** Present on attestations minted by the canonical store; optional at the compatibility edge. */
+  subject?: AgentStatusSubject
   paneKey: string
   source: 'current_hook' | 'hydrated_commitment'
 }>
@@ -90,6 +98,7 @@ export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
 export type AgentHookStatusRowIdentity = {
+  subject: AgentStatusSubject
   paneKey: string
   worktreeId?: string
   terminalHandle?: string
@@ -119,7 +128,10 @@ export type RetiredPaneFence = {
 export type LastStatusFile = {
   version: number
   entries: Record<string, PersistedAgentHookEventPayload>
+  /** Lossless scoped rows; `entries` remains the pane-key rollback shadow for older builds. */
+  subjectEntries?: PersistedAgentHookEventPayload[]
   authorityCommitments?: Record<string, PersistedAgentHookAuthorityCommitment>
+  subjectAuthorityCommitments?: PersistedAgentHookAuthorityCommitment[]
 }
 
 export type AgentPromptSentDedupeEntry = {

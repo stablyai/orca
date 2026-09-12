@@ -3,6 +3,24 @@ import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
 import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { NormalizedLocalHook } from './server-types'
 import { AgentHookServerPersistence } from './server-persistence'
+import {
+  agentStatusSubjectFromLegacyPane,
+  agentStatusSubjectKey
+} from '../../../shared/agent-status-subject'
+
+function localStatusKey(body: Record<string, unknown>, paneKey: string): string {
+  const worktreeId =
+    typeof body.worktreeId === 'string' && body.worktreeId.trim()
+      ? body.worktreeId.trim()
+      : undefined
+  try {
+    return agentStatusSubjectKey(
+      agentStatusSubjectFromLegacyPane({ paneKey, worktreeId, connectionId: null })
+    )
+  } catch {
+    return paneKey
+  }
+}
 
 export abstract class AgentHookServerIngestNormalization extends AgentHookServerPersistence {
   protected setClaudeBackgroundEvidence(
@@ -31,19 +49,20 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     if (!paneKey) {
       return { event: normalizeHookPayload(this.state, source, body, this.env) }
     }
-    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
-    const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    const statusKey = localStatusKey(body as Record<string, unknown>, paneKey)
+    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(statusKey)
+    const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(statusKey)
     const event = normalizeHookPayload(this.state, source, body, this.env)
-    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
-    const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
-    this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
+    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(statusKey)
+    const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(statusKey)
+    this.setClaudeBackgroundEvidence(statusKey, previousRunningTask, previousActiveCron)
     if (!event || event.paneKey !== paneKey) {
       return { event }
     }
     // Why: nested CLIs may inherit the pane key; only accepted statuses may mutate its background-work gate.
     return {
       event,
-      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
+      onAccepted: () => this.setClaudeBackgroundEvidence(statusKey, nextRunningTask, nextActiveCron)
     }
   }
 
@@ -70,12 +89,12 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
     const event = statusDisposition === 'restart' ? { ...replay, launchToken: undefined } : replay
     if (statusDisposition === 'restart') {
-      this.observations.rebind(event.paneKey)
+      this.observations.rebind(this.statusKeyFor(event))
     }
     this.recordCurrentAuthorityObservation(event)
     this.applyNormalizedStatus(event, normalized.onAccepted)
     if (event.payload.state !== 'done') {
-      this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
+      this.withdrawReplayObservation(this.statusKeyFor(event))
     }
   }
 }

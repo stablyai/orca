@@ -69,7 +69,15 @@ function indexed(session: {
     ...(session.hasProviderChild !== undefined
       ? { hasProviderChild: session.hasProviderChild }
       : {}),
-    params: { location: { workspaceId: 'workspace-1' }, provider: 'codex' as const }
+    params: {
+      location: {
+        executionHostId: 'local' as const,
+        wslDistro: null,
+        workspaceId: 'workspace-1',
+        workspaceKind: 'git-worktree' as const
+      },
+      provider: 'codex' as const
+    }
   }
 }
 
@@ -784,8 +792,12 @@ describe('the status sink sees the roster the broadcast cache deliberately lacks
     const published: AgentSessionStatusSummary[] = []
     const forgotten: string[] = []
     const sink: StructuredAgentSessionStatusSink = {
-      publish: (summary) => published.push(summary),
-      forget: (sessionId) => forgotten.push(sessionId)
+      publish: (_subject, summary) => published.push(summary),
+      forget: (subject) => {
+        if (subject.kind === 'structured-session') {
+          forgotten.push(subject.sessionId)
+        }
+      }
     }
     return { sink, published, forgotten }
   }

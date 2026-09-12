@@ -21,6 +21,11 @@ import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { SpoolRecord } from '../../../shared/agent-hook-spool'
+import {
+  agentStatusSubjectFromLegacyPane,
+  agentStatusSubjectKey,
+  type AgentStatusSubject
+} from '../../../shared/agent-status-subject'
 import type {
   AgentHookAuthorityEvidence,
   AgentHookProviderSessionIdentity,
@@ -42,6 +47,14 @@ import type {
   StatusFreshnessListener,
   StatusRowMutationListener
 } from './server-types'
+import {
+  findHydratedLaunchTokenHashForPaneKey,
+  findLatestStatusEntryForPaneKey,
+  findStatusEntriesForPaneKey,
+  findStatusKeysForPaneKey,
+  findStatusKeysForPaneKeys,
+  resolveStatusSubject
+} from './server-status-subject-index'
 
 /** Shared mutable state for the layered hook-server implementation. */
 export abstract class AgentHookServerState {
@@ -118,6 +131,81 @@ export abstract class AgentHookServerState {
   protected readonly observations = new AgentStatusObservationSequencer(
     createAgentStatusAuthorityId('main-agent-hooks')
   )
+
+  /** Canonical subject identity for rows after legacy hook/IPC fields enter the store. */
+  protected statusSubjectFor(payload: AgentHookEventPayload): AgentStatusSubject {
+    return resolveStatusSubject(payload)
+  }
+
+  protected legacyPtyStatusSubjectFor(args: {
+    paneKey: string
+    worktreeId?: string
+    connectionId: string | null
+  }): AgentStatusSubject {
+    if (!args.worktreeId) {
+      const candidates = this.statusEntriesForPaneKey(args.paneKey).filter(
+        (entry) => entry.subject.kind === 'pty' && entry.connectionId === args.connectionId
+      )
+      if (candidates.length === 1) {
+        return candidates[0]!.subject
+      }
+    }
+    return agentStatusSubjectFromLegacyPane(args)
+  }
+
+  protected statusKeyFor(payload: AgentHookEventPayload): string {
+    return agentStatusSubjectKey(this.statusSubjectFor(payload))
+  }
+
+  protected statusEntryForSubject(
+    subject: AgentStatusSubject
+  ): EnrichedAgentHookEventPayload | undefined {
+    return this.state.lastStatusByPaneKey.get(agentStatusSubjectKey(subject)) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+  }
+
+  protected statusEntryFor(
+    payload: AgentHookEventPayload
+  ): EnrichedAgentHookEventPayload | undefined {
+    return this.state.lastStatusByPaneKey.get(this.statusKeyFor(payload)) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+  }
+
+  protected setStatusEntry(entry: EnrichedAgentHookEventPayload): void {
+    this.state.lastStatusByPaneKey.set(agentStatusSubjectKey(entry.subject), entry)
+  }
+
+  protected statusEntriesForPaneKey(paneKey: string): EnrichedAgentHookEventPayload[] {
+    return findStatusEntriesForPaneKey(this.state.lastStatusByPaneKey, paneKey)
+  }
+
+  protected statusKeysForPaneKey(paneKey: string): string[] {
+    return findStatusKeysForPaneKey(this.state.lastStatusByPaneKey, paneKey)
+  }
+
+  protected statusKeysForPaneKeys(paneKeys: ReadonlySet<string>): Set<string> {
+    return findStatusKeysForPaneKeys(
+      this.state.lastStatusByPaneKey,
+      this.persistedAuthorityCommitmentsByPaneKey,
+      paneKeys
+    )
+  }
+
+  protected latestStatusEntryForPaneKey(
+    paneKey: string
+  ): EnrichedAgentHookEventPayload | undefined {
+    return findLatestStatusEntryForPaneKey(this.state.lastStatusByPaneKey, paneKey)
+  }
+
+  protected hydratedLaunchTokenHashForPaneKey(paneKey: string): string | undefined {
+    return findHydratedLaunchTokenHashForPaneKey(
+      this.persistedAuthorityCommitmentsByPaneKey,
+      paneKey,
+      (candidate) => this.resolvePaneKeyAlias(candidate)
+    )
+  }
 
   protected abstract withdrawReplayObservation(paneKey: string): void
   protected abstract ingestSpoolRecord(record: SpoolRecord): void

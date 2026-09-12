@@ -80,7 +80,15 @@ async function awaitingApproval() {
       {
         journal,
         hasProviderChild: true,
-        params: { location: { workspaceId: WORKTREE_ID }, provider: 'codex' as const }
+        params: {
+          location: {
+            executionHostId: 'local' as const,
+            wslDistro: null,
+            workspaceId: WORKTREE_ID,
+            workspaceKind: 'git-worktree' as const
+          },
+          provider: 'codex' as const
+        }
       }
     ]
   ])
@@ -91,11 +99,11 @@ async function awaitingApproval() {
     getRecord: () => null,
     now: () => Date.now(),
     statusSink: () => ({
-      publish: (summary) => {
+      publish: (subject, summary) => {
         published.push(summary)
-        store.ingestStructuredStatus(summary)
+        store.ingestStructuredStatus(subject, summary)
       },
-      forget: (sessionId) => store.dropStructuredStatus(sessionId)
+      forget: (subject) => store.dropStructuredStatus(subject)
     })
   })
   feed.publish(SESSION, journal)

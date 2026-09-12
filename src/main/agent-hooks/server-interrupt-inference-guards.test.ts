@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE, RUNNING_SHELL } from './server.test-fixtures'
+import { agentStatusSubjectKey } from '../../shared/agent-status-subject'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -248,7 +249,11 @@ describe('AgentHookServer listener replay', () => {
         })
       ).resolves.toMatchObject({ status: 204 })
       const cronBaseline = server.getStatusSnapshot()[0]
-      expect(server._getStateForTests().claudeActiveSessionCronPaneKeys.has(PANE)).toBe(true)
+      expect(
+        server
+          ._getStateForTests()
+          .claudeActiveSessionCronPaneKeys.has(agentStatusSubjectKey(cronBaseline.subject!))
+      ).toBe(true)
       expect(
         server.inferInterrupt({
           paneKey: PANE,
@@ -352,6 +357,7 @@ describe('AgentHookServer listener replay', () => {
       'conn-1'
     )
     const waiting = server.getStatusSnapshot()[0]
+    const statusKey = agentStatusSubjectKey(waiting.subject!)
 
     server.ingestRemote(
       {
@@ -369,7 +375,7 @@ describe('AgentHookServer listener replay', () => {
     )
 
     expect(server.getStatusSnapshot()[0]).toEqual(waiting)
-    expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(PANE)).toBe(true)
+    expect(server._getStateForTests().claudeRunningNonAgentTaskPaneKeys.has(statusKey)).toBe(true)
   })
 
   it('carries idle subagent rows through an inferred interrupt', () => {

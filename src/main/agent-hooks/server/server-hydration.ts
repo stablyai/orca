@@ -15,6 +15,7 @@ import {
   sanitizePersistedAuthorityCommitment
 } from './server-persistence-validation'
 import { AgentHookServerReaping } from './server-reaping'
+import { agentStatusSubjectKey } from '../../../shared/agent-status-subject'
 
 export abstract class AgentHookServerHydration extends AgentHookServerReaping {
   /** Hydrate the durable cache, validating every row before it reaches the live listener state. */
@@ -67,7 +68,14 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
     let scrubbedLegacyLaunchTokens = 0
     // Why: drop entries older than HYDRATE_MAX_AGE_MS to bound disk growth (one Date.now() for a consistent cutoff).
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
-    for (const [paneKey, rawEntry] of Object.entries(entries)) {
+    const persistedEntries: [string, unknown][] = Array.isArray(file.subjectEntries)
+      ? file.subjectEntries.flatMap((entry) =>
+          typeof entry === 'object' && entry !== null && typeof entry.paneKey === 'string'
+            ? [[entry.paneKey, entry] as [string, unknown]]
+            : []
+        )
+      : Object.entries(entries)
+    for (const [paneKey, rawEntry] of persistedEntries) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
       const rawResolvedEntry =
         resolvedPaneKey === paneKey || typeof rawEntry !== 'object' || rawEntry === null
@@ -75,12 +83,13 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
+        const statusKey = agentStatusSubjectKey(entry.subject)
         const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
         if (launchTokenHash) {
-          this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, launchTokenHash)
+          this.hydratedLaunchTokenHashByPaneKey.set(statusKey, launchTokenHash)
           const evidence = this.toAuthorityEvidence(entry, launchTokenHash)
           if (evidence) {
-            this.persistedAuthorityCommitmentsByPaneKey.set(resolvedPaneKey, evidence)
+            this.persistedAuthorityCommitmentsByPaneKey.set(statusKey, evidence)
           }
         }
         if (
@@ -100,7 +109,7 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
           // Why: the terminal transition may have fired while no receiver was up; restore as unconfirmed, never as live truth.
           entry.restoredUnconfirmed = true
         }
-        this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
+        this.state.lastStatusByPaneKey.set(statusKey, entry)
         if (entry.connectionId) {
           // Why: a restart can see an earlier wall clock; seed ordering so new events stay after disk state.
           const previousWatermark = this.connectionTimestampWatermarkById.get(entry.connectionId)
@@ -111,17 +120,13 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
         }
         // Why: restore live child hierarchy immediately; provider-specific reconciliation reaps stale seeds.
         if (entry.payload.agentType === 'codex') {
-          seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
+          seedCodexStateFromSnapshot(this.state, statusKey, entry.payload)
         } else if (entry.payload.agentType === 'claude') {
-          seedClaudeLeadTurnFromPersistedStatus(this.state, resolvedPaneKey, entry, {
+          seedClaudeLeadTurnFromPersistedStatus(this.state, statusKey, entry, {
             childOnlyBoundary: entry.claudeLeadBoundaryChildOnly === true
           })
           if (entry.payload.subagents) {
-            seedClaudeSubagentRosterFromSnapshots(
-              this.state,
-              resolvedPaneKey,
-              entry.payload.subagents
-            )
+            seedClaudeSubagentRosterFromSnapshots(this.state, statusKey, entry.payload.subagents)
           }
         }
         hydrated += 1
@@ -129,22 +134,34 @@ export abstract class AgentHookServerHydration extends AgentHookServerReaping {
         dropped += 1
       }
     }
-    for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
+    const persistedCommitments: [string, unknown][] = Array.isArray(
+      file.subjectAuthorityCommitments
+    )
+      ? file.subjectAuthorityCommitments.flatMap((commitment) =>
+          typeof commitment === 'object' &&
+          commitment !== null &&
+          typeof commitment.paneKey === 'string'
+            ? [[commitment.paneKey, commitment] as [string, unknown]]
+            : []
+        )
+      : Object.entries(file.authorityCommitments ?? {})
+    for (const [paneKey, rawCommitment] of persistedCommitments) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
       const commitment = sanitizePersistedAuthorityCommitment(resolvedPaneKey, rawCommitment)
       if (!commitment || commitment.observedAt < ttlCutoff) {
         dropped += 1
         continue
       }
-      const existing = this.persistedAuthorityCommitmentsByPaneKey.get(resolvedPaneKey)
+      const statusKey = agentStatusSubjectKey(commitment.subject)
+      const existing = this.persistedAuthorityCommitmentsByPaneKey.get(statusKey)
       if (existing && !authorityCommitmentsMatch(existing, commitment)) {
-        this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
-        this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
+        this.persistedAuthorityCommitmentsByPaneKey.delete(statusKey)
+        this.hydratedLaunchTokenHashByPaneKey.delete(statusKey)
         dropped += 1
         continue
       }
-      this.persistedAuthorityCommitmentsByPaneKey.set(resolvedPaneKey, commitment)
-      this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, commitment.launchTokenHash)
+      this.persistedAuthorityCommitmentsByPaneKey.set(statusKey, commitment)
+      this.hydratedLaunchTokenHashByPaneKey.set(statusKey, commitment.launchTokenHash)
     }
     if (dropped > 0) {
       console.warn(

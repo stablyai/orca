@@ -6,6 +6,7 @@ import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { OrchestrationFleetAttention } from './orchestration-fleet-attention'
 import type { AgentStatusRowFacets } from './agent-status-observation'
 import type { TuiAgent } from './tui-agent'
+import type { AgentStatusSubject } from './agent-status-subject'
 import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
@@ -82,6 +83,8 @@ export type AgentSubagentSnapshot = {
 }
 
 export type AgentStatusEntry = {
+  /** Canonical domain identity. Optional only for rows decoded from an older peer. */
+  subject?: AgentStatusSubject
   /** Renderer-local status-feed confirmation for children; absent on hook rows. */
   subagentObservation?: 'live' | 'unverifiable'
   state: AgentStatusState
@@ -198,6 +201,8 @@ export type AgentStatusPayload = {
  * absence ("no new info") from an explicit empty string.
  */
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
+
+export type { AgentStatusExecutionScope, AgentStatusSubject } from './agent-status-subject'
 
 /**
  * Narrow an `AgentStatusIpcPayload` (or any superset) down to the status fields alone.

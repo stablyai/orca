@@ -206,7 +206,11 @@ describe('Last-status persistence', () => {
         connectionId: 'ssh-target',
         terminalProvenance: 'restored'
       })
-    ).toEqual({ paneKey: PANE, source: 'hydrated_commitment' })
+    ).toMatchObject({
+      subject: expect.objectContaining({ kind: 'pty', paneKey: PANE }),
+      paneKey: PANE,
+      source: 'hydrated_commitment'
+    })
     restored.retirePaneAuthority(PANE)
     restored.flushStatusPersistSync()
     restored.stop()
@@ -224,6 +228,41 @@ describe('Last-status persistence', () => {
       ).toBeNull()
     } finally {
       retired.stop()
+    }
+  })
+
+  it('round-trips colliding scoped rows while retaining the legacy pane-key shadow', async () => {
+    const first = new AgentHookServer()
+    await first.start({ env: 'production', userDataPath })
+    for (const target of ['target-a', 'target-b']) {
+      first.ingestRemote(
+        {
+          paneKey: PANE,
+          worktreeId: 'repo-1::/workspace/app',
+          payload: { state: 'working', prompt: target, agentType: 'codex' }
+        },
+        target
+      )
+    }
+    first.flushStatusPersistSync()
+    first.stop()
+
+    const persisted = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+    expect(Object.keys(persisted.entries)).toEqual([PANE])
+    expect(persisted.subjectEntries).toHaveLength(2)
+
+    const restored = new AgentHookServer()
+    await restored.start({ env: 'production', userDataPath })
+    try {
+      expect(restored.getStatusSnapshot()).toHaveLength(2)
+      expect(
+        restored
+          .getStatusSnapshot()
+          .map((row) => row.subject?.executionHostId)
+          .sort()
+      ).toEqual(['ssh:target-a', 'ssh:target-b'])
+    } finally {
+      restored.stop()
     }
   })
 

@@ -1,8 +1,11 @@
 import type { ParsedAgentStatusPayload } from '../agent-status-types'
 import type { AgentHookSource } from '../agent-hook-relay'
 import type { AgentProviderSessionMetadata } from '../agent-session-resume'
+import type { AgentStatusSubject } from '../agent-status-subject'
 
 export type AgentHookEventPayload = {
+  /** Required once the event enters the canonical store; absent only at legacy ingress. */
+  subject?: AgentStatusSubject
   paneKey: string
   /** Authenticated hook route that produced this event. */
   source?: AgentHookSource

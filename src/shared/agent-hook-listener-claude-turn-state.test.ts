@@ -9,7 +9,8 @@ import {
   CLAUDE_PREVIOUS_PROMPT_ID,
   CLAUDE_PROMPT_ID,
   normalizeAndAccept,
-  PANE_KEY
+  PANE_KEY,
+  PANE_STATUS_KEY
 } from './agent-hook-listener-test-harness'
 
 describe('shared agent-hook-listener', () => {
@@ -239,7 +240,7 @@ describe('shared agent-hook-listener', () => {
       session_id: 'session-a'
     })
     expect(pre).toBeNull()
-    expect(state.lastStatusByPaneKey.get(PANE_KEY)?.payload.state).toBe('working')
+    expect(state.lastStatusByPaneKey.get(PANE_STATUS_KEY)?.payload.state).toBe('working')
 
     const post = normalizeAndAccept(state, 'claude', {
       hook_event_name: 'PostCompact',
@@ -381,7 +382,7 @@ describe('shared agent-hook-listener', () => {
       latestPrompt = ended?.payload.prompt ?? ''
     }
 
-    const scopedPrefix = `${PANE_KEY}\0amp:`
+    const scopedPrefix = `${PANE_STATUS_KEY}\0amp:`
     const promptKeys = [...state.lastPromptByPaneKey.keys()].filter((key) =>
       key.startsWith(scopedPrefix)
     )

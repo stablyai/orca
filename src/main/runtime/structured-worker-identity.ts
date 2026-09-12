@@ -20,7 +20,10 @@ import type {
   AgentSessionRecord
 } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../shared/structured-agent-session-projection'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import {
   parseWorkerTerminalHostScope,
@@ -75,6 +78,7 @@ export function structuredWorkerPaneKeyBelongsToSession(
   const parsed = paneKey ? parsePaneKey(paneKey) : null
   return Boolean(
     parsed &&
+    paneKey !== structuredAgentSessionPaneKey(sessionId) &&
     parsed.tabId === structuredAgentSessionTabId(sessionId) &&
     isTerminalLeafId(parsed.leafId)
   )

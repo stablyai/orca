@@ -6,6 +6,7 @@
 import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
+import type { AgentStatusSubject } from './agent-status-subject'
 import type {
   AgentStatusOrchestrationContext,
   ParsedAgentStatusPayload
@@ -25,6 +26,8 @@ export type MigrationUnsupportedPtyEntry = {
 }
 
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+  /** Canonical domain identity. Absent only on payloads decoded from an older peer. */
+  subject?: AgentStatusSubject
   paneKey: string
   launchToken?: string
   terminalHandle?: string
@@ -60,6 +63,8 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
  *  (the same baseline the interrupt-inference guard uses). Renderer-enriched fields
  *  (connectionId, worktreeId) diverge from main's cache and must not participate. */
 export type AgentStatusCacheIdentity = {
+  /** Present on new callers; absent only for legacy renderer cleanup. */
+  subject?: AgentStatusSubject
   paneKey: string
   receivedAt: number
   stateStartedAt: number

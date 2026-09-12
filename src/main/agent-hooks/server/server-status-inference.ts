@@ -12,7 +12,6 @@ import {
   type AgentQuestionAnsweredInferenceRequest
 } from '../../../shared/agent-question-answered-intent'
 import { AGENT_STATUS_STALE_AFTER_MS, type AgentType } from '../../../shared/agent-status-types'
-import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
 import { AgentHookServerRowOwnership } from './server-row-ownership'
 
@@ -24,9 +23,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (!isAgentInterruptInputIntent(request.intent)) {
       return false
     }
-    const existing = this.state.lastStatusByPaneKey.get(request.paneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
+    const existing = this.latestStatusEntryForPaneKey(request.paneKey)
     if (!existing) {
       return false
     }
@@ -77,19 +74,20 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     // Why: Escape/Ctrl+C at Claude's idle prompt does not stop provider-owned shells or session crons.
     if (
       agentType === 'claude' &&
-      (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
-        this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey))
+      (this.state.claudeRunningNonAgentTaskPaneKeys.has(this.statusKeyFor(existing)) ||
+        this.state.claudeActiveSessionCronPaneKeys.has(this.statusKeyFor(existing)))
     ) {
       return false
     }
     // Why: keep the Claude lead-turn record in sync, or a later child event re-emits the stale 'working' state and resurrects the cancelled pane.
     if (agentType === 'claude') {
-      markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
+      markClaudeLeadTurnInterrupted(this.state, this.statusKeyFor(existing))
     }
     if (agentType === 'codex') {
-      markCodexLeadTurnInterrupted(this.state, existing.paneKey)
+      markCodexLeadTurnInterrupted(this.state, this.statusKeyFor(existing))
     }
     const inferred = this.applyNormalizedStatus({
+      subject: existing.subject,
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
@@ -118,9 +116,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (!isValidPaneKey(request.paneKey)) {
       return false
     }
-    const existing = this.state.lastStatusByPaneKey.get(request.paneKey) as
-      | EnrichedAgentHookEventPayload
-      | undefined
+    const existing = this.latestStatusEntryForPaneKey(request.paneKey)
     if (!existing) {
       return false
     }
@@ -147,8 +143,9 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       return false
     }
     // Why: sync the listener's lead-turn record too, or a later child event re-emits the stale waiting state and resurrects the card.
-    const restored = clearClaudeAnsweredQuestionWait(this.state, existing.paneKey)
+    const restored = clearClaudeAnsweredQuestionWait(this.state, this.statusKeyFor(existing))
     const inferred = this.applyNormalizedStatus({
+      subject: existing.subject,
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,

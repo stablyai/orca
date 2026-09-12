@@ -151,7 +151,7 @@ describe('Cursor hook normalization', () => {
         worktreeId: submit.worktreeId,
         payload: submit.payload
       },
-      'conn-1'
+      null
     )
 
     const stop = _internals.normalizeHookPayload(
@@ -170,7 +170,7 @@ describe('Cursor hook normalization', () => {
         worktreeId: stop.worktreeId,
         payload: stop.payload
       },
-      'conn-1'
+      null
     )
 
     const response = _internals.normalizeHookPayload(
@@ -191,7 +191,7 @@ describe('Cursor hook normalization', () => {
         worktreeId: response.worktreeId,
         payload: response.payload
       },
-      'conn-1'
+      null
     )
     expect(agentHookServer.getStatusSnapshot()).toEqual([
       expect.objectContaining({

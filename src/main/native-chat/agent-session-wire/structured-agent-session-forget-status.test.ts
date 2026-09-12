@@ -75,7 +75,15 @@ async function workingSession(): Promise<{
       SESSION,
       {
         journal,
-        params: { location: { workspaceId: IDENTITY.workspaceId }, provider: 'codex' },
+        params: {
+          location: {
+            executionHostId: 'local',
+            wslDistro: null,
+            workspaceId: IDENTITY.workspaceId,
+            workspaceKind: 'git-worktree'
+          },
+          provider: 'codex'
+        },
         fence: 1,
         hasProviderChild: true,
         acquisitionGeneration: null
@@ -88,8 +96,8 @@ async function workingSession(): Promise<{
     getRecord: () => null,
     now: () => 1,
     statusSink: () => ({
-      publish: (summary) => server.ingestStructuredStatus(summary),
-      forget: (sessionId) => server.dropStructuredStatus(sessionId)
+      publish: (subject, summary) => server.ingestStructuredStatus(subject, summary),
+      forget: (subject) => server.dropStructuredStatus(subject)
     })
   })
   feed.publish(SESSION, journal)

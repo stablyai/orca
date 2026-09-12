@@ -90,8 +90,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     // Why: structured chats have no hooks, so the host writes their projections here itself; the
     // snapshot above then lists them for the CLI and mobile without a second store.
     structuredAgentStatusSink: {
-      publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
-      forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
+      publish: (subject, summary) => agentHookServer.ingestStructuredStatus(subject, summary),
+      forget: (subject) => agentHookServer.dropStructuredStatus(subject)
     },
     // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
     // read, so a row observed under one process otherwise acquires whatever the pane owns now.

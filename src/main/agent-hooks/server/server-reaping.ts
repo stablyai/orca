@@ -24,8 +24,12 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
     isLocalPaneAgentLive: (paneKey: string) => Promise<boolean>,
     isLocalPaneLivenessEvidenceCurrent: (paneKey: string) => boolean
   ): Promise<number> {
-    const candidates: { paneKey: string; entry: EnrichedAgentHookEventPayload }[] = []
-    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
+    const candidates: {
+      statusKey: string
+      paneKey: string
+      entry: EnrichedAgentHookEventPayload
+    }[] = []
+    for (const [statusKey, entry] of this.state.lastStatusByPaneKey) {
       const enriched = entry as EnrichedAgentHookEventPayload
       if (
         enriched.payload.agentType === 'claude' &&
@@ -35,14 +39,14 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
         // or a background-task/cron latch nothing will refresh, strands the pane just as
         // permanently — and unlike the roster case there is no child event left to reap it.
         (claudeRosterHasRestoredSnapshotSubagent(
-          this.state.claudeSubagentRosterByPaneKey.get(paneKey)
+          this.state.claudeSubagentRosterByPaneKey.get(statusKey)
         ) ||
           enriched.payload.state !== 'done' ||
-          this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
-          this.state.claudeActiveSessionCronPaneKeys.has(paneKey)) &&
-        !this.runtimeObservedStatusPaneKeys.has(paneKey)
+          this.state.claudeRunningNonAgentTaskPaneKeys.has(statusKey) ||
+          this.state.claudeActiveSessionCronPaneKeys.has(statusKey)) &&
+        !this.runtimeObservedStatusPaneKeys.has(statusKey)
       ) {
-        candidates.push({ paneKey, entry: enriched })
+        candidates.push({ statusKey, paneKey: enriched.paneKey, entry: enriched })
       }
     }
     const liveness = await Promise.all(
@@ -56,17 +60,17 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
     )
     let changedPanes = 0
     for (const [index, candidate] of candidates.entries()) {
-      const { paneKey, entry: enriched } = candidate
+      const { statusKey, paneKey, entry: enriched } = candidate
       if (
         liveness[index] ||
         !isLocalPaneLivenessEvidenceCurrent(paneKey) ||
-        this.state.lastStatusByPaneKey.get(paneKey) !== enriched ||
-        this.runtimeObservedStatusPaneKeys.has(paneKey) ||
+        this.state.lastStatusByPaneKey.get(statusKey) !== enriched ||
+        this.runtimeObservedStatusPaneKeys.has(statusKey) ||
         !isLocalExecutionHost(enriched.worktreeId)
       ) {
         continue
       }
-      if (!reapRestoredClaudeSubagentsForDeadPane(this.state, paneKey)) {
+      if (!reapRestoredClaudeSubagentsForDeadPane(this.state, statusKey)) {
         // Why: the roster reap only speaks for restored child rows. A pane whose PTY is provably
         // gone and whose claim is a lead row or a latch has nothing for it to reap, so retire the
         // pane the same way an observed exit would — otherwise the widened candidate set is inert.
@@ -84,7 +88,7 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
         continue
       }
       changedPanes += 1
-      const roster = this.state.claudeSubagentRosterByPaneKey.get(paneKey)
+      const roster = this.state.claudeSubagentRosterByPaneKey.get(statusKey)
       const subagents = claudeRosterToSnapshots(roster)
       // Why: the pane's persisted 'working' was the child gate holding a finished
       // lead open (subagent events never set lead state). With the last working row
@@ -113,7 +117,7 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
           subagents
         }
       }
-      this.state.lastStatusByPaneKey.set(paneKey, reconciled)
+      this.state.lastStatusByPaneKey.set(statusKey, reconciled)
       this.commitStatusRowMutation(enriched, reconciled)
     }
     if (changedPanes > 0) {

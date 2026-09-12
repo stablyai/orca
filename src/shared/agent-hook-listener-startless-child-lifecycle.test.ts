@@ -6,9 +6,14 @@ import {
 import { normalizeHookPayload } from './agent-hook-listener'
 import { seedClaudeSubagentRosterFromSnapshots } from './agent-hook-listener/providers/claude-roster-state'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
+import { agentStatusSubjectFromLegacyPane, agentStatusSubjectKey } from './agent-status-subject'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
+function statusKeyForPane(paneKey: string): string {
+  return agentStatusSubjectKey(agentStatusSubjectFromLegacyPane({ paneKey }))
+}
 
 function claudeEvent(
   state: HookListenerState,
@@ -74,7 +79,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
       agent_id: 'achild-0000000000000004',
       agent_type: 'reviewer'
     })
-    state.claudeLeadStateByPaneKey.delete(paneKey)
+    state.claudeLeadStateByPaneKey.delete(statusKeyForPane(paneKey))
 
     const stopped = claudeEvent(state, paneKey, {
       hook_event_name: 'SubagentStop',
@@ -93,7 +98,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
       agent_id: 'a0000000000000006',
       agent_type: 'reviewer'
     })
-    state.claudeLeadStateByPaneKey.delete(paneKey)
+    state.claudeLeadStateByPaneKey.delete(statusKeyForPane(paneKey))
 
     const stopped = claudeEvent(state, paneKey, {
       hook_event_name: 'SubagentStop',
@@ -113,7 +118,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
       agent_id: 'areviewer-6d3cb5b5',
       agent_type: 'reviewer'
     })
-    state.claudeLeadStateByPaneKey.delete(paneKey)
+    state.claudeLeadStateByPaneKey.delete(statusKeyForPane(paneKey))
 
     const idled = claudeEvent(state, paneKey, {
       hook_event_name: 'TeammateIdle',
@@ -129,7 +134,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
   it('keeps a restored teammate after its exact idle proves the live identity', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('restored-known-idle', LEAF_ID)
-    seedClaudeSubagentRosterFromSnapshots(state, paneKey, [
+    seedClaudeSubagentRosterFromSnapshots(state, statusKeyForPane(paneKey), [
       {
         id: 'areviewer-8f5dc7d7',
         state: 'working',
@@ -170,7 +175,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
       agent_id: 'areviewer-7e4cb6c6',
       agent_type: 'reviewer'
     })
-    state.claudeLeadStateByPaneKey.delete(paneKey)
+    state.claudeLeadStateByPaneKey.delete(statusKeyForPane(paneKey))
 
     const stopped = claudeEvent(state, paneKey, {
       hook_event_name: 'SubagentStop',
@@ -186,7 +191,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
   it('leaves an unrelated restored child explicitly unconfirmed after runtime work drains', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('restored-sibling-after-runtime-drain', LEAF_ID)
-    seedClaudeSubagentRosterFromSnapshots(state, paneKey, [
+    seedClaudeSubagentRosterFromSnapshots(state, statusKeyForPane(paneKey), [
       {
         id: 'a0000000000000008',
         state: 'working',
@@ -215,7 +220,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
         subagents: [expect.objectContaining({ id: 'a0000000000000008', state: 'working' })]
       }
     })
-    expect(state.claudeSubagentRosterByPaneKey.get(paneKey)).toEqual(
+    expect(state.claudeSubagentRosterByPaneKey.get(statusKeyForPane(paneKey))).toEqual(
       new Map([
         [
           'a0000000000000008',
@@ -239,7 +244,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
   it('keeps a restored sibling gated when a current lead is still working', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('restored-sibling-with-live-lead', LEAF_ID)
-    seedClaudeSubagentRosterFromSnapshots(state, paneKey, [
+    seedClaudeSubagentRosterFromSnapshots(state, statusKeyForPane(paneKey), [
       { id: 'a0000000000000010', state: 'working', startedAt: 100 }
     ])
     claudeEvent(state, paneKey, { hook_event_name: 'UserPromptSubmit', prompt: 'continue' })
@@ -262,7 +267,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
   it('keeps a legacy lead Stop unconfirmed when only a restored child gates it', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('restored-child-legacy-stop', LEAF_ID)
-    seedClaudeSubagentRosterFromSnapshots(state, paneKey, [
+    seedClaudeSubagentRosterFromSnapshots(state, statusKeyForPane(paneKey), [
       { id: 'a0000000000000012', state: 'working', startedAt: 100 }
     ])
 
@@ -280,7 +285,7 @@ describe('Claude child lifecycle events with no cached lead state', () => {
   it('does not let a truncated terminal inventory confirm a restored child', () => {
     const state = createHookListenerState()
     const paneKey = makePaneKey('restored-child-truncated-inventory', LEAF_ID)
-    seedClaudeSubagentRosterFromSnapshots(state, paneKey, [
+    seedClaudeSubagentRosterFromSnapshots(state, statusKeyForPane(paneKey), [
       { id: 'arestored', state: 'working', startedAt: 100 }
     ])
 

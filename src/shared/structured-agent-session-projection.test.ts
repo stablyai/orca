@@ -384,6 +384,12 @@ describe('structured agent session status projection', () => {
     expect(parsePaneKey(paneKey)).toMatchObject({ tabId: 'structured-agent-session-session-1' })
   })
 
+  it('fails loudly when synthetic pane identity would be unparseable', () => {
+    expect(() => structuredAgentSessionPaneKey('invalid:session')).toThrow(
+      'tabId must be non-empty and must not contain ":"'
+    )
+  })
+
   it('reads the session back out of a derived tab id, and refuses anything else', () => {
     // The key names the session, not the surface, so a reader that needs the surface has to invert
     // this rather than compare tab ids.

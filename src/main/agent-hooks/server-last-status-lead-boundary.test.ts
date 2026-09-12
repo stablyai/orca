@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { AgentHookServer, _internals } from './server'
+import { AgentHookServer, _internals, type EnrichedAgentHookEventPayload } from './server'
 import { buildBody, postHookEvent, PANE, RUNNING_SHELL } from './server.test-fixtures'
+import { agentStatusSubjectKey } from '../../shared/agent-status-subject'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -26,6 +27,15 @@ afterEach(() => {
 
 describe('Persisted Claude lead boundaries', () => {
   let userDataPath: string
+
+  function statusCacheEntry(server: AgentHookServer): EnrichedAgentHookEventPayload | undefined {
+    const subject = server.getStatusSnapshot()[0]?.subject
+    return subject
+      ? (server._getStateForTests().lastStatusByPaneKey.get(agentStatusSubjectKey(subject)) as
+          | EnrichedAgentHookEventPayload
+          | undefined)
+      : undefined
+  }
 
   beforeEach(() => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-lead-boundary-'))
@@ -98,9 +108,7 @@ describe('Persisted Claude lead boundaries', () => {
     })
     const turnCompletedAt = firstServer.getStatusSnapshot()[0]?.turnCompletedAt
     expect(turnCompletedAt).toEqual(expect.any(Number))
-    expect(firstServer._getStateForTests().lastStatusByPaneKey.get(PANE)?.hookEventName).toBe(
-      'Stop'
-    )
+    expect(statusCacheEntry(firstServer)?.hookEventName).toBe('Stop')
     firstServer.flushStatusPersistSync()
     firstServer.stop()
 
@@ -187,22 +195,16 @@ describe('Persisted Claude lead boundaries', () => {
     )
     await postHookEvent(firstServer, buildBody({ hook_event_name: 'Stop' }))
     expect(
-      (
-        firstServer._getStateForTests().lastStatusByPaneKey.get(PANE) as
-          | { claudeLeadBoundaryChildOnly?: true }
-          | undefined
-      )?.claudeLeadBoundaryChildOnly
+      (statusCacheEntry(firstServer) as { claudeLeadBoundaryChildOnly?: true } | undefined)
+        ?.claudeLeadBoundaryChildOnly
     ).toBe(true)
     await postHookEvent(
       firstServer,
       buildBody({ hook_event_name: 'SubagentStop', agent_id: 'achilda' })
     )
     expect(
-      (
-        firstServer._getStateForTests().lastStatusByPaneKey.get(PANE) as
-          | { claudeLeadBoundaryChildOnly?: true }
-          | undefined
-      )?.claudeLeadBoundaryChildOnly
+      (statusCacheEntry(firstServer) as { claudeLeadBoundaryChildOnly?: true } | undefined)
+        ?.claudeLeadBoundaryChildOnly
     ).toBe(true)
     firstServer.flushStatusPersistSync()
     firstServer.stop()
@@ -254,11 +256,8 @@ describe('Persisted Claude lead boundaries', () => {
     )
     expect(firstServer.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
     expect(
-      (
-        firstServer._getStateForTests().lastStatusByPaneKey.get(PANE) as
-          | { claudeLeadBoundaryChildOnly?: true }
-          | undefined
-      )?.claudeLeadBoundaryChildOnly
+      (statusCacheEntry(firstServer) as { claudeLeadBoundaryChildOnly?: true } | undefined)
+        ?.claudeLeadBoundaryChildOnly
     ).toBeUndefined()
     await postHookEvent(
       firstServer,
@@ -350,22 +349,16 @@ describe('Persisted Claude lead boundaries', () => {
     )
     expect(firstServer.getStatusSnapshot()[0]).toMatchObject({ state: 'waiting', toolName: 'Bash' })
     expect(
-      (
-        firstServer._getStateForTests().lastStatusByPaneKey.get(PANE) as
-          | { claudeLeadBoundaryChildOnly?: true }
-          | undefined
-      )?.claudeLeadBoundaryChildOnly
+      (statusCacheEntry(firstServer) as { claudeLeadBoundaryChildOnly?: true } | undefined)
+        ?.claudeLeadBoundaryChildOnly
     ).toBeUndefined()
     await postHookEvent(
       firstServer,
       buildBody({ hook_event_name: 'SubagentStop', agent_id: 'achilda' })
     )
     expect(
-      (
-        firstServer._getStateForTests().lastStatusByPaneKey.get(PANE) as
-          | { claudeLeadBoundaryChildOnly?: true }
-          | undefined
-      )?.claudeLeadBoundaryChildOnly
+      (statusCacheEntry(firstServer) as { claudeLeadBoundaryChildOnly?: true } | undefined)
+        ?.claudeLeadBoundaryChildOnly
     ).toBeUndefined()
     firstServer.flushStatusPersistSync()
     firstServer.stop()
