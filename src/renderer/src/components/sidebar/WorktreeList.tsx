@@ -160,6 +160,7 @@ const WorktreeList = React.memo(function WorktreeList({
     repoMap,
     worktreeMap,
     worktreeLineageById,
+    workspaceLineageByChildKey,
     prCache,
     settings,
     workspaceStatuses,

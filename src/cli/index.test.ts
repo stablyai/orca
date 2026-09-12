@@ -561,7 +561,15 @@ describe('orca root help', () => {
 
     const setHelp = String(logSpy.mock.calls[0][0])
     expect(setHelp).not.toContain('--parent-workspace')
-    expect(setHelp).not.toContain('folder:<id>')
+    // Why: `worktree set` now accepts a folder workspace as --parent-worktree, but
+    // --worktree itself still names a git worktree only.
+    const setHelpLines = setHelp.split('\n')
+    expect(setHelpLines.find((line) => line.trim().startsWith('--parent-worktree'))).toContain(
+      'folder:<id>'
+    )
+    expect(setHelpLines.find((line) => line.trim().startsWith('--worktree'))).not.toContain(
+      'folder:<id>'
+    )
     expect(formatFlagHelp('parent-worktree')).toContain('identity:<identity>')
     expect(setHelp).not.toContain('worktree:<id>')
     expect(callMock).not.toHaveBeenCalled()
