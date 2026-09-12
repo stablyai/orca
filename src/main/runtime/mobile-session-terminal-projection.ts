@@ -36,6 +36,9 @@ export function buildHeadlessMobileSessionTerminalTabs(
             parentTabId: tab.id,
             leafId,
             title,
+            // Why: the persisted manual rename must reach clients even when a live
+            // OSC/agent title would otherwise mask it in the projection chain.
+            ...(tab.customTitle ? { customTitle: tab.customTitle } : {}),
             ...(ptyId ? { ptyId } : {}),
             ...(tab.startupCwd ? { startupCwd: tab.startupCwd } : {}),
             ...(tab.launchAgent ? { launchAgent: tab.launchAgent } : {}),

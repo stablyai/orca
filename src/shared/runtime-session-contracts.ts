@@ -131,6 +131,8 @@ export type RuntimeSyncedTab = {
   tabId: string
   worktreeId: string
   title: string | null
+  /** Persisted manual rename mirrored into the graph sync (optional for wire compat). */
+  customTitle?: string | null
   activeLeafId: string | null
   layout: TerminalPaneLayoutNode | null
 }
