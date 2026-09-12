@@ -72,7 +72,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
       // character (one throwaway string per char) is pure waste — compute it here. On a large
       // doc this drops O(n) suffix allocations from the rich-editor open path (#7056).
       const lineRest = normalizedContent.slice(index)
-      const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
+      const fenceMatch = lineRest.match(/^[ \t]*(`{3,}|~{3,})/)
       if (fenceMatch) {
         const fenceChar = fenceMatch[1][0] as '`' | '~'
         const fenceLength = fenceMatch[1].length
@@ -82,6 +82,14 @@ export function encodeRawMarkdownHtmlForRichEditor(
         } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
           activeFence = null
           activeFenceLength = 0
+          // Consume the entire closing fence line so the inline-code-span
+          // branch can't treat these backticks as a span opener that bridges
+          // into the next fence and skips its line-start inspection (#13307).
+          const lineEnd = findLineEnd(normalizedContent, index)
+          result += normalizedContent.slice(index, lineEnd)
+          index = lineEnd
+          isLineStart = true
+          continue
         }
       }
     }
