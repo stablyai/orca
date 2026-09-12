@@ -2907,10 +2907,10 @@ export class PtyHandler {
       if (this.ptys.has(entry.id) || this.pendingReviveIds.has(entry.id)) {
         continue
       }
-      // Only re-attach if the original process is still alive
-      try {
-        process.kill(entry.pid, 0)
-      } catch {
+      // Only re-attach if the host proves the original process is still there. `isProcessAlive`
+      // is ESRCH-only for the same reason `reapPtyProvenExited` is: a refusal this host cannot
+      // resolve is unverifiable, not absence (docs/reference/ssh-execution-boundary.md).
+      if (!Number.isInteger(entry.pid) || entry.pid <= 0 || !isProcessAlive(entry.pid)) {
         continue
       }
       const ownedPath = entry.worktreeId

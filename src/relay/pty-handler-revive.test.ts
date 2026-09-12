@@ -518,6 +518,37 @@ describe('PtyHandler', () => {
     expect(JSON.parse(live).map((entry: { id: string }) => entry.id)).toEqual(['pty-21'])
   })
 
+  // Why: the pid gate is the one place revive turns an observation into "this pane is
+  // finished". `kill(pid, 0)` answers EPERM when the process exists under another uid, and
+  // the same ESRCH-only rule `reapPtyProvenExited` applies has to hold here
+  // (docs/reference/ssh-execution-boundary.md).
+  it('keeps a pane whose pid refuses the probe and drops only a proven-gone one', async () => {
+    const state = JSON.stringify([
+      { id: 'pty-30', pid: 424242, cols: 80, rows: 24, cwd: LIVE_CWD },
+      { id: 'pty-31', pid: 434343, cols: 80, rows: 24, cwd: LIVE_CWD }
+    ])
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((pid) => {
+      if (pid === 424242) {
+        throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' })
+      }
+      if (pid === 434343) {
+        throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })
+      }
+      return true
+    })
+    try {
+      await dispatcher.callRequest('pty.revive', { state })
+    } finally {
+      killSpy.mockRestore()
+    }
+
+    expect(mockPtySpawn).toHaveBeenCalledTimes(1)
+    const live = (await dispatcher.callRequest('pty.serialize', {
+      ids: ['pty-30', 'pty-31']
+    })) as string
+    expect(JSON.parse(live).map((entry: { id: string }) => entry.id)).toEqual(['pty-30'])
+  })
+
   describe('a Windows relay reviving a WSL pane', () => {
     const worktreeId = 'r::/remote/wsl-worktree'
     const historyFile = join(
