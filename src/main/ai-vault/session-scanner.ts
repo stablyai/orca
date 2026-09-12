@@ -1,3 +1,4 @@
+import { CodexSessionAccumulator } from './codex-session-accumulator'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -212,6 +213,7 @@ async function parseSessionCandidates(args: {
   antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
 }): Promise<AiVaultSession[]> {
   const sessions: AiVaultSession[] = []
+  const unlimited = Number.isFinite(args.limit) ? null : new CodexSessionAccumulator()
   let index = 0
 
   while (index < args.candidates.length) {
@@ -241,11 +243,15 @@ async function parseSessionCandidates(args: {
         recordSessionScanIssue(args.issues, result.issue)
       }
       if (result.session) {
-        sessions.push(result.session)
+        if (unlimited) {
+          unlimited.add(result.session)
+        } else {
+          sessions.push(result.session)
+        }
       }
     }
 
-    // Unlimited scans deduplicate once at the result boundary; only capped scans need a running count.
+    // Capped scans need the current unique count; unlimited scans retain only canonical rows.
     if (Number.isFinite(args.limit)) {
       const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
       sessions.splice(0, sessions.length, ...uniqueSessions)
@@ -257,7 +263,7 @@ async function parseSessionCandidates(args: {
   // An abort can land while the final batch settles; observe it here so a
   // partial parse is never cached or returned as a complete scan.
   throwIfAiVaultScanCancelled(args.signal)
-  return sessions
+  return unlimited?.sessions() ?? sessions
 }
 
 async function parseSessionCandidate(

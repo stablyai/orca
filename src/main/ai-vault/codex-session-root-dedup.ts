@@ -252,7 +252,7 @@ export function dedupeCodexSessionsBySessionId(
   })
 }
 
-function codexSessionAliasKey(session: AiVaultSession): string | null {
+export function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (session.agent !== 'codex') {
     return null
   }
@@ -263,7 +263,7 @@ function codexSessionAliasKey(session: AiVaultSession): string | null {
   return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
 }
 
-function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
+export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
   const candidateRank = codexSessionRootRank(candidate.codexHome)
   const bestRank = codexSessionRootRank(best.codexHome)
   if (candidateRank !== bestRank) {

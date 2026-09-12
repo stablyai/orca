@@ -47,6 +47,7 @@ vi.mock('./codex-session-root-dedup', async (original) => {
 import { scanAiVaultSessions } from './session-scanner'
 import { scanRemoteAiVaultSessions } from './remote-session-scanner'
 import { dedupeCodexSessionsBySessionId } from './codex-session-root-dedup'
+import { CodexSessionAccumulator } from './codex-session-accumulator'
 
 function candidates() {
   return fixture.sessions.map((session) => ({
@@ -144,3 +145,45 @@ for (const host of ['local', 'remote'] as const) {
     expect(new Set(result.sessions.map((row) => row.sessionId)).size).toBe(10)
   })
 }
+
+it('incremental canonical selection preserves winner occurrence order, ties and repeated references', () => {
+  const accumulator = new CodexSessionAccumulator()
+  const same = session(0)
+  const rows: AiVaultSession[] = []
+  const variants: AiVaultSession[] = [
+    same,
+    same,
+    { ...same, codexHome: '/custom', filePath: '/custom/rollout-0.jsonl' },
+    { ...same, agent: 'claude' as const },
+    { ...same, executionHostId: 'ssh:fixture' },
+    { ...same, modifiedAt: '2026-02-01T00:00:00.000Z' },
+    { ...same, filePath: '/aaa/rollout-0.jsonl' },
+    session(1)
+  ]
+  let seed = 42
+  for (let index = 0; index < 500; index++) {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    const row = variants[seed % variants.length]!
+    rows.push(row)
+    accumulator.add(row)
+    expect(accumulator.sessions()).toEqual(dedupeCodexSessionsBySessionId(rows))
+  }
+})
+
+it('retains only canonical rows during duplicate-heavy load-all scans', () => {
+  const accumulator = new CodexSessionAccumulator()
+  for (let index = 0; index < 10000; index++) {
+    const row = session(index % 100)
+    accumulator.add({
+      ...row,
+      codexHome: '/custom',
+      filePath: `/custom/rollout-${index % 100}.jsonl`
+    })
+    expect(accumulator.size).toBeLessThanOrEqual(100)
+  }
+  for (let index = 0; index < 100; index++) {
+    accumulator.add(session(index))
+  }
+  expect(accumulator.size).toBe(100)
+  expect(accumulator.sessions().every((row) => row.codexHome === null)).toBe(true)
+})
