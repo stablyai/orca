@@ -59,9 +59,22 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
  *   - whether a registered suite EXECUTES. Registration is what is asserted. A
  *     suite gated on win32 plus an env var stays skipped on the CI runner even
  *     when registered -- see MANUAL_OPT_IN -- and a path registered but gated
- *     for another platform is not caught either.
+ *     for another platform is not caught either. Measured 2026-09: nothing in
+ *     `.github/` or `config/` sets any `ORCA_REAL_WSL_*` variable, so all four
+ *     `*.wsl.test.ts` suites ran on no machine until someone exported them by
+ *     hand. They pass; that was not knowable from the board.
+ *   - that an env-var gate can be OPENED. These are compared with `===`, and
+ *     `set VAR=1 && cmd` in cmd.exe stores `"1 "` -- trailing space, gate shut,
+ *     suite reports "skipped" exactly as it does when you never set it. Prefer
+ *     `set "VAR=1"`, and prefer a gate whose closed state is distinguishable
+ *     from its unset state. A gate nobody can open is a gate nobody is running.
  *   - whether the `package_windows` job is triggered for a given diff, or
- *     whether the registered test asserts anything worth running.
+ *     whether the registered test asserts anything worth running. The second
+ *     half is not hypothetical: `local-worktree-filesystem-wsl-banner.wsl.test.ts`
+ *     was registered, opt-in, green -- and could not fail, because its contrast
+ *     row used `endsWith` and the banner it contrasts against is conditional on
+ *     distro user state. Registered, triggered and unable to fail are three
+ *     separate ways to be invisible.
  *
  * Growth of the two grandfathered lists is capped by literals, but only review
  * stops someone raising a cap. The caps make that an explicit, visible edit.

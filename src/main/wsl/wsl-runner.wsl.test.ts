@@ -11,6 +11,18 @@ import { resolveWslExecutablePath } from './wsl-executable-path'
  * Gated behind an env var and win32 because it mutates the distro's `~/.profile`
  * to reproduce #14288. Run with:
  *   ORCA_REAL_WSL_RUNNER_TEST=1 pnpm vitest run src/main/wsl/wsl-runner.wsl.test.ts
+ *
+ * DO NOT run this against a distro you share. The teardown below works, but it
+ * has no margin, and all three of its failure modes land on a real user:
+ *   - the appended `sleep 60` is in `$HOME/.profile` for the duration, so any
+ *     login shell started in that window stalls a minute;
+ *   - an aborted run (crash, timeout, Ctrl-C) never reaches `afterAll`, and the
+ *     stall becomes permanent;
+ *   - the backup is `cp … || true` to a FIXED path, so if it fails, or a stale
+ *     copy from an earlier abort is present, teardown's `|| rm -f "$HOME/.profile"`
+ *     deletes or reverts the user's profile.
+ * Verified by hashing `$HOME/.profile` either side of a run, which is the check
+ * to repeat if you must run it somewhere shared -- do not assume the restore.
  */
 const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
 const enabled = process.platform === 'win32' && process.env.ORCA_REAL_WSL_RUNNER_TEST === '1'
