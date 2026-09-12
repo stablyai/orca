@@ -1,3 +1,4 @@
+import { CodexSessionAccumulator } from './codex-session-accumulator'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -140,6 +141,7 @@ async function parseRemoteSessionCandidates(args: {
   limit: number
 }): Promise<{ sessions: AiVaultSession[]; parsedFilePaths: Set<string> }> {
   const sessions: AiVaultSession[] = []
+  const unlimited = Number.isFinite(args.limit) ? null : new CodexSessionAccumulator()
   const parsedFilePaths = new Set<string>()
   let index = 0
 
@@ -159,9 +161,18 @@ async function parseRemoteSessionCandidates(args: {
     const results = await Promise.all(
       batch.map((candidate) => parseRemoteSessionCandidate(candidate, args.context, args.issues))
     )
-    sessions.push(...results.filter(isAiVaultSession))
-    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
-    sessions.splice(0, sessions.length, ...uniqueSessions)
+    for (const session of results.filter(isAiVaultSession)) {
+      if (unlimited) {
+        unlimited.add(session)
+      } else {
+        sessions.push(session)
+      }
+    }
+    // Capped scans need the current unique count; unlimited scans retain only canonical rows.
+    if (Number.isFinite(args.limit)) {
+      const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
+      sessions.splice(0, sessions.length, ...uniqueSessions)
+    }
     index += batchSize
     await yieldToEventLoop()
   }
@@ -169,7 +180,7 @@ async function parseRemoteSessionCandidates(args: {
   // The loop can terminate on the yield after its final batch, so re-check
   // rather than letting a cancelled scan return a partial parse as a success.
   throwIfAiVaultScanCancelled(args.context.signal)
-  return { sessions, parsedFilePaths }
+  return { sessions: unlimited?.sessions() ?? sessions, parsedFilePaths }
 }
 
 async function scanRemoteInScopeSessions(args: {
