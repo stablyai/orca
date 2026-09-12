@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
 import { PlaneConnectDialog } from '@/components/plane-connect-dialog'
 import { PlaneIcon } from '@/components/icons/PlaneIcon'
@@ -27,6 +27,12 @@ export function PlaneIntegrationCard(): React.JSX.Element {
   const workspaceCount = workspaces.length
   const activeWorkspace = workspaces.find((w) => w.slug === planeStatus.activeWorkspaceSlug)
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
+
+  useEffect(() => {
+    if (!planeStatusChecked) {
+      void checkPlaneConnection()
+    }
+  }, [planeStatusChecked, checkPlaneConnection])
 
   const handleDisconnect = async (): Promise<void> => {
     await disconnectPlane()
@@ -66,14 +72,34 @@ export function PlaneIntegrationCard(): React.JSX.Element {
         connected
           ? activeWorkspace
             ? `${activeWorkspace.name} (${activeWorkspace.slug})`
-            : `${workspaceCount} workspace${workspaceCount === 1 ? '' : 's'} connected`
+            : translate(
+                'auto.components.settings.task.tracker.integration.cards.e1f5e6424c',
+                '{{value0}} workspace{{value1}} connected',
+                { value0: workspaceCount, value1: workspaceCount === 1 ? '' : 's' }
+              )
           : checking
-            ? translate('common.checking', 'Checking...')
-            : 'Connect Plane Cloud or a self-hosted instance using an API token.'
+            ? translate(
+                'auto.components.settings.task.tracker.integration.cards.checkingPlane',
+                'Checking Plane access before showing setup actions.'
+              )
+            : translate(
+                'auto.components.settings.task.tracker.integration.cards.addPlaneAccess',
+                'Connect Plane Cloud or a self-hosted instance using an API token.'
+              )
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={connected ? 'Connected' : 'Not connected'}
+      statusLabel={
+        connected
+          ? translate(
+              'auto.components.settings.task.tracker.integration.cards.statusConnected',
+              'Connected'
+            )
+          : translate(
+              'auto.components.settings.task.tracker.integration.cards.statusNotConnected',
+              'Not connected'
+            )
+      }
       actions={
         connected ? (
           <Button
@@ -123,10 +149,16 @@ export function PlaneIntegrationCard(): React.JSX.Element {
                 {testing ? (
                   <>
                     <LoaderCircle className="mr-1 size-3 animate-spin" />
-                    Testing...
+                    {translate(
+                      'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
+                      'Testing...'
+                    )}
                   </>
                 ) : (
-                  'Test connection'
+                  translate(
+                    'auto.components.settings.task.tracker.integration.cards.c24e56c532',
+                    'Test'
+                  )
                 )}
               </Button>
             </div>
@@ -141,12 +173,19 @@ export function PlaneIntegrationCard(): React.JSX.Element {
               {testResult.ok ? (
                 <>
                   <CheckCircle2 className="size-3.5" />
-                  Connection successful
+                  {translate(
+                    'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
+                    'Verified'
+                  )}
                 </>
               ) : (
                 <>
                   <AlertCircle className="size-3.5" />
-                  {testResult.error || 'Connection failed'}
+                  {testResult.error ||
+                    translate(
+                      'auto.components.settings.plane.connectionFailed',
+                      'Connection failed'
+                    )}
                 </>
               )}
             </div>
@@ -159,7 +198,10 @@ export function PlaneIntegrationCard(): React.JSX.Element {
           )}
 
           <div className="text-[11px] text-muted-foreground">
-            Browse issues and open worktrees with ticket context directly from Plane Cloud or your self-hosted instance.
+            {translate(
+              'auto.components.settings.plane.cardFooter',
+              'Browse issues and open worktrees with ticket context directly from Plane Cloud or your self-hosted instance.'
+            )}
           </div>
         </div>
       </IntegrationCardDetails>
