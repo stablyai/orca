@@ -13,11 +13,7 @@ import {
   parseOrcadSnapshotRestore,
   restoreOrcadStateSnapshotCommand
 } from './orcad-state-snapshot'
-import {
-  orcadStopFreedTheHost,
-  parseOrcadStopOutcome,
-  stopOrcadCommand
-} from './orcad-remote-process-control'
+import { orcadStopFreedTheHost } from './orcad-remote-process-control'
 import { joinRemotePath } from './ssh-remote-platform'
 import type { OrcadActivationLockControl } from './orcad-activation-lock'
 import { readRemoteOrcadBuildHash } from './orcad-remote-build-hash'
@@ -25,7 +21,7 @@ import { resolveOrcadSlotNodeFallback } from './orcad-slot-runtime-eligibility'
 import {
   exec,
   launchAndGate,
-  STOP_WAIT_SECONDS,
+  stopOrcadSlot,
   withoutAbortSignal
 } from './orcad-remote-runtime-control'
 
@@ -168,14 +164,9 @@ export async function stopFailedTargetAndRecoverActive(
   active: ActiveRuntimeIdentity,
   rescue: RollbackRescueSnapshot
 ): Promise<{ code?: string; reason: string }> {
-  let stoppedTarget: ReturnType<typeof parseOrcadStopOutcome>
+  let stoppedTarget: Awaited<ReturnType<typeof stopOrcadSlot>>
   try {
-    stoppedTarget = parseOrcadStopOutcome(
-      await exec(
-        withoutAbortSignal(options),
-        stopOrcadCommand(options.host, target.remoteDir, { waitSeconds: STOP_WAIT_SECONDS })
-      )
-    )
+    stoppedTarget = await stopOrcadSlot(withoutAbortSignal(options), target.remoteDir)
   } catch (error) {
     lock.retain()
     return {

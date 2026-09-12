@@ -13,11 +13,7 @@ import {
   probeOrcadStateSnapshotCommand,
   restoreOrcadStateSnapshotCommand
 } from './orcad-state-snapshot'
-import {
-  orcadStopFreedTheHost,
-  parseOrcadStopOutcome,
-  stopOrcadCommand
-} from './orcad-remote-process-control'
+import { orcadStopFreedTheHost } from './orcad-remote-process-control'
 import { writeOrcadActivationRecord } from './orcad-activation-record-store'
 import { joinRemotePath } from './ssh-remote-platform'
 import type { OrcadActivationLockControl } from './orcad-activation-lock'
@@ -28,7 +24,12 @@ import {
   type OrcadRollbackTransaction
 } from './orcad-activation-transaction'
 import { writeOrcadActivationTransaction } from './orcad-activation-transaction-store'
-import { exec, launchAndGate, STOP_WAIT_SECONDS } from './orcad-remote-runtime-control'
+import {
+  exec,
+  launchAndGate,
+  STOP_WAIT_SECONDS,
+  stopOrcadSlot
+} from './orcad-remote-runtime-control'
 import {
   snapshotDirPath,
   readStateWritesSinceActivation,
@@ -116,12 +117,7 @@ export async function rollbackLocked(
   await writeOrcadActivationTransaction(options, transaction)
   lock.retainOnError()
 
-  const stopped = parseOrcadStopOutcome(
-    await exec(
-      options,
-      stopOrcadCommand(options.host, activeIdentity.remoteDir, { waitSeconds: STOP_WAIT_SECONDS })
-    )
-  )
+  const stopped = await stopOrcadSlot(options, activeIdentity.remoteDir)
   if (!orcadStopFreedTheHost(stopped)) {
     return {
       outcome: 'failed',

@@ -96,7 +96,6 @@ export function installOrcadDelegatedRecovery(options: {
       return
     }
     const identity = Object.freeze({ ...destination.identity })
-    let initialized = false
     let initializing: Promise<void> | undefined
     const trackedDestination: TrackedDestination = {
       ...destination,
@@ -124,7 +123,7 @@ export function installOrcadDelegatedRecovery(options: {
       initializeModel: async (signal) => {
         controller.signal.throwIfAborted()
         signal.throwIfAborted()
-        if (initialized) {
+        if (initializedModels.has(identity.bridgeId)) {
           return
         }
         initializing ??= Promise.resolve()
@@ -134,7 +133,6 @@ export function installOrcadDelegatedRecovery(options: {
             await options.initializeModel(identity, signal)
             controller.signal.throwIfAborted()
             signal.throwIfAborted()
-            initialized = true
             initializedModels.add(identity.bridgeId)
             initializationErrors.delete(identity.bridgeId)
           })

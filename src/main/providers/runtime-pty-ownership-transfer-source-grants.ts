@@ -41,7 +41,6 @@ export class RuntimePtyOwnershipTransferSourceGrants {
       clientId: number
       transportGeneration: number
       pairedDeviceId: string
-      issuedAt: number
       expiresAt: number
     }>
   >()
@@ -165,9 +164,6 @@ export class RuntimePtyOwnershipTransferSourceGrants {
     if (!source) {
       throw new Error('pty_ownership_transfer_source_authority_unavailable')
     }
-    if (this.runtimeId !== undefined && request.destinationRuntimeId === this.runtimeId) {
-      throw new Error('pty_ownership_transfer_source_self_target')
-    }
     const identity = Object.freeze({
       bridgeId: derivePairedGrantBridgeId(
         source,
@@ -204,7 +200,6 @@ export class RuntimePtyOwnershipTransferSourceGrants {
         clientId: binding.clientId,
         transportGeneration: binding.transportGeneration!,
         pairedDeviceId: binding.pairedDeviceId,
-        issuedAt,
         expiresAt: issuedAt + this.grantTtlMs
       })
     )

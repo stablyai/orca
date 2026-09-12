@@ -285,18 +285,46 @@ describe('PtyOwnershipTransferDestinationAdapter', () => {
     )
   })
 
-  it('rejects an identity change during recovery', () => {
+  it.each([
+    { bridgeId: 'other' },
+    { terminalId: 'other' },
+    { incarnationId: 'other' },
+    { ownerLease: 'other' },
+    { sourceOwnerGeneration: 4 },
+    { destinationRuntimeId: 'other' }
+  ])('rejects an identity change during recovery: %j', (change) => {
     const { store } = createStore()
     const adapter = createAdapter(store)
     adapter.prepare(prepareResult)
-    expect(() =>
+    const accept = () =>
       adapter.acceptReplay({
         ...prepareResult,
-        ownerLease: 'other-lease',
+        ...change,
         frames,
         sourceOutputEndSeq: 2
       })
-    ).toThrow(PtyOwnershipTransferDestinationError)
+    expect(accept).toThrow(PtyOwnershipTransferDestinationError)
+    expect(accept).toThrow(expect.objectContaining({ reason: 'identity-mismatch' }))
+  })
+
+  it.each([
+    { receiptId: 'other' },
+    { bridgeId: 'other' },
+    { acceptedSourceEndSeq: 3 },
+    { committedAt: '2026-08-30T12:01:01.000Z' }
+  ])('rejects every changed durable commit receipt field: %j', (change) => {
+    const { store, calls } = createStore()
+    const adapter = createAdapter(store)
+    adapter.prepare(prepareResult)
+    for (const frame of frames) {
+      adapter.acceptReplayFrame(frame)
+    }
+    adapter.commit(commitReceipt)
+    expect(adapter.commit({ ...commitReceipt }).phase).toBe('committed')
+    expect(() => adapter.commit({ ...commitReceipt, ...change })).toThrow(
+      expect.objectContaining({ reason: 'receipt-invalid' })
+    )
+    expect(calls.filter((call) => call === 'commit')).toHaveLength(1)
   })
 
   it('accepts only the newest in-process attachment generation', () => {

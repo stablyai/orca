@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  assertPtyOwnershipTransferIdentity,
   normalizePtyOwnershipTransferJournals,
   parsePtyOwnershipTransferJournal
 } from './pty-ownership-transfer-journal'
@@ -236,8 +237,10 @@ describe('PTY ownership transfer journal contract', () => {
         value: undefined,
         writable: true
       })
-      expect(normalizePtyOwnershipTransferJournals([valid])).toEqual([
-        expect.objectContaining({ bridgeId: 'bridge-1' })
+      const input = Object.freeze([valid, { ...valid, bridgeId: 'bridge-2' }])
+      expect(normalizePtyOwnershipTransferJournals(input)).toEqual([
+        expect.objectContaining({ bridgeId: 'bridge-1' }),
+        expect.objectContaining({ bridgeId: 'bridge-2' })
       ])
     } finally {
       if (descriptor) {
@@ -246,5 +249,26 @@ describe('PTY ownership transfer journal contract', () => {
         delete prototype.toReversed
       }
     }
+  })
+
+  it.each([
+    { bridgeId: 'other' },
+    { terminalId: 'other' },
+    { incarnationId: 'other' },
+    { ownerLease: 'other' },
+    { sourceOwnerGeneration: 4 },
+    { destinationRuntimeId: 'other' }
+  ])('rejects every changed journal identity field: %j', (change) => {
+    const journal = parsePtyOwnershipTransferJournal({
+      ...base,
+      side: 'source',
+      phase: 'prepared',
+      sourceOutputEndSeq: 0,
+      destinationOutputEndSeq: 0
+    })
+    expect(() => assertPtyOwnershipTransferIdentity(journal, base)).not.toThrow()
+    expect(() => assertPtyOwnershipTransferIdentity(journal, { ...base, ...change })).toThrow(
+      'pty_ownership_transfer_identity_conflict'
+    )
   })
 })

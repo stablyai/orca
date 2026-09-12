@@ -12,10 +12,7 @@ import { OrcadDelegatedTransferClient } from './orcad-delegated-transfer-client'
 import { reconcileOrcadInitialModelBaseline } from './orcad-delegated-initial-model-ack'
 import { installOrcadDelegatedOutputReceiver } from './orcad-delegated-output-receiver'
 import { createOrcadDelegatedPtyOperations } from './orcad-delegated-pty-operations'
-import {
-  createOrcadDelegatedProviderAdapters,
-  createOrcadDelegatedProviderInput
-} from './orcad-delegated-provider-adapters'
+import { createOrcadDelegatedProviderAdapters } from './orcad-delegated-provider-adapters'
 import { createOrcadDelegatedExecutionRefresh } from './orcad-delegated-execution-refresh'
 import { createOrcadDelegatedExitDelivery } from './orcad-delegated-exit-delivery'
 import { createOrcadDelegatedExecutionState } from './orcad-delegated-execution-state'
@@ -40,7 +37,7 @@ export async function connectOrcadDelegatedTransfer(options: OrcadDelegatedConne
   let disposed = false
   let multiplexer: SshChannelMultiplexer | undefined
   let receiver: ReturnType<typeof installOrcadDelegatedOutputReceiver> | undefined
-  let providerInput: ReturnType<typeof createOrcadDelegatedProviderInput> | undefined
+  let providerAdapters: ReturnType<typeof createOrcadDelegatedProviderAdapters> | undefined
   let executionRefresh: ReturnType<typeof createOrcadDelegatedExecutionRefresh> | undefined
   let executionState: ReturnType<typeof createOrcadDelegatedExecutionState> | undefined
   let finalOutputSeq: number | undefined
@@ -59,7 +56,7 @@ export async function connectOrcadDelegatedTransfer(options: OrcadDelegatedConne
     removeDispose()
     stopping = Promise.all([
       receiver?.dispose(),
-      providerInput?.whenIdle(),
+      providerAdapters?.providerInput.whenIdle(),
       executionRefresh?.dispose()
     ]).then(() => undefined)
     executionState?.disconnect()
@@ -276,16 +273,15 @@ export async function connectOrcadDelegatedTransfer(options: OrcadDelegatedConne
       isActive: active,
       isCommitReconciled: reconciliation.isReconciled
     })
-    providerInput = createOrcadDelegatedProviderInput({ ...options, identity }, operations, active)
+    providerAdapters = createOrcadDelegatedProviderAdapters(
+      { ...options, identity },
+      operations,
+      active
+    )
     return {
       onExit: providerExits.onExit,
       operations,
-      ...createOrcadDelegatedProviderAdapters(
-        { ...options, identity },
-        operations,
-        providerInput,
-        active
-      ),
+      ...providerAdapters,
       client,
       multiplexer: transport,
       proof,

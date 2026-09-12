@@ -86,4 +86,27 @@ describe('PtyOwnershipTransferDestinationOutputAdmission', () => {
       'pty_ownership_transfer_output_admission_backpressure'
     )
   })
+
+  it.each([1, 2, 3])('rejects only the failed suffix at frame %s', async (failedSeq) => {
+    const admission = new PtyOwnershipTransferDestinationOutputAdmission()
+    const pending = [1, 2, 3].map((seq) => admission.defer(identity, { seq, data: String(seq) }))
+    const failure = new Error('destination-failed')
+    const accept = vi.fn((frame: { seq: number }) => {
+      if (frame.seq === failedSeq) {
+        throw failure
+      }
+    })
+
+    admission.settle(identity, accept)
+
+    expect(accept.mock.calls.map(([frame]) => frame.seq)).toEqual([1, 2, 3].slice(0, failedSeq))
+    const settled = await Promise.allSettled(pending)
+    expect(settled).toEqual(
+      [1, 2, 3].map((seq) =>
+        seq < failedSeq
+          ? { status: 'fulfilled', value: undefined }
+          : { status: 'rejected', reason: failure }
+      )
+    )
+  })
 })

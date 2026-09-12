@@ -5,26 +5,18 @@ import { OrcadDelegatedProviderAttachment } from './orcad-delegated-provider-att
 import { OrcadDelegatedProviderInspection } from './orcad-delegated-provider-inspection'
 import { OrcadDelegatedProviderControls } from './orcad-delegated-provider-controls'
 
-export function createOrcadDelegatedProviderInput(
+export function createOrcadDelegatedProviderAdapters(
   options: OrcadDelegatedConnectionOptions,
   operations: ReturnType<typeof createOrcadDelegatedPtyOperations>,
   isActive: () => boolean
 ) {
-  return new OrcadDelegatedProviderInput({
+  const providerInput = new OrcadDelegatedProviderInput({
     ptyId: options.identity.terminalId,
     operations,
     readInputs: () => options.store.input.loadDelegated(options.identity),
     isActive,
     onError: options.onError
   })
-}
-
-export function createOrcadDelegatedProviderAdapters(
-  options: OrcadDelegatedConnectionOptions,
-  operations: ReturnType<typeof createOrcadDelegatedPtyOperations>,
-  providerInput: OrcadDelegatedProviderInput,
-  active: () => boolean
-) {
   return {
     providerInput,
     providerAttachment: options.providerModel
@@ -32,7 +24,7 @@ export function createOrcadDelegatedProviderAdapters(
           ptyId: options.identity.terminalId,
           input: providerInput,
           operations,
-          isActive: active,
+          isActive,
           getSnapshot: options.providerModel.snapshot,
           getModelSequence: options.providerModel.sequence
         })

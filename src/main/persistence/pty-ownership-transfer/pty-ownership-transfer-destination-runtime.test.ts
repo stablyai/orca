@@ -298,7 +298,15 @@ describe('PtyOwnershipTransferDestinationRuntimeRegistry', () => {
         ...checkpoint,
         identity: { ...identity, incarnationId: 'stale-incarnation' }
       })
-    ).toThrow('pty_ownership_transfer_model_checkpoint_conflict')
+    ).toThrow('orcad_terminal_layout_reservation_identity_conflict')
+    expect(ref && store.readTerminalScrollbackSnapshot(ref)).toBe(checkpoint.modelData)
+
+    store.getWorkspaceSession().terminalLayoutsByTabId[surfaceBinding.tabId].buffersByLeafId = {
+      [leafId]: 'unrelated local output'
+    }
+    expect(() => store.checkpointPtyOwnershipTransferTerminalModel(checkpoint)).toThrow(
+      'pty_ownership_transfer_model_checkpoint_conflict'
+    )
     expect(ref && store.readTerminalScrollbackSnapshot(ref)).toBe(checkpoint.modelData)
   })
 

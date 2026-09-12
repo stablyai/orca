@@ -62,9 +62,16 @@ describe('orcad decommission adapter', () => {
       transactionId,
       '0.2.0+new',
       undefined,
-      'validated-transaction'
+      'validated-transaction',
+      undefined
     )
-    expect(validateTransaction).toHaveBeenCalledWith(transactionId, '0.2.0+new')
+    expect(validateTransaction).toHaveBeenCalledWith(
+      transactionId,
+      '0.2.0+new',
+      undefined,
+      undefined,
+      undefined
+    )
     expect(validateTransaction.mock.invocationCallOrder[0]).toBeLessThan(
       adapter.mock.invocationCallOrder[0]
     )

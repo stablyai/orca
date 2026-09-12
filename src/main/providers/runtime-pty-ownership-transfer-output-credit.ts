@@ -14,8 +14,6 @@ export class RuntimePtyOwnershipTransferOutputCredit {
   private readonly outputAcknowledgements = new Map<
     string,
     {
-      identity: PtyOwnershipTransferWireIdentity
-      attachmentId: string
       binding: RuntimePtyOwnershipTransferAttachmentBinding
       acknowledge: (throughSeq: number) => void
     }
@@ -58,8 +56,6 @@ export class RuntimePtyOwnershipTransferOutputCredit {
       }
     }
     const registration = {
-      identity: Object.freeze({ ...identity }),
-      attachmentId,
       binding,
       acknowledge
     }

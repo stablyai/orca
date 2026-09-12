@@ -2,13 +2,13 @@ import type {
   PtyOwnershipTransferOutputFrame,
   PtyOwnershipTransferWireIdentity
 } from '../../../shared/pty-ownership-transfer-wire'
+import { samePtyOwnershipTransferIdentity } from '../../../shared/pty-ownership-transfer-identity'
 import {
   PTY_OWNERSHIP_TRANSFER_OUTPUT_OUTBOX_MAX_BYTES,
   PTY_OWNERSHIP_TRANSFER_OUTPUT_OUTBOX_MAX_FRAMES
 } from './pty-ownership-transfer-destination-output-outbox'
 
 type PendingOutput = Readonly<{
-  identity: PtyOwnershipTransferWireIdentity
   frame: PtyOwnershipTransferOutputFrame
   promise: Promise<void>
   resolve: () => void
@@ -50,7 +50,7 @@ export class PtyOwnershipTransferDestinationOutputAdmission {
     let queue = this.pending.get(identity.bridgeId)
     let created = false
     if (queue) {
-      if (!sameIdentity(queue.identity, identity)) {
+      if (!samePtyOwnershipTransferIdentity(queue.identity, identity)) {
         throw new Error('pty_ownership_transfer_output_admission_identity_conflict')
       }
     } else {
@@ -85,7 +85,6 @@ export class PtyOwnershipTransferDestinationOutputAdmission {
       reject = onReject
     })
     const entry: PendingOutput = {
-      identity: queue.identity,
       frame: Object.freeze({ ...frame }),
       promise,
       resolve,
@@ -108,12 +107,12 @@ export class PtyOwnershipTransferDestinationOutputAdmission {
     if (!queue) {
       return
     }
-    if (!sameIdentity(queue.identity, identity)) {
+    if (!samePtyOwnershipTransferIdentity(queue.identity, identity)) {
       throw new Error('pty_ownership_transfer_output_admission_identity_conflict')
     }
     this.pending.delete(identity.bridgeId)
     let failed: Error | undefined
-    for (const [index, entry] of queue.entries.entries()) {
+    for (const entry of queue.entries) {
       if (failed) {
         entry.reject(failed)
         continue
@@ -124,9 +123,6 @@ export class PtyOwnershipTransferDestinationOutputAdmission {
       } catch (error) {
         failed = asError(error)
         entry.reject(failed)
-        for (const remaining of queue.entries.slice(index + 1)) {
-          remaining.reject(failed)
-        }
       }
     }
   }
@@ -136,7 +132,7 @@ export class PtyOwnershipTransferDestinationOutputAdmission {
     if (!queue) {
       return
     }
-    if (!sameIdentity(queue.identity, identity)) {
+    if (!samePtyOwnershipTransferIdentity(queue.identity, identity)) {
       throw new Error('pty_ownership_transfer_output_admission_identity_conflict')
     }
     this.pending.delete(identity.bridgeId)
@@ -152,20 +148,6 @@ function sameFrame(
   right: PtyOwnershipTransferOutputFrame
 ): boolean {
   return left.seq === right.seq && left.data === right.data && left.truncated === right.truncated
-}
-
-function sameIdentity(
-  left: PtyOwnershipTransferWireIdentity,
-  right: PtyOwnershipTransferWireIdentity
-): boolean {
-  return (
-    left.bridgeId === right.bridgeId &&
-    left.terminalId === right.terminalId &&
-    left.incarnationId === right.incarnationId &&
-    left.ownerLease === right.ownerLease &&
-    left.sourceOwnerGeneration === right.sourceOwnerGeneration &&
-    left.destinationRuntimeId === right.destinationRuntimeId
-  )
 }
 
 function asError(error: unknown): Error {

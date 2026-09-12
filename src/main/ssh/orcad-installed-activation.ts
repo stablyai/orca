@@ -12,11 +12,7 @@ import { evaluateOrcadActivation } from './orcad-activation-gate'
 import { planOrcadUpdate } from './orcad-update-plan'
 import { ORCAD_LOG_FILENAME } from './orcad-remote-launch'
 import { orcadSnapshotDirName } from './orcad-state-snapshot'
-import {
-  orcadStopFreedTheHost,
-  parseOrcadStopOutcome,
-  stopOrcadCommand
-} from './orcad-remote-process-control'
+import { orcadStopFreedTheHost } from './orcad-remote-process-control'
 import { joinRemotePath } from './ssh-remote-platform'
 import { computeLocalOrcadBuildHash } from './orcad-local-build-hash'
 import type { OrcadActivationLockControl } from './orcad-activation-lock'
@@ -36,6 +32,7 @@ import {
   exec,
   launchAndAwaitReadiness,
   STOP_WAIT_SECONDS,
+  stopOrcadSlot,
   withoutAbortSignal
 } from './orcad-remote-runtime-control'
 import {
@@ -141,14 +138,7 @@ export async function activateInstalledOrcad(
           'launched.'
       }
     }
-    const stopped = parseOrcadStopOutcome(
-      await exec(
-        options,
-        stopOrcadCommand(options.host, outgoingDir, {
-          waitSeconds: STOP_WAIT_SECONDS
-        })
-      )
-    )
+    const stopped = await stopOrcadSlot(options, outgoingDir)
     if (!orcadStopFreedTheHost(stopped)) {
       return {
         outcome: 'installed-not-activated',

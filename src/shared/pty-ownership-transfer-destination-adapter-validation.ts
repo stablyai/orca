@@ -1,7 +1,6 @@
 import {
   PTY_OWNERSHIP_TRANSFER_PUBLICATION_RECEIPT_VERSION,
   type PtyOwnershipTransferCommitReceipt,
-  type PtyOwnershipTransferDestinationJournal,
   type PtyOwnershipTransferIdentity,
   type PtyOwnershipTransferPublicationReceipt
 } from './pty-ownership-transfer-journal-contract'
@@ -22,7 +21,11 @@ import {
   samePtyOwnershipTransferSurfaceBinding,
   type PtyOwnershipTransferSurfaceBinding
 } from './pty-ownership-transfer-surface-binding'
-import { samePtyOwnershipTransferPublicationReceipt } from './pty-ownership-transfer-receipt-validation'
+import {
+  samePtyOwnershipTransferCommitReceipt,
+  samePtyOwnershipTransferPublicationReceipt
+} from './pty-ownership-transfer-receipt-validation'
+import { samePtyOwnershipTransferIdentity } from './pty-ownership-transfer-identity'
 
 export function identityFrom(
   value: PtyOwnershipTransferPrepareResult
@@ -125,7 +128,7 @@ export function validatePublicationReceipt(
     receipt.bridgeId !== record.identity.bridgeId ||
     receipt.destinationRuntimeId !== record.identity.destinationRuntimeId ||
     !record.commitReceipt ||
-    !sameCommitReceipt(receipt.commitReceipt, record.commitReceipt) ||
+    !samePtyOwnershipTransferCommitReceipt(receipt.commitReceipt, record.commitReceipt) ||
     !Number.isFinite(Date.parse(receipt.publishedAt)) ||
     !record.surfaceBinding ||
     !record.surfacePublication ||
@@ -186,7 +189,7 @@ export function assertSameCommitReceipt(
   expected: PtyOwnershipTransferCommitReceipt | undefined,
   actual: PtyOwnershipTransferCommitReceipt
 ): void {
-  if (!expected || !sameCommitReceipt(expected, actual)) {
+  if (!expected || !samePtyOwnershipTransferCommitReceipt(expected, actual)) {
     throw new PtyOwnershipTransferDestinationError(
       'receipt-invalid',
       'commit receipt changed while recovering a destination transfer'
@@ -194,25 +197,11 @@ export function assertSameCommitReceipt(
   }
 }
 
-export function assertJournalIdentity(
-  journal: PtyOwnershipTransferDestinationJournal,
-  identity: PtyOwnershipTransferIdentity
-): void {
-  assertIdentity(journal, identity)
-}
-
 export function assertIdentity(
   expected: PtyOwnershipTransferIdentity,
   actual: PtyOwnershipTransferIdentity
 ): void {
-  if (
-    expected.bridgeId !== actual.bridgeId ||
-    expected.terminalId !== actual.terminalId ||
-    expected.incarnationId !== actual.incarnationId ||
-    expected.ownerLease !== actual.ownerLease ||
-    expected.sourceOwnerGeneration !== actual.sourceOwnerGeneration ||
-    expected.destinationRuntimeId !== actual.destinationRuntimeId
-  ) {
+  if (!samePtyOwnershipTransferIdentity(expected, actual)) {
     throw new PtyOwnershipTransferDestinationError(
       'identity-mismatch',
       'destination transfer identity does not match its durable journal'
@@ -240,16 +229,4 @@ export function boundedPositive(value: number, maximum: number): number {
     )
   }
   return Math.min(value, maximum)
-}
-
-function sameCommitReceipt(
-  left: PtyOwnershipTransferCommitReceipt,
-  right: PtyOwnershipTransferCommitReceipt
-): boolean {
-  return (
-    left.receiptId === right.receiptId &&
-    left.bridgeId === right.bridgeId &&
-    left.acceptedSourceEndSeq === right.acceptedSourceEndSeq &&
-    left.committedAt === right.committedAt
-  )
 }

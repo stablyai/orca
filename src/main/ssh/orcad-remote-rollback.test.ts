@@ -191,6 +191,48 @@ describe('rollbackOrcad', () => {
     )
   })
 
+  it('polls pending readiness and stops sleeping once the target answers', async () => {
+    scriptHost([])
+    const baseImplementation = mockExec.getMockImplementation()
+    let pending = true
+    const sleep = vi.fn(async () => {
+      pending = false
+    })
+    mockExec.mockImplementation(async (conn, command, execOptions) => {
+      if (pending && command.startsWith('head -c ') && command.includes('.orcad-readiness')) {
+        return ''
+      }
+      return baseImplementation?.(conn, command, execOptions) ?? ''
+    })
+
+    await expect(rollbackOrcad(options({ sleep }))).resolves.toMatchObject({
+      outcome: 'rolled-back'
+    })
+
+    expect(sleep).toHaveBeenCalledExactlyOnceWith(500)
+  })
+
+  it.each(['STILL_RUNNING', 'NO_PID', 'UNKNOWN'])(
+    'does not restore or launch when the active stop answers %s',
+    async (stopOutput) => {
+      const log: string[] = []
+      scriptHost(log)
+      const baseImplementation = mockExec.getMockImplementation()
+      mockExec.mockImplementation(async (conn, command, execOptions) => {
+        const output = await baseImplementation?.(conn, command, execOptions)
+        return output === 'STOPPED' ? stopOutput : (output ?? '')
+      })
+
+      await expect(rollbackOrcad(options())).resolves.toMatchObject({
+        outcome: 'failed',
+        code: 'orcad_rollback_stop_incomplete'
+      })
+
+      expect(log).toEqual([`stop:${ACTIVE}`])
+      expect(writeOrcadActivationRecord).not.toHaveBeenCalled()
+    }
+  )
+
   it('refuses before touching anything when terminals started after activation', async () => {
     const log: string[] = []
     scriptHost(log)
@@ -313,42 +355,58 @@ describe('rollbackOrcad', () => {
     ])
   })
 
-  it('restores the rescue state when a confirmed target readiness probe fails', async () => {
-    const log: string[] = []
-    scriptHost(log)
-    const baseImplementation = mockExec.getMockImplementation()
-    mockExec.mockImplementation(async (conn, command: string, execOptions) => {
-      const text = String(command)
-      if (
-        text.startsWith('head -c ') &&
-        text.includes('.orcad-readiness') &&
-        text.includes(TARGET)
-      ) {
-        throw new Error('confirmed readiness read failed')
-      }
-      return baseImplementation?.(conn, command, execOptions) ?? ''
-    })
+  it.each(['probe failure', 'cancellation'])(
+    'restores the rescue state after target readiness %s',
+    async (failure) => {
+      const log: string[] = []
+      scriptHost(log)
+      const controller = new AbortController()
+      const baseImplementation = mockExec.getMockImplementation()
+      mockExec.mockImplementation(async (conn, command: string, execOptions) => {
+        const text = String(command)
+        if (
+          text.startsWith('head -c ') &&
+          text.includes('.orcad-readiness') &&
+          text.includes(TARGET)
+        ) {
+          if (failure === 'cancellation') {
+            return ''
+          }
+          throw new Error('confirmed readiness read failed')
+        }
+        if (controller.signal.aborted) {
+          expect(execOptions?.signal).toBeUndefined()
+        }
+        return baseImplementation?.(conn, command, execOptions) ?? ''
+      })
 
-    const result = await rollbackOrcad(options())
+      const result = await rollbackOrcad(
+        options({
+          signal: controller.signal,
+          readinessTimeoutMs: 5_000,
+          sleep: async () => controller.abort(new Error('cancelled during readiness'))
+        })
+      )
 
-    expect(result).toMatchObject({
-      outcome: 'failed',
-      code: 'orcad_rollback_target_launch_failed'
-    })
-    expect(writeOrcadActivationRecord).not.toHaveBeenCalled()
-    expect(log).toEqual([
-      `stop:${ACTIVE}`,
-      'rescue',
-      'restore',
-      `launch:${TARGET}`,
-      `stop:${TARGET}`,
-      'restore-rescue',
-      `launch:${ACTIVE}`
-    ])
-    expect(result.outcome === 'failed' && result.reason).toContain(
-      `orcad ${ACTIVE} was restored and is serving again`
-    )
-  })
+      expect(result).toMatchObject({
+        outcome: 'failed',
+        code: 'orcad_rollback_target_launch_failed'
+      })
+      expect(writeOrcadActivationRecord).not.toHaveBeenCalled()
+      expect(log).toEqual([
+        `stop:${ACTIVE}`,
+        'rescue',
+        'restore',
+        `launch:${TARGET}`,
+        `stop:${TARGET}`,
+        'restore-rescue',
+        `launch:${ACTIVE}`
+      ])
+      expect(result.outcome === 'failed' && result.reason).toContain(
+        `orcad ${ACTIVE} was restored and is serving again`
+      )
+    }
+  )
 
   it('records the rollback only after the target answers healthy', async () => {
     const log: string[] = []

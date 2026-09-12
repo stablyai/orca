@@ -25,6 +25,7 @@ import {
 } from './pty-ownership-transfer-value-validation'
 import { publicationReceiptMatchesPtyOwnershipTransfer } from './pty-ownership-transfer-receipt-validation'
 import { parsePtyOwnershipTransferSurfaceBinding } from './pty-ownership-transfer-surface-binding'
+import { samePtyOwnershipTransferIdentity } from './pty-ownership-transfer-identity'
 
 export {
   MAX_PTY_OWNERSHIP_TRANSFER_JOURNALS,
@@ -171,14 +172,7 @@ export function assertPtyOwnershipTransferIdentity(
   journal: PtyOwnershipTransferJournal,
   identity: PtyOwnershipTransferIdentity
 ): void {
-  if (
-    journal.bridgeId !== identity.bridgeId ||
-    journal.terminalId !== identity.terminalId ||
-    journal.incarnationId !== identity.incarnationId ||
-    journal.ownerLease !== identity.ownerLease ||
-    journal.sourceOwnerGeneration !== identity.sourceOwnerGeneration ||
-    journal.destinationRuntimeId !== identity.destinationRuntimeId
-  ) {
+  if (!samePtyOwnershipTransferIdentity(journal, identity)) {
     throw new Error('pty_ownership_transfer_identity_conflict')
   }
 }

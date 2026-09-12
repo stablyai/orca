@@ -16,6 +16,7 @@ import type {
 } from './pty-ownership-transfer-coordinator'
 import type { PtyOwnershipTransferDestinationAdapter } from '../../../shared/pty-ownership-transfer-destination-adapter'
 import { attachRecoveredPtyOwnershipTransferSourceRoute } from './pty-ownership-transfer-recovered-source-route'
+import { assertTransferIdentity } from './pty-ownership-transfer-response-identity'
 
 /** Reconcile a transfer after an ambiguous network response without replaying prepared output. */
 export async function recoverPtyOwnershipTransfer(
@@ -31,9 +32,6 @@ export async function recoverPtyOwnershipTransfer(
   const status = await options.source.status(request, requestOptions(options))
   assertTransferIdentity(status, options.identity)
 
-  if (status.phase === 'aborted') {
-    return Object.freeze({ source: status, destination: null, published: false })
-  }
   if (status.phase !== 'committed' && status.phase !== 'published') {
     return Object.freeze({ source: status, destination: null, published: false })
   }
@@ -119,9 +117,6 @@ async function reattachRecoveredDestination(
   const capabilities = options.getDestinationCapabilities
     ? await options.getDestinationCapabilities(requestOptions)
     : options.destinationCapabilities
-  if (capabilities === undefined) {
-    throw new Error('pty_ownership_transfer_recovery_destination_capabilities_unavailable')
-  }
   if (!capabilities) {
     throw new Error('pty_ownership_transfer_recovery_destination_capabilities_unavailable')
   }
@@ -274,28 +269,5 @@ function requestOptions(options: PtyOwnershipTransferCoordinatorOptions): {
   return {
     ...(options.signal ? { signal: options.signal } : {}),
     ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs })
-  }
-}
-
-function assertTransferIdentity(
-  value: {
-    bridgeId: string
-    terminalId: string
-    incarnationId: string
-    ownerLease: string
-    sourceOwnerGeneration: number
-    destinationRuntimeId: string
-  },
-  expected: PtyOwnershipTransferCoordinatorOptions['identity']
-): void {
-  if (
-    value.bridgeId !== expected.bridgeId ||
-    value.terminalId !== expected.terminalId ||
-    value.incarnationId !== expected.incarnationId ||
-    value.ownerLease !== expected.ownerLease ||
-    value.sourceOwnerGeneration !== expected.sourceOwnerGeneration ||
-    value.destinationRuntimeId !== expected.destinationRuntimeId
-  ) {
-    throw new Error('pty_ownership_transfer_response_identity_mismatch')
   }
 }

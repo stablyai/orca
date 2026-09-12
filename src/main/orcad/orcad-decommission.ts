@@ -215,15 +215,13 @@ async function executeExclusiveOrcadDecommission(
   let transactionSnapshot: string | undefined
   if (transactionId) {
     try {
-      const validated = authority
-        ? validateOrcadDecommissionTransaction(
-            transactionId,
-            expectedVersion,
-            undefined,
-            undefined,
-            authority
-          )
-        : validateOrcadDecommissionTransaction(transactionId, expectedVersion)
+      const validated = validateOrcadDecommissionTransaction(
+        transactionId,
+        expectedVersion,
+        undefined,
+        undefined,
+        authority
+      )
       if (
         authority &&
         (!runningInstance ||
@@ -259,22 +257,13 @@ async function executeExclusiveOrcadDecommission(
     return result
   }
   try {
-    if (authority) {
-      persistOrcadDecommissionAcceptance(
-        transactionId,
-        expectedVersion,
-        undefined,
-        transactionSnapshot,
-        authority
-      )
-    } else {
-      persistOrcadDecommissionAcceptance(
-        transactionId,
-        expectedVersion,
-        undefined,
-        transactionSnapshot
-      )
-    }
+    persistOrcadDecommissionAcceptance(
+      transactionId,
+      expectedVersion,
+      undefined,
+      transactionSnapshot,
+      authority
+    )
     return { outcome: 'accepted', transactionId }
   } catch (error) {
     return {

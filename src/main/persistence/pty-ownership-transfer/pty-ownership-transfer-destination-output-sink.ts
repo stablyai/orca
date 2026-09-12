@@ -1,6 +1,7 @@
 import type { PtyOwnershipTransferOutputFrame } from '../../../shared/pty-ownership-transfer-wire'
 import type { PtyOwnershipTransferWireIdentity } from '../../../shared/pty-ownership-transfer-wire'
 import type { PtyOwnershipTransferSurfaceBinding } from '../../../shared/pty-ownership-transfer-surface-binding'
+import { samePtyOwnershipTransferIdentity } from '../../../shared/pty-ownership-transfer-identity'
 import type {
   PtyOwnershipTransferDestinationOutputOutbox,
   PtyOwnershipTransferDestinationOutputSnapshot
@@ -100,7 +101,7 @@ function assertAcknowledgement(
   if (
     !acknowledgement ||
     !isTransferIdentity(acknowledgement.identity) ||
-    !sameIdentity(acknowledgement.identity, expectedIdentity) ||
+    !samePtyOwnershipTransferIdentity(acknowledgement.identity, expectedIdentity) ||
     !Number.isSafeInteger(acknowledgement.throughSeq) ||
     acknowledgement.throughSeq < minimumSeq
   ) {
@@ -120,19 +121,5 @@ function isTransferIdentity(value: unknown): value is PtyOwnershipTransferWireId
     typeof record.ownerLease === 'string' &&
     Number.isSafeInteger(record.sourceOwnerGeneration) &&
     typeof record.destinationRuntimeId === 'string'
-  )
-}
-
-function sameIdentity(
-  left: PtyOwnershipTransferWireIdentity,
-  right: PtyOwnershipTransferWireIdentity
-): boolean {
-  return (
-    left.bridgeId === right.bridgeId &&
-    left.terminalId === right.terminalId &&
-    left.incarnationId === right.incarnationId &&
-    left.ownerLease === right.ownerLease &&
-    left.sourceOwnerGeneration === right.sourceOwnerGeneration &&
-    left.destinationRuntimeId === right.destinationRuntimeId
   )
 }

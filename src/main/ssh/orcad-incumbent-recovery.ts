@@ -14,17 +14,13 @@ import {
   parseOrcadSnapshotRestore,
   restoreOrcadStateSnapshotCommand
 } from './orcad-state-snapshot'
-import {
-  orcadStopFreedTheHost,
-  parseOrcadStopOutcome,
-  stopOrcadCommand
-} from './orcad-remote-process-control'
+import { orcadStopFreedTheHost } from './orcad-remote-process-control'
 import { joinRemotePath } from './ssh-remote-platform'
 import type { OrcadActivationLockControl } from './orcad-activation-lock'
 import {
   exec,
   launchAndAwaitReadiness,
-  STOP_WAIT_SECONDS,
+  stopOrcadSlot,
   withoutAbortSignal
 } from './orcad-remote-runtime-control'
 
@@ -157,12 +153,7 @@ export async function restoreIncumbent(
   candidateDir: string,
   snapshot: PreActivationSnapshot | null
 ): Promise<{ message: string; code?: string; recovered: boolean }> {
-  const stopped = parseOrcadStopOutcome(
-    await exec(
-      options,
-      stopOrcadCommand(options.host, candidateDir, { waitSeconds: STOP_WAIT_SECONDS })
-    )
-  )
+  const stopped = await stopOrcadSlot(options, candidateDir)
   if (!orcadStopFreedTheHost(stopped)) {
     return {
       code: 'orcad_rejected_candidate_stop_incomplete',

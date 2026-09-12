@@ -11,7 +11,7 @@ import {
   type PtyOwnershipTransferDestinationSnapshot
 } from './pty-ownership-transfer-destination-adapter-contract'
 import {
-  assertJournalIdentity,
+  assertIdentity,
   bytesOf,
   identityFrom,
   validateFrame,
@@ -37,7 +37,7 @@ export function prepareDestinationTransfer(
     )
   }
   if (existing) {
-    assertJournalIdentity(existing, identity)
+    assertIdentity(existing, identity)
   }
   const journal = existing ?? state.options.store.prepare(identity, result.replayStartSeq - 1)
   if (journal.acceptedSourceEndSeq > result.sourceOutputEndSeq) {

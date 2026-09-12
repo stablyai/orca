@@ -10,6 +10,7 @@ import {
 } from './orcad-remote-launch'
 import { resolveOrcadActivationReadinessTimeout } from './orcad-activation-lock'
 import { evaluateOrcadActivation, type OrcadActivationVerdict } from './orcad-activation-gate'
+import { parseOrcadStopOutcome, stopOrcadCommand } from './orcad-remote-process-control'
 import type { ServeReadiness } from '../server/serve-readiness'
 
 const DEFAULT_READINESS_TIMEOUT_MS = 90_000
@@ -35,7 +36,7 @@ export function withoutAbortSignal<T extends { signal?: AbortSignal }>(
 }
 
 export async function launchAndAwaitReadiness(
-  options: OrcadDeployOptions,
+  options: Pick<OrcadDeployOptions, 'conn' | 'host' | 'signal' | 'readinessTimeoutMs' | 'sleep'>,
   spec: OrcadLaunchSpec
 ): Promise<ReturnType<typeof parseOrcadReadinessOutput>> {
   await exec(options, orcadLaunchCommand(options.host, spec))
@@ -64,39 +65,35 @@ export async function launchAndGate(
   verdict: OrcadActivationVerdict
   readiness: ServeReadiness | null
 }> {
-  await exec(
-    options,
-    orcadLaunchCommand(options.host, {
-      remoteInstallDir: identity.remoteDir,
-      nodePath: identity.nodePath,
-      fullVersion: identity.version,
-      userDataDir: options.userDataDir,
-      bindHost: options.bindHost,
-      port: options.port,
-      allowHostNodeFallback: true
-    })
-  )
-  const deadline =
-    Date.now() +
-    resolveOrcadActivationReadinessTimeout(options.readinessTimeoutMs, DEFAULT_READINESS_TIMEOUT_MS)
-  const sleep = options.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))
-  let parsed = parseOrcadReadinessOutput('')
-  while (Date.now() < deadline && parsed.state === 'pending') {
-    options.signal?.throwIfAborted()
-    parsed = parseOrcadReadinessOutput(
-      await exec(options, readOrcadReadinessCommand(options.host, identity.remoteDir))
-    )
-    if (parsed.state === 'pending') {
-      await sleep(READINESS_POLL_MS)
-    }
-  }
+  const parsed = await launchAndAwaitReadiness(options, {
+    remoteInstallDir: identity.remoteDir,
+    nodePath: identity.nodePath,
+    fullVersion: identity.version,
+    userDataDir: options.userDataDir,
+    bindHost: options.bindHost,
+    port: options.port,
+    allowHostNodeFallback: true
+  })
+  const readiness = parsed.state === 'ready' ? parsed.readiness : null
   return {
-    verdict: evaluateOrcadActivation(parsed.state === 'ready' ? parsed.readiness : null, {
+    verdict: evaluateOrcadActivation(readiness, {
       buildHash: identity.buildHash,
       fullVersion: identity.version,
       runtimeKind: identity.nodePath ? 'node' : 'bun',
       port: options.port
     }),
-    readiness: parsed.state === 'ready' ? parsed.readiness : null
+    readiness
   }
+}
+
+export async function stopOrcadSlot(
+  options: Pick<OrcadDeployOptions, 'conn' | 'host' | 'signal'>,
+  remoteDir: string
+): Promise<ReturnType<typeof parseOrcadStopOutcome>> {
+  return parseOrcadStopOutcome(
+    await exec(
+      options,
+      stopOrcadCommand(options.host, remoteDir, { waitSeconds: STOP_WAIT_SECONDS })
+    )
+  )
 }

@@ -1,6 +1,7 @@
 import type { PtyOwnershipTransferAttachmentResult } from '../../../shared/pty-ownership-transfer-control-wire'
 import { PTY_OWNERSHIP_TRANSFER_WIRE_VERSION } from '../../../shared/pty-ownership-transfer-wire'
 import type { PtyOwnershipTransferCoordinatorOptions } from './pty-ownership-transfer-coordinator-contract'
+import { assertTransferIdentity } from './pty-ownership-transfer-response-identity'
 
 export async function attachRecoveredPtyOwnershipTransferSourceRoute(
   options: PtyOwnershipTransferCoordinatorOptions,
@@ -32,7 +33,7 @@ export async function attachRecoveredPtyOwnershipTransferSourceRoute(
     capabilities,
     requestOptions
   )
-  assertIdentity(result, options.identity)
+  assertTransferIdentity(result, options.identity)
   return result
 }
 
@@ -69,7 +70,7 @@ async function rekeyRecoveredRoute(
     capabilities,
     requestOptions
   )
-  assertIdentity(rekeyed, options.identity)
+  assertTransferIdentity(rekeyed, options.identity)
   if (
     rekeyed.previousReconnectGeneration !== durableReconnectGeneration ||
     rekeyed.reconnectGeneration !== reconnectGeneration ||
@@ -86,20 +87,4 @@ async function rekeyRecoveredRoute(
     executionVerdict: rekeyed.executionVerdict,
     ...(rekeyed.exit ? { exit: rekeyed.exit } : {})
   })
-}
-
-function assertIdentity(
-  value: PtyOwnershipTransferCoordinatorOptions['identity'],
-  expected: PtyOwnershipTransferCoordinatorOptions['identity']
-): void {
-  if (
-    value.bridgeId !== expected.bridgeId ||
-    value.terminalId !== expected.terminalId ||
-    value.incarnationId !== expected.incarnationId ||
-    value.ownerLease !== expected.ownerLease ||
-    value.sourceOwnerGeneration !== expected.sourceOwnerGeneration ||
-    value.destinationRuntimeId !== expected.destinationRuntimeId
-  ) {
-    throw new Error('pty_ownership_transfer_response_identity_mismatch')
-  }
 }
