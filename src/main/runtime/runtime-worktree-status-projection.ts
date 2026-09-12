@@ -9,6 +9,7 @@ import {
 import type { AgentStatusEntry } from '../../shared/agent-status-types'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type {
+  RuntimeServeStatsAgentState,
   RuntimeTerminalAgentStatus,
   RuntimeWorktreePsSummary,
   RuntimeWorktreeStatus
@@ -184,6 +185,33 @@ export function mapExplicitAgentStateToRuntimeTerminalStatus(
     case 'done':
       return 'idle'
   }
+}
+
+/**
+ * The turn state `serve.stats` can prove for one connected pty, from in-memory evidence only.
+ *
+ * Precedence mirrors `getAgentPromptActivity` (retained/hook status, overridden by a strictly
+ * newer prompt-lifecycle observation, then the live-observed title status) minus the two terms
+ * that cost a per-pty terminal-buffer read: the authoritative wait-permission text scan and the
+ * async agent-status probe. Anything short of current evidence answers `unknown`; a stale status
+ * from a previous incarnation is not evidence, and `idle` must never be a guess.
+ */
+export function deriveServeStatsAgentState(evidence: {
+  explicit: { status: AgentStatus; updatedAt: number } | null
+  lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+  titleStatus: AgentStatus | null
+  titleStatusObservedLive: boolean
+}): RuntimeServeStatsAgentState {
+  const { explicit, lifecycle } = evidence
+  const lifecycleIsNewer =
+    lifecycle &&
+    (!explicit ||
+      lifecycle.updatedAt > explicit.updatedAt ||
+      (lifecycle.updatedAt === explicit.updatedAt && lifecycle.status === 'permission'))
+  const status = lifecycleIsNewer
+    ? lifecycle.status
+    : (explicit?.status ?? (evidence.titleStatusObservedLive ? evidence.titleStatus : null))
+  return status ?? 'unknown'
 }
 
 export function mergeWorktreeStatus(

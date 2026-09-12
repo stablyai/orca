@@ -30,6 +30,13 @@ export class RuntimeRpcShutdown extends RuntimeRpcMobilePairing {
     // Why: before-quit fences relay input; direct auth can still refresh lastSeen while these transports close.
     this.deviceRegistry?.flushPendingLastSeen()
     const failedStop = stopResults.find((result) => result.status === 'rejected')
+    // Why: the transport arrays were emptied above regardless of stop outcome, so no listener is
+    // advertisable once we get here — clear the port before rethrowing, or `serve stats` keeps
+    // reporting a dead port after a failed shutdown.
+    this.runtime.setServePort?.(null)
+    // Why with the port: no listener means no admission budget, and reporting the caps of a
+    // stopped server would read as capacity a caller can still spend.
+    this.runtime.setLongPollStatsProvider?.(null)
     if (failedStop?.status === 'rejected') {
       throw failedStop.reason
     }

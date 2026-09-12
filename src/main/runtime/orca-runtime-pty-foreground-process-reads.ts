@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: getServeStats and runtime state accessors are mechanically co-located in this split mixin. */
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithStateFields } from './orca-runtime-state-fields'
 import {
@@ -13,7 +14,26 @@ import type { IPtyProvider } from '../providers/types'
 import { killAllProcessesForWorktree } from './worktree-teardown'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 import type { MemorySnapshot, StatsSummary } from '../../shared/process-stats-types'
+import type {
+  RuntimeServeStatsAgentState,
+  RuntimeServeStatsLongPolls,
+  RuntimeServeStatsResult
+} from '../../shared/runtime-types'
+import {
+  WORKER_TERMINAL_LIST_STATES,
+  type WorkerTerminalListState
+} from '../../shared/worker-terminal-list-state'
+import type { AgentStatus } from '../../shared/agent-detection'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import { getAppEnvironment } from '../../shared/app-environment'
+import { deriveServeStatsAgentState, getLatestPtyTitle } from './runtime-worktree-status-projection'
+import { selectFreshExplicitAgentStatus } from './runtime-hook-agent-row-selection'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { observeStructuredWorker } from './structured-worker-authority'
 import { collectMemorySnapshot } from '../memory/collector'
+import { collectServeStatsHost } from './serve-stats-host'
+import { readServeStatsEventLoopDelayP99Ms } from './serve-stats-event-loop-delay'
+import { collectServeStatsBrowserPages } from './serve-stats-browser-pages'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { RuntimeClientSettingsUpdate } from './runtime-client-settings'
@@ -166,6 +186,152 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
 
   getStatsSummary(): StatsSummary | null {
     return this.stats?.getSummary() ?? null
+  }
+
+  setServePort(port: number | null): void {
+    this.servePort = port
+  }
+
+  /**
+   * Registers the RPC server's live long-poll reader, or clears it with `null` on shutdown.
+   *
+   * A pull, not a push: the counters move on every long-poll admit and release (the hot path for
+   * every `terminal.wait` / `orchestration.ask` in the fleet), so a setter called per increment
+   * would put a cross-object write on that path and go stale the moment any release path forgot
+   * to call it. One closure registered where `setServePort` is, read only when someone actually
+   * asks for stats, cannot drift from the counters it reads. Null means "no listener is serving",
+   * which is exactly when there is no admission budget to report.
+   */
+  setLongPollStatsProvider(provider: (() => RuntimeServeStatsLongPolls) | null): void {
+    this.longPollStatsProvider = provider
+  }
+
+  // Occupancy follows runtime PTYs; turn-duration statistics exclude waiting agents.
+  async getServeStats(): Promise<RuntimeServeStatsResult> {
+    const worktrees = await this.listManagedWorktrees()
+    const db = this.getOrchestrationDb()
+    const tasks = db.countTasks()
+    const tasksByStatus = db.countTasksByStatus()
+    // Why: derives one state per retained dispatch row in TS (the same scan `worker-list` runs),
+    // so it grows with dispatch history rather than with live work.
+    const workerTerminals = db.countWorkerTerminalInventory()
+    let terminals = 0
+    let terminalsUnverifiable = 0
+    let terminalsExited = 0
+    let agents = 0
+    const agentsByState: Record<RuntimeServeStatsAgentState, number> = {
+      working: 0,
+      permission: 0,
+      idle: 0,
+      unknown: 0
+    }
+    // Hoisted: the hook snapshot is one process-wide array, not a per-pty read.
+    const hookRows = this.getAgentStatusSnapshotFn?.() ?? []
+    for (const [ptyId, pty] of this.ptysById) {
+      if (!pty.connected) {
+        // Registered, but not connected. Only a host-delivered exit frame reaches the liveness
+        // register, so an `exited` verdict there is a death certificate; anything weaker is loss
+        // of contact, which is never proof of death and must stay on the conservative side.
+        if (this.getPtyLivenessVerdict(ptyId)?.status === 'exited') {
+          terminalsExited++
+        } else {
+          terminalsUnverifiable++
+        }
+        continue
+      }
+      terminals++
+      if (
+        this.resolvePaneAgentIdentityField(
+          pty.launchAgent,
+          pty.foregroundAgent,
+          getLatestPtyTitle(pty),
+          pty.paneKey
+        ).agentIdentity
+      ) {
+        agents++
+        agentsByState[this.resolveServeStatsPtyAgentState(pty, hookRows)]++
+      }
+    }
+    for (const session of getStructuredAgentSessionHost()?.listSessionTabs() ?? []) {
+      if (observeStructuredWorker(session).status === 'live') {
+        agents++
+        // The session host proves liveness, never turn state: reporting anything else here would
+        // be a guess (see RuntimeServeStatsResult.counts.agentsByState).
+        agentsByState.unknown++
+      }
+    }
+    // Pages of both kinds plus their renderer footprint, from one walk of the bridge's page-id
+    // registration map.
+    const browserPages = collectServeStatsBrowserPages(this, this.agentBrowserBridge)
+    return {
+      version: getAppEnvironment().getVersion(),
+      runtimeId: this.getRuntimeId(),
+      uptimeSeconds: Math.floor((Date.now() - this.startedAt) / 1000),
+      port: this.servePort,
+      counts: {
+        agents,
+        tasks,
+        terminals,
+        terminalsUnverifiable,
+        terminalsExited,
+        worktrees: worktrees.totalCount,
+        browserPages: browserPages.total,
+        browserPagesRetained: browserPages.retained,
+        // Bytes, not a count, but scoped to exactly the population `browserPages` counts — and
+        // null, never 0, wherever no renderer footprint was measurable (see
+        // RuntimeServeStatsResult.counts.browserPageMemoryTotalBytes).
+        browserPageMemoryTotalBytes: browserPages.memory.totalBytes,
+        browserPageMemoryMaxBytes: browserPages.memory.maxBytes,
+        tasksByStatus,
+        agentsByState,
+        workersByTerminalState: Object.fromEntries(
+          WORKER_TERMINAL_LIST_STATES.map((state) => [state, workerTerminals.counts[state] ?? 0])
+        ) as Record<WorkerTerminalListState, number>
+      },
+      // Host-wide, never Orca-attributed, and null wherever this platform cannot measure
+      // (see RuntimeServeStatsResult.host).
+      host: collectServeStatsHost(),
+      health: {
+        eventLoopDelayP99Ms: readServeStatsEventLoopDelayP99Ms(),
+        // Null whenever no RPC server registered its counters: the caps are the server's, and an
+        // invented 0/0 would read as a runtime that can admit nothing (see
+        // RuntimeServeStatsHealth.longPolls).
+        longPolls: this.longPollStatsProvider?.() ?? null
+      }
+    }
+  }
+
+  /**
+   * One connected pty's turn state, from maps this process already holds.
+   *
+   * The explicit hook status is keyed by pane, and the lifecycle tracker by pty id, so neither
+   * needs a terminal handle, a syscall, or a DB read; a pty with no current evidence stays
+   * `unknown` rather than borrowing a plausible state.
+   */
+  protected resolveServeStatsPtyAgentState(
+    pty: {
+      ptyId: string
+      paneKey: string | null
+      lastAgentStatus: AgentStatus | null
+      lastAgentStatusObservedLive: boolean
+    },
+    hookRows: readonly AgentStatusIpcPayload[]
+  ): RuntimeServeStatsAgentState {
+    const explicit = pty.paneKey
+      ? selectFreshExplicitAgentStatus({
+          handle: this.handleByPtyId.get(pty.ptyId) ?? null,
+          paneKey: pty.paneKey,
+          hookRows
+        })
+      : null
+    const floor = this.agentPromptExplicitStatusFloorByPtyId.get(pty.ptyId)
+    return deriveServeStatsAgentState({
+      // Why: a status recorded before the last prompt submission is superseded evidence.
+      explicit: explicit && (floor === undefined || explicit.updatedAt > floor) ? explicit : null,
+      lifecycle: this.agentPromptLifecycleByPtyId.get(pty.ptyId),
+      titleStatus: pty.lastAgentStatus,
+      titleStatusObservedLive: pty.lastAgentStatusObservedLive
+    })
   }
 
   getMemorySnapshot(): Promise<MemorySnapshot> {

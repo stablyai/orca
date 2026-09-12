@@ -76,7 +76,11 @@ export const RelayConnectionOpenMessageSchema = z
 export const RelayDrainMessageSchema = z
   .object({
     type: z.literal('drain'),
-    graceMs: z.number().int().nonnegative().max(60 * 60 * 1000),
+    graceMs: z
+      .number()
+      .int()
+      .nonnegative()
+      .max(60 * 60 * 1000),
     recovery: z.literal('resolve-director')
   })
   .strict()

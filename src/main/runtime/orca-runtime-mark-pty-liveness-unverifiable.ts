@@ -13,8 +13,14 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
    * Records that we lost contact with a PTY's owning host. Callers must never
    * read this as an exit: a detached relay PTY is designed to outlive the
    * provider that addressed it.
+   *
+   * Lost contact is the absence of evidence, so it cannot retract the one verdict that IS
+   * evidence: a PTY the host already reported gone stays `exited`.
    */
   markPtyLivenessUnverifiable(ptyId: string, reason: string): void {
+    if (this.getPtyLivenessVerdict(ptyId)?.status === 'exited') {
+      return
+    }
     this.rememberPtyLivenessVerdict(ptyId, { status: 'unverifiable', reason })
   }
 
@@ -135,9 +141,20 @@ export class OrcaRuntimeWithMarkPtyLivenessUnverifiable extends OrcaRuntimeWithO
     }
   }
 
+  /**
+   * Drops doubt a newer observation has settled. Only doubt: a host-delivered `exited` is the
+   * register's certificate, and an absence weak enough to reach this method — a relay that
+   * answered without knowing the id, a provider that could not be asked — is never a retraction
+   * of it (docs/reference/ssh-execution-boundary.md). Disposing of a PTY outright, or reusing its
+   * id, clears the entry directly (onPtySpawned, registerPty, dropDisconnectedPtyRecord); that is
+   * what retires a certificate, not an inventory that failed to see it.
+   */
   protected forgetPtyLivenessVerdict(ptyId: string, observedNoLaterThan?: number): void {
     const tracked = this.ptyLivenessVerdictByPtyId.get(ptyId)
     if (observedNoLaterThan !== undefined && tracked && tracked.observedAt > observedNoLaterThan) {
+      return
+    }
+    if (tracked?.verdict.status === 'exited') {
       return
     }
     this.ptyLivenessVerdictByPtyId.delete(ptyId)

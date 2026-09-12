@@ -18,12 +18,22 @@ import {
   createRuntimeTransportMetadata,
   sweepOrphanedRuntimeSockets
 } from './runtime-rpc-socket-metadata'
+import { enableServeStatsEventLoopDelayMonitor } from '../serve-stats-event-loop-delay'
 
 export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
   async start(): Promise<void> {
     if (this.activeTransports.length > 0) {
       return
     }
+    this.runtime.setServePort?.(null)
+    // Why here, not in the constructor: `serve stats` reports these caps as the live admission
+    // budget, and only a started server has one. Registered once — the reader pulls the counters
+    // when someone asks, so nothing has to push on the long-poll hot path.
+    this.runtime.setLongPollStatsProvider?.(() => this.readLongPollStats())
+    // Why here: this is the surface `serve stats` is answered on, so enabling the histogram with
+    // the listener means any caller that can read the field had it measured for the runtime's
+    // whole serving life. One long-lived histogram; reads are O(1).
+    enableServeStatsEventLoopDelayMonitor()
 
     // Why: SIGKILL/OOM skip stop(), orphaning `o-<pid>-*.sock` files; sweep them. Skipped on Windows: named pipes leave no filesystem entries.
     if (this.platform !== 'win32') {
@@ -65,7 +75,14 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         })
     })
 
-    await socketTransport.start()
+    try {
+      await socketTransport.start()
+    } catch (error) {
+      // Why: no listener is bound, so `serve stats` must not advertise long-poll capacity —
+      // the caps belong to a serving runtime, not this one.
+      this.runtime.setLongPollStatsProvider?.(null)
+      throw error
+    }
 
     const activeTransports: RpcTransport[] = [socketTransport]
     const transportsMeta: RuntimeTransportMetadata[] = [transportMeta]
@@ -101,6 +118,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
           // Why: WebSocket transport is supplementary; on failure (e.g. port in use) continue with Unix socket only.
           console.error('[runtime] Failed to start WebSocket transport:', error)
           this.mobileSocketWiring = null
+          // Why: no WS listener bound, so `serve stats` must report no port
+          // (null) rather than a phantom/stale value.
+          this.runtime.setServePort?.(null)
         }
       }
     }
@@ -116,6 +136,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       this.activeTransports = []
       this.transports = []
       await Promise.all(activeTransports.map((t) => t.stop().catch(() => {}))).catch(() => {})
+      this.runtime.setServePort?.(null)
+      // Every transport above was just torn down, so there is no admission budget left to report.
+      this.runtime.setLongPollStatsProvider?.(null)
       throw error
     }
 
@@ -189,6 +212,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       this.detachWebSocketWiring = null
       throw error
     }
+    this.runtime.setServePort?.(wsTransport.resolvedPort)
     this.wsBoundHost = options.host
     return {
       transport: wsTransport,

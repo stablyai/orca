@@ -131,6 +131,60 @@ describe('inventory sweep liveness verdicts', () => {
     expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
   })
 
+  it('keeps a host-delivered exit certificate when a later inventory omits the PTY', async () => {
+    // The regression this pins: the sweep dropped every verdict for an observed-absent id, so a
+    // proven exit decayed into the same null a never-asked host produces — on the very next
+    // `terminal list`. `exited` is evidence; only doubt is the sweep's to drop
+    // (docs/reference/ssh-execution-boundary.md). The sibling is what makes the owning host a
+    // queried one, which is the only shape that can observe an absence at all.
+    const runtime = makeRuntimeMissingFromInventory(
+      () => false,
+      vi.fn(async () => [{ id: 'ssh:conn-1@@relay-sibling', worktreeId: WORKTREE_ID }])
+    )
+    runtime.onPtyExit(REMOTE_PTY_ID, 0, undefined, { hostExitConfirmed: true })
+    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({ status: 'exited' })
+
+    await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
+    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({ status: 'exited' })
+  })
+
+  it('keeps the exit certificate when no provider can observe the owning host', async () => {
+    // The sweep's other absence: it records lost contact instead of dropping doubt. Overwriting a
+    // certificate with `unverifiable` loses the same evidence a delete does, and re-arms the
+    // no-cleanup warning for a process the host already reported gone.
+    const runtime = makeRuntimeMissingFromInventory(() => null)
+    runtime.onPtyExit(REMOTE_PTY_ID, 0, undefined, { hostExitConfirmed: true })
+
+    await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
+    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({ status: 'exited' })
+  })
+
+  it('keeps the exit certificate when the owning host answers but the PTY cannot be asked', async () => {
+    const runtime = makeRuntimeMissingFromInventory(
+      () => null,
+      vi.fn(async () => [{ id: 'ssh:conn-1@@relay-sibling', worktreeId: WORKTREE_ID }])
+    )
+    runtime.onPtyExit(REMOTE_PTY_ID, 0, undefined, { hostExitConfirmed: true })
+
+    await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
+    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toEqual({ status: 'exited' })
+  })
+
+  it('still clears lost-contact doubt when the owning host observes the PTY absent', async () => {
+    const runtime = makeRuntimeMissingFromInventory(
+      () => false,
+      vi.fn(async () => [{ id: 'ssh:conn-1@@relay-sibling', worktreeId: WORKTREE_ID }])
+    )
+    runtime.markPtyLivenessUnverifiable(REMOTE_PTY_ID, 'inventory transport failed')
+
+    await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
+    expect(runtime.getPtyLivenessVerdict(REMOTE_PTY_ID)).toBeNull()
+  })
+
   it('records positive host evidence when reconnect inventory observes the PTY live', async () => {
     let reconnected = false
     const runtime = makeRuntimeMissingFromInventory(

@@ -209,11 +209,14 @@ describe('RuntimeClient module-graph deferral', () => {
   // Why: the mirror — the same stubbed-dispatch probe must show `undefined`
   // (not `null`) for a non-suppressed group, or the assertion above would pass
   // for a build that suppressed EVERY command's env fallback.
-  it('forwards undefined remote selection for a non-suppressed group', async () => {
+  it.each([
+    ['worktree', 'list'],
+    ['serve', 'stats']
+  ])('forwards remote selection for %s %s', async (group, command) => {
     vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
     const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
     try {
-      await main(['worktree', 'list'], '/tmp/repo')
+      await main([group, command], '/tmp/repo')
 
       void dispatchSpy.mock.calls.at(-1)?.[1]?.client
       expect(constructorArgsMock).toHaveBeenCalledTimes(1)

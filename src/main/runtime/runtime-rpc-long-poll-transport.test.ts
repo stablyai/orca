@@ -15,6 +15,7 @@ import {
   seedSupervisedAskWorkers
 } from './runtime-rpc-test-harness'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
+import { UnixSocketTransport } from './rpc/unix-socket-transport'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -313,6 +314,93 @@ describe('OrcaRuntimeRpcServer', () => {
       } finally {
         await server.stop()
       }
+    })
+
+    it('publishes live long-poll occupancy and the caps that fence it through serve stats', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
+      // Why: cap 4 → ask 2, browser-host 2, specialized 3, so every reported ceiling is a
+      // distinct number and a copy-paste between pools would fail this.
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 50,
+        longPollCap: 4
+      })
+
+      // #19342: the operator hit `runtime_busy` and could not find the cap without unpacking
+      // app.asar. Nothing is serving yet, so there is no budget to report.
+      expect((await runtime.getServeStats()).health.longPolls).toBeNull()
+
+      await server.start()
+      try {
+        expect((await runtime.getServeStats()).health.longPolls).toEqual({
+          total: { active: 0, cap: 4 },
+          ask: { active: 0, cap: 2 },
+          browserHost: { active: 0, cap: 2 },
+          specialized: { active: 0, cap: 3 }
+        })
+
+        const metadata = readRuntimeMetadata(userDataPath)
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_wait',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_nobody', wait: true, timeoutMs: 400 }
+        })
+        await waitFor(() => server['activeLongPolls'] === 1)
+
+        // Read while the poll is genuinely held open: this is the mid-flight state an operator
+        // diagnosing `runtime_busy` needs, and a pushed snapshot could have missed it.
+        const held = (await runtime.getServeStats()).health.longPolls
+        expect(held).toMatchObject({
+          total: { active: 1, cap: 4 },
+          // A wait holds no specialized slot, so the ask reservation stays untouched.
+          ask: { active: 0, cap: 2 },
+          specialized: { active: 0, cap: 3 }
+        })
+
+        await session.done
+        expect((await runtime.getServeStats()).health.longPolls).toMatchObject({
+          total: { active: 0, cap: 4 }
+        })
+      } finally {
+        await server.stop()
+      }
+
+      // A stopped server has no listener and therefore no admission budget; reporting the caps
+      // here would read as capacity a caller can still spend.
+      expect((await runtime.getServeStats()).health.longPolls).toBeNull()
+      db.close()
+    })
+
+    it('clears the long-poll provider when the Unix socket fails to start', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 30
+      })
+
+      // Force the listener bind to fail: a failed start must not advertise long-poll
+      // capacity, because the caps belong to a serving runtime, not this one.
+      const spy = vi
+        .spyOn(UnixSocketTransport.prototype, 'start')
+        .mockRejectedValueOnce(new Error('socket bind failed'))
+      try {
+        await expect(server.start()).rejects.toThrow('socket bind failed')
+      } finally {
+        spy.mockRestore()
+      }
+
+      expect((await runtime.getServeStats()).health.longPolls).toBeNull()
+      db.close()
     })
 
     it('emits keepalive frames while agent-prompt verification blocks', async () => {
