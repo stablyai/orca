@@ -109,7 +109,10 @@ function normalizeWindowsSkillUpdateCommand(
   }
 
   const trimmedCommand = command.trim()
-  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global$/i.exec(trimmedCommand)
+  // The package spec carries a version (`skills@latest`), so match it loosely.
+  const updateMatch = /^npx\s+skills(?:@\S+)?\s+update\s+([A-Za-z0-9_-]+)\s+--global$/i.exec(
+    trimmedCommand
+  )
   if (!updateMatch) {
     return command
   }
@@ -227,7 +230,7 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
     // shells rewrite cmd.exe's leading /d /s /c switches into drive paths,
     // starting an interactive cmd session instead of running the payload.
     (target === 'copied-command' && isPosixFamilyWindowsShellConfigured()) ||
-    !/^npx\s+skills\s+(?:add|update)\b/i.test(trimmedCommand)
+    !/^npx\s+skills(?:@\S+)?\s+(?:add|update)\b/i.test(trimmedCommand)
   ) {
     return command
   }

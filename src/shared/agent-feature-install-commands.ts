@@ -2,6 +2,12 @@ import { isSkillsCliAgentKeyShaped } from './skills-cli-agent-keys'
 
 export const ORCA_SKILLS_REPOSITORY_URL = 'https://github.com/stablyai/orca'
 
+// Why the version spec: `npx skills` resolves a bare name from node_modules/.bin
+// and then PATH before it will fetch from the registry, so any unrelated
+// executable named `skills` on the host silently receives these arguments
+// (#18687). Only a spec makes npx treat the argument as a package to fetch.
+export const SKILLS_CLI_PACKAGE_SPEC = 'skills@latest'
+
 export const ORCA_CLI_SKILL_NAME = 'orca-cli'
 export const COMPUTER_USE_SKILL_NAME = 'computer-use'
 export const ORCHESTRATION_SKILL_NAME = 'orchestration'
@@ -42,7 +48,7 @@ export function buildAgentFeatureSkillInstallArgs(
   // Why: one flag per name remains compatible with both single-value and variadic parsers.
   const skillArgs = skillNames.flatMap((name) => ['--skill', name])
   return [
-    'skills',
+    SKILLS_CLI_PACKAGE_SPEC,
     'add',
     ORCA_SKILLS_REPOSITORY_URL,
     ...skillArgs,
@@ -75,7 +81,7 @@ export function buildAgentFeatureSkillUpdateArgs(
   }
   const global = options.global ?? true
   return [
-    'skills',
+    SKILLS_CLI_PACKAGE_SPEC,
     'update',
     ...names,
     global ? '--global' : '--project',

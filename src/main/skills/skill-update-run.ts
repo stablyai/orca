@@ -4,6 +4,7 @@ import {
   type SkillUpdateRun,
   type SkillUpdateStartResult
 } from '../../shared/skill-freshness'
+import { SKILLS_CLI_PACKAGE_SPEC } from '../../shared/agent-feature-install-commands'
 import { resolveCliCommand } from '../codex-cli/command'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
@@ -48,7 +49,7 @@ function clampOutput(value: string): string {
 }
 
 /**
- * Runs `npx --yes skills update <names> --global -y` headlessly.
+ * Runs `npx --yes skills@latest update <names> --global -y` headlessly.
  *
  * Both `--yes` flags are load-bearing and distinct: `npx --yes` skips the
  * install-this-package prompt, and `skills … -y` takes the CLI's own
@@ -93,7 +94,14 @@ export class SkillUpdateRunner {
     const resolveCommand = this.deps.resolveCommand ?? ((name: string) => resolveCliCommand(name))
     const spawnProcess = this.deps.spawnProcess ?? spawn
     const npxCommand = resolveCommand('npx')
-    const npxArgs = ['--yes', 'skills', 'update', ...canonicalNames, '--global', '-y']
+    const npxArgs = [
+      '--yes',
+      SKILLS_CLI_PACKAGE_SPEC,
+      'update',
+      ...canonicalNames,
+      '--global',
+      '-y'
+    ]
 
     let spawnCmd: string
     let spawnArgs: string[]
