@@ -6,8 +6,10 @@ const mocks = vi.hoisted(() => ({
   platform: { OS: 'android' },
   receive: (_notification: Notification) => {},
   remove: vi.fn(),
+  eligible: vi.fn().mockResolvedValue(true),
   schedule: vi.fn().mockResolvedValue('message-1')
 }))
+vi.mock('./push-receive', () => ({ canPresentForegroundPush: mocks.eligible }))
 vi.mock('react-native', () => ({ Platform: mocks.platform }))
 vi.mock('expo-notifications', () => ({
   addNotificationReceivedListener: (listener: typeof mocks.receive) => {
@@ -41,13 +43,15 @@ function notification(trigger: unknown = { type: 'push', remoteMessage: { notifi
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.eligible.mockReset().mockResolvedValue(true)
   mocks.platform.OS = 'android'
 })
 
-it('presents a title-only data push with its original identity, routing and channel', () => {
+it('presents a title-only data push with its original identity, routing and channel', async () => {
   const stop = startAndroidForegroundPushPresentation()
   const incoming = notification()
   mocks.receive(incoming)
+  await vi.waitFor(() => expect(mocks.schedule).toHaveBeenCalledOnce())
   expect(mocks.schedule).toHaveBeenCalledWith({
     identifier: incoming.request.identifier,
     content: incoming.request.content,
@@ -79,4 +83,30 @@ it('leaves iOS delivery unchanged', () => {
   mocks.platform.OS = 'ios'
   startAndroidForegroundPushPresentation()()
   expect(mocks.remove).not.toHaveBeenCalled()
+})
+
+it('waits for eligibility before scheduling, even if native presentation will bypass JS', async () => {
+  let resolve!: (eligible: boolean) => void
+  mocks.eligible.mockReturnValue(
+    new Promise<boolean>((done) => {
+      resolve = done
+    })
+  )
+  startAndroidForegroundPushPresentation()
+  mocks.receive(notification())
+  expect(mocks.schedule).not.toHaveBeenCalled()
+  // Model a dismissal arriving while the eligibility reads are in flight.
+  resolve(false)
+  await Promise.resolve()
+  expect(mocks.schedule).not.toHaveBeenCalled()
+})
+
+it('does not schedule when eligibility cannot be read', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  mocks.eligible.mockRejectedValueOnce(new Error('storage unavailable'))
+  startAndroidForegroundPushPresentation()
+  mocks.receive(notification())
+  await vi.waitFor(() => expect(warn).toHaveBeenCalledOnce())
+  expect(mocks.schedule).not.toHaveBeenCalled()
+  warn.mockRestore()
 })

@@ -1,5 +1,6 @@
 import { Platform } from 'react-native'
 import * as Notifications from 'expo-notifications'
+import { canPresentForegroundPush } from './push-receive'
 import { readOrcaPushPayload } from './push-payload'
 
 export function startAndroidForegroundPushPresentation(): () => void {
@@ -23,19 +24,26 @@ export function startAndroidForegroundPushPresentation(): () => void {
       return
     }
 
-    void Notifications.scheduleNotificationAsync({
-      identifier,
-      content: {
-        title: content.title,
-        body: content.body,
-        data: content.data,
-        sound: content.sound === 'default' ? 'default' : false
-      },
-      trigger:
-        typeof content.data?.channelId === 'string' ? { channelId: content.data.channelId } : null
-    }).catch((error: unknown) => {
+    void present().catch((error: unknown) => {
       console.warn('[push] Foreground notification presentation failed', error)
     })
+
+    async function present(): Promise<void> {
+      if (!payload || !(await canPresentForegroundPush(payload))) {
+        return
+      }
+      await Notifications.scheduleNotificationAsync({
+        identifier,
+        content: {
+          title: content.title,
+          body: content.body,
+          data: content.data,
+          sound: content.sound === 'default' ? 'default' : false
+        },
+        trigger:
+          typeof content.data?.channelId === 'string' ? { channelId: content.data.channelId } : null
+      })
+    }
   })
   return () => subscription.remove()
 }

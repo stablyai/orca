@@ -9,6 +9,7 @@ import type { HostCatalogEntry } from '../transport/types'
 import { getNotificationNavigationTarget } from './notification-routing'
 import {
   foregroundNotificationBehavior,
+  canPresentForegroundPush,
   isRemotePushTrigger,
   pushNotificationRouteData,
   resetForegroundPushClaimsForTests
@@ -256,3 +257,18 @@ it.each(['apns', 'fcm'])(
     })
   }
 )
+
+it('preflight does not consume the final presentation claim and observes later dismissals', async () => {
+  const payload = {
+    hostFingerprint,
+    notificationId: 'preflight',
+    notificationEpoch: 'epoch',
+    notificationSeq: 4
+  }
+  await expect(canPresentForegroundPush(payload)).resolves.toBe(true)
+  await expect(shouldSuppressForegroundPush(apnsData(payload))).resolves.toBe(false)
+  const { rememberPushDismissal } = await import('./push-dismissal-watermarks')
+  await rememberPushDismissal(payload)
+  await expect(canPresentForegroundPush(payload)).resolves.toBe(false)
+  await expect(shouldSuppressForegroundPush(apnsData(payload))).resolves.toBe(true)
+})

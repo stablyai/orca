@@ -53,16 +53,22 @@ export async function foregroundNotificationBehavior(
   const preferences = await loadNotificationDeliveryPreferences()
   // Unrecognized notifications retain normal behavior; recognized pushes fail closed
   // when consent, host, viewing, or dismissal checks cannot complete.
-  const suppressed = await shouldSuppressForegroundPush(
+  const ineligible = await shouldSuppressForegroundPush(
     payload,
     preferences.suppressWhileViewing
   ).catch(() => payload !== null)
+  const suppressed = ineligible || (payload !== null && !claimForegroundPush(payload))
   return {
     shouldShowBanner: !suppressed,
     shouldShowList: !suppressed,
     shouldPlaySound: !suppressed && preferences.sound,
     shouldSetBadge: false
   }
+}
+
+export async function canPresentForegroundPush(payload: OrcaPushPayload): Promise<boolean> {
+  const preferences = await loadNotificationDeliveryPreferences()
+  return !(await shouldSuppressForegroundPush(payload, preferences.suppressWhileViewing))
 }
 
 async function resolvePushHostId(payload: OrcaPushPayload): Promise<string | null> {
@@ -102,7 +108,7 @@ async function shouldSuppressForegroundPush(
     return true
   }
   // Keep this last: a socket/native dismissal may land during any preference or host read.
-  return (await wasPushDismissed(payload)) || !claimForegroundPush(payload)
+  return wasPushDismissed(payload)
 }
 
 /** Whether the OS says a notification came from a provider rather than this app. */
