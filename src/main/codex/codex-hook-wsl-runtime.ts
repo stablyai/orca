@@ -20,6 +20,7 @@ import {
   wrapReadablePosixHookCommand,
   writeCodexHooksJson
 } from './codex-hook-definition'
+import { createCodexHookTrustEntry } from './codex-hook-identity'
 import { grantManagedCodexHookTrust } from './codex-hook-trust-grant'
 import { getManagedScript } from './codex-hook-script'
 import {
@@ -28,6 +29,10 @@ import {
 } from './codex-hook-trust-cleanup'
 import { readCodexTrustGrantLedgerHomeForReconciliation } from './codex-managed-trust-reconciliation'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
+import {
+  preserveCodexWrittenWslManagedHookTrust,
+  type WslManagedHookTrustCandidate
+} from './wsl-managed-hook-trust'
 import type {
   CodexWslRuntimeHookInstallPlan,
   WslCanonicalPathSettlement
@@ -74,23 +79,39 @@ async function installManagedHooksIntoWslRuntimeExclusively(
     }
   }
 
-  const trustEntries: CodexTrustEntry[] = []
+  const trustCandidates: WslManagedHookTrustCandidate[] = []
   for (const eventName of CODEX_EVENTS) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+    const managedHook = buildManagedCommandHook(command)
     const definition: HookDefinition = {
-      hooks: [buildManagedCommandHook(command)]
+      hooks: [managedHook]
     }
     nextHooks[eventName] = [definition, ...cleaned]
-    trustEntries.push({
+    const next: CodexTrustEntry = {
       sourcePath: plan.trustConfigPath,
       eventLabel: CODEX_EVENT_LABEL[eventName],
       groupIndex: 0,
       handlerIndex: 0,
       command,
       timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
-    })
+    }
+    const previousDefinition = current[0]
+    const previousHook = previousDefinition?.hooks?.[0]
+    const previous =
+      previousDefinition && previousHook
+        ? createCodexHookTrustEntry(
+            plan.trustConfigPath,
+            eventName,
+            0,
+            0,
+            previousDefinition,
+            previousHook
+          )
+        : null
+    trustCandidates.push({ next, previous })
   }
+  const trustEntries = trustCandidates.map((candidate) => candidate.next)
 
   config.hooks = nextHooks
   writeManagedScript(plan.scriptPath, getManagedScript('posix'))
@@ -118,9 +139,15 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       telemetryLane: 'managed'
     })
     if (grant.lane === 'fallback') {
+      // Why: when RPC grant is unavailable, keep a Codex-written hash if the
+      // managed hook content is unchanged so reinstalls do not force re-approval.
+      const preservedTrustEntries = preserveCodexWrittenWslManagedHookTrust(
+        plan.tomlPath,
+        trustCandidates
+      )
       // Why: WSL runtime homes may carry user hook approvals we did not rebuild
       // here; only upsert Orca's entries instead of sweeping the whole source.
-      upsertHookTrustEntries(plan.tomlPath, trustEntries)
+      upsertHookTrustEntries(plan.tomlPath, preservedTrustEntries)
     }
   } catch (error) {
     return {
