@@ -1,8 +1,11 @@
-import { fork, type ChildProcess } from 'node:child_process'
-import { getAppEnvironment } from '../../shared/app-environment'
+import type { ChildProcess } from 'node:child_process'
+import { isDurableDaemonScopeSupported } from './daemon-cgroup-scope'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
-import { daemonLogArgs } from './daemon-launch-paths'
+import {
+  spawnDaemonChildProcess,
+  type DaemonChildSpawnOptions
+} from './daemon-launched-child-spawn'
 import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
 
@@ -24,69 +27,42 @@ export type LaunchedDaemonChild = {
   identity: DaemonEndpointIdentity
 }
 
-type LaunchDaemonChildOptions = {
-  entryPath: string
-  forkEntryPath: string
-  relocatedExecPath?: string
-  userDataPath: string
-  socketPath: string
-  tokenPath: string
-  pidPath: string
-  launchNonce: string
-  macosLoginSessionWatch: boolean
+/**
+ * Why a wrapper instead of one code path: a durable cgroup scope (see `daemon-cgroup-scope.ts`)
+ * is what lets the daemon survive a combined-unit `systemctl restart`, but the pre-flight
+ * capability probe can still race a real environment fact (a torn-down user session, a polkit
+ * policy rejection at the actual `StartTransientUnit` D-Bus call). A scoped attempt that fails
+ * for any reason but a lost endpoint race retries once, unscoped, so an environment that cannot
+ * support isolation degrades to today's proven behavior instead of failing the launch outright.
+ */
+export async function launchDaemonChild(
+  options: DaemonChildSpawnOptions
+): Promise<LaunchedDaemonChild> {
+  if (!isDurableDaemonScopeSupported()) {
+    return launchDaemonChildAttempt(options, false)
+  }
+  try {
+    return await launchDaemonChildAttempt(options, true)
+  } catch (error) {
+    if (error instanceof DaemonEndpointUnavailableError) {
+      // Not a scope problem: another daemon owns the endpoint and the caller adopts it, so a
+      // retry would only fork a second child to lose the same race.
+      throw error
+    }
+    console.warn(
+      '[daemon] durable cgroup-scope launch failed, retrying without cgroup isolation:',
+      (error as Error).message
+    )
+    return launchDaemonChildAttempt(options, false)
+  }
 }
 
-export async function launchDaemonChild(
-  options: LaunchDaemonChildOptions
+async function launchDaemonChildAttempt(
+  options: DaemonChildSpawnOptions,
+  useDurableScope: boolean
 ): Promise<LaunchedDaemonChild> {
-  const {
-    entryPath,
-    forkEntryPath,
-    relocatedExecPath,
-    userDataPath,
-    socketPath,
-    tokenPath,
-    pidPath,
-    launchNonce,
-    macosLoginSessionWatch
-  } = options
-  const child = fork(
-    forkEntryPath,
-    [
-      '--socket',
-      socketPath,
-      '--token',
-      tokenPath,
-      '--pid-record',
-      pidPath,
-      '--launch-nonce',
-      launchNonce,
-      '--entry-path',
-      entryPath,
-      '--app-version',
-      getAppEnvironment().getVersion(),
-      '--spawner-exec-path',
-      process.execPath,
-      ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
-      ...daemonLogArgs()
-    ],
-    {
-      // Why: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
-      cwd: userDataPath,
-      // Why: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
-      detached: true,
-      stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-      // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
-      ...(relocatedExecPath ? { execPath: relocatedExecPath } : {}),
-      // Why: run the fork as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: '1',
-        // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
-        ORCA_USER_DATA_PATH: userDataPath
-      }
-    }
-  )
+  const { pidPath, launchNonce } = options
+  const child = spawnDaemonChildProcess(options, useDurableScope)
 
   // Why: keep only the startup-window stderr tail so a crash cause is visible without unbounded memory.
   let startupStderr = ''
@@ -148,8 +124,12 @@ export async function launchDaemonChild(
         )
         return
       }
-      if (Number.isSafeInteger(child.pid) && (child.pid as number) > 0) {
-        unlinkOwnedDaemonPidFile(pidPath, child.pid as number, launchNonce)
+      // Best-effort by design: the launch failed before any self-report, so `child.pid` is the
+      // only PID available here. `unlinkOwnedDaemonPidFile` matches on both PID and launch
+      // nonce, so a mismatch removes nothing rather than clobbering another daemon's record.
+      const childPid = child.pid
+      if (childPid !== undefined && childPid > 0) {
+        unlinkOwnedDaemonPidFile(pidPath, childPid, launchNonce)
       }
       reject(startupError)
     }
@@ -169,13 +149,15 @@ export async function launchDaemonChild(
         if (settled) {
           return
         }
+        // Why not `child.pid`: on the durable-scope path the immediate child is `systemd-run`
+        // (see daemon-ready-identity.ts); adoption compares this identity against the daemon's
+        // own hello-response identity, so both sides must come from inside the daemon process.
         const readyIdentity = parseDaemonReadyIdentity(msg)
-        if (!Number.isSafeInteger(child.pid) || (child.pid as number) <= 0 || !readyIdentity) {
+        if (!readyIdentity) {
           void fail(new Error('Daemon readiness identity is incomplete'))
           return
         }
         launchedIdentity = {
-          pid: child.pid as number,
           ...readyIdentity,
           launchNonce
         }
@@ -226,6 +208,14 @@ export async function launchDaemonChild(
   return { child, identity: launchedIdentity }
 }
 
+/**
+ * Startup-failure cleanup only — a successful launch detaches instead (see `onReadyMessage`).
+ *
+ * Signalling `child.pid` stays correct on the durable-scope path: in `--scope` mode systemd-run
+ * registers its *own* PID with the transient unit and then `execvpe()`s the daemon, so that PID
+ * is either still systemd-run (scope setup not finished, and killing it aborts the launch) or
+ * already the daemon itself. There is never an intermediate process left holding the daemon.
+ */
 export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise<void> {
   try {
     if (

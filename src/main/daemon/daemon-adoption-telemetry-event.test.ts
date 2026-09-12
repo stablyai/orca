@@ -41,7 +41,8 @@ const stalePidRecord: ParsedDaemonPid = {
   linuxStartTicks: null,
   bootId: null,
   spawnerExecPath:
-    '/Users/alice/Library/Caches/com.stablyai.orca.ShipIt/u/Orca.app/Contents/MacOS/Orca'
+    '/Users/alice/Library/Caches/com.stablyai.orca.ShipIt/u/Orca.app/Contents/MacOS/Orca',
+  cgroupUnit: null
 }
 const origin = { app_version_match: 'different', spawner_path_class: 'updater-cache' } as const
 const PID_PATH = '/fake/daemon.pid'

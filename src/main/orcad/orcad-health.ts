@@ -47,6 +47,9 @@ export type TerminalDaemonHealth = {
   buildVersion: string | null
   entryPath: string | null
   protocolVersion: number | null
+  /** The systemd scope unit the daemon self-detected landing in (see daemon-cgroup-scope.ts),
+   *  or null when it ran unscoped — the case a combined-unit `systemctl restart` still reaps. */
+  cgroupUnit: string | null
   selfTest: PtySelfTest
 }
 
@@ -116,6 +119,7 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
       buildVersion: null,
       entryPath: null,
       protocolVersion: null,
+      cgroupUnit: null,
       selfTest
     }
   }
@@ -137,6 +141,7 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
     buildVersion: record?.appVersion ?? null,
     entryPath: record?.entryPath ?? null,
     protocolVersion: facts.protocolVersion,
+    cgroupUnit: record?.cgroupUnit ?? null,
     selfTest
   }
 }

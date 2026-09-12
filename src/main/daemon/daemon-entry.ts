@@ -13,6 +13,7 @@ import { warmWindowsConptyOnce } from './windows-conpty-warmup'
 import { warmPwshAvailabilityCache } from '../pwsh'
 import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
 import { PROTOCOL_VERSION } from './types'
+import { detectOwnCgroupScopeUnit } from './daemon-cgroup-scope'
 import {
   DAEMON_EXIT_ENDPOINT_OCCUPIED,
   DaemonEndpointUnavailableError
@@ -268,11 +269,14 @@ async function main(): Promise<void> {
       ? {
           publishEndpointOwnership: () =>
             publishDaemonPidFile(pidPath, {
-              pid: process.pid,
               ...readyIdentity,
               ...(entryPath ? { entryPath } : {}),
               ...(appVersion ? { appVersion } : {}),
               ...(spawnerExecPath ? { spawnerExecPath } : {}),
+              // Why detect rather than trust the launcher's intent: this is the ground truth of
+              // where the daemon's own cgroup landed, verified from inside the process that
+              // matters. See daemon-cgroup-scope.ts.
+              cgroupUnit: detectOwnCgroupScopeUnit(),
               launchNonce
             })
         }
