@@ -139,7 +139,22 @@
     "../src/main/startup/cli-command-names.ts",
     "../src/main/runtime/runtime-metadata.ts",
     "../src/main/sqlite/sync-database.ts",
-    "../src/main/win32-utils.ts"
+    "../src/main/win32-utils.ts",
+    // Why: `orca terminal attach` speaks the daemon NDJSON protocol directly;
+    // the list is the transitive import closure of the CLI's daemon modules.
+    "../src/main/daemon/daemon-checkpoint-file.ts",
+    "../src/main/daemon/daemon-create-or-attach-result.ts",
+    "../src/main/daemon/daemon-errors.ts",
+    "../src/main/daemon/daemon-foreground-process-protocol.ts",
+    "../src/main/daemon/daemon-hello-protocol.ts",
+    "../src/main/daemon/daemon-protocol-version.ts",
+    "../src/main/daemon/daemon-respawn-throttle.ts",
+    "../src/main/daemon/daemon-spawner.ts",
+    "../src/main/daemon/daemon-stream-events.ts",
+    "../src/main/daemon/terminal-history-seed-transfer-protocol.ts",
+    "../src/main/daemon/terminal-modes.ts",
+    "../src/main/daemon/terminal-snapshot.ts",
+    "../src/main/daemon/types.ts"
   ],
   "compilerOptions": {
     "composite": true,

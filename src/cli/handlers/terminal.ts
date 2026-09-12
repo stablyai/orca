@@ -37,6 +37,7 @@ import {
   getRequiredWorktreeSelector,
   getTerminalHandle
 } from '../selectors'
+import { terminalAttachHandler } from './terminal-attach'
 import { terminalCloseHandler } from './terminal-close'
 import { terminalSendHandler } from './terminal-send'
 
@@ -109,6 +110,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatTerminalRead)
   },
   'terminal send': terminalSendHandler,
+  'terminal attach': terminalAttachHandler,
   'terminal wait': async ({ flags, client, cwd, json }) => {
     const timeoutMs = getOptionalPositiveIntegerFlag(flags, 'timeout-ms')
     const result = await client.call<{ wait: RuntimeTerminalWait }>(

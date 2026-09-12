@@ -257,7 +257,11 @@ export const electronViteConfig: UserConfig = {
             'src/main/codex/managed-home-shell-preflight.ts'
           ),
           // Why: account import mutates the user's macOS Keychain from the CLI.
-          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
+          'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts'),
+          // Why: the CLI imports these for `orca terminal attach`; they must survive out/main rebuilds.
+          'daemon/daemon-protocol-version': resolve('src/main/daemon/daemon-protocol-version.ts'),
+          'daemon/daemon-spawner': resolve('src/main/daemon/daemon-spawner.ts'),
+          'daemon/types': resolve('src/main/daemon/types.ts')
         },
         // Why: Rolldown's SSR default is ESM, but Electron and sidecar launchers
         // consume these stable CommonJS paths.
