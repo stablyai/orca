@@ -1,6 +1,6 @@
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import { classifyGitHubUnavailable } from '../../../../shared/github/api-availability'
-import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../shared/task-query'
 import { sortWorkItemsByNumber } from '../../../../shared/work-items'
 import {
   ghExecFileAsync,
@@ -18,6 +18,7 @@ import type { MainWorkItem } from './../map/work-item-field-coercion'
 import { mapIssueWorkItem, mapPullRequestWorkItem } from './../map/work-item'
 import {
   buildWorkItemListRequest,
+  buildRecentIssueListRequest,
   assertSshRepoHasResolvedGitHubSource,
   type PartialWorkItemsResult
 } from './work-item-list-request'
@@ -33,15 +34,8 @@ export async function listRecentWorkItems(
 ): Promise<PartialWorkItemsResult> {
   const ghOptions = ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
   assertSshRepoHasResolvedGitHubSource({ connectionId, issueOwnerRepo, prOwnerRepo })
-  const recentQuery = parseTaskQuery('is:open')
   const issueRequest = issueOwnerRepo
-    ? buildWorkItemListRequest({
-        kind: 'issue',
-        ownerRepo: issueOwnerRepo,
-        limit,
-        query: recentQuery,
-        page
-      })
+    ? buildRecentIssueListRequest({ ownerRepo: issueOwnerRepo, limit, page })
     : null
   const prRequest = prOwnerRepo
     ? buildWorkItemListRequest({
