@@ -348,6 +348,24 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
+  it.each(['plain-escape', 'ctrl-c'] as const)(
+    'does not infer a DSH interruption from %s',
+    (intent) => {
+      vi.useFakeTimers()
+      const inferInterrupt = vi.fn()
+      const tracker = createAgentInterruptInference({
+        paneKey: PANE_KEY,
+        getStatusEntry: () => makeEntry({ agentType: 'dsh-console' }),
+        inferInterrupt,
+        now: () => 1_100
+      })
+      tracker.observeInputIntent(intent)
+      vi.runOnlyPendingTimers()
+      expect(inferInterrupt).not.toHaveBeenCalled()
+      tracker.dispose()
+    }
+  )
+
   it('does not emit for non-working states', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()

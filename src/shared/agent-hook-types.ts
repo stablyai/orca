@@ -4,6 +4,7 @@
 // to keep a single source of truth for the version string and status contract.
 
 export const AGENT_HOOK_TARGETS = [
+  'dsh-console',
   'claude',
   'openclaude',
   'codex',

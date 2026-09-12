@@ -7,6 +7,11 @@ export const EXACT_NODE_ENTRYPOINT_IDENTITIES: readonly {
   agent: TuiAgent
   processName: string
 }[] = [
+  {
+    pattern: /(?:^|\/)node_modules\/@cofy-x\/dsh-console\/bin\/dsh-console\.js$/,
+    agent: 'dsh-console',
+    processName: 'dsh-console'
+  },
   // Why: Cursor's native Windows launcher runs a generic versioned index.js,
   // so its install path is the only stable identity that avoids ordinary Node apps.
   {

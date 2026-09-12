@@ -35,6 +35,29 @@ describe('draft prefill teardown ordering (#14975)', () => {
 })
 
 describe('tui agent startup plans', () => {
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'uses the published DSH interactive prompt and continue flags on %s',
+    (platform) => {
+      const plan = buildAgentStartupPlan({
+        agent: 'dsh-console',
+        prompt: "fix Bob's branch",
+        agentArgs: '--continue',
+        cmdOverrides: {},
+        platform
+      })
+      expect(plan?.launchCommand).toContain('--prompt')
+      expect(plan?.launchCommand).toContain('--continue')
+      expect(plan?.launchCommand).not.toContain('--prompt-interactive')
+      const resumed = buildAgentResumeStartupPlan({
+        agent: 'dsh-console',
+        providerSession: { key: 'session_id', id: 'dsh-session' },
+        cmdOverrides: {},
+        platform
+      })
+      expect(resumed?.launchCommand).toBe("dsh-console '--resume' 'dsh-session'")
+    }
+  )
+
   it.each(['powershell', 'cmd'] as const)(
     'keeps the established invalid-quote error on %s',
     (shell) => {

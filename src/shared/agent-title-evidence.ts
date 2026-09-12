@@ -1,3 +1,4 @@
+import { isDshConsoleTitle } from './dsh-console-title'
 import {
   AGY_AGENT_NAME_RE,
   CLAUDE_IDLE,
@@ -271,6 +272,9 @@ function collectAnchoredNames(segments: readonly string[]): TuiAgent[] {
   const anchored = new Set<TuiAgent>()
 
   for (const segment of segments) {
+    if (isDshConsoleTitle(segment)) {
+      anchored.add('dsh-console')
+    }
     // Why anchored and not a bare marker: the native envelope owns the whole wrapped pane title.
     // Its session text may name other agents without changing the OpenCode owner.
     if (isOpenCodeNativeTitle(segment)) {

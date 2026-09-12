@@ -1,3 +1,4 @@
+import { isDshConsoleTitle } from './dsh-console-title'
 import {
   AGY_AGENT_NAME_RE,
   CLAUDE_IDLE,
@@ -19,6 +20,9 @@ import { memoizeTitleClassification } from './terminal-title-classification-memo
  * Used to scope prompt-cache-timer behavior to Claude sessions only.
  */
 function computeIsClaudeAgent(title: string): boolean {
+  if (isDshConsoleTitle(title)) {
+    return false
+  }
   if (!title || isClaudeManagementTitle(title) || isOpenCodeNativeTitle(title)) {
     return false
   }
@@ -49,6 +53,9 @@ export const isClaudeAgent: (title: string) => boolean =
   memoizeTitleClassification(computeIsClaudeAgent)
 
 function computeAgentLabel(title: string): string | null {
+  if (isDshConsoleTitle(title)) {
+    return 'DSH Console'
+  }
   if (isClaudeManagementTitle(title)) {
     return null
   }

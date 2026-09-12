@@ -59,7 +59,8 @@ function shouldIgnoreInterruptIntent(
   agentType: AgentStatusEntry['agentType'],
   intent: AgentInterruptInputIntent
 ): boolean {
-  return agentType === 'droid' && intent === 'ctrl-c'
+  // DSH Escape edits input; only a real aborted-turn event proves Ctrl+C completed.
+  return agentType === 'dsh-console' || (agentType === 'droid' && intent === 'ctrl-c')
 }
 
 function canInferInterrupt(entry: AgentStatusEntry, intent: AgentInterruptInputIntent): boolean {

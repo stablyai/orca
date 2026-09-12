@@ -4,6 +4,7 @@ import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from './command-token-scanner'
+import { isDshConsoleProcess } from './dsh-console-process'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
 
@@ -289,7 +290,9 @@ export function recognizeAgentProcessFromCommandLine(
   const keep = options?.includeHeadlessOneShot === true
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
-  let direct = recognizeAgentProcess(tokens[0])
+  let direct = isDshConsoleProcess(tokens[0] ?? '', tokens.slice(1))
+    ? { agent: 'dsh-console' as const, processName: 'dsh-console' }
+    : recognizeAgentProcess(tokens[0])
   // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
   if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
     direct = null
@@ -304,7 +307,9 @@ export function recognizeAgentProcessFromCommandLine(
   }
   const viaEntrypoint = isPythonProcessName(firstNormalized)
     ? recognizePythonEntrypoint(tokens, entrypoint)
-    : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
+    : isDshConsoleProcess(entrypoint, tokens.slice(tokens.indexOf(entrypoint, 1) + 1))
+      ? { agent: 'dsh-console' as const, processName: 'dsh-console' }
+      : (recognizeAgentProcess(entrypoint) ?? recognizeNodeScriptEntrypoint(entrypoint))
   if (
     viaEntrypoint?.agent === 'claude-agent-teams' &&
     tokens[tokens.indexOf(entrypoint, 1) + 1]?.toLowerCase() !== 'claude-teams'

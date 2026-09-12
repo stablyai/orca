@@ -67,6 +67,12 @@ function resolveTuiAgentConfig(source: TuiAgentConfigSource): TuiAgentConfig {
 }
 
 const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
+  'dsh-console': {
+    detectCmd: 'dsh-console',
+    detectRequiredCommands: ['dsh', 'pnpm', 'node'],
+    // Why: the published launcher forwards --prompt to its interactive Cordis runner.
+    promptInjectionMode: 'flag-prompt'
+  },
   claude: {
     detectCmd: 'claude',
     promptInjectionMode: 'argv',
