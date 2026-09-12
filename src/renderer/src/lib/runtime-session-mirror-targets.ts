@@ -15,6 +15,7 @@ type RuntimeMirrorStatus = {
   remoteControl?: RuntimeStatus['remoteControl'] | null
   snapshot?: RuntimeHostStatusSnapshot
   connectionGeneration?: number
+  hostContactEpoch?: number
 }
 
 type RuntimeMirrorEnvironment = {
@@ -28,6 +29,7 @@ export type RuntimeSessionMirrorTarget = {
   runtimeId: string
   connectionGeneration: number
   pairingRevision: number
+  hostContactEpoch: number
 }
 
 export type RuntimeSessionMirrorTargetState = Omit<
@@ -67,7 +69,8 @@ export function getReachableRuntimeSessionMirrorTargets(
       environmentId,
       runtimeId,
       connectionGeneration: entry?.connectionGeneration ?? 0,
-      pairingRevision: environment.pairingRevision ?? environment.createdAt
+      pairingRevision: environment.pairingRevision ?? environment.createdAt,
+      hostContactEpoch: entry?.hostContactEpoch ?? 0
     })
   }
   return targets

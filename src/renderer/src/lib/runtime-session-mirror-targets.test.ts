@@ -48,7 +48,8 @@ describe('getReachableRuntimeSessionMirrorTargets', () => {
         environmentId: 'online-env',
         runtimeId: 'runtime-online',
         connectionGeneration: 3,
-        pairingRevision: 101
+        pairingRevision: 101,
+        hostContactEpoch: 0
       }
     ])
   })
@@ -87,7 +88,8 @@ describe('getReachableRuntimeSessionMirrorTargets', () => {
         environmentId: 'offline-env',
         runtimeId: 'runtime-recovered',
         connectionGeneration: 0,
-        pairingRevision: 200
+        pairingRevision: 200,
+        hostContactEpoch: 0
       }
     ])
   })

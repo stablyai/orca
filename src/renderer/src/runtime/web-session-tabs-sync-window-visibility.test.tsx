@@ -16,7 +16,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./use-runtime-session-mirror-environment-key', () => ({
-  useRuntimeSessionMirrorEnvironmentKey: mocks.runtimeSessionMirrorEnvironmentKey
+  useRuntimeSessionMirrorEnvironmentKeys: () => ({
+    environmentKey: mocks.runtimeSessionMirrorEnvironmentKey(),
+    resubscribeSignal: ''
+  })
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', async (importOriginal) => {

@@ -70,7 +70,8 @@ describe('mirror targets and host connection state agree on one host', () => {
         environmentId: ENVIRONMENT_ID,
         runtimeId: 'rt-1',
         connectionGeneration: 4,
-        pairingRevision: 101
+        pairingRevision: 101,
+        hostContactEpoch: 0
       }
     ])
   })
