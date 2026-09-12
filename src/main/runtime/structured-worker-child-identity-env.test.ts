@@ -67,7 +67,11 @@ describe('structuredWorkerChildIdentityEnv', () => {
     installFakeAppEnvironment({ isPackaged: () => true, getPath: () => USER_DATA })
     const childEnv = { PATH: '/usr/bin' }
     const env = structuredWorkerChildIdentityEnv(SESSION_ID, childEnv)
-    expect(env).toEqual({ PATH: '/usr/bin', ORCA_STRUCTURED_SESSION: '1' })
+    expect(env).toEqual({
+      PATH: '/usr/bin',
+      ORCA_STRUCTURED_SESSION: '1',
+      ORCA_WORK_ORIGIN_SESSION_ID: SESSION_ID
+    })
     expect(env.ORCA_TERMINAL_HANDLE).toBeUndefined()
     expect(env.ORCA_PANE_KEY).toBeUndefined()
     expect(env.ORCA_CLI_COMMAND).toBeUndefined()

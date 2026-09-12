@@ -16,6 +16,10 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
   ): Promise<CreateWorktreeResult> {
+    args = {
+      ...args,
+      workOrigin: args.workOrigin === undefined ? { kind: 'host' } : args.workOrigin
+    }
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -79,7 +83,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         deps: {
           store: this.store,
           ptySpawnAvailable: Boolean(this.ptyController?.spawn),
-          createTerminal: (selector, options) => this.createTerminal(selector, options),
+          createTerminal: (selector, options) =>
+            this.createTerminal(selector, { ...options, workOrigin: args.workOrigin }),
           markTrusted: (agent, path) =>
             this.markWorkspaceTrustedForAgent(agent, sshConnectionId, path),
           pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
@@ -94,7 +99,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
               setup,
               startup,
               undefined,
-              args.navigation
+              args.navigation,
+              args.workOrigin
             )
         }
       })
@@ -218,10 +224,12 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       ports: {
         canSpawn: Boolean(this.ptyController?.spawn),
         markTrusted: (agent, path) => this.markLocalWorkspaceTrustedForAgent(agent, path),
-        createTerminal: (selector, options) => this.createTerminal(selector, options),
+        createTerminal: (selector, options) =>
+          this.createTerminal(selector, { ...options, workOrigin: args.workOrigin }),
         pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
         sendFollowup: (handle, followup) => this.sendStartupFollowupWhenReady(handle, followup),
-        provision: (options) => this.provisionManagedWorktreeTerminals(options),
+        provision: (options) =>
+          this.provisionManagedWorktreeTerminals({ ...options, workOrigin: args.workOrigin }),
         activate: (repoId, worktreeId, activationSetup, startup, activationDefaultTabs) =>
           this.notifyActivateWorktree(
             repoId,
@@ -229,7 +237,8 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
             activationSetup,
             startup,
             activationDefaultTabs,
-            args.navigation
+            args.navigation,
+            args.workOrigin
           )
       }
     })
@@ -272,7 +281,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
             }
           }
         : {}),
-      ...(defaultTabs ? { defaultTabs } : {}),
+      ...(defaultTabs && args.workOrigin?.kind === 'host' ? { defaultTabs } : {}),
       ...(warning ? { warning } : {}),
       ...(addResult.localBaseRefRefresh
         ? { localBaseRefRefresh: addResult.localBaseRefRefresh }

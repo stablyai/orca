@@ -48,6 +48,7 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   markdownFrontmatterVisible: 'fileKeyed',
   sleepingAgentSessionsByPaneKey: 'sleepingAgentKeyed',
   terminalPtyIncarnationsByPaneKey: 'paneKeyed',
+  terminalWorkOriginsByPaneKey: 'paneKeyed',
   // Why: this host-issued fence must never collide while unified renderer state merges equal repo ids across hosts.
   terminalTopologyRevisionByRepoId: 'hostPrivate',
   terminalSurfaceTombstonesByPaneKey: 'surfaceTombstoneKeyed',

@@ -63,3 +63,63 @@ it.each([0, 255])(
     }
   }
 )
+
+it('uses the same recipient for live delivery and missed-event replay', async () => {
+  const controller = new RuntimeMobileNotificationController()
+  const cleanups: (() => void)[] = []
+  const runtime = {
+    onNotificationDispatched: controller.onDispatched.bind(controller),
+    getMobileNotificationEpoch: controller.getEpoch.bind(controller),
+    getMissedNotificationsSince: controller.getMissedSince.bind(controller),
+    registerSubscriptionCleanup: (_id: string, cleanup: () => void) => cleanups.push(cleanup)
+  }
+  const subscribe = NOTIFICATION_METHODS.find(
+    (m) => m.name === 'notifications.subscribe'
+  ) as RpcStreamingMethod
+  const replay = NOTIFICATION_METHODS.find(
+    (m) => m.name === 'notifications.getMissedSince'
+  ) as RpcMethod
+  const a: unknown[] = [],
+    b: unknown[] = []
+  const contexts = ['a', 'b'].map(
+    (pairedDeviceId) => ({ runtime, pairedDeviceId }) as unknown as RpcContext
+  )
+  const pending = [
+    subscribe.handler(undefined, contexts[0]!, (event) => a.push(event)),
+    subscribe.handler(undefined, contexts[1]!, (event) => b.push(event))
+  ]
+  try {
+    for (const deviceId of ['a', 'b']) {
+      controller.dispatch({
+        type: 'notification',
+        source: 'agent-task-complete',
+        title: deviceId,
+        body: '',
+        worktreeId: 'shared-workspace',
+        emittedAt: 10000,
+        workOrigin: { kind: 'paired-device', deviceId }
+      })
+    }
+    controller.dispatch({
+      type: 'notification',
+      source: 'agent-task-complete',
+      title: 'unknown',
+      body: '',
+      workOrigin: null
+    })
+    expect(a).toHaveLength(2)
+    expect(b).toHaveLength(2)
+    expect(a[1]).toMatchObject({ title: 'a' })
+    expect(b[1]).toMatchObject({ title: 'b' })
+    for (const [index, ctx] of contexts.entries()) {
+      const result = await replay.handler(
+        { lastSeenSeq: 0, epoch: controller.getEpoch(), includeDesktopSuppressed: true },
+        ctx
+      )
+      expect(result).toMatchObject({ notifications: [{ title: index === 0 ? 'a' : 'b' }] })
+    }
+  } finally {
+    cleanups.forEach((stop) => stop())
+    await Promise.all(pending)
+  }
+})

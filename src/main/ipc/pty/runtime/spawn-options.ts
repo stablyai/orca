@@ -1,3 +1,4 @@
+import { resolvePtySpawnWorkOrigin } from '../pane/pty-work-origin'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/types'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { makePaneKey, isTerminalLeafId } from '../../../../shared/stable-pane-id'
@@ -99,6 +100,7 @@ export async function buildRuntimePtySpawnOptions(
   if (args.startupCommandDelivery !== undefined) {
     ctx.spawnOptions.startupCommandDelivery = args.startupCommandDelivery
   }
+  ctx.spawnOptions.workOrigin = resolvePtySpawnWorkOrigin(args, ctx.deps.store)
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent
   }

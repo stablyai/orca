@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../../../shared/work-origin'
 /**
  * Starting, holding and retiring a worker that IS a structured agent session.
  *
@@ -77,6 +78,7 @@ export function releaseStructuredWorkerSession(
 
 export async function createStructuredWorkerSession(args: {
   runtime: OrcaRuntimeService
+  workOrigin?: WorkOrigin
   worktreeId: string
   agent: 'claude' | 'codex'
   dispatchId: string
@@ -106,6 +108,7 @@ export async function createStructuredWorkerSession(args: {
   try {
     created = await createStructuredAgentSessionForWorktree({
       runtime: args.runtime,
+      workOrigin: args.workOrigin,
       ensureHost: async () => {
         await args.runtime.ensureStructuredAgentSessionHost()
         return requireInstalledHost()

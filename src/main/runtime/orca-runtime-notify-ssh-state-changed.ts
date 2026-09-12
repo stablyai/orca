@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import type { WorkOrigin } from '../../shared/work-origin'
 import { OrcaRuntimeWithGetStatus } from './orca-runtime-get-status'
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { getPublicSshState } from './public-ssh-state'
@@ -6,7 +7,6 @@ import { splitWorktreeId } from '../../shared/worktree/id'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
-import { navigationTargetsClients, navigationTargetsHost } from '../../shared/runtime-navigation'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
@@ -145,14 +145,20 @@ export class OrcaRuntimeWithNotifySshStateChanged extends OrcaRuntimeWithGetStat
     setup?: CreateWorktreeResult['setup'],
     startup?: WorktreeStartupLaunch,
     defaultTabs?: CreateWorktreeResult['defaultTabs'],
-    navigationTarget?: RuntimeNavigationTarget
+    navigationTarget?: RuntimeNavigationTarget,
+    workOrigin: WorkOrigin = null
   ): void {
     const navigation = navigationTarget ?? 'all'
-    if (navigationTargetsHost(navigation)) {
-      this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    if (navigation === 'caller') {
+      return
     }
-    if (navigationTargetsClients(navigation)) {
-      this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    if (workOrigin?.kind === 'host') {
+      this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    } else if (workOrigin?.kind === 'paired-device') {
+      this.emitClientEvent({
+        ...toRuntimeActivateWorktreeEvent(repoId, worktreeId, setup, startup, defaultTabs),
+        recipientDeviceId: workOrigin.deviceId
+      })
     }
   }
 

@@ -157,8 +157,8 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
-    expect(followed.activeTabIdByWorktree?.[WT]).toBe(agentTabId)
-    expect(followed.groupsByWorktree?.[WT]?.[0]?.activeTabId).toBe(agentTabId)
+    expect(followed.activeTabIdByWorktree).toBeUndefined()
+    expect(followed.groupsByWorktree).toBeUndefined()
   })
 
   it('does not let stale browser intent override a newer terminal selection', () => {

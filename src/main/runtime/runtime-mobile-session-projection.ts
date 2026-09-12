@@ -285,6 +285,7 @@ export function projectRuntimeMobileSessionTabs(
       : {}
     tabs.push({
       type: 'terminal',
+      workOrigin: host.getWorkOrigin?.(snapshot.worktree, paneKey, livePty),
       id: tab.id,
       parentTabId: tab.parentTabId,
       leafId: tab.leafId,

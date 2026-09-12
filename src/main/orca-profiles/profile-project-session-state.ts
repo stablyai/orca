@@ -86,6 +86,10 @@ export function mergeWorkspaceSessions(
       ...base.defaultTerminalTabsAppliedByWorktreeId,
       ...incoming.defaultTerminalTabsAppliedByWorktreeId
     },
+    terminalWorkOriginsByPaneKey: {
+      ...base.terminalWorkOriginsByPaneKey,
+      ...incoming.terminalWorkOriginsByPaneKey
+    },
     terminalPtyIncarnationsByPaneKey: {
       ...base.terminalPtyIncarnationsByPaneKey,
       ...incoming.terminalPtyIncarnationsByPaneKey
@@ -163,6 +167,14 @@ export function removeRepoFromWorkspaceSession(
   if (next.terminalPtyIncarnationsByPaneKey) {
     next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
       Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
+        const separator = paneKey.lastIndexOf(':')
+        return separator < 1 || !removedTerminalTabIds.has(paneKey.slice(0, separator))
+      })
+    )
+  }
+  if (next.terminalWorkOriginsByPaneKey) {
+    next.terminalWorkOriginsByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalWorkOriginsByPaneKey).filter(([paneKey]) => {
         const separator = paneKey.lastIndexOf(':')
         return separator < 1 || !removedTerminalTabIds.has(paneKey.slice(0, separator))
       })

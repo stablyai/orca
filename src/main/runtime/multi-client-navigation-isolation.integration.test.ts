@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parsePairingCode } from '../../shared/pairing'
-import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import type { PersistedMobileClientTabSelections } from '../../shared/persisted-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
@@ -343,6 +342,10 @@ describe('paired runtime navigation isolation', () => {
     const harness = await startHarness()
     await subscribeBothClientEventStreams(harness)
 
+    vi.spyOn(harness.runtime, 'getTerminalWorkOrigin').mockReturnValue({
+      kind: 'paired-device',
+      deviceId: harness.deviceIdA
+    })
     // The observer is offline while the creator works.
     harness.readerB.dispose()
     await new Promise<void>((resolve) => {
@@ -359,7 +362,9 @@ describe('paired runtime navigation isolation', () => {
         repo: FOLDER_REPO_ID,
         name: 'offline-observer-workspace',
         activate: true,
-        navigation: 'all'
+        navigation: 'all',
+        callerTerminalHandle: 'parent-terminal',
+        cliProvenanceRequest: {}
       }
     })
     await expect(harness.readerA.next('create-while-b-offline')).resolves.toMatchObject({
@@ -397,34 +402,52 @@ describe('paired runtime navigation isolation', () => {
     expect(observed.at(-1)).toBe('reposChanged')
   })
 
-  it('still reveals to every client when a paired caller asks for all-surface navigation', async () => {
-    // Why: the CLI pairs as a runtime device but has no viewer of its own, so
-    // `orca worktree create --activate` against a remote runtime sends navigation 'all'.
-    const harness = await startHarness()
-    await subscribeBothClientEventStreams(harness)
-
-    send(harness.clientA, {
-      id: 'cli-shaped-create',
-      method: 'worktree.create',
-      params: {
-        repo: FOLDER_REPO_ID,
-        name: 'cli-shaped-workspace',
-        activate: true,
-        navigation: 'all'
+  it.each([false, true])(
+    'isolates current and legacy CLI activation (headless=%s)',
+    async (headless) => {
+      const harness = await startHarness({ headless })
+      await subscribeBothClientEventStreams(harness)
+      const deviceId = harness.deviceIdA
+      vi.spyOn(harness.runtime, 'getTerminalWorkOrigin').mockReturnValue({
+        kind: 'paired-device',
+        deviceId
+      })
+      for (const legacy of [false, true]) {
+        const id = `cli-create-${legacy}`
+        send(harness.clientA, {
+          id,
+          method: 'worktree.create',
+          params: {
+            repo: FOLDER_REPO_ID,
+            name: id,
+            activate: true,
+            callerTerminalHandle: 'parent-terminal',
+            cliProvenanceRequest: {},
+            ...(legacy ? {} : { navigation: 'all' })
+          }
+        })
+        await expect(harness.readerA.next(id)).resolves.toMatchObject({ ok: true })
+        await expect(
+          harness.readerA.next(
+            'events-a',
+            (response) => resultType(response) === 'activateWorktree'
+          )
+        ).resolves.toMatchObject({ ok: true })
+        harness.runtime.notifyReposChangedForRemoteClients()
+        const observed: string[] = []
+        for (;;) {
+          const type = resultType(await harness.readerB.next('events-b'))
+          observed.push(type ?? 'unknown')
+          if (type === 'reposChanged') {
+            break
+          }
+        }
+        expect(observed).not.toContain('activateWorktree')
+        expect(observed).toContain('worktreesChanged')
+        expect(harness.activateWorktree).not.toHaveBeenCalled()
       }
-    })
-    await expect(harness.readerA.next('cli-shaped-create')).resolves.toMatchObject({ ok: true })
-
-    const [eventA, eventB] = await Promise.all([
-      harness.readerA.next('events-a', (response) => resultType(response) === 'activateWorktree'),
-      harness.readerB.next('events-b', (response) => resultType(response) === 'activateWorktree')
-    ])
-    expect([resultType(eventA), resultType(eventB)]).toEqual([
-      'activateWorktree',
-      'activateWorktree'
-    ])
-    expect(harness.activateWorktree).toHaveBeenCalled()
-  })
+    }
+  )
 
   it('keeps create activation caller-scoped on a headless orca serve host', async () => {
     const harness = await startHarness({ headless: true })
@@ -449,20 +472,19 @@ describe('paired runtime navigation isolation', () => {
     expect(observed).not.toContain('activateWorktree')
     expect(observed).toContain('worktreesChanged')
 
-    // A headless host with no viewer of its own still reveals an in-process/CLI create.
     await harness.runtime.createManagedWorktree({
       repoSelector: `id:${FOLDER_REPO_ID}`,
       name: 'headless-cli-workspace',
       activate: true
     })
-    expect(
-      resultType(
-        await harness.readerB.next(
-          'events-b',
-          (response) => resultType(response) === 'activateWorktree'
-        )
-      )
-    ).toBe('activateWorktree')
+    harness.runtime.notifyReposChangedForRemoteClients()
+    for (;;) {
+      const type = resultType(await harness.readerB.next('events-b'))
+      expect(type).not.toBe('activateWorktree')
+      if (type === 'reposChanged') {
+        break
+      }
+    }
   })
 
   it('normalizes a paired focused terminal.create before host-renderer activation', async () => {
@@ -502,27 +524,28 @@ describe('paired runtime navigation isolation', () => {
     })
   })
 
-  it('still reveals a host-originated create-with-activate on the host and every client', async () => {
+  it('reveals a host-originated create only on the host', async () => {
     const harness = await startHarness()
     await subscribeBothClientEventStreams(harness)
-
-    // Why: a headless server's only viewer is a remote client, so an in-process/CLI
-    // create must keep reaching clients; only paired-client callers are scoped.
     await harness.runtime.createManagedWorktree({
       repoSelector: `id:${FOLDER_REPO_ID}`,
-      name: 'cli-created-workspace',
+      name: 'host-created',
       activate: true
     })
-
-    const [eventA, eventB] = await Promise.all([
-      harness.readerA.next('events-a', (response) => resultType(response) === 'activateWorktree'),
-      harness.readerB.next('events-b', (response) => resultType(response) === 'activateWorktree')
-    ])
-    expect([resultType(eventA), resultType(eventB)]).toEqual([
-      'activateWorktree',
-      'activateWorktree'
-    ])
-    expect(harness.activateWorktree).toHaveBeenCalled()
+    harness.runtime.notifyReposChangedForRemoteClients()
+    for (const [reader, id] of [
+      [harness.readerA, 'events-a'],
+      [harness.readerB, 'events-b']
+    ] as const) {
+      for (;;) {
+        const type = resultType(await reader.next(id))
+        expect(type).not.toBe('activateWorktree')
+        if (type === 'reposChanged') {
+          break
+        }
+      }
+    }
+    expect(harness.activateWorktree).toHaveBeenCalledOnce()
   })
 
   it('projects session-tab activation only to the paired caller across fanout and reconnect', async () => {
@@ -631,7 +654,7 @@ describe('paired runtime navigation isolation', () => {
     harness.runtime.notifyWorktreesChangedForRemoteClients(REPO_ID)
     expect(resultType(await harness.readerA.next('events-a'))).toBe('worktreesChanged')
     expect(resultType(await harness.readerB.next('events-b'))).toBe('worktreesChanged')
-    expect(harness.hostSelections.worktreeId).toBe(CLIENT_A_WORKTREE_ID)
+    expect(harness.hostSelections.worktreeId).toBe(HOST_WORKTREE_ID)
 
     send(harness.clientB, {
       id: 'clients-follow',
@@ -639,15 +662,13 @@ describe('paired runtime navigation isolation', () => {
       params: { worktree: `id:${CLIENT_B_WORKTREE_ID}`, navigation: 'clients' }
     })
     await harness.readerB.next('clients-follow')
+    harness.runtime.notifyReposChangedForRemoteClients()
     const [eventA, eventB] = await Promise.all([
       harness.readerA.next('events-a'),
       harness.readerB.next('events-b')
     ])
-    expect([resultType(eventA), resultType(eventB)]).toEqual([
-      'activateWorktree',
-      'activateWorktree'
-    ])
-    expect(harness.hostSelections.worktreeId).toBe(CLIENT_A_WORKTREE_ID)
+    expect([resultType(eventA), resultType(eventB)]).toEqual(['reposChanged', 'reposChanged'])
+    expect(harness.hostSelections.worktreeId).toBe(HOST_WORKTREE_ID)
 
     for (const [session, id] of [
       [harness.clientA, 'tabs-a'],
@@ -675,7 +696,7 @@ describe('paired runtime navigation isolation', () => {
         await harness.readerA.next('tabs-a', (response) => resultType(response) === 'updated')
       )
     ).toBe('client-a-tab')
-    expect(harness.hostSelections.tabId).toBe('client-a-tab')
+    expect(harness.hostSelections.tabId).toBe('host-tab')
 
     send(harness.clientB, {
       id: 'tabs-clients-follow',
@@ -687,18 +708,18 @@ describe('paired runtime navigation isolation', () => {
       }
     })
     await harness.readerB.next('tabs-clients-follow')
-    const [tabsA, tabsB] = await Promise.all([
-      harness.readerA.next('tabs-a', (response) => resultType(response) === 'updated'),
-      harness.readerB.next('tabs-b', (response) => resultType(response) === 'updated')
-    ])
-    expect([activeTabId(tabsA), activeTabId(tabsB)]).toEqual(['client-b-tab', 'client-b-tab'])
-    expect(
-      [tabsA, tabsB].map(
-        (response) =>
-          (response.result as RuntimeMobileSessionTabsResult | undefined)?.navigationIntent
-      )
-    ).toEqual(['follow', 'follow'])
-    expect(harness.hostSelections.tabId).toBe('client-a-tab')
+    const tabsB = await harness.readerB.next(
+      'tabs-b',
+      (response) => resultType(response) === 'updated'
+    )
+    send(harness.clientA, {
+      id: 'verify-a-selection',
+      method: 'session.tabs.list',
+      params: { worktree: `id:${SESSION_WORKTREE_ID}` }
+    })
+    const tabsA = await harness.readerA.next('verify-a-selection')
+    expect([activeTabId(tabsA), activeTabId(tabsB)]).toEqual(['client-a-tab', 'client-b-tab'])
+    expect(harness.hostSelections.tabId).toBe('host-tab')
   })
 
   it('isolates crossed clients across two runtime servers', async () => {

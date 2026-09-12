@@ -198,6 +198,7 @@ export function persistAdmittedStablePaneBinding(args: {
       tabId: args.owner.tabId,
       leafId: args.owner.leafId,
       ptyId: args.result.id,
+      workOrigin: args.result.workOrigin,
       ...(args.result.incarnationId ? { incarnationId: args.result.incarnationId } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
       expectedBinding

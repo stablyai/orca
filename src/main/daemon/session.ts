@@ -15,21 +15,17 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
 
-import type {
-  SessionState,
-  ShellReadyState,
-  TakePendingOutputResult,
-  TerminalSnapshot
-} from './types'
+import type * as SessionTypes from './types'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
   readonly sessionId: string
   readonly incarnationId = randomUUID()
   readonly terminalHandle: string | null
+  readonly workOrigin: SessionOptions['workOrigin']
   readonly launchAgent: TuiAgent | null
   readonly wslDistro: string | null
-  private _state: SessionState = 'running'
+  private _state: SessionTypes.SessionState = 'running'
   private _exitCode: number | null = null
   private _disposed = false
   private subprocess: SubprocessHandle
@@ -44,6 +40,7 @@ export class Session {
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
     this.terminalHandle = opts.terminalHandle ?? null
+    this.workOrigin = opts.workOrigin
     this.launchAgent = opts.launchAgent ?? null
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
@@ -95,11 +92,11 @@ export class Session {
     this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
   }
 
-  get state(): SessionState {
+  get state(): SessionTypes.SessionState {
     return this._state
   }
 
-  get shellState(): ShellReadyState {
+  get shellState(): SessionTypes.ShellReadyState {
     return this.shellReady.state
   }
 
@@ -221,7 +218,7 @@ export class Session {
     this.producerPause.release({ resume: true })
   }
 
-  getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
+  getSnapshot(opts: { scrollbackRows?: number } = {}): SessionTypes.TerminalSnapshot | null {
     this.startupIngress.snapshotBarrier()
     return this.output.getSnapshot(opts)
   }
@@ -237,7 +234,7 @@ export class Session {
   takePendingOutput(
     includeSnapshot: boolean,
     opts: { teardownSnapshot?: boolean } = {}
-  ): TakePendingOutputResult | null {
+  ): SessionTypes.TakePendingOutputResult | null {
     if (this._disposed) {
       return null
     }

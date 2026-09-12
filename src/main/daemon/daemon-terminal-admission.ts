@@ -1,3 +1,4 @@
+import { normalizeWorkOrigin } from '../../shared/work-origin'
 import { performance } from 'node:perf_hooks'
 import type { BackgroundTransientFactRelay } from './daemon-background-transient-facts'
 import type { DaemonClientConnections } from './daemon-client-connections'
@@ -103,6 +104,9 @@ export class DaemonTerminalAdmission {
         command: payload.command,
         startupCommandDelivery: payload.startupCommandDelivery,
         ...(attachOnly ? { attachOnly: true } : {}),
+        ...(payload.workOrigin !== undefined
+          ? { workOrigin: normalizeWorkOrigin(payload.workOrigin) }
+          : {}),
         ...(isTuiAgent(payload.launchAgent) ? { launchAgent: payload.launchAgent } : {}),
         shellOverride: payload.shellOverride,
         terminalWindowsWslDistro: payload.terminalWindowsWslDistro,
@@ -158,6 +162,7 @@ export class DaemonTerminalAdmission {
       pid: result.pid,
       shellState: result.shellState,
       incarnationId: result.incarnationId,
+      ...(result.workOrigin !== undefined ? { workOrigin: result.workOrigin } : {}),
       ...(result.launchAgent ? { launchAgent: result.launchAgent } : {}),
       wslDistro: result.wslDistro,
       ...(result.historySeeded !== undefined ? { historySeeded: result.historySeeded } : {}),

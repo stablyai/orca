@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import { ipcRenderer } from 'electron'
 import type { AgentSessionPtyWriteRefusal } from '../../shared/agent-session-pty-write-admission'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
@@ -30,6 +31,7 @@ export const ptySessionControlApi = {
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
+    workOrigin?: WorkOrigin
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
     connectionId?: string | null

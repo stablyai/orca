@@ -1,3 +1,4 @@
+import { workOriginAllowsDevice } from '../../../shared/work-origin'
 import { reserveNotificationCooldown } from '../../../shared/notification-burst-cooldown'
 // Why: the out-of-band leg of the mobile notification fan-out. Every event that
 // already went to connected sockets is offered to the push gateway so a phone
@@ -157,7 +158,8 @@ export class PushDispatcher {
       if (
         !registration ||
         registration.expiresAt <= Date.now() ||
-        !allowsPushDelivery(registration, event)
+        !allowsPushDelivery(registration, event) ||
+        !workOriginAllowsDevice(event.workOrigin, device.deviceId)
       ) {
         return []
       }

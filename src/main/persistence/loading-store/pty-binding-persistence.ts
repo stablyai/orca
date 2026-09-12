@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../../shared/work-origin'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { isTerminalLeafId } from '../../../shared/stable-pane-id'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -41,6 +42,7 @@ export class PtyBindingPersistenceOperations {
       leafId: string
       ptyId: string
       incarnationId?: string
+      workOrigin?: WorkOrigin
       startupCwd?: string
       expectedBinding?: { ptyId: string; incarnationId?: string }
       expectedSourceBinding?: PtyBindingSourceExpectation
@@ -161,6 +163,12 @@ export class PtyBindingPersistenceOperations {
           ...this[ptyBindingPersistenceOperationsContext].runtime.state.workspaceSessionsByHostId,
           [resolvedHostId]: sessionBeforeBinding
         }
+      }
+    }
+    if (args.workOrigin !== undefined) {
+      session.terminalWorkOriginsByPaneKey = {
+        ...session.terminalWorkOriginsByPaneKey,
+        [paneKey]: args.workOrigin
       }
     }
     if (args.incarnationId) {

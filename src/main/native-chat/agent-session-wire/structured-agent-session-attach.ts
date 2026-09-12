@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../../shared/work-origin'
 // Attach: reserve the session record, then open its journal.
 //
 // `create` and `ensure` are the same transition with a different starting
@@ -53,6 +54,7 @@ import { structuredAgentSessionRefusalMessage } from './structured-agent-session
  * session. The host fills them in.
  */
 export type AgentSessionAttachParams = {
+  workOrigin?: WorkOrigin
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
@@ -248,6 +250,7 @@ export function reserveRequestFor(input: {
   const { params, authority } = input
   return {
     sessionId: input.sessionId,
+    workOrigin: params.workOrigin,
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,

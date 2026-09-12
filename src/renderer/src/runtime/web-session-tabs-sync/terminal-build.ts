@@ -163,6 +163,13 @@ export function buildMirroredTerminalTabs(
     return {
       tab: {
         id: localTabId,
+        workOriginsByLeafId: Object.fromEntries(
+          surfaces.flatMap((surface) =>
+            surface.workOrigin === undefined && terminalPtyMode === 'local'
+              ? []
+              : [[surface.leafId, surface.workOrigin ?? null]]
+          )
+        ),
         ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? null,
         worktreeId: snapshot.worktree,
         title,

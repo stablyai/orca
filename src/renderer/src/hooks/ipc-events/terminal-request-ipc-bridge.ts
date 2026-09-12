@@ -79,6 +79,16 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
         const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
+        if (data.workOrigin !== undefined) {
+          useAppStore.setState((state) => ({
+            tabsByWorktree: {
+              ...state.tabsByWorktree,
+              [worktreeId]: state.tabsByWorktree[worktreeId].map((row) =>
+                row.id === tab.id ? { ...row, workOrigin: data.workOrigin } : row
+              )
+            }
+          }))
+        }
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })

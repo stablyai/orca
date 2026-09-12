@@ -1,9 +1,50 @@
+import { useAppStore } from '../store'
 import { describe, expect, it, vi } from 'vitest'
 import type { SshProviderEpoch } from '../../../shared/ssh-types'
 import { subscribeRuntimeClientEvents } from './runtime-client-events'
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
 
 describe('subscribeRuntimeClientEvents', () => {
+  it('accepts only addressed activation and rejects old-host broadcasts', async () => {
+    let receive!: (response: unknown) => void
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          subscribe: vi.fn(async (_args, callbacks) => {
+            receive = callbacks.onResponse
+            return { unsubscribe: vi.fn() }
+          })
+        }
+      }
+    })
+    const prior = useAppStore.getState().runtimeEnvironments
+    useAppStore.setState({ runtimeEnvironments: [{ id: 'env-a', pairedDeviceId: 'a' }] as never })
+    try {
+      const onEvent = vi.fn()
+      const subscription = await subscribeRuntimeClientEvents('env-a', onEvent)
+      for (const recipientDeviceId of [undefined, 'b', 'a']) {
+        receive({
+          ok: true,
+          result: {
+            type: 'activateWorktree',
+            repoId: 'repo',
+            worktreeId: 'worktree',
+            recipientDeviceId
+          }
+        })
+      }
+      expect(onEvent).toHaveBeenCalledExactlyOnceWith({
+        type: 'activateWorktree',
+        repoId: 'repo',
+        worktreeId: 'worktree',
+        recipientDeviceId: 'a'
+      })
+      subscription.unsubscribe()
+    } finally {
+      useAppStore.setState({ runtimeEnvironments: prior })
+    }
+  })
+
   it('subscribes to runtime client events and forwards event frames', async () => {
     replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 7 }])
     const unsubscribe = vi.fn()

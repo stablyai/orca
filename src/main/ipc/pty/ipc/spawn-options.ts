@@ -1,3 +1,4 @@
+import { resolvePtySpawnWorkOrigin } from '../pane/pty-work-origin'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
@@ -75,6 +76,7 @@ export async function buildPtyIpcSpawnOptions(
   if (args.startupCommandDelivery !== undefined) {
     ctx.spawnOptions.startupCommandDelivery = args.startupCommandDelivery
   }
+  ctx.spawnOptions.workOrigin = resolvePtySpawnWorkOrigin(args, ctx.deps.store)
   if (isTuiAgent(args.launchAgent)) {
     ctx.spawnOptions.launchAgent = args.launchAgent
   }
