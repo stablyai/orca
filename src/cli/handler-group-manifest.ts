@@ -60,6 +60,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/project.js')).PROJECT_HANDLERS
   },
   {
+    name: 'project-group',
+    keys: ['project-group scan-nested', 'project-group import-nested'],
+    load: async () => (await import('./handlers/project-group.js')).PROJECT_GROUP_HANDLERS
+  },
+  {
     name: 'repo',
     keys: ['repo list', 'repo add', 'repo show', 'repo set-base-ref', 'repo search-refs'],
     load: async () => (await import('./handlers/repo.js')).REPO_HANDLERS
