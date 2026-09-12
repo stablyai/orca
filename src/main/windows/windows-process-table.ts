@@ -168,6 +168,13 @@ function stagedRelayAddonIsUnpatched(): boolean {
   }
 }
 
+/**
+ * Once per process, for the main and relay processes whose console is real. The
+ * daemon's stderr is destroyed once it reports ready, so it logs this capability
+ * to daemonLog at startup instead (daemon-entry.ts).
+ */
+let warnedAboutCimFallback = false
+
 let cachedModule: WindowsProcessTreeModule | null | undefined
 let moduleLoader: () => WindowsProcessTreeModule | null = loadWindowsProcessTree
 let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
@@ -293,6 +300,7 @@ let nativeReadGate: Promise<unknown> = Promise.resolve()
 
 function resetNativeReaderState(): void {
   nativeReaderEpoch += 1
+  warnedAboutCimFallback = false
   unreturnedReads.clear()
   // Chain, never replace. Dropping the old chain lets a waiter still holding it
   // run against a read queued on the new one -- two concurrent calls into one
@@ -367,6 +375,12 @@ function readOneSnapshot<Row>(projection: ProcessRowProjection<Row>): Promise<Ro
       // never silently start forking shells at the caller's poll rate. Absence
       // is the one condition that can never resolve itself — see
       // docs/reference/windows-process-enumeration.md.
+      if (!warnedAboutCimFallback) {
+        warnedAboutCimFallback = true
+        console.warn(
+          '[windows-process-table] no native binding; falling back to a powershell.exe CIM scan at each caller poll. See docs/reference/windows-process-enumeration.md.'
+        )
+      }
       return projection.cimFallback()
     }
     // Reject rather than resolve empty: an empty table is a claim that nothing
