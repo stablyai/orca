@@ -276,10 +276,11 @@ builds `structuredAgentSessionTabId(sessionId)` itself. Main's key is unchanged;
 the renderer's three call sites (the status bridge's write and its unmount
 cleanup, and `NativeChatStructuredSession`'s read) stopped passing `tab.id`.
 
-The tab id was the wrong input. `web-session-tabs-sync/terminal-surfaces.ts`
-re-hosts a mirrored session at `${baseId}:history-N` when its derived id is
-already occupied, and the host never sees that suffix. Two things followed from
-keying on it, and both are fixed:
+The tab id was the wrong input, but not a simply wrong one: the trade is real in
+both directions, and the section below on readers is the other half of it.
+`web-session-tabs-sync/terminal-surfaces.ts` re-hosts a mirrored session at
+`${baseId}:history-N` when its derived id is already occupied, and the host never
+sees that suffix. Two things followed from keying on it, and both are fixed:
 
 - the renderer and main wrote different keys for one session, so removing the
   filter would have produced two rows for one chat;
@@ -307,6 +308,25 @@ session (the collision that produces the suffix), and they now share one key, so
 the status bridge's unmount cleanup no longer clears the row while another
 surface still mirrors that session.
 
+### What this converged, and what it did not
+
+The key is now derived from the session id. What the key is derived _from_ is
+not: on the replacement path the renderer's local tab id still trails the **old**
+session, so the session id in the key and the session the surface actually hosts
+disagree. So "the tab id was the wrong input" is only half the story — the tab id
+is wrong because the renderer lets it go stale, and 2a converged the key without
+converging that.
+
+The host does not have this problem, because it re-keys. `replaceConversationInSnapshot`
+(`src/main/runtime/structured-conversation-tab-replacement.ts`) sets the tab's id
+to `agent-session:${replacement.sessionId}` and renames every reference that held
+the old one — `activeTabId`, and each group's `tabOrder`, `activeTabId` and
+`recentTabIds`. `terminal-surfaces.ts` instead reuses `existing?.id`, so the
+renderer is the outlier. `/clear` and `/compact` are what mint a replacement
+session id, so this is a routine action, not an edge case.
+
+That leaves two readers to fix here, and a re-key to do elsewhere.
+
 ### The key names the session, so readers resolve the surface by session
 
 A structured pane key's tab-id half is `structuredAgentSessionTabId(sessionId)`,
@@ -329,6 +349,49 @@ new one:
 
 `structured-agent-session-projection.ts` owns both directions of the derivation,
 so no reader re-spells the prefix.
+
+This is the invariant guard, not a substitute for the re-key below: it resolves
+from the pane key, never from `entry.tabId`, so PR 2b making main the sole writer
+of that field does not decay it — and it covers the `:history-N` surface, which a
+re-key cannot, because the suffix exists precisely when the derived id is taken.
+
+### For the re-key PR: what was already measured
+
+Making the renderer's tab id follow the session, as the host's does, is the
+durable fix and belongs in its own PR ahead of this one. It was probed against
+`structured-conversation-tab-replacement.test.ts` and the `web-session-tabs-sync`
+suites (28 files / 249 tests green at the baseline) and then reverted. Do not
+re-derive this:
+
+- **Re-keying alone breaks focus continuity.** `resolveWebSessionVisibleTabId`
+  (`web-session-focus-intent.ts`) matches the sticky visible tab by exact id and
+  then falls back to `entityId`. A replacement changes both, so it resolves to
+  null and `nextActiveUnifiedTabId` falls through to the first agent tab in
+  snapshot order — in the `history: 'before'` variants that is the reopened
+  archive, so `/clear` leaves the user looking at the old conversation. The id
+  carry-forward is load-bearing for focus, which is why the code does it.
+- **The repair channel already exists.** `apply-preparation-groups.ts` builds
+  `rekeyedTabIds` for exactly this ("an entity-identical replacement ... is a
+  rename — its position and focus must carry over") and already feeds it from
+  provisional-terminal and local-editor renames. Adding agent tabs to it restored
+  correct focus in all six variants; 5 of 7 cases then pass.
+- **Residue to cover with its own test:** `activeTabIdByWorktree` lands on the
+  reopened history tab in the two agent-session × history-present variants. All
+  three `terminal` variants pass.
+- **`layoutByWorktree` is not at risk.** `TabGroupLayoutNode` holds `groupId`,
+  never tab ids, so persisted layouts survive a re-key untouched.
+- **It would remove the main source of `:history-N`.** The suffix exists because
+  the replaced tab squats on `structured-agent-session-<old>`; freeing that id
+  gives the reopened history tab its natural one.
+- The replaced-conversation fixture in
+  `components/sidebar/replaced-structured-session-agent-row.test.tsx` retargets to
+  `applyWebSessionTabsSnapshot` for that PR rather than needing a new one.
+
+The contract that PR rewrites is `clear pane identity`, seven pinned cases
+covering agent-session **and** the terminal→chat conversion (`contentType:
+'terminal'` with `structuredSessionId`, where the reused surface is a terminal
+holding `ptyIdsByTabId`, `terminalLayoutsByTabId` and `runtimePaneTitlesByTabId`).
+That is why it is not a rider on a status-row refactor.
 
 ### `stateStartedAt`: the renderer stops overriding the store's rule
 
