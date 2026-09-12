@@ -60,6 +60,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
 ): string {
   const normalizedContent = normalizeMarkdownReferenceLinks(content)
   const lastBracketClose = normalizedContent.lastIndexOf(']]')
+  const lastCommentClose = normalizedContent.lastIndexOf('-->')
   const { transport } = codec
   let index = 0
   let isLineStart = true
@@ -179,7 +180,11 @@ export function encodeRawMarkdownHtmlForRichEditor(
           continue
         }
       }
-      const inlineHtml = matchInlineHtml(normalizedContent.slice(index))
+      // An unterminated comment cannot match; later tags must still be encoded.
+      const inlineHtml =
+        normalizedContent.startsWith('<!--', index) && index + 4 > lastCommentClose
+          ? null
+          : matchInlineHtml(normalizedContent.slice(index))
       if (inlineHtml) {
         result += transport.create('inline-html', inlineHtml)
         index += inlineHtml.length
