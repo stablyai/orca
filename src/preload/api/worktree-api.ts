@@ -140,6 +140,11 @@ export type WorktreeApi = {
   onRemoteBranchConflict: (
     callback: (data: WorktreeRemoteBranchConflictEvent) => void
   ) => () => void
+  openInNewWindow: (worktreeId: string, workspaceKey: string) => Promise<{
+    success: boolean
+    windowId?: number
+    error?: string
+  }>
 }
 
 export type FolderWorkspacesApi = {
