@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   formatAutomationDateTime,
   getAutomationRunStatusLabel,
@@ -13,13 +13,25 @@ import {
   formatAutomationTokens,
   getAutomationUsageStatusLabel
 } from './automation-usage-model'
+import { automationRunOccurrenceLabel } from './automation-run-occurrences'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
+import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
+import type { AutomationActionNotice } from './automation-row-action-dispatch'
+import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
+import {
+  getAutomationRunHistoryArrowTarget,
+  isAutomationRunHistoryArrowKey,
+  shouldHandleAutomationRunHistoryKey
+} from './automation-run-history-keyboard-navigation'
 import { translate } from '@/i18n/i18n'
 
 type AutomationRunHistoryProps = {
   runs: AutomationRun[]
   automationId: string
   worktreeMap: ReadonlyMap<string, Worktree>
+  /** Set when the history read failed; the runs below are unknown, not zero. */
+  notice?: AutomationActionNotice | null
+  onRecoverHistory?: (action: AutomationHostRecoveryAction) => void
   onOpenRun: (run: AutomationRun) => void
 }
 
@@ -27,8 +39,11 @@ export function AutomationRunHistory({
   runs,
   automationId,
   worktreeMap,
+  notice,
+  onRecoverHistory,
   onOpenRun
 }: AutomationRunHistoryProps): React.JSX.Element {
+  const containerRef = React.useRef<HTMLDivElement>(null)
   const [selectedRunState, setSelectedRunState] = useState<{
     automationId: string
     runId: string | null
@@ -45,13 +60,68 @@ export function AutomationRunHistory({
     selectedRunState.automationId === automationId ? selectedRunState.runId : null
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0] ?? null
 
+  const findRunRow = React.useCallback(
+    (runId: string): HTMLElement | null =>
+      containerRef.current?.querySelector<HTMLElement>(`[data-automation-run-id="${runId}"]`) ??
+      null,
+    []
+  )
+
+  React.useEffect(() => {
+    if (runs.length === 0 || notice) {
+      return
+    }
+
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (!shouldHandleAutomationRunHistoryKey(event)) {
+        return
+      }
+
+      if (event.key === 'Enter') {
+        if (selectedRun) {
+          event.preventDefault()
+          onOpenRun(selectedRun)
+        }
+        return
+      }
+
+      if (isAutomationRunHistoryArrowKey(event.key)) {
+        const targetRun = getAutomationRunHistoryArrowTarget({
+          runs,
+          selectedRunId: selectedRun?.id ?? null,
+          key: event.key
+        })
+        if (targetRun) {
+          event.preventDefault()
+          setSelectedRunState({ automationId, runId: targetRun.id })
+          // Enter is left to the focused control, so focus has to follow the selection.
+          findRunRow(targetRun.id)?.focus?.({ preventScroll: true })
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [automationId, findRunRow, notice, onOpenRun, runs, selectedRun])
+
+  React.useEffect(() => {
+    if (!selectedRunId) {
+      return
+    }
+    const element = findRunRow(selectedRunId)
+    if (element && typeof element.scrollIntoView === 'function') {
+      element.scrollIntoView({ block: 'nearest' })
+    }
+  }, [findRunRow, selectedRunId])
+
   return (
-    <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
+    <div ref={containerRef} className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
       <div className="flex items-center justify-between border-b border-border/50 px-3 py-2">
         <div className="text-sm font-medium">
           {translate('auto.components.automations.AutomationRunHistory.53fc5f07ab', 'Run history')}
         </div>
-        <div className="text-xs text-muted-foreground">{runCountLabel}</div>
+        {/* A failed read knows no counts; "0 runs" would answer a question nobody asked the host. */}
+        {notice ? null : <div className="text-xs text-muted-foreground">{runCountLabel}</div>}
       </div>
       <div className="min-h-[18rem] min-w-0">
         <div className="grid grid-cols-[minmax(9rem,1fr)_minmax(10rem,1.1fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] gap-3 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground">
@@ -79,10 +149,12 @@ export function AutomationRunHistory({
               worktree: runWorktree
             })
             const usageLabel = getAutomationUsageStatusLabel(run.usage)
+            const occurrenceLabel = automationRunOccurrenceLabel(run)
             return (
               <button
                 key={run.id}
                 type="button"
+                data-automation-run-id={run.id}
                 data-current={selectedRun?.id === run.id}
                 className={cn(
                   'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(10rem,1.1fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] items-center gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
@@ -95,6 +167,15 @@ export function AutomationRunHistory({
               >
                 <div className="min-w-0">
                   <div>{formatAutomationDateTime(run.scheduledFor)}</div>
+                  {/* The row's own date is the first occurrence; only this line says it recurred. */}
+                  {occurrenceLabel ? (
+                    <div
+                      data-testid="automation-run-occurrences"
+                      className="mt-1 truncate text-xs text-foreground"
+                    >
+                      {occurrenceLabel}
+                    </div>
+                  ) : null}
                   <div className="mt-1 truncate text-xs text-muted-foreground">
                     {workspaceLabel.detailLabel}
                   </div>
@@ -142,7 +223,17 @@ export function AutomationRunHistory({
               </button>
             )
           })}
-          {runs.length === 0 ? (
+          {notice ? (
+            <div className="grid gap-2 px-3 py-6" data-testid="automation-run-history-failure">
+              <p className="text-center text-sm text-foreground">
+                {translate(
+                  'auto.components.automations.AutomationRunHistory.historyUnavailable',
+                  'Run history is unavailable from this host. This does not mean the automation failed or has no runs.'
+                )}
+              </p>
+              <AutomationOwnerConflictNotice notice={notice} onRecover={onRecoverHistory} />
+            </div>
+          ) : runs.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">
               {translate(
                 'auto.components.automations.AutomationRunHistory.402651bfb6',

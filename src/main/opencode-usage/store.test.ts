@@ -22,7 +22,8 @@ vi.mock('./scanner', () => ({
   scanOpenCodeUsageDatabases: vi.fn()
 }))
 
-import { OpenCodeUsageStore, initOpenCodeUsagePath, normalizePersistedState } from './store'
+import { OpenCodeUsageStore, initOpenCodeUsagePath } from './store'
+import { normalizePersistedState } from './persisted-state-normalization'
 import { scanOpenCodeUsageDatabases } from './scanner'
 
 function createEmptyScanResult() {

@@ -1,5 +1,5 @@
 import type { ParsedTaskQuery } from '../../../shared/task-query'
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { applyTaskPageGitHubListOps } from './task-page-github-work-item-mutation-patches'
 import {

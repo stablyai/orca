@@ -14,8 +14,11 @@ import {
   filterDashboardWorkspaces,
   type DashboardFilters
 } from './agent-board-filtering'
+import { countAgentMapAgentTypes, filterAgentMapCards } from './agent-map-filter'
 import { selectAgentlessMapWorkspaces } from './agent-map-workspace-visibility'
-import { useAgentMapStateFilter } from './useAgentMapStateFilter'
+import { AgentMapFilterChips } from './AgentMapFilterChips'
+import { AgentMapFilterPanel } from './AgentMapFilterPanel'
+import { useAgentMapFilters } from './useAgentMapFilters'
 
 const AgentMap = lazyWithRetry(
   () => import('./AgentMap').then((module) => ({ default: module.AgentMap })),
@@ -60,7 +63,11 @@ export function AgentDashboardMapView({
   workspaceContextMenusEnabled,
   onWorkspaceContextMenuOpenChange
 }: AgentDashboardMapViewProps): React.JSX.Element {
-  const { agentStates, toggleAgentState, resetAgentStates } = useAgentMapStateFilter()
+  const agentTypes = useMemo(
+    () => [...countAgentMapAgentTypes(snapshot.cards).keys()],
+    [snapshot.cards]
+  )
+  const mapFilters = useAgentMapFilters(agentTypes)
   const [showAgentlessWorkspaces, setShowAgentlessWorkspaces] = useState(false)
   const [showOrchestrationLinks, setShowOrchestrationLinks] = useState(true)
   const agentlessWorkspaces = useMemo(
@@ -73,6 +80,30 @@ export function AgentDashboardMapView({
       }),
     [snapshot.cards, snapshot.workspaces]
   )
+  // The map's own facets run here so the panel can report one shown-count that
+  // matches what the canvas actually draws.
+  const visibleCards = useMemo(
+    () =>
+      filterAgentMapCards({
+        cards,
+        enabledStates: mapFilters.states,
+        enabledHosts: mapFilters.hosts,
+        enabledAgentTypes: mapFilters.agentTypes,
+        timeRanges: mapFilters.timeRanges,
+        orchestrationOnly: mapFilters.orchestrationOnly,
+        now
+      }).filter((card) => !mapFilters.unreadOnly || card.unseen),
+    [
+      cards,
+      mapFilters.states,
+      mapFilters.hosts,
+      mapFilters.agentTypes,
+      mapFilters.timeRanges,
+      mapFilters.orchestrationOnly,
+      mapFilters.unreadOnly,
+      now
+    ]
+  )
   const visibleAgentlessWorkspaces = useMemo(
     () =>
       showAgentlessWorkspaces ? filterDashboardWorkspaces(agentlessWorkspaces, query, filters) : [],
@@ -83,33 +114,57 @@ export function AgentDashboardMapView({
     <>
       <AgentDashboardToolbar
         cards={snapshot.cards}
-        filterOptions={snapshot.filterOptions}
         filteredCount={cards.length}
         query={query}
         onQueryChange={onQueryChange}
         filters={filters}
         onFiltersChange={onFiltersChange}
-        agentStates={agentStates}
-        onAgentStateToggle={toggleAgentState}
-        onAgentStatesReset={resetAgentStates}
+        searchInputRef={searchInputRef}
+        filterControl={
+          <AgentMapFilterPanel
+            cards={snapshot.cards}
+            shownCount={visibleCards.length}
+            filterOptions={snapshot.filterOptions}
+            filters={filters}
+            onFiltersChange={onFiltersChange}
+            map={mapFilters}
+            agentlessWorkspaceCount={agentlessWorkspaces.length}
+            showAgentlessWorkspaces={showAgentlessWorkspaces}
+            onShowAgentlessWorkspacesChange={setShowAgentlessWorkspaces}
+            showOrchestrationLinks={showOrchestrationLinks}
+            onShowOrchestrationLinksChange={setShowOrchestrationLinks}
+          />
+        }
+      />
+      <AgentMapFilterChips
+        map={mapFilters}
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        projectLabel={(id) => snapshot.cards.find((card) => card.repoId === id)?.repoName ?? id}
+        statusLabel={(id) =>
+          snapshot.cards.find((card) => card.workspaceStatusId === id)?.workspaceStatusLabel ?? id
+        }
         showAgentlessWorkspaces={showAgentlessWorkspaces}
-        agentlessWorkspaceCount={agentlessWorkspaces.length}
         onShowAgentlessWorkspacesChange={setShowAgentlessWorkspaces}
         showOrchestrationLinks={showOrchestrationLinks}
         onShowOrchestrationLinksChange={setShowOrchestrationLinks}
-        searchInputRef={searchInputRef}
+        onClear={() => {
+          onFiltersChange(EMPTY_DASHBOARD_FILTERS)
+          mapFilters.reset()
+          setShowAgentlessWorkspaces(false)
+          setShowOrchestrationLinks(true)
+        }}
       />
       <div className={cn('flex min-h-0 flex-1', dialogCard && 'flex-row-reverse')}>
         <Suspense fallback={null}>
           <AgentMap
-            cards={cards}
+            cards={visibleCards}
             workspaces={visibleAgentlessWorkspaces}
             repoIconsByRepoId={snapshot.repoIconsByRepoId}
             now={now}
             className={dialogCard ? 'w-1/2 flex-none' : undefined}
-            compact={dialogCard !== null}
             selectedPaneKey={dialogCard?.paneKey}
-            enabledStates={agentStates}
+            enabledHosts={mapFilters.hosts}
             showOrchestrationLinks={showOrchestrationLinks}
             launchableAgentsByWorktreeId={snapshot.launchableAgentsByWorktreeId}
             workspaceContextMenusEnabled={workspaceContextMenusEnabled}

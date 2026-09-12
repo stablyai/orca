@@ -14,15 +14,25 @@ import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { Store } from '../persistence'
+import { clearBrowserRoutePartitionStorageForEnvironment } from '../browser/browser-route-partition-storage-runtime'
+import { retireBrowserRoutePartitionStorageForEnvironment } from '../browser/browser-route-partition-storage-retirement'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
-import { closeRemoteRuntimeRequestConnection } from './runtime-environment-request-connections'
+import { clearRuntimeEnvironmentCapabilityEvidence } from './runtime-environment-capability-evidence'
+import {
+  closeRemoteRuntimeRequestConnection,
+  getRuntimeEnvironmentStatusOwner,
+  getRuntimeEnvironmentStatusSnapshots,
+  retryRemoteRuntimeSharedControlConnectionNow
+} from './runtime-environment-request-connections'
+import {
+  clearRuntimeEnvironmentManualDisconnect,
+  isRuntimeEnvironmentManuallyDisconnected,
+  markRuntimeEnvironmentManuallyDisconnected
+} from './runtime-environment-manual-disconnect'
 import {
   callRuntimeEnvironment,
-  clearSharedControlSupport,
   getRuntimeEnvironmentStatus
 } from './runtime-environment-transport-routing'
-
-const manuallyDisconnectedEnvironmentIds = new Set<string>()
 
 function manuallyDisconnectedResponse(
   environment: ReturnType<typeof resolveEnvironment>
@@ -38,14 +48,12 @@ function manuallyDisconnectedResponse(
   }
 }
 
-export function isRuntimeEnvironmentManuallyDisconnected(environmentId: string): boolean {
-  return manuallyDisconnectedEnvironmentIds.has(environmentId)
-}
+export { isRuntimeEnvironmentManuallyDisconnected }
 
 type ConnectivityHandlerOptions = {
   store: Store
   getUserDataPath: () => string
-  invalidateTransport: (environmentId: string) => void
+  invalidateTransport: (environmentId: string) => Promise<void> | void
 }
 
 export function registerRuntimeEnvironmentConnectivityHandlers({
@@ -53,6 +61,9 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   getUserDataPath,
   invalidateTransport
 }: ConnectivityHandlerOptions): void {
+  ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () =>
+    getRuntimeEnvironmentStatusSnapshots()
+  )
   ipcMain.handle('runtimeEnvironments:list', () =>
     listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
   )
@@ -63,7 +74,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       args: { name: string; pairingCode: string }
     ): { environment: PublicKnownRuntimeEnvironment } => {
       const environment = addEnvironmentFromPairingCode(getUserDataPath(), args)
-      manuallyDisconnectedEnvironmentIds.delete(environment.id)
+      clearRuntimeEnvironmentManualDisconnect(environment.id)
       return { environment: redactRuntimeEnvironment(environment) }
     }
   )
@@ -72,7 +83,13 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
       if (result.ok) {
-        manuallyDisconnectedEnvironmentIds.delete(result.environment.id)
+        clearRuntimeEnvironmentManualDisconnect(result.environment.id)
+        getRuntimeEnvironmentStatusOwner(getUserDataPath(), result.environment.id).acceptVerified({
+          id: 'status.get',
+          ok: true,
+          result: result.runtimeStatus,
+          _meta: { runtimeId: result.runtimeStatus.runtimeId }
+        })
       }
       return result
     }
@@ -88,9 +105,22 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
         throw new Error('Choose another Active Server in Advanced before removing this server.')
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
-      manuallyDisconnectedEnvironmentIds.delete(removed.id)
-      invalidateTransport(removed.id)
+      clearRuntimeEnvironmentCapabilityEvidence(removed.id)
+      clearRuntimeEnvironmentManualDisconnect(removed.id)
+      const retiring = Promise.resolve(invalidateTransport(removed.id))
       closeLegacySelectorTransport(args.selector, removed.id)
+      // Why: removal is an explicit lifecycle decision, so its client-hosted browser storage goes
+      // too -- but only once the client host releases its partitions, or every one refuses as live.
+      void retireBrowserRoutePartitionStorageForEnvironment({
+        environmentId: removed.id,
+        whenClientHostClosed: retiring,
+        clearStorage: clearBrowserRoutePartitionStorageForEnvironment,
+        onError: (error) => {
+          console.warn('[runtime-environments] browser partition storage clear failed:', error)
+        }
+      }).catch((error) => {
+        console.warn('[runtime-environments] browser partition storage clear failed:', error)
+      })
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )
@@ -98,9 +128,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     'runtimeEnvironments:disconnect',
     (_event, args: { selector: string }): { disconnected: PublicKnownRuntimeEnvironment } => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      manuallyDisconnectedEnvironmentIds.add(environment.id)
+      markRuntimeEnvironmentManuallyDisconnected(environment.id)
       invalidateTransport(environment.id)
       closeLegacySelectorTransport(args.selector, environment.id)
+      // Retain disconnected evidence for renderers that missed the teardown event.
+      getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id)
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )
@@ -111,8 +143,19 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       args: { selector: string; timeoutMs?: number }
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
-      manuallyDisconnectedEnvironmentIds.delete(environment.id)
-      return getRuntimeEnvironmentStatus(getUserDataPath(), environment.id, args.timeoutMs)
+      clearRuntimeEnvironmentManualDisconnect(environment.id)
+      return getRuntimeEnvironmentStatus(getUserDataPath(), environment.id, args.timeoutMs, {
+        reconnect: true
+      })
+    }
+  )
+  ipcMain.handle(
+    'runtimeEnvironments:retryControlConnection',
+    (_event, args: { selector: string }): void => {
+      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      if (!isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+        retryRemoteRuntimeSharedControlConnectionNow(environment.id)
+      }
     }
   )
 }
@@ -127,7 +170,6 @@ function closeLegacySelectorTransport(selector: string, environmentId: string): 
     return
   }
   closeRemoteRuntimeRequestConnection(selector)
-  clearSharedControlSupport(selector)
 }
 
 function registerPassiveStatusHandler(getUserDataPath: () => string): void {
@@ -135,7 +177,7 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
     'runtimeEnvironments:getStatus',
     async (
       _event,
-      args: { selector: string; timeoutMs?: number }
+      args: { selector: string; timeoutMs?: number; observeOnly?: true }
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
@@ -144,7 +186,8 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
       const response = await getRuntimeEnvironmentStatus(
         getUserDataPath(),
         environment.id,
-        args.timeoutMs
+        args.timeoutMs,
+        args.observeOnly ? { observeOnly: true } : undefined
       )
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
         ? manuallyDisconnectedResponse(environment)

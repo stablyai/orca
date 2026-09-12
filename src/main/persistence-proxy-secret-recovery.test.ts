@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, mkdtempSync, writeFileSync
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 const testState = { dir: '' }
 
@@ -28,26 +29,7 @@ vi.mock('electron', () => ({
   app: {
     getPath: () => testState.dir
   },
-  session: { defaultSession: undefined },
-  safeStorage: {
-    isEncryptionAvailable: () => {
-      if (cipherState.availabilityThrows) {
-        throw new Error('safeStorage cannot be used before the app is ready')
-      }
-      return cipherState.encryptionAvailable
-    },
-    encryptString: (plaintext: string) => Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8'),
-    decryptString: (ciphertext: Buffer) => {
-      if (cipherState.decryptAlwaysThrows) {
-        throw new Error('keychain access denied')
-      }
-      const decoded = ciphertext.toString('utf-8')
-      if (!decoded.startsWith('enc:')) {
-        throw new Error('invalid ciphertext')
-      }
-      return decoded.slice('enc:'.length + 36 + 1)
-    }
-  }
+  session: { defaultSession: undefined }
 }))
 
 vi.mock('./telemetry/client', () => ({
@@ -60,7 +42,31 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 async function createStore() {
   vi.resetModules()
+  const { setSecretStore } = await import('../shared/secret-store')
+  setSecretStore({
+    isEncryptionAvailable: () => {
+      if (cipherState.availabilityThrows) {
+        throw new Error('safeStorage cannot be used before the app is ready')
+      }
+      return cipherState.encryptionAvailable
+    },
+    encryptString: (plaintext) => Buffer.from(`enc:${randomUUID()}:${plaintext}`, 'utf-8'),
+    decryptString: (ciphertext) => {
+      if (cipherState.decryptAlwaysThrows) {
+        throw new Error('keychain access denied')
+      }
+      const decoded = ciphertext.toString('utf-8')
+      if (!decoded.startsWith('enc:')) {
+        throw new Error('invalid ciphertext')
+      }
+      return decoded.slice('enc:'.length + 36 + 1)
+    },
+    describeProtectionGap: () => null
+  })
   const { Store, initDataPath } = await import('./persistence')
+  // Why here: userData resolves through AppEnvironment, and this must point at this
+  // file's temp dir rather than the global fake's shared one, after resetModules.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return new Store()
 }

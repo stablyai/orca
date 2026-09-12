@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue } from '../../../../shared/types'
+import type { JiraIssue } from '../../../../shared/jira-types'
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from './SmartWorkspaceNameField'

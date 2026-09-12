@@ -62,7 +62,7 @@ const OBSERVER = {
 
 function readConfig(): FixtureConfig {
   const configIndex = process.argv.indexOf('--config')
-  const configPath = configIndex >= 0 ? process.argv[configIndex + 1] : undefined
+  const configPath = configIndex !== -1 ? process.argv[configIndex + 1] : undefined
   if (!configPath) {
     throw new Error('Legacy close client requires --config <path>')
   }

@@ -1,6 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import * as Clipboard from 'expo-clipboard'
-import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/types'
+import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerSuccess } from '../platform/haptics'

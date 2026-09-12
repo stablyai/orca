@@ -7,7 +7,7 @@ import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { parseSparsePresetDirectories } from '@/lib/sparse-preset-draft'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { SparsePreset } from '../../../../shared/types'
+import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { translate } from '@/i18n/i18n'
 import {
   SparseCheckoutPresetDraftForm,

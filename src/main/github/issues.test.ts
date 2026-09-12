@@ -68,15 +68,11 @@ vi.mock('./github-api-repository', async (importOriginal) => {
   }
 })
 
-import {
-  addIssueComment,
-  createIssue,
-  getIssue,
-  listAssignableUsers,
-  listIssues,
-  listLabels,
-  updateIssue
-} from './issues'
+import { getIssue, listIssues } from './issues'
+import { createIssue } from './issue-create'
+import { updateIssue } from './issue-update'
+import { addIssueComment } from './issue-comment'
+import { listAssignableUsers, listLabels } from './issue-field-options'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 

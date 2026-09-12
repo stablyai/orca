@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { Repo, TerminalTab, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -9,6 +11,7 @@ import {
   getProjectHostSetupProjectionFromState,
   getWorktreeMapFromState,
   resetFloatingVisibleTabCountSelectorCacheForTest,
+  resetFloatingWorkspaceUnreadSelectorCacheForTest,
   selectRepoByIdForActiveWorkspace,
   selectFloatingVisibleTabCount,
   selectFloatingWorkspaceHasUnread
@@ -606,6 +609,10 @@ describe('selectFloatingWorkspaceHasUnread', () => {
 
   type UnreadState = Parameters<typeof selectFloatingWorkspaceHasUnread>[0]
 
+  beforeEach(() => {
+    resetFloatingWorkspaceUnreadSelectorCacheForTest()
+  })
+
   function makeState(overrides: Partial<UnreadState>): UnreadState {
     return {
       tabsByWorktree: {},
@@ -665,5 +672,73 @@ describe('selectFloatingWorkspaceHasUnread', () => {
       unreadAgentCompletionPanes: { 'ft-closed:leaf-a': true }
     })
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
+  })
+
+  it('shares one scan across consumers and skips 1,000 unrelated writes', () => {
+    let tabIdReads = 0
+    let terminalUnreadReads = 0
+    let completionKeyScans = 0
+    const tabs = [
+      {
+        get id() {
+          tabIdReads += 1
+          return 'ft1'
+        },
+        title: 'floating',
+        ptyId: null
+      } as unknown as TerminalTab
+    ]
+    const unreadTerminalTabs = new Proxy<Record<string, true>>(
+      {},
+      {
+        get(target, property, receiver) {
+          if (typeof property === 'string') {
+            terminalUnreadReads += 1
+          }
+          return Reflect.get(target, property, receiver)
+        }
+      }
+    )
+    const unreadAgentCompletionPanes = new Proxy<Record<string, true>>(
+      { 'main-tab:leaf-a': true },
+      {
+        ownKeys(target) {
+          completionKeyScans += 1
+          return Reflect.ownKeys(target)
+        }
+      }
+    )
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: tabs },
+      unreadTerminalTabs,
+      unreadAgentCompletionPanes
+    })
+
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
+    const countsAfterFirstConsumer = {
+      tabIdReads,
+      terminalUnreadReads,
+      completionKeyScans
+    }
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
+    for (let write = 0; write < 1_000; write += 1) {
+      expect(
+        selectFloatingWorkspaceHasUnread({
+          ...state,
+          unrelatedStoreRevision: write
+        } as unknown as UnreadState)
+      ).toBe(false)
+    }
+    expect({ tabIdReads, terminalUnreadReads, completionKeyScans }).toEqual(
+      countsAfterFirstConsumer
+    )
+
+    expect(
+      selectFloatingWorkspaceHasUnread({
+        ...state,
+        unreadTerminalTabs: { ft1: true }
+      })
+    ).toBe(true)
+    expect(tabIdReads).toBeGreaterThan(countsAfterFirstConsumer.tabIdReads)
   })
 })

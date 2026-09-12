@@ -10,10 +10,13 @@
  *   ORCA_MOBILE_WS_URL=ws://127.0.0.1:6768 \
  *     pnpm exec tsx scripts/repro-terminal-colors.ts <deviceToken> <serverPublicKeyB64> <worktreeSelector> [handleA] [handleB]
  */
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
+import {
+  saveTerminalColorSnapshots,
+  summarizeTerminalColorSnapshot,
+  type TerminalColorSnapshot
+} from './repro-terminal-color-output'
 
 const WS_URL = process.env.ORCA_MOBILE_WS_URL ?? 'ws://127.0.0.1:6768'
 const token = process.argv[2]
@@ -21,7 +24,6 @@ const serverPublicKeyB64 = process.argv[3]
 const worktreeSelector = process.argv[4]
 const explicitHandleA = process.argv[5]
 const explicitHandleB = process.argv[6]
-const ESC = String.fromCharCode(27)
 
 type RpcResponse = {
   id: string
@@ -35,15 +37,6 @@ type PendingRequest = {
   method: string
   resolve: (response: RpcResponse) => void
   reject: (error: Error) => void
-}
-
-type Snapshot = {
-  label: string
-  handle: string
-  cols: number | null
-  rows: number | null
-  serialized: string
-  lines: string
 }
 
 if (!token || !serverPublicKeyB64 || !worktreeSelector) {
@@ -158,9 +151,13 @@ async function ensureSecondHandle(ws: WebSocket, handleA: string): Promise<strin
   return handle
 }
 
-async function captureSnapshot(ws: WebSocket, label: string, handle: string): Promise<Snapshot> {
+async function captureSnapshot(
+  ws: WebSocket,
+  label: string,
+  handle: string
+): Promise<TerminalColorSnapshot> {
   const id = nextId()
-  const snapshot = await new Promise<Snapshot>((resolve, reject) => {
+  const snapshot = await new Promise<TerminalColorSnapshot>((resolve, reject) => {
     const timeout = setTimeout(() => {
       pending.delete(id)
       streamListeners.delete(id)
@@ -205,48 +202,6 @@ async function captureSnapshot(ws: WebSocket, label: string, handle: string): Pr
 
   await send(ws, 'terminal.unsubscribe', { subscriptionId: handle }).catch(() => null)
   return snapshot
-}
-
-function countMatches(value: string, pattern: RegExp): number {
-  return value.match(pattern)?.length ?? 0
-}
-
-function summarize(snapshot: Snapshot): Record<string, string | number | null> {
-  const data = snapshot.serialized
-  return {
-    label: snapshot.label,
-    handle: snapshot.handle,
-    cols: snapshot.cols,
-    rows: snapshot.rows,
-    serializedBytes: Buffer.byteLength(data),
-    sgrTotal: countMatches(data, new RegExp(`${ESC}\\[[0-9;:]*m`, 'g')),
-    sgrColor: countMatches(
-      data,
-      new RegExp(
-        `${ESC}\\[(?:[0-9;:]*[;:])?(?:3[0-7]|4[0-7]|9[0-7]|10[0-7]|38[;:]|48[;:])[0-9;:]*m`,
-        'g'
-      )
-    ),
-    sgrReset: countMatches(data, new RegExp(`${ESC}\\[(?:0|39|49|0;39;49)m`, 'g')),
-    altScreen: data.includes(`${ESC}[?1049h`) ? 'yes' : 'no',
-    containsTruecolor: data.includes('38;2') || data.includes('38:2') ? 'yes' : 'no',
-    containsPaletteColor: data.includes('38;5') || data.includes('38:5') ? 'yes' : 'no'
-  }
-}
-
-function saveSnapshots(snapshots: Snapshot[]): string {
-  const dir = join(process.cwd(), 'terminal-color-repro')
-  mkdirSync(dir, { recursive: true })
-  for (const snapshot of snapshots) {
-    const base = snapshot.label.replace(/[^a-z0-9_-]/gi, '-')
-    writeFileSync(join(dir, `${base}.ansi`), snapshot.serialized || snapshot.lines)
-    writeFileSync(
-      join(dir, `${base}.escaped.txt`),
-      JSON.stringify(snapshot.serialized || snapshot.lines)
-    )
-  }
-  writeFileSync(join(dir, 'summary.json'), JSON.stringify(snapshots.map(summarize), null, 2))
-  return dir
 }
 
 async function run(ws: WebSocket): Promise<void> {
@@ -303,11 +258,14 @@ async function run(ws: WebSocket): Promise<void> {
   const firstB = await captureSnapshot(ws, 'b-during-switch', handleB)
   const secondA = await captureSnapshot(ws, 'a-after-switch', handleA)
   const snapshots = [firstA, firstB, secondA]
-  const dir = saveSnapshots(snapshots)
+  const dir = saveTerminalColorSnapshots(snapshots)
 
-  console.table(snapshots.map(summarize))
+  console.table(snapshots.map(summarizeTerminalColorSnapshot))
   console.log(`saved: ${dir}`)
-  if (summarize(firstA).sgrColor !== summarize(secondA).sgrColor) {
+  if (
+    summarizeTerminalColorSnapshot(firstA).sgrColor !==
+    summarizeTerminalColorSnapshot(secondA).sgrColor
+  ) {
     console.log(
       'color SGR count changed between A snapshots: serialization/state changed on desktop'
     )

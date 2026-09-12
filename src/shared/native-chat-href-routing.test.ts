@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { routeNativeChatHref } from './native-chat-href-routing'
+import { createNativeChatFileHref, routeNativeChatHref } from './native-chat-href-routing'
 
 describe('routeNativeChatHref', () => {
   it('classifies web and mail links', () => {
@@ -45,6 +45,35 @@ describe('routeNativeChatHref', () => {
       pathText: String.raw`C:\repo\src\index.ts`,
       line: null
     })
+  })
+
+  it('routes encoded renderer file targets without treating Windows drives as schemes', () => {
+    expect(
+      routeNativeChatHref(createNativeChatFileHref(String.raw`C:\repo\report.docx:12`))
+    ).toEqual({
+      kind: 'file',
+      pathText: String.raw`C:\repo\report.docx:12`,
+      line: null
+    })
+    expect(routeNativeChatHref(createNativeChatFileHref('/tmp/report.html'))).toEqual({
+      kind: 'file',
+      pathText: '/tmp/report.html',
+      line: null
+    })
+  })
+
+  it('bounds nested renderer file target decoding', () => {
+    let href = '/tmp/report.html'
+    for (let depth = 0; depth < 4; depth += 1) {
+      href = createNativeChatFileHref(` ${href}`)
+    }
+    expect(routeNativeChatHref(href)).toEqual({
+      kind: 'file',
+      pathText: '/tmp/report.html',
+      line: null
+    })
+
+    expect(routeNativeChatHref(createNativeChatFileHref(` ${href}`))).toEqual({ kind: 'none' })
   })
 
   it('drops anchors, unknown schemes, malformed file URIs, and empty hrefs', () => {

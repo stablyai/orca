@@ -1,41 +1,64 @@
-import {
-  MESSAGE_TYPES,
-  type MessagePriority,
-  type MessageType,
-  type WorkerReportOutcome
-} from './types'
+import { z } from 'zod'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { FederatedLifecycleSettlement } from './federation-lifecycle-settlement'
+import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import { OrchestrationError } from './orchestration-error'
+import {
+  acquireFederationAckLease,
+  getFederationAckedThrough,
+  recordFederationAckCheckpoint
+} from './federation-ack-checkpoints'
+import { bindCoordinatorMutationPayload } from './dispatch-message-binding'
+import { resolveFederatedLifecycleSettlementCapability } from './federation-sync-capability'
+import { getOrchestrationPeerCapabilityCache } from './orchestration-peer-capability-cache'
+import { parseFederatedLifecycle, parseRelayedMessage } from './federation-sync-message'
+export { parseRelayedMessage } from './federation-sync-message'
 
-const MESSAGE_TYPE_SET = new Set<MessageType>(MESSAGE_TYPES)
+const FEDERATION_PULL_PAGE_SIZE = 50
+const MAX_FEDERATION_PULL_PAGES_PER_SYNC = 6
 
-function isMessageType(value: unknown): value is MessageType {
-  return typeof value === 'string' && MESSAGE_TYPE_SET.has(value as MessageType)
-}
-
-type PulledRelayItem = {
-  dispatch_id: string
-  direction: 'to_home'
-  sequence: number
-  message_id: string
-  kind: string
-  payload: string
-}
-
-type RelayedMessage = {
-  from: string
-  subject: string
-  body: string
-  type: MessageType
-  priority: MessagePriority
-  threadId: string | null
-  payload: string | null
-}
+// Peer payloads are untrusted input: decode them so a malformed page fails as an
+// orchestration error instead of a TypeError deep inside the import loop.
+const PulledRelayPage = z
+  .object({
+    runtimeEpoch: z.string().min(1),
+    items: z.array(
+      z
+        .object({
+          dispatch_id: z.string(),
+          direction: z.literal('to_home'),
+          sequence: z.number(),
+          message_id: z.string(),
+          kind: z.string(),
+          payload: z.string()
+        })
+        .passthrough()
+    )
+  })
+  .passthrough()
 
 export async function syncFederatedDispatch(
   runtime: OrcaRuntimeService,
-  dispatchId: string
+  dispatchId: string,
+  isCurrent: () => boolean = () => true
 ): Promise<{ imported: number; acknowledgedThrough: number }> {
+  return syncFederatedDispatchPages(
+    runtime,
+    dispatchId,
+    MAX_FEDERATION_PULL_PAGES_PER_SYNC,
+    isCurrent
+  )
+}
+
+async function syncFederatedDispatchPages(
+  runtime: OrcaRuntimeService,
+  dispatchId: string,
+  remainingPages: number,
+  isCurrent: () => boolean
+): Promise<{ imported: number; acknowledgedThrough: number }> {
+  if (!isCurrent()) {
+    return { imported: 0, acknowledgedThrough: 0 }
+  }
   const db = runtime.getOrchestrationDb()
   const federated = db.getFederatedDispatch(dispatchId)
   const dispatch = db.getDispatchContextById(dispatchId)
@@ -52,19 +75,51 @@ export async function syncFederatedDispatch(
       `Saved environment ${federated.environment_name} now identifies a different Orca server.`
     )
   }
+  const ackLease = acquireFederationAckLease(runtime, dispatchId)
+  const capability = await resolveFederatedLifecycleSettlementCapability(
+    runtime,
+    federated,
+    currentServer.pairingRevision
+  )
+  const supportsLifecycleSettlement =
+    federated.protocol_version >= ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION &&
+    capability?.supported === true
+  const shouldReplayUnacknowledged =
+    supportsLifecycleSettlement ||
+    (federated.protocol_version >= ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION &&
+      (federated.to_home_acknowledged_sequence ?? 0) < federated.to_home_imported_sequence)
 
-  const pulled = (await runtime.callOrchestrationWorkerServer(
+  const pulledResponse = await runtime.callOrchestrationWorkerServer(
     federated.environment_id,
     'orchestration.federationPull',
     {
       dispatchId,
       afterSequence: federated.to_home_imported_sequence,
-      limit: 50
+      ...(shouldReplayUnacknowledged ? { replayUnacknowledged: true } : {}),
+      limit: FEDERATION_PULL_PAGE_SIZE
     },
-    15_000
-  )) as { runtimeEpoch: string; items: PulledRelayItem[] }
-  let cursor = federated.to_home_imported_sequence
+    15_000,
+    undefined,
+    { expectedEnvironmentPairingRevision: currentServer.pairingRevision }
+  )
+  const parsedPull = PulledRelayPage.safeParse(pulledResponse)
+  if (!parsedPull.success) {
+    throw new OrchestrationError(
+      'invalid_runtime_response',
+      `The execution host returned an invalid federation relay page for ${dispatchId}.`
+    )
+  }
+  const pulled = parsedPull.data
+  if (!isCurrent()) {
+    return { imported: 0, acknowledgedThrough: federated.to_home_imported_sequence }
+  }
+  let cursor =
+    shouldReplayUnacknowledged && pulled.items.length > 0
+      ? pulled.items[0].sequence - 1
+      : federated.to_home_imported_sequence
   let imported = 0
+  const settlements: { sequence: number; lifecycle: FederatedLifecycleSettlement }[] = []
+  let lifecycleAcknowledgmentBarrier: number | undefined
   for (const item of pulled.items) {
     if (item.dispatch_id !== dispatchId || item.sequence !== cursor + 1) {
       throw new OrchestrationError(
@@ -86,24 +141,91 @@ export async function syncFederatedDispatch(
         type: message.type,
         priority: message.priority,
         threadId: message.threadId ?? undefined,
-        payload: message.payload ?? undefined
+        payload: bindCoordinatorMutationPayload(message.type, message.payload, dispatchId)
       },
       lifecycle: parseFederatedLifecycle(message, item.message_id, dispatchId, dispatch.task_id)
     })
+    if (
+      stored.lifecycle &&
+      supportsLifecycleSettlement &&
+      capability?.runtimeEpoch === pulled.runtimeEpoch
+    ) {
+      settlements.push({
+        sequence: item.sequence,
+        lifecycle:
+          stored.lifecycle.action === 'settled'
+            ? {
+                action: stored.lifecycle.outcome === 'succeeded' ? 'completed' : 'failed',
+                authority: 'run_home'
+              }
+            : { ...stored.lifecycle, authority: 'run_home' }
+      })
+    }
+    if (
+      lifecycleAcknowledgmentBarrier === undefined &&
+      federated.protocol_version >=
+        ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION &&
+      item.kind === 'worker_done' &&
+      !(supportsLifecycleSettlement && capability?.runtimeEpoch === pulled.runtimeEpoch)
+    ) {
+      lifecycleAcknowledgmentBarrier = item.sequence
+    }
     cursor = item.sequence
-    runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
+    if (stored.message.read === 0) {
+      runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
+    }
     imported += stored.duplicate ? 0 : 1
   }
 
-  if (cursor > 0) {
-    await runtime.callOrchestrationWorkerServer(
+  const ackIdentity = {
+    environmentId: federated.environment_id,
+    peerFingerprint: federated.peer_fingerprint,
+    remoteRuntimeEpoch: pulled.runtimeEpoch
+  }
+  const durableAcknowledgedThrough =
+    federated.remote_runtime_epoch === pulled.runtimeEpoch
+      ? (federated.to_home_acknowledged_sequence ?? 0)
+      : 0
+  const acknowledgmentCursor = lifecycleAcknowledgmentBarrier
+    ? lifecycleAcknowledgmentBarrier - 1
+    : cursor
+  if (
+    isCurrent() &&
+    acknowledgmentCursor >
+      Math.max(getFederationAckedThrough(ackLease, ackIdentity), durableAcknowledgedThrough)
+  ) {
+    const delivered = (await runtime.callOrchestrationWorkerServer(
       federated.environment_id,
       'orchestration.federationAck',
-      { dispatchId, throughSequence: cursor },
+      {
+        dispatchId,
+        throughSequence: acknowledgmentCursor,
+        ...(settlements.length > 0 ? { settlements } : {})
+      },
       15_000,
-      { orchestrationRequestId: `relay_ack_${dispatchId}_${cursor}` }
-    )
+      { orchestrationRequestId: `relay_ack_${dispatchId}_${cursor}` },
+      { expectedEnvironmentPairingRevision: currentServer.pairingRevision }
+    )) as { acknowledgedThrough: number }
+    const keepRelayEligible =
+      pulled.items.length === FEDERATION_PULL_PAGE_SIZE && remainingPages === 1
+    const locallyAcknowledgedThrough = keepRelayEligible
+      ? Math.max(0, delivered.acknowledgedThrough - 1)
+      : delivered.acknowledgedThrough
+    db.recordFederatedHomeAcknowledgment({
+      dispatchId,
+      remoteRuntimeEpoch: pulled.runtimeEpoch,
+      sequence: locallyAcknowledgedThrough
+    })
+    recordFederationAckCheckpoint(runtime, ackLease, {
+      ...ackIdentity,
+      throughSequence: locallyAcknowledgedThrough
+    })
   }
+  getOrchestrationPeerCapabilityCache(runtime).observeEpoch(
+    federated.peer_fingerprint,
+    pulled.runtimeEpoch
+  )
+  db.updateFederatedDispatchRuntimeEpoch(dispatchId, pulled.runtimeEpoch)
   const toWorker =
     db.getWorkerDispatch(dispatchId)?.state === 'ready'
       ? db.listPendingFederationRelay(dispatchId, 'to_worker')
@@ -116,7 +238,8 @@ export async function syncFederatedDispatch(
       15_000,
       {
         orchestrationRequestId: `relay_import_${dispatchId}_${toWorker.at(-1)?.sequence ?? 0}`
-      }
+      },
+      { expectedEnvironmentPairingRevision: currentServer.pairingRevision }
     )) as { acknowledgedThrough: number }
     db.acknowledgeFederationRelay({
       dispatchId,
@@ -124,130 +247,22 @@ export async function syncFederatedDispatch(
       throughSequence: delivered.acknowledgedThrough
     })
   }
-  return { imported, acknowledgedThrough: cursor }
-}
-
-export function parseRelayedMessage(payload: string): RelayedMessage {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(payload)
-  } catch {
-    throw new OrchestrationError('invalid_argument', 'Federated relay payload is invalid JSON.')
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new OrchestrationError('invalid_argument', 'Federated relay payload is not a message.')
-  }
-  const message = parsed as Partial<RelayedMessage>
-  if (typeof message.subject !== 'string' || typeof message.body !== 'string') {
-    throw new OrchestrationError('invalid_argument', 'Federated relay message is incomplete.')
-  }
-  if (!isMessageType(message.type)) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      `Federated relay message type ${String(message.type)} is not supported.`
-    )
-  }
-  return {
-    from: typeof message.from === 'string' ? message.from : 'remote-worker',
-    subject: message.subject,
-    body: message.body,
-    type: message.type,
-    priority:
-      message.priority === 'high' || message.priority === 'urgent' ? message.priority : 'normal',
-    threadId: typeof message.threadId === 'string' ? message.threadId : null,
-    payload: typeof message.payload === 'string' ? message.payload : null
-  }
-}
-
-function parseFederatedLifecycle(
-  message: RelayedMessage,
-  messageId: string,
-  dispatchId: string,
-  taskId: string
-):
-  | { kind: 'none' }
-  | { kind: 'heartbeat'; at: string }
-  | {
-      kind: 'worker_report'
-      taskId: string
-      outcome: WorkerReportOutcome
-      result: string
-    }
-  | { kind: 'rejected'; code: string; reason: string } {
-  if (message.type === 'heartbeat') {
-    return { kind: 'heartbeat', at: new Date().toISOString() }
-  }
-  if (message.type !== 'worker_done') {
-    return { kind: 'none' }
-  }
-  let payload
-  try {
-    payload = parseWorkerReportPayload(message.payload)
-  } catch (error) {
-    return {
-      kind: 'rejected',
-      code: 'invalid_payload',
-      reason: error instanceof Error ? error.message : String(error)
-    }
-  }
-  if (payload.dispatchId !== dispatchId || payload.taskId !== taskId) {
-    return {
-      kind: 'rejected',
-      code: 'task_dispatch_mismatch',
-      reason: `Federated report does not match Dispatch ${dispatchId}.`
-    }
-  }
-  const result = JSON.stringify({
-    provenance: 'worker_report',
-    outcome: payload.outcome,
-    messageId,
-    reportedBy: `dispatch:${dispatchId}`,
-    subject: message.subject,
-    body: message.body,
-    completedBy: `dispatch:${dispatchId}`,
-    filesModified: payload.filesModified,
-    reportPath: payload.reportPath,
-    completedAt: new Date().toISOString()
-  })
-  return {
-    kind: 'worker_report',
-    taskId: payload.taskId,
-    outcome: payload.outcome,
-    result
-  }
-}
-
-function parseWorkerReportPayload(payload: string | null): {
-  taskId: string
-  dispatchId: string
-  outcome: WorkerReportOutcome
-  filesModified: string[]
-  reportPath: string | null
-} {
-  let parsed: unknown
-  try {
-    parsed = payload ? JSON.parse(payload) : null
-  } catch {
-    parsed = null
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new OrchestrationError('invalid_argument', 'Federated worker report is invalid.')
-  }
-  const report = parsed as Record<string, unknown>
   if (
-    typeof report.taskId !== 'string' ||
-    typeof report.dispatchId !== 'string' ||
-    (report.outcome !== 'succeeded' && report.outcome !== 'failed')
+    isCurrent() &&
+    pulled.items.length === FEDERATION_PULL_PAGE_SIZE &&
+    remainingPages > 1 &&
+    lifecycleAcknowledgmentBarrier === undefined
   ) {
-    throw new OrchestrationError('invalid_argument', 'Federated worker report is incomplete.')
+    const next = await syncFederatedDispatchPages(
+      runtime,
+      dispatchId,
+      remainingPages - 1,
+      isCurrent
+    )
+    return {
+      imported: imported + next.imported,
+      acknowledgedThrough: next.acknowledgedThrough
+    }
   }
-  return {
-    taskId: report.taskId,
-    dispatchId: report.dispatchId,
-    outcome: report.outcome,
-    filesModified: Array.isArray(report.filesModified)
-      ? report.filesModified.filter((file): file is string => typeof file === 'string')
-      : [],
-    reportPath: typeof report.reportPath === 'string' ? report.reportPath : null
-  }
+  return { imported, acknowledgedThrough: cursor }
 }

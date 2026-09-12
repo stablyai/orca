@@ -50,6 +50,7 @@ export function isDashboardWorkspace(value: unknown): value is DashboardWorkspac
     HOST_KINDS.has(workspace.hostKind) &&
     isString(workspace.executionHostId, MAX_ID_LENGTH) &&
     normalizeExecutionHostId(workspace.executionHostId) !== null &&
+    isOptionalString(workspace.hostLabel, DASHBOARD_MAX_LABEL_LENGTH) &&
     typeof workspace.workspaceKind === 'string' &&
     WORKSPACE_KINDS.has(workspace.workspaceKind) &&
     isOptionalString(workspace.workspaceStatusId, MAX_ID_LENGTH) &&

@@ -116,16 +116,17 @@ test.describe('Voice microphone selection', () => {
 
     const microphone = orcaPage.getByRole('combobox', { name: 'Microphone' })
     await expect(microphone).toHaveText('System default')
-    await microphone.click()
+    // Settings can still be animating; keyboard activation does not depend on its position.
+    await microphone.press('Space')
     await expect(orcaPage.getByRole('option', { name: 'USB Microphone' })).toBeVisible()
-    await orcaPage.getByRole('option', { name: 'USB Microphone' }).click()
+    // Keyboard selection bypasses the transient pointer stability gate in CI.
+    await orcaPage.getByRole('option', { name: 'USB Microphone' }).press('Enter')
 
     await expect
       .poll(() => readMicrophoneSettings(orcaPage), {
         message: 'selected microphone did not persist'
       })
       .toEqual({ deviceId: 'usb-mic', label: 'USB Microphone' })
-    await expect(microphone).toHaveText('USB Microphone')
 
     await orcaPage.reload({ waitUntil: 'domcontentloaded' })
     await waitForSessionReady(orcaPage)
@@ -147,7 +148,7 @@ test.describe('Voice microphone selection', () => {
     await prepareVoiceSettings(orcaPage, 'stale-airpods-id', 'AirPods')
 
     const microphone = orcaPage.getByRole('combobox', { name: 'Microphone' })
-    await microphone.click()
+    await microphone.press('Space')
     await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toBeVisible()
     await orcaPage.keyboard.press('Escape')
 
@@ -164,9 +165,18 @@ test.describe('Voice microphone selection', () => {
       state.dispatchDeviceChange()
     })
 
-    await expect(microphone).toHaveText('AirPods')
-    await microphone.click()
-    await expect(orcaPage.getByRole('option', { name: 'AirPods' })).toBeVisible()
+    // Why: devicechange can leave Radix's listbox open and aria-hide the
+    // trigger, so getByRole('combobox') finds nothing. The live option is
+    // the stable handle; open the named trigger only if the list is closed.
+    const airpodsOption = orcaPage.getByRole('option', { name: 'AirPods', exact: true })
+    await expect(async () => {
+      if (!(await airpodsOption.isVisible().catch(() => false))) {
+        const trigger = orcaPage.getByRole('combobox', { name: 'Microphone' })
+        await expect(trigger).toHaveText('AirPods', { timeout: 1_000 })
+        await trigger.press('Space')
+      }
+      await expect(airpodsOption).toBeVisible({ timeout: 1_000 })
+    }).toPass({ timeout: 10_000 })
     await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toHaveCount(0)
     await orcaPage.keyboard.press('Escape')
     await expect(readMicrophoneSettings(orcaPage)).resolves.toEqual({

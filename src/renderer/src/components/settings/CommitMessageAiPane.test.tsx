@@ -1,7 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { SourceControlAiSettings } from '../../../../shared/source-control-ai-types'
 import {
   getCommitMessageModelDiscoveryHostKey,

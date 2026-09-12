@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { TerminalTab } from '../shared/types'
+import type { TerminalTab } from '../shared/terminal-tab-types'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import { toRuntimeExecutionHostId } from '../shared/execution-host'
 

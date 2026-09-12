@@ -1,4 +1,5 @@
 import { isAuthError, isPassphraseError, isTransientError } from './ssh-connection-utils'
+import { isHostKeyVerificationError } from './ssh-host-key-decision'
 
 // Why: the system-SSH transport reports network failures as OpenSSH prose, not errno codes, so its
 // probe timeouts and connect failures never match isTransientError's code table.
@@ -53,6 +54,12 @@ const EMPTY_SYSTEM_SSH_PROBE_EXIT_255 = /^system ssh probe failed \(exit 255\)\.
  * network-shaped failure as recoverable. Auth stays permanent on both paths.
  */
 export function isTransientReconnectError(err: Error): boolean {
+  // A denied host key is a decision, not a fault: retrying re-derives the same answer, so the ladder
+  // would back off forever against a host it has already refused. Checked by type rather than left
+  // to the fragment lists below, which would silently start retrying if the wording changed.
+  if (isHostKeyVerificationError(err)) {
+    return false
+  }
   if (isAuthError(err) || isPassphraseError(err)) {
     return false
   }

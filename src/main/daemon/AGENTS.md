@@ -35,7 +35,7 @@ hands → probe once more → `rename` in one syscall → verify we kept it.
 - **Do not identify an entry by `birthtimeMs`.** Node documents it as sometimes holding the ctime,
   filesystems without a birth time report the epoch, and its granularity is often coarser than the
   events it must separate. Three attempts to patch around this produced three more defects; inode
-  recycling is now settled by asking whether anything is *serving*.
+  recycling is now settled by asking whether anything is _serving_.
 - **Do not add a sweeper.** Deciding whether someone else's leftover is safe to delete is the
   question this design retired; the last one produced five defects, including deleting a live
   listener's only pathname. Every actor removes its own scratch name on each non-crash path.

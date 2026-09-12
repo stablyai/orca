@@ -89,6 +89,8 @@ export async function launchInstalledApp({
       // (logs/daemon/terminal-history) under a controlled dir.
       ...extraEnv,
       ORCA_E2E_USER_DATA_DIR: userDataDir,
+      // Why: the driven app stays off the foreground so a local run doesn't steal focus.
+      ORCA_BACKGROUND_LAUNCH: '1',
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
       ORCA_E2E_HOME_DIR: isolatedHome

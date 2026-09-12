@@ -1,4 +1,4 @@
-import type { Page } from '@stablyai/playwright-test'
+import type { Locator, Page } from '@stablyai/playwright-test'
 
 import { expect, test } from './helpers/orca-app'
 import {
@@ -62,6 +62,12 @@ async function switchToBrowserTab(page: Page, worktreeId: string, browserTabId: 
 
 function browserSlot(page: Page, pageId: string) {
   return page.locator(`[data-browser-overlay-tab-id="${pageId}"]`)
+}
+
+// Why: the toolbar reload button is also named "Retry" once a load fails, so match the
+// overlay's button by its visible label — the toolbar one is icon-only.
+function failureOverlayRetryButton(slot: Locator): Locator {
+  return slot.getByRole('button', { name: 'Retry' }).filter({ hasText: 'Retry' })
 }
 
 async function readBrowserHeading(page: Page, browserTabId: string): Promise<string | null> {
@@ -144,7 +150,7 @@ test.describe('local HTTPS certificate trust', () => {
       // The certificate-failure branch keeps its safe recovery actions and the
       // certificate-specific hint, but never the local-server connectivity hint.
       await expect(firstSlot.getByRole('button', { name: 'Copy Address' })).toBeVisible()
-      await expect(firstSlot.getByRole('button', { name: 'Retry' })).toBeVisible()
+      await expect(failureOverlayRetryButton(firstSlot)).toBeVisible()
       await expect(firstSlot.getByText(/use a trusted local certificate/i)).toBeVisible()
       await expect(firstSlot.getByText(/make sure the server is running/i)).toHaveCount(0)
       await firstSlot.getByRole('button', { name: 'Proceed Anyway (Unsafe)' }).click()

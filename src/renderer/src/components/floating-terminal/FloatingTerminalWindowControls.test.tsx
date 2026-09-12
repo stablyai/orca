@@ -185,6 +185,13 @@ afterEach(() => {
 
 describe('FloatingTerminalWindowControls default-agent launch', () => {
   it('activates the new agent tab so the floating panel selects and focuses it', () => {
+    ;(
+      storeBox.state as {
+        settings: Record<string, unknown>
+      }
+    ).settings.nativeChatSessionOptions = {
+      claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } }
+    }
     const element = FloatingTerminalWindowControls({
       maximized: false,
       onToggleMaximized: vi.fn(),
@@ -193,6 +200,8 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
 
     const launch = findOnClickByAriaLabel(element, 'Open Claude in floating workspace')
     launch()
+
+    expect(mocks.buildAgentStartupPlan.mock.calls[0]?.[0]).not.toHaveProperty('sessionOptions')
 
     expect(mocks.createTab).toHaveBeenCalledWith(
       FLOATING_TERMINAL_WORKTREE_ID,

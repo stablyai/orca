@@ -2,7 +2,7 @@ import {
   isEmptyLinearIssueAttributeFilter,
   linearIssueAttributeFilterSignature,
   type LinearIssueAttributeFilter
-} from '../../../shared/linear-issue-attribute-filter'
+} from '../../../shared/linear/issue-attribute-filter'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext

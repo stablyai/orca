@@ -1,4 +1,4 @@
-import type { GitLabProjectRef } from '../../shared/types'
+import type { GitLabProjectRef } from '../../shared/gitlab-types'
 
 export type ProjectRef = GitLabProjectRef
 

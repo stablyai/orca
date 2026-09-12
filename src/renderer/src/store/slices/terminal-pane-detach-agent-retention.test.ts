@@ -7,7 +7,7 @@ import {
 } from './agent-pane-authority'
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 
 const WORKTREE_ID = 'repo::/repo/worktree'

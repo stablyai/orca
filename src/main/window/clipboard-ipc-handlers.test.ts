@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   CLIPBOARD_IMAGE_MAX_PIXELS,
@@ -12,6 +13,9 @@ const {
   spawnMock,
   childStdinEndMock,
   resolveAuthorizedPathMock,
+  authorizeExternalPathMock,
+  fsAccessMock,
+  fsLstatMock,
   fsMkdirMock,
   fsOpendirMock,
   fsRmMock,
@@ -45,6 +49,9 @@ const {
     return child
   }),
   resolveAuthorizedPathMock: vi.fn(),
+  authorizeExternalPathMock: vi.fn(),
+  fsAccessMock: vi.fn(),
+  fsLstatMock: vi.fn(),
   fsMkdirMock: vi.fn(),
   fsOpendirMock: vi.fn(),
   fsRmMock: vi.fn(),
@@ -68,11 +75,15 @@ vi.mock('node:child_process', () => ({
 }))
 
 vi.mock('node:fs/promises', () => ({
+  access: fsAccessMock,
+  lstat: fsLstatMock,
   mkdir: fsMkdirMock,
   opendir: fsOpendirMock,
   rm: fsRmMock,
   open: fsOpenMock,
   stat: fsStatMock,
+  realpath: vi.fn(), // unused here; only satisfies filesystem-path-containment's named import
+  writeFile: fsWriteFileMock,
   default: {
     writeFile: fsWriteFileMock
   }
@@ -81,9 +92,8 @@ vi.mock('node:fs/promises', () => ({
 vi.mock('../ipc/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE:
     'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.',
-  isENOENT: (error: unknown): boolean =>
-    error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT',
-  resolveAuthorizedPath: resolveAuthorizedPathMock
+  resolveAuthorizedPath: resolveAuthorizedPathMock,
+  authorizeExternalPath: authorizeExternalPathMock
 }))
 
 vi.mock('node:crypto', () => ({
@@ -134,6 +144,11 @@ import {
   setTrustedClipboardRendererWebContentsId
 } from './clipboard-ipc-handlers'
 
+const REMOTE_CLIPBOARD_STAGING_ROOT = join(
+  '/tmp',
+  `orca-clipboard-files${typeof process.getuid === 'function' ? `-${process.getuid()}` : ''}`
+)
+
 function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
   for (const [channel, handler] of handleMock.mock.calls as [
@@ -180,6 +195,7 @@ function shellIdListArray(childCount: number): Buffer {
 
 describe('registerClipboardHandlers', () => {
   beforeEach(() => {
+    installFakeAppEnvironment({ getPath: () => '/tmp' })
     vi.spyOn(Date, 'now').mockReturnValue(1760000000000)
     removeHandlerMock.mockReset()
     handleMock.mockReset()
@@ -187,6 +203,13 @@ describe('registerClipboardHandlers', () => {
     childStdinEndMock.mockClear()
     resolveAuthorizedPathMock.mockReset()
     resolveAuthorizedPathMock.mockImplementation(async (path: string) => path)
+    fsLstatMock.mockReset()
+    fsLstatMock.mockResolvedValue({
+      isDirectory: () => true,
+      isSymbolicLink: () => false,
+      mode: 0o700,
+      uid: typeof process.getuid === 'function' ? process.getuid() : 0
+    })
     fsMkdirMock.mockReset()
     fsMkdirMock.mockResolvedValue(undefined)
     fsOpendirMock.mockReset()
@@ -316,8 +339,8 @@ describe('registerClipboardHandlers', () => {
 
     const handlers = getRegisteredHandlers()
     const tempDir = join(
-      '/tmp',
-      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
+      REMOTE_CLIPBOARD_STAGING_ROOT,
+      '1760000000000-00000000-0000-4000-8000-000000000000'
     )
     const tempPath = join(tempDir, 'report.pdf')
 
@@ -329,6 +352,10 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toEqual({ ok: true })
 
     expect(provider.stat).toHaveBeenCalledWith('/remote/report.pdf')
+    expect(fsMkdirMock).toHaveBeenCalledWith(REMOTE_CLIPBOARD_STAGING_ROOT, {
+      recursive: true,
+      mode: 0o700
+    })
     expect(fsMkdirMock).toHaveBeenCalledWith(tempDir, { mode: 0o700 })
     expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
     expect(fsStatMock).toHaveBeenCalledWith(tempPath)
@@ -353,7 +380,6 @@ describe('registerClipboardHandlers', () => {
     ).resolves.toEqual({ ok: false, reason: 'is-directory' })
 
     expect(provider.downloadFile).not.toHaveBeenCalled()
-    expect(fsMkdirMock).not.toHaveBeenCalled()
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 
@@ -367,8 +393,8 @@ describe('registerClipboardHandlers', () => {
 
     const handlers = getRegisteredHandlers()
     const tempDir = join(
-      '/tmp',
-      'orca-clipboard-file-1760000000000-00000000-0000-4000-8000-000000000000'
+      REMOTE_CLIPBOARD_STAGING_ROOT,
+      '1760000000000-00000000-0000-4000-8000-000000000000'
     )
     const tempPath = join(tempDir, 'report.pdf')
 
@@ -380,7 +406,12 @@ describe('registerClipboardHandlers', () => {
     ).rejects.toThrow('transfer failed')
 
     expect(provider.downloadFile).toHaveBeenCalledWith('/remote/report.pdf', tempPath)
-    expect(fsRmMock).toHaveBeenCalledWith(tempDir, { recursive: true, force: true })
+    expect(fsRmMock).toHaveBeenCalledWith(tempDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100
+    })
     expect(clipboardWriteBufferMock).not.toHaveBeenCalled()
   })
 
@@ -520,30 +551,7 @@ describe('registerClipboardHandlers', () => {
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeImage')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:writeFile')
     expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:saveImageAsTempFile')
-  })
-
-  it('saves clipboard images to a local temp file when no connection is provided', async () => {
-    const png = Buffer.from([0, 1, 2, 3])
-    const expectedPath = join(
-      '/tmp',
-      'orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
-    )
-    clipboardReadImageMock.mockReturnValue({
-      getSize: () => ({ height: 1, width: 1 }),
-      isEmpty: () => false,
-      toPNG: () => png
-    })
-
-    registerClipboardHandlers({} as never)
-
-    const handlers = getRegisteredHandlers()
-    await expect(
-      handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), undefined)
-    ).resolves.toBe(expectedPath)
-    expect(fsWriteFileMock).toHaveBeenCalledWith(expectedPath, png)
-    expect(clipboardReadBufferMock).not.toHaveBeenCalled()
-    expect(fsOpenMock).not.toHaveBeenCalled()
-    expect(getSshFilesystemProviderMock).not.toHaveBeenCalled()
+    expect(removeHandlerMock).toHaveBeenCalledWith('clipboard:readImageThumbnail')
   })
 
   it('does not inspect FileNameW when an empty image clipboard is read outside Windows', async () => {

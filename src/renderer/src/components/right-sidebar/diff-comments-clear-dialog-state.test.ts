@@ -4,7 +4,7 @@ import {
   formatPendingDiffCommentsClearDescription,
   resolvePendingDiffCommentsClear,
   type PendingDiffCommentsClear
-} from './diff-comments-clear-dialog-state'
+} from './source-control/notes/diff-comments-clear-dialog-state'
 
 const allPending: PendingDiffCommentsClear = { kind: 'all', worktreeId: 'wt-1' }
 const filePending: PendingDiffCommentsClear = {

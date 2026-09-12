@@ -6,6 +6,7 @@ import { subscribeToTerminalUserInput } from '@/components/terminal-pane/termina
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
+import { replayPreviewConnectionSnapshot } from './preview-terminal-snapshot-replay'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import {
   buildPreviewAppearanceOptions,
@@ -16,13 +17,16 @@ import { installPreviewTerminalCompatibility } from './preview-terminal-compatib
 import { createPreviewClipboardPaster } from './preview-terminal-paste'
 import { installPreviewImeBridge, type PreviewImeBridge } from './preview-terminal-ime-bridge'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
-import { translate } from '@/i18n/i18n'
+import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
 import { getBuiltinTheme, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { installPreviewTerminalKeyHandler } from './preview-terminal-key-handler'
 import { createPreviewGridClaim } from './preview-grid-claim'
+import { createPreviewBoxFit } from './preview-terminal-box-fit'
 import { installPreviewTerminalAppMenuClipboard } from './preview-terminal-app-menu-clipboard'
+import { installPreviewTerminalRightClickPaste } from './preview-terminal-right-click-paste'
+import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
@@ -42,11 +46,9 @@ function clamp(value: number, min: number, max: number): number {
  * process's per-PTY headless emulator. On open it claims the PTY grid for the
  * dialog's own box (see createPreviewGridClaim), so the terminal renders
  * properly sized rather than scaled. The terminal itself is always created at
- * the PTY's REAL cols/rows — serialized ANSI replayed into different
- * dimensions rewraps into garbage — and when someone else owns the grid (a
- * phone, a host reclaim) the oversized frame is scaled down to fit and
- * anchored so the cursor stays visible. Keystrokes pass through to the PTY;
- * DOM renderer so it never grabs a WebGL context.
+ * the PTY's REAL cols/rows, and when someone else owns the grid (a phone, a
+ * host reclaim) createPreviewBoxFit scales the oversized frame down. Keystrokes
+ * pass through to the PTY; DOM renderer so it never grabs a WebGL context.
  */
 export function AgentTerminalPreview({
   ptyId,
@@ -114,36 +116,8 @@ export function AgentTerminalPreview({
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     const pendingLivePayloads: Extract<TerminalPreviewDataPayload, { type: 'data' }>[] = []
 
-    const fitToBox = (): void => {
-      const screen = container.querySelector<HTMLElement>('.xterm-screen')
-      const box = container.parentElement
-      if (!screen || !box || !terminal) {
-        return
-      }
-      const scale = Math.min(1, box.clientWidth / Math.max(1, screen.offsetWidth))
-      container.style.transform = scale < 1 ? `scale(${scale})` : ''
-      // Anchor whichever end keeps the CURSOR row in view when the terminal is
-      // taller than the box: a fresh shell prompts at the TOP of its screen
-      // (blind bottom-anchoring clipped it away), while a busy TUI keeps its
-      // action at the bottom.
-      const cellHeight = screen.offsetHeight / Math.max(1, terminal.rows)
-      const cursorBottom = (terminal.buffer.active.cursorY + 1) * cellHeight * scale
-      const anchorTop = cursorBottom <= box.clientHeight
-      box.style.alignItems = anchorTop ? 'flex-start' : 'flex-end'
-      container.style.transformOrigin = anchorTop ? 'top left' : 'bottom left'
-    }
-    // Re-fit after every parsed write (cursor may move ends); rAF coalesces.
-    let fitScheduled = false
-    const scheduleFit = (): void => {
-      if (fitScheduled) {
-        return
-      }
-      fitScheduled = true
-      requestAnimationFrame(() => {
-        fitScheduled = false
-        fitToBox()
-      })
-    }
+    const boxFit = createPreviewBoxFit({ container, getTerminal: () => terminal })
+    const scheduleFit = boxFit.schedule
 
     const gridClaim = createPreviewGridClaim({
       ptyId,
@@ -200,6 +174,7 @@ export function AgentTerminalPreview({
       ptyId,
       container,
       getTerminal: () => terminal,
+      getTerminalInput: () => terminalInputRef.current,
       isDisposed: () => disposed
     })
 
@@ -210,7 +185,11 @@ export function AgentTerminalPreview({
 
     const installImeNativeTextBridge = (): void => {
       if (terminal) {
-        imeBridge = installPreviewImeBridge(terminal)
+        // Why a live getter: kitty state can change between keydown and commit,
+        // and the tracker outlives every reconnect inside this effect.
+        imeBridge = installPreviewImeBridge(terminal, {
+          getKittyKeyboardFlags: () => kittyKeyboardModes.flags
+        })
       }
     }
 
@@ -230,7 +209,7 @@ export function AgentTerminalPreview({
           macOptionAsAlt: macOptionAsAltRef.current,
           keybindings: useAppStore.getState().keybindings,
           terminalInput: terminalInputRef.current,
-          kittyKeyboardActive: () => kittyKeyboardModes.flags > 0,
+          getKittyKeyboardFlags: () => kittyKeyboardModes.flags,
           terminalShortcutPolicy: settingsRef.current?.terminalShortcutPolicy
         })
       })
@@ -304,22 +283,13 @@ export function AgentTerminalPreview({
           clamp(snap.rows ?? FALLBACK_ROWS, 2, 200)
         )
         terminal.reset()
-        // Why: the reset drops xterm's kitty flags, so the mirror must restart
-        // from the incoming snapshot instead of the dead session's state.
-        kittyKeyboardModes.reset()
       }
-      if (snap.scrollbackAnsi) {
-        writeReplayed(snap.scrollbackAnsi)
-      }
-      if (snap.data) {
-        writeReplayed(snap.data)
-      }
-      if (snap.pendingEscapeTailAnsi) {
-        writeReplayed(snap.pendingEscapeTailAnsi)
-      }
-      for (const data of connection.replay) {
-        writeReplayed(data)
-      }
+      replayPreviewConnectionSnapshot({
+        snapshot: snap,
+        replay: connection.replay,
+        kittyKeyboardModes,
+        write: (chunk, live) => writeReplayed(chunk, undefined, live)
+      })
       for (const payload of pendingLivePayloads.splice(0)) {
         writeLive(payload)
       }
@@ -387,7 +357,15 @@ export function AgentTerminalPreview({
     const disposeAppMenuClipboard = installPreviewTerminalAppMenuClipboard({
       container,
       getTerminal: () => terminal,
-      pasteClipboardText
+      pasteClipboardText: (activeElement, source) => void pasteClipboardText(activeElement, source)
+    })
+    const disposeRightClickPaste = installPreviewTerminalRightClickPaste({
+      container,
+      getTerminal: () => terminal,
+      // Same default as the pane: Windows users expect terminal-style right-click.
+      isRightClickToPasteEnabled: () =>
+        settingsRef.current?.terminalRightClickToPaste ?? isWindowsUserAgent(),
+      pasteClipboardText: (activeElement, source) => void pasteClipboardText(activeElement, source)
     })
 
     offData = window.api.terminalPreview.onData((payload) => {
@@ -411,6 +389,7 @@ export function AgentTerminalPreview({
       gridClaim.dispose()
       boxResizeObserver?.disconnect()
       disposeAppMenuClipboard()
+      disposeRightClickPaste()
       offData?.()
       userInputDisposable?.dispose()
       disposeImeNativeTextBridge()
@@ -441,7 +420,7 @@ export function AgentTerminalPreview({
     // Why: a size FIXED by the viewport (not shrink-to-fit) + overflow-hidden
     // keeps the dialog stable no matter how wide/tall the pane's serialized
     // buffer is. The terminal keeps the pane's true dimensions and is scaled/
-    // clipped to fit; fitToBox anchors whichever end keeps the cursor in view.
+    // clipped to fit; createPreviewBoxFit anchors the end that shows the cursor.
     <div
       className={cn(
         'relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5',
@@ -451,10 +430,7 @@ export function AgentTerminalPreview({
     >
       {ptyGone ? (
         <div className="absolute inset-0 flex items-center justify-center px-2.5 py-8 text-center text-[11px] text-muted-foreground">
-          {translate(
-            'dashboardPopout.terminal.closed',
-            "No live terminal — this agent's pane has closed."
-          )}
+          {terminalPreviewUnavailableMessage({ ptyId })}
         </div>
       ) : null}
       <div

@@ -80,7 +80,15 @@ async function openFloatingPanel(page: Page): Promise<void> {
     PANEL_SELECTOR,
     { timeout: 30_000 }
   )
-  await page.evaluate(() => window.dispatchEvent(new Event('orca-toggle-floating-terminal')))
+  // Why: the panel's open flag is persisted (floating-terminal-panel-view-state), so
+  // after a restart it reopens on its own and a blind toggle would close it again.
+  const alreadyOpen = await page.evaluate(
+    (selector) => Boolean(document.querySelector(selector)),
+    OPEN_PANEL_SELECTOR
+  )
+  if (!alreadyOpen) {
+    await page.evaluate(() => window.dispatchEvent(new Event('orca-toggle-floating-terminal')))
+  }
   await expect(page.locator(OPEN_PANEL_SELECTOR)).toBeVisible()
 }
 
@@ -131,6 +139,37 @@ test('concurrent floating Markdown renames do not clobber the destination', asyn
   expect(
     [result.destinationContent, result.firstContent ?? result.secondContent].toSorted()
   ).toEqual(['first\n', 'second\n'])
+})
+
+test('Enter commits a floating Markdown rename only once', async ({ orcaPage }) => {
+  const seeded = await seedFloatingMarkdownFile(orcaPage)
+  await openFloatingPanel(orcaPage)
+
+  const panel = orcaPage.locator(OPEN_PANEL_SELECTOR)
+  const tab = panel.locator(`[data-tab-id="${seeded.tabId}"]`)
+  await tab.click({ button: 'right' })
+  await orcaPage.getByRole('menuitem').filter({ hasText: 'Rename' }).first().click()
+
+  const input = panel.getByRole('textbox', {
+    name: `Rename file ${seeded.originalName}`,
+    exact: true
+  })
+  await input.fill(seeded.renamedName)
+  await input.press('Enter')
+
+  await expect(tab).toContainText(seeded.renamedName)
+  await expect
+    .poll(() =>
+      orcaPage.evaluate(
+        async ({ originalPath, renamedPath }) => ({
+          originalExists: await window.api.fs.pathExists({ filePath: originalPath }),
+          renamedExists: await window.api.fs.pathExists({ filePath: renamedPath })
+        }),
+        { originalPath: seeded.originalPath, renamedPath: seeded.renamedPath }
+      )
+    )
+    .toEqual({ originalExists: false, renamedExists: true })
+  await expect(orcaPage.getByText(/Failed to rename/)).toHaveCount(0)
 })
 
 test('Electron serializes native Unicode rename aliases', async ({ orcaPage }) => {

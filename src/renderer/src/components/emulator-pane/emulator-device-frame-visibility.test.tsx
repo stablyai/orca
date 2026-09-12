@@ -182,4 +182,19 @@ describe('EmulatorDeviceFrame window-visibility gating', () => {
     expect(stopFrameStream).not.toHaveBeenCalled()
     expect(startFrameStream).toHaveBeenCalledTimes(1)
   })
+
+  it('resumes a parked stream when user input proves hidden visibility is stale', async () => {
+    vi.useFakeTimers()
+    await renderFrame(true)
+
+    await act(async () => setDocumentVisibility('hidden'))
+    await act(async () => vi.advanceTimersByTime(EMULATOR_STREAM_PARK_DELAY_MS))
+    expect(stopFrameStream).toHaveBeenCalledWith({ streamId: 'stream-1' })
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }))
+    })
+    expect(document.visibilityState).toBe('hidden')
+    expect(startFrameStream).toHaveBeenCalledTimes(2)
+  })
 })

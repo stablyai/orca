@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import type { TerminalPaneLayoutNode } from '../../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
 import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
 
 it('prunes deeply nested duplicate ownership without recursive stack growth', () => {

@@ -16,6 +16,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
+import { createMockSubprocess, waitFor } from './daemon-pty-adapter-test-harness'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { HistoryManager } from './history-manager'
@@ -30,7 +31,6 @@ import {
 } from './terminal-history-recovery-quarantine'
 import { encodeLogBatch, encodeLogHeader } from './terminal-history-log'
 import type { HistoryReader } from './history-reader'
-import type { SubprocessHandle } from './session'
 import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
 import { getDaemonSocketPath } from './daemon-spawner'
@@ -79,54 +79,6 @@ async function leaveFailedQuarantineProtection(
     quarantineUnreadableRecovery: true
   })
   expect(manager.isSessionDisabled(sessionId)).toBe(true)
-}
-
-function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle & {
-  pause: ReturnType<typeof vi.fn<() => void>>
-  resume: ReturnType<typeof vi.fn<() => void>>
-  _simulateData: (data: string) => void
-  _simulateExit: (code: number) => void
-} {
-  let onDataCb: ((data: string) => void) | null = null
-  let onExitCb: ((code: number) => void) | null = null
-  return {
-    // Why: getCwd falls back to OS pid lookup; an implausibly-high fake pid can't collide with a real process' cwd.
-    pid: 999_999_999,
-    getForegroundProcess: vi.fn(() => null),
-    write: vi.fn(),
-    resize: vi.fn(),
-    pause: vi.fn<() => void>(),
-    resume: vi.fn<() => void>(),
-    kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
-    signal: vi.fn(),
-    onData(cb) {
-      onDataCb = cb
-      if (dataOnSubscribe) {
-        cb(dataOnSubscribe)
-      }
-    },
-    onExit(cb) {
-      onExitCb = cb
-    },
-    dispose: vi.fn(),
-    _simulateData(data: string) {
-      onDataCb?.(data)
-    },
-    _simulateExit(code: number) {
-      onExitCb?.(code)
-    }
-  }
-}
-
-async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
-  const start = Date.now()
-  while (!predicate()) {
-    if (Date.now() - start > timeoutMs) {
-      throw new Error('waitFor timed out')
-    }
-    await new Promise((r) => setTimeout(r, 10))
-  }
 }
 
 describe('DaemonPtyAdapter history recovery', () => {

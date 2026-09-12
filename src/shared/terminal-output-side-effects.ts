@@ -67,7 +67,7 @@ export type TerminalTitleTrackerCallbacks = {
   onPrLink?: (link: TerminalGitHubPRLink) => void
   /**
    * Fired per chunk containing a DECSET 2031 subscribe (chunk-boundary-safe): lets
-   * hidden-delivery-gated renderer views answer the color-scheme query without byte access.
+   * hidden-delivery-gated renderer views track the subscription without byte access.
    */
   onMode2031Subscribe?: () => void
   /**
@@ -93,7 +93,7 @@ export type TerminalTitleTracker = {
    */
   seedInitialTitle: (rawTitle: string) => void
   /** Restore the status consumed by the latest exit candidate when process evidence disproves it. */
-  restoreLastAgentExit: () => AgentStatus | null
+  restoreLastAgentExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
   /** Last title surfaced through onTitle, after normalization. */
   getLastNormalizedTitle: () => string | null
   /**
@@ -280,8 +280,8 @@ export function createTerminalTitleTracker(
         agentTracker?.seedTitle(rawTitle)
       }
     },
-    restoreLastAgentExit(): AgentStatus | null {
-      return agentTracker?.restoreLastExit() ?? null
+    restoreLastAgentExit(confirmedStatus?: AgentStatus): AgentStatus | null {
+      return agentTracker?.restoreLastExit(confirmedStatus) ?? null
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
     setTransientFactScanningSuppressed(suppressed: boolean): void {

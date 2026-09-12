@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from './types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import {
   describeWorkspaceSessionError,
   safeParseWorkspaceSession,

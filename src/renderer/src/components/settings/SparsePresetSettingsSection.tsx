@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Plus } from 'lucide-react'
-import type { SparsePreset } from '../../../../shared/types'
+import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { useAppStore } from '../../store'
 import { parseSparsePresetDirectories } from '@/lib/sparse-preset-draft'
 import { useMountedRef } from '@/hooks/useMountedRef'

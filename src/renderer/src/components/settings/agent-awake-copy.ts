@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { ComputerAwakeMode } from '../../../../shared/computer-awake-mode'
 import { searchKeywords } from './settings-search-keywords'
 
 const AGENT_AWAKE_TITLE_KEY = 'auto.components.settings.agent-awake-copy.modeTitle'
@@ -11,19 +12,29 @@ export function getAgentAwakeTitle(): string {
   return translate(AGENT_AWAKE_TITLE_KEY, 'Keep computer awake')
 }
 
+export function getAgentAwakeModeLabel(mode: ComputerAwakeMode): string {
+  if (mode === 'on') {
+    return translate('auto.components.settings.AgentAwakeSetting.on', 'On')
+  }
+  if (mode === 'auto') {
+    return translate('auto.components.settings.AgentAwakeSetting.auto', 'Agent')
+  }
+  return translate('auto.components.settings.AgentAwakeSetting.off', 'Off')
+}
+
 export function getAgentAwakeDescription(
   userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
 ): string {
   if (userAgent.includes('Windows')) {
     return translate(
       AGENT_AWAKE_DESCRIPTION_WINDOWS_KEY,
-      "Choose On, Auto while agents are working, or Off. Lid-close behavior follows this device's power settings."
+      "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings."
     )
   }
 
   return translate(
     AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY,
-    'Choose On, Auto while agents are working, or Off. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
+    'Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
   )
 }
 

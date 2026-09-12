@@ -1,4 +1,4 @@
-import type { OnboardingState } from '../../../../shared/types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 
 // Why: split out so App.tsx can gate the lazy <OnboardingFlow> without an
 // eager static import path that pulls the whole flow into the main chunk.

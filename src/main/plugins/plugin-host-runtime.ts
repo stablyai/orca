@@ -20,7 +20,7 @@ export type PluginHostCallError = Error & { code?: string }
 export type PluginWorkerOrcaApi = {
   /** Register the handler for a command declared in the manifest. */
   commands: {
-    register(commandId: string, handler: (args: unknown) => unknown | Promise<unknown>): void
+    register(commandId: string, handler: (args: unknown) => unknown): void
   }
   /** Handle an event the manifest subscribed to (`contributes.events`). */
   events: {
@@ -55,7 +55,7 @@ export function createPluginWorkerRuntime(
   const send = options.send
   const importModule = options.importModule ?? ((specifier: string) => import(specifier))
   const exit = options.exit ?? ((code: number) => process.exit(code))
-  const commandHandlers = new Map<string, (args: unknown) => unknown | Promise<unknown>>()
+  const commandHandlers = new Map<string, (args: unknown) => unknown>()
   const eventHandlers = new Map<string, ((payload: unknown) => void | Promise<void>)[]>()
   const pendingHostCalls = new Map<
     number,
@@ -64,7 +64,7 @@ export function createPluginWorkerRuntime(
   let nextHostCallId = 0
   let initialized = false
   let shuttingDown = false
-  let deactivate: (() => unknown | Promise<unknown>) | null = null
+  let deactivate: (() => unknown) | null = null
 
   async function handleInit(input: {
     pluginRoot: string
@@ -88,7 +88,7 @@ export function createPluginWorkerRuntime(
     if (module.deactivate !== undefined && typeof module.deactivate !== 'function') {
       throw new Error(`plugin entry ${input.mainEntry} has a non-function deactivate export`)
     }
-    deactivate = (module.deactivate as (() => unknown | Promise<unknown>) | undefined) ?? null
+    deactivate = (module.deactivate as (() => unknown) | undefined) ?? null
     const orca: PluginWorkerOrcaApi = {
       commands: {
         register(commandId, handler) {

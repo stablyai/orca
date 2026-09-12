@@ -1,13 +1,17 @@
+import { translate } from '@/i18n/i18n'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   parseLoopbackUrlWithPort,
   type LocalhostWorktreeLabelRoute
 } from '../../../shared/localhost-worktree-labels'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../../shared/workspace-ports'
+import { toast } from 'sonner'
 
 export type OpenHttpLinkOptions = {
   worktreeId?: string | null
+  /** Terminal-only opt-in for routing a remote-owned source through its managed browser. */
+  allowRemoteInApp?: boolean
   /** Unconditional: always use the system browser regardless of settings. */
   forceSystemBrowser?: boolean
   /** Unconditional for local sources: open inside Orca regardless of settings. */
@@ -35,13 +39,23 @@ type StoreAccessor = () => {
   > | null
   setActiveWorktree: (worktreeId: string) => void
   createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
-  repos?: LocalhostLinkRepo[]
-  projects?: LocalhostLinkProject[]
+  repos?: readonly LocalhostLinkRepo[]
+  projects?: readonly LocalhostLinkProject[]
   worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
   allWorktrees?: () => LocalhostLinkWorktree[]
   workspacePortScan?: { result: WorkspacePortScanResult } | null
   workspacePortScansByKey?: Record<string, WorkspacePortScanResult>
 }
+
+type WorkspaceHttpLinkBrowserRequest = {
+  workspaceId: string
+  url: string
+  intent: { kind: 'url' }
+  expectedRuntimeEnvironmentId?: string
+  expectedSshConnectionId?: string
+}
+
+type WorkspaceHttpLinkBrowserOpener = (request: WorkspaceHttpLinkBrowserRequest) => Promise<void>
 
 type LocalhostLinkRepo = {
   id: string
@@ -61,9 +75,16 @@ type LocalhostLinkWorktree = {
 // the break, several renderer test files that load this module first see
 // `createEditorSlice` as undefined at store/index.ts initialization.
 let storeAccessor: StoreAccessor | null = null
+let workspaceHttpLinkBrowserOpener: WorkspaceHttpLinkBrowserOpener | null = null
 
 export function registerHttpLinkStoreAccessor(fn: StoreAccessor): void {
   storeAccessor = fn
+}
+
+export function registerWorkspaceHttpLinkBrowserOpener(
+  fn: WorkspaceHttpLinkBrowserOpener | null
+): void {
+  workspaceHttpLinkBrowserOpener = fn
 }
 
 // Scope: http(s) URLs only. file: URIs and in-worktree markdown targets are
@@ -93,27 +114,65 @@ export function resolveModifierRouting(
 }
 
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
-  const { worktreeId, forceSystemBrowser, forceInApp, modifierHeld, sourceOwner } = opts
+  const {
+    worktreeId,
+    allowRemoteInApp,
+    forceSystemBrowser,
+    forceInApp,
+    modifierHeld,
+    sourceOwner
+  } = opts
   if (sourceOwner?.kind === 'unknown') {
     return
   }
   const state = storeAccessor?.()
   const remoteRuntimeActive = Boolean(state?.settings?.activeRuntimeEnvironmentId?.trim())
-  const sourceIsLocal = sourceOwner ? sourceOwner.kind === 'local' : !remoteRuntimeActive
+  const effectiveSourceOwner = sourceOwner
+  const sourceIsLocal = effectiveSourceOwner
+    ? effectiveSourceOwner.kind === 'local'
+    : !remoteRuntimeActive
   const openLinksInApp = state?.settings?.openLinksInApp === true
   const modifier = resolveModifierRouting(
     Boolean(modifierHeld),
     openLinksInApp,
     state?.settings?.openLinksInAppModifierInverts === true
   )
-  const routeToOrca =
-    sourceIsLocal &&
+  const wantsOrca =
     !forceSystemBrowser &&
     !modifier.wantsSystemBrowser &&
     Boolean(worktreeId) &&
     (forceInApp || openLinksInApp || modifier.wantsOrca)
 
-  if (routeToOrca && worktreeId && state) {
+  if (
+    wantsOrca &&
+    allowRemoteInApp &&
+    worktreeId &&
+    (effectiveSourceOwner?.kind === 'runtime' ||
+      effectiveSourceOwner?.kind === 'ssh' ||
+      (!effectiveSourceOwner && remoteRuntimeActive))
+  ) {
+    if (workspaceHttpLinkBrowserOpener) {
+      void workspaceHttpLinkBrowserOpener({
+        workspaceId: worktreeId,
+        url,
+        intent: { kind: 'url' },
+        ...(effectiveSourceOwner?.kind === 'runtime'
+          ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
+          : effectiveSourceOwner?.kind === 'ssh'
+            ? { expectedSshConnectionId: effectiveSourceOwner.connectionId }
+            : {})
+      }).catch((error) => {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
+        )
+      })
+    }
+    return
+  }
+
+  if (wantsOrca && sourceIsLocal && worktreeId && state) {
     // Why: http clicks from inside a worktree should not push a worktree-switch
     // history entry — the user isn't changing worktrees, they're opening a tab
     // in the one they're already in. activateAndRevealWorktree is reserved for

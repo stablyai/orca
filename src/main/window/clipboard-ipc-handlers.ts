@@ -9,7 +9,8 @@ import {
 import { spawn } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
-import { isENOENT, PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem-path-containment'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
@@ -22,7 +23,8 @@ import {
 import {
   assertClipboardImageBase64LengthWithinLimit,
   assertClipboardImageByteLengthWithinLimit,
-  assertClipboardImageDimensionsWithinLimit
+  assertClipboardImageDimensionsWithinLimit,
+  type ClipboardImageThumbnail
 } from '../../shared/clipboard-image'
 import {
   writeFileToClipboard,
@@ -31,10 +33,12 @@ import {
 } from './clipboard-file-copy'
 import {
   cleanupExpiredRemoteClipboardFiles,
+  scheduleLegacyRemoteClipboardFileCleanup,
   writeRemoteFileToClipboard
 } from './clipboard-remote-file-copy'
 import { saveClipboardImageBufferInRuntime } from './clipboard-runtime-image-upload'
 import { readWindowsClipboardImageFileAsPng } from './clipboard-windows-image-file'
+import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { isDashboardPopoutRenderer } from './dashboard-popout-window'
 
@@ -51,8 +55,16 @@ async function saveClipboardImageBufferForTarget(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
-  if (runtimeEnvironmentId && !args?.connectionId) {
-    return saveClipboardImageBufferInRuntime(app.getPath('userData'), runtimeEnvironmentId, buffer)
+  // Why (#17679): with a runtime owner, a connectionId names one of the RUNTIME's SSH
+  // connections (nested Remote Server -> SSH), not one this process dialed. Looking it up
+  // in the local provider registry can only miss, so the runtime must perform the save.
+  if (runtimeEnvironmentId) {
+    return saveClipboardImageBufferInRuntime(
+      app.getPath('userData'),
+      runtimeEnvironmentId,
+      buffer,
+      args?.connectionId ?? null
+    )
   }
   return saveClipboardImageBufferAsTempFile(buffer, args)
 }
@@ -83,8 +95,10 @@ export function registerClipboardHandlers(store: Store): void {
   ipcMain.removeHandler('clipboard:writeImage')
   ipcMain.removeHandler('clipboard:writeFile')
   ipcMain.removeHandler('clipboard:saveImageAsTempFile')
+  ipcMain.removeHandler('clipboard:readImageThumbnail')
 
   void cleanupExpiredRemoteClipboardFiles()
+  scheduleLegacyRemoteClipboardFileCleanup()
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
@@ -97,6 +111,12 @@ export function registerClipboardHandlers(store: Store): void {
       return assertClipboardTextWithinLimitWithYield(clipboard.readText('selection'), options)
     }
   )
+  // Why: an unanswered paste reads as a dropped paste, so the composer probes
+  // the clipboard in memory before the (slower) save lands.
+  ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
+    assertTrustedClipboardSender(event)
+    return buildClipboardImageThumbnail(clipboard.readImage())
+  })
   // Why: terminals need to detect clipboard images to support tools like Claude
   // Code that accept image input via paste. Writes the clipboard image to a
   // temp file and returns the path, or null if the clipboard has no image.

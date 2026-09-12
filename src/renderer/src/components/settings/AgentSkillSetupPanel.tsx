@@ -5,7 +5,7 @@ import { IntegrationStatusPill } from '../integration-status-pill'
 import { SkillFreshnessStatusPill } from '../skills/SkillFreshnessStatusPill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { AgentSkillSetupFailureNotice } from './AgentSkillSetupFailureNotice'
-import { buildSkillSetupTerminalCommand } from './CliSkillRuntimeSetup'
+import { createTerminalSnapshot, type SkillTerminalSnapshot } from './agent-skill-terminal-snapshot'
 import type { AgentSkillSetupPanelProps } from './agent-skill-setup-panel-props'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -31,7 +31,8 @@ export function AgentSkillSetupPanel({
   error,
   installDisabled = false,
   terminalHeightPx,
-  terminalShellOverride,
+  terminalShellOverride: shellOverride,
+  terminalRuntime: runtime,
   leading,
   icon,
   variant = 'card',
@@ -59,7 +60,7 @@ export function AgentSkillSetupPanel({
     installedInstallLabel ??
     translate('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
   const [terminalOpen, setTerminalOpen] = useState(false)
-  const [terminalCommand, setTerminalCommand] = useState<string | null>(null)
+  const [terminalSnapshot, setTerminalSnapshot] = useState<SkillTerminalSnapshot | null>(null)
   const [terminalAttempt, setTerminalAttempt] = useState(0)
   const [terminalOpening, setTerminalOpening] = useState(false)
   const [setupAttemptRunning, setSetupAttemptRunning] = useState(false)
@@ -74,16 +75,15 @@ export function AgentSkillSetupPanel({
     [getPrerequisiteStatus]
   )
   const activeCommand = installed ? (installedCommand ?? command) : command
-  // Why: the inline terminal auto-inserts when its command changes, so keep an
-  // already-open terminal pinned to the command selected by the user's click.
-  const openTerminalCommand = terminalCommand ?? activeCommand
+  // Why: the inline terminal auto-inserts when its command changes, so keep the
+  // already-open terminal pinned to the command and runtime selected at click.
+  const openTerminalCommand = terminalSnapshot?.copiedCommand ?? activeCommand
 
   const openSetupTerminal = (): void => {
     if (terminalOpening || setupAttemptRunning) {
       return
     }
-    const nextCommand =
-      setupCommandFailedCode !== null && terminalCommand ? terminalCommand : activeCommand
+    const nextSnapshot = createTerminalSnapshot(activeCommand, shellOverride, runtime)
     setTerminalOpening(true)
     if (setupCommandFailedCode !== null) {
       setTerminalOpen(false)
@@ -100,7 +100,7 @@ export function AgentSkillSetupPanel({
         if (mountedRef.current) {
           setTerminalOpening(false)
           if (shouldOpenTerminal) {
-            setTerminalCommand(nextCommand)
+            setTerminalSnapshot(nextSnapshot)
             setTerminalAttempt((attempt) => attempt + 1)
             setTerminalOpen(true)
             setupAttemptRunningRef.current = true
@@ -352,7 +352,7 @@ export function AgentSkillSetupPanel({
           </div>
         ) : null}
       </div>
-      {terminalOpen ? (
+      {terminalOpen && terminalSnapshot ? (
         <div
           className={cn(
             'min-w-0 max-w-full overflow-hidden',
@@ -387,11 +387,11 @@ export function AgentSkillSetupPanel({
               </TooltipContent>
             </Tooltip>
           </div>
-          {/* The copied string above stays as built; only what we run is adapted. */}
           <OnboardingInlineCommandTerminal
             key={terminalAttempt}
             worktreeId={terminalWorktreeId}
-            command={buildSkillSetupTerminalCommand(openTerminalCommand, terminalShellOverride)}
+            command={openTerminalCommand}
+            prepareCommandForShell={terminalSnapshot.prepareCommandForShell}
             title={terminalTitle}
             description={translate(
               'auto.components.settings.AgentSkillSetupPanel.runCommandDescription',
@@ -399,7 +399,7 @@ export function AgentSkillSetupPanel({
             )}
             ariaLabel={terminalAriaLabel}
             terminalHeightPx={terminalHeightPx}
-            shellOverride={terminalShellOverride}
+            shellOverride={terminalSnapshot.shellOverride}
             terminalTopMarginPx={8}
             descriptionPaddingClassName="px-4 py-2"
             autoScrollIntoView={false}

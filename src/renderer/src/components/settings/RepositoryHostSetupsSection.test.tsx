@@ -9,7 +9,8 @@ import {
   RUNTIME_PROTOCOL_VERSION,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 
@@ -292,6 +293,7 @@ describe('RepositoryHostSetupsSection', () => {
                 }
               ]
             ]),
+            targetGenerations: new Map(),
             targetLabels: new Map([
               ['direct', 'Direct box'],
               ['jump', 'Jump box']

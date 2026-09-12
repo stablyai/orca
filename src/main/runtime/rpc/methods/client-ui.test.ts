@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
+import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import {
   MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH,
   MAX_QUICK_COMMAND_ID_LENGTH,
@@ -7,8 +8,8 @@ import {
   MAX_QUICK_COMMAND_REPO_ID_LENGTH,
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH
 } from '../../../../shared/terminal-quick-commands'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree-card-properties'
-import type { PersistedUIState } from '../../../../shared/types'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
@@ -21,6 +22,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 describe('client UI RPC methods', () => {
   it('returns the runtime host agent settings needed by mobile create flows', async () => {
     const settings = {
+      worktreeVisibilityDefaults: { external: 'show' as const },
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
       agentCmdOverrides: { codex: 'codex --profile work' },
@@ -29,9 +31,11 @@ describe('client UI RPC methods', () => {
       visibleTaskProviders: ['github', 'gitlab'],
       defaultRepoSelection: ['repo-1'],
       defaultLinearTeamSelection: ['team-1'],
+      experimentalStructuredNativeChat: true,
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn',
       githubProjects: {
         pinned: [
           {
@@ -56,6 +60,24 @@ describe('client UI RPC methods', () => {
 
     expect(runtime.getClientSettings).toHaveBeenCalledTimes(1)
     expect(response).toMatchObject({ ok: true, result: { settings } })
+  })
+
+  it('rejects paired attempts to mutate the host-owned structured chat setting', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateClientSettings: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('settings.update', { experimentalStructuredNativeChat: true })
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'invalid_argument' }
+    })
+    expect(runtime.updateClientSettings).not.toHaveBeenCalled()
   })
 
   it('persists the runtime host task source settings for mobile Tasks', async () => {
@@ -92,6 +114,17 @@ describe('client UI RPC methods', () => {
 
     const response = await dispatcher.dispatch(
       makeRequest('settings.update', {
+        worktreeVisibilityDefaults: {
+          external: 'show',
+          customSources: [
+            { id: 'team', rootPath: ' /srv/team ' },
+            { id: 'invalid', rootPath: '../relative' }
+          ],
+          sourcePreferences: {
+            builtIn: { claude: 'show', unknown: 'show' },
+            custom: { team: 'hide', 'bad id': 'show' }
+          }
+        },
         defaultTuiAgent: 'codex',
         disabledTuiAgents: ['claude', 'not-real', 'claude'],
         defaultTaskSource: 'linear',
@@ -101,6 +134,7 @@ describe('client UI RPC methods', () => {
         compactWorktreeCards: true,
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
+        minimaxEndpoint: 'cn',
         defaultRepoSelection: settings.defaultRepoSelection,
         defaultLinearTeamSelection: ['team-1', 'team-2'],
         githubProjects: settings.githubProjects
@@ -108,6 +142,14 @@ describe('client UI RPC methods', () => {
     )
 
     expect(runtime.updateClientSettings).toHaveBeenCalledWith({
+      worktreeVisibilityDefaults: {
+        external: 'show',
+        customSources: [{ id: 'team', rootPath: '/srv/team' }],
+        sourcePreferences: {
+          builtIn: { claude: 'show' },
+          custom: { team: 'hide' }
+        }
+      },
       defaultTuiAgent: 'codex',
       disabledTuiAgents: ['claude'],
       defaultTaskSource: 'linear',
@@ -117,6 +159,7 @@ describe('client UI RPC methods', () => {
       compactWorktreeCards: true,
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
+      minimaxEndpoint: 'cn',
       defaultRepoSelection: settings.defaultRepoSelection,
       defaultLinearTeamSelection: ['team-1', 'team-2'],
       githubProjects: settings.githubProjects
@@ -355,7 +398,7 @@ describe('client UI RPC methods', () => {
     const response = await dispatcher.dispatch(makeRequest('ui.get'))
 
     expect(runtime.getUIState).toHaveBeenCalledTimes(1)
-    expect(response).toMatchObject({ ok: true, result: { ui } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(ui) } })
   })
 
   it('persists UI updates on the runtime host and returns the updated state', async () => {
@@ -395,7 +438,7 @@ describe('client UI RPC methods', () => {
       hideAutomationGeneratedWorkspaces: true,
       filterRepoIds: ['repo-1']
     })
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
   })
 
   it('lets a paired client clear the OSC 52 default-on notice', async () => {
@@ -420,6 +463,24 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).toHaveBeenCalledWith({
       osc52ClipboardDefaultOnNoticePending: false
     })
+  })
+
+  it('does not let a paired client replace the host workspace origin filter', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateUIState: vi.fn(() => getDefaultUIState())
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('ui.set', {
+        hideWorkspacesFromOtherDevices: true,
+        sidebarWidth: 280
+      })
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(runtime.updateUIState).toHaveBeenCalledWith({ sidebarWidth: 280 })
   })
 
   it('accepts persisted literal UI arrays and nested UI state', async () => {
@@ -522,11 +583,12 @@ describe('client UI RPC methods', () => {
     }
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
 
+    const { manualRepoOrder: _desktopOwnedOrder, ...forwarded } = payload
     expect(runtime.updateUIState).toHaveBeenCalledWith({
-      ...payload,
+      ...forwarded,
       worktreeCardProperties: ['status', 'unread', 'branch', 'automation', 'inline-agents']
     })
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
   })
 
   // Why one case per field: the schema is strict, so a single unlisted key makes
@@ -545,6 +607,8 @@ describe('client UI RPC methods', () => {
     ],
     ['taskResumeState.jiraPreset', { taskResumeState: { jiraPreset: 'assigned' } }],
     ['taskResumeState.jiraQuery', { taskResumeState: { jiraQuery: 'ENG' } }],
+    ['dismissedUnexpectedSignoutVersion', { dismissedUnexpectedSignoutVersion: '1.2.3' }],
+    ['dismissedUnexpectedSignoutVersion null', { dismissedUnexpectedSignoutVersion: null }],
     ['activeView', { activeView: 'tasks' }],
     ['showDotfilesByWorktree', { showDotfilesByWorktree: { 'repo::/worktree': true } }],
     ['setupGuideSidebarDismissed', { setupGuideSidebarDismissed: true }],
@@ -621,7 +685,7 @@ describe('client UI RPC methods', () => {
     const response = await dispatcher.dispatch(makeRequest('ui.recordFeatureInteraction', 'tasks'))
 
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('tasks')
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
   })
 
   it('rejects unknown and malformed UI update fields', async () => {
@@ -683,7 +747,7 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).toHaveBeenCalledWith({
       worktreeCardProperties: ['status', 'unread', 'jira-issue']
     })
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
   })
 
   it('accepts every worktree card property the shared union defines', async () => {
@@ -763,7 +827,7 @@ describe('client UI RPC methods', () => {
     expect(runtime.updateUIState).toHaveBeenCalledWith({
       worktreeCardProperties: ['status', 'unread', 'ci', 'issue', 'pr']
     })
-    expect(response).toMatchObject({ ok: true, result: { ui: updated } })
+    expect(response).toMatchObject({ ok: true, result: { ui: omitPairingLocalUiFields(updated) } })
   })
 
   it('rejects each star-nag persisted state mutation field from remote clients', async () => {

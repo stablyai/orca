@@ -1,0 +1,28 @@
+name: Pi extension provider verification
+on:
+  pull_request:
+    paths:
+      - 'src/shared/commit-message-agent-specs-primary.ts'
+      - 'tests/tools/pi-provider-runtime-smoke.mjs'
+      - '.github/workflows/pi-provider-runtime.yml'
+permissions:
+  contents: read
+jobs:
+  runtime:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Install pinned Pi runtime
+        run: npm install --prefix .cache/pi-provider --ignore-scripts --no-audit --no-fund @earendil-works/pi-coding-agent@0.84.2
+      - name: Verify extension model generation before and after
+        run: node tests/tools/pi-provider-runtime-smoke.mjs .cache/pi-provider/node_modules/@earendil-works/pi-coding-agent/dist/cli.js

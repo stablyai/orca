@@ -22,6 +22,11 @@ export async function activateWorktreeFromSidebar(
     }
     return
   }
+  // Keep navigation independent from an optional runtime wake IPC.
+  activateAndRevealWorktree(worktreeId, {
+    revealInSidebar: false,
+    ...(executionHostId ? { executionHostId } : {})
+  })
 
   if (typeof window !== 'undefined' && window.api?.ephemeralVm?.resumeWorkspace) {
     try {
@@ -41,14 +46,6 @@ export async function activateWorktreeFromSidebar(
           description: error instanceof Error ? error.message : String(error)
         }
       )
-      return
     }
   }
-
-  // Why: sidebar clicks already happen on a visible row; revealing again can
-  // jump duplicate pinned/canonical entries back to the first mounted copy.
-  activateAndRevealWorktree(worktreeId, {
-    revealInSidebar: false,
-    ...(executionHostId ? { executionHostId } : {})
-  })
 }

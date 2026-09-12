@@ -16,7 +16,8 @@ import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRunti
 import {
   buildSkillCommandForRuntime,
   ensureWslCliAvailableForAgentSkillTerminal,
-  getWslCliDistroRequest
+  getWslCliDistroRequest,
+  type LocalAgentRuntime
 } from './CliSkillRuntimeSetup'
 
 // Shared install/update wiring for Task Sources + Linear settings.
@@ -32,6 +33,7 @@ export function useLinearAgentSkillSetup(): {
   installDisabled: boolean
   error: string | null
   terminalShellOverride: string | undefined
+  terminalRuntime: LocalAgentRuntime | undefined
   preInstallNotice: string
   refreshSkill: () => Promise<boolean>
   getPrerequisiteStatus: () => Promise<Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>>
@@ -99,6 +101,7 @@ export function useLinearAgentSkillSetup(): {
     installDisabled,
     error: activeSkillRuntime.installDisabledReason ?? skillError,
     terminalShellOverride: activeSkillRuntime.terminalShellOverride,
+    terminalRuntime: activeSkillRuntime.agentRuntime,
     preInstallNotice: AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
     refreshSkill,
     getPrerequisiteStatus,

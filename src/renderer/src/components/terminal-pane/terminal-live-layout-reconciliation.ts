@@ -1,5 +1,9 @@
-import type { TerminalPaneLayoutNode, TerminalPaneSplitDirection } from '../../../../shared/types'
+import type {
+  TerminalPaneLayoutNode,
+  TerminalPaneSplitDirection
+} from '../../../../shared/terminal-tab-types'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { collectLeafIds } from './terminal-pane-layout-tree'
 
 /**
  * Whether a tab's split layout is owned by a host (web/mobile clients, or a
@@ -82,6 +86,29 @@ function mountedLeafIdsIn(
   ]
 }
 
+/**
+ * Mounted leaves the host layout no longer names. The host retires a leaf when
+ * its PTY ends, so a pane still mounted for it is a ghost: it renders nothing
+ * and, once it is the only pane left, absorbs the tab's next close. An empty
+ * layout plans nothing — absence of a tree is not evidence about any pane.
+ */
+export function planTerminalLiveLayoutRemovals(
+  root: TerminalPaneLayoutNode | null | undefined,
+  currentLeafIds: Iterable<string>,
+  retiredLeafIds: ReadonlySet<string>
+): string[] {
+  if (!root) {
+    return []
+  }
+  const layoutLeafIds = new Set(collectLeafIds(root))
+  // Why: a mounted leaf the layout stopped naming is a removal only once the
+  // host is known to have retired it (trackRetiredLeafIds). A snapshot landing
+  // while the client is still starting a pane must not read as a retirement.
+  return [...currentLeafIds].filter(
+    (leafId) => !layoutLeafIds.has(leafId) && retiredLeafIds.has(leafId)
+  )
+}
+
 export function planTerminalLiveLayoutInsertions(
   root: TerminalPaneLayoutNode | null | undefined,
   currentLeafIds: Iterable<string>
@@ -152,4 +179,53 @@ export function planTerminalLiveLayoutInsertions(
 
   ensureSubtree(root)
   return insertions
+}
+
+/** Panes to close for leaves the host retired. Only a pane whose transport has
+ *  no PTY any more is a ghost; a pane with no transport yet, or still bound to
+ *  a PTY, may simply not be named by a stale snapshot. The last pane on the tab
+ *  is never removed. */
+export function selectRetiredPaneIds(
+  retiredLeafIds: readonly string[],
+  view: {
+    paneCount: number
+    paneIdForLeaf: (leafId: string) => number | null
+    ptyIdForPane: (paneId: number) => string | null | undefined
+  }
+): number[] {
+  const paneIds: number[] = []
+  for (const leafId of retiredLeafIds) {
+    if (view.paneCount - paneIds.length <= 1) {
+      break
+    }
+    const paneId = view.paneIdForLeaf(leafId)
+    if (paneId === null || view.ptyIdForPane(paneId) !== null) {
+      continue
+    }
+    paneIds.push(paneId)
+  }
+  return paneIds
+}
+
+/**
+ * Leaves the host dropped from its layout whose panes are still mounted. Only a
+ * leaf the host named before can be retired: a leaf it has never named belongs
+ * to a pane the client is still starting. A retired leaf stays retired until
+ * its pane is gone or the host names it again, so a removal skipped while the
+ * transport still held its PTY is planned again once that PTY clears.
+ */
+export function trackRetiredLeafIds(args: {
+  retiredLeafIds: ReadonlySet<string>
+  previousLayoutLeafIds: ReadonlySet<string>
+  layoutLeafIds: ReadonlySet<string>
+  mountedLeafIds: Iterable<string>
+}): ReadonlySet<string> {
+  const mounted = new Set(args.mountedLeafIds)
+  const next = new Set<string>()
+  for (const leafId of [...args.retiredLeafIds, ...args.previousLayoutLeafIds]) {
+    if (mounted.has(leafId) && !args.layoutLeafIds.has(leafId)) {
+      next.add(leafId)
+    }
+  }
+  return next
 }

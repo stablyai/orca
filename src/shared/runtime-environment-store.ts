@@ -176,17 +176,19 @@ const LAST_USED_PERSIST_INTERVAL_MS = 60_000
 export function markEnvironmentUsed(
   userDataPath: string,
   selector: string,
-  args: { runtimeId?: string | null; now?: number } = {}
+  args: { runtimeId?: string | null; pairedDeviceId?: string; now?: number } = {}
 ): void {
   const store = readEnvironmentStore(userDataPath)
   const environment = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
   const runtimeIdChanged = args.runtimeId != null && args.runtimeId !== environment.runtimeId
+  const pairedDeviceIdChanged =
+    args.pairedDeviceId != null && args.pairedDeviceId !== environment.pairedDeviceId
   const lastUsedIsFresh =
     environment.lastUsedAt != null &&
     now >= environment.lastUsedAt &&
     now - environment.lastUsedAt < LAST_USED_PERSIST_INTERVAL_MS
-  if (!runtimeIdChanged && lastUsedIsFresh) {
+  if (!runtimeIdChanged && !pairedDeviceIdChanged && lastUsedIsFresh) {
     return
   }
   const next = store.environments.map((entry) =>
@@ -194,6 +196,7 @@ export function markEnvironmentUsed(
       ? {
           ...entry,
           runtimeId: args.runtimeId ?? entry.runtimeId,
+          ...(args.pairedDeviceId ? { pairedDeviceId: args.pairedDeviceId } : {}),
           lastUsedAt: now,
           updatedAt: now
         }

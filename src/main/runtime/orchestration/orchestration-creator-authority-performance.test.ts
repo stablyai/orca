@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from '../../sqlite/sync-database'
-import { OrchestrationDb } from './db'
+import { DISPATCH_CONTEXT_CLAIM_SQL, OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 const CREATOR_PANE = 'tab-creator:11111111-1111-4111-8111-111111111111'
 const CREATOR_PROCESS = 'pty-creator:incarnation-a'
@@ -45,9 +46,35 @@ describe('creator authority lookup performance', () => {
     const taskDetails = taskPlan.map((row) => row.detail).join(' | ')
     const paneDetails = panePlan.map((row) => row.detail).join(' | ')
 
-    expect(taskDetails).toContain('idx_dispatch_active_assignee_handle')
+    expect(taskDetails).toContain('idx_dispatch_active_run_assignee_handle')
     expect(taskDetails).not.toMatch(/SCAN (?:runs|rebound)/)
     expect(paneDetails).toContain('idx_dispatch_assignee_pane_leaf')
+  })
+
+  it('uses active-assignee indexes for Dispatch occupancy claims', () => {
+    db = new OrchestrationDb(':memory:')
+    const plan = sqliteFor(db)
+      .prepare(`EXPLAIN QUERY PLAN ${DISPATCH_CONTEXT_CLAIM_SQL}`)
+      .all(
+        'ctx_claimant',
+        1,
+        null,
+        'term_worker',
+        'tab_worker:33333333-3333-4333-8333-333333333333',
+        'worker:1',
+        0,
+        'task_claimant',
+        'term_worker',
+        'tab_worker:33333333-3333-4333-8333-333333333333',
+        'tab_worker:33333333-3333-4333-8333-333333333333',
+        '33333333-3333-4333-8333-333333333333',
+        '33333333-3333-4333-8333-333333333333'
+      ) as { detail: string }[]
+    const details = plan.map((row) => row.detail).join(' | ')
+
+    expect(details).toContain('idx_dispatch_active_assignee_handle')
+    expect(details).toContain('idx_dispatch_active_assignee_pane_key')
+    expect(details).toContain('idx_dispatch_assignee_pane_leaf')
   })
 
   it('keeps 300 Task reads bounded with 50,000 retained Runs', () => {
@@ -58,13 +85,7 @@ describe('creator authority lookup performance', () => {
       coordinatorPaneKey: 'tab-coordinator:22222222-2222-4222-8222-222222222222'
     })
     const creatorTask = db.createTask({ spec: 'creator', runId: run.id })
-    db.createDispatchContext(
-      creatorTask.id,
-      'term-creator',
-      CREATOR_PANE,
-      undefined,
-      CREATOR_PROCESS
-    )
+    createRootDispatch(db, creatorTask.id, 'term-creator', CREATOR_PANE, undefined, CREATOR_PROCESS)
     const workerTask = db.createTask({
       spec: 'worker',
       runId: run.id,
@@ -119,7 +140,8 @@ describe('creator authority lookup performance', () => {
         )
         .run(retainedDispatchCount, run.id)
       const creatorTask = db.createTask({ spec: 'creator', runId: run.id })
-      const creatorDispatch = db.createDispatchContext(
+      const creatorDispatch = createRootDispatch(
+        db,
         creatorTask.id,
         'term-creator',
         CREATOR_PANE,
@@ -147,9 +169,14 @@ describe('creator authority lookup performance', () => {
       const elapsedMs = performance.now() - startedAt
 
       const competingTask = db.createTask({ spec: 'competing creator', runId: run.id })
-      expect(() => db!.createDispatchContext(competingTask.id, 'term-creator')).toThrow(
-        `Terminal term-creator already has an active dispatch (${creatorDispatch.id}`
-      )
+      expect(() =>
+        db!.createDispatchContext({
+          taskId: competingTask.id,
+          assigneeHandle: 'term-creator',
+          creator: { kind: 'system' },
+          maxDepth: Number.MAX_SAFE_INTEGER
+        })
+      ).toThrow(`Terminal term-creator already has an active dispatch (${creatorDispatch.id}`)
       expect(elapsedMs).toBeLessThan(200)
     }
   )

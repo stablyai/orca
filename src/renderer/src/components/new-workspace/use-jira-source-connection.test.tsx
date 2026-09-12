@@ -4,7 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import type * as React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { JiraConnectionStatus } from '../../../../shared/types'
+import type { JiraConnectionStatus } from '../../../../shared/jira-types'
 import {
   getJiraSourceConnectionRevisionKey,
   useJiraSourceConnection

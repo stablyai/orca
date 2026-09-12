@@ -1,5 +1,14 @@
-import { memo, useCallback, useEffect, useMemo, useRef, type ComponentType } from 'react'
-import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  type ComponentType,
+  type ForwardedRef
+} from 'react'
+import { Keyboard, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import {
   Bold,
   Code2,
@@ -19,7 +28,12 @@ import {
 } from 'lucide-react-native'
 import WebView, { type WebViewMessageEvent } from 'react-native-webview'
 import { colors, radii, spacing } from '../theme/mobile-theme'
-import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset-script'
+import type {
+  MobileRichMarkdownCommand,
+  MobileRichMarkdownEditorMessage,
+  MobileRichMarkdownEditorProps
+} from './mobile-rich-markdown-editor-contract'
+import { useMobileRichMarkdownEditorController } from './use-mobile-rich-markdown-editor-controller'
 import {
   buildMobileRichMarkdownEditorHtml,
   escapeInjectedJavaScriptString
@@ -28,63 +42,16 @@ import {
 const EDITOR_DOCUMENT_ORIGIN = 'https://orca-mobile-editor.invalid'
 const EDITOR_DOCUMENT_URL = `${EDITOR_DOCUMENT_ORIGIN}/rich-markdown-editor`
 
-function normalizeExternalEditorUrl(value: string): string | null {
-  const url = value.trim()
-  if (!url) {
-    return null
-  }
-  for (let index = 0; index < url.length; index += 1) {
-    const code = url.charCodeAt(index)
-    if (code <= 32 || code === 127) {
-      return null
-    }
-  }
-  if (/^mailto:/i.test(url)) {
-    return url
-  }
-  if (!/^https?:\/\//i.test(url)) {
-    return null
-  }
-  try {
-    const parsed = new URL(url)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null
-  } catch {
-    return null
-  }
+type Props = Omit<MobileRichMarkdownEditorProps, 'onOpenLink'> & {
+  onOpenLink?: (url: string) => void
 }
 
-type RichMarkdownCommand =
-  | 'paragraph'
-  | 'heading1'
-  | 'heading2'
-  | 'heading3'
-  | 'bold'
-  | 'italic'
-  | 'strike'
-  | 'bulletList'
-  | 'orderedList'
-  | 'taskList'
-  | 'quote'
-  | 'inlineCode'
-  | 'codeBlock'
-  | 'link'
-  | 'image'
-
-type Props = {
-  content: string
-  editable: boolean
-  onChange: (content: string) => void
-  onKeyboardInsetChange?: (bottom: number) => void
+export type MobileRichMarkdownEditorHandle = {
+  dismissKeyboard: () => void
 }
-
-type EditorWebViewMessage =
-  | { type: 'ready' }
-  | { type: 'change'; markdown: string; generation: number }
-  | { type: 'openLink'; url: string }
-  | { type: 'keyboardInset'; bottom: number }
 
 type ToolbarItem = {
-  command: RichMarkdownCommand
+  command: MobileRichMarkdownCommand
   label: string
   icon: ComponentType<{ size?: number; color?: string }>
 }
@@ -107,64 +74,56 @@ const TOOLBAR_ITEMS: ToolbarItem[] = [
   { command: 'codeBlock', label: 'Code block', icon: FileCode2 }
 ]
 
-function MobileRichMarkdownEditorInner({
-  content,
-  editable,
-  onChange,
-  onKeyboardInsetChange
-}: Props) {
+function MobileRichMarkdownEditorInner(
+  { content, editable, onChange, onKeyboardInsetChange, onOpenLink }: Props,
+  ref: ForwardedRef<MobileRichMarkdownEditorHandle>
+) {
   const webViewRef = useRef<WebView>(null)
-  const readyRef = useRef(false)
-  const documentGenerationRef = useRef(0)
-  const currentWebViewContentRef = useRef<string | null>(null)
   const html = useMemo(() => buildMobileRichMarkdownEditorHtml(), [])
 
   const inject = useCallback((script: string) => {
     webViewRef.current?.injectJavaScript(`${script}\ntrue;`)
   }, [])
 
-  const applyContent = useCallback(
-    (nextContent: string) => {
-      documentGenerationRef.current += 1
-      currentWebViewContentRef.current = nextContent
-      inject(
-        `window.__orcaRichMarkdown && window.__orcaRichMarkdown.setMarkdown(${escapeInjectedJavaScriptString(nextContent)}, ${documentGenerationRef.current});`
-      )
-    },
+  const transport = useMemo(
+    () => ({
+      setMarkdown: (markdown: string, generation: number) =>
+        inject(
+          `window.__orcaRichMarkdown && window.__orcaRichMarkdown.setMarkdown(${escapeInjectedJavaScriptString(markdown)}, ${generation});`
+        ),
+      setEditable: (nextEditable: boolean) =>
+        inject(
+          `window.__orcaRichMarkdown && window.__orcaRichMarkdown.setEditable(${nextEditable ? 'true' : 'false'});`
+        ),
+      runCommand: (command: MobileRichMarkdownCommand) =>
+        inject(
+          `window.__orcaRichMarkdown && window.__orcaRichMarkdown.runCommand(${escapeInjectedJavaScriptString(command)});`
+        )
+    }),
     [inject]
   )
 
-  const applyEditable = useCallback(
-    (nextEditable: boolean) => {
-      inject(
-        `window.__orcaRichMarkdown && window.__orcaRichMarkdown.setEditable(${nextEditable ? 'true' : 'false'});`
-      )
+  const openLink = useCallback(
+    (url: string) => {
+      if (onOpenLink) {
+        onOpenLink(url)
+        return
+      }
+      void Linking.openURL(url).catch(() => {})
     },
-    [inject]
+    [onOpenLink]
   )
 
-  useEffect(() => {
-    if (!readyRef.current) {
-      return
-    }
-    if (currentWebViewContentRef.current !== content) {
-      applyContent(content)
-    }
-  }, [applyContent, content])
+  const { handleMessage, runCommand } = useMobileRichMarkdownEditorController({
+    content,
+    editable,
+    onChange,
+    onKeyboardInsetChange,
+    onOpenLink: openLink,
+    transport
+  })
 
-  useEffect(() => {
-    if (readyRef.current) {
-      applyEditable(editable)
-    }
-  }, [applyEditable, editable])
-
-  // Clear any reported keyboard inset when the editor unmounts so a lifted
-  // Save/Discard bar settles back once the tab closes.
-  useEffect(() => {
-    return () => onKeyboardInsetChange?.(0)
-  }, [onKeyboardInsetChange])
-
-  const handleMessage = useCallback(
+  const handleWebViewMessage = useCallback(
     (event: WebViewMessageEvent) => {
       let message: unknown
       try {
@@ -175,37 +134,9 @@ function MobileRichMarkdownEditorInner({
       if (!message || typeof message !== 'object') {
         return
       }
-      const editorMessage = message as Partial<EditorWebViewMessage>
-      if ('type' in message && message.type === 'ready') {
-        readyRef.current = true
-        applyContent(content)
-        applyEditable(editable)
-        return
-      }
-      if (
-        editorMessage.type === 'change' &&
-        typeof editorMessage.markdown === 'string' &&
-        editorMessage.generation === documentGenerationRef.current
-      ) {
-        currentWebViewContentRef.current = editorMessage.markdown
-        onChange(editorMessage.markdown)
-        return
-      }
-      if (editorMessage.type === 'openLink' && typeof editorMessage.url === 'string') {
-        const url = normalizeExternalEditorUrl(editorMessage.url)
-        if (url) {
-          void Linking.openURL(url).catch(() => {})
-        }
-        return
-      }
-      if (editorMessage.type === 'keyboardInset' && typeof editorMessage.bottom === 'number') {
-        const bottom = normalizeMobileRichMarkdownKeyboardInset(editorMessage.bottom)
-        if (bottom !== null) {
-          onKeyboardInsetChange?.(bottom)
-        }
-      }
+      handleMessage(message as Partial<MobileRichMarkdownEditorMessage>)
     },
-    [applyContent, applyEditable, content, editable, onChange, onKeyboardInsetChange]
+    [handleMessage]
   )
 
   const handleShouldStartLoadWithRequest = useCallback((request: { url?: string }) => {
@@ -218,14 +149,14 @@ function MobileRichMarkdownEditorInner({
     return isEditorDocument
   }, [])
 
-  const runCommand = useCallback(
-    (command: RichMarkdownCommand) => {
-      inject(
-        `window.__orcaRichMarkdown && window.__orcaRichMarkdown.runCommand(${escapeInjectedJavaScriptString(command)});`
-      )
-    },
-    [inject]
-  )
+  const dismissKeyboard = useCallback(() => {
+    // Why: the caret lives in the WebView, so the injected blur is what closes the keyboard;
+    // Keyboard.dismiss only clears a native TextInput that stole focus first.
+    inject('window.__orcaRichMarkdown && window.__orcaRichMarkdown.dismissKeyboard();')
+    Keyboard.dismiss()
+  }, [inject])
+
+  useImperativeHandle(ref, () => ({ dismissKeyboard }), [dismissKeyboard])
 
   return (
     <View style={styles.container}>
@@ -265,7 +196,7 @@ function MobileRichMarkdownEditorInner({
         domStorageEnabled={false}
         hideKeyboardAccessoryView
         keyboardDisplayRequiresUserAction={false}
-        onMessage={handleMessage}
+        onMessage={handleWebViewMessage}
         onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
         style={styles.webView}
         scrollEnabled
@@ -278,7 +209,7 @@ function MobileRichMarkdownEditorInner({
   )
 }
 
-export const MobileRichMarkdownEditor = memo(MobileRichMarkdownEditorInner)
+export const MobileRichMarkdownEditor = memo(forwardRef(MobileRichMarkdownEditorInner))
 
 const styles = StyleSheet.create({
   container: {

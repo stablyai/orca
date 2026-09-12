@@ -1,7 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { TooltipProvider } from '../ui/tooltip'
 import { GitPane } from './GitPane'

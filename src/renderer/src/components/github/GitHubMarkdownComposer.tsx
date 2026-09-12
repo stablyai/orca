@@ -27,7 +27,7 @@ import {
 } from '@/components/github/github-markdown-composer-tabbar'
 import { hasBoundedGitHubMarkdownImageUrlText } from '@/components/github/github-markdown-image-url'
 import { useImageInput } from '@/components/github/use-image-input'
-import type { GitHubOwnerRepo } from '../../../../shared/types'
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {

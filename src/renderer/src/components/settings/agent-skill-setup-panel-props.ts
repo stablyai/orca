@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react'
 import type { Button } from '../ui/button'
+import type { LocalAgentRuntime } from './CliSkillRuntimeSetup'
 
 type AgentSkillSetupPanelVariant = 'card' | 'inline'
 type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
@@ -18,6 +19,7 @@ export type AgentSkillSetupPanelProps = {
   installDisabled?: boolean
   terminalHeightPx?: number
   terminalShellOverride?: string
+  terminalRuntime?: LocalAgentRuntime
   leading?: ReactNode
   icon?: ReactNode
   variant?: AgentSkillSetupPanelVariant

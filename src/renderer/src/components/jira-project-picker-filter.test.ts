@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { JiraProject } from '../../../shared/types'
+import type { JiraProject } from '../../../shared/jira-types'
 import {
   JIRA_PROJECT_PICKER_QUERY_MAX_BYTES,
   filterJiraProjectPickerProjects,

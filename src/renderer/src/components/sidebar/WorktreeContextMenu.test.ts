@@ -14,7 +14,10 @@ import {
   selectMenuScopedMap,
   shouldRevealWorktreeDeveloperMenu
 } from './WorktreeContextMenu'
-import type { Worktree, WorktreeLineage, WorkspaceStatusDefinition } from '../../../../shared/types'
+import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 describe('shouldRevealWorktreeDeveloperMenu', () => {
   it('stays hidden for an ordinary right-click', () => {
@@ -63,6 +66,31 @@ describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
     // The render where menuOpen flips true must read real data so menu items
     // (sleep/delete/lineage) reflect live tabs/ptys/delete state.
     expect(selectMenuScopedMap(true, live, empty)).toBe(live)
+  })
+})
+
+describe('getDeleteStateForWorktreeHost', () => {
+  const local = { id: 'repo::path', hostId: 'local' } as unknown as Worktree
+  const ssh = { id: 'repo::path', hostId: 'ssh:box' } as unknown as Worktree
+  const sshDelete = {
+    isDeleting: true,
+    executionHostId: 'ssh:box' as const,
+    error: null,
+    canForceDelete: false,
+    forceDeleteReason: null
+  }
+
+  it('keeps host-qualified pending state on its matching row only', () => {
+    const states = { [getWorktreeHostIdentity(ssh)]: sshDelete }
+    expect(getDeleteStateForWorktreeHost(ssh, states)).toBe(sshDelete)
+    expect(getDeleteStateForWorktreeHost(local, states)).toBeUndefined()
+  })
+
+  it('retains legacy unqualified state', () => {
+    const legacyDelete = { ...sshDelete, executionHostId: undefined }
+    const states = { [local.id]: legacyDelete }
+    expect(getDeleteStateForWorktreeHost(local, states)).toBe(legacyDelete)
+    expect(getDeleteStateForWorktreeHost(ssh, states)).toBe(legacyDelete)
   })
 })
 
@@ -145,6 +173,11 @@ describe('shouldSuppressContextMenuFollowUpClick', () => {
 
   it('does not suppress later unrelated clicks', () => {
     expect(shouldSuppressContextMenuFollowUpClick(1_000, 1_700)).toBe(false)
+  })
+
+  it('keeps the 500 ms ctrl-click boundary inclusive', () => {
+    expect(shouldSuppressContextMenuFollowUpClick(1_000, 1_500)).toBe(true)
+    expect(shouldSuppressContextMenuFollowUpClick(1_000, 1_501)).toBe(false)
   })
 
   it('does not suppress clicks that predate the context menu timestamp', () => {

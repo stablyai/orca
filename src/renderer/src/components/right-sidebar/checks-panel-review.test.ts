@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { gitHubPRToChecksPanelReview, selectChecksPanelReview } from './checks-panel-review'
-import type { PRInfo } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
 function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
@@ -69,6 +69,8 @@ describe('selectChecksPanelReview', () => {
       selectChecksPanelReview({
         hostedReview: review,
         pr: makePR({ number: 12 }),
+        linkedPR: null,
+        suppressedGitHubPR: null,
         linkedGitLabMR: 34,
         linkedBitbucketPR: null,
         linkedAzureDevOpsPR: null,
@@ -81,6 +83,8 @@ describe('selectChecksPanelReview', () => {
     const selected = selectChecksPanelReview({
       hostedReview: null,
       pr: makePR({ number: 12, state: 'merged' }),
+      linkedPR: null,
+      suppressedGitHubPR: null,
       linkedGitLabMR: null,
       linkedBitbucketPR: null,
       linkedAzureDevOpsPR: null,
@@ -100,11 +104,70 @@ describe('selectChecksPanelReview', () => {
       selectChecksPanelReview({
         hostedReview: null,
         pr: makePR({ number: 12, state: 'merged' }),
+        linkedPR: null,
+        suppressedGitHubPR: null,
         linkedGitLabMR: links.linkedGitLabMR ?? null,
         linkedBitbucketPR: links.linkedBitbucketPR ?? null,
         linkedAzureDevOpsPR: links.linkedAzureDevOpsPR ?? null,
         linkedGiteaPR: links.linkedGiteaPR ?? null
       })
     ).toBeNull()
+  })
+
+  it('hides a matching suppressed GitHub PR', () => {
+    expect(
+      selectChecksPanelReview({
+        hostedReview: null,
+        pr: makePR({ number: 12 }),
+        linkedPR: null,
+        suppressedGitHubPR: 12,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: null,
+        linkedGiteaPR: null
+      })
+    ).toBeNull()
+  })
+
+  it('does not substitute a stale branch PR for an explicit GitHub link', () => {
+    expect(
+      selectChecksPanelReview({
+        hostedReview: null,
+        pr: makePR({ number: 43 }),
+        linkedPR: 42,
+        suppressedGitHubPR: null,
+        linkedGitLabMR: null,
+        linkedBitbucketPR: null,
+        linkedAzureDevOpsPR: null,
+        linkedGiteaPR: null
+      })
+    ).toBeNull()
+  })
+
+  it('keeps a different detected PR and lets an explicit link override stale suppression', () => {
+    const common = {
+      hostedReview: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null
+    }
+
+    expect(
+      selectChecksPanelReview({
+        ...common,
+        pr: makePR({ number: 13 }),
+        linkedPR: null,
+        suppressedGitHubPR: 12
+      })
+    ).toMatchObject({ provider: 'github', number: 13 })
+    expect(
+      selectChecksPanelReview({
+        ...common,
+        pr: makePR({ number: 12 }),
+        linkedPR: 12,
+        suppressedGitHubPR: 12
+      })
+    ).toMatchObject({ provider: 'github', number: 12 })
   })
 })

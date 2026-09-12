@@ -22,6 +22,7 @@ function makeState(overrides: Partial<AppState>): AppState {
     settings: { confirmClosePinnedTab: true },
     unifiedTabsByWorktree: {},
     requestPinnedTabCloseConfirm: vi.fn(),
+    cancelPinnedTabCloseRequest: vi.fn(),
     ...overrides
   } as unknown as AppState
 }
@@ -79,6 +80,17 @@ describe('guardPinnedTabClose', () => {
       onConfirm: onClose,
       onCancel
     })
+  })
+
+  it('returns a cancellation for the exact queued confirmation', () => {
+    const cancelPinnedTabCloseRequest = vi.fn()
+    getStateMock.mockReturnValue(makeState({ cancelPinnedTabCloseRequest }))
+
+    const cancel = guardPinnedTabClose({ isPinned: true, tabLabel: 'Docs', onClose: vi.fn() })
+    const request = getStateMock().requestPinnedTabCloseConfirm.mock.calls[0][0]
+    cancel?.()
+
+    expect(cancelPinnedTabCloseRequest).toHaveBeenCalledWith(request)
   })
 
   it('closes a pinned tab immediately when the setting is off', () => {

@@ -4,7 +4,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { GlobalSettings, Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 
 const NOW = 1_000_000_000
@@ -160,5 +163,18 @@ describe('useLiveDashboardSnapshot', () => {
     })
     rerender()
     expect(result.current.cards[0].terminalInput?.hostPlatform).toBe('win32')
+  })
+
+  it('re-derives saved SSH labels when the target catalog changes', () => {
+    seed({ tabAutoGenerateTitle: false })
+    useAppStore.setState({
+      repos: [{ ...repo(), connectionId: 'target-1', executionHostId: 'ssh:target-1' }]
+    })
+    const { result, rerender } = renderHook(() => useLiveDashboardSnapshot())
+    expect(result.current.cards[0].hostLabel).toBe('target-1')
+
+    useAppStore.setState({ sshTargetLabels: new Map([['target-1', 'Builder']]) })
+    rerender()
+    expect(result.current.cards[0].hostLabel).toBe('Builder')
   })
 })

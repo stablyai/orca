@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../store/types'
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 import {
   buildRecentTabSwitcherModel,
   getNextRecentTabSwitcherIndex,
@@ -28,7 +28,8 @@ function tab(id: string, entityId: string, label: string): Tab {
 function stateWithTabs(
   tabOrder: string[],
   recentTabIds: string[],
-  activeTabId: string
+  activeTabId: string,
+  hydratingTabIds: string[] = []
 ): Pick<
   AppState,
   | 'activeBrowserTabId'
@@ -43,11 +44,13 @@ function stateWithTabs(
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
 > {
+  // Why: only tabs the group actually holds — a group tab missing from tabOrder is a hydration
+  // race the strip repairs by appending, so listing extras here would not model "one tab open".
   const tabs = [
     tab('tab-a', 'file-a', 'A'),
     tab('tab-b', 'file-b', 'B'),
     tab('tab-c', 'file-c', 'C')
-  ]
+  ].filter((entry) => tabOrder.includes(entry.id) || hydratingTabIds.includes(entry.id))
   return {
     activeBrowserTabId: null,
     activeFileId: tabs.find((entry) => entry.id === activeTabId)?.entityId ?? null,
@@ -109,6 +112,17 @@ describe('buildRecentTabSwitcherModel', () => {
     )
 
     expect(model).toBeNull()
+  })
+
+  it('includes a unified tab that has not yet entered persisted group order', () => {
+    const model = buildRecentTabSwitcherModel(
+      stateWithTabs(['tab-a'], [], 'tab-a', ['tab-b']),
+      WT,
+      'sequential'
+    )
+
+    expect(model?.items.map((item) => item.label)).toEqual(['A', 'B'])
+    expect(model?.activeIndex).toBe(0)
   })
 })
 

@@ -98,7 +98,7 @@ export class PluginDevWatcher {
 
   private removeSubscription(subscription: WatcherProcessSubscription): void {
     const index = this.subscriptions.indexOf(subscription)
-    if (index >= 0) {
+    if (index !== -1) {
       this.subscriptions.splice(index, 1)
     }
   }

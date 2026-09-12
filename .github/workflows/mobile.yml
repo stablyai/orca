@@ -12,10 +12,25 @@ on:
       # Why: the mobile terminal link parsers are conformance-tested against
       # these shared fixtures; desktop-side fixture edits must re-run this suite.
       - 'src/shared/terminal-file-link-conformance.ts'
+      # Why: this job holds the only checks that load the Fastfile, so edits to
+      # it or to the release workflow it guards must re-run them.
+      - '.github/workflows/mobile.yml'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/workflows/mobile-ios-release.yml'
+
+concurrency:
+  group: mobile-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    env:
+      # Why: an unfrozen bundler silently re-resolves when Gemfile.lock drifts
+      # from the Gemfile, which is how the release jobs could land on different
+      # fastlane versions in the first place. Fail here instead.
+      BUNDLE_FROZEN: 'true'
 
     defaults:
       run:
@@ -25,32 +40,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
+      - uses: ./.github/actions/install-node-dependencies
 
-      - name: Setup Ruby
+      # bundler-cache installs mobile/Gemfile.lock, so this job is also what
+      # proves the pinned fastlane the release workflow depends on still
+      # resolves — before a release run finds out.
+      - name: Setup Ruby and fastlane
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      # Why: the mobile typecheck imports shared types from ../src/shared, and
-      # some of those files import runtime deps (tweetnacl, ws) resolved from
-      # the repo-root node_modules. Without a root install, tsc fails with
-      # "Cannot find module 'tweetnacl'/'ws'". Mobile is a separate pnpm project
-      # (not in the root workspace), so this is a distinct install.
-      # --ignore-scripts skips the root postinstall (Electron native-module
-      # rebuild) which is irrelevant to a type-only check and would only add
-      # time and failure surface on this ubuntu mobile runner.
-      - name: Install root dependencies
-        working-directory: .
-        run: pnpm install --frozen-lockfile --ignore-scripts
+          bundler-cache: true
+          working-directory: mobile
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -63,6 +63,20 @@ jobs:
 
       - name: Test iOS release version resolution
         run: ruby fastlane/ios_release_version_test.rb
+
+      - name: Test TestFlight lane arguments
+        run: ruby fastlane/fastfile_testflight_arguments_test.rb
+
+      # Why: nothing else in CI loads the Fastfile, so a syntax error, a broken
+      # require, or an undefined constant only surfaces mid-release — the
+      # ios-distribute job failed every run for six days that way. `lanes` just
+      # loads and lists, so it needs no App Store Connect credentials and makes
+      # no network calls to Apple.
+      - name: Smoke-check the Fastfile
+        env:
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_OPT_OUT_USAGE: '1'
+        run: bundle exec fastlane lanes
 
       - name: Lint
         run: pnpm lint

@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorSlice } from './editor'
 import type { AppState } from '../types'
-import type { GitStatusResult } from '../../../../shared/types'
+import type { GitStatusResult } from '../../../../shared/git-status-types'
 
 const MERGE_BASE = '1f3c0d9a5b6e7f8091a2b3c4d5e6f708192a3b4c'
 

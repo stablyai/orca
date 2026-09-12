@@ -1,12 +1,12 @@
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import {
   destroyPersistentWebview,
   moveFocusToRendererBeforeFocusedWebviewHidden
-} from '../../components/browser-pane/webview-registry'
+} from '../../components/browser-pane/host-guest/webview-registry'
 import {
   getExplicitBrowserPageZoomLevel,
   rememberExplicitBrowserPageZoomLevel
-} from '../../components/browser-pane/browser-page-zoom'
+} from '../../components/browser-pane/host-guest/browser-page-zoom'
 
 export { moveFocusToRendererBeforeFocusedWebviewHidden }
 

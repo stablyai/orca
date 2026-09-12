@@ -1,5 +1,6 @@
 import type { z } from 'zod'
-import type { PersistedUIState } from '../../../../shared/types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { WorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup'
 import type { UiUpdateFieldsSchema } from './client-ui-schemas'
 import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-schema-parity'
 
@@ -34,3 +35,19 @@ const _uiUpdateValueParity: AssertNoMissingValues<
   z.input<UiUpdateFieldsSchema>
 > = true
 void _uiUpdateValueParity
+
+// Why a nested pair: the guards above only walk PersistedUIState's OWN keys, and
+// a structural `extends` is satisfied by extra properties — so a sub-key added
+// to workspaceCleanup (e.g. `browse`) and never added to its `.strict()` schema
+// would keep both green while every paired client's ui.set payload is rejected.
+type WorkspaceCleanupSchema = NonNullable<z.input<UiUpdateFieldsSchema>['workspaceCleanup']>
+const _workspaceCleanupParity: AssertNoMissingKeys<
+  WorkspaceCleanupUIState,
+  WorkspaceCleanupSchema
+> = true
+void _workspaceCleanupParity
+const _workspaceCleanupValueParity: AssertNoMissingValues<
+  WorkspaceCleanupUIState,
+  WorkspaceCleanupSchema
+> = true
+void _workspaceCleanupValueParity

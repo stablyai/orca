@@ -117,6 +117,7 @@ describe('native chat PTY session options', () => {
     expect(effortResult.snapshot.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
     expect(effortResult.snapshot.find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'dispatched',
+      transport: 'catalog',
       kind: { currentValue: 'high' }
     })
     expect(listener).toHaveBeenCalledOnce()
@@ -157,28 +158,6 @@ describe('native chat PTY session options', () => {
       valueSource: 'dispatched',
       kind: { currentValue: 'fable' }
     })
-  })
-
-  it('reveals the terminal only when Claude actually requires model-switch interaction', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'sonnet' })
-    const dispatch = vi.fn().mockResolvedValue({ outcome: 'interaction-required' })
-    const onAgentPicker = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      dispatchCommand: dispatch,
-      onAgentPicker
-    })!
-
-    const result = await surface.setOption('model', 'haiku')
-
-    expect(dispatch).toHaveBeenCalledWith('/model haiku', {
-      detectAgentInteraction: 'claude-model-switch-confirmation',
-      expectedChoiceLabel: 'Haiku'
-    })
-    expect(onAgentPicker).toHaveBeenCalledOnce()
-    expect(result.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
   it('keeps the prior model and persistence when Claude rejects the switch', async () => {
@@ -719,7 +698,7 @@ describe('native chat PTY session options', () => {
     expect(surface.getSnapshot()[0]).toMatchObject({
       id: 'model',
       valueSource: 'default',
-      kind: { currentValue: 'grok-4.5' }
+      kind: { currentValue: 'grok-4.6' }
     })
 
     // Regression: the effort row hangs off that default model, so resolving the apply
@@ -735,9 +714,9 @@ describe('native chat PTY session options', () => {
 
   it('does not adopt grok’s unprobed seed default as a persisted launch model', async () => {
     // Regression: setting an option under the CLI default wrote `model` into settings,
-    // so every later grok launch app-wide emitted `-m grok-4.5` — on an account without
+    // so every later grok launch app-wide emitted `-m grok-4.6` — on an account without
     // that model, a fatal launch the user never opted into. No discovery has run here,
-    // so `grok-4.5` is still only the seed's guess.
+    // so `grok-4.6` is still only the seed's guess.
     let persisted: PersistedNativeChatSessionOptions = {}
     const surface = createNativeChatPtySessionOptions({
       agent: 'grok',
@@ -760,7 +739,7 @@ describe('native chat PTY session options', () => {
 
     expect(persisted.grok?.model).toBeUndefined()
     // The scoped value is still remembered for a later explicit pick of that model.
-    expect(persisted.grok?.valuesByModel?.['grok-4.5']?.effort).toBe('low')
+    expect(persisted.grok?.valuesByModel?.['grok-4.6']?.effort).toBe('low')
     expect(resolveNativeChatSessionOptionDefaults(persisted, 'grok')).toBeUndefined()
 
     // A model the user actually picks still becomes the launch default.

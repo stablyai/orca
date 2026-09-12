@@ -13,7 +13,7 @@ import type {
 } from '../../../shared/remote-server-update'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { UpdateCheckOptions } from '../../../shared/types'
+import type { UpdateCheckOptions } from '../../../shared/update-status-types'
 import { waitForReplacementRuntime } from './remote-server-restart-wait'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
 import { pollRemoteServerUpdater } from './remote-server-updater-polling'

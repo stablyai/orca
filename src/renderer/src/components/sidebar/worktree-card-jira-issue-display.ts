@@ -1,4 +1,5 @@
-import type { Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeCardJiraIssueDisplay } from './worktree-card-meta-types'
 
 function withoutRepeatedJiraIdentifier(title: string, identifier: string): string {

@@ -5,7 +5,7 @@ import type {
   ProjectHostSetup,
   ProjectHostSetupCreateResult,
   ProjectHostSetupResult
-} from '../../../../shared/types'
+} from '../../../../shared/project-types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'

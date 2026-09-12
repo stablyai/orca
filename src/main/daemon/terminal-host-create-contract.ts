@@ -1,5 +1,5 @@
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type {
@@ -8,6 +8,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type CreateOrAttachOptions = {
   sessionId: string
@@ -35,7 +36,7 @@ export type CreateOrAttachOptions = {
   }
   streamClient: {
     onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
-    onExit: (code: number, incarnationId: PtyIncarnationId) => void
+    onExit: (code: number, incarnationId: PtyIncarnationId, cause?: TerminalExitCause) => void
   }
   /** Lets the daemon route output under the adopted owner's canonical id before
    *  attaching its stream callbacks. */
@@ -53,4 +54,6 @@ export type CreateOrAttachResult = {
   attachToken: symbol
   incarnationId: PtyIncarnationId
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
+  /** Daemon-process verdict on the spawn cwd; only set on a fresh spawn that was given a cwd. */
+  cwdReadableByDaemon?: boolean
 }

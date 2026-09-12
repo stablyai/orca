@@ -3,15 +3,15 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-cl
 import {
   linearTeamLabels,
   linearTeamMembers,
-  linearTeamStates,
-  type RuntimeLinearSettings
-} from '@/runtime/runtime-linear-client'
+  linearTeamStates
+} from '@/runtime/runtime-linear-project-client'
+import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type {
-  GitHubAssignableUser,
-  LinearWorkflowState,
   LinearLabel,
-  LinearMember
-} from '../../../shared/types'
+  LinearMember,
+  LinearWorkflowState
+} from '../../../shared/linear/workspace-types'
 import { getTaskSourceRuntimeSettings } from '../../../shared/task-source-context'
 import { unionLinearMetadataById } from '../components/linear-issue-attribute-filter-team-ids'
 import {

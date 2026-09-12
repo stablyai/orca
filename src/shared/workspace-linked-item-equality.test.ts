@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { areWorkspaceLinkedItemsEqual } from './workspace-linked-item'
-import type { WorkspaceLinkedItem } from './types'
+import type { WorkspaceLinkedItem } from './worktree/types'
 
 const item: WorkspaceLinkedItem = {
   provider: 'jira',

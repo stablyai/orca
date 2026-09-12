@@ -1,7 +1,11 @@
 import { memo, useState } from 'react'
 import { Image, Linking, Pressable, Text, View } from 'react-native'
 import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
-import type { GitHubReaction, GitHubReactionContent, PRComment } from '../../../../src/shared/types'
+import type {
+  GitHubReaction,
+  GitHubReactionContent,
+  PRComment
+} from '../../../../src/shared/github/comment-types'
 import { colors } from '../../theme/mobile-theme'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
@@ -62,11 +66,13 @@ function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
 export const PRCommentCard = memo(function PRCommentCard({
   comment,
   isReply = false,
-  actions
+  actions,
+  now
 }: {
   comment: PRComment
   isReply?: boolean
   actions?: PRCommentCardActions
+  now: number
 }) {
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -120,9 +126,7 @@ export const PRCommentCard = memo(function PRCommentCard({
         >
           {comment.author}
         </Text>
-        <Text style={styles.time}>
-          · {formatPrCommentRelativeTime(comment.createdAt, Date.now())}
-        </Text>
+        <Text style={styles.time}>· {formatPrCommentRelativeTime(comment.createdAt, now)}</Text>
         {fileLabel ? (
           <Text style={styles.path} numberOfLines={1}>
             {fileLabel}

@@ -1,7 +1,7 @@
 import type {
   LinearSaveIssueRequest,
   LinearSaveIssueResult
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { formatLinearSaveIssue } from '../linear-format'

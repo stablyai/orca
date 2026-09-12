@@ -1,10 +1,14 @@
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
-import { getUtf8ByteLengthForCodePoint } from '../../../shared/utf8-byte-limits'
+import {
+  getUtf8ByteLengthForCodePoint,
+  readUtf8CodePointAt
+} from '../../../shared/utf8-byte-limits'
 
 export type PastePayloadMetadata = {
   byteLength: number
   exceededLimit: boolean
   hasControlSequences: boolean
+  lineEndingByteLength: number
   lineCount: number
 }
 
@@ -21,31 +25,42 @@ export function measurePastePayloadMetadata(
   const stopAfterBytes = options.stopAfterBytes
   let byteLength = 0
   let hasControlSequences = false
+  let lineEndingByteLength = 0
   let lineCount = 1
   let previousWasCarriageReturn = false
 
   for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(text, index)
     byteLength += getUtf8ByteLengthForCodePoint(codePoint)
     hasControlSequences ||= isPasteControlSequenceCodePoint(codePoint)
     if (codePoint === 0x0d) {
       lineCount += 1
+      lineEndingByteLength += 1
       previousWasCarriageReturn = true
     } else {
-      if (codePoint === 0x0a && !previousWasCarriageReturn) {
-        lineCount += 1
+      if (codePoint === 0x0a) {
+        lineEndingByteLength += 1
+        if (!previousWasCarriageReturn) {
+          lineCount += 1
+        }
       }
       previousWasCarriageReturn = false
     }
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
-      return { byteLength, exceededLimit: true, hasControlSequences, lineCount }
+      return {
+        byteLength,
+        exceededLimit: true,
+        hasControlSequences,
+        lineEndingByteLength,
+        lineCount
+      }
     }
     if (codePoint > 0xffff) {
       index += 1
     }
   }
 
-  return { byteLength, exceededLimit: false, hasControlSequences, lineCount }
+  return { byteLength, exceededLimit: false, hasControlSequences, lineEndingByteLength, lineCount }
 }
 
 export async function measurePastePayloadMetadataWithYield(
@@ -69,24 +84,35 @@ export async function measurePastePayloadMetadataWithYield(
   let nextYieldAt = yieldAfterCodeUnits
   let byteLength = 0
   let hasControlSequences = false
+  let lineEndingByteLength = 0
   let lineCount = 1
   let previousWasCarriageReturn = false
 
   for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(text, index)
     byteLength += getUtf8ByteLengthForCodePoint(codePoint)
     hasControlSequences ||= isPasteControlSequenceCodePoint(codePoint)
     if (codePoint === 0x0d) {
       lineCount += 1
+      lineEndingByteLength += 1
       previousWasCarriageReturn = true
     } else {
-      if (codePoint === 0x0a && !previousWasCarriageReturn) {
-        lineCount += 1
+      if (codePoint === 0x0a) {
+        lineEndingByteLength += 1
+        if (!previousWasCarriageReturn) {
+          lineCount += 1
+        }
       }
       previousWasCarriageReturn = false
     }
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
-      return { byteLength, exceededLimit: true, hasControlSequences, lineCount }
+      return {
+        byteLength,
+        exceededLimit: true,
+        hasControlSequences,
+        lineEndingByteLength,
+        lineCount
+      }
     }
     if (codePoint > 0xffff) {
       index += 1
@@ -97,7 +123,7 @@ export async function measurePastePayloadMetadataWithYield(
     }
   }
 
-  return { byteLength, exceededLimit: false, hasControlSequences, lineCount }
+  return { byteLength, exceededLimit: false, hasControlSequences, lineEndingByteLength, lineCount }
 }
 
 export function getPastePayloadUtf8ByteLength(text: string): number {
@@ -110,7 +136,7 @@ export function countPastePayloadLines(text: string): number {
 
 export function hasPastePayloadControlSequence(text: string): boolean {
   for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(text, index)
     if (isPasteControlSequenceCodePoint(codePoint)) {
       return true
     }
@@ -126,6 +152,7 @@ function createEmptyPastePayloadMetadata(): PastePayloadMetadata {
     byteLength: 0,
     exceededLimit: false,
     hasControlSequences: false,
+    lineEndingByteLength: 0,
     lineCount: 0
   }
 }

@@ -41,7 +41,11 @@ async function withPreflightTimeout<T>(command: string, commandPromise: Promise<
   }
 }
 
-export async function execLocalPreflightCommand(
+/** Rejects on non-zero exit, spawn failure, or timeout — it never reports
+ *  "absent" as a value. A caller that collapses that rejection into `false`
+ *  makes "not installed" and "could not run it" the same answer; see
+ *  docs/reference/wsl-probe-failure-semantics.md before doing so. */
+export async function execLocalPreflightCommandOrThrow(
   command: string,
   args: string[]
 ): Promise<PreflightCommandResult> {
@@ -49,18 +53,27 @@ export async function execLocalPreflightCommand(
   const commandPromise = execFileAsync(command, args, {
     encoding: 'utf-8',
     timeout: PREFLIGHT_COMMAND_TIMEOUT_MS,
+    // Preflight probes console-subsystem binaries (git, gh, node); without this
+    // each one flashes a console and steals foreground on Windows (#10488).
+    windowsHide: true,
     ...(env ? { env } : {})
   }) as Promise<PreflightCommandResult>
 
   return withPreflightTimeout(command, commandPromise)
 }
 
-export async function execCommandInWsl(
+// Throws on any failure — a distro that is booting/unreachable throws the
+// same way a command that genuinely doesn't exist does. Callers must not
+// collapse both into "absent"; see docs/reference/wsl-probe-failure-semantics.md.
+export async function execCommandInWslOrThrow(
   target: WslPreflightTarget,
   command: string
 ): Promise<PreflightCommandResult> {
   const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
-  return withPreflightTimeout('wsl.exe', commandPromise)
+  // Label only (runPreflightCommandInWsl owns the actual wsl.exe invocation) —
+  // not the literal 'wsl.exe' so the wsl-invocation-boundary guard doesn't
+  // mistake this string for a spawn site.
+  return withPreflightTimeout('wsl command', commandPromise)
 }
 
 export async function isCommandAvailable(
@@ -69,8 +82,8 @@ export async function isCommandAvailable(
 ): Promise<boolean> {
   try {
     await (wslTarget
-      ? execCommandInWsl(wslTarget, `${shellQuote(command)} --version`)
-      : execLocalPreflightCommand(command, ['--version']))
+      ? execCommandInWslOrThrow(wslTarget, `${shellQuote(command)} --version`)
+      : execLocalPreflightCommandOrThrow(command, ['--version']))
     return true
   } catch {
     return false
@@ -91,10 +104,16 @@ export async function isCommandOnPath(
   }
   try {
     // Why: preflight must validate the executable on PATH, not a shell alias or function.
-    const { stdout } = await execCommandInWsl(
+    const { stdout } = await execCommandInWslOrThrow(
       wslTarget,
       [
-        buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+        // Same skip as agent detection: without it this branch answers "yes"
+        // for a Windows binary reached through interop, so preflight and the
+        // detector disagree about the same distro.
+        buildPosixCommandPathLookupScript(
+          { kind: 'literal', value: command },
+          { skipWindowsMountDirs: true }
+        ),
         'if [ -n "$resolved" ]; then',
         `printf '${WSL_COMMAND_PATH_SENTINEL}%s\\n' "$resolved"`,
         'fi'

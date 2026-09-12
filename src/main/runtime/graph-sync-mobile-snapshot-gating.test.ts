@@ -9,8 +9,9 @@ import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { OrcaRuntimeService } from './orca-runtime'
+import * as mobileSessionTerminalProjection from './mobile-session-terminal-projection'
 
 // Freshness predicate of shouldApplyWebSessionTabsSnapshot in
 // src/renderer/src/runtime/web-session-tabs-sync.ts, copied as a literal
@@ -54,6 +55,9 @@ const storeBase = {
   getGitHubCache: () => ({ pr: {}, issue: {} }),
   setWorktreeMeta: () => undefined as never,
   removeWorktreeMeta: () => {},
+  getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
+  addRetiredWorktreeName: () => {},
+  mergeRetiredWorktreeNames: () => false,
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
     nestWorkspaces: false,
@@ -144,7 +148,6 @@ function makeRendererSnapshot(args: {
 }
 
 type RuntimeInternals = {
-  buildHeadlessMobileSessionTerminalTabs: (...args: unknown[]) => unknown[]
   offscreenBrowserBackend: unknown
   agentBrowserBridge: unknown
   mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
@@ -207,13 +210,13 @@ describe('graph-sync mobile snapshot gating', () => {
   })
 
   it('skips the serve-only hydrate rebuild and emits nothing when no serve ptys and no browser backend', () => {
-    const { runtime, events, sync } = createRuntime(
+    const { events, sync } = createRuntime(
       makeSession({
         tabsByWorktree: { [WT]: [makeTerminalTab('plain-tab', 'repo-1::wt@@abc')] }
       })
     )
     const buildSpy = vi.spyOn(
-      runtime as unknown as RuntimeInternals,
+      mobileSessionTerminalProjection,
       'buildHeadlessMobileSessionTerminalTabs'
     )
 

@@ -5,7 +5,7 @@ import {
   TERMINAL_QUICK_COMMAND_SEARCH_QUERY_MAX_BYTES,
   searchTerminalQuickCommands
 } from './terminal-quick-command-search'
-import type { TerminalQuickCommand } from '../../../shared/types'
+import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 
 const commands: TerminalQuickCommand[] = [
   {

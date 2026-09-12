@@ -1,11 +1,31 @@
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { agentStatusEvidenceObservedAt } from '../../../shared/agent-status-freshness'
+import type { Worktree } from '../../../shared/worktree/types'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../shared/execution-host'
+import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 
 export type AgentMetadata = {
   paneKey: string
   textParts: string[]
   snippetCandidates: string[]
+  lastActivityAt: number
+}
+
+/** Latest agent activity across a tab's panes, or null if it has none. */
+export function maxAgentActivityAt(metadata: readonly AgentMetadata[]): number | null {
+  let max: number | null = null
+  for (const entry of metadata) {
+    if (
+      Number.isFinite(entry.lastActivityAt) &&
+      entry.lastActivityAt > 0 &&
+      (max === null || entry.lastActivityAt > max)
+    ) {
+      max = entry.lastActivityAt
+    }
+  }
+  return max
 }
 
 export type WorkspaceTabAgentMetadataState = {
@@ -68,7 +88,7 @@ function agentRecordMatchesTab({
 
 function collectLiveMetadata(
   entry: AgentStatusEntry
-): Pick<AgentMetadata, 'snippetCandidates' | 'textParts'> {
+): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
   const textParts: string[] = []
   const snippetCandidates: string[] = []
   addText(textParts, entry.orchestration?.displayName)
@@ -86,12 +106,12 @@ function collectLiveMetadata(
     addText(textParts, historyEntry.prompt)
     addText(snippetCandidates, historyEntry.prompt)
   }
-  return { textParts, snippetCandidates }
+  return { textParts, snippetCandidates, lastActivityAt: agentStatusEvidenceObservedAt(entry) }
 }
 
 function collectSleepingMetadata(
   record: SleepingAgentSessionRecord
-): Pick<AgentMetadata, 'snippetCandidates' | 'textParts'> {
+): Pick<AgentMetadata, 'snippetCandidates' | 'textParts' | 'lastActivityAt'> {
   const textParts: string[] = []
   const snippetCandidates: string[] = []
   addText(textParts, record.prompt)
@@ -101,7 +121,7 @@ function collectSleepingMetadata(
   addText(textParts, record.terminalTitle)
   addText(snippetCandidates, record.terminalTitle)
   addProviderSession(textParts, record.providerSession)
-  return { textParts, snippetCandidates }
+  return { textParts, snippetCandidates, lastActivityAt: record.updatedAt }
 }
 
 export function collectAgentMetadataForTerminal({
@@ -173,6 +193,7 @@ export function collectAgentMetadataForTerminal({
 type IndexedAgentEntry = {
   paneKey: string
   worktreeId: string | null | undefined
+  connectionId: string | null | undefined
   metadata: AgentMetadata
 }
 
@@ -206,6 +227,7 @@ export function buildAgentMetadataTabIndex(
     pushToIndex(index, tabId, {
       paneKey,
       worktreeId: entry.worktreeId,
+      connectionId: entry.connectionId,
       metadata: { paneKey, ...collectLiveMetadata(entry) }
     })
   }
@@ -225,6 +247,7 @@ export function buildAgentMetadataTabIndex(
     pushToIndex(index, tabId, {
       paneKey,
       worktreeId: retained.worktreeId,
+      connectionId: retained.entry.connectionId,
       metadata: { paneKey, ...meta }
     })
   }
@@ -240,6 +263,7 @@ export function buildAgentMetadataTabIndex(
     pushToIndex(index, tabId, {
       paneKey,
       worktreeId: record.worktreeId,
+      connectionId: record.connectionId,
       metadata: { paneKey, ...collectSleepingMetadata(record) }
     })
   }
@@ -250,11 +274,28 @@ export function buildAgentMetadataTabIndex(
 export function collectAgentMetadataFromIndex(
   index: AgentMetadataTabIndex,
   terminalTabId: string,
-  worktreeId: string
+  worktree: Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>,
+  ambiguousWorktreeIds: ReadonlySet<string>
 ): AgentMetadata[] {
   const entries = index.get(terminalTabId)
   if (!entries) {
     return []
   }
-  return entries.filter((e) => !e.worktreeId || e.worktreeId === worktreeId).map((e) => e.metadata)
+  return entries
+    .filter((entry) => {
+      if (entry.worktreeId && entry.worktreeId !== worktree.id) {
+        return false
+      }
+      if (entry.connectionId) {
+        return isExecutionHostAliasForWorktree(toSshExecutionHostId(entry.connectionId), worktree)
+      }
+      if (entry.connectionId === undefined && ambiguousWorktreeIds.has(worktree.id)) {
+        return false
+      }
+      return (
+        !ambiguousWorktreeIds.has(worktree.id) ||
+        isExecutionHostAliasForWorktree(LOCAL_EXECUTION_HOST_ID, worktree)
+      )
+    })
+    .map((entry) => entry.metadata)
 }

@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 export type NativeChatLaunchPrompt = {
   tabId: string

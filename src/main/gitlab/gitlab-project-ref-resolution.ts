@@ -1,8 +1,9 @@
 import { glabExecFileAsync } from '../git/runner'
+import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
-import type { IssueSourcePreference } from '../../shared/types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import {
   _resetGlabUnauthenticatedHosts,
@@ -123,7 +124,8 @@ async function resolveProjectRefForRemote(
       {
         repoPath,
         connectionId,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+        ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
       },
       remoteName
     )
@@ -246,12 +248,13 @@ export function glabRepoExecOptions(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): { cwd?: string; wslDistro?: string } {
+): { cwd?: string; wslDistro?: string; admissionTier?: GitAdmissionTier } {
   return connectionId
     ? {}
     : {
         cwd: repoPath,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+        ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
       }
 }
 

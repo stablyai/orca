@@ -1,7 +1,9 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '../types'
-import type { GitHubWorkItem, JiraIssue, Worktree } from '../../../../shared/types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { JiraIssue } from '../../../../shared/jira-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import {
@@ -44,7 +46,9 @@ function createHistoryStore(worktreeIds: string[] = []): StoreApi<MinimalState> 
 
 const viewCases: { entry: WorktreeNavHistorySimpleViewEntry; label: string }[] = [
   { entry: 'tasks', label: 'Tasks' },
-  { entry: 'automations', label: 'Automations' }
+  { entry: 'automations', label: 'Automations' },
+  { entry: 'artifacts', label: 'Artifacts' },
+  { entry: 'skills', label: 'Skills' }
 ]
 
 function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {

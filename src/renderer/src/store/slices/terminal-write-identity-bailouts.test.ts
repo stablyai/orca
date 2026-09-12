@@ -13,7 +13,7 @@
  * 1_000 (one per call), the post-fix numbers are 0.
  */
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { createTestStore } from './store-test-helpers'
 
 const REPEATS = 1_000

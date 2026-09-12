@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { performance } from 'node:perf_hooks'
-import { planWorktreeSortOrderUpdates } from '../../src/shared/worktree-sort-order-update.ts'
+import { planWorktreeSortOrderUpdates } from '../../src/shared/worktree/sort-order-update.ts'
 import { reuseEqualCatalogRows } from '../../src/renderer/src/store/slices/worktree-catalog-reconciliation.ts'
 
 const WORKTREE_COUNT = 655

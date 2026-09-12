@@ -9,6 +9,7 @@ import type {
 import { isPerAccountManagedCodexHome } from '../../shared/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
   appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter
@@ -18,6 +19,7 @@ import {
   isAtomicNoReplaceUnsupportedError
 } from './codex-session-backfill-copy'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
+import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
 
 const RETRYABLE_RESUME_ERROR =
   'Orca could not safely move this legacy Codex session into your system Codex home. Retry resume; if it still fails, check that both Codex session folders are readable and writable.'
@@ -103,6 +105,7 @@ async function resolveSelectedAccountCodexHomeForResume(
     args.agent !== 'codex' ||
     args.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     !args.codexHome ||
+    parseWslUncPath(args.codexHome) !== null ||
     !isPerAccountManagedCodexHome(args.codexHome)
   ) {
     return null
@@ -120,8 +123,16 @@ async function resolveSelectedAccountCodexHomeForResume(
     const candidateStat = await lstat(candidatePath)
     // Why: the bridge is async, so an unbridged rollout is a real state — decline rather than pin a home codex cannot resume from.
     return candidateStat.isFile() && !candidateStat.isSymbolicLink() ? selectedCodexHome : null
-  } catch {
-    return null
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | null)?.code
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return null
+    }
+    // Why: a blanket catch here declined the SELECTED account on a briefly
+    // locked file and kept the source per-account home, resuming under another
+    // account's credentials while the UI still showed the selected one. Only a
+    // definitive absence means "not bridged here" (STA-4607).
+    throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
   }
 }
 

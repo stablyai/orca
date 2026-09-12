@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { LinearWorkspace } from '../../shared/types'
+import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 
 const { connectedWorkspaces } = vi.hoisted(() => ({
   connectedWorkspaces: [] as LinearWorkspace[]

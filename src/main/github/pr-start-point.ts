@@ -1,4 +1,5 @@
-import type { GitHubPrStartPoint, GitPushTarget, IssueSourcePreference } from '../../shared/types'
+import type { IssueSourcePreference } from '../../shared/repo-types'
+import type { GitHubPrStartPoint, GitPushTarget } from '../../shared/worktree/types'
 import { fetchCompareBaseRefWithLocalFallback } from '../git/compare-base-ref-fetch'
 import {
   isMissingRemoteRefGitError,

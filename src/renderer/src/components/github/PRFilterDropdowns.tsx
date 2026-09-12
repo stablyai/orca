@@ -17,9 +17,9 @@ import {
 } from '@/components/github/PRFilterSections'
 import type {
   GitHubAssignableUser,
-  GitHubOwnerRepo,
-  GlobalSettings
-} from '../../../../shared/types'
+  GitHubOwnerRepo
+} from '../../../../shared/github/pull-request-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ParsedTaskQuery } from '../../../../shared/task-query'
 import { translate } from '@/i18n/i18n'
 

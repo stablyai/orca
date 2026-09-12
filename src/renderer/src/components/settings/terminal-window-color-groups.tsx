@@ -1,4 +1,4 @@
-import type { TerminalColorOverrides } from '../../../../shared/types'
+import type { TerminalColorOverrides } from '../../../../shared/terminal-color-overrides'
 import { translate } from '@/i18n/i18n'
 
 export const COLOR_OVERRIDE_GROUPS: {

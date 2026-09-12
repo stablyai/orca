@@ -3,9 +3,9 @@ import { mintStablePaneId } from './mint-stable-pane-id'
 import type { ManagedPaneInternal } from './pane-manager-types'
 
 export class PaneIdentityRegistry {
-  private leafIdByNumericId: Map<number, TerminalLeafId> = new Map()
-  private numericIdByLeafId: Map<TerminalLeafId, number> = new Map()
-  private publishedPaneIds: Set<number> = new Set()
+  private leafIdByNumericId = new Map<number, TerminalLeafId>()
+  private numericIdByLeafId = new Map<TerminalLeafId, number>()
+  private publishedPaneIds = new Set<number>()
 
   claimLeafId(leafIdHint?: string): TerminalLeafId {
     if (leafIdHint && isTerminalLeafId(leafIdHint) && !this.numericIdByLeafId.has(leafIdHint)) {

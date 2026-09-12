@@ -1,6 +1,7 @@
-import { LayoutDashboard, MessageCircleQuestion } from 'lucide-react'
+import { LayoutDashboard } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
+import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { DASHBOARD_BUCKET_ORDER, type DashboardBucket } from '../../../../shared/dashboard-snapshot'
 import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
 import { translate } from '@/i18n/i18n'
@@ -46,7 +47,7 @@ function DashboardBucketCounts({
           className="inline-flex items-center gap-1 text-[10px] tabular-nums text-worktree-sidebar-foreground/55"
         >
           {bucket === 'attention' ? (
-            <MessageCircleQuestion className="size-2.5 text-amber-500" aria-hidden />
+            <AgentQuestionIcon className="size-2.5" />
           ) : (
             <span className={cn('size-1.5 rounded-full', DASHBOARD_BUCKET_DOT_CLASS[bucket])} />
           )}
@@ -67,6 +68,7 @@ export default function AgentDashboardSidebarEntry(): React.JSX.Element {
   return (
     <button
       type="button"
+      data-contextual-tour-target="agents-sidebar"
       onClick={() => {
         if (openAsPopout) {
           void window.api.dashboard.openPopout()
@@ -83,7 +85,9 @@ export default function AgentDashboardSidebarEntry(): React.JSX.Element {
         className="size-4 shrink-0 text-worktree-sidebar-foreground/30"
         strokeWidth={1.75}
       />
-      <span className="flex-1">{translate('dashboard.sidebar.label', 'Agent Dashboard')}</span>
+      <span className="flex-1">
+        {translate('dashboard.sidebar.dashboardLabel', 'Agent Dashboard')}
+      </span>
       <DashboardBucketCounts counts={dashboardBucketCounts} showIdle={showIdle} />
     </button>
   )

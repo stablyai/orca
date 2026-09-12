@@ -193,6 +193,16 @@ describe('applyTerminalAppearance theme assignment', () => {
     expect(pane.terminal.options.fontSize).toBe(settings.terminalFontSize + 2)
   })
 
+  it('applies regular and bold font weights independently', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, terminalFontWeight: 400, terminalFontWeightBold: 800 })
+
+    expect(pane.terminal.options.fontWeight).toBe(400)
+    expect(pane.terminal.options.fontWeightBold).toBe(800)
+  })
+
   it('still assigns a fresh theme when composed values actually change', () => {
     const pane = makePane(1)
     const settings = getDefaultSettings('/tmp')
@@ -256,6 +266,46 @@ describe('applyTerminalAppearance theme assignment', () => {
     apply(pane, { ...settings, theme: 'dark', terminalThemeDark: 'Builtin Tango Light' })
 
     expect(pane.terminal.options.minimumContrastRatio).toBe(4.5)
+  })
+
+  // #10754: a Powerline statusline draws its segment separators in the neighbouring segment's
+  // background color, so the automatic floor turns every invisible seam into a bright line.
+  it('lets the user setting disable contrast correction on a dark theme', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: 1 })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+  })
+
+  it('lets the user setting override the light-background floor as well', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'light', terminalMinimumContrastRatio: 1 })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+  })
+
+  it('clamps an out-of-range user setting before it reaches xterm', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: 99 })
+
+    expect(pane.terminal.options.minimumContrastRatio).toBe(21)
+  })
+
+  it('returns to the automatic floor when the user setting is cleared live', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: 1 })
+    expect(pane.terminal.options.minimumContrastRatio).toBe(1)
+
+    apply(pane, { ...settings, theme: 'dark', terminalMinimumContrastRatio: undefined })
+    expect(pane.terminal.options.minimumContrastRatio).toBe(3)
   })
 
   it('skips the minimumContrastRatio write on a no-op re-apply (preserves xterm contrast cache)', () => {

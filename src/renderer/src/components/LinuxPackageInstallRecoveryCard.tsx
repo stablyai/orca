@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import type {
   LinuxPackageInstallInstructions,
   LinuxPackageInstallRecovery
-} from '../../../shared/types'
+} from '../../../shared/update-status-types'
 import { UpdateErrorCardContent } from './UpdateErrorCardContent'
 import { translate } from '@/i18n/i18n'
-
-const COPY_CONFIRMATION_MS = 4_000
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 function copiedNote(packageFileName: string): string {
   return translate(
     'auto.components.LinuxPackageInstallRecoveryCard.aa57fa4f80',
-    'Command copied. Run it in a system terminal to install {{value0}}, then quit and reopen Orca.',
+    'Command copied. Quit Orca, run it in a system terminal to install {{value0}}, then reopen Orca.',
     {
       value0: packageFileName
     }
@@ -39,15 +39,15 @@ export function LinuxPackageInstallRecoveryCard({
   // be resolved per render — at module scope they would freeze the whole card in English.
   const TITLE = translate(
     'auto.components.LinuxPackageInstallRecoveryCard.53e1559f99',
-    'Automatic Install Failed'
+    'Manual Install Required'
   )
   const SUMMARY = translate(
     'auto.components.LinuxPackageInstallRecoveryCard.a7ac6ec78b',
-    'Orca downloaded the update but could not install the system package automatically.'
+    'Orca downloaded the system package. Quit Orca before finishing the update from a terminal.'
   )
   const EXPLAINER = translate(
     'auto.components.LinuxPackageInstallRecoveryCard.82c6dbea00',
-    'Copy the command and run it in a system terminal on the computer where Orca is installed. After it finishes, quit and reopen Orca to run the new version.'
+    'Copy the command, quit Orca, and run it in a system terminal on the computer where Orca is installed. Reopen Orca after it finishes.'
   )
   const AGENT_NOTE = translate(
     'auto.components.LinuxPackageInstallRecoveryCard.53c4b8e148',
@@ -61,42 +61,23 @@ export function LinuxPackageInstallRecoveryCard({
     'auto.components.LinuxPackageInstallRecoveryCard.c732bcbf8f',
     'Checking package...'
   )
-  const [pendingAction, setPendingAction] = useState<'copy' | 'show' | 'retry' | null>(null)
+  const [pendingAction, setPendingAction] = useState<'copy' | 'show' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [copiedFileName, setCopiedFileName] = useState<string | null>(null)
   // Why: the trusted system directories lack sudo or a package manager — no command can be offered at all.
   const [commandUnavailable, setCommandUnavailable] = useState(false)
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
-
-  // Why: quitAndInstall resolves as soon as main schedules the install, so a failed retry never
-  // rejects — it arrives as a new recovery status. Without this the busy slot never clears and every
-  // action stays inert for the rest of the session.
-  useEffect(() => {
-    setPendingAction((current) => (current === 'retry' ? null : current))
+  const mountedRef = useMountedRef()
+  const recoveryRef = useRef(recovery)
+  useLayoutEffect(() => {
+    recoveryRef.current = recovery
   }, [recovery])
+  const isCurrentRecovery = (): boolean => mountedRef.current && recoveryRef.current === recovery
 
-  useEffect(() => {
-    if (!copiedFileName) {
-      return
-    }
-    const timer = window.setTimeout(() => setCopiedFileName(null), COPY_CONFIRMATION_MS)
-    return () => window.clearTimeout(timer)
-  }, [copiedFileName])
-
-  const handleCopyCommand = useCallback(() => {
+  const handleCopyCommand = (): void => {
     if (pendingAction) {
       return
     }
     setPendingAction('copy')
     setActionError(null)
-    setCopiedFileName(null)
     void (async () => {
       let instructions: LinuxPackageInstallInstructions
       try {
@@ -104,26 +85,29 @@ export function LinuxPackageInstallRecoveryCard({
       } catch (error) {
         // Why: only main knows whether the machine simply has no package manager; any other failure
         // (stale status, untrusted sender, invalid artifact) must not demote the copy path.
-        if (mountedRef.current) {
+        if (isCurrentRecovery()) {
           setActionError(toMessage(error))
         }
         return
       }
       if (!instructions.ok) {
-        if (mountedRef.current) {
+        if (isCurrentRecovery()) {
           setCommandUnavailable(true)
           setActionError(instructions.message)
         }
         return
       }
+      if (!isCurrentRecovery()) {
+        return
+      }
       try {
         await window.api.ui.writeClipboardText(instructions.command)
-        if (mountedRef.current) {
-          setCopiedFileName(instructions.packageFileName)
+        if (isCurrentRecovery()) {
+          toast.success(copiedNote(instructions.packageFileName))
         }
       } catch (error) {
         // Why: the command itself is valid — only the clipboard failed, so keep the copy action.
-        if (mountedRef.current) {
+        if (isCurrentRecovery()) {
           setActionError(toMessage(error))
         }
       }
@@ -132,19 +116,18 @@ export function LinuxPackageInstallRecoveryCard({
         setPendingAction(null)
       }
     })
-  }, [pendingAction])
+  }
 
-  const handleShowPackage = useCallback(() => {
+  const handleShowPackage = (): void => {
     if (pendingAction) {
       return
     }
     setPendingAction('show')
     setActionError(null)
-    setCopiedFileName(null)
     void window.api.updater
       .showLinuxPackage()
       .catch((error: unknown) => {
-        if (mountedRef.current) {
+        if (isCurrentRecovery()) {
           setActionError(toMessage(error))
         }
       })
@@ -153,29 +136,9 @@ export function LinuxPackageInstallRecoveryCard({
           setPendingAction(null)
         }
       })
-  }, [pendingAction])
+  }
 
-  const handleRetryAutomatic = useCallback(() => {
-    // Why: guard in the handler, not only through the disabled prop, so no path can quit and install mid-hash.
-    if (pendingAction) {
-      return
-    }
-    // Why: the quit sequence owns the app from here; hold the busy slot so no other action starts
-    // work mid-quit. Released by the effect above when a fresh recovery status says Orca stayed open.
-    setPendingAction('retry')
-    setActionError(null)
-    setCopiedFileName(null)
-    // Why: a fresh install attempt re-evaluates the machine, so an earlier "no command" verdict must not stick.
-    setCommandUnavailable(false)
-    void window.api.updater.quitAndInstall().catch((error: unknown) => {
-      if (mountedRef.current) {
-        setActionError(toMessage(error))
-        setPendingAction(null)
-      }
-    })
-  }, [pendingAction])
-
-  // Why: the label keeps naming its action — the footnote below the buttons carries the confirmation.
+  // Why: the label keeps naming its action while the toast carries transient confirmation.
   const copyAction = {
     label: translate(
       'auto.components.LinuxPackageInstallRecoveryCard.55c86654b7',
@@ -193,39 +156,27 @@ export function LinuxPackageInstallRecoveryCard({
     disabled: pendingAction !== null,
     onClick: handleShowPackage
   }
-  const retryAction = {
-    label: translate(
-      'auto.components.LinuxPackageInstallRecoveryCard.3da99454c6',
-      'Try Automatic Install Again'
-    ),
-    // Why: the retry re-proves the package digest before it quits, so the click is no longer
-    // instant — without this the card would just go inert for the length of the hash.
-    pendingLabel: CHECKING_LABEL,
-    isPending: pendingAction === 'retry',
-    disabled: pendingAction !== null,
-    onClick: handleRetryAutomatic
-  }
-
   const officialReleaseAction = releaseUrl
     ? {
         label: translate('auto.components.UpdateCard.47126bcf57', 'Download Manually'),
-        onClick: () => void window.api.shell.openUrl(releaseUrl)
+        onClick: () => {
+          setActionError(null)
+          void window.api.shell.openUrl(releaseUrl).catch((error: unknown) => {
+            if (isCurrentRecovery()) {
+              setActionError(toMessage(error))
+            }
+          })
+        }
       }
     : undefined
 
   const detail = [
     recovery.reason === 'authentication-agent-unavailable' ? AGENT_NOTE : null,
-    diagnostic,
+    recovery.reason === 'manual-install-required' ? null : diagnostic,
     TRUST_NOTE
   ]
     .filter(Boolean)
     .join(' ')
-
-  const footnote = actionError
-    ? { text: actionError, tone: 'destructive' as const }
-    : copiedFileName
-      ? { text: copiedNote(copiedFileName) }
-      : undefined
 
   return (
     <UpdateErrorCardContent
@@ -235,11 +186,9 @@ export function LinuxPackageInstallRecoveryCard({
       detail={detail}
       // Why: with no safe command to copy, revealing the retained package becomes the primary path.
       primaryAction={commandUnavailable ? showAction : copyAction}
-      secondaryAction={retryAction}
-      // Why: the button row only fits two actions at this card width, so the demoted mode keeps
-      // Show Package and Retry there and drops the official-release link to the link row.
-      tertiaryAction={commandUnavailable ? officialReleaseAction : showAction}
-      footnote={footnote}
+      secondaryAction={commandUnavailable ? undefined : showAction}
+      tertiaryAction={officialReleaseAction}
+      footnote={actionError ? { text: actionError, tone: 'destructive' } : undefined}
       onClose={onClose}
     />
   )

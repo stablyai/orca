@@ -1,16 +1,16 @@
+import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type {
   CheckStatus,
   GitHubAssignableUser,
-  ProviderCheckSummary,
   GitHubPRMergeMethod,
   GitHubPRMergeMethodSettings,
   GitHubPRReviewSummary,
   GitHubRepositoryIdentity,
-  PRCheckDetail,
   PRMergeableState,
   PRReviewDecision,
-  PRState
-} from '../../../src/shared/types'
+  PRState,
+  ProviderCheckSummary
+} from '../../../src/shared/github/pull-request-types'
 import type { HostedReviewProvider } from '../../../src/shared/hosted-review'
 
 // Primitive + enum value readers shared by the github.* PR parsers. Each narrows

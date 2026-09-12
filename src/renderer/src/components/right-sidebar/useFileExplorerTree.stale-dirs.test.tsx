@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DirEntry } from '../../../../shared/types'
+import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import { useFileExplorerTree } from './useFileExplorerTree'
 
 const readDirectoryMock = vi.hoisted(() => vi.fn())

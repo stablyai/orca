@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { compareGitStatusEntries } from './source-control-status-sort'
 
 function entry(path: string, conflictStatus?: GitStatusEntry['conflictStatus']): GitStatusEntry {

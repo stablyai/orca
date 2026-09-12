@@ -1,6 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import type {
   DashboardCard,
@@ -10,14 +8,11 @@ import type {
   DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AgentMapCanvas, type AgentMapCanvasHandle } from './AgentMapCanvas'
-import {
-  filterAgentMapCards,
-  type AgentMapState,
-  type AgentMapHostFilter
-} from './agent-map-filter'
+import { ALL_AGENT_MAP_HOSTS, filterAgentMapCards, type AgentMapState } from './agent-map-filter'
 import { updateAgentMapLayout, type AgentMapLayoutCache } from './agent-map-layout'
+import { selectAgentMapRecentFlareStatuses } from './agent-map-node-metadata'
 import './agent-map.css'
 
 type AgentMapProps = {
@@ -26,11 +21,11 @@ type AgentMapProps = {
   repoIconsByRepoId?: Record<string, RepoIcon | null>
   now: number
   className?: string
-  compact?: boolean
   selectedPaneKey?: string | null
-  /** Owned by the board so the shared toolbar filter can drive it. Defaults to
-   *  every state, i.e. the map shows whatever it is handed. */
+  /** Pass-throughs in production — the board pre-filters so its panel can report
+   *  a shown-count that matches the canvas. Kept so tests can empty the map. */
   enabledStates?: ReadonlySet<AgentMapState>
+  enabledHosts?: ReadonlySet<DashboardCardHostKind>
   /** Owned by the board's filter menu. Defaults to shown. */
   showOrchestrationLinks?: boolean
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
@@ -41,29 +36,14 @@ type AgentMapProps = {
   onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
 }
 
-const HOST_FILTERS: AgentMapHostFilter[] = ['all', 'local', 'ssh', 'wsl', 'remote']
 const ALL_AGENT_STATES: ReadonlySet<AgentMapState> = new Set<AgentMapState>([
   'attention',
   'working',
   'done',
   'idle'
 ])
+const ALL_HOSTS: ReadonlySet<DashboardCardHostKind> = new Set(ALL_AGENT_MAP_HOSTS)
 const EMPTY_WORKSPACES: DashboardWorkspace[] = []
-
-function hostFilterLabel(filter: AgentMapHostFilter): string {
-  switch (filter) {
-    case 'all':
-      return translate('dashboardPopout.map.host.all', 'All hosts')
-    case 'local':
-      return translate('dashboardPopout.map.host.local', 'Local')
-    case 'ssh':
-      return translate('dashboardPopout.map.host.ssh', 'SSH')
-    case 'wsl':
-      return translate('dashboardPopout.map.host.wsl', 'WSL')
-    case 'remote':
-      return translate('dashboardPopout.map.host.remote', 'Remote')
-  }
-}
 
 export function AgentMap({
   cards,
@@ -71,9 +51,9 @@ export function AgentMap({
   repoIconsByRepoId,
   now,
   className,
-  compact = false,
   selectedPaneKey = null,
   enabledStates = ALL_AGENT_STATES,
+  enabledHosts = ALL_HOSTS,
   showOrchestrationLinks = true,
   launchableAgentsByWorktreeId,
   workspaceContextMenusEnabled = false,
@@ -84,41 +64,26 @@ export function AgentMap({
 }: AgentMapProps): React.JSX.Element {
   const canvasRef = useRef<AgentMapCanvasHandle>(null)
   const layoutCacheRef = useRef<AgentMapLayoutCache | null>(null)
-  const [hostFilter, setHostFilter] = useState<AgentMapHostFilter>('all')
-  const hostCounts = useMemo(() => {
-    const counts: Record<DashboardCardHostKind, number> = {
-      local: 0,
-      ssh: 0,
-      wsl: 0,
-      remote: 0
-    }
-    for (const card of cards) {
-      counts[card.hostKind ?? 'local'] += 1
-    }
-    for (const workspace of workspaces) {
-      counts[workspace.hostKind] += 1
-    }
-    return counts
-  }, [cards, workspaces])
   const visibleCards = useMemo(
     () =>
       filterAgentMapCards({
         cards,
         enabledStates,
-        hostFilter
+        enabledHosts
       }),
-    [cards, enabledStates, hostFilter]
+    [cards, enabledStates, enabledHosts]
   )
   const visibleWorkspaces = useMemo(
-    () =>
-      hostFilter === 'all'
-        ? workspaces
-        : workspaces.filter((workspace) => workspace.hostKind === hostFilter),
-    [hostFilter, workspaces]
+    () => workspaces.filter((workspace) => enabledHosts.has(workspace.hostKind)),
+    [enabledHosts, workspaces]
   )
   const layoutResult = useMemo(
     () => updateAgentMapLayout(layoutCacheRef.current, visibleCards, now, visibleWorkspaces),
     [visibleCards, visibleWorkspaces, now]
+  )
+  const recentFlareStatuses = useMemo(
+    () => selectAgentMapRecentFlareStatuses(visibleCards),
+    [visibleCards]
   )
   useEffect(() => {
     layoutCacheRef.current = layoutResult.cache
@@ -128,44 +93,6 @@ export function AgentMap({
   return (
     <section className={cn('flex min-h-0 flex-1', className)}>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-12 shrink-0 items-center gap-3 border-b border-border px-3 py-2">
-          <strong className="min-w-0 truncate text-xs">
-            {translate(
-              'dashboardPopout.map.filters.canvasSummary',
-              '{{shown}} of {{total}} agents shown',
-              {
-                shown: visibleCards.length,
-                total: cards.length
-              }
-            )}
-          </strong>
-          {!compact ? (
-            <div
-              className="ml-auto flex items-center gap-0.5 rounded-md border border-border p-0.5"
-              role="group"
-              aria-label={translate('dashboardPopout.map.hostFilter', 'Host filter')}
-            >
-              {HOST_FILTERS.filter((option) => option === 'all' || hostCounts[option] > 0).map(
-                (option) => (
-                  <Button
-                    key={option}
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    aria-pressed={hostFilter === option}
-                    onClick={() => setHostFilter(option)}
-                    className={cn(
-                      'h-6 px-2 text-[10px]',
-                      hostFilter === option && 'bg-accent text-accent-foreground'
-                    )}
-                  >
-                    {hostFilterLabel(option)}
-                  </Button>
-                )
-              )}
-            </div>
-          ) : null}
-        </header>
         <AgentMapCanvas
           ref={canvasRef}
           layout={layout}
@@ -173,6 +100,7 @@ export function AgentMap({
           selectedPaneKey={selectedPaneKey}
           allowAggregation
           showOrchestrationLinks={showOrchestrationLinks}
+          recentFlareStatuses={recentFlareStatuses}
           launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
           workspaceContextMenusEnabled={workspaceContextMenusEnabled}
           onWorkspaceContextMenuOpenChange={onWorkspaceContextMenuOpenChange}

@@ -727,7 +727,7 @@ final class Provider {
 
     private func click(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
-        let button = params["mouseButton"]?.string ?? "left"
+        let button = try mouseButton(params["mouseButton"]?.string)
         let count = try positiveInteger(params["clickCount"]?.number, defaultValue: 1, name: "clickCount")
         guard count <= SyntheticMouseClickDelivery.maxClickCount else {
             throw ProviderError.coded(
@@ -741,13 +741,16 @@ final class Provider {
         recoverWindow(snapshot.app, windowId: snapshot.windowId, windowBounds: snapshot.windowBounds)
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
-            if modifiers.isEmpty, count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
+            if modifiers.isEmpty,
+               count <= 1,
+               button.hasAccessibilityAction,
+               let actionName = try performClickAction(record: record, mouseButton: button) {
                 return actionMetadata(path: "accessibility", actionName: actionName)
             }
             if let point = center(record.localFrame, in: snapshot.windowBounds) {
                 try Input.click(
                     at: point,
-                    button: mouseButton(button),
+                    button: button,
                     count: count,
                     modifiers: modifiers,
                     targetWindow: snapshot
@@ -763,7 +766,7 @@ final class Provider {
         let point = try coordinatePoint(params: params, xKey: "x", yKey: "y", snapshot: snapshot)
         try Input.click(
             at: point,
-            button: mouseButton(button),
+            button: button,
             count: count,
             modifiers: modifiers,
             targetWindow: snapshot
@@ -774,8 +777,8 @@ final class Provider {
         )
     }
 
-    private func performClickAction(record: ElementRecord, mouseButton: String) throws -> String? {
-        if mouseButton == "right" {
+    private func performClickAction(record: ElementRecord, mouseButton: MouseButtonSelection) throws -> String? {
+        if mouseButton == .right {
             return performAction(record.element, "AXShowMenu") ? "AXShowMenu" : nil
         }
         for action in ["AXPress", "AXConfirm", "AXOpen"] {
@@ -807,14 +810,31 @@ final class Provider {
         guard isSettable(record.element, kAXValueAttribute as String) else {
             throw ProviderError.coded("value_not_settable", "element \(record.index) is not settable")
         }
-        let result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, expected as CFString)
+        let current = rawAttributeValue(record.element, kAXValueAttribute as String)
+        let coercion = AttributeValueCoercion(existingValue: current, requested: expected)
+        let result: AXError
+        switch coercion.writeValue {
+        case .string:
+            result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, expected as CFString)
+        case let .integer(value):
+            result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, NSNumber(value: value))
+        case let .double(value):
+            result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, NSNumber(value: value))
+        case let .boolean(value):
+            result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, value ? kCFBooleanTrue : kCFBooleanFalse)
+        }
         guard result == .success else {
             throw ProviderError.coded("accessibility_error", "AXUIElementSetAttributeValue failed with \(result.rawValue)")
         }
-        let actual = rawStringAttribute(record.element, kAXValueAttribute as String)
-        let verification = actual == expected
-            ? verifiedAction(property: "value", expected: expected, actualPreview: actual)
-            : unverifiedAction(reason: actual == nil ? "provider_unavailable" : "value_mismatch", expected: expected, actualPreview: actual)
+        let verification: [String: Any]
+        switch coercion.compare(readback: rawAttributeValue(record.element, kAXValueAttribute as String)) {
+        case let .match(actualPreview):
+            verification = verifiedAction(property: "value", expected: expected, actualPreview: actualPreview)
+        case let .mismatch(actualPreview):
+            verification = unverifiedAction(reason: "value_mismatch", expected: expected, actualPreview: actualPreview)
+        case .unsupported:
+            verification = unverifiedAction(reason: "readback_unsupported", expected: expected)
+        }
         return actionMetadata(path: "accessibility", actionName: "AXSetValue", verification: verification)
     }
 
@@ -1157,10 +1177,29 @@ private func isTargetWindowFocused(_ snapshot: Snapshot) -> Bool {
     return !intersection.isNull && intersection.area >= min(frame.area, snapshot.windowBounds.area) * 0.75
 }
 
+private enum AXElementProbe {
+    case value(AXUIElement)
+    case absent
+    case unavailable
+}
+
+private func copyElementProbe(_ element: AXUIElement, _ attribute: String) -> AXElementProbe {
+    var value: CFTypeRef?
+    switch AXUIElementCopyAttributeValue(element, attribute as CFString, &value) {
+    case .success:
+        guard let value else { return .unavailable }
+        return .value(value as! AXUIElement)
+    case .noValue:
+        return .absent
+    default:
+        return .unavailable
+    }
+}
+
 private func currentSyntheticClickRecipient(
     snapshot: Snapshot,
     point: CGPoint
-) -> SyntheticMouseClickDelivery.Recipient? {
+) -> SyntheticMouseClickDelivery.RecipientObservation {
     let target = syntheticClickRecipient(pid: snapshot.app.pid, windowId: snapshot.windowId)
     var cachedTargetCandidates: [WindowCandidate]?
     func targetCandidates() -> [WindowCandidate] {
@@ -1169,39 +1208,60 @@ private func currentSyntheticClickRecipient(
         cachedTargetCandidates = candidates
         return candidates
     }
-    if let focused = focusedSyntheticClickRecipient(
+    switch focusedSyntheticClickRecipient(
         targetPID: snapshot.app.pid,
         targetCandidates: targetCandidates
     ) {
-        guard focused == target else { return focused }
-    } else {
-        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == snapshot.app.pid else {
-            return nil
+    case let .focused(focused):
+        guard focused == target else { return .focused(focused) }
+        switch hitTestSyntheticClickRecipient(
+            at: point,
+            targetPID: snapshot.app.pid,
+            targetCandidates: targetCandidates
+        ) {
+        case let .focused(recipient):
+            return .focused(recipient)
+        case .dismissed, .unavailable:
+            return .unavailable
         }
+    case .dismissed:
+        return .dismissed
+    case .unavailable:
+        return .unavailable
     }
-    return hitTestSyntheticClickRecipient(
-        at: point,
-        targetPID: snapshot.app.pid,
-        targetCandidates: targetCandidates
-    )
 }
 
 private func focusedSyntheticClickRecipient(
     targetPID: pid_t,
     targetCandidates: () -> [WindowCandidate]
-) -> SyntheticMouseClickDelivery.Recipient? {
+) -> SyntheticMouseClickDelivery.RecipientObservation {
     let systemWide = AXUIElementCreateSystemWide()
-    guard let focusedApp = copyElement(systemWide, kAXFocusedApplicationAttribute as String),
-          let ownerPID = pidAttribute(focusedApp),
-          let focusedWindow = copyElement(systemWide, kAXFocusedWindowAttribute as String) ??
-            copyElement(focusedApp, kAXFocusedWindowAttribute as String)
-    else {
-        return nil
+    let focusedApp: AXUIElement
+    switch copyElementProbe(systemWide, kAXFocusedApplicationAttribute as String) {
+    case let .value(value):
+        focusedApp = value
+    case .absent:
+        return .dismissed
+    case .unavailable:
+        return .unavailable
     }
+    guard let ownerPID = pidAttribute(focusedApp) else { return .unavailable }
+
+    let focusedWindow: AXUIElement
+    switch copyElementProbe(focusedApp, kAXFocusedWindowAttribute as String) {
+    case let .value(value):
+        focusedWindow = value
+    case .absent:
+        guard ownerPID == targetPID else { return .unavailable }
+        return .dismissed
+    case .unavailable:
+        return .unavailable
+    }
+
     if let windowId = windowNumber(focusedWindow) {
-        return syntheticClickRecipient(pid: ownerPID, windowId: windowId)
+        return .focused(syntheticClickRecipient(pid: ownerPID, windowId: windowId))
     }
-    guard ownerPID == targetPID else { return nil }
+    guard ownerPID == targetPID else { return .unavailable }
     guard let frame = absoluteFrame(focusedWindow),
           let candidate = SyntheticMouseClickDelivery.uniqueWindowCandidate(
             from: targetCandidates(),
@@ -1209,35 +1269,38 @@ private func focusedSyntheticClickRecipient(
               windowFramesMatch($0.bounds, frame)
             }
           )
-    else {
-        return nil
-    }
-    return syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId)
+    else { return .unavailable }
+    return .focused(syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId))
 }
 
 private func hitTestSyntheticClickRecipient(
     at point: CGPoint,
     targetPID: pid_t,
     targetCandidates: () -> [WindowCandidate]
-) -> SyntheticMouseClickDelivery.Recipient? {
+) -> SyntheticMouseClickDelivery.RecipientObservation {
     let systemWide = AXUIElementCreateSystemWide()
     var hitElement: AXUIElement?
-    guard AXUIElementCopyElementAtPosition(
+    switch AXUIElementCopyElementAtPosition(
         systemWide,
         Float(point.x),
         Float(point.y),
         &hitElement
-    ) == .success,
-          let hitElement,
+    ) {
+    case .success:
+        break
+    case .noValue:
+        return .dismissed
+    default:
+        return .unavailable
+    }
+    guard let hitElement,
           let ownerPID = pidAttribute(hitElement),
           let window = containingWindow(hitElement)
-    else {
-        return nil
-    }
+    else { return .unavailable }
     if let windowId = windowNumber(window) {
-        return syntheticClickRecipient(pid: ownerPID, windowId: windowId)
+        return .focused(syntheticClickRecipient(pid: ownerPID, windowId: windowId))
     }
-    guard ownerPID == targetPID else { return nil }
+    guard ownerPID == targetPID else { return .unavailable }
     guard let frame = absoluteFrame(window),
           let candidate = SyntheticMouseClickDelivery.uniqueWindowCandidate(
             from: targetCandidates(),
@@ -1245,10 +1308,8 @@ private func hitTestSyntheticClickRecipient(
               windowFramesMatch($0.bounds, frame)
             }
           )
-    else {
-        return nil
-    }
-    return syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId)
+    else { return .unavailable }
+    return .focused(syntheticClickRecipient(pid: ownerPID, windowId: candidate.windowId))
 }
 
 private func containingWindow(_ element: AXUIElement) -> AXUIElement? {
@@ -1492,14 +1553,19 @@ private func stringAttribute(_ element: AXUIElement, _ attribute: String) -> Str
 }
 
 private func rawStringAttribute(_ element: AXUIElement, _ attribute: String) -> String? {
-    var value: CFTypeRef?
-    guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success,
-          let value,
-          CFGetTypeID(value) == CFStringGetTypeID()
+    guard let value = rawAttributeValue(element, attribute), CFGetTypeID(value) == CFStringGetTypeID()
     else {
         return nil
     }
     return value as? String
+}
+
+private func rawAttributeValue(_ element: AXUIElement, _ attribute: String) -> CFTypeRef? {
+    var value: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(element, attribute as CFString, &value) == .success else {
+        return nil
+    }
+    return value
 }
 
 private func boolAttribute(_ element: AXUIElement, _ attribute: String) -> Bool? {
@@ -1634,16 +1700,17 @@ private func screenshotScale(screenshot: ScreenshotPayload?, bounds: CGRect) -> 
     )
 }
 
-private enum MouseButton {
-    case left
-    case right
-
+extension MouseButtonSelection {
+    // Why: macOS has no dedicated middle-button event family; it rides `otherMouse*`
+    // with the button number carried by `mouseButton:` on the event constructor.
     var cgButton: CGMouseButton {
         switch self {
         case .left:
             return .left
         case .right:
             return .right
+        case .middle:
+            return .center
         }
     }
 
@@ -1653,6 +1720,8 @@ private enum MouseButton {
             return .leftMouseDown
         case .right:
             return .rightMouseDown
+        case .middle:
+            return .otherMouseDown
         }
     }
 
@@ -1662,20 +1731,18 @@ private enum MouseButton {
             return .leftMouseUp
         case .right:
             return .rightMouseUp
+        case .middle:
+            return .otherMouseUp
         }
     }
 }
 
-private func mouseButton(_ raw: String?) throws -> MouseButton {
-    switch raw ?? "left" {
-    case "left":
-        return .left
-    case "right":
-        return .right
-    case "middle":
-        throw ProviderError.coded("invalid_argument", "middle-click is not yet supported")
-    case let value:
-        throw ProviderError.coded("invalid_argument", "unsupported mouse button '\(value)'")
+private func mouseButton(_ raw: String?) throws -> MouseButtonSelection {
+    switch ActionArgumentValidation.mouseButton(raw) {
+    case let .success(button):
+        return button
+    case let .failure(error):
+        throw ProviderError.coded("invalid_argument", error.message)
     }
 }
 
@@ -2492,7 +2559,7 @@ private func resizePng(_ image: CGImage, scale: CGFloat) -> BoundedPNG? {
 private enum Input {
     static func click(
         at point: CGPoint,
-        button: MouseButton,
+        button: MouseButtonSelection,
         count: Int,
         modifiers: [KeyModifier],
         targetWindow: Snapshot
@@ -2508,7 +2575,7 @@ private enum Input {
             try SyntheticMouseClickDelivery.deliver(
                 clickCount: count,
                 target: target,
-                currentRecipient: {
+                currentObservation: {
                     currentSyntheticClickRecipient(snapshot: targetWindow, point: point)
                 },
                 makeEvent: { step in

@@ -1,3 +1,4 @@
+import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 
 const MAX_PREVIEW_LENGTH = 80
@@ -5,8 +6,24 @@ const MAX_PREVIEW_STRING_INPUT = 160
 const MAX_PREVIEW_COLLECTION_ITEMS = 8
 const MAX_PREVIEW_DEPTH = 2
 const MAX_TOOL_RUN_SUMMARY_PARTS = 3
-const PRIMARY_ARG_KEYS = ['command', 'cmd', 'query', 'pattern', 'url', 'description'] as const
-const BRIEF_ARG_KEYS = ['command', 'cmd', 'query', 'pattern'] as const
+// Search term before command: a classified search row carries both, and the
+// term is what identifies it. No other tool input supplies the two together.
+// `directory` is a scan root or a listed folder — it labels a row but is
+// deliberately absent from the file-target keys below, because a folder reaches
+// mobile as a tappable open-file link that can only fail.
+const PRIMARY_ARG_KEYS = [
+  'query',
+  'pattern',
+  'directory',
+  'command',
+  'cmd',
+  'url',
+  'description'
+] as const
+const BRIEF_ARG_KEYS = ['query', 'pattern', 'directory', 'command', 'cmd'] as const
+// Only the keys that hold a shell command, so a search term or a listed folder
+// cannot stand in for one.
+const COMMAND_ARG_KEYS = ['command', 'cmd'] as const
 export const MAX_TOOL_DETAIL_LENGTH = 4000
 
 export type ToolInputDisplay = {
@@ -123,8 +140,25 @@ function normalizedToolFilePath(input: unknown): string | null {
   // target would label the row with the scan root and link to a folder. Costs the
   // link on a file-scoped search; a dead link on every other search is worse.
   const directory = isSearchToolInput(value) ? undefined : value.path
-  const path = value.file_path ?? value.filePath ?? directory ?? value.notebook_path
+  const path =
+    value.file_path ??
+    value.filePath ??
+    directory ??
+    value.notebook_path ??
+    firstPatchChangePath(value)
   return typeof path === 'string' && path.length > 0 ? path : null
+}
+
+function firstPatchChangePath(value: Record<string, unknown>): unknown {
+  if (!Array.isArray(value.changes)) {
+    return undefined
+  }
+  for (const change of value.changes) {
+    if (typeof change === 'object' && change !== null && typeof change.path === 'string') {
+      return change.path
+    }
+  }
+  return undefined
 }
 
 export function briefToolArg(input: unknown): string {
@@ -148,6 +182,18 @@ export function briefToolArg(input: unknown): string {
     }
   }
   return summarizeToolInput(normalized).slice(0, 28)
+}
+
+/** The shell command a call carries in its input, or null when it carries none.
+ *  Codex keeps the raw command on a classified `read`/`search`/`list` row, so
+ *  this is what tells one apart from a Claude tool of the same lowercased word. */
+export function toolInputCommand(input: unknown): string | null {
+  const normalized = normalizeToolInput(input)
+  return isToolInputRecord(normalized) ? firstPrimaryToolArg(normalized, COMMAND_ARG_KEYS) : null
+}
+
+function isToolInputRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 /** Codex delivers tool arguments as a JSON string. Parse those into the object
@@ -215,8 +261,20 @@ function summarizePrimaryToolArg(input: unknown): string | null {
   return null
 }
 
-export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
-  const parts: string[] = []
+/** One named call in a run header, kept apart rather than pre-joined so a
+ *  surface can draw the boundary between members itself. */
+export type ToolRunMember = {
+  name: string
+  /** Brief argument, or '' when the call has none worth showing. */
+  arg: string
+  mcpIdentity?: NativeChatMcpIdentity
+}
+
+/** The run header's leading calls. Capped at the same limit the joined string
+ *  has always used, so the two can never disagree about which calls speak for
+ *  a run. */
+export function toolRunSummaryMembers(blocks: readonly NativeChatBlock[]): ToolRunMember[] {
+  const members: ToolRunMember[] = []
   for (const block of blocks) {
     if (!isToolCallBlock(block)) {
       continue
@@ -225,13 +283,18 @@ export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
     if (!name) {
       continue
     }
-    const detail = briefToolArg(block.input)
-    parts.push(detail ? `${name} ${detail}` : name)
-    if (parts.length >= MAX_TOOL_RUN_SUMMARY_PARTS) {
+    members.push({ name, arg: briefToolArg(block.input), mcpIdentity: block.mcpIdentity })
+    if (members.length >= MAX_TOOL_RUN_SUMMARY_PARTS) {
       break
     }
   }
-  return parts.join('  ·  ')
+  return members
+}
+
+export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
+  return toolRunSummaryMembers(blocks)
+    .map((member) => (member.arg ? `${member.name} ${member.arg}` : member.name))
+    .join('  ·  ')
 }
 
 export function countToolCalls(blocks: readonly NativeChatBlock[]): number {
@@ -283,7 +346,7 @@ function boundedPreviewValue(value: unknown, depth: number, seen: WeakSet<object
   const result: Record<string, unknown> = {}
   let count = 0
   for (const key in value) {
-    if (!Object.prototype.hasOwnProperty.call(value, key)) {
+    if (!Object.hasOwn(value, key)) {
       continue
     }
     if (count >= MAX_PREVIEW_COLLECTION_ITEMS) {

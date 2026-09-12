@@ -1,5 +1,6 @@
-import { githubProjectHost } from '../../../../shared/github-project-identity'
-import type { GitHubOwnerRepo, GitHubWorkItem } from '../../../../shared/types'
+import { githubProjectHost } from '../../../../shared/github/project-identity'
+import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
 // Why: the dialog lacks repository context, so recover its host-aware identity from the canonical item URL.
 export function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {

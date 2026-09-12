@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/types'
+import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { MobileGitBranchChangeEntry } from '../source-control/mobile-branch-compare'
 import type { MobileGitStatusEntry } from '../source-control/mobile-git-status'
 import {
   buildMobileDiffReviewQueue,
   createMobileDiffReviewFileKey,
-  filterMobileDiffReviewQueue
+  filterMobileDiffReviewQueue,
+  summarizeMobileDiffReviewQueue,
+  type MobileDiffReviewQueueItem
 } from './mobile-diff-review-queue'
 
 const emptyReviewState: MobileDiffReviewState = { version: 1, files: {} }
@@ -116,5 +118,62 @@ describe('mobile diff review queue', () => {
     expect(filterMobileDiffReviewQueue(queue, 'notes').map((item) => item.filePath)).toEqual([
       'b.ts'
     ])
+  })
+
+  it('summarizes review counts in one pass without rereading item fields', () => {
+    const entryCount = 1_000
+    const reads = { isReviewed: 0, scope: 0, canStage: 0 }
+    let expectedReviewedCount = 0
+    let expectedReviewedUnstagedItems = 0
+    let expectedReviewedUnstagedCount = 0
+    const queue = Array.from({ length: entryCount }, (_, index) => {
+      const isReviewed = index % 2 === 0
+      const scope = index % 3 === 0 ? 'unstaged' : 'staged'
+      const canStage = index % 5 === 0
+      if (isReviewed) {
+        expectedReviewedCount += 1
+        if (scope === 'unstaged') {
+          expectedReviewedUnstagedItems += 1
+          if (canStage) {
+            expectedReviewedUnstagedCount += 1
+          }
+        }
+      }
+      const item = {} as MobileDiffReviewQueueItem
+      Object.defineProperties(item, {
+        isReviewed: {
+          enumerable: true,
+          get: () => {
+            reads.isReviewed += 1
+            return isReviewed
+          }
+        },
+        scope: {
+          enumerable: true,
+          get: () => {
+            reads.scope += 1
+            return scope
+          }
+        },
+        canStage: {
+          enumerable: true,
+          get: () => {
+            reads.canStage += 1
+            return canStage
+          }
+        }
+      })
+      return item
+    })
+
+    expect(summarizeMobileDiffReviewQueue(queue)).toEqual({
+      reviewedCount: expectedReviewedCount,
+      reviewedUnstagedCount: expectedReviewedUnstagedCount
+    })
+    expect(reads).toEqual({
+      isReviewed: entryCount,
+      scope: expectedReviewedCount,
+      canStage: expectedReviewedUnstagedItems
+    })
   })
 })

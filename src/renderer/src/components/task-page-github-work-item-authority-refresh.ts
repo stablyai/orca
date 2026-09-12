@@ -50,7 +50,7 @@ export function getTaskPageGitHubRevalidatableAuthorityItemKeys(
   const quiet = getQuietRevalidateState(queryKey)
   for (const itemKey of getTaskPageGitHubConfirmedAuthorityItemKeys()) {
     const separator = itemKey.indexOf('\0')
-    if (separator < 0) {
+    if (separator === -1) {
       continue
     }
     const repoId = itemKey.slice(0, separator)

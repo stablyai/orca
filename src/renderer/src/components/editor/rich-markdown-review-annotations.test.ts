@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Editor } from '@tiptap/core'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import {
   countRichMarkdownReviewMarkdownLines,
   getRichMarkdownAnnotationButtonLeft,

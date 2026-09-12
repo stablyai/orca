@@ -1,3 +1,6 @@
+vi.mock('../notifications/push-registration', () => ({
+  attachPushRegistration: () => () => {}
+}))
 import { createElement, Fragment, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -554,7 +557,7 @@ describe('settings host client lifecycle', () => {
     }
 
     const originalClient = clients.get(replacedHostId)?.[0]
-    act(() => context?.closeHost(replacedHostId))
+    act(() => context?.refreshHostClient(replacedHostId))
     expect(originalClient?.closeMock).toHaveBeenCalledOnce()
 
     await act(async () => {

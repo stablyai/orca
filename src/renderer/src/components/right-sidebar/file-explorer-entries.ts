@@ -1,4 +1,4 @@
-import type { DirEntry } from '../../../../shared/types'
+import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 
 export function shouldIncludeFileExplorerEntry(entry: DirEntry): boolean {
   return entry.name !== '.git' && entry.name !== 'node_modules'
@@ -9,8 +9,5 @@ function isDotfileSegment(segment: string): boolean {
 }
 
 export function isDotfileRelativePath(relativePath: string): boolean {
-  return relativePath
-    .split(/[\\/]+/)
-    .filter(Boolean)
-    .some(isDotfileSegment)
+  return relativePath.split(/[\\/]+/).some(isDotfileSegment)
 }

@@ -1,6 +1,6 @@
 // Why: publishing an artifact mints a URL anyone can open, so agents get the capability only
 // after the user grants it. The gate lives here so main, the CLI, and Settings share one contract.
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 export const ARTIFACT_SHARING_DISABLED_CODE = 'artifact_sharing_disabled'
 

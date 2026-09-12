@@ -1,6 +1,7 @@
 import type { DraftPasteReadySignal } from '../../../shared/tui-agent-config'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
+import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-pre-handler-buffer'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
 import { createDraftPasteReadyScanner } from '../../../shared/draft-paste-ready-scanner'
@@ -80,6 +81,9 @@ export function waitForAgentDraftInputReady(
         .catch(() => finish(false))
     } else {
       unsubscribe = subscribeToPtyData(ptyId, observeData)
+      // Why: spawn can resolve after the first Codex frame was buffered. Replay
+      // it to this observer without consuming the primary xterm handler's copy.
+      replayPreHandlerPtyData(ptyId, observeData)
     }
 
     if (!settled) {

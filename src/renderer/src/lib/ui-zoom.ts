@@ -6,7 +6,7 @@ const isMac = navigator.userAgent.includes('Mac')
  * and repositions the native macOS traffic lights to stay aligned.
  */
 export function applyUIZoom(level: number): void {
-  const zoomFactor = Math.pow(1.2, level)
+  const zoomFactor = 1.2 ** level
   window.api.ui.setZoomLevel(level)
   document.documentElement.style.setProperty('--ui-zoom-factor', String(zoomFactor))
   if (isMac) {
@@ -20,7 +20,7 @@ export function applyUIZoom(level: number): void {
  */
 export function syncZoomCSSVar(): void {
   const level = window.api.ui.getZoomLevel()
-  const zoomFactor = Math.pow(1.2, level)
+  const zoomFactor = 1.2 ** level
   document.documentElement.style.setProperty('--ui-zoom-factor', String(zoomFactor))
   if (isMac) {
     window.api.ui.syncTrafficLights(zoomFactor)

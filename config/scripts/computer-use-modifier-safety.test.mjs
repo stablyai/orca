@@ -11,7 +11,7 @@ function source(path) {
 function sourceBetween(contents, startMarker, endMarker) {
   const start = contents.indexOf(startMarker)
   const end = contents.indexOf(endMarker, start + startMarker.length)
-  if (start < 0 || end < 0) {
+  if (start === -1 || end === -1) {
     throw new Error(`Missing source boundary: ${startMarker} → ${endMarker}`)
   }
   return contents.slice(start, end)

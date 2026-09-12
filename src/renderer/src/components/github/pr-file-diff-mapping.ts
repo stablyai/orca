@@ -5,14 +5,13 @@ import {
   type LargeDiffRenderLimit
 } from '@/components/editor/large-diff-render-limit'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { GitBranchChangeEntry, GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { PRComment } from '../../../../shared/github/comment-types'
 import type {
-  GitBranchChangeEntry,
-  GitDiffResult,
   GitHubOwnerRepo,
   GitHubPRFile,
-  GitHubPRFileContents,
-  PRComment
-} from '../../../../shared/types'
+  GitHubPRFileContents
+} from '../../../../shared/github/pull-request-types'
 
 export const PR_DIFF_OVERSCAN = 5
 

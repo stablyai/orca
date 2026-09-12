@@ -71,7 +71,7 @@ function mapExternalRuns({
     .map((run, index) => {
       const runAt = asString(run.run_at) ?? asString(run.runAt)
       const id = asString(run.id) ?? `${jobId}:${runAt ?? index}`
-      return {
+      const mapped: ExternalAutomationRun = {
         id,
         managerId,
         provider,
@@ -83,15 +83,15 @@ function mapExternalRuns({
         error: asString(run.error),
         outputPath: asString(run.output_path) ?? asString(run.outputPath)
       }
+      return { run: mapped, time: runAt ? Date.parse(runAt) : Number.NaN }
     })
     .sort((a, b) => {
-      const aTime = a.runAt ? Date.parse(a.runAt) : Number.NaN
-      const bTime = b.runAt ? Date.parse(b.runAt) : Number.NaN
-      if (Number.isFinite(aTime) && Number.isFinite(bTime)) {
-        return bTime - aTime
+      if (Number.isFinite(a.time) && Number.isFinite(b.time)) {
+        return b.time - a.time
       }
-      return b.id.localeCompare(a.id)
+      return b.run.id.localeCompare(a.run.id)
     })
+    .map(({ run }) => run)
 }
 
 function hermesScheduleDisplay(job: ExternalJobRecord): string {

@@ -39,7 +39,7 @@ import {
 import { mailDisposition, readMailRow } from './helpers/orchestration-mail-store'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
-const POINTER_COMMAND = 'orca orchestration check'
+const POINTER_COMMAND = 'orca-dev orchestration check'
 const NO_DELIVERY_SETTLE_MS = 5_000
 const DELIVERY_TIMEOUT_MS = 20_000
 
@@ -115,6 +115,10 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     agent.setTitle(CODEX_IDLE_TITLE)
     await waitForObservedTitle(firstClient, originalHandle, CODEX_IDLE_TITLE)
     const titlesBeforeRestart = agent.titleEmitCount()
+    const run = await firstClient.call<{ run: { id: string } }>('orchestration.runCreate', {
+      objective: 'Restart-safe mailbox delivery',
+      from: originalHandle
+    })
 
     await session.close(firstApp)
     firstApp = null
@@ -146,7 +150,7 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     expect(agent.titleEmitCount()).toBe(titlesBeforeRestart)
 
     const sent = await secondClient.call<{ message: { id: string } }>('orchestration.send', {
-      to: restoredHandle!,
+      to: `run:${run.result.run.id}`,
       from: 'e2e-sender',
       subject: 'Seeded idle must wait',
       body: 'e2e body',
@@ -173,7 +177,11 @@ test('keeps mail pending across a restart and delivers it when the agent reports
         message: 'live idle frame never released the pending mail'
       })
       .toContain(POINTER_COMMAND)
-    expect(mailDisposition(readMailRow(session.userDataDir, messageId))).toBe('pending')
+    await expect
+      .poll(() => mailDisposition(readMailRow(session.userDataDir, messageId)), {
+        timeout: DELIVERY_TIMEOUT_MS
+      })
+      .toBe('pushed')
   } finally {
     if (firstApp) {
       await session.close(firstApp)

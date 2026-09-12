@@ -1,12 +1,12 @@
 // Why: Google binds a signed-in session to the browser identity that created it.
-// Cookies copied in from another browser (or sent under an Electron/Chrome-shaped
-// UA that doesn't match a real first-party browser) get flagged by anti-fraud on
-// accounts.google.com and expire within ~1h. Presenting a Firefox identity scoped
+// Cookies copied in from another browser (or sent under a UA that doesn't match a
+// real first-party browser) get flagged by anti-fraud on accounts.google.com and
+// expire within ~1h. Presenting a Firefox identity scoped
 // to Google's auth hosts lets the user sign in *inside* the embedded browser, so
 // Google issues cookies bound to THIS browser that self-refresh — instead of us
 // transplanting cookies that go stale. Scope is deliberately the auth hosts only:
 // post-auth app surfaces (mail.google.com, myaccount.google.com, drive, etc.) keep
-// the profile's real Chrome-shaped identity so nothing else about the session shifts.
+// the profile's real identity so nothing else about the session shifts.
 
 // Why: exact hostname match — subdomains such as myaccount.google.com are post-auth
 // app surfaces, not the sign-in flow, and must retain the profile's real identity.
@@ -48,4 +48,12 @@ export function stripClientHints(headers: Record<string, string>): void {
 export function setUserAgentHeader(headers: Record<string, string>, value: string): void {
   const existing = Object.keys(headers).find((key) => key.toLowerCase() === 'user-agent')
   headers[existing ?? 'User-Agent'] = value
+}
+
+// Why: the outgoing header carries the WebContents UA override, so reading it
+// (case-insensitively) tells us whether a request originated from the Firefox
+// auth document even when its destination host isn't an auth host.
+export function currentUserAgent(headers: Record<string, string>): string | undefined {
+  const existing = Object.keys(headers).find((key) => key.toLowerCase() === 'user-agent')
+  return existing ? headers[existing] : undefined
 }

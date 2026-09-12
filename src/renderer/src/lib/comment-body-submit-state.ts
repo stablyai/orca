@@ -1,4 +1,7 @@
-import { getUtf8ByteLengthForCodePoint } from '../../../shared/utf8-byte-limits'
+import {
+  getUtf8ByteLengthForCodePoint,
+  readUtf8CodePointAt
+} from '../../../shared/utf8-byte-limits'
 
 export const COMMENT_BODY_NONBLANK_SCAN_MAX_BYTES = 64 * 1024
 
@@ -16,7 +19,7 @@ function getCommentBodyPresence(
   let scannedBytes = 0
 
   for (let index = 0; index < body.length; index += 1) {
-    const codePoint = body.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(body, index)
     const codeUnitLength = codePoint > 0xffff ? 2 : 1
     scannedBytes += getUtf8ByteLengthForCodePoint(codePoint)
     if (scannedBytes > maxScanBytes) {

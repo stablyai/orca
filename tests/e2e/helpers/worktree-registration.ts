@@ -1,6 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
-import type { CommitMessageAiSettings } from '../../../src/shared/types'
+import type { CommitMessageAiSettings } from '../../../src/shared/commit-message-ai-types'
 
 // Why: these specs create worktrees via raw `git worktree add`, which bypasses
 // Orca's own add/remove path — the one thing that invalidates the main-process

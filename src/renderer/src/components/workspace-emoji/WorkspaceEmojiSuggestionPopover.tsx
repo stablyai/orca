@@ -1,4 +1,4 @@
-import type { ComponentProps, RefObject } from 'react'
+import { useEffect, useRef, type ComponentProps, type RefObject } from 'react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
@@ -31,6 +31,28 @@ export function WorkspaceEmojiSuggestionPopover({
   side = 'top',
   suggestions
 }: WorkspaceEmojiSuggestionPopoverProps): React.JSX.Element {
+  const listRef = useRef<HTMLDivElement>(null)
+
+  // cmdk only auto-scrolls when it owns the arrow keys; here selection is driven from the input.
+  useEffect(() => {
+    if (!open || !commandValue) {
+      return
+    }
+    const item = Array.from(
+      listRef.current?.querySelectorAll<HTMLElement>('[cmdk-item=""]') ?? []
+    ).find((node) => node.getAttribute('data-value') === commandValue)
+    if (!item) {
+      return
+    }
+    if (item.parentElement?.firstElementChild === item) {
+      item
+        .closest('[cmdk-group=""]')
+        ?.querySelector('[cmdk-group-heading=""]')
+        ?.scrollIntoView({ block: 'nearest' })
+    }
+    item.scrollIntoView({ block: 'nearest' })
+  }, [commandValue, open, suggestions])
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor virtualRef={anchorRef as RefObject<HTMLInputElement>} />
@@ -64,7 +86,7 @@ export function WorkspaceEmojiSuggestionPopover({
           shouldFilter={false}
           className="bg-transparent"
         >
-          <CommandList className="!max-h-none min-h-0 flex-1 scrollbar-sleek">
+          <CommandList ref={listRef} className="!max-h-none min-h-0 flex-1 scrollbar-sleek">
             <CommandGroup heading={heading} className="p-1">
               {suggestions.map((suggestion) => (
                 <CommandItem

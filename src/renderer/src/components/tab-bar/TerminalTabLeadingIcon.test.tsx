@@ -1,18 +1,21 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import type { TerminalTabActivityStatus } from './terminal-tab-activity-status'
 
 /** Render one activity status through the production leading-icon component. */
 function renderStatus(status: TerminalTabActivityStatus): string {
   return renderToStaticMarkup(
-    <TerminalTabLeadingIcon
-      agent="codex"
-      activityStatus={status}
-      shell={undefined}
-      showUnreadActivity={false}
-      isActive={false}
-    />
+    <TooltipProvider>
+      <TerminalTabLeadingIcon
+        agent="codex"
+        activityStatus={status}
+        shell={undefined}
+        showUnreadActivity={false}
+        isActive={false}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -36,12 +39,12 @@ describe('TerminalTabLeadingIcon', () => {
     expect(markup).toContain('data-agent-icon="codex"')
   })
 
-  it('shows a needs-input (permission) state as an amber question glyph', () => {
+  it('shows a needs-input (permission) state as the shared question glyph', () => {
     const markup = renderStatus('permission')
 
     expect(markup).toContain('data-agent-activity-status="permission"')
     expect(markup).toContain('lucide-message-circle-question-mark')
-    expect(markup).toContain('text-amber-500')
+    expect(markup).toContain('text-agent-question')
     expect(markup).not.toContain('bg-red-500')
   })
 

@@ -4,8 +4,9 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import type { FolderWorkspace, ProjectGroup } from '../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
+import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../shared/project-group-types'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export type RestoredSubagentLivenessSweepDeps = {

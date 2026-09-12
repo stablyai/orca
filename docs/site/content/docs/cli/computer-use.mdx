@@ -1,0 +1,113 @@
+---
+title: Computer use
+description: Drive local desktop apps from an agent via accessibility trees, screenshots, and safe UI actions.
+---
+
+import { Callout } from '@/components/docs/prose'
+
+The `orca computer` CLI lets an agent inspect and control native desktop apps — list running apps, read accessibility trees, click controls, set values, type text, scroll, and take screenshots. Use it when a task needs to operate the OS or a third-party app rather than a terminal or the built-in browser.
+
+<Callout title="Beta">
+  Computer use ships native helpers per platform and requires Accessibility (and on macOS, Screen
+  Recording) permission. The command surface is stable enough for skills to build against, but flag
+  names may still shift.
+</Callout>
+
+## First-time setup
+
+Check the runtime and permissions:
+
+```
+orca status --json
+orca computer permissions --json
+orca computer capabilities --json
+```
+
+If `permissions` reports anything missing, grant Accessibility (and Screen Recording on macOS) to **Orca Computer Use** in System Settings, then re-run `permissions --json` to confirm.
+
+## Snapshot → act → snapshot
+
+Every interaction follows the same loop: read the app's current state, act on a specific element, then re-read state to verify the result.
+
+```
+orca computer list-apps --json
+orca computer get-app-state --app com.spotify.client --json
+orca computer click --app com.spotify.client --element-index 42 --json
+```
+
+Element indexes are scoped to the latest `get-app-state` result and may be **sparse**. In `--json` output, read the tree from `result.snapshot.treeText`. Do not invent indexes from `elementCount`. Refresh state after navigation, focus changes, scrolling, or any app re-render before reusing an index.
+
+## Multi-window apps
+
+```bash
+orca computer list-windows --app com.microsoft.edgemac --json
+orca computer get-app-state --app com.microsoft.edgemac --window-id <id> --json
+orca computer click --app com.microsoft.edgemac --window-id <id> --element-index 12 --json
+```
+
+Prefer stable `--window-id` when the listed id is not `none`; otherwise use `--window-index`.
+
+## Selecting an app
+
+Prefer bundle IDs returned by `list-apps`:
+
+```
+orca computer get-app-state --app com.microsoft.edgemac --json
+```
+
+App names work when unambiguous (`--app Spotify`). Use `--app pid:<number>` only when bundle ID and name both collide.
+
+## Available actions
+
+```
+orca computer click --app <app> --element-index <i> --json
+orca computer set-value --app <app> --element-index <i> --value "text" --json
+orca computer type-text --app <app> --text "text" --json
+orca computer press-key --app <app> --key Return --json
+orca computer hotkey --app <app> --key CmdOrCtrl+A --json
+orca computer paste-text --app <app> --text "text" --json
+orca computer scroll --app <app> --element-index <i> --direction down --json
+orca computer drag --app <app> --from-x 100 --from-y 100 --to-x 300 --to-y 300 --json
+orca computer perform-secondary-action --app <app> --element-index <i> --action <name> --json
+```
+
+Prefer semantic actions (`click`, `set-value`, `perform-secondary-action`) over raw `type-text` or `press-key` — they target accessibility elements directly and survive focus changes that keyboard input doesn't.
+
+When accessibility targeting fails, fall back carefully to coordinates:
+
+```bash
+orca computer click --app com.apple.Safari --x 120 --y 340 --json
+orca computer drag --app <app> --from-element-index 3 --to-element-index 9 --json
+```
+
+## Sensitive input
+
+Pass secrets through stdin so they don't land in shell history:
+
+```
+printf '%s' "$TEXT" | orca computer set-value \
+  --app com.apple.Safari --element-index 7 --value-stdin --json
+```
+
+`--text-stdin` works the same way for `type-text` and `paste-text`.
+
+On Linux and Windows, action payloads also pass briefly through a local operation file while the helper runs. Stdin keeps secrets out of shell history, but it does not hide them from every local observer; avoid sending secrets unless the task explicitly requires it.
+
+## Screenshots
+
+`get-app-state` returns an accessibility tree and, by default, a screenshot. With `--json`, the image bytes are written to disk and the path is returned in `screenshot.path` rather than embedded in the response. Pass `--no-screenshot` when pixels aren't needed (faster, smaller payload). Pass `--restore-window` to bring a hidden or minimized window into view before capture.
+
+## Use it from an agent
+
+The shipped `computer-use` skill packages the same command surface with safety guidance. Install it into the agent's skill directory:
+
+```
+npx skills add https://github.com/stablyai/orca --skill computer-use
+```
+
+See [Skills registry & MCP](/docs/cli/skills) for how skills are picked up.
+
+## Next steps
+
+- [Orca CLI overview](/docs/cli/overview) — the rest of the CLI surface (worktrees, terminal, browser).
+- [Skills registry & MCP](/docs/cli/skills) — distributing this CLI to agents.

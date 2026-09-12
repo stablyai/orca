@@ -6,7 +6,7 @@
  * is returned because it is also the only remaining recheck wakeup once damping
  * has stopped the churn that was waking the parking effect.
  */
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   getParkVerdictUnparkPinUntilMs,
   type ParkVerdictFlipRecord

@@ -6,10 +6,11 @@ import { GROK_MODEL_LIST_ARGS, parseGrokModelList } from './grok-model-list-prob
 const SIGNED_IN_STDOUT = [
   'You are logged in with grok.com.',
   '',
-  'Default model: grok-4.5',
+  'Default model: grok-4.6',
   '',
   'Available models:',
-  '  * grok-4.5 (default)',
+  '  * grok-4.6 (default)',
+  '  - grok-4.5',
   ''
 ].join('\n')
 
@@ -19,8 +20,12 @@ describe('parseGrokModelList', () => {
   })
 
   it('parses the signed-in listing into exactly the bulleted models', () => {
+    // Regression: grok stars only the default row and dashes the rest, so a `*`-only
+    // bullet pattern published a one-model list and dropped every other model —
+    // and discovery is authoritative, so the dropped rows left the picker entirely.
     expect(parseGrokModelList(SIGNED_IN_STDOUT)).toEqual([
-      { id: 'grok-4.5', label: 'Grok 4.5', isDefault: true }
+      { id: 'grok-4.6', label: 'Grok 4.6', isDefault: true },
+      { id: 'grok-4.5', label: 'Grok 4.5' }
     ])
   })
 
@@ -48,11 +53,23 @@ describe('parseGrokModelList', () => {
   })
 
   it('ignores the decoy ids that sit above the header', () => {
-    // `Default model: grok-4.5` is a valid-looking id and the login line holds a
+    // `Default model: grok-4.6` is a valid-looking id and the login line holds a
     // dotted token; both precede the header, so neither may become a model.
     const parsed = parseGrokModelList(SIGNED_IN_STDOUT)
-    expect(parsed).toHaveLength(1)
+    expect(parsed).toHaveLength(2)
     expect(parsed.some(({ id }) => id.includes('grok.com'))).toBe(false)
+  })
+
+  it('reads the default marker off a dashed row too', () => {
+    // The bullet grok uses is presentational; only the annotation is the claim.
+    expect(
+      parseGrokModelList('Available models:\n  - grok-build\n  - grok-4.5 (default)\n').map(
+        ({ id, isDefault }) => [id, isDefault]
+      )
+    ).toEqual([
+      ['grok-build', undefined],
+      ['grok-4.5', true]
+    ])
   })
 
   it('strips a trailing parenthetical annotation from the id, spaced or not', () => {

@@ -3,7 +3,7 @@
 // RPCs). Keeping these settings in the same global store is what lets a grouping
 // or filter change on the phone show up on desktop and vice-versa.
 
-import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
 export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
@@ -54,6 +54,49 @@ export function sortModeFromDesktop(
   sortBy: WorkspaceViewSettings['sortBy']
 ): MobileSortMode | null {
   return sortBy && SORT_VALUES.includes(sortBy) ? sortBy : null
+}
+
+/**
+ * Map a user edit to the ui.set payload, carrying only the fields the edit touched.
+ *
+ * Why patch-only (STA-5781): the shared store is edited concurrently by desktop and
+ * web clients, and this screen's mirror refreshes only on connect/focus. Echoing the
+ * whole snapshot let a stale mirror revert sibling fields another client had just
+ * changed; the host merges partial updates field-by-field, so sending only the
+ * touched fields is lossless. This also supersedes the old #8873 special case:
+ * alwaysShowDefaultBranchWorkspace has no mobile toggle, so it is simply never in a
+ * patch and can no longer revert a desktop opt-out.
+ */
+export function buildWorkspaceViewSettingsUpdate(
+  patch: Partial<MobileViewState>,
+  next: MobileViewState
+): WorkspaceViewSettings {
+  const update: WorkspaceViewSettings = {}
+  if ('groupMode' in patch) {
+    update.groupBy = groupModeToDesktop(next.groupMode)
+  }
+  if ('sortMode' in patch) {
+    update.sortBy = next.sortMode
+  }
+  if ('hideSleeping' in patch) {
+    update.hideSleepingWorkspaces = next.hideSleeping
+  }
+  if ('hideDefaultBranch' in patch) {
+    update.hideDefaultBranchWorkspace = next.hideDefaultBranch
+  }
+  if ('alwaysShowDefaultBranch' in patch) {
+    update.alwaysShowDefaultBranchWorkspace = next.alwaysShowDefaultBranch
+  }
+  if ('filterRepoIds' in patch) {
+    update.filterRepoIds = next.filterRepoIds
+  }
+  if ('collapsedGroups' in patch) {
+    update.collapsedGroups = next.collapsedGroups
+  }
+  if ('workspaceStatuses' in patch) {
+    update.workspaceStatuses = [...next.workspaceStatuses]
+  }
+  return update
 }
 
 export type MobileViewState = {

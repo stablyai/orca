@@ -6,11 +6,15 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   Automation,
+  AutomationRun,
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
+import type { AutomationListRow } from './automation-list-row-identity'
+import type { ExternalAutomationScope } from './external-automation-scope-client'
 import { AutomationListLocalRows } from './AutomationListLocalRows'
 import { AutomationListExternalRows } from './AutomationListExternalRows'
+import { indexLatestAutomationRuns } from './automation-list-last-run'
 
 // Why: Tooltip needs a provider in the app; stub so rows render standalone.
 vi.mock('@/components/ui/tooltip', () => ({
@@ -84,24 +88,56 @@ function makeExternalManager(): ExternalAutomationManager {
   }
 }
 
+function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
+  return {
+    id: 'run-1',
+    automationId: 'automation-1',
+    title: 'test',
+    scheduledFor: 1,
+    status: 'dispatch_failed',
+    trigger: 'scheduled',
+    workspaceId: 'worktree-1',
+    sessionKind: 'terminal',
+    chatSessionId: null,
+    terminalSessionId: null,
+    terminalPaneKey: null,
+    terminalPtyId: null,
+    outputSnapshot: null,
+    precheckResult: null,
+    usage: null,
+    error: 'boom',
+    startedAt: Date.now() - 8 * 60 * 60 * 1000,
+    dispatchedAt: Date.now() - 8 * 60 * 60 * 1000,
+    createdAt: Date.now() - 8 * 60 * 60 * 1000,
+    ...overrides
+  }
+}
+
 function renderLocalRows(handlers: {
-  onSelect: (automationId: string) => void
-  onDelete?: (automation: Automation) => void
+  onSelect: (rowKey: string) => void
+  onDelete?: (row: AutomationListRow) => void
+  runs?: AutomationRun[]
 }) {
+  const row: AutomationListRow = {
+    key: 'row|local|automation-1',
+    automation: makeAutomation(),
+    hostLabel: 'Local',
+    usageSummary: null
+  }
   return render(
     <AutomationListLocalRows
-      automations={[makeAutomation()]}
-      selectedId={null}
+      rows={[row]}
+      selectedRowKey={null}
       isSelectedLocal={true}
-      runs={[]}
+      lastRunByAutomationId={indexLatestAutomationRuns(handlers.runs ?? [])}
       relativeNow={Date.now()}
       repoMap={new Map()}
       worktreeMap={new Map()}
       projectHostSetups={[]}
       sshConnectionStates={new Map()}
       runtimeStatusByEnvironmentId={new Map()}
-      automationHostTarget={null}
-      automationSourceHostAvailabilityById={new Map()}
+      hostTargetFor={() => null}
+      automationSourceHostAvailabilityByRowKey={new Map()}
       hostLabelById={new Map()}
       onSelect={handlers.onSelect}
       onRunNow={vi.fn()}
@@ -117,14 +153,19 @@ function renderExternalRows(handlers: {
   onRequestAction?: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
-    action: 'run' | 'pause' | 'resume' | 'delete'
+    action: 'run' | 'pause' | 'resume' | 'delete',
+    scope: ExternalAutomationScope
   ) => void
 }) {
   const manager = makeExternalManager()
   const job = makeExternalJob()
+  const scope: ExternalAutomationScope = {
+    owner: { authority: { kind: 'desktop' }, selector: { kind: 'self' } },
+    provider: 'hermes'
+  }
   return render(
     <AutomationListExternalRows
-      entries={[{ key: `${manager.id}:${job.id}`, manager, job }]}
+      entries={[{ key: `${manager.id}:${job.id}`, scope, manager, job }]}
       selectedExternalKey={null}
       relativeNow={Date.now()}
       sshConnectionStates={new Map()}
@@ -162,6 +203,11 @@ describe('Automation list row selection', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  it('shows last-run status and relative time', () => {
+    renderLocalRows({ onSelect: vi.fn(), runs: [makeRun()] })
+    expect(screen.getByText('Failed 8h ago')).toBeTruthy()
+  })
+
   it('still selects when the local row itself is clicked', async () => {
     const onSelect = vi.fn()
     const { container } = renderLocalRows({ onSelect })
@@ -172,7 +218,7 @@ describe('Automation list row selection', () => {
     await user.click(row as Element)
 
     expect(onSelect).toHaveBeenCalledTimes(1)
-    expect(onSelect).toHaveBeenCalledWith('automation-1')
+    expect(onSelect).toHaveBeenCalledWith('row|local|automation-1')
   })
 
   it('opens the actions menu on keyboard activation without selecting the row', async () => {

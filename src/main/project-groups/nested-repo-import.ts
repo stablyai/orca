@@ -1,4 +1,8 @@
-import type { NestedRepoScanResult, ProjectGroup, ProjectGroupImportMode } from '../../shared/types'
+import type {
+  NestedRepoScanResult,
+  ProjectGroup,
+  ProjectGroupImportMode
+} from '../../shared/project-group-types'
 import {
   getRuntimePathBasename,
   isPathInsideOrEqual,
@@ -146,10 +150,12 @@ export function createNestedProjectGroupResolver(args: {
   createGroup: (input: CreateGroupInput) => ProjectGroup
 }): NestedProjectGroupResolver {
   const createdGroups: ProjectGroup[] = []
-  const folderScopes = buildSparseFolderScopes({
-    parentPath: args.parentPath,
-    repoPaths: args.repoPaths ?? []
-  })
+  // Every folder-scope read sits behind ensureRootGroup, so outside group mode the scopes are
+  // unreachable. One flag drives both so the skip can never drift from the guard that justifies it.
+  const createsGroups = args.mode === 'group'
+  const folderScopes = createsGroups
+    ? buildSparseFolderScopes({ parentPath: args.parentPath, repoPaths: args.repoPaths ?? [] })
+    : []
   const folderScopesByRelativePath = new Map(
     folderScopes.map((scope) => [scope.relativePath, scope])
   )
@@ -157,7 +163,7 @@ export function createNestedProjectGroupResolver(args: {
   let rootGroup: ProjectGroup | undefined
 
   const ensureRootGroup = (): ProjectGroup | undefined => {
-    if (args.mode !== 'group') {
+    if (!createsGroups) {
       return undefined
     }
     if (rootGroup) {

@@ -292,6 +292,7 @@ export function LinearAgentSkillSetupPrompt({
         command={command}
         installedCommand={installedCommand}
         terminalShellOverride={terminalShellOverride}
+        terminalRuntime={agentRuntime}
         installed={skill.installed}
         loading={showCheckingModal || cliLoading || skill.loading}
         error={skill.error}

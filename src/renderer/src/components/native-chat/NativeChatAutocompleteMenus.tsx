@@ -12,7 +12,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   onChoose,
   onRetry
 }: {
-  autocomplete: Extract<ComposerAutocomplete, { mode: 'slash' | 'skill' }>
+  autocomplete: Extract<ComposerAutocomplete, { mode: 'slash' }>
   activeIndex: number
   listboxId: string
   onChoose: (item: NativeChatPickerItem) => void
@@ -54,7 +54,6 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
           <PickerOption
             key={item.id}
             item={item}
-            prefix={autocomplete.prefix}
             index={index}
             activeIndex={activeIndex}
             listboxId={listboxId}
@@ -102,7 +101,6 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
           <PickerOption
             key={item.id}
             item={item}
-            prefix={autocomplete.prefix}
             index={index}
             activeIndex={activeIndex}
             listboxId={listboxId}
@@ -140,9 +138,9 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
 })
 
 function getPickerEmptyText(
-  autocomplete: Extract<ComposerAutocomplete, { mode: 'slash' | 'skill' }>
+  autocomplete: Extract<ComposerAutocomplete, { mode: 'slash' }>
 ): string {
-  if (autocomplete.mode === 'skill' || !autocomplete.commandsEnabled) {
+  if (!autocomplete.commandsEnabled) {
     return translate('components.native-chat.composer.noSkills', 'No matching skills')
   }
   if (autocomplete.skillsEnabled) {
@@ -174,7 +172,6 @@ function PickerStatus({ children }: { children: React.ReactNode }): React.JSX.El
 
 function PickerOption({
   item,
-  prefix,
   index,
   activeIndex,
   listboxId,
@@ -182,7 +179,6 @@ function PickerOption({
   onChoose
 }: {
   item: NativeChatPickerItem
-  prefix: '/' | '$'
   index: number
   activeIndex: number
   listboxId: string
@@ -213,7 +209,14 @@ function PickerOption({
         <Package className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
       ) : null}
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-mono font-medium">{prefix + item.name}</span>
+        <span className="flex min-w-0 items-baseline gap-1.5">
+          <span className="min-w-0 truncate font-mono font-medium">{item.token}</span>
+          {item.kind === 'command' && item.argumentHint ? (
+            <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
+              {item.argumentHint}
+            </span>
+          ) : null}
+        </span>
         {item.description ? (
           <span className="block truncate text-xs text-muted-foreground">{item.description}</span>
         ) : null}

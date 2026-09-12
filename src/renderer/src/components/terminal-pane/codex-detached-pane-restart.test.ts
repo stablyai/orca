@@ -297,7 +297,8 @@ describe('codex detached pane restart executor', () => {
       worktreeId: 'wt1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => null
+      getPtyIdForPane: () => null,
+      getTabWideAgentHintLeafId: () => null
     })
     try {
       await sweepUnclaimedCodexPaneRestarts()
@@ -324,7 +325,8 @@ describe('codex detached pane restart executor', () => {
       worktreeId: 'wt1',
       getManager: () => null,
       getContainer: () => null,
-      getPtyIdForPane: () => OLD_PTY
+      getPtyIdForPane: () => OLD_PTY,
+      getTabWideAgentHintLeafId: () => null
     })
     try {
       pendingSpawn.resolve({ id: NEW_PTY })

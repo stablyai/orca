@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { createProjectGroupHeaderDragSession } from './project-group-header-drag-start'
-import type { ProjectGroup } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 
 function group(id: string, overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {

@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../../shared/types'
+import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
 
 const { activateCyclableTabMock, getStateMock } = vi.hoisted(() => ({

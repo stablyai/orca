@@ -18,6 +18,7 @@ describe('paste payload metadata', () => {
         byteLength: textEncoder.encode(text).byteLength,
         exceededLimit: false,
         hasControlSequences: expected.hasControlSequences,
+        lineEndingByteLength: text.match(/[\r\n]/g)?.length ?? 0,
         lineCount: expected.lineCount
       })
     }
@@ -30,6 +31,7 @@ describe('paste payload metadata', () => {
       byteLength: 26,
       exceededLimit: false,
       hasControlSequences: true,
+      lineEndingByteLength: 3,
       lineCount: 3
     })
     expect(getPastePayloadUtf8ByteLength(text)).toBe(26)
@@ -45,6 +47,7 @@ describe('paste payload metadata', () => {
       byteLength: 8,
       exceededLimit: true,
       hasControlSequences: false,
+      lineEndingByteLength: 0,
       lineCount: 1
     })
     expect(metadata.byteLength).toBeLessThan(getPastePayloadUtf8ByteLength(text))
@@ -64,6 +67,7 @@ describe('paste payload metadata', () => {
       byteLength: 43,
       exceededLimit: false,
       hasControlSequences: true,
+      lineEndingByteLength: 2,
       lineCount: 2
     })
     expect(yieldToEventLoop).toHaveBeenCalled()

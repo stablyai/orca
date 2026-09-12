@@ -1,8 +1,5 @@
-import type {
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'

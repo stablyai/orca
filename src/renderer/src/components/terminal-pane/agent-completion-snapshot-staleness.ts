@@ -8,16 +8,20 @@ export function isSupersededAgentCompletionSnapshot(
   if (!storedAgentStatus || !snapshot) {
     return false
   }
-  if (typeof snapshot.stateStartedAt !== 'number') {
+  const comparableStateStartedAt = snapshot.localStateStartedAt ?? snapshot.stateStartedAt
+  if (typeof comparableStateStartedAt !== 'number') {
     return storedAgentStatus.state !== snapshot.state
   }
   // Why: hook completion notifications are delayed by a quiet window; by the
   // time they fire, the same pane may already belong to a newer agent turn.
-  if (storedAgentStatus.stateStartedAt > snapshot.stateStartedAt) {
+  if (storedAgentStatus.stateStartedAt > comparableStateStartedAt) {
     return true
   }
+  const hasStampedTurn =
+    typeof snapshot.turnCompletedAt === 'number' && Number.isFinite(snapshot.turnCompletedAt)
   return (
-    storedAgentStatus.stateStartedAt === snapshot.stateStartedAt &&
-    storedAgentStatus.state !== snapshot.state
+    storedAgentStatus.stateStartedAt === comparableStateStartedAt &&
+    storedAgentStatus.state !== snapshot.state &&
+    !hasStampedTurn
   )
 }

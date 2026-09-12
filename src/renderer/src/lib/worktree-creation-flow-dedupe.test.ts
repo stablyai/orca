@@ -27,7 +27,10 @@ vi.mock('@/lib/browser-uuid', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn(),
+  activateAndRevealWorktree: vi.fn()
+}))
+
+vi.mock('@/lib/worktree-initial-terminal-seeding', () => ({
   ensureWorktreeHasInitialTerminal: vi.fn()
 }))
 

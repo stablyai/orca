@@ -51,6 +51,7 @@ import {
 import { stat } from 'node:fs/promises'
 import { subscribe as subscribeParcelWatcher } from '@parcel/watcher'
 import { createWslWatcher } from './filesystem-watcher-wsl'
+import { createDebouncedBatch } from './filesystem-watcher-batch-control'
 import {
   MAX_PHYSICAL_WATCHER_CHILDREN,
   reserveWatcherChild,
@@ -60,7 +61,7 @@ import {
 import { acquireWatcherRemovalGate } from './watcher-removal-gate'
 import { WATCH_BATCH_TRAILING_MS } from '../../shared/filesystem-watch-batch-window'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 /** Remote fs:changed rides the shared debounce window, so drain it before asserting sends. */
 const emitRemote = async (onEvents: (e: unknown[]) => void, events: unknown[]) => {
@@ -135,7 +136,7 @@ describe('registerFilesystemWatcherHandlers', () => {
       return {
         subscription: { unsubscribe: vi.fn(async () => release()) },
         listeners: new Map(),
-        batch: { events: [], overflowed: false, timer: null, firstEventAt: 0 },
+        batch: createDebouncedBatch(),
         rootPath: worktreePath
       }
     })

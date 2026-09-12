@@ -687,8 +687,8 @@ describe('captureAllSleepingAgentSessions', () => {
   })
 
   // Why: a finished resumable-agent turn leaves the TUI alive at its prompt, so the persisted
-  // recovery anchor must survive `done` (state remapped to 'working' to stay cold-restore
-  // eligible) — else logout→relaunch cold-restores to a bare shell instead of `--resume` (#9454).
+  // recovery anchor must survive `done` without relabeling completed work as pending — else
+  // logout→relaunch cold-restores to a bare shell instead of `--resume` (#9454).
   // Covers claude (the reported agent) and codex; previously this was Pi-only.
   it.each([
     ['claude', 'Claude'],
@@ -722,7 +722,7 @@ describe('captureAllSleepingAgentSessions', () => {
         agent: agentType,
         providerSession,
         origin: 'live',
-        state: 'working'
+        state: 'done'
       })
       // Launch config is still cleared on done: tokens must no longer authorize config reuse.
       expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toBeUndefined()

@@ -17,7 +17,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProviderGeneration: mocks.getProviderGeneration,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE: 'unavailable'
 }))
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: mocks.resolveRegisteredPath
 }))
 vi.mock('./local-worktree-runtime-options', () => ({

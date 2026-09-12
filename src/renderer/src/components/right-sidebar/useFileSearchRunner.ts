@@ -10,7 +10,7 @@ import {
 } from '@/runtime/runtime-file-search-bounds'
 import { searchRuntimeFiles } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
-import type { SearchResult } from '../../../../shared/types'
+import type { SearchResult } from '../../../../shared/code-search-types'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 const SEARCH_DEBOUNCE_MS = 300

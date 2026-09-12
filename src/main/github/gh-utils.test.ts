@@ -38,7 +38,7 @@ import {
   __resetLocalGitConfigSignatureCacheForTests,
   readLocalGitConfigSignature
 } from './local-git-config-signature'
-import { GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN } from '../../shared/github-work-items-query-bounds'
+import { GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN } from '../../shared/github/work-items-query-bounds'
 
 describe('github owner/repo resolution', () => {
   beforeEach(() => {

@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FsChangedPayload } from '../../../../shared/types'
+import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import type {
   FileExplorerOperationOwner,
   FileExplorerTreeRefreshOutcome
@@ -74,7 +74,7 @@ describe('useFileExplorerWatch pending refreshes', () => {
         useFileExplorerWatch({
           worktreePath: visiblePath,
           activeWorktreeId: 'wt-1',
-          dirCache: { '/repo': { children: [], loading: false } },
+          dirCache: { '/repo': { children: [] } },
           setDirCache: vi.fn(),
           expanded: new Set(),
           setSelectedPath: vi.fn(),

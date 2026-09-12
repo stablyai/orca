@@ -11,7 +11,7 @@ import {
 } from './markdown-internal-links'
 import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
 import { getRichMarkdownCommentAtPos } from './rich-markdown-review-annotations'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { translate } from '@/i18n/i18n'
 import {
   classifyHtmlSuperscriptLinkAction,

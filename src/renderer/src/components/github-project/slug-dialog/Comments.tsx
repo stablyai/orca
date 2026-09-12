@@ -12,11 +12,12 @@ import {
 } from '@/lib/comment-body-submit-state'
 import { useRepoSlugIndex } from '@/lib/repo-slug-index'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
-import type { GlobalSettings, PRComment } from '../../../../../shared/types'
+import type { PRComment } from '../../../../../shared/github/comment-types'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type {
   GitHubProjectCommentMutationResult,
   GitHubProjectMutationResult
-} from '../../../../../shared/github-project-types'
+} from '../../../../../shared/github/project-result-types'
 import { translate } from '@/i18n/i18n'
 
 function getRuntimeTarget(settings: Parameters<typeof getActiveRuntimeTarget>[0]) {

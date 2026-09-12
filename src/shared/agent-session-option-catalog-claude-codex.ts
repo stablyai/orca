@@ -185,19 +185,21 @@ const CODEX_EFFORT_CHOICES = [
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
-  { value: 'xhigh', label: 'Extra high' }
+  { value: 'xhigh', label: 'Extra high' },
+  { value: 'max', label: 'Max' },
+  { value: 'ultra', label: 'Ultra' }
 ]
 
-function codexEffort(includeExtraHigh: boolean): CatalogOption {
+// Why: Codex can clamp higher values, so expose only each model's advertised levels.
+function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
+  const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
   return {
     id: 'effort',
     label: 'Reasoning effort',
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: includeExtraHigh
-        ? CODEX_EFFORT_CHOICES
-        : CODEX_EFFORT_CHOICES.filter((choice) => choice.value !== 'xhigh'),
+      choices: CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1),
       defaultValue: 'medium'
     },
     apply: {
@@ -214,14 +216,14 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // Why: Codex model access depends on auth. Keep this seed short and allow
   // unknown persisted ids to pass through instead of claiming a complete list.
   models: [
-    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort(true)] },
-    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort(true)] },
-    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', options: [codexEffort(false)] },
-    { id: 'gpt-5.5', label: 'GPT-5.5', options: [codexEffort(true)] },
+    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', options: [codexEffort('ultra')] },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', options: [codexEffort('ultra')] },
+    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', options: [codexEffort('max')] },
+    { id: 'gpt-5.5', label: 'GPT-5.5', options: [codexEffort('xhigh')] },
     {
       id: 'gpt-5.2-codex',
       label: 'GPT-5.2 Codex',
-      options: [codexEffort(true)]
+      options: [codexEffort('xhigh')]
     }
   ],
   modelApply: {
@@ -232,5 +234,5 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     // command and let its own picker apply the account-supported model.
     midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
-  unknownModelOptions: [codexEffort(true)]
+  unknownModelOptions: [codexEffort('xhigh')]
 }

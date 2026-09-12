@@ -1,10 +1,37 @@
-import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { buildSkillDiscoverySources, discoverSkills } from './discovery'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  buildSkillDiscoverySources,
+  clearSkillRootScanCache,
+  discoverSkills,
+  LAST_KNOWN_ROOT_SCAN_RETENTION_MS
+} from './discovery'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
-import type { Repo } from '../../shared/types'
+import type * as SkillRootFileWalk from './skill-root-file-walk'
+import type { Repo } from '../../shared/repo-types'
+
+/** Root path whose walk should reject as if its scan had been abandoned. */
+let unavailableRootPath: string | null = null
+
+vi.mock('./skill-root-file-walk', async (importOriginal) => {
+  const actual = await importOriginal<typeof SkillRootFileWalk>()
+  return {
+    ...actual,
+    findSkillFiles: (rootPath: string, maxDepth: number, signal?: AbortSignal) => {
+      if (unavailableRootPath !== null && rootPath === unavailableRootPath) {
+        // Shape matches what an aborted walk throws.
+        return Promise.reject(
+          Object.assign(new Error('This operation was aborted'), {
+            name: 'AbortError'
+          })
+        )
+      }
+      return actual.findSkillFiles(rootPath, maxDepth, signal)
+    }
+  }
+})
 
 function makeRepo(path: string, connectionId: string | null = null): Repo {
   return {
@@ -18,7 +45,136 @@ function makeRepo(path: string, connectionId: string | null = null): Repo {
   }
 }
 
+beforeEach(() => {
+  // Roots are shared between scans for a few seconds; each case owns its own tree.
+  clearSkillRootScanCache()
+  // Why: the Hermes root is the only home root that env vars can move outside the
+  // per-case tree, so a developer's real install must not leak into these scans.
+  vi.stubEnv('HERMES_HOME', '')
+  vi.stubEnv('LOCALAPPDATA', '')
+  vi.spyOn(console, 'info').mockImplementation(() => undefined)
+})
+
+afterEach(() => {
+  unavailableRootPath = null
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
+})
+
 describe('skill discovery', () => {
+  // Why this matters: callers already waiting on a scan that is later abandoned for
+  // age see it reject. Re-throwing turned one slow root into a failed discovery that
+  // emptied the picker for every healthy root beside it.
+  it('keeps every healthy root when one root walk is aborted', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const healthySkill = join(home, '.codex', 'skills', 'review')
+    const stalledSkill = join(home, '.omp', 'agent', 'skills', 'planning')
+    await mkdir(healthySkill, { recursive: true })
+    await mkdir(stalledSkill, { recursive: true })
+    await writeFile(join(healthySkill, 'SKILL.md'), '# Review\n\nReview code.')
+    await writeFile(join(stalledSkill, 'SKILL.md'), '# Planning\n\nPlan work.')
+    unavailableRootPath = join(home, '.omp', 'agent', 'skills')
+
+    const result = await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+
+    expect(result.skills.map((skill) => skill.name)).toEqual(['Review'])
+    const stalledSource = result.sources.find((source) => source.path === unavailableRootPath)
+    expect(stalledSource).toMatchObject({ skippedReason: 'unavailable' })
+  })
+
+  // `unavailable` must stay distinct from `missing`: a root that did not answer is
+  // unknown, not empty, and a consumer must not read it as "these skills are gone".
+  it('does not report an aborted root as missing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const absentRoot = join(home, '.codex', 'skills')
+    const stalledRoot = join(home, '.omp', 'agent', 'skills')
+    await mkdir(stalledRoot, { recursive: true })
+    unavailableRootPath = stalledRoot
+
+    const result = await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+
+    expect(result.sources.find((source) => source.path === absentRoot)).toMatchObject({
+      exists: false,
+      skippedReason: 'missing'
+    })
+    expect(result.sources.find((source) => source.path === stalledRoot)).toMatchObject({
+      exists: true,
+      skippedReason: 'unavailable'
+    })
+  })
+
+  // The impact this exists for: every consumer derives "installed" from the skill
+  // list, so an empty list for an unanswered root made an installed skill offer
+  // Install again the moment a mount stalled.
+  it('serves the last answered skills for a root whose rescan did not answer', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const stalledRoot = join(home, '.omp', 'agent', 'skills')
+    await mkdir(join(stalledRoot, 'planning'), { recursive: true })
+    await writeFile(join(stalledRoot, 'planning', 'SKILL.md'), '# Planning\n\nPlan work.')
+
+    const first = await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+    expect(first.skills.map((skill) => skill.name)).toEqual(['Planning'])
+
+    unavailableRootPath = stalledRoot
+    const second = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      refresh: true
+    })
+
+    expect(second.skills.map((skill) => skill.name)).toEqual(['Planning'])
+    expect(second.sources.find((source) => source.path === stalledRoot)).toMatchObject({
+      skippedReason: 'unavailable'
+    })
+  })
+
+  it('drops the retained copy once a root answers as absent', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const stalledRoot = join(home, '.omp', 'agent', 'skills')
+    await mkdir(join(stalledRoot, 'planning'), { recursive: true })
+    await writeFile(join(stalledRoot, 'planning', 'SKILL.md'), '# Planning\n\nPlan work.')
+    await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+    await rm(stalledRoot, { recursive: true })
+
+    await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd'), refresh: true })
+    unavailableRootPath = stalledRoot
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      refresh: true
+    })
+
+    // A removed skill must not come back the next time its root stalls.
+    expect(result.skills.map((skill) => skill.name)).toEqual([])
+  })
+
+  it('stops serving a retained copy once it is older than the retention window', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const stalledRoot = join(home, '.omp', 'agent', 'skills')
+    await mkdir(join(stalledRoot, 'planning'), { recursive: true })
+    await writeFile(join(stalledRoot, 'planning', 'SKILL.md'), '# Planning\n\nPlan work.')
+    await discoverSkills({ homeDir: home, cwd: join(root, 'missing-cwd') })
+
+    const recordedAt = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(recordedAt + LAST_KNOWN_ROOT_SCAN_RETENTION_MS + 1)
+    unavailableRootPath = stalledRoot
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd'),
+      refresh: true
+    })
+
+    expect(result.skills).toEqual([])
+    expect(result.sources.find((source) => source.path === stalledRoot)).toMatchObject({
+      skippedReason: 'unavailable'
+    })
+  })
+
   it('discovers home and repo SKILL.md packages with provider metadata', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -129,7 +285,11 @@ describe('skill discovery', () => {
     await writeFile(join(codexSkills, 'review', 'SKILL.md'), '# review')
     await mkdir(join(home, '.agents'), { recursive: true })
     // Shared root is a symlink onto the Codex root: one canonical file, two roots.
-    await symlink(codexSkills, join(home, '.agents', 'skills'), 'dir')
+    await symlink(
+      codexSkills,
+      join(home, '.agents', 'skills'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
 
     const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
 
@@ -148,7 +308,11 @@ describe('skill discovery', () => {
     await writeFile(join(claudeSkills, 'orchestration', 'SKILL.md'), '# orchestration')
     // `npx skills add --global` links a provider home onto an existing install.
     await mkdir(join(home, '.grok'), { recursive: true })
-    await symlink(claudeSkills, join(home, '.grok', 'skills'), 'dir')
+    await symlink(
+      claudeSkills,
+      join(home, '.grok', 'skills'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
 
     const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
 
@@ -208,9 +372,19 @@ describe('skill discovery', () => {
         '/home/test/.config/opencode/skills',
         '/home/test/.pi/agent/skills',
         '/home/test/.omp/agent/skills',
+        '/home/test/.hermes/skills',
         '/home/test/.gemini/skills',
         '/home/test/.gemini/antigravity/skills',
-        '/home/test/.cursor/skills'
+        '/home/test/.cursor/skills',
+        '/home/test/.factory/skills',
+        '/home/test/.continue/skills',
+        '/home/test/.trae-cn/skills',
+        '/home/test/.augment/skills',
+        '/workspace/current/.factory/skills',
+        '/workspace/current/.continue/skills',
+        '/workspace/current/.trae/skills',
+        '/workspace/current/.grok/skills',
+        '/workspace/current/.augment/skills'
       ])
     )
     // Why: these live outside ~/.agents/skills, so they must carry the shared
@@ -225,6 +399,9 @@ describe('skill discovery', () => {
     expect(
       roots.find((root) => root.path.replace(/\\/g, '/') === '/home/test/.omp/agent/skills')?.owner
     ).toBe('omp')
+    expect(
+      roots.find((root) => root.path.replace(/\\/g, '/') === '/home/test/.hermes/skills')?.owner
+    ).toBe('hermes')
   })
 
   it('does not add runtime-owned repository paths to local scan roots', () => {
@@ -301,6 +478,72 @@ describe('skill discovery', () => {
     expect(skill?.sourceKind).toBe('home')
     expect(skill?.directoryPath).toBe(linkedSkill)
     expect(skill?.providers).toEqual(['agent-skills'])
+  })
+
+  it('discovers Skills installed in the Hermes home', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const skillDir = join(home, '.hermes', 'skills', 'social-media', 'research')
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(
+      join(skillDir, 'SKILL.md'),
+      ['---', 'name: social-research', 'description: Research social sources.', '---', ''].join(
+        '\n'
+      )
+    )
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd')
+    })
+
+    expect(result.skills).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'social-research',
+          sourceKind: 'home',
+          sourceLabel: 'Hermes home',
+          directoryPath: skillDir,
+          providers: ['agent-skills']
+        })
+      ])
+    )
+    expect(result.sources.find((source) => source.id === 'home-hermes')).toMatchObject({
+      owner: 'hermes',
+      exists: true
+    })
+  })
+
+  it('discovers Hermes Skills under a relocated HERMES_HOME profile', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const hermesHome = join(root, 'profiles', 'coder')
+    const skillDir = join(hermesHome, 'skills', 'research')
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(
+      join(skillDir, 'SKILL.md'),
+      ['---', 'name: profile-research', 'description: Research sources.', '---', ''].join('\n')
+    )
+    vi.stubEnv('HERMES_HOME', hermesHome)
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd')
+    })
+
+    expect(result.skills).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'profile-research',
+          sourceLabel: 'Hermes home',
+          directoryPath: skillDir
+        })
+      ])
+    )
+    expect(result.sources.find((source) => source.id === 'home-hermes')).toMatchObject({
+      path: join(hermesHome, 'skills'),
+      exists: true
+    })
   })
 
   it('discovers worktree .agents skill symlinks from the requested cwd', async () => {

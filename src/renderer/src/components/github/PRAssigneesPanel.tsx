@@ -19,7 +19,8 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
-import type { GitHubAssignableUser, GitHubWorkItem } from '../../../../shared/types'
+import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 
 export function PRAssigneesPanel({
   item,

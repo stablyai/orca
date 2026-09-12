@@ -9,6 +9,7 @@ import {
   sortWorktrees
 } from './workspace-list-sections'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
+import { getMobileWorkspaceLineageGroupKey } from './mobile-workspace-lineage'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'feature')
@@ -240,6 +241,24 @@ describe('getWorktreeStatus', () => {
 })
 
 describe('buildSections', () => {
+  it('keys same-id rows by host inside a section', () => {
+    const worktreeId = 'repo-1::/work/orca'
+    const sections = buildSections(
+      [worktree({ worktreeId, hostId: 'local' }), worktree({ worktreeId, hostId: 'ssh:builder' })],
+      'name',
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      '',
+      'none',
+      new Set()
+    )
+    const keys = sections[0]?.data.map((item) => item.sectionListKey) ?? []
+
+    expect(new Set(keys).size).toBe(2)
+    expect(keys).toEqual(
+      expect.arrayContaining([`all:local|${worktreeId}`, `all:ssh:builder|${worktreeId}`])
+    )
+  })
+
   it('matches desktop Name sort by display name', () => {
     const beta = worktree({ worktreeId: 'beta', displayName: 'Beta', repo: 'aaa' })
     const alpha = worktree({ worktreeId: 'alpha', displayName: 'Alpha', repo: 'zzz' })
@@ -776,7 +795,7 @@ describe('buildSections', () => {
       new Set(),
       new Map(),
       DEFAULT_MOBILE_WORKSPACE_STATUSES,
-      new Set(['workspace-lineage:parent'])
+      new Set([getMobileWorkspaceLineageGroupKey(parent)])
     )
 
     expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['parent'])

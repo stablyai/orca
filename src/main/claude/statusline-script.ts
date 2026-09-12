@@ -19,6 +19,11 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     return [
       '@echo off',
       'setlocal',
+      // Why: a backgrounded session's statusline runs in a daemon worker that inherited the
+      // dispatching pane's env, so ORCA_PANE_KEY names a pane it does not run in (#9236).
+      // Why exit, not the drain label: a worker is outside an Orca pane, so reading stdin to
+      // EOF can block forever (#11549). This gates before stdin is owned, per that contract.
+      'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
       // Why: pane key is static PTY env (the endpoint file never sets it), so it can gate before stdin is consumed.
       `if "%ORCA_PANE_KEY%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
       // Why: current keys end in a UUID; replacing the legacy delimiter also keeps surviving numeric-pane keys filename-safe.
@@ -86,6 +91,12 @@ export function getManagedStatusLineScript(target: 'local' | 'posix' = 'local'):
     'done',
     'payload=${payload%?}',
     'if [ -z "$payload" ]; then',
+    '  exit 0',
+    'fi',
+    // Why: a backgrounded session's statusline runs in a daemon worker that inherited the
+    // dispatching pane's env, so ORCA_PANE_KEY names a pane it does not run in (#9236).
+    // Placed after capture: POSIX hooks own stdin first, or the agent sees EPIPE (#8110).
+    'if [ -n "$CLAUDE_JOB_DIR" ]; then',
     '  exit 0',
     'fi',
     // Why: rate_limits appears only for Claude.ai-subscriber sessions after the first API response; skip the post (and its curl spawn) otherwise.

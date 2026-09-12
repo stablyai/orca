@@ -1,23 +1,30 @@
 import { getRepoExecutionHostId } from './execution-host'
-import { githubRepoIdentityKey, isDefaultGitHubHost } from './github-repository-identity-key'
-import type {
-  Project,
-  ProjectHostSetup,
-  ProjectProviderIdentity,
-  Repo,
-  WorktreeMeta
-} from './types'
+import {
+  normalizeProjectHostSetupRow,
+  normalizeProjectRow
+} from './project-catalog-row-normalization'
+import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
+import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
+import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
+import type { Repo } from './repo-types'
 
+/**
+ * A projection-local draft. `project` is always freshly built by `createProjectFromRepo`, never a
+ * caller's or persisted row, because `mergeProjectRepo` writes to it in place; seeding it from an
+ * existing `Project` would leak those writes to whoever else holds that row. `sourceRepoIds`
+ * mirrors `project.sourceRepoIds` so membership is a lookup rather than a rescan.
+ */
 type ProjectAccumulator = {
   project: Project
+  sourceRepoIds: Set<string>
 }
 
 export type ProjectHostSetupProjection = {
-  projects: Project[]
-  setups: ProjectHostSetup[]
+  projects: readonly Project[]
+  setups: readonly ProjectHostSetup[]
 }
 
-function getProjectProviderIdentity(
+export function getProjectProviderIdentity(
   repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): ProjectProviderIdentity | null {
   const owner = typeof repo.upstream?.owner === 'string' ? repo.upstream.owner.trim() : ''
@@ -96,6 +103,8 @@ export function isProjectRemoteIdentityPending(
   return repo.gitRemoteIdentity === undefined && !hasProjectRemoteIdentity(repo)
 }
 
+const HOST_LOCAL_PROJECT_ID_PREFIX = 'repo:'
+
 export function getProjectIdentityKey(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {
@@ -107,7 +116,16 @@ export function getProjectIdentityKey(
   if (gitRemoteIdentity) {
     return `git:${gitRemoteIdentity.canonicalKey}`
   }
-  return `repo:${repo.id}`
+  return `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.id}`
+}
+
+/**
+ * True for the `repo:<id>` fallback above — a folder project, or a git repo with no
+ * remote. The id is a per-host repo id, so the same project on another host derives a
+ * different one and can never be matched there.
+ */
+export function isHostLocalProjectId(projectId: string): boolean {
+  return projectId.startsWith(HOST_LOCAL_PROJECT_ID_PREFIX)
 }
 
 export function getProjectIdForProviderIdentity(identity: ProjectProviderIdentity): string {
@@ -118,11 +136,6 @@ function getProjectId(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {
   return getProjectIdentityKey(repo)
-}
-
-function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
 }
 
 function isGitHubRemoteHost(host: string): boolean {
@@ -205,9 +218,43 @@ function parseGitHubRemoteUrl(remoteUrl: string | undefined): ProjectProviderIde
   }
 }
 
-function createProjectFromRepo(repo: Repo, now: number): Project {
+// Why: `addedAt || now` restamps Date.now() when addedAt is 0 / absent / NaN, so every
+// projection looks dirty and reconcileCatalogRows never reuses the project or setup.
+function catalogTimestampFromAddedAt(addedAt: number): number {
+  return Number.isFinite(addedAt) ? addedAt : 0
+}
+
+// Why: 0 / absent / NaN means "the repo predates timestamped catalog rows", not epoch. Keeping
+// it out of min()/max() stops one unknown sibling from wiping a real timestamp — and unlike the
+// old `|| now` fallback it stays order-independent, so both merge orders agree.
+function knownCatalogTimestamp(value: number): number | undefined {
+  return Number.isFinite(value) && value !== 0 ? value : undefined
+}
+
+/** Oldest of two catalog `createdAt` values, treating 0/NaN on either side as unknown. */
+export function mergeCatalogCreatedAt(left: number, right: number): number {
+  const known = knownCatalogTimestamp(left)
+  const other = knownCatalogTimestamp(right)
+  if (known === undefined || other === undefined) {
+    return known ?? other ?? 0
+  }
+  return Math.min(known, other)
+}
+
+/** Newest of two catalog `updatedAt` values, treating 0/NaN on either side as unknown. */
+export function mergeCatalogUpdatedAt(left: number, right: number): number {
+  const known = knownCatalogTimestamp(left)
+  const other = knownCatalogTimestamp(right)
+  if (known === undefined || other === undefined) {
+    return known ?? other ?? 0
+  }
+  return Math.max(known, other)
+}
+
+function createProjectFromRepo(repo: Repo): Project {
   const identity = getProjectProviderIdentity(repo)
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
+  const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
   return {
     id: getProjectId(repo),
     displayName: repo.displayName,
@@ -217,26 +264,26 @@ function createProjectFromRepo(repo: Repo, now: number): Project {
     ...(identity ? { providerIdentity: identity } : {}),
     ...(gitRemoteIdentity ? { gitRemoteIdentity } : {}),
     sourceRepoIds: [repo.id],
-    createdAt: repo.addedAt || now,
-    updatedAt: repo.addedAt || now
+    createdAt: addedAt,
+    updatedAt: addedAt
   }
 }
 
-function mergeProjectRepo(project: Project, repo: Repo): Project {
-  const sourceRepoIds = project.sourceRepoIds.includes(repo.id)
-    ? project.sourceRepoIds
-    : [...project.sourceRepoIds, repo.id]
-  return {
-    ...project,
-    sourceRepoIds,
-    createdAt: Math.min(project.createdAt, repo.addedAt || project.createdAt),
-    updatedAt: Math.max(project.updatedAt, repo.addedAt || project.updatedAt)
+/** Mutates the draft in place — only ever call this on an accumulator this projection owns. */
+function mergeProjectRepo(accumulator: ProjectAccumulator, repo: Repo): void {
+  const { project, sourceRepoIds } = accumulator
+  if (!sourceRepoIds.has(repo.id)) {
+    sourceRepoIds.add(repo.id)
+    project.sourceRepoIds.push(repo.id)
   }
+  const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
+  project.createdAt = mergeCatalogCreatedAt(project.createdAt, addedAt)
+  project.updatedAt = mergeCatalogUpdatedAt(project.updatedAt, addedAt)
 }
 
-function createSetupFromRepo(repo: Repo, projectId: string, now: number): ProjectHostSetup {
+function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
   const hostId = getRepoExecutionHostId(repo)
-  const createdAt = repo.addedAt || now
+  const createdAt = catalogTimestampFromAddedAt(repo.addedAt)
   const setupMethod = repo.projectHostSetupMethod ?? 'legacy-repo'
   return {
     id: repo.id,
@@ -261,7 +308,7 @@ function createSetupFromRepo(repo: Repo, projectId: string, now: number): Projec
 
 export function projectHostSetupProjectionFromRepos(
   repos: readonly Repo[],
-  now = Date.now()
+  _now?: number
 ): ProjectHostSetupProjection {
   const projectById = new Map<string, ProjectAccumulator>()
   const setups: ProjectHostSetup[] = []
@@ -269,18 +316,20 @@ export function projectHostSetupProjectionFromRepos(
   for (const repo of repos) {
     const projectId = getProjectId(repo)
     const existing = projectById.get(projectId)
-    const project = existing
-      ? mergeProjectRepo(existing.project, repo)
-      : createProjectFromRepo(repo, now)
-    const setup = createSetupFromRepo(repo, projectId, now)
-    projectById.set(projectId, {
-      project
-    })
+    if (existing) {
+      mergeProjectRepo(existing, repo)
+    } else {
+      const project = createProjectFromRepo(repo)
+      projectById.set(projectId, { project, sourceRepoIds: new Set(project.sourceRepoIds) })
+    }
+    // Why normalize here: a repo row is untrusted persisted/wire data too, and these
+    // constructors copy repo.path / repo.id straight onto fields consumers call .trim() on.
+    const setup = normalizeProjectHostSetupRow(createSetupFromRepo(repo, projectId))
     setups.push(setup)
   }
 
   return {
-    projects: [...projectById.values()].map((entry) => entry.project),
+    projects: [...projectById.values()].map((entry) => normalizeProjectRow(entry.project)),
     setups
   }
 }
@@ -288,28 +337,6 @@ export function projectHostSetupProjectionFromRepos(
 export function getProjectHostSetupsForProject(
   setups: readonly ProjectHostSetup[],
   projectId: string
-): ProjectHostSetup[] {
+): readonly ProjectHostSetup[] {
   return setups.filter((setup) => setup.projectId === projectId)
-}
-
-export function getProjectHostSetupForRepo(
-  setups: readonly ProjectHostSetup[],
-  repo: Repo
-): ProjectHostSetup {
-  return (
-    setups.find((setup) => setup.repoId === repo.id) ??
-    projectHostSetupProjectionFromRepos([repo]).setups[0]
-  )
-}
-
-export function getProjectHostSetupWorktreeMeta(
-  setups: readonly ProjectHostSetup[],
-  repo: Repo
-): Pick<WorktreeMeta, 'projectId' | 'hostId' | 'projectHostSetupId'> {
-  const setup = getProjectHostSetupForRepo(setups, repo)
-  return {
-    projectId: setup.projectId,
-    hostId: setup.hostId,
-    projectHostSetupId: setup.id
-  }
 }

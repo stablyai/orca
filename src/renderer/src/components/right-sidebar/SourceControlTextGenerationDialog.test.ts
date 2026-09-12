@@ -1,11 +1,11 @@
 import React, { type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { buildCommitMessageGenerationParams } from './SourceControlTextGenerationDialog'
+import { buildCommitMessageGenerationParams } from './source-control/ai/text-generation-dialog'
 import {
   getDefaultSourceControlTextGenerationSaveTargetKey,
   SourceControlTextGenerationDialogForm
-} from './SourceControlTextGenerationDialogForm'
+} from './source-control/ai/text-generation-dialog-form'
 import {
   applyCommitMessageGenerationDefaults,
   applySourceControlTextGenerationDefaults

@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import grokUrl from '../../../shared/agent-icons/grok.png?url'
 import mimoCodeUrl from '../../../shared/agent-icons/mimo-code.png?url'
 import anteUrl from '../../../shared/agent-icons/ante.png?url'

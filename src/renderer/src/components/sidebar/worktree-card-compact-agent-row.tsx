@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect, useRef } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -8,25 +8,12 @@ import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
+import { agentNoUpdateLabel } from '@/lib/agent-row-decay-state'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
-
-function formatShortTimeAgo(ts: number, now: number): string {
-  const delta = now - ts
-  if (delta < 60_000) {
-    return 'now'
-  }
-  const minutes = Math.floor(delta / 60_000)
-  if (minutes < 60) {
-    return `${minutes}m`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) {
-    return `${hours}h`
-  }
-  return `${Math.floor(hours / 24)}d`
-}
+import { formatShortTimeAgo } from '@/lib/short-time-ago'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -36,21 +23,29 @@ function getCompactAgentPrimary(
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
-function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
+export function getCompactAgentSecondary(
+  agent: DashboardAgentRowData,
+  now: number,
+  lastAssistantMessageOverride?: string
+): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
   }
-  if (agent.state === 'working') {
-    const toolName = agent.entry.toolName?.trim() ?? ''
-    const toolInput = agent.entry.toolInput?.trim() ?? ''
-    if (toolName && toolInput) {
-      return `${toolName}: ${toolInput}`
-    }
-    if (toolName) {
-      return toolName
-    }
+  // Why: the only honest thing to say about a pane Orca still holds but no longer hears
+  // from is how long the silence has run; the user supplies the meaning.
+  if (agent.state === 'unverifiable') {
+    return agentNoUpdateLabel(agent.entry, now)
   }
-  const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim()
+  // Why: the lead turn is over in monitoring, so its last tool line is stale; name the state instead.
+  if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
+    return agentStateLabel('monitoring')
+  }
+  const toolPreview = formatAgentToolPreview(agent.entry, agent.state)
+  if (toolPreview) {
+    return toolPreview
+  }
+  const lastAssistantMessage =
+    lastAssistantMessageOverride ?? agent.entry.lastAssistantMessage?.trim()
   if (lastAssistantMessage) {
     return lastAssistantMessage
   }
@@ -123,7 +118,31 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
-  const secondary = getCompactAgentSecondary(agent)
+  // Keep a live row's last assistant line stable while status/tool payloads
+  // briefly omit the hook-only field between updates. Committed in an effect so a
+  // discarded concurrent render can't pin an uncommitted message and no extra render
+  // pass runs per streaming ping; a zero stateStartedAt has no per-turn identity, so
+  // those rows never cache.
+  const turn = agent.entry.stateStartedAt
+  const currentMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
+  const turnHoldable = agent.state === 'working' && turn > 0
+  const heldMessageRef = useRef<{ turn: number; message: string } | null>(null)
+  useEffect(() => {
+    if (turnHoldable && currentMessage) {
+      heldMessageRef.current = { turn, message: currentMessage }
+    } else if (!turnHoldable) {
+      heldMessageRef.current = null
+    }
+  }, [turnHoldable, turn, currentMessage])
+  const held = heldMessageRef.current
+  const stableMessage =
+    turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
+  const secondary = getCompactAgentSecondary(agent, now, stableMessage)
+  // Why: sidebar truncation must preserve the passive-vs-active distinction.
+  const leadingText = dotState === 'monitoring' ? secondary : primary
+  const trailingText =
+    dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
+  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
@@ -196,22 +215,31 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       ) : reserveDisclosureGutter ? (
         <span className="size-4 shrink-0" aria-hidden />
       ) : null}
-      <AgentStateDot state={dotState} size="sm" />
+      {/* Why: the row's actionable disabled reason must win on every hit area. */}
+      <AgentStateDot
+        state={dotState}
+        size="sm"
+        title={sendTargetDisabledReason ? null : undefined}
+        tooltipSide="right"
+      />
       {!hideIcon && (
         <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>
           <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
         </span>
       )}
-      <span className="min-w-0 flex-1 truncate">
+      <span
+        className="min-w-0 flex-1 truncate"
+        title={sendTargetDisabledReason ? undefined : rowTitle}
+      >
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
         <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
-          {primary}
+          {leadingText}
         </span>
-        {secondary && (
+        {trailingText && (
           <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
             {' '}
-            - {secondary}
+            - {trailingText}
           </span>
         )}
       </span>
@@ -274,7 +302,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
-      title={sendTargetDisabledReason ?? `${primary}${secondary ? ` - ${secondary}` : ''}`}
+      title={sendTargetDisabledReason}
     >
       {rowBody}
     </div>

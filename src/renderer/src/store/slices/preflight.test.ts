@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { PreflightStatus } from '../../../../preload/api-types'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { AppState } from '../types'
 import { createPreflightSlice } from './preflight'
 import { createRuntimeStatusSlice } from './runtime-status'
+import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 
 const preflightCheck = vi.fn()
 const callRuntimeRpc = vi.fn()
@@ -61,6 +63,7 @@ function resetPreflightMocks(): void {
   preflightCheck.mockReset()
   callRuntimeRpc.mockReset()
   platformGet.mockReset().mockReturnValue({ platform: 'linux' })
+  resetRendererAppPlatformCacheForTests()
 }
 
 function makeStatus(glabInstalled: boolean): PreflightStatus {
@@ -265,11 +268,12 @@ describe('createPreflightSlice', () => {
       new Error('Project runtime requires repair before preflight: wsl-distro-required')
     )
     const store = createTestStore()
+    const repos: AppState['repos'] = [makeRepo({ id: 'repo-1', path: 'C:\\repo' })]
     store.setState({
       settings: {
         localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
       },
-      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      repos,
       worktreesByRepo: {},
       activeRepoId: 'repo-1',
       activeWorktreeId: null

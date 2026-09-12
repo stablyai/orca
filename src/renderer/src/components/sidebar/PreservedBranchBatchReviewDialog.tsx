@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { translate } from '@/i18n/i18n'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
 import { useAppStore } from '@/store'

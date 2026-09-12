@@ -42,7 +42,8 @@ describe('useMobileNativeChatDrafts', () => {
     messages = [],
     launchDraft = null,
     chatActive = true,
-    transcriptLoading = false
+    transcriptLoading = false,
+    transcriptSettled = !transcriptLoading
   }: {
     tabId: string
     sessionId?: string | null
@@ -50,6 +51,7 @@ describe('useMobileNativeChatDrafts', () => {
     launchDraft?: string | null
     chatActive?: boolean
     transcriptLoading?: boolean
+    transcriptSettled?: boolean
   }): null {
     state = useMobileNativeChatDrafts({
       hostId: 'host',
@@ -59,7 +61,8 @@ describe('useMobileNativeChatDrafts', () => {
       messages,
       launchDraft,
       chatActive,
-      transcriptLoading
+      transcriptLoading,
+      transcriptSettled
     })
     return null
   }
@@ -112,6 +115,20 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe('')
   })
 
+  it('tracks every composer mutation with a stable route-owned generation', async () => {
+    await mount('a')
+    const getter = state!.getComposerEditGeneration
+    const initialGeneration = getter()
+
+    act(() => state?.setComposerText('typed'))
+    expect(getter()).toBe(initialGeneration + 1)
+
+    await switchTo('b')
+    expect(state?.getComposerEditGeneration).toBe(getter)
+    act(() => state?.setComposerText((current) => `${current} dictated`))
+    expect(getter()).toBe(initialGeneration + 2)
+  })
+
   it('restores the text on a definite rejection', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
@@ -143,6 +160,26 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe('newer edit')
   })
 
+  it('preserves an intentional clear after a newer edit while a rejection is pending', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, 'ping')
+      }
+    })
+    act(() => state?.setComposerText('newer edit'))
+    act(() => state?.setComposerText(''))
+    act(() => {
+      if (origin) {
+        state?.restoreRejectedDraft(origin, 'ping')
+      }
+    })
+
+    expect(state?.composerText).toBe('')
+  })
+
   it('restores a rejected send onto its originating tab only', async () => {
     await mount('a')
     act(() => state?.setComposerText('from a'))
@@ -154,12 +191,13 @@ describe('useMobileNativeChatDrafts', () => {
     })
 
     await switchTo('b')
+    act(() => state?.setComposerText('from b'))
     act(() => {
       if (originA) {
         state?.restoreRejectedDraft(originA, 'from a')
       }
     })
-    expect(state?.composerText).toBe('')
+    expect(state?.composerText).toBe('from b')
 
     await switchTo('a')
     expect(state?.composerText).toBe('from a')
@@ -316,8 +354,8 @@ describe('useMobileNativeChatDrafts', () => {
     })
     expect(state?.pending).toHaveLength(1)
 
-    // Claude echoes a captioned image send as two turns: the source marker and
-    // the caption prefixed with `[Image #1] ` — the pending must still match.
+    // Claude echoes a captioned image send as a source turn plus a caption
+    // carrying `[Image #1]`; the pending must still match.
     await act(async () =>
       renderer?.update(
         createElement(Harness, {
@@ -326,6 +364,37 @@ describe('useMobileNativeChatDrafts', () => {
             assistantTextMessage('a1', 'hi'),
             userTextMessage('u1', '[Image: source: /tmp/a.png]'),
             userTextMessage('u2', '[Image #1] look at this')
+          ]
+        })
+      )
+    )
+    expect(state?.pending).toEqual([])
+    expect(state?.imagePreviewsByMessageId).toEqual({ u2: ['file:///a.jpg'] })
+  })
+
+  it('reconciles a captioned image echo with a trailing [Image #N] marker', async () => {
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
+      )
+    )
+    const origin = state?.captureSendOrigin('look at this')
+    act(() => {
+      if (origin) {
+        state?.acceptSend(origin, 'look at this', ['file:///a.jpg'])
+      }
+    })
+    expect(state?.pending).toHaveLength(1)
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [
+            assistantTextMessage('a1', 'hi'),
+            userTextMessage('u1', '[Image: source: /tmp/a.png]'),
+            userTextMessage('u2', 'look at this[Image #1]')
           ]
         })
       )
@@ -407,6 +476,20 @@ describe('useMobileNativeChatDrafts', () => {
     })
 
     expect(state?.composerText).toBe('new edit')
+  })
+
+  it('does not erase a whitespace-only newer edit when an older send clears', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('/clear'))
+    const origin = state?.captureSendOrigin('/clear')
+    act(() => state?.setComposerText(' /clear'))
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, '/clear')
+      }
+    })
+
+    expect(state?.composerText).toBe(' /clear')
   })
 
   it('stays quiet when an unconfirmed send lands in the transcript', async () => {

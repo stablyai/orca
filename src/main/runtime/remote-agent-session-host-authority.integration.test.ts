@@ -10,7 +10,7 @@ import type {
   RuntimeEnsureAgentSessionRequest
 } from '../../shared/agent-session-host-authority'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import type { SubprocessHandle } from '../daemon/session'
+import type { SubprocessHandle } from '../daemon/session-subprocess-handle'
 import { TerminalHost } from '../daemon/terminal-host'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
@@ -36,6 +36,7 @@ function createControlledSubprocess(): ControlledSubprocess {
     write: vi.fn(),
     resize: vi.fn(),
     kill: () => exit(0),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: () => exit(137),
     signal: vi.fn(),
     onData: vi.fn(),

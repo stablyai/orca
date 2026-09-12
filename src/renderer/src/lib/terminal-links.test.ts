@@ -115,6 +115,15 @@ describe('terminal path helpers', () => {
   })
 
   describe('extractTerminalFileLinks local path tokens', () => {
+    it('keeps Unicode path segments in the detected range', () => {
+      expect(extractTerminalFileLinks('/tmp/报告.html').map((link) => link.displayText)).toEqual([
+        '/tmp/报告.html'
+      ])
+      expect(
+        extractTerminalFileLinks('docs/café/report.pdf').map((link) => link.displayText)
+      ).toEqual(['docs/café/report.pdf'])
+    })
+
     it('detects tilde-prefixed POSIX paths', () => {
       const links = extractTerminalFileLinks('~/Documents/Path/file_name')
       expect(links).toHaveLength(1)
@@ -215,6 +224,15 @@ describe('terminal path helpers', () => {
       expect(links).toHaveLength(20_000)
       expect(links[0].pathText).toBe('/tmp/Foo Bar/file')
     }, 5_000)
+
+    it('keeps extension-heavy assistant prose on a bounded scan path', () => {
+      const filenames = Array.from({ length: 20_000 }, (_, index) => `report-${index}.txt`)
+      const links = extractTerminalFileLinks(`/tmp/root/${filenames.join(' ')}`)
+
+      expect(links).toHaveLength(2)
+      expect(links[0].pathText).toBe(`/tmp/root/${filenames.slice(0, -1).join(' ')}`)
+      expect(links.at(-1)?.pathText).toBe('report-19999.txt')
+    })
   })
 
   it('supports Windows cwd resolution for terminal file links', () => {

@@ -28,6 +28,7 @@ type LinearAgentSkillSetupDialogProps = {
   command: string
   installedCommand: string
   terminalShellOverride?: string
+  terminalRuntime?: AgentSkillSetupPanelProps['terminalRuntime']
   installed: boolean
   loading: boolean
   error: string | null
@@ -47,6 +48,7 @@ export function LinearAgentSkillSetupDialog({
   command,
   installedCommand,
   terminalShellOverride,
+  terminalRuntime,
   installed,
   loading,
   error,
@@ -137,6 +139,7 @@ export function LinearAgentSkillSetupDialog({
               terminalWorktreeId="sidebar-linear-agent-skill-setup"
               terminalHeightPx={240}
               terminalShellOverride={terminalShellOverride}
+              terminalRuntime={terminalRuntime}
               installed={installed}
               loading={loading}
               error={error}

@@ -1,4 +1,4 @@
-import type { WorkspaceKey, WorkspaceScope } from './types'
+import type { WorkspaceKey, WorkspaceScope } from './folder-workspace-types'
 
 export function worktreeWorkspaceKey(worktreeId: string): WorkspaceKey {
   return `worktree:${worktreeId}`

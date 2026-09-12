@@ -1,6 +1,5 @@
 import type { PtyOwnerBackend } from './pty-owner-backend'
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
-import type { PtySlaveEchoProbe } from './pty-slave-line-discipline-echo'
 
 export type PtyIngressEmission = {
   data: string
@@ -19,7 +18,6 @@ export type PtyStartupIngressOptions = {
    * the reply waits for `quiet` instead of relying on echo-shape recognition. Absent
    * on backends with no line discipline to read (ConPTY, wsl.exe).
    */
-  echoProbe?: PtySlaveEchoProbe
 }
 
 export type PtyIngressSourceSpan = {

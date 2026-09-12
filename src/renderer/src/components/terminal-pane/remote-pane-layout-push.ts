@@ -1,4 +1,4 @@
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { updateWebRuntimePaneLayout } from '@/runtime/web-runtime-session'
 

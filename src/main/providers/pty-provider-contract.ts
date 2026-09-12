@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -10,6 +10,9 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -32,12 +35,20 @@ export type PtyProviderBufferSnapshot = {
   oscLinks?: TerminalOscLinkRange[]
   alternateScreen?: boolean
   pendingEscapeTailAnsi?: string
+  /** Effective kitty keyboard flags PROVEN at this snapshot's own `seq`
+   *  boundary. Absent means the source could not prove them; readers must not
+   *  rewrite that silence into a known `0`. */
+  kittyKeyboardFlags?: number
+  /** Ordered ownership evidence proven at this snapshot's `seq`. */
+  terminalOwner?: TerminalOwner
 }
 
 export type PtySpawnOptions = {
   cols: number
   rows: number
   cwd?: string
+  /** Exact per-spawn cwd already proven by main; providers validate any other resolved path. */
+  prevalidatedCwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
   /** Main-validated home provenance for an automatic Codex session resume. */
@@ -64,6 +75,8 @@ export type PtySpawnOptions = {
    *  Existing-session attach paths must stay false so recovery checks do not
    *  replace the daemon out from under a still-live PTY. */
   isNewSession?: boolean
+  /** Host setting forwarded additively to the process owner; old owners ignore it. */
+  historyIsolationEnabled?: boolean
   /** Attach the named session atomically or fail without creating a process. */
   attachOnly?: boolean
   /** Exact persisted owner expected by an attach-only routing decision. */
@@ -103,11 +116,18 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  requestHostRpc?: (
+    method: string,
+    params: unknown,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ) => Promise<unknown>
   /** Fresh local spawns currently route to an in-process, non-persistent fallback. */
   readonly routesFreshSpawnsToLocalProvider?: true
   /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
   recoverFreshSpawnRouting?: () => Promise<boolean>
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  /** Process-owner cleanup for history stored outside the workspace tree. */
+  deleteWorktreeHistory?: (worktreeId: string) => Promise<void>
   /** Whether this spawn target can append the Git guard after its final env merge. */
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   /** Explicit false selects pre-claim legacy spawn for a preserved old daemon. */
@@ -120,7 +140,11 @@ export type IPtyProvider = {
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
-  write(id: string, data: string): void
+  write(id: string, data: string): boolean | void
+  /** Three-valued settlement for writes whose delivery a durable claim depends on.
+   *  Required: a provider that answers this from its own fire-and-forget `write` is
+   *  fabricating a handoff, so every provider must settle or say it cannot. */
+  writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   resize(id: string, cols: number, rows: number): void
   /**
    * Producer-side flow control: stop/restart reading the underlying PTY so a
@@ -173,13 +197,26 @@ export type IPtyProvider = {
    * providers without an authoritative size source can omit it.
    */
   getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
+  /** Optional host capability used to suppress expensive legacy remote inventory polls. */
+  supportsForegroundProcessEvidence?(options?: { signal?: AbortSignal }): Promise<boolean>
 
   // Why: deadlineMs (absolute epoch ms) bounds the underlying RPCs so destructive
   // teardown fails fast inside its sweep budget instead of tripping the outer sweep
   // deadline; each RPC leaf converts to a relative timeout when it actually issues.
   shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: PtyIncarnationId
+      /** Ask the execution host to refuse this stop unless it recorded this exact client identity
+       *  as the PTY's creator AND this connection still authenticates as it. Optional because a
+       *  host that predates it ignores the field, and because most stops are ordinary teardown of a
+       *  pane whose owner the host may never have attested (a revived PTY carries none). Set it
+       *  wherever the caller's authority to destroy comes from that attestation. */
+      expectedOwnerClientInstanceId?: string
+    }
   ): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>
@@ -192,15 +229,26 @@ export type IPtyProvider = {
   getForegroundProcess(id: string): Promise<string | null>
   /** Strong process evidence captured after the caller's command boundary. */
   confirmForegroundProcess?: (id: string) => Promise<string | null>
+  /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
+  confirmShellForeground?: (id: string) => Promise<boolean>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
   // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
-  listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]>
+  listProcesses(opts?: {
+    deadlineMs?: number
+    includeForegroundProcessEvidence?: boolean
+  }): Promise<PtyProcessInfo[]>
   getDefaultShell(): Promise<string>
   getProfiles(): Promise<{ name: string; path: string }[]>
   onData(callback: (payload: PtyDataEvent) => void): () => void
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void
   onExit(
-    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
+    callback: (payload: {
+      id: string
+      code: number
+      incarnationId?: PtyIncarnationId
+      /** Absent when the provider predates exit causes; readers must not infer one from `code`. */
+      cause?: TerminalExitCause
+    }) => void
   ): () => void
 }

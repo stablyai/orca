@@ -4,13 +4,16 @@ import React, { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
-import type { GlobalSettings, Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
 const fetchIssue = vi.fn()
 const fetchLinearIssue = vi.fn()
-const setWorkspacePortScan = vi.fn()
+const replaceWorkspacePortScans = vi.fn()
 const setWorkspacePortScanRefreshing = vi.fn()
 const cacheTimerMocks = vi.hoisted(() => ({
   usePromptCacheCountdownStartedAt: vi.fn()
@@ -40,7 +43,7 @@ vi.mock('@/store', () => ({
       recordFeatureInteraction: vi.fn(),
       remoteBranchConflictByWorktreeId: {},
       setRemoteBrowserPageHandle: vi.fn(),
-      setWorkspacePortScan,
+      replaceWorkspacePortScans,
       setWorkspacePortScanRefreshing,
       settings,
       sshConnectionStates: new Map(),

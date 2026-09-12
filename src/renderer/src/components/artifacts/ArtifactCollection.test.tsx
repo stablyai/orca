@@ -10,12 +10,9 @@ vi.mock('./ArtifactPreview', () => ({
   ArtifactPreview: ({ shareUrl }: { shareUrl: string }) => <div>{`Preview ${shareUrl}`}</div>
 }))
 
-vi.mock('./ArtifactActions', () => ({
-  ArtifactActions: () => <div>Artifact actions</div>
-}))
-
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ArtifactCollection } from './ArtifactCollection'
+import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -52,81 +49,75 @@ describe('ArtifactCollection', () => {
         <ArtifactCollection
           artifacts={items}
           deletingId={null}
-          selectedArtifact={items[0]}
+          selectedSlug={items[0]?.artifact.slug ?? null}
           selectArtifact={selectArtifact}
           deleteArtifact={vi.fn()}
           hasMore={false}
           loadingMore={false}
           loadMore={vi.fn()}
+          onRefresh={vi.fn()}
+          isRefreshing={false}
         />
       </TooltipProvider>
     )
     return { container, selectArtifact }
   }
 
-  it('keeps the artifact list beside a contained preview', async () => {
+  it('renders a full-width table list without an inline preview', async () => {
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
     const { container, selectArtifact } = renderCollection(items)
 
-    const collection = container.firstElementChild
-    // Why: full-bleed split — no card frame around the panes.
-    expect(collection).toHaveClass('lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)]')
-    expect(collection).not.toHaveClass('rounded-md')
-    expect(collection?.children[1]?.tagName).toBe('SECTION')
-    expect(screen.getByText('Preview https://share.onorca.dev/a/first')).toBeInTheDocument()
+    const table = container.querySelector(`.${LIST_TABLE_CONTAINER_CLASS.split(' ')[0]}`)
+    expect(table).toHaveClass('rounded-md', 'border')
+    expect(screen.getByText('Name')).toBeInTheDocument()
+    expect(screen.getByText('Type')).toBeInTheDocument()
+    expect(screen.queryByText(/Preview https:\/\//)).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('option', { name: /Second artifact/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Second artifact/ }))
     expect(selectArtifact).toHaveBeenCalledWith('second')
   })
 
-  it('exposes the list as a single-tab-stop listbox', () => {
+  it('highlights only the selected row', () => {
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
     renderCollection(items)
 
-    expect(screen.getByRole('listbox', { name: 'Shared artifacts' })).toBeInTheDocument()
-    const [first, second] = screen.getAllByRole('option')
-    expect(first).toHaveAttribute('aria-selected', 'true')
-    expect(first).toHaveAttribute('aria-current', 'page')
-    expect(first).toHaveAttribute('tabindex', '0')
-    expect(second).toHaveAttribute('aria-selected', 'false')
-    expect(second).toHaveAttribute('tabindex', '-1')
+    const first = screen.getByRole('button', { name: /First artifact/ })
+    const second = screen.getByRole('button', { name: /Second artifact/ })
+    expect(first).toHaveAttribute('data-current', 'true')
+    expect(second).not.toHaveAttribute('data-current')
   })
 
-  it('moves focus with arrows and commits selection on Enter', async () => {
+  it('commits selection on Enter from the focused row', async () => {
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
     const { selectArtifact } = renderCollection(items)
-    const [first, second] = screen.getAllByRole('option')
+    const second = screen.getByRole('button', { name: /Second artifact/ })
 
-    first.focus()
-    await userEvent.keyboard('{ArrowDown}')
-    expect(second).toHaveFocus()
-    // Why: arrows must not commit — each selection reloads the preview webview.
-    expect(selectArtifact).not.toHaveBeenCalled()
-
+    second.focus()
     await userEvent.keyboard('{Enter}')
     expect(selectArtifact).toHaveBeenCalledWith('second')
   })
 
-  it('filters the list by name and keeps the preview mounted', async () => {
+  it('filters the list by name', async () => {
     const items = [artifact('first', 'First artifact'), artifact('second', 'Second artifact')]
     renderCollection(items)
 
-    await userEvent.type(screen.getByPlaceholderText('Search artifacts'), 'second')
-    expect(screen.getAllByRole('option')).toHaveLength(1)
-    expect(screen.getByRole('option', { name: /Second artifact/ })).toBeInTheDocument()
-    expect(screen.getByText('Preview https://share.onorca.dev/a/first')).toBeInTheDocument()
+    await userEvent.type(screen.getByPlaceholderText('Search...'), 'second')
+    expect(screen.getByRole('button', { name: /Second artifact/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /First artifact/ })).not.toBeInTheDocument()
 
-    await userEvent.clear(screen.getByPlaceholderText('Search artifacts'))
-    await userEvent.type(screen.getByPlaceholderText('Search artifacts'), 'nothing')
-    expect(screen.queryAllByRole('option')).toHaveLength(0)
+    await userEvent.clear(screen.getByPlaceholderText('Search...'))
+    await userEvent.type(screen.getByPlaceholderText('Search...'), 'nothing')
+    expect(screen.queryByRole('button', { name: /Second artifact/ })).not.toBeInTheDocument()
     expect(screen.getByText('No matches')).toBeInTheDocument()
   })
 
-  it('shows the share url and expiry instead of repeating the row metadata', () => {
+  it('shows compact type, size, and expiry in the row', () => {
     const items = [artifact('first', 'First artifact')]
     renderCollection(items)
 
-    expect(screen.getByText('https://share.onorca.dev/a/first')).toBeInTheDocument()
-    expect(screen.getByText(/Link expires/)).toBeInTheDocument()
+    expect(screen.getByText('HTML')).toBeInTheDocument()
+    expect(screen.getByText('1.2 KB')).toBeInTheDocument()
+    expect(screen.getByText(/in \d+ days/)).toBeInTheDocument()
+    expect(screen.queryByText('https://share.onorca.dev/a/first')).not.toBeInTheDocument()
   })
 })

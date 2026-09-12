@@ -30,8 +30,7 @@ vi.mock('electron', () => ({
   app: {
     exit: appExitMock,
     quit: appQuitMock,
-    relaunch: appRelaunchMock,
-    getPath: () => '/tmp/orca-user-data'
+    relaunch: appRelaunchMock
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (_event: unknown, args?: unknown) => unknown) => {
@@ -68,9 +67,13 @@ vi.mock('../orca-profiles/profile-project-transfer', () => ({
 }))
 
 import { registerOrcaProfileHandlers } from './orca-profiles'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 describe('registerOrcaProfileHandlers', () => {
   beforeEach(() => {
+    // Why the port and per-test: userData resolves through AppEnvironment now, and
+    // the global setup's beforeEach reinstates its own fake before this runs.
+    installFakeAppEnvironment({ getPath: () => '/tmp/orca-user-data' })
     vi.useFakeTimers()
     handlers.clear()
     appExitMock.mockReset()

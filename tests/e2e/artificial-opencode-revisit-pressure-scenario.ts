@@ -27,9 +27,7 @@ type RevisitPressureMeasurement = {
   maxTimerDriftMs: number
 }
 
-// Why: the renderer hidden-skip counters were deleted with the skip grammar;
-// only the mode-2031 fact-reply counter still exists renderer-side.
-type RevisitPressureDebug = { hiddenRendererMode2031ReplyCount: number }
+type RevisitPressureDebug = { hiddenRendererSkipCount: number }
 
 type RevisitPressureSchedulerSnapshot = {
   peakQueuedChars: number

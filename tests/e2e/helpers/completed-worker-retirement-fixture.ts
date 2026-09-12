@@ -16,9 +16,14 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../src/shared/runtime-types'
+import { buildFakeAgentCommandOverride } from './fake-agent-command-override'
+import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './fake-agent-paste-end-scanner'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-retired-worker-'))
 const lifecycleLedgerPath = path.join(fakeCliDir, 'codex-lifecycle.jsonl')
+export const completedWorkerFakeCodexCommand = buildFakeAgentCommandOverride(
+  path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+)
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const ledger = process.env.ORCA_E2E_CODEX_LIFECYCLE_LEDGER
@@ -30,30 +35,47 @@ if (args.includes('app-server')) {
 }
 append({ event: 'spawn', args })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
+${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
+  const pasteEndScan = scanFakeAgentPasteEnd(fakeAgentPasteEndTail, input)
+  fakeAgentPasteEndTail = pasteEndScan.tail
+  if (pasteEndScan.pasteEndOffset !== null) {
+    process.stdout.write('\\x1b[?25h')
+  }
   append({ event: 'input', input })
   if (input.includes('ORCA_E2E_EXIT_AFTER_DONE')) {
     append({ event: 'normal-exit' })
     process.exit(0)
   }
-  if (input.includes('\\r')) process.stdout.write('ACK\\n')
+  fakeAgentMaybeAck(pasteEndScan, input, (mode) => {
+    append({ event: 'ack', mode })
+    const message = mode === 'bracketed' ? 'ACK' : 'PASTE_PROTOCOL_ERROR'
+    process.stdout.write('\\u001b]0;Codex Working\\u0007' + message + '\\n')
+    setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
+  })
 })
+process.stdin.setRawMode?.(true)
 process.stdin.resume()
 setInterval(() => {}, 60_000)
 `
 
-if (process.platform === 'win32') {
-  writeFileSync(path.join(fakeCliDir, 'fake-codex.js'), fakeCodexSource)
-  writeFileSync(
-    path.join(fakeCliDir, 'codex.cmd'),
-    '@echo off\r\nnode "%~dp0\\fake-codex.js" %*\r\n'
-  )
-} else {
-  const executable = path.join(fakeCliDir, 'codex')
-  writeFileSync(executable, `#!/usr/bin/env node\n${fakeCodexSource}`)
-  chmodSync(executable, 0o755)
+function installCompletedWorkerFakeCodex(): void {
+  mkdirSync(fakeCliDir, { recursive: true })
+  if (process.platform === 'win32') {
+    writeFileSync(path.join(fakeCliDir, 'fake-codex.js'), fakeCodexSource)
+    writeFileSync(
+      path.join(fakeCliDir, 'codex.cmd'),
+      '@echo off\r\nnode "%~dp0\\fake-codex.js" %*\r\n'
+    )
+  } else {
+    const executable = path.join(fakeCliDir, 'codex')
+    writeFileSync(executable, `#!/usr/bin/env node\n${fakeCodexSource}`)
+    chmodSync(executable, 0o755)
+  }
 }
+
+installCompletedWorkerFakeCodex()
 
 export const completedWorkerLaunchEnv = {
   PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
@@ -62,9 +84,10 @@ export const completedWorkerLaunchEnv = {
 
 export type LifecycleEvent = {
   pid: number
-  event: 'spawn' | 'input' | 'normal-exit'
+  event: 'spawn' | 'input' | 'ack' | 'normal-exit'
   args?: string[]
   input?: string
+  mode?: 'bracketed' | 'unbracketed'
 }
 
 export type TerminalIdentity = Pick<
@@ -73,6 +96,8 @@ export type TerminalIdentity = Pick<
 >
 
 export function clearCompletedWorkerLedger(): void {
+  // Another spec can clean up this cached fixture before the next test uses it.
+  installCompletedWorkerFakeCodex()
   rmSync(lifecycleLedgerPath, { force: true })
 }
 
@@ -86,7 +111,7 @@ export function readCompletedWorkerLedger(): LifecycleEvent[] {
   }
   const contents = readFileSync(lifecycleLedgerPath, 'utf8')
   const lastCompleteLine = contents.lastIndexOf('\n')
-  if (lastCompleteLine < 0) {
+  if (lastCompleteLine === -1) {
     return []
   }
   return contents

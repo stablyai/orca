@@ -1,5 +1,5 @@
 import { Bookmark, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
-import type { SparsePreset } from '../../../../shared/types'
+import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { formatSparsePresetUpdatedAt } from './sparse-preset-date'

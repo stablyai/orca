@@ -1,6 +1,6 @@
 import type { AgentHookSource } from './agent-hook-relay'
 import type { AgentStatusState } from './agent-status-types'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export const RESUMABLE_TUI_AGENTS = [
   'claude',
@@ -14,7 +14,9 @@ export const RESUMABLE_TUI_AGENTS = [
   'grok',
   'devin',
   'omp',
-  'prime-agent'
+  'prime-agent',
+  'copilot',
+  'kimi'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -61,9 +63,6 @@ export type SleepingAgentSessionRecord = {
    *  so only the pane's own cold-restore path may consume them — activation
    *  launching a tab too would duplicate a warm-reattached session (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'
-  /** Prevents provider-session relaunch while main reconciles a durable
-   *  orchestration assignment against authoritative PTY inventory. */
-  automaticResumeBlockedBy?: 'legacy-orchestration-worker'
   /** Set on a finished pane captured by an explicit workspace sleep. Its
    *  `--resume` is issued by the pane's own cold restore when its tab is
    *  opened, so a mobile wake must not background-mount every such tab and
@@ -230,10 +229,15 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
+    // Why: Copilot's hook `session_id` is also its `~/.copilot/session-state/<id>/`
+    // directory name, so the same id is the CLI's resume locator.
+    case 'copilot': {
+      const id = readSessionId(payload, ['session_id', 'sessionId'])
+      return id ? { key: 'session_id', id } : null
+    }
     case 'amp':
     case 'cursor':
     case 'command-code':
-    case 'copilot':
     case 'hermes':
       return null
   }
@@ -276,5 +280,13 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id'
         ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
         : null
+    // Why: the joined form is the only one Copilot documents, and it matches the
+    // flag spelling buildAgentResumeInvocation bakes into persisted AI Vault
+    // resume commands, so local and remote resumes agree on one spelling.
+    case 'copilot':
+      return providerSession.key === 'session_id' ? ['copilot', `--resume=${id}`] : null
+    // Why: Kimi resumes by id with --session; sessions are work-dir-scoped (enforced by callers).
+    case 'kimi':
+      return providerSession.key === 'session_id' ? ['kimi', '--session', id] : null
   }
 }

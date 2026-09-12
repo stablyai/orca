@@ -1,9 +1,12 @@
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
+  hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages,
-  stripImagePromptMarker
+  normalizeNativeChatUserText,
+  normalizedNativeChatUserMessageText
 } from './mobile-native-chat-image-transcript-markers'
+export { normalizeNativeChatUserText as normalizeReconcileText } from './mobile-native-chat-image-transcript-markers'
 
 /** An ack-lost ('unknown' outcome) send held until its transcript echo lands or
  *  the deadline surfaces the uncertainty. */
@@ -17,17 +20,7 @@ export type UnconfirmedSend = {
 }
 
 export function normalizedUserText(message: NativeChatMessage): string | null {
-  if (message.role !== 'user') {
-    return null
-  }
-  const text = message.blocks
-    .filter((block) => block.type === 'text')
-    .map((block) => (block.type === 'text' ? block.text : ''))
-    .join('')
-  // Claude echoes a captioned image send as `[Image #1] caption` — the sent
-  // text must still match its echo, so strip the marker before comparing.
-  const stripped = stripImagePromptMarker(text).trim()
-  return stripped || null
+  return normalizedNativeChatUserMessageText(message)
 }
 
 export function countUserTextOccurrences(
@@ -87,7 +80,7 @@ export function mergeLandedImagePreviewEchoes(
   const entries = Object.entries(previous[sessionKey] ?? {})
   for (const preview of landed) {
     const existingIndex = entries.findIndex(([messageId]) => messageId === preview.messageId)
-    if (existingIndex >= 0) {
+    if (existingIndex !== -1) {
       entries.splice(existingIndex, 1)
     }
     entries.push([preview.messageId, preview.images])
@@ -117,17 +110,13 @@ function imagePreviewReplacementMessageId(
     nextIndex++
   }
   const prompt = messages[nextIndex]
-  const firstText = prompt?.blocks.find((block) => block.type === 'text')
-  return prompt?.role === 'user' &&
-    prompt.source === source.source &&
-    firstText?.type === 'text' &&
-    stripImagePromptMarker(firstText.text) !== firstText.text
+  return prompt?.role === 'user' && prompt.source === source.source && hasImagePromptMarker(prompt)
     ? prompt.id
     : null
 }
 
 /** Moves previews forward when a progressive source-only transcript frame later
- *  folds into the marker-prefixed prompt with a different authoritative id. */
+ *  folds into the marker-bearing prompt with a different authoritative id. */
 export function migrateImagePreviewMessageIds(
   previous: Record<string, Record<string, string[]>>,
   sessionKey: string,
@@ -164,6 +153,20 @@ export function findLandedImagePreviewEchoes(
 ): LandedImagePreviewEcho[] {
   const normalized = normalizeImageTranscriptMessages(messages)
   const messageIndexById = new Map(normalized.map((message, index) => [message.id, index]))
+  // Keep provenance from the raw transcript: normalization removes image markers,
+  // so a plain text row must not become a candidate merely because it shares a
+  // caption prefix with a glued image send.
+  const imageMessageIds = new Set(
+    messages
+      .filter(
+        (message) =>
+          message.role === 'user' &&
+          (isImageSourceUserTurn(message) ||
+            hasImagePromptMarker(message) ||
+            message.blocks.some(isImageRefBlock))
+      )
+      .map((message) => message.id)
+  )
   const claimedMessageIds = new Set<string>()
   const landed: LandedImagePreviewEcho[] = []
 
@@ -171,13 +174,24 @@ export function findLandedImagePreviewEchoes(
     if (!entry.images?.length) {
       continue
     }
-    const targetText = entry.text.trim()
+    const targetText = normalizeNativeChatUserText(entry.text)
     const candidates = normalized.filter((message) => {
       if (message.role !== 'user') {
         return false
       }
       if (targetText) {
-        return normalizedUserText(message) === targetText
+        const text = normalizedUserText(message)
+        if (text === null) {
+          return false
+        }
+        // Why not equality alone: a send is glued onto the agent's input line with any
+        // send adjacent to it, so an image send that shares a turn with a following
+        // text-only send lands in a row whose text is the concatenation. Requiring the
+        // whole row to equal this echo left it unmatched, and since both other
+        // retirement paths skip image echoes, nothing could ever retire it.
+        return (
+          text === targetText || (imageMessageIds.has(message.id) && text.startsWith(targetText))
+        )
       }
       const imageCount = message.blocks.filter(isImageRefBlock).length
       return message.blocks.length === 0 || imageCount >= entry.images!.length

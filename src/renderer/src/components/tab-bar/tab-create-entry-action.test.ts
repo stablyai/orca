@@ -10,10 +10,8 @@ const readyFiles = (files: string[]) => ({ files, loading: false, loadError: nul
 describe('openTabEntryWithOperations', () => {
   function makeOperations(overrides: Partial<TabEntryOperations> = {}): TabEntryOperations {
     return {
-      createBrowserTab: vi.fn() as TabEntryOperations['createBrowserTab'],
       createRuntimePath: vi.fn().mockResolvedValue(undefined),
-      createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(true),
-      isWebRuntimeSessionActive: vi.fn().mockReturnValue(false),
+      openWorkspaceBrowserTab: vi.fn().mockResolvedValue(undefined),
       openFile: vi.fn(),
       statRuntimePath: vi.fn().mockResolvedValue({ size: 1, isDirectory: false, mtime: 1 }),
       authorizeExternalPath: vi.fn().mockResolvedValue(undefined),
@@ -32,9 +30,9 @@ describe('openTabEntryWithOperations', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     },
-    activeRuntimeEnvironmentId: null,
     allowAbsolutePaths: true,
-    localPlatform: 'posix' as const
+    localPlatform: 'posix' as const,
+    searchEngine: 'google' as const
   }
 
   it('stats existing files before opening and rejects directories', async () => {
@@ -182,51 +180,77 @@ describe('openTabEntryWithOperations', () => {
     expect(operations.openFile).toHaveBeenCalled()
   })
 
-  it('routes paired runtime browser creation through the web session API', async () => {
-    const operations = makeOperations({
-      isWebRuntimeSessionActive: vi.fn().mockReturnValue(true)
-    })
+  it('routes URL classifications through the workspace browser opener', async () => {
+    const operations = makeOperations()
 
     await openTabEntryWithOperations({
       ...baseArgs,
       query: 'https://example.com',
-      activeRuntimeEnvironmentId: 'runtime-1',
       operations
     })
 
-    expect(operations.createWebRuntimeSessionBrowserTab).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'runtime-1',
+    expect(operations.openWorkspaceBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
       url: 'https://example.com/',
-      targetGroupId: 'group-1'
+      targetGroupId: 'group-1',
+      intent: { kind: 'url' }
     })
-    expect(operations.createBrowserTab).not.toHaveBeenCalled()
   })
 
-  it('falls back to a local browser tab when paired runtime browser creation fails', async () => {
-    const operations = makeOperations({
-      createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false),
-      isWebRuntimeSessionActive: vi.fn().mockReturnValue(true)
-    })
+  it('builds a search URL from the selected immutable classification', async () => {
+    const operations = makeOperations()
 
     await openTabEntryWithOperations({
       ...baseArgs,
-      query: 'https://example.com',
-      activeRuntimeEnvironmentId: 'runtime-1',
+      query: 'different query',
+      classification: { kind: 'search', engine: 'duckduckgo', query: 'react hooks' },
       operations
     })
 
-    expect(operations.createWebRuntimeSessionBrowserTab).toHaveBeenCalledWith({
-      worktreeId: 'wt-1',
-      environmentId: 'runtime-1',
-      url: 'https://example.com/',
-      targetGroupId: 'group-1'
-    })
-    expect(operations.createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
-      activate: true,
-      browserRuntimeEnvironmentId: null,
+    expect(operations.openWorkspaceBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://duckduckgo.com/?q=react%20hooks',
       targetGroupId: 'group-1',
-      title: 'https://example.com/'
+      intent: { kind: 'search', engine: 'duckduckgo' }
+    })
+  })
+
+  it('uses plain Kagi search URLs and the fallback classifier engine', async () => {
+    const operations = makeOperations()
+
+    await openTabEntryWithOperations({
+      ...baseArgs,
+      query: 'private project',
+      searchEngine: 'kagi',
+      operations
+    })
+
+    expect(operations.openWorkspaceBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://kagi.com/search?q=private%20project',
+      targetGroupId: 'group-1',
+      intent: { kind: 'search', engine: 'kagi' }
+    })
+  })
+
+  it('uses a configured Kagi private-session link', async () => {
+    const operations = makeOperations()
+
+    await openTabEntryWithOperations({
+      ...baseArgs,
+      query: 'private project',
+      searchEngine: 'kagi',
+      searchUrlOptions: {
+        kagiSessionLink: 'https://kagi.com/search?token=secret'
+      },
+      operations
+    })
+
+    expect(operations.openWorkspaceBrowserTab).toHaveBeenCalledWith({
+      workspaceId: 'wt-1',
+      url: 'https://kagi.com/search?token=secret&q=private+project',
+      targetGroupId: 'group-1',
+      intent: { kind: 'search', engine: 'kagi' }
     })
   })
 

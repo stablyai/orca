@@ -3,7 +3,7 @@ import {
   buildSourceControlManualReviewUrl,
   buildSourceControlManualReviewUrlFromContext,
   resolveSourceControlManualReviewProvider
-} from './source-control-manual-review-url'
+} from './source-control/review/manual-review-url'
 
 describe('resolveSourceControlManualReviewProvider', () => {
   it('prefers hosted review and creation providers over linked review hints', () => {

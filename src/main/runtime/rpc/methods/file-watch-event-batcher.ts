@@ -2,7 +2,7 @@ import {
   WATCH_BATCH_MAX_WAIT_MS,
   WATCH_BATCH_TRAILING_MS
 } from '../../../../shared/filesystem-watch-batch-window'
-import type { FsChangeEvent } from '../../../../shared/types'
+import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
 import { MAX_BATCHED_WATCHER_EVENTS } from '../../../ipc/filesystem-watcher-event-batch'
 
 export function createFileWatchEventBatcher(

@@ -3,6 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import SmartWorkspaceNameField from './SmartWorkspaceNameField'
 
 vi.mock('@/store', () => {
@@ -10,6 +11,7 @@ vi.mock('@/store', () => {
     repos: [],
     addRepo: vi.fn(),
     checkLinearConnection: vi.fn(),
+    fetchLinearIssue: vi.fn(),
     fetchWorkItems: vi.fn(),
     fetchWorkItemsAcrossRepos: vi.fn(),
     getCachedWorkItems: vi.fn(() => null),
@@ -25,6 +27,7 @@ vi.mock('@/store', () => {
   }
   const useAppStore = (selector: (s: typeof state) => unknown): unknown => selector(state)
   useAppStore.getState = () => state
+  useAppStore.setState = (patch: Partial<typeof state>) => Object.assign(state, patch)
   return { useAppStore }
 })
 
@@ -79,6 +82,13 @@ let container: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
+  useAppStore.setState({
+    linearStatus: { connected: false, viewer: null },
+    linearStatusChecked: false,
+    fetchLinearIssue: vi.fn(async () => null),
+    listLinearIssues: vi.fn(async () => ({ items: [] })),
+    searchLinearIssues: vi.fn(async () => [])
+  })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -88,6 +98,7 @@ afterEach(() => {
   act(() => {
     root.unmount()
   })
+  vi.useRealTimers()
   container.remove()
 })
 
@@ -258,6 +269,87 @@ describe('SmartWorkspaceNameField IME Enter guard', () => {
     // at the row-select branch, not merely inert.
     expect(onValueChange).toHaveBeenCalledWith('배포')
     expect(onPlainEnter).not.toHaveBeenCalled()
+  })
+})
+
+describe('SmartWorkspaceNameField Linear URL loading', () => {
+  it('blocks Enter and delays visible loading feedback while preserving its layout', async () => {
+    vi.useFakeTimers()
+    const url = 'https://linear.app/stably/issue/STA-4084/restore-shell-integration'
+    const onPlainEnter = vi.fn()
+    const onValueChange = vi.fn()
+    const onLinearIssueSelect = vi.fn()
+    useAppStore.setState({
+      linearStatus: {
+        connected: true,
+        viewer: null,
+        activeWorkspaceId: 'workspace-1',
+        selectedWorkspaceId: 'workspace-1',
+        workspaces: [
+          {
+            id: 'workspace-1',
+            displayName: 'Stably User',
+            email: null,
+            organizationId: 'organization-stably',
+            organizationName: 'Stably',
+            organizationUrlKey: 'stably'
+          }
+        ]
+      },
+      linearStatusChecked: true,
+      fetchLinearIssue: vi.fn(() => new Promise<null>(() => {}))
+    })
+
+    await act(async () => {
+      root.render(
+        <SmartWorkspaceNameField
+          repos={[]}
+          repoId="repo-1"
+          onRepoChange={vi.fn()}
+          value={url}
+          onValueChange={onValueChange}
+          onGitHubItemSelect={vi.fn()}
+          onBranchSelect={vi.fn()}
+          onLinearIssueSelect={onLinearIssueSelect}
+          selectedSource={null}
+          onClearSelectedSource={vi.fn()}
+          onPlainEnter={onPlainEnter}
+        />
+      )
+    })
+
+    const input = container.querySelector<HTMLInputElement>('[data-workspace-name-input="true"]')
+    const describedBy = input?.getAttribute('aria-describedby')
+    const status = describedBy ? container.querySelector<HTMLElement>(`#${describedBy}`) : null
+    const reservedResults = container.querySelector<HTMLElement>('[aria-hidden="true"].space-y-1')
+    expect(input?.getAttribute('aria-busy')).toBe('true')
+    expect(status?.getAttribute('role')).toBe('status')
+    expect(status?.getAttribute('aria-live')).toBe('polite')
+    expect(status?.textContent).toContain('Loading Linear issue…')
+    expect(container.textContent).not.toContain('Start typing to create a name or find a source.')
+    expect(reservedResults?.classList.contains('invisible')).toBe(true)
+    expect(reservedResults?.children).toHaveLength(3)
+
+    if (!input) {
+      throw new Error('workspace name input not rendered')
+    }
+    pressEnter(input)
+    expect(onPlainEnter).not.toHaveBeenCalled()
+    expect(onValueChange).not.toHaveBeenCalled()
+    expect(onLinearIssueSelect).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(199)
+    })
+    expect(reservedResults?.classList.contains('invisible')).toBe(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    const visibleResults = container.querySelector<HTMLElement>('[aria-hidden="true"].space-y-1')
+    expect(visibleResults).toBe(reservedResults)
+    expect(visibleResults?.classList.contains('invisible')).toBe(false)
+    expect(visibleResults?.querySelectorAll('.animate-pulse')).toHaveLength(3)
   })
 })
 

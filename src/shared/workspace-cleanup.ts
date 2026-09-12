@@ -1,3 +1,8 @@
+// Type-only, so the cycle back through workspace-cleanup-filter-model erases at build.
+import type { WorkspaceCleanupBrowseState } from './workspace-cleanup-browse-state'
+import type { ExecutionHostId } from './execution-host'
+import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
+
 export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 2
 export const WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS = 7 * 24 * 60 * 60 * 1000
 export const WORKSPACE_CLEANUP_IDLE_MS = 30 * 24 * 60 * 60 * 1000
@@ -34,10 +39,16 @@ export type WorkspaceCleanupDismissal = {
   dismissedAt: number
   fingerprint: string
   classifierVersion: number
+  // Why (STA-4343): `repoId::path` ids repeat across hosts, so ignoring one
+  // host's row must not hide another host's. Optional: a dismissal persisted
+  // before this field keeps its legacy id-only match.
+  executionHostId?: ExecutionHostId
 }
 
 export type WorkspaceCleanupUIState = {
   dismissals: Record<string, WorkspaceCleanupDismissal>
+  // Why optional: a host that predates the flat list still writes dismissals-only state.
+  browse?: WorkspaceCleanupBrowseState
 }
 
 export type WorkspaceCleanupCandidate = {
@@ -45,10 +56,13 @@ export type WorkspaceCleanupCandidate = {
   repoId: string
   repoName: string
   connectionId: string | null
+  executionHostId?: ExecutionHostId
   displayName: string
   branch: string
   path: string
+  /** @deprecated Current renderers ignore this legacy verdict; retained for older paired clients. */
   tier: WorkspaceCleanupTier
+  /** @deprecated Current renderers ignore this legacy verdict; retained for older paired clients. */
   selectedByDefault: boolean
   reasons: WorkspaceCleanupReason[]
   blockers: WorkspaceCleanupBlocker[]
@@ -73,20 +87,34 @@ export type WorkspaceCleanupCandidate = {
 
 export type WorkspaceCleanupScanArgs = {
   worktreeId?: string
+  /** Non-destructive evidence refresh; bounded so one renderer cannot enqueue an unbounded scan. */
+  worktreeIds?: string[]
   skipGitWorktreeIds?: string[]
   scanId?: string
+  // Why: optional so an older client still receives the legacy suggestion-only
+  // broad scan; only a client that renders the full list asks for every row.
+  includeAllWorkspaces?: boolean
+  /** Re-stat activity for targeted rows; removal preflight needs fresh, batched evidence scans do not. */
+  refreshActivity?: boolean
 }
 
-export type WorkspaceCleanupLocalProcessArgs = {
+export const WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT = 500
+
+export type WorkspaceCleanupSnapshotPruneBatchArgs = {
+  batchId: string
+}
+
+export type WorkspaceCleanupSnapshotPruneRecordArgs = WorkspaceCleanupSnapshotPruneBatchArgs & {
   worktreeId: string
-  connectionId?: string | null
-  worktreePath?: string
+  executionHostId?: ExecutionHostId
 }
 
 export type WorkspaceCleanupScanError = {
   repoId: string
   repoName: string
   message: string
+  /** Optional for compatibility with older hosts that did not qualify scan errors. */
+  executionHostId?: ExecutionHostId
 }
 
 export type WorkspaceCleanupScanResult = {
@@ -102,15 +130,21 @@ export type WorkspaceCleanupScanProgress = WorkspaceCleanupScanResult & {
   candidateMode?: 'append' | 'snapshot'
 }
 
-export type WorkspaceCleanupLocalProcessResult = {
-  hasKillableProcesses: boolean | null
+/** One-shot consent to remove a workspace whose git status could not be read. */
+export type WorkspaceCleanupUnverifiedRemovalConsent = {
+  /** Host-qualified candidate identity, never a bare worktree id. */
+  identity: string
+  /** Minted for one removal call and released when that call settles. */
+  attemptId: string
 }
 
 export type WorkspaceCleanupDismissArgs = {
   dismissals: WorkspaceCleanupDismissal[]
+  /** Removed worktrees' persisted dismissals are dead weight; prune them. */
+  removedWorktreeIds?: string[]
 }
 
-export const WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
+const LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'main-worktree',
   'folder-repo',
   'pinned',
@@ -132,23 +166,19 @@ export const WORKSPACE_CLEANUP_HARD_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocke
 const WORKSPACE_CLEANUP_QUEUE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> = new Set([
   'main-worktree',
   'folder-repo',
-  'dismissed'
+  'ssh-disconnected'
 ])
 
 export const WORKSPACE_CLEANUP_FORCE_REMOVE_BLOCKERS: ReadonlySet<WorkspaceCleanupBlocker> =
-  new Set(['dirty-files', 'unpushed-commits', 'unknown-base', 'git-status-error'])
+  new Set(['dirty-files', 'unpushed-commits', 'unknown-base'])
 
-export function isWorkspaceCleanupHardBlocker(blocker: WorkspaceCleanupBlocker): boolean {
-  return WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker)
-}
+export const WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS: ReadonlySet<WorkspaceCleanupBlocker> =
+  new Set(['active-workspace', 'live-agent', 'dismissed'])
 
 export function canQueueWorkspaceCleanupCandidate(
-  candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'reasons'>
+  candidate: Pick<WorkspaceCleanupCandidate, 'blockers'>
 ): boolean {
-  return (
-    candidate.reasons.length > 0 &&
-    !candidate.blockers.some((blocker) => WORKSPACE_CLEANUP_QUEUE_BLOCKERS.has(blocker))
-  )
+  return !candidate.blockers.some((blocker) => WORKSPACE_CLEANUP_QUEUE_BLOCKERS.has(blocker))
 }
 
 export function shouldForceWorkspaceCleanupRemoval(
@@ -161,22 +191,27 @@ export function shouldForceWorkspaceCleanupRemoval(
   )
 }
 
-export function canSelectWorkspaceCleanupCandidate(
+function canSelectWorkspaceCleanupCandidate(
   candidate: Pick<WorkspaceCleanupCandidate, 'blockers' | 'git' | 'reasons'>
 ): boolean {
   return (
     candidate.reasons.length > 0 &&
     candidate.git.clean === true &&
     candidate.git.checkedAt !== null &&
-    !candidate.blockers.some(isWorkspaceCleanupHardBlocker)
+    !candidate.blockers.some((blocker) => LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker))
   )
 }
 
+type WorkspaceCleanupPolicyInput = Omit<WorkspaceCleanupCandidate, 'tier' | 'selectedByDefault'> &
+  Partial<Pick<WorkspaceCleanupCandidate, 'tier' | 'selectedByDefault'>>
+
 export function applyWorkspaceCleanupPolicy(
-  candidate: WorkspaceCleanupCandidate
+  candidate: WorkspaceCleanupPolicyInput
 ): WorkspaceCleanupCandidate {
   const canSelect = canSelectWorkspaceCleanupCandidate(candidate)
-  const hasHardBlocker = candidate.blockers.some(isWorkspaceCleanupHardBlocker)
+  const hasHardBlocker = candidate.blockers.some((blocker) =>
+    LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker)
+  )
   const tier: WorkspaceCleanupTier = hasHardBlocker ? 'protected' : canSelect ? 'ready' : 'review'
 
   return {
@@ -239,12 +274,19 @@ export function isWorkspaceOldForCleanup(
 }
 
 export function shouldHideWorkspaceCleanupCandidate(
-  candidate: Pick<WorkspaceCleanupCandidate, 'worktreeId' | 'fingerprint'>,
+  candidate: Pick<
+    WorkspaceCleanupCandidate,
+    'worktreeId' | 'fingerprint' | 'connectionId' | 'executionHostId'
+  >,
   dismissal: WorkspaceCleanupDismissal | undefined
 ): boolean {
   return (
     dismissal?.worktreeId === candidate.worktreeId &&
     dismissal.fingerprint === candidate.fingerprint &&
-    dismissal.classifierVersion === WORKSPACE_CLEANUP_CLASSIFIER_VERSION
+    dismissal.classifierVersion === WORKSPACE_CLEANUP_CLASSIFIER_VERSION &&
+    // A host-qualified dismissal hides only its own host's row; a legacy one
+    // (no host recorded) keeps hiding every row that matches the fingerprint.
+    (dismissal.executionHostId === undefined ||
+      dismissal.executionHostId === getWorkspaceCleanupCandidateHostId(candidate))
   )
 }

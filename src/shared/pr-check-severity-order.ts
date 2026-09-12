@@ -1,4 +1,4 @@
-import type { PRCheckDetail } from './types'
+import type { PRCheckDetail } from './github/check-types'
 
 // Why: `neutral`/`skipped` carry no signal, so they sink below `success` — otherwise a
 // wall of skipped jobs buries the passing checks a reviewer actually reads.

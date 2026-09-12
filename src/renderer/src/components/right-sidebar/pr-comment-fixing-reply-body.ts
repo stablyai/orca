@@ -1,4 +1,4 @@
-import type { PRComment } from '../../../../shared/types'
+import type { PRComment } from '../../../../shared/github/comment-types'
 
 /** Posted when a selected review comment is sent to AI. */
 export const PR_COMMENT_AI_FIXING_REPLY = 'Fixing. Will be in the next commit'

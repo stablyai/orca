@@ -311,6 +311,7 @@ describe('createTerminalHandleLinkProvider', () => {
     const links = await collectLinks([makeBufferLine('Worker: term_worker')], 1, null, {
       paneId: 4,
       pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+      claimPtyMouse: vi.fn(() => true),
       request,
       focusTerminal: vi.fn()
     })

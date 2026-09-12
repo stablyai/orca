@@ -489,11 +489,11 @@ function verifyNativeArgumentGuardrails() {
 
 function powerShellFunctionBody(source, name) {
   const start = source.indexOf(`function ${name}`)
-  if (start < 0) {
+  if (start === -1) {
     return null
   }
   const bodyStart = source.indexOf('{', start)
-  if (bodyStart < 0) {
+  if (bodyStart === -1) {
     return null
   }
   let depth = 0
@@ -513,11 +513,11 @@ function powerShellFunctionBody(source, name) {
 
 function swiftFunctionBody(source, name) {
   const start = source.indexOf(`func ${name}`)
-  if (start < 0) {
+  if (start === -1) {
     return null
   }
   const bodyStart = source.indexOf('{', start)
-  if (bodyStart < 0) {
+  if (bodyStart === -1) {
     return null
   }
   let depth = 0

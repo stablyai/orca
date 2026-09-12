@@ -13,9 +13,10 @@ import {
   type LinearGroupBy,
   type LinearOrderBy,
   type LinearViewMode
-} from '../../../shared/linear-issue-view-resume-state'
+} from '../../../shared/linear/issue-view-resume-state'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
-import type { TaskProvider, TaskViewPresetId } from '../../../shared/types'
+import type { TaskProvider } from '../../../shared/task-providers'
+import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
@@ -46,7 +47,7 @@ export type {
   LinearGroupBy,
   LinearOrderBy,
   LinearViewMode
-} from '../../../shared/linear-issue-view-resume-state'
+} from '../../../shared/linear/issue-view-resume-state'
 
 export function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   return (
@@ -210,15 +211,13 @@ export const getLinearDisplayProperties = createLocalizedCatalog(
   }
 )
 
-export const getLinearPriorityLabels = createLocalizedCatalog(
-  (): Record<number, string> => ({
-    0: translate('auto.components.TaskPage.713179dfdc', 'No priority'),
-    1: translate('auto.components.TaskPage.f373ab1a4f', 'Urgent'),
-    2: translate('auto.components.TaskPage.345b169f1f', 'High'),
-    3: translate('auto.components.TaskPage.7fd59c18d8', 'Medium'),
-    4: translate('auto.components.TaskPage.69591944e7', 'Low')
-  })
-)
+export const getLinearPriorityLabels = createLocalizedCatalog((): Record<number, string> => ({
+  0: translate('auto.components.TaskPage.713179dfdc', 'No priority'),
+  1: translate('auto.components.TaskPage.f373ab1a4f', 'Urgent'),
+  2: translate('auto.components.TaskPage.345b169f1f', 'High'),
+  3: translate('auto.components.TaskPage.7fd59c18d8', 'Medium'),
+  4: translate('auto.components.TaskPage.69591944e7', 'Low')
+}))
 
 export function getLinearPriorityLabel(priority: number): string {
   return getLinearPriorityLabels()[priority] ?? `P${priority}`

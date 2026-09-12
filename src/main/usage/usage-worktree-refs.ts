@@ -1,4 +1,4 @@
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 

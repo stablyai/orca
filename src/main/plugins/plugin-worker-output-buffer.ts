@@ -34,7 +34,7 @@ export function pipePluginWorkerOutput(
     while (remaining.length > 0) {
       if (discarding) {
         const newline = remaining.indexOf('\n')
-        if (newline < 0) {
+        if (newline === -1) {
           return
         }
         discarding = false
@@ -42,20 +42,20 @@ export function pipePluginWorkerOutput(
         continue
       }
       const newline = remaining.indexOf('\n')
-      const segment = newline < 0 ? remaining : remaining.slice(0, newline)
+      const segment = newline === -1 ? remaining : remaining.slice(0, newline)
       const available = PLUGIN_WORKER_OUTPUT_LINE_LIMIT - buffered.length
       if (segment.length > available) {
         emit(buffered + segment.slice(0, available), true)
         buffered = ''
-        discarding = newline < 0
+        discarding = newline === -1
       } else {
         buffered += segment
-        if (newline >= 0) {
+        if (newline !== -1) {
           emit(buffered)
           buffered = ''
         }
       }
-      if (newline < 0) {
+      if (newline === -1) {
         return
       }
       remaining = remaining.slice(newline + 1)

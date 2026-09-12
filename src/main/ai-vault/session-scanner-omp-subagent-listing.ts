@@ -1,10 +1,12 @@
-import { readdir, stat } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import type {
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSubagentListResult
 } from '../../shared/ai-vault-types'
+import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { recordSessionScanIssue } from './session-scan-issues'
 import { sessionIdFromFileName, sessionSortTime } from './session-scanner-accumulator'
 import { parseMessageGraphSessionFile } from './session-scanner-graph-parsers'
 import {
@@ -16,6 +18,8 @@ import { errorMessage } from './session-scanner-values'
 // Match the Claude subagent lister's deliberate parse batching: opening every
 // read stream at once stalls over WSL UNC paths.
 const OMP_SUBAGENT_PARSE_CONCURRENCY = 8
+// Bulk directory work, so 'scan' — same reasoning as the Claude lister.
+const OMP_SUBAGENT_FS_PRIORITY = 'scan'
 
 /**
  * List the task-subagent transcripts of one OMP session, on demand. The main
@@ -35,8 +39,13 @@ export async function listOmpSubagentSessions(args: {
 
   let entries
   try {
-    entries = await readdir(artifactDir, { withFileTypes: true })
-  } catch {
+    entries = await wslGatedReaddir(artifactDir, OMP_SUBAGENT_FS_PRIORITY)
+  } catch (err) {
+    // A gate refusal is a stalled distro, not a session without subagents —
+    // report it so the panel offers a retry instead of showing an empty list.
+    if (err instanceof WslTranscriptFsError) {
+      recordSessionScanIssue(issues, { agent: 'omp', path: artifactDir, message: err.message })
+    }
     return { sessions: [], issues }
   }
 
@@ -79,7 +88,7 @@ async function parseOmpSubagentTranscript(args: {
 }): Promise<AiVaultSession | null> {
   const filePath = join(args.artifactDir, args.name)
   try {
-    const fileStat = await stat(filePath)
+    const fileStat = await wslGatedStat(filePath, OMP_SUBAGENT_FS_PRIORITY)
     // The shared OMP parser decorates every parse with an artifact-dir count, so
     // a child row carries its own grandchild count. It is accurate but has no
     // renderer — subagent rows don't expand — and this lister is local-only, so
@@ -107,7 +116,11 @@ async function parseOmpSubagentTranscript(args: {
       }
     }
   } catch (err) {
-    args.issues.push({ agent: 'omp', path: filePath, message: errorMessage(err) })
+    recordSessionScanIssue(args.issues, {
+      agent: 'omp',
+      path: filePath,
+      message: errorMessage(err)
+    })
     return null
   }
 }

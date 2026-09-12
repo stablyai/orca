@@ -1,4 +1,5 @@
-import type { ClassifiedError, GitHubWorkItem } from '../../../shared/types'
+import type { ClassifiedError } from '../../../shared/classified-error'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 /**
  * Cross-repo Tasks pagination is cursor-based on `updatedAt`: each page's oldest

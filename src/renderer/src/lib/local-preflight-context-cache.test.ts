@@ -16,11 +16,15 @@ afterEach(() => {
   resetLocalPreflightContextCachesForTests()
 })
 
+function makeRepos(id: string, path: string): AppState['repos'] {
+  return [{ id, path, displayName: id, badgeColor: 'blue', addedAt: 1 }]
+}
+
 function makeWslState(distro: string): AppState {
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: null,
-    repos: [{ id: 'repo-1', path: `\\\\wsl.localhost\\${distro}\\home\\alice\\repo` }],
+    repos: makeRepos('repo-1', `\\\\wsl.localhost\\${distro}\\home\\alice\\repo`),
     worktreesByRepo: {}
   } as AppState
 }
@@ -29,7 +33,7 @@ function makeWindowsProjectState(projectId: string): AppState {
   return {
     activeRepoId: projectId,
     activeWorktreeId: null,
-    repos: [{ id: projectId, path: `C:\\Users\\alice\\${projectId}` }],
+    repos: makeRepos(projectId, `C:\\Users\\alice\\${projectId}`),
     settings: {},
     worktreesByRepo: {}
   } as AppState

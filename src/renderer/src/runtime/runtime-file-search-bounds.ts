@@ -1,4 +1,4 @@
-import type { SearchOptions, SearchResult } from '../../../shared/types'
+import type { SearchOptions, SearchResult } from '../../../shared/code-search-types'
 import { isUtf8ByteLengthWithinLimit } from '../../../shared/utf8-byte-limits'
 
 export const RUNTIME_FILE_SEARCH_TEXT_MAX_BYTES = 8 * 1024

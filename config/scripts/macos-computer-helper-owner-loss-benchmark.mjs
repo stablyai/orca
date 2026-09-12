@@ -210,7 +210,7 @@ function connectInvalidPeer(socketPath) {
     const onData = (chunk) => {
       buffer += chunk
       const newline = buffer.indexOf('\n')
-      if (newline < 0) {
+      if (newline === -1) {
         return
       }
       let response

@@ -1,7 +1,8 @@
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { PullRequestLinkedIssue } from '../../shared/pull-request-generation'
 import { isLinkedIssueNumber } from '../../shared/source-control-ai-action-variables'
-import type { WorkspaceLinkedItem } from '../../shared/types'
+import type { WorkspaceLinkedItem } from '../../shared/worktree/types'
+import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import { getIssue as getGitHubIssue } from '../github/issues'
 import { getIssue as getGitLabIssue } from '../gitlab/issues'
 
@@ -11,7 +12,7 @@ export type PullRequestLinkedIssueMeta = {
   linkedWorkItem?: WorkspaceLinkedItem | null
 }
 
-type LocalGitOptions = { wslDistro?: string }
+type LocalGitOptions = Pick<GitRuntimeOptions, 'wslDistro' | 'admissionTier'>
 
 function inferIssueProvider(
   meta: PullRequestLinkedIssueMeta,

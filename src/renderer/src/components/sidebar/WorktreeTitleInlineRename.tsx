@@ -123,6 +123,8 @@ export function WorktreeTitleInlineRename({
     [measureTitleTruncated, wrapTitle]
   )
 
+  // Why: remounts the rendered title so truncation is measured again. The editor must
+  // not share it — an unread flip would remount the input and reselect what was typed.
   const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
   // Why: the sidebar row needs a text-only editor to avoid layout jumps; the
   // hovercard can use a compact field that reads more like native rename UI.
@@ -149,6 +151,12 @@ export function WorktreeTitleInlineRename({
     [measureTitleTruncated, onEditingChange]
   )
 
+  // Why: double-click and the shortcut both open here, so neither can skip a step.
+  const openRenameEditor = useCallback(() => {
+    setValue(displayName)
+    setEditingMode(true)
+  }, [displayName, setEditingMode])
+
   const handleInputRef = useCallback((input: HTMLInputElement | null) => {
     inputElementRef.current = input
     if (!input) {
@@ -170,9 +178,8 @@ export function WorktreeTitleInlineRename({
     if (disabled || editing) {
       return
     }
-    setValue(displayName)
-    setEditing(true)
-  }, [beginEditing, disabled, editing, displayName, onBeginEditingConsumed])
+    openRenameEditor()
+  }, [beginEditing, disabled, editing, onBeginEditingConsumed, openRenameEditor])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -185,10 +192,9 @@ export function WorktreeTitleInlineRename({
       }
       event.preventDefault()
       event.stopPropagation()
-      setValue(displayName)
-      setEditingMode(true)
+      openRenameEditor()
     },
-    [disabled, displayName, setEditingMode]
+    [disabled, openRenameEditor]
   )
 
   const cancelRename = useCallback(() => {
@@ -260,7 +266,6 @@ export function WorktreeTitleInlineRename({
     return (
       <>
         <span
-          key={`editing:${titleElementKey}`}
           ref={handleRootRef}
           className={cn(
             'relative grid min-w-0 truncate leading-tight text-foreground',

@@ -1,5 +1,5 @@
 import type { HostedReviewInfo } from './hosted-review'
-import type { PRInfo } from './types'
+import type { PRInfo } from './github/pull-request-types'
 
 export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
   return {
@@ -17,6 +17,7 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
     ...(pr.mergeQueueRequired !== undefined ? { mergeQueueRequired: pr.mergeQueueRequired } : {}),
     ...(pr.mergeStateStatus !== undefined ? { mergeStateStatus: pr.mergeStateStatus } : {}),
     ...(pr.headSha ? { headSha: pr.headSha } : {}),
+    ...(pr.prRepo ? { githubRepository: pr.prRepo } : {}),
     ...(pr.confirmedContainedHeadOid
       ? { confirmedContainedHeadOid: pr.confirmedContainedHeadOid }
       : {}),

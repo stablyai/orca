@@ -11,8 +11,8 @@ import {
 } from 'node:fs'
 import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { app } from 'electron'
-import type { WorkspaceSessionState } from '../shared/types'
+import { getAppEnvironment } from '../shared/app-environment'
+import type { WorkspaceSessionState } from '../shared/workspace-session-state-types'
 import {
   TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT,
   TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT
@@ -27,7 +27,7 @@ export type TerminalScrollbackSnapshotStorage = {
 }
 
 function getLegacySnapshotRoot(): string {
-  return join(app.getPath('userData'), SNAPSHOT_DIR_NAME)
+  return join(getAppEnvironment().getPath('userData'), SNAPSHOT_DIR_NAME)
 }
 
 export function getProfileTerminalScrollbackSnapshotRoot(dataFile: string): string {

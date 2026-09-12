@@ -47,7 +47,7 @@ function parseAuthCookies(raw: string): { name: string; value: string }[] {
     .map((p) => p.trim())
     .map((pair) => {
       const eq = pair.indexOf('=')
-      if (eq < 0) {
+      if (eq === -1) {
         return null
       }
       const name = pair.slice(0, eq).trim()

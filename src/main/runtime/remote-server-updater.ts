@@ -2,7 +2,7 @@ import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot
 } from '../../shared/remote-server-update'
-import type { UpdateCheckOptions } from '../../shared/types'
+import type { UpdateCheckOptions } from '../../shared/update-status-types'
 
 type RemoteServerUpdaterAdapter = {
   getSnapshot: (runtimeId: string) => RemoteServerUpdaterSnapshot

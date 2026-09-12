@@ -1,5 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
-import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
+import type { ExecutionHostId } from '../shared/execution-host'
+import type { GitHubRepositoryIdentity } from '../shared/github/pull-request-types'
+import type { RepoKind } from '../shared/repo-types'
 import {
   faviconUrlFromWebsite,
   githubAvatarIcon,
@@ -7,7 +9,10 @@ import {
   type RepoIcon
 } from '../shared/repo-icon'
 import { getRepoSlug, getRepoUpstream } from './github/client'
-import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
+import {
+  resolveFilesystemRouteForHost,
+  resolveGitRouteForHost
+} from './providers/execution-host-provider-dispatch'
 import type { IFilesystemProvider } from './providers/types'
 import { detectGitRemoteIdentity } from './repo-git-remote-identity'
 import { detectRepoFileIcon } from './repo-icon-file-detection'
@@ -76,13 +81,36 @@ async function detectRemotePackageHomepageIcon(
   }
 }
 
+/**
+ * The connection this client may dial to read `executionHostId`'s remotes, or `refuse` when it may
+ * dial none. `runtime:` is refused rather than degraded to `null`: that server runs its own git,
+ * and answering "no connection" would read this machine's copy of the path instead.
+ */
+function repoRemoteReadConnection(
+  executionHostId: ExecutionHostId
+): { kind: 'refuse' } | { kind: 'dial'; connectionId: string | null } {
+  const route = resolveGitRouteForHost(executionHostId)
+  switch (route.kind) {
+    case 'local':
+      return { kind: 'dial', connectionId: null }
+    case 'ssh':
+      return { kind: 'dial', connectionId: route.connectionId }
+    case 'runtime':
+      return { kind: 'refuse' }
+  }
+}
+
 export async function detectGitHubAvatarIcon(
   repoPath: string,
-  connectionId?: string | null,
+  executionHostId: ExecutionHostId,
   upstream?: GitHubRepositoryIdentity | null
 ): Promise<RepoIcon | null> {
   try {
-    const slug = githubAvatarSlug(await getRepoSlug(repoPath, connectionId), upstream)
+    const target = repoRemoteReadConnection(executionHostId)
+    if (target.kind === 'refuse') {
+      return null
+    }
+    const slug = githubAvatarSlug(await getRepoSlug(repoPath, target.connectionId), upstream)
     return slug ? githubAvatarIcon(slug) : null
   } catch {
     return null
@@ -92,30 +120,35 @@ export async function detectGitHubAvatarIcon(
 export async function detectRepoIcon({
   repoPath,
   kind,
-  connectionId,
+  executionHostId,
   upstream
 }: {
   repoPath: string
   kind: RepoKind
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
   upstream?: GitHubRepositoryIdentity | null
 }): Promise<RepoIcon | undefined> {
   try {
-    const fsProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-    const fileIcon = await detectRepoFileIcon(repoPath, fsProvider)
+    const route = resolveFilesystemRouteForHost(executionHostId)
+    const fileIcon = await detectRepoFileIcon(repoPath, route)
     if (fileIcon) {
       return fileIcon
     }
 
-    const homepageIcon = fsProvider
-      ? await detectRemotePackageHomepageIcon(repoPath, fsProvider)
-      : await detectLocalPackageHomepageIcon(repoPath)
+    // Why the same route again: a remote repoPath with no provider, and every runtime host, must
+    // not be probed on the client filesystem — a same-named local path answers for the wrong repo.
+    const remoteProvider = route.kind === 'ssh' ? route.provider : null
+    const homepageIcon = remoteProvider
+      ? await detectRemotePackageHomepageIcon(repoPath, remoteProvider)
+      : route.kind === 'local'
+        ? await detectLocalPackageHomepageIcon(repoPath)
+        : null
     if (homepageIcon) {
       return homepageIcon
     }
 
     if (kind === 'git') {
-      return (await detectGitHubAvatarIcon(repoPath, connectionId, upstream)) ?? undefined
+      return (await detectGitHubAvatarIcon(repoPath, executionHostId, upstream)) ?? undefined
     }
   } catch {
     // Repo creation must not fail because a best-effort icon probe failed.
@@ -128,16 +161,20 @@ export async function detectRepoIcon({
 export async function detectRepoIconAndUpstream({
   repoPath,
   kind,
-  connectionId
+  executionHostId
 }: {
   repoPath: string
   kind: RepoKind
-  connectionId?: string | null
+  executionHostId: ExecutionHostId
 }) {
-  const upstream = kind === 'git' ? await getRepoUpstream(repoPath, connectionId) : null
+  const remoteRead = repoRemoteReadConnection(executionHostId)
+  const upstream =
+    kind === 'git' && remoteRead.kind === 'dial'
+      ? await getRepoUpstream(repoPath, remoteRead.connectionId)
+      : null
   const gitRemoteIdentity =
-    kind === 'git' ? await detectGitRemoteIdentity(repoPath, connectionId) : null
-  const repoIcon = await detectRepoIcon({ repoPath, kind, connectionId, upstream })
+    kind === 'git' ? await detectGitRemoteIdentity(repoPath, executionHostId) : null
+  const repoIcon = await detectRepoIcon({ repoPath, kind, executionHostId, upstream })
   return {
     ...(repoIcon ? { repoIcon } : {}),
     ...(gitRemoteIdentity ? { gitRemoteIdentity } : {}),

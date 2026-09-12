@@ -11,7 +11,8 @@ const {
   relaunchAppMock,
   showOpenDialogMock,
   grantFloatingWorkspaceDirectoryMock,
-  registerRendererShutdownCheckpointHandlerMock
+  registerRendererShutdownCheckpointHandlerMock,
+  registerMacKeyboardLayoutChangeNotificationsMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
@@ -22,7 +23,8 @@ const {
   relaunchAppMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
   grantFloatingWorkspaceDirectoryMock: vi.fn(),
-  registerRendererShutdownCheckpointHandlerMock: vi.fn()
+  registerRendererShutdownCheckpointHandlerMock: vi.fn(),
+  registerMacKeyboardLayoutChangeNotificationsMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
@@ -109,6 +111,10 @@ vi.mock('./renderer-shutdown-checkpoint', () => ({
   registerRendererShutdownCheckpointHandler: registerRendererShutdownCheckpointHandlerMock
 }))
 
+vi.mock('./macos-keyboard-layout-change-notifications', () => ({
+  registerMacKeyboardLayoutChangeNotifications: registerMacKeyboardLayoutChangeNotificationsMock
+}))
+
 const windowsProbes = vi.hoisted(() => ({
   isWslAvailable: vi.fn(() => true),
   isWslAvailableAsync: vi.fn(async () => true),
@@ -151,6 +157,7 @@ describe('registerAppHandlers', () => {
     showOpenDialogMock.mockReset()
     grantFloatingWorkspaceDirectoryMock.mockReset()
     registerRendererShutdownCheckpointHandlerMock.mockReset()
+    registerMacKeyboardLayoutChangeNotificationsMock.mockReset()
     for (const probe of Object.values(windowsProbes)) {
       probe.mockClear()
     }
@@ -170,6 +177,7 @@ describe('registerAppHandlers', () => {
     registerAppHandlers(store as never)
 
     expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(store)
+    expect(registerMacKeyboardLayoutChangeNotificationsMock).toHaveBeenCalledOnce()
   })
 
   it('marks relaunch as expected shutdown before exiting', async () => {

@@ -1,7 +1,7 @@
 import './terminal-hydration-store-test-bootstrap'
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { createTestStore, makeLayout, makeTab, makeWorktree, seedStore } from './store-test-helpers'
@@ -197,5 +197,34 @@ describe('hydrateWorkspaceSession canonical terminal rows', () => {
     ])
     // Why: both dropped classes keep a valid worktreeId, so only the per-tab sweep can evict them.
     expect(Object.keys(state.sleepingAgentSessionsByPaneKey)).toEqual([`recovery-tab:${leafId}`])
+  })
+
+  it('drops stale unverified-loss markers when full hydration removes their rows', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    const retainedTab = makeTab({ id: 'retained-tab', worktreeId, ptyId: null })
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      },
+      tabsByWorktree: { [worktreeId]: [retainedTab] },
+      unverifiedPtyLossTabIds: {
+        [retainedTab.id]: true,
+        'dropped-tab': true
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: retainedTab.id,
+      tabsByWorktree: { [worktreeId]: [retainedTab] },
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(store.getState().unverifiedPtyLossTabIds).toEqual({
+      [retainedTab.id]: true
+    })
   })
 })

@@ -10,6 +10,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentKanbanCard } from './AgentKanbanCard'
 
 const agentIconRender = vi.fn()
+const agentStateDotRender = vi.fn()
 
 vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => {
@@ -19,7 +20,10 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 vi.mock('@/components/AgentStateDot', () => ({
-  AgentStateDot: () => <span data-testid="state-dot" />
+  AgentStateDot: ({ state }: { state: string }) => {
+    agentStateDotRender(state)
+    return <span data-testid="state-dot" />
+  }
 }))
 
 function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
@@ -102,6 +106,23 @@ describe('AgentKanbanCard', () => {
     expect(container.querySelector('.lucide-message-circle-question-mark')).toBeNull()
   })
 
+  it('shows the saved SSH host beside the repository metadata', () => {
+    const { container } = renderCard({
+      card: card({
+        hostKind: 'ssh',
+        executionHostId: 'ssh:opaque-target',
+        hostLabel: 'openclaw'
+      }),
+      now: 2_000
+    })
+
+    expect(screen.getByLabelText('SSH host · openclaw')).toHaveAttribute(
+      'data-dashboard-host-badge',
+      'ssh'
+    )
+    expect(container.querySelector('.lucide-server')).toBeInTheDocument()
+  })
+
   it('shows review metadata and expands grouped subagents without opening the terminal', () => {
     const onOpenTerminal = vi.fn()
     renderCard({
@@ -164,7 +185,7 @@ describe('AgentKanbanCard', () => {
       card: card({ bucket: 'attention', dotState: 'waiting' }),
       now: 2_000
     })
-    expect(attention.firstElementChild?.className).toContain('border-amber-500/40')
+    expect(attention.firstElementChild?.className).toContain('border-agent-question/40')
 
     cleanup()
     const { container: done } = renderCard({
@@ -181,7 +202,7 @@ describe('AgentKanbanCard', () => {
     const idleClassName = idle.firstElementChild?.className ?? ''
     expect(idleClassName).toContain('border-border/60')
     expect(idleClassName).not.toContain('emerald')
-    expect(idleClassName).not.toContain('amber')
+    expect(idleClassName).not.toContain('agent-question')
   })
 
   it('heads the card with the conversation name and drops the worktree to the footer', () => {
@@ -265,6 +286,24 @@ describe('AgentKanbanCard', () => {
     )
     expect(agentIconRender).toHaveBeenCalledTimes(2)
     expect(screen.getByText('2m')).toBeInTheDocument()
+  })
+
+  it('rerenders when a working card enters monitoring', () => {
+    const initial = card()
+    const { rerender } = renderCard({ card: initial, now: 2_000 })
+    expect(agentStateDotRender).toHaveBeenLastCalledWith('working')
+
+    rerender(
+      <TooltipProvider>
+        <AgentKanbanCard
+          card={{ ...initial, workingMode: 'monitoring' }}
+          now={2_000}
+          onOpenTerminal={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    expect(agentStateDotRender).toHaveBeenLastCalledWith('monitoring')
   })
 
   it('rerenders when the repo icon changes', () => {

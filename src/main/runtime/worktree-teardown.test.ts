@@ -521,7 +521,7 @@ describe('killAllProcessesForWorktree', () => {
     expect(localProvider.shutdown).toHaveBeenCalledTimes(1)
   })
 
-  it('accepts a failed Windows stop when a fresh inventory proves the PTY exited', async () => {
+  it('accepts a failed stop when exact-owner inventory supersedes cached uncertainty', async () => {
     const worktreeId = 'repo-1::C:/Users/User/orca/workspaces/repo/feature'
     const ptyId = `${worktreeId}@@windows-pty`
     const stopTerminalsForWorktree = vi.fn(
@@ -538,7 +538,11 @@ describe('killAllProcessesForWorktree', () => {
       })
     )
     const runtime = {
-      stopTerminalsForWorktree
+      stopTerminalsForWorktree,
+      getPtyLivenessVerdict: vi.fn(() => ({
+        status: 'unverifiable',
+        reason: 'the provider disconnected during stop'
+      }))
     } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
     let inventoryCount = 0
     const localProvider = createProviderStub(async () => {
@@ -566,6 +570,45 @@ describe('killAllProcessesForWorktree', () => {
       registryStopped: 0
     })
     expect(localProvider.listProcesses).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps cached uncertainty when no provider can observe the owning host', async () => {
+    const worktreeId = 'repo-1::/remote/worktree'
+    const ptyId = `${worktreeId}@@remote-pty`
+    const stopTerminalsForWorktree = vi.fn(
+      async (
+        _worktreeId: string,
+        options: {
+          stopPty: (
+            ptyId: string,
+            stop: () => boolean
+          ) => Promise<{ stopped: boolean; owner: boolean }>
+        }
+      ) => ({
+        stopped: (await options.stopPty(ptyId, () => false)).owner ? 1 : 0
+      })
+    )
+    const runtime = {
+      stopTerminalsForWorktree,
+      getPtyLivenessVerdict: vi.fn(() => ({
+        status: 'unverifiable',
+        reason: 'no registered provider can observe its host'
+      }))
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const fallbackProvider = createProviderStub(async () => [])
+    listRegisteredPtysMock.mockReturnValue([])
+
+    await expect(
+      killAllProcessesForWorktree(worktreeId, {
+        runtime,
+        resolvedConnectionId: 'missing-connection',
+        localProvider: fallbackProvider,
+        includeProviderInventory: false,
+        includeLocalRegistry: false,
+        requirePhysicalStop: true
+      })
+    ).rejects.toThrow('no registered provider can observe its host')
+    expect(fallbackProvider.listProcesses).not.toHaveBeenCalled()
   })
 
   it('keeps duplicate sweeps behind the runtime physical-stop promise', async () => {

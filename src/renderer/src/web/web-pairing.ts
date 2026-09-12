@@ -7,6 +7,7 @@ export type WebPairingOffer = {
   endpoint: string
   deviceToken: string
   publicKeyB64: string
+  pairedDeviceId?: string
   scope?: DeviceScope
 }
 
@@ -99,11 +100,16 @@ function decodePairingPayload(base64url: string): WebPairingOffer | null {
     return null
   }
   const scope = parseWebPairingScope(parsed.scope)
+  const pairedDeviceId =
+    typeof parsed.pairedDeviceId === 'string' && parsed.pairedDeviceId.length > 0
+      ? parsed.pairedDeviceId
+      : null
   return {
     v: PAIRING_OFFER_VERSION,
     endpoint: normalizeWebSocketEndpoint(parsed.endpoint),
     deviceToken: parsed.deviceToken,
     publicKeyB64: parsed.publicKeyB64,
+    ...(pairedDeviceId ? { pairedDeviceId } : {}),
     ...(scope ? { scope } : {})
   }
 }

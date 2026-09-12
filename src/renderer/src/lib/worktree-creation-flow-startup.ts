@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import type { WorktreeStartupPayload } from '@/lib/worktree-activation'
+import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
 import type {
   WorktreeCreationPhase,
   WorktreeCreationRequest

@@ -4,11 +4,11 @@
 // renderer are meaningless on SSH targets, so the relay performs the remote
 // filesystem work itself.
 //
-// Plugin source strings ship over the JSON-RPC channel at session-ready
-// (commit #7) — they are NOT bundled with the relay binary because the
-// relay is versioned independently from Orca and the plugin source changes
-// frequently as new agent events get added (see docs/design/agent-status-
-// over-ssh.md §4 "Why ship the plugin source over the wire").
+// Plugin source strings ship over the JSON-RPC channel at session-ready —
+// they are NOT bundled with the relay binary because the relay is versioned
+// independently from Orca and the plugin source changes frequently as new
+// agent events get added; bundling would make every such change a relay
+// redeploy, and an old relay would silently serve stale plugin code.
 //
 // We deliberately do not reuse OpenCodeHookService / PiTitlebarExtensionService
 // directly: those modules import `electron` and ride on Orca's userData

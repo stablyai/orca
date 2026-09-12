@@ -3,7 +3,7 @@ import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
 import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
 import { useAppStore } from '@/store'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 /** Seed the chat-composer copy of launch context that reaches only the TUI
  *  input (argv prefill or startup paste). No-op for agents without a
@@ -64,10 +64,18 @@ export function deliverLaunchPromptToAgentTab(args: {
     forcePaste,
     timeoutMs,
     onTimeout
-  }).then((delivered) => {
-    if (shouldSeed && !delivered && !deliversViaNativePrefill) {
-      useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+  }).then(
+    (delivered) => {
+      if (shouldSeed && !delivered && !deliversViaNativePrefill) {
+        useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+      }
+      return delivered || deliversViaNativePrefill
+    },
+    (error) => {
+      if (shouldSeed && !deliversViaNativePrefill) {
+        useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
+      }
+      throw error
     }
-    return delivered || deliversViaNativePrefill
-  })
+  )
 }

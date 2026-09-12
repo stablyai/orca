@@ -1,9 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { SourceControlHeaderToolbar } from './source-control-header-toolbar'
-import type { GitBranchCompareSummary } from '../../../../shared/types'
+import { SourceControlHeaderToolbar } from './source-control/panel/header-toolbar'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
+import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import type { PrimaryAction } from './source-control-primary-action'
 
@@ -13,7 +14,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-vi.mock('./source-control-header-overflow-menu', () => ({
+vi.mock('./source-control/panel/header-overflow-menu', () => ({
   SourceControlHeaderOverflowMenu: () => <button type="button">More actions</button>
 }))
 
@@ -40,6 +41,9 @@ function renderToolbar(options?: {
   branchSummary?: GitBranchCompareSummary | null
   compareBaseRef?: string | null
   branchLineTotal?: GitBranchLineTotal | null
+  visibleCreatePrHeaderAction?: PrimaryAction | null
+  hostedReview?: HostedReviewInfo | null
+  suppressedGitHubPRNumber?: number | null
 }): string {
   return renderToStaticMarkup(
     <SourceControlHeaderToolbar
@@ -47,12 +51,18 @@ function renderToolbar(options?: {
       filterExpanded={false}
       onFilterQueryChange={vi.fn()}
       onFilterExpandedChange={vi.fn()}
-      visibleCreatePrHeaderAction={CREATE_PR_ACTION}
-      hostedReview={null}
+      visibleCreatePrHeaderAction={
+        options?.visibleCreatePrHeaderAction === undefined
+          ? CREATE_PR_ACTION
+          : options.visibleCreatePrHeaderAction
+      }
+      hostedReview={options?.hostedReview ?? null}
       isCreatePrIntentInFlight={false}
       isCreatingPr={false}
       onCreatePrHeaderClick={vi.fn()}
       onOpenHostedReviewInChecks={vi.fn()}
+      suppressedGitHubPRNumber={options?.suppressedGitHubPRNumber ?? null}
+      onRelinkSuppressedGitHubPR={vi.fn()}
       sourceControlViewMode="list"
       viewModeToggleDisabled={false}
       onToggleViewMode={vi.fn()}
@@ -74,6 +84,32 @@ function renderToolbar(options?: {
 }
 
 describe('SourceControlHeaderToolbar branch identity', () => {
+  it('shows the relink recovery instead of blank chrome for a matched unlinked PR', () => {
+    const markup = renderToolbar({
+      visibleCreatePrHeaderAction: null,
+      suppressedGitHubPRNumber: 42
+    })
+
+    expect(markup).toContain('PR #42 unlinked')
+    expect(markup).toContain('Link PR #42')
+    expect(markup).not.toContain('Create PR')
+  })
+
+  it('keeps the relink recovery ahead of transient Create PR loading chrome', () => {
+    const markup = renderToolbar({
+      visibleCreatePrHeaderAction: {
+        ...CREATE_PR_ACTION,
+        title: 'Checking whether this branch can create a pull request…',
+        disabled: true
+      },
+      suppressedGitHubPRNumber: 42
+    })
+
+    expect(markup).toContain('Link PR #42')
+    expect(markup).not.toContain('Create PR')
+    expect(markup).not.toContain('Checking whether')
+  })
+
   it('keeps Create PR while stacking head above base in the context row', () => {
     const markup = renderToolbar()
     const branchIndex = markup.indexOf('brennanb2025/source-control-branch-name')

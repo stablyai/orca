@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 
 const {
   handleMock,
@@ -56,7 +56,7 @@ vi.mock('../repo-detection', () => ({
   detectRepoIconAndUpstream: detectRepoIconAndUpstreamMock
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 
@@ -113,7 +113,7 @@ describe('repos:add with git worktrees', () => {
     invalidateAuthorizedRootsCacheMock.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
-    registerRepoHandlers(mockWindow as never, mockStore as never)
+    registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
   })
 
   it('returns the tracked main checkout instead of adding its linked worktree', async () => {

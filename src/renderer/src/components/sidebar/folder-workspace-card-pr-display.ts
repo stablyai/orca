@@ -1,10 +1,10 @@
 import type { AppState } from '@/store/types'
-import type { Repo, Worktree, WorktreeLineage, WorkspaceLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import {
-  buildParentPrChecksRows,
-  type ParentPrChecksRow
-} from '@/components/right-sidebar/parent-pr-checks-rows'
+import { buildParentPrChecksRows } from '@/components/right-sidebar/parent-pr-checks-rows'
+import type { ParentPrChecksRow } from '@/components/right-sidebar/parent-pr-checks-row-types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getProjectedWorktreeLineageChildrenByParentId } from './worktree-lineage-projection'
 

@@ -4,6 +4,7 @@ import { readTerminalHistoryJsonAsync } from './terminal-history-file-reader'
 import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 import type { TerminalCheckpointFile, TerminalModes } from './types'
+import { parseTerminalOwner } from '../../shared/terminal-owner'
 
 export type TerminalHistoryCheckpointRead =
   | { status: 'missing' }
@@ -43,11 +44,15 @@ function isTerminalCheckpointFile(value: unknown): value is TerminalCheckpointFi
     isTerminalModes(checkpoint.modes) &&
     isNonNegativeSafeInteger(checkpoint.scrollbackLines) &&
     (checkpoint.generation === undefined || isNonNegativeSafeInteger(checkpoint.generation)) &&
+    (checkpoint.pendingOutputSeq === undefined ||
+      isNonNegativeSafeInteger(checkpoint.pendingOutputSeq)) &&
     typeof checkpoint.checkpointedAt === 'string' &&
     (checkpoint.oscLinks === undefined || isTerminalOscLinkRanges(checkpoint.oscLinks)) &&
     (checkpoint.pendingEscapeTailAnsi === undefined ||
       typeof checkpoint.pendingEscapeTailAnsi === 'string') &&
-    (checkpoint.lastTitle === undefined || typeof checkpoint.lastTitle === 'string')
+    (checkpoint.lastTitle === undefined || typeof checkpoint.lastTitle === 'string') &&
+    (checkpoint.terminalOwner === undefined ||
+      parseTerminalOwner(checkpoint.terminalOwner) !== undefined)
   )
 }
 

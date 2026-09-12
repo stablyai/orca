@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from './types'
+import type { FolderWorkspace } from './folder-workspace-types'
 import { folderWorkspaceToWorktree } from './folder-workspace-worktree'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
@@ -129,6 +129,17 @@ describe('folderWorkspaceToWorktree', () => {
       createdWithAgent: 'codex',
       pendingFirstAgentMessageRename: true,
       firstAgentMessageRenameError: 'No model configured'
+    })
+  })
+
+  it('projects runtime ownership from the folder execution host', () => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({ executionHostId: 'runtime:shared%20server' })
+    )
+
+    expect(worktree).toMatchObject({
+      hostId: 'runtime:shared%20server',
+      runtimeOwnerEnvironmentId: 'shared server'
     })
   })
 
