@@ -1,5 +1,6 @@
 import { z } from 'zod'
-import { isPluginPanelAction } from './plugin-host-api'
+import { getPluginHostMethodSpec, isPluginPanelAction } from './plugin-host-api'
+import { pluginCommandIdSchema } from './plugin-manifest'
 
 /**
  * postMessage protocol between a sandboxed plugin panel iframe and the host
@@ -17,6 +18,8 @@ export const PANEL_ACTION_RESULT_TYPE = 'orca-panel-action-result'
 export const PANEL_PING_TYPE = 'orca-panel-ping'
 export const PANEL_PONG_TYPE = 'orca-panel-pong'
 export const PLUGIN_PANEL_FRAME_NAME_PREFIX = 'orca-plugin-panel:'
+/** Main binds command dispatch to the plugin that owns the opaque panel session. */
+export const PLUGIN_PANEL_COMMAND_ACTION = 'plugin.command.invoke'
 
 /** Per-plugin bridge budgets, enforced host-side. */
 export const PANEL_MESSAGE_MAX_BYTES = 64 * 1024
@@ -39,7 +42,13 @@ export const panelActionRequestSchema = z.object({
   type: z.literal(PANEL_ACTION_REQUEST_TYPE),
   /** Plugin-chosen correlation id echoed back on the result message. */
   requestId: z.string().min(1).max(128),
-  action: z.string().min(1).refine(isPluginPanelAction, 'not a panel-callable action'),
+  action: z
+    .string()
+    .min(1)
+    .refine(
+      (action) => action === PLUGIN_PANEL_COMMAND_ACTION || isPluginPanelAction(action),
+      'not a panel-callable action'
+    ),
   params: z.unknown().optional()
 })
 
@@ -149,4 +158,36 @@ export function readPanelPongId(data: unknown): number | null {
   // isSafeInteger, not isInteger: zod's .int() rejects 2**53 and above, and a
   // wider reader would admit ids the watchdog can never have issued.
   return Number.isSafeInteger(frame.pingId) && frame.pingId >= 0 ? frame.pingId : null
+}
+/** Validates action params against the host API spec (shared with workers). */
+export function parsePanelActionParams(
+  action: string,
+  params: unknown
+): { ok: true; params: unknown } | { ok: false; error: string } {
+  if (action === PLUGIN_PANEL_COMMAND_ACTION) {
+    const parsed = z
+      .object({
+        commandId: pluginCommandIdSchema,
+        args: z.unknown().optional()
+      })
+      .strict()
+      .safeParse(params)
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0]
+      const path = issue?.path.join('.') || '(root)'
+      return { ok: false, error: `${path}: ${issue?.message ?? 'invalid action params'}` }
+    }
+    return { ok: true, params: parsed.data }
+  }
+  const spec = getPluginHostMethodSpec(action)
+  if (!spec) {
+    return { ok: false, error: `unknown action: ${action}` }
+  }
+  const parsed = spec.params.safeParse(params)
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0]
+    const path = issue?.path.join('.') || '(root)'
+    return { ok: false, error: `${path}: ${issue?.message ?? 'invalid action params'}` }
+  }
+  return { ok: true, params: parsed.data }
 }
