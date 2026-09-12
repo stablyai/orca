@@ -30,22 +30,48 @@ device with `emulator_unsupported`. `tap`, `type`, `gesture`, `button`, `rotate`
 tree on Android, a serve-sim node tree on iOS.
 
 Camera and sensor injection are not wrapped; Android virtual-scene is out of scope. Device
-control is local to the host that owns the SDK, so remote and SSH device control is out of
-scope.
+control is local to the host that owns the SDK. Remote and SSH device control is out of
+scope beyond a plain `adb connect` to an address that is already reachable (see
+"Connecting a network / cloud-phone device" below); Orca does not set up VPNs, SSH
+tunnels, port-forwards, adb pairing, or remote USB.
 
 ## Prerequisites
 
-- Android Studio or the Android SDK installed, with `ANDROID_HOME` or `ANDROID_SDK_ROOT`
-  set. Orca also checks the per-OS default location (`%LOCALAPPDATA%\Android\Sdk`,
-  `~/Library/Android/sdk`, `~/Android/Sdk`).
-- `adb` and `emulator` on the SDK path, plus at least one AVD (Android Studio ▸ Device
-  Manager) or a connected device with USB debugging.
+- **`adb` (platform-tools)** with `ANDROID_HOME` or `ANDROID_SDK_ROOT` set. Orca also
+  checks the per-OS default location (`%LOCALAPPDATA%\Android\Sdk`,
+  `~/Library/Android/sdk`, `~/Android/Sdk`). This alone is enough for connected devices
+  (USB or network). The full Android Studio / SDK install — the `emulator` and
+  `avdmanager` binaries — is only needed for local AVDs.
+- At least one AVD (Android Studio ▸ Device Manager), a connected device with USB
+  debugging, or a device/cloud phone connected via Settings ▸ Mobile Emulator ▸ ADB Device
+  Connection (see below).
 - A booted, adb-visible device before any input or capability command. A shutdown AVD is
   listed with `state: shutdown` and must be started first, by `ORCA emulator attach`,
   Android Studio, or `emulator @<avd>`.
 
-Orca returns a clear message when the SDK is missing
-(`Android SDK not found. Install Android Studio and set ANDROID_HOME.`).
+Orca returns a clear message when adb is missing (`Android platform-tools (adb)
+not found. Install Android Studio or standalone platform-tools, then set
+ANDROID_HOME.`).
+
+## Connecting a network / cloud-phone device
+
+Devices reached over an adb TCP address (`host:port`) — physical devices on the same
+network, or a cloud phone — are connected from **Settings ▸ Mobile Emulator ▸ ADB Device
+Connection**, not from the CLI: enter the address, click **Connect**, and Orca runs
+`adb connect` and verifies the device comes online. This skill drives the device once it's
+connected; it does not establish the connection.
+
+- **The address must already be reachable from the machine running Orca.** VPN/SSH/tunnel
+  setup is the user's own concern; a tunnel that forwards a remote adb port to
+  `127.0.0.1:<port>` on this machine is a normal, supported address to paste in.
+- If the device asks to authorize this computer, approve the RSA key prompt on the device (or
+  the cloud-phone console), then connect again.
+- **Disconnect is explicit and only in Settings.** Closing the emulator pane/tab or quitting
+  Orca never disconnects a network device — it only stops the local scrcpy transport tunnel,
+  leaving the shared adb server's connection intact for other tools. Click **Disconnect** in
+  Settings to actually drop it.
+- Once connected, the device's `host:port` serial works everywhere `--device <serial>` is
+  accepted below, the same as `emulator-5554`.
 
 ## Operations
 
@@ -75,8 +101,8 @@ device.
 `attach`, or opening the emulator pane, makes one device active per worktree, and unqualified
 commands target it. Pass a selector only to override that or reach a second device.
 
-- `--device <serial>` such as `emulator-5554`, from `ORCA emulator devices`. An AVD name
-  resolves only once that AVD is booted.
+- `--device <serial>` such as `emulator-5554` or a connected `host:port` serial, from
+  `ORCA emulator devices`. An AVD name resolves only once that AVD is booted.
 - `--emulator <id>` is an alternative spelling of `--device`: the bridge resolves both
   through the same device lookup.
 - `--worktree id:<fullWorktreeId>` or `--worktree active`. The full id is the exact
