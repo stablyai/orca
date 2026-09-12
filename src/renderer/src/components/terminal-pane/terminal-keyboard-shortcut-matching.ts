@@ -1,5 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { safeFind } from '../terminal-search-safe-find'
+import { buildTerminalSearchOptions } from '../terminal-search-options'
 import { resolveTerminalShortcutAction, type MacOptionAsAlt } from './terminal-shortcut-policy'
 import {
   keybindingMatchesAction,
@@ -87,12 +88,24 @@ export function matchSearchNavigate(
   return e.shiftKey ? 'previous' : 'next'
 }
 
+/**
+ * Runs one Cmd+G / Ctrl+G jump between matches.
+ *
+ * Options come from `buildTerminalSearchOptions` so this path carries the same
+ * decorations the find bar does; without them the addon moves the selection but
+ * stops repainting highlights and reporting the position.
+ *
+ * @param pane The pane whose addon performs the search.
+ * @param direction Which way to walk the matches.
+ * @param searchState The active query and its case/regex flags.
+ * @returns Whether the addon found a match.
+ */
 export function runTerminalSearchNavigation(
   pane: Pick<ManagedPane, 'searchAddon'>,
   direction: SearchNavigationDirection,
   searchState: SearchState
 ): boolean {
-  const options = { caseSensitive: searchState.caseSensitive, regex: searchState.regex }
+  const options = buildTerminalSearchOptions(searchState)
   return direction === 'next'
     ? safeFind(
         (term, findOptions) => pane.searchAddon.findNext(term, findOptions),
