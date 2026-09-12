@@ -17,11 +17,13 @@ function makeTls() {
 
 function heartbeatLifecycle(transport: WebSocketTransport) {
   return transport as unknown as {
-    heartbeat: {
-      timer: ReturnType<typeof setInterval> | null
-      alive: WeakSet<WebSocket>
+    liveness: {
+      heartbeat: {
+        timer: ReturnType<typeof setInterval> | null
+        alive: WeakSet<WebSocket>
+      }
+      accepted: Set<WebSocket>
     }
-    heartbeatConnections: Set<WebSocket>
     wss: { clients: Set<WebSocket> }
     handleConnection(ws: WebSocket): void
   }
@@ -34,8 +36,8 @@ async function waitForHeartbeatLifecycle(
 ): Promise<void> {
   await vi.waitFor(() => {
     const lifecycle = heartbeatLifecycle(transport)
-    expect(lifecycle.heartbeatConnections.size).toBe(connectionCount)
-    expect(lifecycle.heartbeat.timer !== null).toBe(armed)
+    expect(lifecycle.liveness.accepted.size).toBe(connectionCount)
+    expect(lifecycle.liveness.heartbeat.timer !== null).toBe(armed)
   })
 }
 
@@ -100,30 +102,30 @@ describe('WebSocketTransport', () => {
     await transport.start()
 
     const lifecycle = heartbeatLifecycle(transport)
-    expect(lifecycle.heartbeat.timer).toBeNull()
-    expect(lifecycle.heartbeatConnections.size).toBe(0)
+    expect(lifecycle.liveness.heartbeat.timer).toBeNull()
+    expect(lifecycle.liveness.accepted.size).toBe(0)
 
     const firstClient = await connectWs(transport)
     await waitForHeartbeatLifecycle(transport, 1, true)
     const firstServerSocket = Array.from(lifecycle.wss.clients)[0]
     expect(firstServerSocket).toBeDefined()
     // Note: periodic probes run on timer interval ticks; assert the arm/disarm lifecycle only.
-    const firstTimer = lifecycle.heartbeat.timer
+    const firstTimer = lifecycle.liveness.heartbeat.timer
 
     const secondClient = await connectWs(transport)
     await waitForHeartbeatLifecycle(transport, 2, true)
-    expect(lifecycle.heartbeat.timer).toBe(firstTimer)
+    expect(lifecycle.liveness.heartbeat.timer).toBe(firstTimer)
 
     firstClient.close()
     await waitForHeartbeatLifecycle(transport, 1, true)
-    expect(lifecycle.heartbeat.timer).toBe(firstTimer)
+    expect(lifecycle.liveness.heartbeat.timer).toBe(firstTimer)
 
     secondClient.close()
     await waitForHeartbeatLifecycle(transport, 0, false)
 
     const thirdClient = await connectWs(transport)
     await waitForHeartbeatLifecycle(transport, 1, true)
-    expect(lifecycle.heartbeat.timer).not.toBe(firstTimer)
+    expect(lifecycle.liveness.heartbeat.timer).not.toBe(firstTimer)
 
     thirdClient.close()
     await waitForHeartbeatLifecycle(transport, 0, false)
@@ -144,16 +146,16 @@ describe('WebSocketTransport', () => {
     transport.onConnectionClose(closeHandler)
 
     lifecycle.handleConnection(socket)
-    expect(lifecycle.heartbeatConnections.size).toBe(1)
-    expect(lifecycle.heartbeat.timer).not.toBeNull()
+    expect(lifecycle.liveness.accepted.size).toBe(1)
+    expect(lifecycle.liveness.heartbeat.timer).not.toBeNull()
 
     socket.emit('error', new Error('connection reset'))
     socket.emit('close')
 
     expect(closeHandler).toHaveBeenCalledTimes(1)
     expect(socket.close).toHaveBeenCalledTimes(1)
-    expect(lifecycle.heartbeatConnections.size).toBe(0)
-    expect(lifecycle.heartbeat.timer).toBeNull()
+    expect(lifecycle.liveness.accepted.size).toBe(0)
+    expect(lifecycle.liveness.heartbeat.timer).toBeNull()
   })
 
   it('handles request/response round-trip', async () => {
