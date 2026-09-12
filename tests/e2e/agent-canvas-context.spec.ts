@@ -86,6 +86,10 @@ test('connects a note through native context and displays hook delivery without 
     animations: 'disabled'
   })
   await note.getByRole('button', { name: 'Remove card', exact: true }).click()
+  await orcaPage
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Remove from canvas', exact: true })
+    .click()
   await expect(agent.getByRole('button', { name: 'Attached notes' })).toHaveCount(0)
   await expect(orcaPage.locator('.react-flow__edge')).toHaveCount(0)
 })

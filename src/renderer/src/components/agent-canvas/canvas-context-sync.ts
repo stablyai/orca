@@ -7,16 +7,17 @@ import { resolveTarget } from './canvas-runtime-target'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { toHostSessionTabId } from '../../../../shared/terminal-surface-id'
 import {
-  canvasContextReplaceSchema,
+  canvasContextSyncSchema,
   canvasContextReceiptSchema,
   type CanvasContextReceipt,
-  type CanvasContextReplace
+  type CanvasContextSync
 } from '../../../../shared/canvas-agent-context'
 import type { CanvasDocument } from './agent-canvas-document'
 import { indexCanvasAgents } from './canvas-agent-bindings'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import type { Tab } from '../../../../shared/tab-types'
-import { CANVAS_STORAGE_PREFIX, readCanvasDocument } from './use-agent-canvas-document'
+import { CANVAS_STORAGE_PREFIX, readCanvasDocument } from './canvas-document-access'
+import { sendCanvasContextSnapshot } from './canvas-context-rpc'
 
 export type CanvasContextView = { nodes: CanvasContextReceipt['nodes']; error: string | null }
 export const EMPTY_CANVAS_CONTEXT: CanvasContextView = { nodes: {}, error: null }
@@ -25,9 +26,10 @@ type SyncEntry = {
   signature: string
   revision: number
   target: RuntimeClientTarget
-  request: CanvasContextReplace
+  request: CanvasContextSync
+  pendingError: string | null
   queue: Promise<unknown>
-  queued?: CanvasContextReplace
+  queued?: CanvasContextSync
   timer?: ReturnType<typeof setTimeout>
 }
 const entries = new Map<string, SyncEntry>()
@@ -79,12 +81,7 @@ function enqueue(entry: SyncEntry): Promise<unknown> {
         return
       }
       try {
-        const result = canvasContextReceiptSchema.parse(
-          await callRuntimeRpc<CanvasContextReceipt>(target, 'agentHooks.canvasContext', request, {
-            timeoutMs: 8000,
-            suppressFeatureInteraction: true
-          })
-        )
+        const result = await sendCanvasContextSnapshot(target, request)
         if (request === entry.request) {
           if (result.revision !== request.revision) {
             entry.revision = Math.max(entry.revision, result.revision)
@@ -92,7 +89,7 @@ function enqueue(entry: SyncEntry): Promise<unknown> {
             publish(entry, { nodes: {}, error: 'Reconciling context with the execution host…' })
             return
           }
-          publish(entry, { nodes: result.nodes, error: null })
+          publish(entry, { nodes: result.nodes, error: entry.pendingError })
         }
       } catch (error) {
         if (request !== entry.request) {
@@ -136,7 +133,9 @@ export function syncCanvasContext(
     reportUnavailable(scope, 'Context is unverifiable: execution host unavailable.')
     return
   }
-  const bindings: CanvasContextReplace['bindings'] = []
+  const bindings: CanvasContextSync['bindings'] = []
+  const deferredBindings: CanvasContextSync['deferredBindings'] = []
+  let pendingError: string | null = null
   const index = indexCanvasAgents(cards)
   for (const node of document.nodes.filter((node) => node.kind === 'agent')) {
     const ids = new Set(
@@ -146,27 +145,8 @@ export function syncCanvasContext(
       .filter((note) => note.kind === 'note' && ids.has(note.id))
       .map(({ id, title, content }) => ({ id, title, content }))
     const card = index.get(node.agentKey ?? node.agentTabId ?? '')
-    if (!card?.ptyId || !card.leafId) {
-      if (!notes.length) {
-        continue
-      }
-      reportUnavailable(scope, 'Waiting for the agent terminal to become available.')
-      return
-    }
-    const provider = card.agentType
-    if (provider !== 'codex' && provider !== 'claude' && provider !== 'cursor') {
-      if (!notes.length) {
-        continue
-      }
-      reportUnavailable(scope, 'Automatic context supports Codex, Claude Code, and Cursor CLI.')
-      return
-    }
-    bindings.push({
+    const control = {
       nodeId: node.id,
-      paneKey: makePaneKey(toHostSessionTabId(card.tabId), card.leafId),
-      worktreeId: card.worktreeId,
-      ptyId: card.ptyId,
-      provider: provider as 'codex' | 'claude' | 'cursor',
       name: node.title,
       collaborationPaused: document.collaborationPaused === true,
       peers: [
@@ -182,14 +162,31 @@ export function syncCanvasContext(
         )
       ],
       notes
+    }
+    const provider = card?.agentType
+    if (
+      !card?.ptyId ||
+      !card.leafId ||
+      (provider !== 'codex' && provider !== 'claude' && provider !== 'cursor')
+    ) {
+      deferredBindings.push(control)
+      pendingError = 'Some agent terminals are unverifiable; their context is pending.'
+      continue
+    }
+    bindings.push({
+      ...control,
+      paneKey: makePaneKey(toHostSessionTabId(card.tabId), card.leafId),
+      worktreeId: card.worktreeId,
+      ptyId: card.ptyId,
+      provider: provider as 'codex' | 'claude' | 'cursor'
     })
   }
-  const signature = JSON.stringify([target, bindings])
+  const signature = JSON.stringify([target, bindings, deferredBindings])
   let entry = entries.get(scope)
   if (entry?.signature === signature && !refresh && !unavailable.has(scope)) {
     return
   }
-  if (!entry && !bindings.length) {
+  if (!entry && !bindings.length && !deferredBindings.length) {
     return
   }
   if (!entry) {
@@ -198,7 +195,8 @@ export function syncCanvasContext(
       signature: '',
       revision: 0,
       target,
-      request: { canvasId: scope, revision: 0, bindings: [] },
+      request: { canvasId: scope, revision: 0, bindings: [], deferredBindings: [] },
+      pendingError: null,
       queue: Promise.resolve()
     }
     entries.set(scope, entry)
@@ -206,8 +204,8 @@ export function syncCanvasContext(
   if (entry.signature !== signature) {
     entry.revision = Math.max(Date.now(), entry.revision + 1)
     entry.target = target
-    entry.request = { canvasId: scope, revision: entry.revision, bindings }
-    const parsed = canvasContextReplaceSchema.safeParse(entry.request)
+    const request = { canvasId: scope, revision: entry.revision, bindings, deferredBindings }
+    const parsed = canvasContextSyncSchema.safeParse(request)
     if (!parsed.success) {
       reportUnavailable(
         scope,
@@ -215,6 +213,8 @@ export function syncCanvasContext(
       )
       return
     }
+    entry.request = parsed.data
+    entry.pendingError = pendingError
     entry.signature = signature
     publish(entry, { nodes: {}, error: null })
   }
@@ -237,7 +237,7 @@ export async function clearClosedCanvasContext(tab: Tab): Promise<void> {
   const scope = JSON.stringify(['workspace-tab', tab.executionHostId, tab.worktreeId, tab.id])
   const entry = entries.get(scope)
   const saved = readCanvasDocument(CANVAS_STORAGE_PREFIX + scope)
-  if (!entry && !saved.error && !saved.document.edges.length) {
+  if (!entry && !saved.error && !saved.document.nodes.some((node) => node.kind === 'agent')) {
     return
   }
   const target = resolveTarget(scope)
@@ -254,7 +254,8 @@ export async function clearClosedCanvasContext(tab: Tab): Promise<void> {
   const request = {
     canvasId: scope,
     revision: Math.max(Date.now(), (entry?.revision ?? 0) + 1),
-    bindings: []
+    bindings: [],
+    deferredBindings: []
   }
   if (entry) {
     entry.request = request
@@ -277,8 +278,10 @@ export async function clearClosedCanvasContext(tab: Tab): Promise<void> {
       throw new Error('Canvas context removal was not acknowledged. Retry closing the canvas.')
     }
   } catch (error) {
-    closing.delete(scope)
-    throw error
+    if (!hasRuntimeRpcErrorCode(error, 'method_not_found')) {
+      closing.delete(scope)
+      throw error
+    }
   }
   entries.delete(scope)
   unavailable.delete(scope)

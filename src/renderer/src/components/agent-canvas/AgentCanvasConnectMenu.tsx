@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ArrowRight, Check, ChevronDown, TerminalSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -24,6 +24,7 @@ export function AgentCanvasConnectMenu({
   onConnect: (source: string, target: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const pendingReview = useRef<string | null>(null)
   const peerConnection = document.nodes.find((node) => node.id === sourceId)?.kind === 'agent'
   const targets = open
     ? document.nodes.filter((node) => node.kind === 'agent' && node.id !== sourceId)
@@ -45,7 +46,19 @@ export function AgentCanvasConnectMenu({
             <ChevronDown />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-72 p-0" align="start">
+        <PopoverContent
+          className="w-72 p-0"
+          align="start"
+          onCloseAutoFocus={(event) => {
+            const targetId = pendingReview.current
+            if (targetId) {
+              // Open details after the menu releases its focus scope.
+              event.preventDefault()
+              pendingReview.current = null
+              onConnect(sourceId, targetId)
+            }
+          }}
+        >
           <div className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
             {peerConnection
               ? translate(
@@ -83,7 +96,11 @@ export function AgentCanvasConnectMenu({
                     value={`${target.title} ${target.id}`}
                     onSelect={() => {
                       setOpen(false)
-                      onConnect(sourceId, target.id)
+                      if (connected) {
+                        pendingReview.current = target.id
+                      } else {
+                        onConnect(sourceId, target.id)
+                      }
                     }}
                   >
                     <TerminalSquare className="size-3.5" />

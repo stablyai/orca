@@ -1,4 +1,5 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { closeCanvasTab } from '@/components/agent-canvas/close-canvas-tab'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   createWebRuntimeSessionTerminal,
@@ -104,7 +105,7 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
         const active = store.getActiveTab(store.activeWorktreeId)
         if (active?.contentType === 'canvas') {
           if (!active.isPinned) {
-            store.closeUnifiedTab(active.id)
+            void closeCanvasTab(active)
           }
           return
         }

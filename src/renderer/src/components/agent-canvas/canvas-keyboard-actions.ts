@@ -10,6 +10,7 @@ export function handleCanvasKeyDown(
     removeNode: (id: string) => void
     removeEdge: (id: string) => void
     clearSelection: () => void
+    undo?: () => void
   }
 ): void {
   const target = event.target
@@ -18,12 +19,20 @@ export function handleCanvasKeyDown(
     event.defaultPrevented ||
     event.nativeEvent.isComposing ||
     event.altKey ||
-    event.ctrlKey ||
-    event.metaKey ||
     !(target instanceof HTMLElement) ||
     isEditableTarget(target) ||
     target.closest('.xterm, button, [role="dialog"]')
   ) {
+    return
+  }
+  const commandKey = navigator.userAgent.includes('Mac') ? event.metaKey : event.ctrlKey
+  if (commandKey && !event.shiftKey && event.key.toLowerCase() === 'z' && actions.undo) {
+    event.preventDefault()
+    event.stopPropagation()
+    actions.undo()
+    return
+  }
+  if (event.ctrlKey || event.metaKey) {
     return
   }
   if (event.key === 'Escape') {

@@ -3,12 +3,13 @@ import {
   emptyCanvasDocument,
   type CanvasDocument
 } from './agent-canvas-document'
+import type { Tab } from '../../../../shared/tab-types'
 
 export const CANVAS_STORAGE_PREFIX = 'orca.agent-canvas.v1:'
 
 type MountedDocument = {
   read: () => CanvasDocument
-  apply: (document: CanvasDocument) => void
+  apply: (document: CanvasDocument, closedTab?: Tab) => void
 }
 const mountedDocuments = new Map<string, MountedDocument>()
 
@@ -44,7 +45,8 @@ export function readCanvasDocument(key: string): {
 
 export function changeCanvasDocument(
   scope: string,
-  change: (document: CanvasDocument) => CanvasDocument
+  change: (document: CanvasDocument) => CanvasDocument,
+  closedTab?: Tab
 ): void {
   const current = readCanvasDocument(CANVAS_STORAGE_PREFIX + scope)
   if (current.error) {
@@ -53,5 +55,5 @@ export function changeCanvasDocument(
   const next = canvasDocumentSchema.parse(change(current.document))
   // Persist before acknowledging an agent's request, including when the canvas is hidden.
   localStorage.setItem(CANVAS_STORAGE_PREFIX + scope, JSON.stringify(next))
-  mountedDocuments.get(scope)?.apply(next)
+  mountedDocuments.get(scope)?.apply(next, closedTab)
 }

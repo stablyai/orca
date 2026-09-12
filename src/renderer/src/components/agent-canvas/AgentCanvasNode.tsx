@@ -36,6 +36,7 @@ export type CanvasFlowNode = Node<
     connectingSource: CanvasNode | null
     interacting?: boolean
     onRemove: (id: string) => void
+    onAdoptSession?: (id: string) => void
   },
   'canvas'
 >
@@ -125,14 +126,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
               <X />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>
-            {node.kind === 'agent'
-              ? translate(
-                  'agentCanvas.removeAgentHint',
-                  'Remove from canvas · terminal stays in workspace'
-                )
-              : translate('agentCanvas.removeNode', 'Remove from canvas')}
-          </TooltipContent>
+          <TooltipContent>{translate('agentCanvas.removeCard', 'Remove card')}</TooltipContent>
         </Tooltip>
       </header>
       {node.kind === 'agent' ? (
@@ -212,6 +206,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
           nodeId={node.id}
           document={data.document}
           onConnect={data.onConnect}
+          onAdoptSession={readOnly ? undefined : data.onAdoptSession}
         />
       )}
       <div className="nodrag nopan flex h-8 shrink-0 items-center rounded-b-xl px-2">

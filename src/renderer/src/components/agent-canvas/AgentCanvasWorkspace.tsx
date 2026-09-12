@@ -123,6 +123,7 @@ export default function AgentCanvasWorkspace({ tab }: { tab: Tab }) {
       <CanvasBrowserContext.Provider value={browserContext}>
         <ReactFlowProvider>
           <AgentCanvasBoard
+            workspaceTab={tab}
             scope={scope}
             cards={cards}
             onReveal={reveal}

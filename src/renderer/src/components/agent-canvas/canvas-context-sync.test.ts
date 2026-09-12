@@ -68,6 +68,78 @@ afterEach(() => {
 })
 
 describe('canvas context synchronization', () => {
+  it.each(['pause', 'disconnect'] as const)(
+    'publishes %s for A/B even when C with a connected note becomes unavailable',
+    async (edit) => {
+      const { CanvasAgentContextStore } =
+        await import('../../../../shared/canvas-agent-context-store')
+      const store = new CanvasAgentContextStore()
+      const identity = { sessionId: 'original', launchTokenHash: 'a'.repeat(64) }
+      mocks.call.mockImplementation((_target, _method, request) =>
+        store.replace(
+          request,
+          new Map(
+            request.bindings.map((binding: { nodeId: string }) => [binding.nodeId, identity])
+          ),
+          request.deferredBindings
+        )
+      )
+      const sync = await import('./canvas-context-sync')
+      const cards = ['a', 'b', 'c'].map((id) => ({
+        ...card,
+        tabId: id,
+        paneKey: `${id}:${card.leafId}`,
+        ptyId: `${id}-pty`
+      }))
+      const canvas: CanvasDocument = {
+        ...document,
+        nodes: [
+          document.nodes[1],
+          ...cards.map((agent, index) => ({
+            ...document.nodes[0],
+            id: ['a', 'b', 'c'][index],
+            agentKey: canvasAgentKey(agent),
+            agentTabId: agent.tabId
+          }))
+        ],
+        edges: [
+          { id: 'ab', source: 'a', target: 'b' },
+          { id: 'nc', source: 'note', target: 'c' }
+        ]
+      }
+      sync.syncCanvasContext(scope, canvas, cards)
+      await vi.advanceTimersByTimeAsync(200)
+      sync.syncCanvasContext(
+        scope,
+        {
+          ...canvas,
+          collaborationPaused: edit === 'pause',
+          edges: canvas.edges.filter((edge) => edit === 'pause' || edge.id !== 'ab')
+        },
+        cards.slice(0, 2)
+      )
+      await vi.advanceTimersByTimeAsync(200)
+      expect(mocks.call).toHaveBeenCalledTimes(2)
+      const request = mocks.call.mock.calls[1][2]
+      expect(request.bindings).toHaveLength(2)
+      expect(request.bindings[0]).toMatchObject({
+        nodeId: 'a',
+        peers: edit === 'pause' ? ['b'] : [],
+        collaborationPaused: edit === 'pause'
+      })
+      expect(request.deferredBindings).toEqual([
+        expect.objectContaining({ nodeId: 'c', notes: [expect.objectContaining({ id: 'note' })] })
+      ])
+      const saved = store.snapshot().get(scope)!.bindings
+      expect(saved.find((binding) => binding.nodeId === 'a')).toMatchObject({
+        peers: edit === 'pause' ? ['b'] : [],
+        collaborationPaused: edit === 'pause'
+      })
+      expect(saved.find((binding) => binding.nodeId === 'c')?.identity).toEqual(identity)
+      expect(sync.readCanvasContext(scope).nodes.a.state).toBe('ready')
+      expect(sync.readCanvasContext(scope).error).toContain('unverifiable')
+    }
+  )
   it('registers bidirectional peers and a persisted pause without sharing terminal output', async () => {
     const sync = await import('./canvas-context-sync')
     const second = {
@@ -124,7 +196,7 @@ describe('canvas context synchronization', () => {
     sync.syncCanvasContext(scope, edited, [card])
     await vi.advanceTimersByTimeAsync(200)
     expect(mocks.call).toHaveBeenCalledTimes(1)
-    expect(mocks.call.mock.calls[0][1]).toBe('agentHooks.canvasContext')
+    expect(mocks.call.mock.calls[0][1]).toBe('agentHooks.canvasContextSync')
     expect(mocks.call.mock.calls[0][2].bindings[0].notes[0].content).toBe('Latest reference')
     expect(sync.readCanvasContext(scope).nodes.agent.state).toBe('ready')
     sync.syncCanvasContext(scope, { ...edited, edges: [] }, [card])
@@ -161,7 +233,8 @@ describe('canvas context synchronization', () => {
     const sync = await import('./canvas-context-sync')
     sync.syncCanvasContext(scope, document, [{ ...card, paneKey: 'tab:other', leafId: 'other' }])
     await vi.advanceTimersByTimeAsync(200)
-    expect(mocks.call).not.toHaveBeenCalled()
+    expect(mocks.call.mock.calls[0][2].bindings).toEqual([])
+    expect(mocks.call.mock.calls[0][2].deferredBindings[0].nodeId).toBe('agent')
     expect(sync.readCanvasContext(scope).error).toContain('terminal')
   })
   it('does not enqueue invalid context on later polls', async () => {
@@ -185,6 +258,60 @@ describe('canvas context synchronization', () => {
     sync.syncCanvasContext(scope, document, [card])
     await vi.advanceTimersByTimeAsync(200)
     expect(sync.readCanvasContext(scope).nodes.agent.state).toBe('unsupported')
+  })
+  it('allows closing on a proven unsupported host, including persisted canvases after reload', async () => {
+    const sync = await import('./canvas-context-sync')
+    localStorage.setItem(`orca.agent-canvas.v1:${scope}`, JSON.stringify(document))
+    mocks.call.mockRejectedValue({ code: 'method_not_found' })
+    const tab = { id: 'canvas', worktreeId: 'workspace', executionHostId: 'local' } as Tab
+    await expect(sync.clearClosedCanvasContext(tab)).resolves.toBeUndefined()
+    expect(mocks.call).toHaveBeenCalledTimes(1)
+    expect(sync.readCanvasContext(scope).nodes).toEqual({})
+  })
+  it.each(['timeout', 'connection_closed', 'permission_denied'])(
+    'does not treat %s as unsupported when closing',
+    async (code) => {
+      const sync = await import('./canvas-context-sync')
+      localStorage.setItem(`orca.agent-canvas.v1:${scope}`, JSON.stringify(document))
+      mocks.call.mockRejectedValue({ code })
+      const tab = { id: 'canvas', worktreeId: 'workspace', executionHostId: 'local' } as Tab
+      await expect(sync.clearClosedCanvasContext(tab)).rejects.toEqual({ code })
+    }
+  )
+  it('requires explicit session adoption; disconnecting and reconnecting never moves context', async () => {
+    const { CanvasAgentContextStore } =
+      await import('../../../../shared/canvas-agent-context-store')
+    const { adoptCanvasAgentSession } = await import('./canvas-session-adoption')
+    const store = new CanvasAgentContextStore()
+    let identity = { sessionId: 'original', launchTokenHash: 'a'.repeat(64) }
+    mocks.call.mockImplementation((_target, _method, request) =>
+      store.replace(
+        request,
+        new Map(request.bindings.map((binding: { nodeId: string }) => [binding.nodeId, identity]))
+      )
+    )
+    const sync = await import('./canvas-context-sync')
+    sync.syncCanvasContext(scope, document, [card])
+    await vi.advanceTimersByTimeAsync(200)
+    identity = { sessionId: 'replacement', launchTokenHash: 'b'.repeat(64) }
+    sync.syncCanvasContext(scope, { ...document, edges: [] }, [card])
+    await vi.advanceTimersByTimeAsync(200)
+    sync.syncCanvasContext(scope, document, [card])
+    await vi.advanceTimersByTimeAsync(200)
+    expect(sync.readCanvasContext(scope).nodes.agent.state).toBe('session-changed')
+    const adopted = adoptCanvasAgentSession(document, 'agent')
+    sync.syncCanvasContext(scope, adopted, [card])
+    await vi.advanceTimersByTimeAsync(200)
+    const newId = adopted.nodes[0].id
+    expect(newId).not.toBe('agent')
+    expect(adopted.edges[0].target).toBe(newId)
+    expect(sync.readCanvasContext(scope).nodes[newId].state).toBe('ready')
+    expect(store.snapshot().get(scope)?.bindings[0].identity).toMatchObject(identity)
+    expect(store.snapshot().get(scope)?.bindings[0].notes[0].content).toBe('My reference')
+    identity = { sessionId: 'yet-another', launchTokenHash: 'c'.repeat(64) }
+    sync.syncCanvasContext(scope, adopted, [card], true)
+    await vi.advanceTimersByTimeAsync(200)
+    expect(sync.readCanvasContext(scope).nodes[newId].state).toBe('session-changed')
   })
   it('closes only after context removal is acknowledged, without reattaching during close', async () => {
     const sync = await import('./canvas-context-sync')

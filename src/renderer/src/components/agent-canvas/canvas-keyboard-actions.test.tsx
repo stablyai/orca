@@ -5,6 +5,38 @@ import { handleCanvasKeyDown } from './canvas-keyboard-actions'
 
 afterEach(cleanup)
 
+it.each(['Macintosh', 'Linux', 'Windows'])(
+  'uses the platform undo shortcut on %s without stealing editor input',
+  (platform) => {
+    const agent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
+    const actions = {
+      readOnly: false,
+      selectedId: null,
+      edgeId: null,
+      removeNode: vi.fn(),
+      removeEdge: vi.fn(),
+      clearSelection: vi.fn(),
+      undo: vi.fn()
+    }
+    const view = render(
+      <div data-testid="canvas" onKeyDown={(event) => handleCanvasKeyDown(event, actions)}>
+        <textarea aria-label="Note" />
+        <div role="dialog" tabIndex={0} />
+      </div>
+    )
+    const shortcut = {
+      key: 'z',
+      ...(platform === 'Macintosh' ? { metaKey: true } : { ctrlKey: true })
+    }
+    fireEvent.keyDown(view.getByLabelText('Note'), shortcut)
+    fireEvent.keyDown(view.getByRole('dialog'), shortcut)
+    expect(actions.undo).not.toHaveBeenCalled()
+    fireEvent.keyDown(view.getByTestId('canvas'), shortcut)
+    expect(actions.undo).toHaveBeenCalledOnce()
+    agent.mockRestore()
+  }
+)
+
 it('removes selected cards or edges and preserves editing and terminal input', () => {
   const actions = {
     readOnly: false,

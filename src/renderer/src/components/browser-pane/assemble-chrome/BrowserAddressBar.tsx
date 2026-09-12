@@ -360,7 +360,7 @@ export default function BrowserAddressBar({
     ]
   )
 
-  useBrowserAddressBarDismissal(open, dismissSuggestions)
+  useBrowserAddressBarDismissal(open, dismissSuggestions, inputRef)
 
   useEffect(() => {
     if (!dismissSuggestionsRef) {

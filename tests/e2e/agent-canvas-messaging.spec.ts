@@ -3,7 +3,7 @@ import { runProcess } from '../../src/shared/child-process/run-process'
 import { resolveManagedOrcaCliCommand } from '../../src/main/cli/managed-orca-cli-command'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor } from './helpers/terminal'
+import { waitForActivePaneHookDescriptor, type ActivePaneHookDescriptor } from './helpers/terminal'
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
 import {
   configureGoldenStubAgent,
@@ -34,7 +34,7 @@ test('connected agents exchange real CLI messages and replies with visible histo
   const second = await waitForActivePaneHookDescriptor(orcaPage)
   expect(second.paneKey).not.toBe(first.paneKey)
   const endpoint = await readHookEndpoint(electronApp)
-  const agents = []
+  const agents: (ActivePaneHookDescriptor & { launchToken: string; sessionId: string })[] = []
   for (const pane of [first, second]) {
     const launchToken = await orcaPage.evaluate(
       (key) => window.__store!.getState().agentLaunchConfigByPaneKey[key]?.identity.launchToken,
@@ -110,7 +110,7 @@ test('connected agents exchange real CLI messages and replies with visible histo
   await expect(orcaPage.locator('.react-flow__edge')).toHaveCount(1)
   await expect(
     orcaPage.getByRole('button', { name: 'Pause collaboration', exact: true })
-  ).toBeVisible()
+  ).toHaveCount(0)
   await orcaPage.locator('.canvas-link-control').click()
   await expect(orcaPage.getByRole('complementary', { name: 'Agent collaboration' })).toBeVisible()
   await expect(orcaPage.getByText('Connected · agents can exchange messages')).toBeVisible({
@@ -180,12 +180,8 @@ test('connected agents exchange real CLI messages and replies with visible histo
     animations: 'disabled'
   })
   await orcaPage.getByRole('button', { name: 'Close connection details', exact: true }).click()
-  await orcaPage.getByRole('button', { name: 'Pause collaboration', exact: true }).click()
-  await expect(
-    orcaPage.getByRole('button', { name: 'Resume collaboration', exact: true })
-  ).toHaveAttribute('aria-pressed', 'true')
   await orcaPage.locator('.canvas-link-control').click()
-  await expect(orcaPage.getByText('Collaboration paused · messages stay queued')).toBeVisible()
+  await expect(orcaPage.getByText('Connected · agents can exchange messages')).toBeVisible()
   const cdp = await orcaPage.context().newCDPSession(orcaPage)
   await cdp.send('Emulation.setDeviceMetricsOverride', {
     width: 900,

@@ -64,13 +64,13 @@ export function AgentCanvasConversation({
               'agentCanvas.collaborationPaused',
               'Collaboration paused · messages stay queued'
             )
-          : (context.error ??
-            (ready
-              ? translate(
-                  'agentCanvas.collaborationReady',
-                  'Connected · agents can exchange messages'
-                )
-              : states.includes('unsupported')
+          : ready
+            ? translate(
+                'agentCanvas.collaborationReady',
+                'Connected · agents can exchange messages'
+              )
+            : (context.error ??
+              (states.includes('unsupported')
                 ? translate(
                     'agentCanvas.collaborationUnsupported',
                     'Messaging unavailable on this execution host'

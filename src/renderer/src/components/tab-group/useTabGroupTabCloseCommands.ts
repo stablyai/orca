@@ -13,7 +13,7 @@ import { closeStructuredAgentSession } from '@/runtime/structured-agent-session-
 import { cancelStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
-import { clearClosedCanvasContext } from '../agent-canvas/canvas-context-sync'
+import { closeCanvasTab } from '../agent-canvas/close-canvas-tab'
 
 function reportStructuredSessionCloseError(error: unknown): void {
   toast.error(
@@ -166,18 +166,7 @@ export function useTabGroupTabCloseCommands({
         }
       } else if (item.contentType === 'simulator' || item.contentType === 'canvas') {
         if (item.contentType === 'canvas') {
-          void clearClosedCanvasContext(item)
-            .then(() => {
-              closeUnifiedTab(item.id)
-              if (!opts?.skipEmptyCheck) {
-                leaveWorktreeIfEmpty()
-              }
-            })
-            .catch((error: unknown) =>
-              toast.error('Could not remove canvas context', {
-                description: error instanceof Error ? error.message : String(error)
-              })
-            )
+          void closeCanvasTab(item, opts?.skipEmptyCheck ? undefined : leaveWorktreeIfEmpty)
           return
         }
         closeUnifiedTab(item.id)
@@ -242,13 +231,7 @@ export function useTabGroupTabCloseCommands({
           closeTerminalTab(item.entityId, { skipRunningProcessConfirm: true })
         } else if (item.contentType === 'simulator' || item.contentType === 'canvas') {
           if (item.contentType === 'canvas') {
-            void clearClosedCanvasContext(item)
-              .then(() => closeUnifiedTab(item.id))
-              .catch((error: unknown) =>
-                toast.error('Could not remove canvas context', {
-                  description: error instanceof Error ? error.message : String(error)
-                })
-              )
+            void closeCanvasTab(item)
             continue
           }
           closeUnifiedTab(item.id)

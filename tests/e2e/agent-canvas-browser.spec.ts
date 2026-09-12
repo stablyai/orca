@@ -139,10 +139,18 @@ test('uses a live Orca browser inside the canvas without recreating its guest', 
     await orcaPage.screenshot({ path: testInfo.outputPath('canvas-browser-note-overlap.png') })
     await cdp.detach()
     await note.getByRole('button', { name: 'Remove card', exact: true }).click()
+    await orcaPage
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Remove from canvas', exact: true })
+      .click()
     await card.getByRole('button', { name: 'Remove card', exact: true }).click()
+    await orcaPage
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Remove from canvas', exact: true })
+      .click()
     await expect(card).toHaveCount(0)
     await expect(pane).not.toBeVisible()
-    await orcaPage.getByRole('button', { name: 'Undo canvas edit', exact: true }).click()
+    await orcaPage.locator('[data-agent-canvas-surface]').press('ControlOrMeta+z')
     await expect(guest).toBeVisible()
     expect(
       await guest.evaluate((element) => (element as Electron.WebviewTag).getWebContentsId())

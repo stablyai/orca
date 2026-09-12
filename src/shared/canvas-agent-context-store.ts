@@ -7,10 +7,15 @@ import { normalizeAgentProviderSession } from './agent-session-resume'
 import {
   canvasContextReplaceSchema,
   type CanvasContextBinding,
+  type CanvasContextDeferredBinding,
   type CanvasContextIdentity,
   type CanvasContextReceipt,
   type CanvasContextReplace
 } from './canvas-agent-context'
+import {
+  mergeDeferredCanvasBindings,
+  sameCanvasBindingSnapshot
+} from './canvas-context-deferred-bindings'
 
 export type BoundContext = CanvasContextBinding & {
   identity: CanvasContextIdentity | null
@@ -83,21 +88,24 @@ export class CanvasAgentContextStore {
 
   replace(
     request: CanvasContextReplace,
-    identities: Map<string, CanvasContextIdentity | null>
+    identities: Map<string, CanvasContextIdentity | null>,
+    deferred: CanvasContextDeferredBinding[] = []
   ): Promise<CanvasContextReceipt> {
     const operation = this.writes.then(async () => {
       const current = this.canvases.get(request.canvasId)
       if (current && request.revision < current.revision) {
         return this.receipt(request.canvasId, identities)
       }
+      const proposed = mergeDeferredCanvasBindings(request.bindings, deferred, current?.bindings)
       if (
         current &&
         current.revision === request.revision &&
-        current.bindings.every((binding) => binding.identity)
+        current.bindings.every((binding) => binding.identity) &&
+        sameCanvasBindingSnapshot(current.bindings, proposed)
       ) {
         return this.receipt(request.canvasId, identities)
       }
-      const bindings = request.bindings.map((binding) => {
+      const bindings = proposed.map((binding) => {
         const previous = current?.bindings.find(
           (item) =>
             item.nodeId === binding.nodeId &&

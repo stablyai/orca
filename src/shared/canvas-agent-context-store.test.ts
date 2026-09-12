@@ -42,6 +42,59 @@ afterEach(async () => {
 })
 
 describe('native canvas context', () => {
+  it('retains deferred identity through serialized writes, persistence, and session replacement', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'canvas-deferred-context-'))
+    directories.push(directory)
+    const store = new CanvasAgentContextStore()
+    await store.configure(directory)
+    const initial = store.replace(request, identities)
+    const deferred = store.replace({ ...request, revision: 2, bindings: [] }, new Map(), [
+      {
+        nodeId: binding.nodeId,
+        notes: [],
+        peers: [],
+        collaborationPaused: true
+      }
+    ])
+    await Promise.all([initial, deferred])
+    const restored = new CanvasAgentContextStore()
+    await restored.configure(directory)
+    expect(restored.snapshot().get(request.canvasId)?.bindings[0]).toMatchObject({
+      identity,
+      notes: [],
+      peers: [],
+      collaborationPaused: true,
+      paneKey: binding.paneKey
+    })
+    const receipt = await restored.replace(
+      { ...request, revision: 3 },
+      new Map([[binding.nodeId, { sessionId: 'replacement', launchTokenHash: 'b'.repeat(64) }]])
+    )
+    expect(receipt.nodes[binding.nodeId].state).toBe('session-changed')
+    await restored.replace({ ...request, revision: 4, bindings: [] }, new Map())
+    expect(restored.snapshot().get(request.canvasId)?.bindings).toEqual([])
+  })
+  it('never replaces the host-owned pane or PTY with deferred terminal observations', async () => {
+    const store = new CanvasAgentContextStore()
+    await store.replace(request, identities)
+    const unverified = {
+      ...binding,
+      paneKey: 'other-pane',
+      ptyId: 'other-pty',
+      worktreeId: 'other-folder',
+      notes: [],
+      peers: []
+    }
+    await store.replace({ ...request, revision: 2, bindings: [] }, new Map(), [unverified])
+    expect(store.snapshot().get(request.canvasId)?.bindings[0]).toMatchObject({
+      paneKey: binding.paneKey,
+      ptyId: binding.ptyId,
+      worktreeId: binding.worktreeId,
+      identity,
+      notes: [],
+      peers: []
+    })
+  })
   it.each(['codex', 'claude', 'cursor'] as const)(
     'gives %s the owning CLI path even without attached notes, but never leaks it to SSH',
     async (provider) => {

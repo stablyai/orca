@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CanvasDocument } from './agent-canvas-document'
+import { removeCanvasNodes } from './agent-canvas-document'
+import { canvasNodeUsesTab } from './canvas-resource-tabs'
+import { adoptCanvasAgentSession } from './canvas-session-adoption'
 import {
   CANVAS_STORAGE_PREFIX,
   readCanvasDocument,
@@ -72,6 +75,17 @@ export function useAgentCanvasDocument(scope: string) {
     const previous = current.current
     setPast((history) => [...history.slice(-19), previous])
   }, [])
+  const adoptSession = useCallback(
+    (nodeId: string) => {
+      if (blocked) {
+        return
+      }
+      update((value) => adoptCanvasAgentSession(value, nodeId), false)
+      // Undoing layout must not revive an identity the user explicitly replaced.
+      setPast([])
+    },
+    [blocked, update]
+  )
 
   useEffect(() => {
     if (blocked) {
@@ -79,7 +93,23 @@ export function useAgentCanvasDocument(scope: string) {
     }
     return registerCanvasDocument(scope, {
       read: () => current.current,
-      apply: (next) => update(() => next)
+      apply: (next, closedTab) => {
+        if (closedTab) {
+          setPast((history) =>
+            history.map((entry) =>
+              removeCanvasNodes(
+                entry,
+                new Set(
+                  entry.nodes
+                    .filter((node) => canvasNodeUsesTab(node, closedTab))
+                    .map((node) => node.id)
+                )
+              )
+            )
+          )
+        }
+        update(() => next, !closedTab)
+      }
     })
   }, [blocked, scope, update])
 
@@ -98,6 +128,7 @@ export function useAgentCanvasDocument(scope: string) {
     document,
     update,
     checkpoint,
+    adoptSession,
     undo,
     canUndo: past.length > 0,
     error,

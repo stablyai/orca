@@ -15,6 +15,9 @@ import { translate } from '@/i18n/i18n'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { AgentCanvasNode, type CanvasFlowNode } from './AgentCanvasNode'
 import { AgentCanvasToolbar } from './AgentCanvasToolbar'
+import { AgentCanvasRemoveDialog } from './AgentCanvasRemoveDialog'
+import { useCanvasNodeRemoval } from './use-canvas-node-removal'
+import type { Tab } from '../../../../shared/tab-types'
 import { AgentCanvasEdge, type CanvasFlowEdge } from './AgentCanvasEdge'
 import { useCanvasConnections } from './use-canvas-connections'
 import { AgentCanvasConnectionPrompt } from './AgentCanvasConnectionPrompt'
@@ -40,12 +43,14 @@ const EDGE_TYPES = { context: AgentCanvasEdge }
 const FIT_OPTIONS = { padding: 0.15, maxZoom: 1 }
 
 export function AgentCanvasBoard({
+  workspaceTab,
   scope,
   cards,
   onReveal,
   launchOptions,
   onLaunchAgent
 }: {
+  workspaceTab: Tab
   scope: string
   cards: DashboardCard[]
   onReveal: (card: DashboardCard) => void
@@ -53,7 +58,7 @@ export function AgentCanvasBoard({
   onLaunchAgent: (agent: TuiAgent) => Promise<string>
 }) {
   const state = useAgentCanvasDocument(scope)
-  const { document, update, checkpoint, readOnly } = state
+  const { document, update, checkpoint, readOnly, adoptSession: adoptDocumentSession } = state
   const contextStatus = useCanvasAgentContext(scope, document, cards, readOnly)
   const flow = useReactFlow<CanvasFlowNode>()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -106,6 +111,18 @@ export function AgentCanvasBoard({
     },
     [readOnly, update, setEdgeId]
   )
+  const removal = useCanvasNodeRemoval(workspaceTab, document, readOnly, removeNode)
+  const interacting = dragging || !!removal.node
+  const adoptSession = useCallback(
+    (id: string) => {
+      if (!readOnly) {
+        adoptDocumentSession(id)
+        setSelectedId(null)
+        setEdgeId(null)
+      }
+    },
+    [readOnly, adoptDocumentSession, setEdgeId]
+  )
   const nodes = useMemo<CanvasFlowNode[]>(
     () =>
       document.nodes.map((node) => ({
@@ -123,8 +140,9 @@ export function AgentCanvasBoard({
           document,
           onConnect: connectNodes,
           connectingSource,
-          interacting: dragging,
-          onRemove: removeNode,
+          interacting,
+          onRemove: removal.request,
+          onAdoptSession: adoptSession,
           card: cardsByKey.get(node.agentKey ?? node.agentTabId ?? ''),
           readOnly,
           onEdit: edit,
@@ -142,8 +160,9 @@ export function AgentCanvasBoard({
       selectedId,
       connectNodes,
       connectingSource,
-      dragging,
-      removeNode
+      interacting,
+      removal.request,
+      adoptSession
     ]
   )
   const edges = useMemo(
@@ -198,13 +217,13 @@ export function AgentCanvasBoard({
     },
     [update, setEdgeId]
   )
-  const selected = document.nodes.find((node) => node.id === selectedId)
   const placed = new Set(document.nodes.map((node) => node.agentKey ?? node.agentTabId))
   return (
     <CanvasContextStatus.Provider value={contextStatus}>
       <div
         className="relative flex min-h-0 flex-1 flex-col"
         data-agent-canvas-surface
+        tabIndex={0}
         onKeyDownCapture={(event) => {
           if (
             connectingSource &&
@@ -220,7 +239,8 @@ export function AgentCanvasBoard({
             readOnly,
             selectedId,
             edgeId,
-            removeNode,
+            removeNode: removal.request,
+            undo: state.undo,
             removeEdge,
             clearSelection: () => {
               setSelectedId(null)
@@ -230,15 +250,6 @@ export function AgentCanvasBoard({
         }
       >
         <AgentCanvasToolbar
-          collaborationPaused={document.collaborationPaused}
-          onToggleCollaboration={
-            document.edges.some(
-              (edge) => document.nodes.find((node) => node.id === edge.source)?.kind === 'agent'
-            )
-              ? () =>
-                  update((value) => ({ ...value, collaborationPaused: !value.collaborationPaused }))
-              : undefined
-          }
           agents={cards.filter(
             (card) => !placed.has(canvasAgentKey(card)) && !placed.has(card.tabId)
           )}
@@ -254,19 +265,18 @@ export function AgentCanvasBoard({
               .catch((error) => toast.error(error.message))
               .finally(() => setLaunching(false))
           }}
-          selected={selected}
           readOnly={readOnly}
-          canUndo={state.canUndo}
           onAddAgent={(card) => addNode('agent', card)}
           onAddNode={addNode}
-          onRemove={() => {
-            if (selected) {
-              removeNode(selected.id)
-            }
-          }}
-          onUndo={state.undo}
           onFit={() => void flow.fitView(FIT_OPTIONS)}
           onZoom={(direction) => void (direction === 'in' ? flow.zoomIn() : flow.zoomOut())}
+        />
+        <AgentCanvasRemoveDialog
+          node={removal.node}
+          tab={removal.tab}
+          onCancel={removal.onCancel}
+          onDetach={removal.onDetach}
+          onCloseTab={removal.onCloseTab}
         />
         {state.error && (
           <div role="alert" className="flex items-center gap-2 px-3 py-2 text-xs text-destructive">
@@ -358,13 +368,29 @@ export function AgentCanvasBoard({
             )}
           </div>
         </div>
+        {document.collaborationPaused && (
+          <div
+            role="status"
+            className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground"
+          >
+            {translate(
+              'agentCanvas.deliveryDisabled',
+              'Message delivery is disabled for this canvas.'
+            )}
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={readOnly}
+              onClick={() => update((value) => ({ ...value, collaborationPaused: false }), false)}
+            >
+              {translate('agentCanvas.enableDelivery', 'Enable message delivery')}
+            </Button>
+          </div>
+        )}
         <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
           <span>{translate('agentCanvas.localLayout', 'Canvas on this device')}</span>
           <span>
-            {translate(
-              'agentCanvas.canvasHint',
-              'Drag a point to connect · × to remove · Undo to restore'
-            )}
+            {translate('agentCanvas.canvasControlsHint', 'Drag a point to connect · × to remove')}
           </span>
         </div>
       </div>

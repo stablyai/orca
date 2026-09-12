@@ -9,6 +9,9 @@ test('opens a full workspace canvas, drags stable nodes, and restores independen
   await orcaPage.evaluate((worktreeId) => {
     const store = window.__store!
     const state = store.getState()
+    if (!state.settings) {
+      throw new Error('Settings have not loaded')
+    }
     const tab = state.tabsByWorktree[worktreeId]?.[0] ?? state.createTab(worktreeId)
     store.setState({
       settings: {
@@ -89,11 +92,28 @@ test('opens a full workspace canvas, drags stable nodes, and restores independen
   await orcaPage.mouse.up()
   await expect(orcaPage.locator('.react-flow__edge')).toHaveCount(1)
   await expect(orcaPage.getByRole('dialog')).toHaveCount(0)
+  await orcaPage.getByRole('button', { name: 'Fit canvas', exact: true }).click()
+  const toolbarButton = await orcaPage
+    .getByRole('button', { name: 'Note', exact: true })
+    .boundingBox()
+  const drawingArea = await orcaPage.locator('[data-agent-canvas]').boundingBox()
+  expect(drawingArea!.y).toBeGreaterThan(toolbarButton!.y + toolbarButton!.height)
+  await orcaPage.locator('.canvas-link-control').click()
+  await expect(orcaPage.getByLabel('Linked note')).toHaveText('Check login, refresh, and logout.')
+  await orcaPage.getByRole('button', { name: 'Close connection details', exact: true }).click()
   await expect(agent.locator('[data-canvas-agent-icon="codex"]')).toBeVisible()
   await expect(agent.getByRole('button', { name: 'Attached notes' })).toContainText(
     'Review checklist'
   )
-  await expect(agent.getByText('Waiting for the agent terminal to become available.')).toBeVisible()
+  await agent.getByRole('button', { name: 'Attached notes' }).click()
+  await orcaPage.getByRole('dialog').getByRole('button', { name: 'Review checklist' }).click()
+  await expect(
+    orcaPage.getByRole('button', { name: 'Close connection details', exact: true })
+  ).toBeFocused()
+  await orcaPage.getByRole('button', { name: 'Close connection details', exact: true }).click()
+  await expect(agent.getByRole('status')).toHaveText(
+    'Some agent terminals are unverifiable; their context is pending.'
+  )
   await expect(orcaPage.getByRole('button', { name: 'Send context', exact: true })).toHaveCount(0)
   const cdp = await orcaPage.context().newCDPSession(orcaPage)
   await cdp.send('Emulation.setEmulatedMedia', {
@@ -109,6 +129,9 @@ test('opens a full workspace canvas, drags stable nodes, and restores independen
   await expect(orcaPage.getByRole('dialog').getByRole('option')).toContainText('Connected · review')
   await orcaPage.getByRole('dialog').getByRole('combobox').press('ArrowDown')
   await orcaPage.getByRole('dialog').getByRole('combobox').press('Enter')
+  await expect(
+    orcaPage.getByRole('button', { name: 'Close connection details', exact: true })
+  ).toBeFocused()
   await expect(orcaPage.getByLabel('Linked note')).toHaveText('Check login, refresh, and logout.')
   await expect(orcaPage.getByRole('button', { name: 'Send context', exact: true })).toHaveCount(0)
   await expect(orcaPage.locator('.react-flow__edge')).toHaveCount(1)
@@ -128,9 +151,13 @@ test('opens a full workspace canvas, drags stable nodes, and restores independen
   await expect(orcaPage.locator('.react-flow__edge')).toHaveCount(1)
   await expect(orcaPage.getByRole('dialog')).toHaveCount(0)
   await note.getByRole('button', { name: 'Remove card', exact: true }).click()
+  await orcaPage
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Remove from canvas', exact: true })
+    .click()
   await expect(orcaPage.getByRole('textbox', { name: 'Note content' })).toHaveCount(0)
   await expect(orcaPage.locator('.react-flow__edge')).toHaveCount(0)
-  await orcaPage.getByRole('button', { name: 'Undo canvas edit', exact: true }).click()
+  await orcaPage.locator('[data-agent-canvas-surface]').press('ControlOrMeta+z')
   await expect(orcaPage.getByRole('textbox', { name: 'Note content' })).toHaveValue(
     'Check login, refresh, and logout.'
   )
@@ -207,8 +234,12 @@ test('keeps browser cards mounted while dragging and fits a narrow workspace', a
   await expect(orcaPage.locator('.react-flow__node')).toHaveCount(1)
   await orcaPage.locator('.react-flow__node').focus()
   await orcaPage.locator('.react-flow__node').press('Delete')
+  await orcaPage
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Remove from canvas', exact: true })
+    .click()
   await expect(orcaPage.locator('.react-flow__node')).toHaveCount(0)
-  await orcaPage.getByRole('button', { name: 'Undo canvas edit', exact: true }).click()
+  await orcaPage.locator('[data-agent-canvas-surface]').press('ControlOrMeta+z')
   await expect(urlInput).toHaveValue('https://example.com')
 })
 
@@ -222,6 +253,9 @@ test('keeps multiple terminals live while unselected and removes only their card
   await orcaPage.evaluate(() => {
     const store = window.__store!
     const state = store.getState()
+    if (!state.settings) {
+      throw new Error('Settings have not loaded')
+    }
     store.setState({
       detectedAgentIds: ['codex'],
       settings: {
@@ -271,8 +305,12 @@ test('keeps multiple terminals live while unselected and removes only their card
     .filter({ has: orcaPage.locator('.xterm') })
     .first()
   await firstAgent.getByRole('button', { name: 'Remove card', exact: true }).click()
+  await orcaPage
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Remove from canvas', exact: true })
+    .click()
   await expect(terminals).toHaveCount(1)
-  await orcaPage.getByRole('button', { name: 'Undo canvas edit', exact: true }).click()
+  await orcaPage.locator('[data-agent-canvas-surface]').press('ControlOrMeta+z')
   await expect(terminals).toHaveCount(2)
   await expect(terminals.first()).toContainText('CANVAS_TICK_', { timeout: 10_000 })
   expect(pageErrors).toEqual([])

@@ -93,6 +93,10 @@ function isStockPlaceholder(
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
+  return isStockTerminalComposerPlaceholder(text)
+}
+
+export function isStockTerminalComposerPlaceholder(text: string): boolean {
   return (
     /^Try\s+["“]/.test(text) ||
     text === 'Ask Codex to do anything' ||

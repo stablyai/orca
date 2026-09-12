@@ -36,8 +36,17 @@ Official contracts checked on 2026-09-05: [Codex hooks](https://developers.opena
 the exact live pane/PTY and verifies local execution ownership. A registry beside
 the hook endpoint persists notes with restricted file permissions and atomic replacement.
 Bindings are fenced by workspace, pane, provider session, and hashed launch token.
-Replacing a terminal/session does not silently transfer its attachments. Reconnect
-the note to explicitly attach it to the new session.
+Replacing a terminal/session does not silently transfer its attachments. Use
+**Use current session** and confirm to adopt the new session explicitly.
+
+`agentHooks.canvasContextSync` adds deferred node controls for partial observations.
+An unverifiable agent does not block pauses or connection/note removals for other
+agents. The host merges deferred controls into its existing binding inside the
+serialized write, retaining the original pane and session identity even after a
+renderer reload. It never creates a binding from a deferred node alone.
+The renderer falls back to the legacy RPC only for complete snapshots and only on
+`method_not_found`; partial updates require an updated host and otherwise report
+unsupported without deleting identity fences. Timeouts never trigger fallback.
 
 The existing status-hook transport opts into response bodies using
 `X-Orca-Canvas-Context: 1`. Old hooks still receive HTTP 204. Updated scripts emit one
@@ -56,7 +65,7 @@ require Git. No workspace-wide AGENTS.md, CLAUDE.md, or Cursor rules are written
 - Ready: the owning runtime accepted the snapshot for the indicated next boundary.
 - Returned to agent hook: the listener produced the native context response. This
   is transport evidence, not proof the model read or followed the note.
-- Session changed: reconnect the note to explicitly adopt the replacement session.
+- Session changed: use **Use current session** and confirm to replace the agent binding. Notes and connections remain; previous conversations are not transferred. Disconnecting a note never adopts a replacement session.
 - Unsupported / unverifiable / update failure: no delivery claim; the last accepted
   snapshot may still be active until removal reaches the execution host.
 
