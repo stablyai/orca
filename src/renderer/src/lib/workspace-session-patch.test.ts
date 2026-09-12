@@ -82,6 +82,25 @@ function createRepo(id: string, connectionId: string | null): Repo {
 }
 
 describe('buildWorkspaceSessionPatch', () => {
+  it('persists active workspace identity changes together', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        activeRepoId: 'repo-2',
+        activeWorkspaceKey: 'worktree:wt-2',
+        activeWorkspaceExecutionHostId: 'runtime:host-2',
+        activeWorktreeId: 'wt-2'
+      }),
+      ['activeRepoId', 'activeWorkspaceKey', 'activeWorkspaceExecutionHostId', 'activeWorktreeId']
+    )
+
+    expect(patch).toEqual({
+      activeRepoId: 'repo-2',
+      activeWorkspaceKey: 'worktree:wt-2',
+      activeWorkspaceExecutionHostId: 'runtime:host-2',
+      activeWorktreeId: 'wt-2'
+    })
+  })
+
   it('returns only the direct key for active tab changes', () => {
     const patch = buildWorkspaceSessionPatch(createSnapshot({ activeTabId: 'tab-2' }), [
       'activeTabId'
