@@ -1,0 +1,158 @@
+[
+  {
+    "id": "markdown",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1.25,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 257.79998779296875,
+      "timestamp": 1788848302.666995
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 266.2000045776367
+    },
+    "point": {
+      "x": 170,
+      "y": 266
+    },
+    "hit": {
+      "x": 170,
+      "y": 266,
+      "adjusted": false,
+      "handled": false
+    }
+  },
+  {
+    "id": "automatic",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1.25,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 257.79998779296875,
+      "timestamp": 1788848302.694262
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 265.2000045776367
+    },
+    "point": {
+      "x": 170,
+      "y": 265
+    },
+    "hit": {
+      "x": 170,
+      "y": 265,
+      "adjusted": false,
+      "handled": false
+    }
+  },
+  {
+    "id": "internal",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1.25,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 370.79998779296875,
+      "timestamp": 1788848302.716784
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 265.2000045776367
+    },
+    "point": {
+      "x": 170,
+      "y": 265
+    },
+    "hit": {
+      "x": 170,
+      "y": 265,
+      "adjusted": true,
+      "handled": false
+    }
+  },
+  {
+    "id": "card",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1.25,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 426.79998779296875,
+      "timestamp": 1788848302.73344
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 265.2000045776367
+    },
+    "point": {
+      "x": 170,
+      "y": 265
+    },
+    "hit": {
+      "x": 170,
+      "y": 265,
+      "adjusted": true,
+      "handled": false
+    }
+  },
+  {
+    "id": "button",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1.25,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 482.79998779296875,
+      "timestamp": 1788848302.750044
+    },
+    "cssPoint": {
+      "x": 99.125,
+      "y": 265.2000045776367
+    },
+    "point": {
+      "x": 99,
+      "y": 265
+    },
+    "hit": {
+      "x": 99,
+      "y": 265,
+      "adjusted": true,
+      "handled": false
+    }
+  },
+  {
+    "id": "external",
+    "metadata": {
+      "offsetTop": 0,
+      "pageScaleFactor": 1.25,
+      "deviceWidth": 390,
+      "deviceHeight": 664,
+      "scrollOffsetX": 0,
+      "scrollOffsetY": 538.7999877929688,
+      "timestamp": 1788848302.766254
+    },
+    "cssPoint": {
+      "x": 170,
+      "y": 265.2000045776367
+    },
+    "point": {
+      "x": 170,
+      "y": 265
+    },
+    "hit": {
+      "x": 170,
+      "y": 265,
+      "adjusted": true,
+      "handled": false
+    }
+  }
+]

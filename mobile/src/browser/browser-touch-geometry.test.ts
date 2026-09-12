@@ -2,11 +2,54 @@ import { describe, expect, it } from 'vitest'
 import {
   clampBrowserZoomState,
   computeBrowserFrameGeometry,
+  computeBrowserTouchClickRadiusCss,
   mapScreenToBrowserPoint,
   readLocalTouchPoint
 } from './browser-touch-geometry'
 
 describe('browser touch geometry', () => {
+  it.each([390 / 980, 1, 1.25])(
+    'maps page scale %s after client pan and zoom',
+    (pageScaleFactor) => {
+      const layout = { width: 390, height: 700 }
+      const metadata = { deviceWidth: 390, deviceHeight: 664, pageScaleFactor, scrollOffsetY: 400 }
+      const zoom = { scale: 2, offsetX: -30, offsetY: 20 }
+      const point = { x: 120, y: 180 }
+      const screenX = 195 + zoom.offsetX + (point.x * pageScaleFactor - 195) * zoom.scale
+      const screenY = 350 + zoom.offsetY + (point.y * pageScaleFactor - 332) * zoom.scale
+      expect(mapScreenToBrowserPoint(screenX, screenY, layout, metadata, zoom)).toEqual(point)
+      expect(computeBrowserTouchClickRadiusCss(layout, metadata, zoom, 14)).toBe(
+        Math.max(6, Math.min(48, Math.round(14 / (2 * pageScaleFactor))))
+      )
+    }
+  )
+
+  it.each([undefined, 0, -1, Number.NaN, Number.POSITIVE_INFINITY])(
+    'uses legacy scale one for invalid/missing scale %s',
+    (pageScaleFactor) => {
+      expect(
+        mapScreenToBrowserPoint(
+          100,
+          200,
+          { width: 390, height: 700 },
+          { deviceWidth: 390, deviceHeight: 700, pageScaleFactor },
+          { scale: 1, offsetX: 0, offsetY: 0 }
+        )
+      ).toEqual({ x: 100, y: 200 })
+    }
+  )
+
+  it('rejects letterbox touches before converting to CSS coordinates', () => {
+    expect(
+      mapScreenToBrowserPoint(
+        195,
+        5,
+        { width: 390, height: 700 },
+        { deviceWidth: 390, deviceHeight: 664, pageScaleFactor: 390 / 980 },
+        { scale: 1, offsetX: 0, offsetY: 0 }
+      )
+    ).toBeNull()
+  })
   it('maps the visual center of a letterboxed desktop frame to the browser center', () => {
     const layout = { width: 390, height: 700 }
     const metadata = { deviceWidth: 1280, deviceHeight: 720 }

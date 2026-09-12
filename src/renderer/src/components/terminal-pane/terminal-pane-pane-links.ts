@@ -14,6 +14,7 @@ import {
 } from './terminal-link-handlers'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import { installTerminalLinkifierClickPriming } from './terminal-linkifier-click-priming'
+import { installTerminalPaneTouchLinks } from './terminal-pane-touch-links'
 import { installTerminalLinkPointerGesture } from './terminal-link-pointer-gesture'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 import { handleOscLink } from './terminal-osc-link-routing'
@@ -93,10 +94,22 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       })
     )
   )
-  refs.linkifierClickPrimingDisposablesRef.current.set(
-    pane.id,
-    installTerminalLinkifierClickPriming(pane.terminal)
-  )
+  const clickPriming = installTerminalLinkifierClickPriming(pane.terminal)
+  const touchLinks = installTerminalPaneTouchLinks({
+    terminal: pane.terminal,
+    paneId: pane.id,
+    linkDeps,
+    getLinkActionContext: () => getLinkActionContext(pane.id),
+    getSourceOwner: () => getHttpLinkSourceOwnerForPane(pane.id),
+    getActionDestinations: () => getHttpLinkActionDestinations(pane.id),
+    requestOpenLinksInAppPreference
+  })
+  refs.linkifierClickPrimingDisposablesRef.current.set(pane.id, {
+    dispose: () => {
+      clickPriming.dispose()
+      touchLinks.dispose()
+    }
+  })
   refs.fileLinkClickFallbackDisposablesRef.current.set(
     pane.id,
     installFilePathLinkClickFallback(pane.id, pane.terminal, linkDeps)

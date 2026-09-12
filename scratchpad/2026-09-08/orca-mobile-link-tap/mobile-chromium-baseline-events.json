@@ -1,0 +1,58 @@
+[
+  {
+    "type": "pointerdown",
+    "capture": true,
+    "target": "xterm-screen",
+    "defaultPrevented": false,
+    "isTrusted": true
+  },
+  {
+    "type": "pointerdown",
+    "capture": false,
+    "target": "xterm-screen",
+    "defaultPrevented": false,
+    "isTrusted": true
+  },
+  {
+    "type": "touchstart",
+    "capture": true,
+    "target": "xterm-screen",
+    "defaultPrevented": false,
+    "isTrusted": true
+  },
+  {
+    "type": "touchstart",
+    "capture": false,
+    "target": "xterm-screen",
+    "defaultPrevented": true,
+    "isTrusted": true
+  },
+  {
+    "type": "pointerup",
+    "capture": true,
+    "target": "xterm-screen",
+    "defaultPrevented": false,
+    "isTrusted": true
+  },
+  {
+    "type": "pointerup",
+    "capture": false,
+    "target": "xterm-screen",
+    "defaultPrevented": false,
+    "isTrusted": true
+  },
+  {
+    "type": "touchend",
+    "capture": true,
+    "target": "xterm-screen",
+    "defaultPrevented": false,
+    "isTrusted": true
+  },
+  {
+    "type": "touchend",
+    "capture": false,
+    "target": "xterm-screen",
+    "defaultPrevented": true,
+    "isTrusted": true
+  }
+]

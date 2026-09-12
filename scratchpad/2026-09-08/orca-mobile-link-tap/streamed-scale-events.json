@@ -1,0 +1,107 @@
+{
+  "metadata": {
+    "offsetTop": 0,
+    "pageScaleFactor": 0.3979591727256775,
+    "deviceWidth": 390,
+    "deviceHeight": 664,
+    "scrollOffsetX": 0,
+    "scrollOffsetY": 0,
+    "timestamp": 1788848301.816331
+  },
+  "screenPoint": {
+    "x": 149.23468977212906,
+    "y": 148.83673059940338
+  },
+  "oldPoint": {
+    "x": 149,
+    "y": 149
+  },
+  "oldEvents": [
+    {
+      "type": "pointerdown",
+      "target": "BODY",
+      "x": 149,
+      "y": 149,
+      "defaultPrevented": false,
+      "isTrusted": true
+    },
+    {
+      "type": "mousedown",
+      "target": "BODY",
+      "x": 149,
+      "y": 149,
+      "defaultPrevented": false,
+      "isTrusted": true
+    },
+    {
+      "type": "pointerup",
+      "target": "BODY",
+      "x": 149,
+      "y": 149,
+      "defaultPrevented": false,
+      "isTrusted": true
+    },
+    {
+      "type": "mouseup",
+      "target": "BODY",
+      "x": 149,
+      "y": 149,
+      "defaultPrevented": false,
+      "isTrusted": true
+    },
+    {
+      "type": "click",
+      "target": "BODY",
+      "x": 149,
+      "y": 149,
+      "defaultPrevented": false,
+      "isTrusted": true
+    }
+  ],
+  "correctedPoint": {
+    "x": 375,
+    "y": 374
+  },
+  "events": [
+    {
+      "type": "pointerdown",
+      "target": "markdown",
+      "x": 375,
+      "y": 374,
+      "defaultPrevented": false,
+      "isTrusted": true
+    },
+    {
+      "type": "mousedown",
+      "target": "markdown",
+      "x": 375,
+      "y": 374,
+      "defaultPrevented": false,
+      "isTrusted": true
+    },
+    {
+      "type": "pointerup",
+      "target": "markdown",
+      "x": 375,
+      "y": 374,
+      "defaultPrevented": false,
+      "isTrusted": true
+    },
+    {
+      "type": "mouseup",
+      "target": "markdown",
+      "x": 375,
+      "y": 374,
+      "defaultPrevented": false,
+      "isTrusted": true
+    },
+    {
+      "type": "click",
+      "target": "markdown",
+      "x": 375,
+      "y": 374,
+      "defaultPrevented": false,
+      "isTrusted": true
+    }
+  ]
+}
