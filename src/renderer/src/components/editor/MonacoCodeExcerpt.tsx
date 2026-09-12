@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { monaco } from '@/lib/monaco-setup'
+import { patchPythonTripleQuotedFStrings } from '@/lib/monaco-languages/register-python'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
@@ -24,7 +25,13 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
           })
         }
         monaco.languages.setLanguageConfiguration('python', conf)
-        monaco.languages.setMonarchTokensProvider('python', pythonTokens)
+        // Why: this registers an explicit tokens provider, which wins over the
+        // factory installed in monaco-setup. Apply the same triple-quoted
+        // f-string patch so excerpts cannot reinstate the stock grammar's bug.
+        monaco.languages.setMonarchTokensProvider(
+          'python',
+          patchPythonTripleQuotedFStrings(pythonTokens)
+        )
       }
     )
   await pythonLanguageRegistrationPromise
