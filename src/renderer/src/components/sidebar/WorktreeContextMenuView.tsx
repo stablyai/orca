@@ -188,19 +188,20 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-                {worktree.isUnread ? (
-                  <BellOff className="size-3.5" />
-                ) : (
-                  <Bell className="size-3.5" />
-                )}
-                {worktree.isUnread
-                  ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
-                  : translate(
-                      'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
-                      'Mark Unread'
-                    )}
-              </DropdownMenuItem>
+            </>
+          )}
+          <DropdownMenuItem onSelect={handleToggleRead} disabled={deletingContext}>
+            {isMultiContext || worktree.isUnread ? (
+              <BellOff className="size-3.5" />
+            ) : (
+              <Bell className="size-3.5" />
+            )}
+            {isMultiContext || worktree.isUnread
+              ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
+              : translate('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
+          </DropdownMenuItem>
+          {!isMultiContext && (
+            <>
               {repo ? (
                 <>
                   <DropdownMenuSeparator />

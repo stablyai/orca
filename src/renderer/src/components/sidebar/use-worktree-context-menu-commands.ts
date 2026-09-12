@@ -42,11 +42,16 @@ export function useWorktreeContextMenuCommands(args: {
     window.api.ui.writeClipboardText(args.worktree.path)
   }, [args])
   const handleToggleRead = useCallback(() => {
-    args.updateWorktreeMeta(
-      args.worktree.id,
-      { isUnread: !args.worktree.isUnread },
-      { executionHostId: args.worktree.hostId ?? 'local' }
-    )
+    const targets = args.isMultiContext
+      ? args.activeContextWorktrees.filter((worktree) => worktree.isUnread)
+      : [args.worktree]
+    for (const worktree of targets) {
+      void args.updateWorktreeMeta(
+        worktree.id,
+        { isUnread: args.isMultiContext ? false : !worktree.isUnread },
+        { executionHostId: worktree.hostId ?? 'local' }
+      )
+    }
   }, [args])
   const handleTogglePin = useCallback(() => {
     args.setWorktreesPinnedAndReveal([args.worktree.id], !args.worktree.isPinned)
