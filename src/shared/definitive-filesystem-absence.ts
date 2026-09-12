@@ -1,3 +1,5 @@
+import { readUntrustedString } from './untrusted-value-fields'
+
 /**
  * The single errno allowlist for "this path is definitively not there".
  *
@@ -12,6 +14,6 @@
  * category error this predicate exists to prevent.
  */
 export function isDefinitiveAbsence(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | null)?.code
+  const code = readUntrustedString(error, 'code')
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
