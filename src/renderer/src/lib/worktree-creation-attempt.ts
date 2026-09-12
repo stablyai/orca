@@ -7,7 +7,6 @@ export type WorktreeCreationAttempt = {
   cleanupRuntime?: () => Promise<void>
   worktree?: Worktree
   isCancelled: () => boolean
-  onCreated: (worktree: Worktree) => void
 }
 
 export const activeWorktreeCreationAttempts = new Map<string, WorktreeCreationAttempt>()

@@ -1,9 +1,7 @@
 import { dispatchWorktreeCreation } from './worktree-creation-dispatch'
 import { toast } from 'sonner'
-import {
-  withWorktreeCreationCancellation,
-  type WorktreeCreationAttempt
-} from './worktree-creation-cancellation'
+import { withWorktreeCreationCancellation } from './worktree-creation-cancellation'
+import type { WorktreeCreationAttempt } from './worktree-creation-attempt'
 import { useAppStore } from '@/store'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
@@ -132,10 +130,9 @@ async function executeWorktreeCreationAttempt(
   }
   const completionState = useAppStore.getState()
   const shouldActivateOnCompletion =
-    completionState.pendingWorktreeCreations[creationId] !== undefined &&
-    (isPendingCreationSurfaceVisible(creationId) ||
-      (completionState.activeView === 'terminal' &&
-        completionState.activePendingCreationId === null))
+    completionState.activeView === 'terminal' &&
+    (completionState.activePendingCreationId === creationId ||
+      completionState.activePendingCreationId === null)
 
   // Why: the worktree exists past this point and nothing awaits this caller, so
   // each follow-up step is best-effort — an escaped throw would strand the

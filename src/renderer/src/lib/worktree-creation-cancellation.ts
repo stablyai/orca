@@ -1,13 +1,10 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import type { Worktree } from '../../../shared/worktree/types'
 
 import {
   activeWorktreeCreationAttempts as activeAttempts,
   type WorktreeCreationAttempt
 } from './worktree-creation-attempt'
-export { cancelActiveWorktreeCreation } from './worktree-creation-attempt'
-export type { WorktreeCreationAttempt } from './worktree-creation-attempt'
 
 export async function withWorktreeCreationCancellation(
   creationId: string,
@@ -30,10 +27,7 @@ export async function withWorktreeCreationCancellation(
     completed: false,
     cancelled: false,
     isCancelled: () =>
-      attempt.cancelled || !useAppStore.getState().pendingWorktreeCreations[creationId],
-    onCreated: (worktree) => {
-      attempt.worktree = worktree
-    }
+      attempt.cancelled || !useAppStore.getState().pendingWorktreeCreations[creationId]
   }
   activeAttempts.set(creationId, attempt)
   try {
@@ -41,20 +35,12 @@ export async function withWorktreeCreationCancellation(
       await execute(attempt)
     }
   } finally {
-    const cleanup = async (): Promise<boolean> => {
-      try {
-        const removed =
-          !attempt.worktree || (await removeCancelledCreatedWorktree(attempt.worktree))
-        if (removed) {
-          await attempt.cleanupRuntime?.()
-        }
-        return removed
-      } finally {
+    const cleanup = (): Promise<boolean> =>
+      removeCancelledCreation(attempt).finally(() => {
         if (activeAttempts.get(creationId) === attempt) {
           activeAttempts.delete(creationId)
         }
-      }
-    }
+      })
     if (!attempt.completed && attempt.isCancelled()) {
       await cleanup()
     } else if (!attempt.completed && attempt.worktree) {
@@ -66,22 +52,26 @@ export async function withWorktreeCreationCancellation(
   }
 }
 
-async function removeCancelledCreatedWorktree(worktree: Worktree): Promise<boolean> {
+async function removeCancelledCreation(attempt: WorktreeCreationAttempt): Promise<boolean> {
+  const { worktree } = attempt
   try {
-    const result = await useAppStore
-      .getState()
-      .removeWorktree({ id: worktree.id, executionHostId: worktree.hostId ?? 'local' }, true, {
-        skipArchiveHooks: true,
-        suppressPreservedBranchToast: true,
-        ...(worktree.instanceId ? { expectedInstanceId: worktree.instanceId } : {})
-      })
-    if (!result.ok) {
-      throw new Error(result.error)
+    if (worktree) {
+      const result = await useAppStore
+        .getState()
+        .removeWorktree({ id: worktree.id, executionHostId: worktree.hostId ?? 'local' }, true, {
+          skipArchiveHooks: true,
+          suppressPreservedBranchToast: true,
+          ...(worktree.instanceId ? { expectedInstanceId: worktree.instanceId } : {})
+        })
+      if (!result.ok) {
+        throw new Error(result.error)
+      }
     }
+    await attempt.cleanupRuntime?.()
     return true
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('worktree create: cancellation cleanup failed', worktree.id, error)
+    console.error('worktree create: cancellation cleanup failed', worktree?.id, error)
     toast.error(`Could not remove the cancelled workspace: ${message}`, {
       duration: Infinity
     })

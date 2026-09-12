@@ -44,7 +44,9 @@ export function dispatchWorktreeCreation(
       preparedRequest.compareBaseRef,
       {
         isCancelled: attempt.isCancelled,
-        onCreated: attempt.onCreated,
+        onCreated: (worktree) => {
+          attempt.worktree = worktree
+        },
         ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
         ...(preparedRequest.displayNameKind
           ? { displayNameKind: preparedRequest.displayNameKind }

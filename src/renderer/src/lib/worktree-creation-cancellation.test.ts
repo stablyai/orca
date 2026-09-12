@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { toast } from 'sonner'
-import {
-  cancelActiveWorktreeCreation,
-  withWorktreeCreationCancellation
-} from './worktree-creation-cancellation'
+import { cancelActiveWorktreeCreation } from './worktree-creation-attempt'
+import { withWorktreeCreationCancellation } from './worktree-creation-cancellation'
 
 const state = vi.hoisted(() => ({
   pendingWorktreeCreations: {} as Record<string, unknown>,
@@ -31,7 +29,7 @@ describe('worktree creation cancellation', () => {
   it('does no extra deletion or runtime cleanup after a normal handoff', async () => {
     const cleanup = vi.fn()
     await withWorktreeCreationCancellation('creation', async (attempt) => {
-      attempt.onCreated(worktree)
+      attempt.worktree = worktree
       attempt.cleanupRuntime = cleanup
       attempt.completed = true
       delete state.pendingWorktreeCreations.creation
@@ -55,7 +53,7 @@ describe('worktree creation cancellation', () => {
     const running = withWorktreeCreationCancellation('creation', async (attempt) => {
       attempt.cleanupRuntime = cleanup
       await gate.promise
-      attempt.onCreated(worktree)
+      attempt.worktree = worktree
     })
     expect(cancelActiveWorktreeCreation('creation')).toBe(true)
     expect(cancelActiveWorktreeCreation('creation')).toBe(true)
@@ -79,7 +77,7 @@ describe('worktree creation cancellation', () => {
     const running = withWorktreeCreationCancellation('creation', async (attempt) => {
       await gate.promise
       expect(attempt.isCancelled()).toBe(true)
-      attempt.onCreated(worktree)
+      attempt.worktree = worktree
     })
     cancelActiveWorktreeCreation('creation')
     state.pendingWorktreeCreations.creation = { replacement: true }
@@ -115,7 +113,7 @@ describe('worktree creation cancellation', () => {
 
   it('cleans up a settled post-create failure when its error panel is dismissed', async () => {
     await withWorktreeCreationCancellation('creation', async (attempt) => {
-      attempt.onCreated(worktree)
+      attempt.worktree = worktree
     })
     expect(state.removeWorktree).not.toHaveBeenCalled()
     expect(cancelActiveWorktreeCreation('creation')).toBe(true)
@@ -125,7 +123,7 @@ describe('worktree creation cancellation', () => {
 
   it('retires a settled workspace before retry dispatch and blocks retry on failed cleanup', async () => {
     await withWorktreeCreationCancellation('creation', async (attempt) => {
-      attempt.onCreated(worktree)
+      attempt.worktree = worktree
     })
     const events: string[] = []
     state.removeWorktree.mockImplementationOnce(async () => {
@@ -137,7 +135,7 @@ describe('worktree creation cancellation', () => {
     })
     expect(events).toEqual(['remove', 'create'])
     await withWorktreeCreationCancellation('creation', async (attempt) => {
-      attempt.onCreated(worktree)
+      attempt.worktree = worktree
     })
     state.removeWorktree.mockResolvedValueOnce({ ok: false, error: 'Host unavailable' })
     const retry = vi.fn()
@@ -147,11 +145,24 @@ describe('worktree creation cancellation', () => {
     expect(retry).not.toHaveBeenCalled()
   })
 
+  it('releases the attempt and reports a runtime cleanup failure', async () => {
+    await withWorktreeCreationCancellation('creation', async (attempt) => {
+      attempt.cleanupRuntime = async () => {
+        throw new Error('Runtime cleanup failed')
+      }
+      cancelActiveWorktreeCreation('creation')
+    })
+    expect(cancelActiveWorktreeCreation('creation')).toBe(false)
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Runtime cleanup failed'), {
+      duration: Infinity
+    })
+  })
+
   it('reports failed cleanup and retains the runtime when the host cannot confirm deletion', async () => {
     const cleanup = vi.fn()
     state.removeWorktree.mockResolvedValue({ ok: false, error: 'Host unavailable' })
     await withWorktreeCreationCancellation('creation', async (attempt) => {
-      attempt.onCreated(worktree)
+      attempt.worktree = worktree
       attempt.cleanupRuntime = cleanup
       cancelActiveWorktreeCreation('creation')
     })
