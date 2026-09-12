@@ -34,14 +34,22 @@ function joinLogExcerptWithByteCap(prefixLines: string[], recentLines: string[])
 
 function collectEarlierErrorLineIndexes(lines: string[], recentStart: number): number[] {
   const indexes = new Set<number>()
-  for (let index = 0; index < recentStart; index += 1) {
+  // Only the latest context survives; older windows cannot contribute once it is full.
+  for (let index = recentStart - 1; index >= 0; index -= 1) {
     if (!ERROR_LINE_PATTERN.test(lines[index] ?? '')) {
       continue
     }
     const contextStart = Math.max(0, index - PR_CHECK_LOG_TAIL_ERROR_CONTEXT_LINES)
     const contextEnd = Math.min(recentStart - 1, index + PR_CHECK_LOG_TAIL_ERROR_CONTEXT_LINES)
-    for (let contextIndex = contextStart; contextIndex <= contextEnd; contextIndex += 1) {
+    for (
+      let contextIndex = contextEnd;
+      contextIndex >= contextStart && indexes.size < PR_CHECK_LOG_TAIL_MAX_EARLIER_LINES;
+      contextIndex -= 1
+    ) {
       indexes.add(contextIndex)
+    }
+    if (indexes.size === PR_CHECK_LOG_TAIL_MAX_EARLIER_LINES) {
+      break
     }
   }
   return [...indexes].sort((left, right) => left - right)
@@ -61,8 +69,7 @@ export function sliceCheckLogTail(logText: string): string {
     return applyLogTailByteCap(lines.slice(-PR_CHECK_LOG_TAIL_LINES).join('\n'))
   }
 
-  const cappedEarlierIndexes = earlierIndexes.slice(-PR_CHECK_LOG_TAIL_MAX_EARLIER_LINES)
-  const earlierLines = cappedEarlierIndexes.map((index) => lines[index] ?? '')
+  const earlierLines = earlierIndexes.map((index) => lines[index] ?? '')
   // Why: if the recent tail alone exceeds the byte cap, keep the earlier error
   // context visible instead of truncating it back out of the combined excerpt.
   return joinLogExcerptWithByteCap(
