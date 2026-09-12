@@ -31,24 +31,27 @@ A handoff is done when the new worktree id and agent handle have been reported a
 
 Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with worktree/terminal commands.
 
-Independent new-worktree handoff:
+New-worktree handoff — pass the lineage flag you mean:
 
 ```text
+ORCA worktree create --name <task-name> --parent-worktree active --agent codex --prompt "<task brief>" --json
 ORCA worktree create --name <task-name> --no-parent --agent codex --prompt "<task brief>" --json
 ```
 
-Use `--no-parent` and omit `--base-branch` for independent top-level handoffs unless the user explicitly asks for stacked work, "branch from current", or a specific base. Put any current-branch context in the prompt.
+The first files the handoff under this worktree, the second files it at the top level; see Lineage for what each one does. With neither flag Orca infers a parent from the calling context, so state the flag rather than leaving the grouping to where the command happened to run.
+
+Omit `--base-branch` unless the user explicitly asks for stacked work, "branch from current", or a specific base. Put any current-branch context in the prompt. The base is a separate choice from lineage.
 
 Custom Codex model/effort handoff:
 
-`worktree create --agent codex` uses Orca's configured launcher; it has no per-call model/effort flags or arbitrary Codex argument forwarding. For a request such as `gpt-6-astra xhigh`, create the worktree, launch Codex through `terminal create --command` with `--model` and `-c model_reasoning_effort=...`, wait for TUI readiness, then send the prompt. For a full handoff, stop after confirming the send was accepted.
+`worktree create --agent codex` uses Orca's configured launcher; it has no per-call model/effort flags or arbitrary Codex argument forwarding. For a request such as `gpt-6-astra xhigh`, create the worktree, launch Codex through `terminal create --command` with `--model` and `-c model_reasoning_effort=...`, wait for TUI readiness, then send the prompt. For a full handoff, stop after confirming the send was accepted. `<lineage-flag>` below stands for `--parent-worktree active` or `--no-parent`; substitute the one you chose.
 
 **Extra first terminal:** when no repo default-terminal configuration supplies a primary terminal, bare `worktree create` (no `--agent`) opens a fallback shell before the later `terminal create --command ...` adds the agent. Configured default tabs are materialized instead and may run real commands. Prefer `--agent` whenever the built-in launcher is enough. When custom argv forces the two-step path, close a prior terminal only after `terminal list` or `terminal show` confirms it is an unused shell.
 
 The create result's `worktree.id` already contains both pieces Orca needs: `<repoId>::<worktreePath>`. Copy that whole value into the next command; do not shorten it to the repo id.
 
 ```text
-ORCA worktree create --name <task-name> --no-parent --json
+ORCA worktree create --name <task-name> <lineage-flag> --json
 ORCA terminal create --worktree id:<repoId>::<newWorktreePath> --title <task-name> --command 'codex --model gpt-6-astra -c model_reasoning_effort="xhigh"' --json
 ORCA terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 ORCA terminal send --terminal <handle> --text "<task brief>" --enter --json
@@ -83,8 +86,8 @@ ORCA worktree show --worktree <selector> --json
 ORCA worktree create --repo id:<repoId> --name related-task --json
 ORCA worktree create --repo id:<repoId> --name related-task --parent-worktree active --json
 ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
-ORCA worktree create --name child-task --agent codex --prompt "hi" --json
-ORCA worktree create --name independent-task --no-parent --json
+ORCA worktree create --name child-task --parent-worktree active --agent codex --prompt "hi" --json
+ORCA worktree create --name top-level-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
@@ -98,13 +101,16 @@ Selectors:
 - `active` / `current` for the enclosing Orca-managed worktree from the shell cwd
 - For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
 
-Lineage rules:
+Lineage:
 
-- When creating from inside an Orca-managed worktree or folder context, Orca infers the current parent context when it can.
-- Use `--parent-worktree active` when the child worktree relationship should be explicit.
-- Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<repoId>::<worktreePath>` when a folder or worktree parent context should be explicit.
-- Use `--no-parent` only when the new work is independent.
-- `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
+Lineage is the sidebar grouping: a child worktree is grouped under its parent and travels with it through the user's review, sleep, and status-lane flows, and a top-level worktree is its own row. It does not affect the branch, the base commit, or the PR, and `worktree set` can change it later. Deleting a parent in the Orca UI deletes its children with it; `orca worktree rm` removes only the worktree you name.
+
+Flags:
+
+- `--parent-worktree active`, `--parent-worktree folder:<folderId>`, or `--parent-worktree worktree:<repoId>::<worktreePath>` names a parent explicitly.
+- `--no-parent` makes the new worktree its own root.
+- Pass one of them. With neither flag, Orca infers a parent from the calling context (Orca terminal, orchestration context, or cwd) and records the new worktree as its child; it comes out top-level only when nothing can be inferred. That inference follows from where the command ran, not from what the new work is about.
+- Lineage and Git base are independent. `--no-parent` never changes the base; `--base-branch` never changes lineage. Omit `--base-branch` to use the repo default base, or pass it explicitly. Never base on the current feature branch unless the user asks for stacked work or "branch from current".
 - If `--repo` is omitted, Orca infers the repo from the current Orca worktree when possible.
 
 Agent/setup flags:

@@ -40,12 +40,65 @@ describe('orca CLI skill guidance', () => {
     )
   })
 
-  it('keeps independent worktree lineage separate from Git base selection', () => {
+  it('keeps worktree lineage separate from Git base selection', () => {
     const skill = readSkill()
 
-    expect(skill).toContain('`--no-parent` only controls Orca lineage')
-    expect(skill).toContain('omit `--base-branch` so Orca uses the repo default base')
-    expect(skill).toContain('Never base it on the current feature branch')
+    expect(skill).toContain(
+      'Lineage and Git base are independent. `--no-parent` never changes the base; `--base-branch` never changes lineage.'
+    )
+    expect(skill).toContain('Omit `--base-branch` to use the repo default base')
+    expect(skill).toContain('Never base on the current feature branch')
+  })
+
+  // Why: child-vs-top-level lineage is an unresolved product preference, so this guide
+  // must not resolve it. These assertions pin symmetry -- both options present, both
+  // costs stated, neither one reachable by copying a template -- not either outcome.
+  it('presents both lineage options symmetrically in the handoff templates', () => {
+    const skill = readSkill()
+
+    expect(skill).toContain(
+      'ORCA worktree create --name <task-name> --parent-worktree active --agent codex --prompt'
+    )
+    expect(skill).toContain(
+      'ORCA worktree create --name <task-name> --no-parent --agent codex --prompt'
+    )
+    // A flagless template is not neutral: create infers a parent, so omitting the flag
+    // silently picks the child outcome. No copy-paste template may leave it out.
+    expect(skill).not.toContain('ORCA worktree create --name <task-name> --agent codex --prompt')
+    expect(skill).not.toContain('ORCA worktree create --name <task-name> --json')
+    expect(skill).toContain('<lineage-flag>')
+  })
+
+  // Why: validation (n=66, two providers) showed prose cannot make a model pick lineage
+  // from the situation -- it only shifts each model's fixed disposition, and a vividly
+  // one-sided cost flips one provider outright. So the guide states the mechanism and
+  // argues for neither side; these assertions pin that shape, not an outcome.
+  it('states the lineage mechanism and prescribes neither option', () => {
+    const skill = readSkill()
+
+    expect(skill).toContain(
+      "Lineage is the sidebar grouping: a child worktree is grouped under its parent and travels with it through the user's review, sleep, and status-lane flows, and a top-level worktree is its own row."
+    )
+    // The cascade is a UI-surface behaviour; the CLI removes only the named worktree.
+    // Left unscoped, an agent cleaning up via the parent would leak its children.
+    expect(skill).toContain(
+      'Deleting a parent in the Orca UI deletes its children with it; `orca worktree rm` removes only the worktree you name'
+    )
+    expect(skill).toContain(
+      'Orca infers a parent from the calling context (Orca terminal, orchestration context, or cwd)'
+    )
+    expect(skill).toContain(
+      'That inference follows from where the command ran, not from what the new work is about.'
+    )
+    // Neither side may be restored as a rule.
+    expect(skill).not.toContain('Use `--no-parent` only when the new work is independent.')
+    expect(skill).not.toContain('--name independent-task')
+    expect(skill).not.toMatch(
+      /(prefer|default to|always use) (a child|child lineage|`--no-parent`)/i
+    )
+    // The old cascade claim was false: the Orca UI deletes a parent's children with it.
+    expect(skill).not.toContain('deleting a parent never deletes its children on its own')
+    expect(skill).not.toContain('Both stay visible either way')
   })
 
   it('documents non-lifecycle full handoffs and custom Codex model fallback', () => {
