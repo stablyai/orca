@@ -114,8 +114,11 @@ with `--task`, since `--spec` creates a new one. Placement is never silently
 inherited:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <explicit_placement> --agent <agent> --json
+ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <explicit_placement> --json
 ```
+
+Repeat `--on`/`--worktree` and `--terminal` explicitly; add `--agent` only when
+the Settings default agent is not wanted.
 
 After three consecutive failures for one Task, its dispatch context
 circuit-breaks and the Task is failed. Do not route around that boundary with a

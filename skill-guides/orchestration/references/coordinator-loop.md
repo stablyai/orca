@@ -21,6 +21,14 @@ when an older CLI rejects the flag. A nested worker must respect
 
 ## Launch preferences
 
+Omit `--agent` to launch the user's Settings default agent; that is the normal
+choice, and the first example in the kernel shows it. Name an agent only when
+the task or the user calls for a specific one. Workers never inherit the
+coordinator's own agent. An omitted `--agent` with no enabled default, a named
+agent that is disabled, an empty `--agent`, and a host too old to resolve a
+default all fail with `agent_unconfigured` rather than silently substituting
+another agent.
+
 For a fresh Claude, Codex, or Cursor terminal, `--model` accepts an opaque
 provider model ID. Pass it only when the user named a model; otherwise omit it
 so the worker inherits the user's configured agent default. Add `--effort` only
