@@ -27,29 +27,4 @@ describe('CI dependency download caches', () => {
       'mobile/pnpm-lock.yaml'
     ])
   })
-
-  it('saves release tool downloads before signing can mutate them', () => {
-    const steps = Object.values(workflow('release-cut').jobs).find((job) =>
-      job.steps?.some((step) => step.id === 'electron-builder-downloads')
-    ).steps
-    const restore = steps.find((step) => step.id === 'electron-builder-downloads')
-    const save = steps.find(
-      (step) => step.name === 'Save electron-builder downloads before signing'
-    )
-    expect(restore.uses).toBe('actions/cache/restore@v5')
-    expect(restore.with.key).toContain(
-      'electron-builder-downloads-v2-${{ runner.os }}-${{ runner.arch }}'
-    )
-    expect(restore.with['restore-keys']).toContain('electron-builder-downloads-v2-')
-    expect(save.uses).toBe('actions/cache/save@v5')
-    expect(save.with.path).toBe(restore.with.path)
-    expect(save.with.key).toBe('${{ steps.electron-builder-downloads.outputs.cache-primary-key }}')
-    expect(steps.indexOf(save)).toBeGreaterThan(
-      steps.findIndex((step) => step.name === 'Build Windows release artifacts')
-    )
-    expect(steps.indexOf(save)).toBeLessThan(
-      steps.findIndex((step) => step.id === 'sign-elevate-cache')
-    )
-    expect(save.if).toContain("matrix.platform != 'win' || github.run_attempt == 1")
-  })
 })

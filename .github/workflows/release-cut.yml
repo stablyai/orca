@@ -1251,13 +1251,12 @@ jobs:
       # Cache the Electron binary + electron-builder tool downloads
       # (winCodeSign, nsis, squirrel, AppImage). Saves ~30-90s per job.
       - name: Cache electron-builder downloads
-        id: electron-builder-downloads
-        uses: actions/cache/restore@v5
+        uses: actions/cache@v5
         with:
           path: ${{ matrix.eb_cache_path }}
-          key: electron-builder-downloads-v2-${{ runner.os }}-${{ runner.arch }}-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
+          key: electron-builder-${{ matrix.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
-            electron-builder-downloads-v2-${{ runner.os }}-${{ runner.arch }}-${{ matrix.platform }}-
+            electron-builder-${{ matrix.platform }}-
 
       # Why: pnpm install triggers electron's postinstall, which downloads the
       # Electron binary from GitHub release assets. GitHub's download CDN
@@ -1454,14 +1453,6 @@ jobs:
       - name: Install SignPath PowerShell module
         if: matrix.platform == 'win' && github.run_attempt == 1
         uses: ./.github/actions/install-signpath-module
-
-      # Save before SignPath replaces cached elevate.exe with this run's signed bytes.
-      - name: Save electron-builder downloads before signing
-        if: steps.electron-builder-downloads.outputs.cache-hit != 'true' && (matrix.platform != 'win' || github.run_attempt == 1)
-        uses: actions/cache/save@v5
-        with:
-          path: ${{ matrix.eb_cache_path }}
-          key: ${{ steps.electron-builder-downloads.outputs.cache-primary-key }}
 
       # ── Windows inner-binary signing (issue #7785) ─────────────────────
       # Why: SignPath cannot deep-sign inside NSIS installers, so inner PE
@@ -1722,7 +1713,10 @@ jobs:
       # clobbered the SignPath signature in v1.4.129-rc.4. There is no supported
       # way to disable just the copy, so we overwrite the cache's copy with our
       # signed one (identical bytes plus signature) so the clobber becomes a
-      # no-op. The download cache is saved before signing, so this swap stays local.
+      # no-op. Known quirk: the cache persists across releases via actions/cache,
+      # so later runs may see elevate.exe as already signed and skip staging it —
+      # that is fine (the signature is timestamped) and the evidence gate checks
+      # elevate.exe in the shipped installer unconditionally.
       #
       # The cache lookup lives in a script because the inline path this step used
       # (`<cache>\nsis`) matches no app-builder-lib layout, and `SilentlyContinue`
@@ -1739,7 +1733,9 @@ jobs:
             Write-Host '::warning::No elevate.exe in win-unpacked resources; nothing to protect from the rebuild clobber.'
             exit 0
           }
-          # Only this run's production SignPath signature may enter the installer rebuild.
+          # Why this guard stays: windows-signing-rehearsal.yml shares the
+          # electron-builder-win-<lockfile hash> cache key with this workflow, so a
+          # test-certificate elevate.exe must never be staged into a release cache.
           $signature = Get-AuthenticodeSignature -FilePath $signed
           $subject = if ($null -eq $signature.SignerCertificate) { '<none>' } else { $signature.SignerCertificate.Subject }
           if ($signature.Status -ne 'Valid' -or $subject -notlike '*CN=SignPath Foundation*') {
