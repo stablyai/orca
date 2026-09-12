@@ -1,5 +1,6 @@
 import { unregisterPushForRemovedHost } from '../notifications/push-registration'
 import { removeHost } from './host-store'
+import { forgetConnectionLogHost } from './persisted-connection-log-store'
 
 export async function removeHostAndCloseClient(
   hostId: string,
@@ -17,4 +18,6 @@ export async function removeHostAndCloseClient(
     throw error
   }
   forgetHostClient(hostId)
+  // Closing the client can still append its final lifecycle event.
+  forgetConnectionLogHost(hostId)
 }

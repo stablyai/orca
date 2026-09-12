@@ -15,8 +15,9 @@
  */
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import type { PtyProviderBufferSnapshot } from '../providers/types'
 
 const repoRoot = resolve(__dirname, '../../..')
 const REAPER_MODULE = 'src/main/runtime/orca-runtime-on-pty-exit.ts'
@@ -141,7 +142,52 @@ describe('onPtyExit per-PTY map reaper coverage', () => {
 })
 
 describe('per-PTY lifecycle generation retention (leak regression)', () => {
-  type Internals = { ptyLifecycleGenerationById: Map<string, number> }
+  type Internals = {
+    ptyLifecycleGenerationById: Map<string, number>
+    getPtyLifecycleGeneration: (ptyId: string) => number
+    dropDisconnectedPtyRecord: (ptyId: string) => void
+    captureProviderTerminalBuffer: (
+      ptyId: string,
+      opts: Record<string, never>,
+      generation: number
+    ) => Promise<unknown>
+  }
+
+  it('releases pruned lifecycle generations without discarding an active sibling', () => {
+    const runtime = new OrcaRuntimeService()
+    const internals = runtime as unknown as Internals
+    runtime.onPtySpawned('active')
+    const activeGeneration = internals.getPtyLifecycleGeneration('active')
+    for (let index = 0; index < 1_000; index += 1) {
+      const id = `retired-${index}`
+      internals.getPtyLifecycleGeneration(id)
+      internals.dropDisconnectedPtyRecord(id)
+    }
+    expect([...internals.ptyLifecycleGenerationById]).toEqual([['active', activeGeneration]])
+  })
+
+  it('rejects an old provider response after pruning and reusing its PTY id', async () => {
+    const runtime = new OrcaRuntimeService()
+    const internals = runtime as unknown as Internals
+    let finish!: (value: PtyProviderBufferSnapshot) => void
+    const response = new Promise<PtyProviderBufferSnapshot>((resolve) => (finish = resolve))
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer: vi.fn(() => response)
+    })
+    const before = internals.getPtyLifecycleGeneration('reused')
+    const capture = internals.captureProviderTerminalBuffer('reused', {}, before)
+    internals.dropDisconnectedPtyRecord('reused')
+    expect(internals.ptyLifecycleGenerationById.has('reused')).toBe(false)
+    runtime.onPtySpawned('reused')
+    const after = internals.getPtyLifecycleGeneration('reused')
+    expect(after).toBeGreaterThan(before)
+    finish({ data: 'old screen', cols: 80, rows: 24, seq: 10, source: 'headless' })
+    await expect(capture).resolves.toBeNull()
+    expect(internals.getPtyLifecycleGeneration('reused')).toBe(after)
+  })
 
   it('retains no lifecycle generation after a spawn/exit cycle', () => {
     const runtime = new OrcaRuntimeService()

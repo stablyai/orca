@@ -63,7 +63,7 @@ describe('connection log buffer', () => {
         })
     )
     const save = vi.fn(async () => {})
-    const store = createConnectionLogStore(3, { load, save })
+    const store = createConnectionLogStore(3, { load, save, remove: async () => {} })
 
     store.append('host-a', entry(3))
     finishLoad([entry(1), entry(2)])
@@ -76,7 +76,11 @@ describe('connection log buffer', () => {
 
   it('redacts credentials before retaining or persisting an event', async () => {
     const save = vi.fn(async () => {})
-    const store = createConnectionLogStore(3, { load: async () => [], save })
+    const store = createConnectionLogStore(3, {
+      load: async () => [],
+      save,
+      remove: async () => {}
+    })
 
     store.append('host-a', {
       ...entry(1),
@@ -91,7 +95,11 @@ describe('connection log buffer', () => {
   })
 
   it('redacts quoted credential values when the object key is unquoted', async () => {
-    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
+    const store = createConnectionLogStore(3, {
+      load: async () => [],
+      save: async () => {},
+      remove: async () => {}
+    })
 
     store.append('host-a', {
       ...entry(1),
@@ -105,7 +113,11 @@ describe('connection log buffer', () => {
   })
 
   it('redacts the full quoted credential when its value contains an escaped quote', async () => {
-    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
+    const store = createConnectionLogStore(3, {
+      load: async () => [],
+      save: async () => {},
+      remove: async () => {}
+    })
 
     store.append('host-a', {
       ...entry(1),
@@ -117,7 +129,11 @@ describe('connection log buffer', () => {
   })
 
   it('redacts unterminated quoted credentials', async () => {
-    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
+    const store = createConnectionLogStore(3, {
+      load: async () => [],
+      save: async () => {},
+      remove: async () => {}
+    })
 
     store.append('host-a', {
       ...entry(1),
@@ -133,7 +149,11 @@ describe('connection log buffer', () => {
   })
 
   it('redacts URL userinfo through the last authority separator', async () => {
-    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
+    const store = createConnectionLogStore(3, {
+      load: async () => [],
+      save: async () => {},
+      remove: async () => {}
+    })
 
     store.append('host-a', {
       ...entry(1),
@@ -154,7 +174,7 @@ describe('connection log buffer', () => {
       .mockRejectedValueOnce(new Error('storage unavailable'))
       .mockResolvedValueOnce([entry(1)])
     const save = vi.fn(async () => {})
-    const store = createConnectionLogStore(3, { load, save })
+    const store = createConnectionLogStore(3, { load, save, remove: async () => {} })
 
     store.append('host-a', entry(2))
     await expect(store.hydrate('host-a')).rejects.toThrow('storage unavailable')
@@ -167,7 +187,8 @@ describe('connection log buffer', () => {
   it('preserves legacy entries that reused the same event id', async () => {
     const store = createConnectionLogStore(3, {
       load: async () => [entry(1), { ...entry(2), id: 'log-1' }],
-      save: async () => {}
+      save: async () => {},
+      remove: async () => {}
     })
 
     await store.hydrate('host-a')
@@ -177,7 +198,11 @@ describe('connection log buffer', () => {
 
   it('retries one transient persistence failure without requiring another append', async () => {
     const save = vi.fn().mockResolvedValue(undefined)
-    const store = createConnectionLogStore(3, { load: async () => [], save })
+    const store = createConnectionLogStore(3, {
+      load: async () => [],
+      save,
+      remove: async () => {}
+    })
 
     await store.hydrate('host-a')
     await vi.waitFor(() => expect(save).toHaveBeenCalled())
@@ -191,7 +216,11 @@ describe('connection log buffer', () => {
 
   it('does not retry failed automatic hydration for every appended event', async () => {
     const load = vi.fn().mockRejectedValue(new Error('storage unavailable'))
-    const store = createConnectionLogStore(3, { load, save: async () => {} })
+    const store = createConnectionLogStore(3, {
+      load,
+      save: async () => {},
+      remove: async () => {}
+    })
 
     store.append('host-a', entry(1))
     await expect(store.hydrate('host-a')).rejects.toThrow('storage unavailable')
