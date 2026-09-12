@@ -1,10 +1,18 @@
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import { useAppStore } from '@/store'
 import {
   useWorkspaceCleanupRemoval,
   type WorkspaceCleanupRemovalController
 } from './use-workspace-cleanup-removal'
 import { useWorkspaceCleanupScanLifecycle } from './use-workspace-cleanup-scan-lifecycle'
+import type { WorkspaceCleanupScanScope } from '../../../../shared/workspace-cleanup'
 
 const WORKSPACE_CLEANUP_CLOSE_LINGER_MS = 300
 
@@ -23,6 +31,7 @@ export type WorkspaceCleanupDialogLifecycle = {
 /** Keeps scan/removal ownership mounted while the closed dialog drops its projection tree. */
 export function useWorkspaceCleanupDialogLifecycle(): WorkspaceCleanupDialogLifecycle {
   const activeModal = useAppStore((s) => s.activeModal)
+  const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const loading = useAppStore((s) => s.workspaceCleanupLoading)
   const open = activeModal === 'workspace-cleanup'
@@ -53,9 +62,20 @@ export function useWorkspaceCleanupDialogLifecycle(): WorkspaceCleanupDialogLife
     }
   }, [removalInFlightRef, resetForReopen])
 
+  const scope = useMemo<WorkspaceCleanupScanScope | null>(() => {
+    const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
+    if (!repoId) {
+      return null
+    }
+    const executionHostId =
+      typeof modalData.executionHostId === 'string' ? modalData.executionHostId : ''
+    return { repoId, ...(executionHostId ? { executionHostId } : {}) }
+  }, [modalData])
+
   const { startWorkspaceCleanupScan } = useWorkspaceCleanupScanLifecycle({
     open,
     loading,
+    scope,
     removalInFlight: removal.removalInFlight,
     removalInFlightRef,
     resetRowFailures,

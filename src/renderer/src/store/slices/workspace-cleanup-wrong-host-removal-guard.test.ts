@@ -107,7 +107,7 @@ function makeHostCandidate(
       newestDiffCommentAt: null,
       retainedDoneAgentCount: 0
     },
-    git: { clean: !force, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW },
+    git: { clean: !force, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: NOW },
     fingerprint: `fingerprint-${executionHostId ?? 'unqualified'}${force ? '-force' : ''}`
   }
 }

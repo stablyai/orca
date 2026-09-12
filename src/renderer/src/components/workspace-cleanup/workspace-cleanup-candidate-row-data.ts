@@ -34,6 +34,20 @@ export function getCandidateFactStatuses(candidate: WorkspaceCleanupCandidate): 
       tone: blocker === 'git-status-error' || blocker === 'unknown-base' ? 'destructive' : 'neutral'
     }))
   }
+  // Why: ahead of the unpushed branch because a squash merge leaves commits Git
+  // still counts as ahead — labelling that row "Unpushed commits" describes the
+  // ref graph and argues against the deletion the merge proof just justified.
+  if (candidate.reasons.includes('merged')) {
+    return [
+      {
+        label: translate(
+          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.mergedStatus',
+          'Merged'
+        ),
+        tone: 'ready'
+      }
+    ]
+  }
   if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {
     return [
       {
@@ -131,6 +145,12 @@ export function getDirtyGitLabel(candidate: WorkspaceCleanupCandidate): string |
       'components.workspace.cleanup.browse.gitStatusUnverified',
       'Git status could not be verified'
     )
+  }
+  // Why: a merged branch keeps its own commit ids after a squash, so the ahead
+  // count is real but harmless — warning about it would argue against the very
+  // deletion the merge proof just justified.
+  if (candidate.git.merged === true && candidate.git.clean !== false) {
+    return null
   }
   if (candidate.blockers.includes('unpushed-commits')) {
     if (candidate.git.upstreamAhead && candidate.git.upstreamAhead > 0) {

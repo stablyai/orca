@@ -65,7 +65,7 @@ function makeCandidate(
       newestDiffCommentAt: null,
       retainedDoneAgentCount: 0
     },
-    git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW },
+    git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, merged: null, checkedAt: NOW },
     fingerprint: '2|feature|abc123|clean|19675',
     ...overrides
   }
@@ -93,7 +93,7 @@ describe('workspace cleanup scan snapshot', () => {
       executionHostId: 'ssh:ssh-1',
       path: '/remote/repo-feature',
       blockers: ['ssh-disconnected'],
-      git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
+      git: { clean: null, upstreamAhead: null, upstreamBehind: null, merged: null, checkedAt: null }
     })
     const result = makeBroadResult([makeCandidate(), sshCandidate])
 

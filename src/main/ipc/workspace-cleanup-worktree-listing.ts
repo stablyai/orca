@@ -18,26 +18,34 @@ import {
   resolveWorkspaceCleanupRepoGitRoute,
   type WorkspaceCleanupGitRoute
 } from './workspace-cleanup-git-route'
-import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import {
+  getLocalProjectWorktreeGitOptions,
+  type LocalProjectWorktreeGitOptions
+} from '../project-runtime-git-options'
 
 export async function listCleanupGitWorktrees(
   store: Store,
   repo: Repo,
   repoIsFolder: boolean,
   signal?: AbortSignal
-): Promise<{ route: WorkspaceCleanupGitRoute; gitWorktrees: GitWorktreeInfo[] }> {
+): Promise<{
+  route: WorkspaceCleanupGitRoute
+  gitWorktrees: GitWorktreeInfo[]
+  localGitOptions: LocalProjectWorktreeGitOptions
+}> {
   const route = resolveWorkspaceCleanupRepoGitRoute(repo)
   if (repoIsFolder) {
-    return { route, gitWorktrees: [createFolderWorktree(repo)] }
+    return { route, gitWorktrees: [createFolderWorktree(repo)], localGitOptions: {} }
   }
   if (route.kind === 'ssh') {
     if (!route.provider) {
       // Why: cleanup should reflect only workspaces Orca can currently inspect.
-      return { route, gitWorktrees: [] }
+      return { route, gitWorktrees: [], localGitOptions: {} }
     }
     const provider = route.provider
     return {
       route,
+      localGitOptions: {},
       gitWorktrees: await withWorkspaceCleanupTimeout(
         (signal) => provider.listWorktrees(repo.path, { signal }),
         WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
@@ -49,6 +57,7 @@ export async function listCleanupGitWorktrees(
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   return {
     route,
+    localGitOptions,
     gitWorktrees: await withWorkspaceCleanupTimeout(
       (signal) => listRepoWorktrees(repo, { ...localGitOptions, signal }),
       WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,

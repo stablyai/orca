@@ -55,6 +55,8 @@ export function getWorkspaceCleanupSortFieldLabel(field: WorkspaceCleanupSortFie
 
 export function getWorkspaceCleanupGitStateLabel(state: WorkspaceCleanupGitState): string {
   switch (state) {
+    case 'merged':
+      return translate('components.workspace.cleanup.browse.git.merged', 'Merged into base')
     case 'clean':
       return translate('components.workspace.cleanup.browse.git.clean', 'Clean')
     case 'dirty':

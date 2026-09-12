@@ -20,7 +20,7 @@ type PendingScan = {
 function deferredCandidate(worktreeId: string) {
   return makeFacetCandidate({
     worktreeId,
-    git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
+    git: { clean: null, upstreamAhead: null, upstreamBehind: null, merged: null, checkedAt: null }
   })
 }
 

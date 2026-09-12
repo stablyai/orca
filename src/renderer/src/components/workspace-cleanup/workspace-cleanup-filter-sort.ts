@@ -96,6 +96,7 @@ export function sortWorkspaceCleanupCandidates(
 }
 
 const GIT_STATE_LABELS: Record<WorkspaceCleanupGitState, string> = {
+  merged: 'Merged',
   unpushed: 'Unpushed',
   unknown: 'Unknown',
   clean: 'Clean',
@@ -110,6 +111,12 @@ export function getWorkspaceCleanupGitLabel(candidate: WorkspaceCleanupCandidate
 export function getWorkspaceCleanupGitState(
   candidate: WorkspaceCleanupCandidate
 ): WorkspaceCleanupGitState {
+  // Why: checked before unpushed because a squash merge leaves commits that look
+  // unpushed while the base already carries every change — reporting "Unpushed"
+  // there describes the ref graph and misleads about the risk.
+  if (candidate.git.merged === true) {
+    return 'merged'
+  }
   if (hasUnpushedCommits(candidate)) {
     return 'unpushed'
   }
@@ -242,6 +249,11 @@ function getReviewSortRank(reviewInfo: WorkspaceCleanupReviewInfo): number {
 }
 
 function getGitSortRank(candidate: WorkspaceCleanupCandidate): number {
+  // Why: the scale is risk ascending, and a merged branch is safer than merely
+  // clean — its changes are provably already on the base.
+  if (candidate.git.merged === true) {
+    return 0
+  }
   if (hasUnpushedCommits(candidate)) {
     return 4
   }

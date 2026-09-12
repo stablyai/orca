@@ -65,6 +65,7 @@ describe('ranked fields', () => {
             clean: true,
             upstreamAhead: 2,
             upstreamBehind: 0,
+            merged: null,
             checkedAt: 1
           }
         }
@@ -76,6 +77,7 @@ describe('ranked fields', () => {
             clean: false,
             upstreamAhead: 0,
             upstreamBehind: 0,
+            merged: null,
             checkedAt: 1
           }
         }
@@ -86,6 +88,7 @@ describe('ranked fields', () => {
             clean: null,
             upstreamAhead: 0,
             upstreamBehind: 0,
+            merged: null,
             checkedAt: null
           }
         }
