@@ -1,4 +1,4 @@
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { CLIENT_PLATFORM } from '@/lib/client-platform'
 import { resolveWindowsShellOverride } from '@/lib/pane-manager/windows-pty-compatibility'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { isWslUncPath } from '../../../shared/wsl-paths'

@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -92,6 +92,51 @@ describe('serve update handoff', () => {
 
       expect(appMock.quit).toHaveBeenCalledOnce()
       removeListener()
+    }
+  )
+
+  it.runIf(process.platform === 'linux')(
+    'requires AppImage identity plus the spool helper marker on Linux',
+    async () => {
+      const { hasServeUpdateSupervisor } = await import('./serve-update-handoff')
+      const { getHelperMarkerPath } = await import('../shared/serve-update-spool')
+      const { resetLinuxServeUpdateHelperCache } = await import('./serve-update-spool')
+
+      // Why each case resets the env: hasServeUpdateSupervisor re-reads the spool dir
+      // per call; the helper verdict itself is cached once-per-process, so reset it
+      // after every marker change.
+      const previousAppImage = process.env.APPIMAGE
+      try {
+        process.env.ORCA_SERVE_UPDATE_SPOOL_DIR = root
+        process.env.ORCA_SERVE_UPDATE_UNIT_NAME = 'orca-serve.service'
+        process.env.APPIMAGE = ''
+        writeFileSync(
+          join(root, 'helper.json'),
+          JSON.stringify({ helperVersion: 1, unitName: 'orca-serve.service' })
+        )
+        expect(hasServeUpdateSupervisor()).toBe(false)
+
+        process.env.APPIMAGE = join(root, 'orca.AppImage')
+        resetLinuxServeUpdateHelperCache()
+        expect(hasServeUpdateSupervisor()).toBe(true)
+
+        writeFileSync(
+          join(root, 'helper.json'),
+          JSON.stringify({ helperVersion: 1, unitName: 'other.service' })
+        )
+        resetLinuxServeUpdateHelperCache()
+        expect(hasServeUpdateSupervisor()).toBe(false)
+      } finally {
+        if (previousAppImage === undefined) {
+          delete process.env.APPIMAGE
+        } else {
+          process.env.APPIMAGE = previousAppImage
+        }
+        delete process.env.ORCA_SERVE_UPDATE_SPOOL_DIR
+        delete process.env.ORCA_SERVE_UPDATE_UNIT_NAME
+        resetLinuxServeUpdateHelperCache()
+        rmSync(getHelperMarkerPath(root), { force: true })
+      }
     }
   )
 })

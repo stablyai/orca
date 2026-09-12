@@ -36,14 +36,16 @@ describe('locale-translation-policy zh round 5', () => {
         locale: 'zh'
       })
     ).toBe('Codex 账户')
+    // menu.showMobileButton is human-reviewed-exempt (31d06895df): repair keeps the
+    // reviewed 手机端 copy instead of applying the Orca Mobile brand rule.
     expect(
       repairTranslatedValue({
         key: 'menu.showMobileButton',
         enValue: 'Show Orca Mobile Button',
-        localeValue: '显示 Orca 移动按钮',
+        localeValue: '显示 Orca 手机端按钮',
         locale: 'zh'
       })
-    ).toBe('显示 Orca Mobile 按钮')
+    ).toBe('显示 Orca 手机端按钮')
     expect(
       repairTranslatedValue({
         key: 'auto.hooks.useSettingsNavigationMetadata.ab4b21b58e',

@@ -9,6 +9,7 @@ import {
   type ServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
 import { getCanonicalUserDataPath } from './persistence'
+import { hasLinuxServeUpdateHelper } from './serve-update-spool'
 
 function getConfiguredHandoffPath(): string | null {
   const configuredPath = process.env[SERVE_UPDATE_HANDOFF_PATH_ENV]
@@ -20,7 +21,15 @@ function getConfiguredHandoffPath(): string | null {
 }
 
 export function hasServeUpdateSupervisor(): boolean {
-  return process.platform === 'darwin' && getConfiguredHandoffPath() !== null
+  if (process.platform === 'darwin') {
+    return getConfiguredHandoffPath() !== null
+  }
+  if (process.platform === 'linux') {
+    // Why: the root helper owns stop/swap/start on Linux; the AppImage identity
+    // (electron-updater's own gate in AppImageUpdater.isUpdaterActive) must also hold.
+    return Boolean(process.env.APPIMAGE) && hasLinuxServeUpdateHelper()
+  }
+  return false
 }
 
 export function requestServeUpdateHandoff(targetVersion: string): boolean {

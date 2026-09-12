@@ -54,6 +54,7 @@ const store = {
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
+vi.mock('@/lib/client-platform', () => ({ CLIENT_PLATFORM: 'win32' }))
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),

@@ -78,7 +78,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     return super.downloadRemoteServerUpdate(runtimeId)
   }
 
-  installRemoteServerUpdate(runtimeId: string): RemoteServerUpdateInstallResult {
+  async installRemoteServerUpdate(runtimeId: string): Promise<RemoteServerUpdateInstallResult> {
     return super.installRemoteServerUpdate(runtimeId)
   }
 
@@ -106,7 +106,9 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.dismissAvailableUpdate()
   }
 
-  setupAutoUpdater(mainWindow: BrowserWindow, opts?: UpdaterSetupOptions): void {
+  // Why nullable: headless serve arms the updater with no window; every consumer
+  // of mainWindowRef is `?.`-guarded, so null just means "no renderer to publish to".
+  setupAutoUpdater(mainWindow: BrowserWindow | null, opts?: UpdaterSetupOptions): void {
     this.mainWindowRef = mainWindow
     this.onBeforeQuitCleanup = opts?.onBeforeQuit ?? null
     this.persistLastUpdateCheckAt = opts?.setLastUpdateCheckAt ?? null
@@ -153,9 +155,13 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
 
     // Security: never re-add a verifyUpdateCodeSignature override — a no-op disables electron-updater's built-in Authenticode check and accepts any installer.
     if (this.activeUpdateSource === 'release') {
+      // Why: E2E harnesses point a packaged build at a local feed; unset in production.
+      const feedBaseOverride = process.env.ORCA_RELEASE_FEED_BASE
       autoUpdater.setFeedURL({
         provider: 'generic',
-        url: 'https://github.com/stablyai/orca/releases/latest/download'
+        url: feedBaseOverride
+          ? `${feedBaseOverride.replace(/\/+$/, '')}/latest/download`
+          : 'https://github.com/stablyai/orca/releases/latest/download'
       })
     }
     if (this.autoUpdaterInitialized) {
@@ -213,7 +219,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       },
       setUserInitiatedCheck: (value) => {
         this.userInitiatedCheck = value
-      }
+      },
+      recordSupervisedServeDownloadInfo: (info) => this.recordSupervisedServeDownloadInfo(info)
     })
 
     void this.checkForUpdateNudge()
