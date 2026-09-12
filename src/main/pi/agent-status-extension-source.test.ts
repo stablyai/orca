@@ -209,11 +209,12 @@ describe('getPiAgentStatusExtensionSource', () => {
     expect(
       harness.fetchMock.mock.calls.map(([_event, init]) => JSON.parse(String(init?.body)).payload)
     ).toEqual([
-      { hook_event_name: 'agent_start', session_id: 'omp-session-8' },
+      { hook_event_name: 'agent_start', session_id: 'omp-session-8', session_file: '/tmp/s' },
       {
         hook_event_name: 'before_agent_start',
         prompt: 'hi',
-        session_id: 'omp-session-9'
+        session_id: 'omp-session-9',
+        session_file: '/tmp/s'
       },
       { hook_event_name: 'agent_end' }
     ])
@@ -261,9 +262,9 @@ describe('getPiAgentStatusExtensionSource', () => {
         hook_event_name: 'message_end',
         role: 'assistant',
         text: 'done',
-        session_id: 'omp-session-9'
+        session_id: 'omp-session-9',
+        session_file: '/tmp/omp-session-9.jsonl'
       })
-      expect(body.payload).not.toHaveProperty('session_file')
       expect(harness.fetchMock.mock.calls[1]?.[0]).toBe('http://127.0.0.1:4321/hook/omp')
       expect(harness.spawnMock).not.toHaveBeenCalled()
       finishDeliveries[1]?.()
