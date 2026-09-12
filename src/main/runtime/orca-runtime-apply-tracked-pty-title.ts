@@ -58,7 +58,11 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
         this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       }
       ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
-      if (agentStatus === 'idle' && prevStatus !== 'idle') {
+      // Why `!== 'permission'` rather than `!== 'idle'`: a name-only idle leaves the waiter
+      // parked on its poll, so the later explicit idle is an idle→idle step that still has
+      // to be offered. The resolve helper re-ranks and returns early when it is not yet
+      // satisfying evidence, which is what the old edge guard was really protecting.
+      if (agentStatus === 'idle' && prevStatus !== 'permission') {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
       }
       const shouldDelayMobileSnapshot =
@@ -112,7 +116,9 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       // working→idle transition that never comes. Permission→idle is excluded:
       // it means the agent was blocked on user approval and the user said no,
       // which isn't a task-completion signal.
-      if (agentStatus === 'idle' && prevStatus !== 'idle') {
+      // Why not `prevStatus !== 'idle'`: see the pty branch — the resolve helper re-ranks,
+      // so an idle→idle step that upgrades weak evidence to explicit must still be offered.
+      if (agentStatus === 'idle' && prevStatus !== 'permission') {
         this.resolveTuiIdleWaiters(leaf)
       }
       // Why the second condition: push delivery is gated on LIVE idle, so its

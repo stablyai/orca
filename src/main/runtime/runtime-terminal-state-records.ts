@@ -1,4 +1,5 @@
 import type { AgentStatus } from '../../shared/agent-detection'
+import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
@@ -65,6 +66,10 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   lastExitCause: TerminalExitCause | null
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
+  /** Latest first-party state from the agent's own OSC 9999 status stream — what the
+   *  agent SAYS it is doing, as opposed to `lastAgentStatus`, which is inferred from its
+   *  OSC title. Optional: absent until a payload lands. */
+  lastExplicitAgentStatus?: { state: AgentStatusState; updatedAt: number } | null
   lastAgentStatusStartedAtEpochMs: number | null
   lastAgentStatusRichInvalidatedAtEpochMs: number | null
   lastOscTitle: string | null
