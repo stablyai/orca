@@ -45,6 +45,10 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'kimi':
       // Why: Kimi Code emits Claude-compatible hook events, so UserPromptSubmit is its new-turn boundary too.
       return eventName === 'UserPromptSubmit'
+    case 'bob':
+      // Why: Bob reuses the pane across sessions, so SessionStart must drop the previous
+      // session's tool/prompt caches the same way Claude's does.
+      return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'gemini':
@@ -137,9 +141,10 @@ export function extractToolFields(
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
-    // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
+    // Why: Kimi Code and Bob Shell use Claude's tool_name/tool_input payload fields verbatim.
     // falls through
     case 'kimi':
+    case 'bob':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)

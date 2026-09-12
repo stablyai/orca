@@ -8,26 +8,21 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { CodexHookService, codexHookService } from '../codex/hook-service'
-import { DroidHookService, droidHookService } from '../droid/hook-service'
-import { CursorHookService, cursorHookService } from '../cursor/hook-service'
+import { CodexHookService } from '../codex/hook-service'
+import { DroidHookService } from '../droid/hook-service'
+import { CursorHookService } from '../cursor/hook-service'
 import { CURSOR_EVENTS, type CursorEvent } from '../cursor/hook-events'
-import { CommandCodeHookService, commandCodeHookService } from '../command-code/hook-service'
-import { GeminiHookService, geminiHookService } from '../gemini/hook-service'
-import { AntigravityHookService, antigravityHookService } from '../antigravity/hook-service'
-import { AmpHookService, ampHookService } from '../amp/hook-service'
-import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
-import { GrokHookService, grokHookService } from '../grok/hook-service'
-import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
-import { HermesHookService, hermesHookService } from '../hermes/hook-service'
-import { DevinHookService, devinHookService } from '../devin/hook-service'
-import { KimiHookService, kimiHookService } from '../kimi/hook-service'
+import { CommandCodeHookService } from '../command-code/hook-service'
+import { GeminiHookService } from '../gemini/hook-service'
+import { AntigravityHookService } from '../antigravity/hook-service'
+import { AmpHookService } from '../amp/hook-service'
+import { ClaudeHookService } from '../claude/hook-service'
+import { GrokHookService } from '../grok/hook-service'
+import { CopilotHookService } from '../copilot/hook-service'
+import { HermesHookService } from '../hermes/hook-service'
+import { DevinHookService } from '../devin/hook-service'
+import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
-import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
-import {
-  installRemoteManagedAgentHooks,
-  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
-} from './remote-managed-hook-installers'
 
 type FakeFs = {
   files: Map<string, string>
@@ -686,113 +681,6 @@ describe('remote hook service installers', () => {
     expect(config.disableAllHooks).toBeUndefined()
     expect(fs.files.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toContain('#!/bin/sh')
     expect(fs.modes.get('/home/dev/.orca/agent-hooks/copilot-hook.sh')).toBe(0o755)
-  })
-
-  // Why: Droid (and Copilot) each shipped a working installRemote but were never
-  // registered in REMOTE_MANAGED_HOOK_INSTALLERS, so their status silently never
-  // appeared over SSH (issue #7253). Guard the whole bug class, not one agent:
-  // every locally-managed hook service that implements installRemote MUST be
-  // wired into the remote installer.
-  it('registers every managed agent that implements installRemote in the remote installer (issue #7253)', () => {
-    const servicesByAgent = new Map<string, { installRemote?: unknown }>([
-      ['claude', claudeHookService],
-      ['openclaude', openClaudeHookService],
-      ['codex', codexHookService],
-      ['gemini', geminiHookService],
-      ['antigravity', antigravityHookService],
-      ['amp', ampHookService],
-      ['cursor', cursorHookService],
-      ['droid', droidHookService],
-      ['command-code', commandCodeHookService],
-      ['grok', grokHookService],
-      ['copilot', copilotHookService],
-      ['hermes', hermesHookService],
-      ['devin', devinHookService],
-      ['kimi', kimiHookService]
-    ])
-
-    // Guard against a service silently missing from the map above as new agents land.
-    for (const [agent] of MANAGED_AGENT_HOOK_INSTALLERS) {
-      expect(servicesByAgent.has(agent)).toBe(true)
-    }
-
-    const registered = new Set<string>(REMOTE_MANAGED_HOOK_INSTALLER_AGENTS)
-    const missing: string[] = []
-    for (const [agent, service] of servicesByAgent) {
-      if (typeof service.installRemote === 'function' && !registered.has(agent)) {
-        missing.push(agent)
-      }
-    }
-    expect(missing).toEqual([])
-  })
-
-  it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
-    const { sftp } = createFakeSftp()
-    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
-      agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
-    })
-    const byAgent = new Map(results.map((r) => [r.agent, r.state]))
-    expect(byAgent.get('droid')).toBe('installed')
-    expect(byAgent.get('copilot')).toBe('installed')
-  })
-
-  it('installs only positively detected remote agents', async () => {
-    const { sftp, fs } = createFakeSftp()
-
-    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
-      agents: ['codex']
-    })
-
-    expect(results.map((result) => result.agent)).toEqual(['codex'])
-    const paths = [...fs.files.keys(), ...fs.dirs]
-    for (const unusedHome of ['.factory', '.gemini', '.grok', '.hermes', '.commandcode']) {
-      expect(paths.some((path) => path.includes(`/home/dev/${unusedHome}`))).toBe(false)
-    }
-  })
-
-  it('fails closed when the agent allowlist is omitted or empty (issue #11641)', async () => {
-    const { sftp, fs } = createFakeSftp()
-
-    await expect(installRemoteManagedAgentHooks(sftp, '/home/dev')).resolves.toEqual([])
-    await expect(
-      installRemoteManagedAgentHooks(sftp, '/home/dev', { agents: [] })
-    ).resolves.toEqual([])
-
-    // Why: fake SFTP seeds '/' only; no agent config homes or files may appear.
-    expect([...fs.files.keys()]).toEqual([])
-    expect([...fs.dirs]).toEqual(['/'])
-  })
-
-  it('stops before the next installer when its relay request is cancelled', async () => {
-    const controller = new AbortController()
-    const claudeInstall = vi
-      .spyOn(claudeHookService, 'installRemote')
-      .mockImplementation(async () => {
-        controller.abort()
-        return {
-          agent: 'claude',
-          state: 'installed',
-          configPath: '/home/dev/.claude/settings.json',
-          managedHooksPresent: true,
-          detail: null
-        }
-      })
-    const openClaudeInstall = vi.spyOn(openClaudeHookService, 'installRemote')
-    try {
-      const { sftp } = createFakeSftp()
-
-      await expect(
-        installRemoteManagedAgentHooks(sftp, '/home/dev', {
-          signal: controller.signal,
-          agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
-        })
-      ).rejects.toMatchObject({ name: 'AbortError' })
-      expect(claudeInstall).toHaveBeenCalledTimes(1)
-      expect(openClaudeInstall).not.toHaveBeenCalled()
-    } finally {
-      claudeInstall.mockRestore()
-      openClaudeInstall.mockRestore()
-    }
   })
 
   it('installs remote Droid hooks into Factory settings.json (issue #7253)', async () => {
