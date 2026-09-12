@@ -20,6 +20,7 @@ import {
 import { isSkillsCliAgentKeyShaped, toSkillsCliAgentKeys } from '../../shared/skills-cli-agent-keys'
 import {
   buildAgentFeatureSkillInstallArgs,
+  buildAgentFeatureSkillRemoveArgs,
   buildAgentFeatureSkillUpdateArgs
 } from '../../shared/agent-feature-install-commands'
 
@@ -114,7 +115,7 @@ function runNpxSkills(args: string[]): Promise<number> {
   })
 }
 
-type SkillMutationVerb = 'install' | 'update'
+type SkillMutationVerb = 'install' | 'update' | 'remove'
 
 /** Agents Orca can see on this host, as `skills --agent` keys. */
 function detectSkillsCliAgentKeys(): string[] {
@@ -186,7 +187,9 @@ function buildNpxSkillsArgs(
   const skillArgs =
     verb === 'install'
       ? buildAgentFeatureSkillInstallArgs(skillNames, { global, yes: true, agents })
-      : buildAgentFeatureSkillUpdateArgs(skillNames, { global, yes: true })
+      : verb === 'update'
+        ? buildAgentFeatureSkillUpdateArgs(skillNames, { global, yes: true })
+        : buildAgentFeatureSkillRemoveArgs(skillNames, { global, yes: true })
   // Why: a cold package cache makes bare `npx` prompt before it will fetch
   // `skills`, which strands an unattended host just like the picker does.
   return ['--yes', ...skillArgs]
@@ -235,7 +238,7 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
     }
 
     const global = flags.get('local') !== true
-    // Why: install scopes its targets; update only refreshes what is already placed.
+    // Why: install scopes its targets; update/remove only touch what is already placed.
     const agents = verb === 'install' ? resolveInstallAgentKeys(flags) : []
     const npxArgs = buildNpxSkillsArgs(verb, skillNames, global, agents)
     const command = formatNpxCommand(npxArgs)
@@ -283,5 +286,6 @@ export const SKILL_HANDLERS: Record<string, CommandHandler> = {
   },
   ...SKILL_GUIDE_GET_HANDLER,
   'skills install': createSkillMutationHandler('install'),
-  'skills update': createSkillMutationHandler('update')
+  'skills update': createSkillMutationHandler('update'),
+  'skills remove': createSkillMutationHandler('remove')
 }
