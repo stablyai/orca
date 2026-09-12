@@ -118,6 +118,17 @@ export async function sweepSupersededRelayEndpoints(
   options: SupersededRelaySweepOptions
 ): Promise<SupersededRelayFinding[]> {
   if (isWindowsRemoteHost(hostPlatform)) {
+    // No pass runs here: a Windows endpoint is a named pipe with no inode to stat, so the
+    // `$HOME` glob cannot see it, and `probeRelayEndpointIncumbent` answers `unverifiable` for
+    // every Windows path anyway — nothing on this host could be classified, let alone reaped.
+    // The population is real all the same (`relayEndpointForHost` hashes the version dir into
+    // the pipe name, so an update strands the incumbent exactly as it does on POSIX), and with
+    // `--grace-time 0` it keeps its PTYs forever. Returning silently was the whole bug: this
+    // sweep exists to make that population visible, and on Windows it made it invisible.
+    console.warn(
+      `[ssh-relay] Superseded relay sweep did not run (Windows named-pipe endpoints are not enumerated); ` +
+        `orphans from earlier builds are neither listed nor reclaimed: current=${options.currentRelayDir}`
+    )
     return []
   }
   let listing: string
@@ -126,7 +137,14 @@ export async function sweepSupersededRelayEndpoints(
       wrapCommand: true,
       signal: options.signal
     })
-  } catch {
+  } catch (err) {
+    // Same reason the Windows arm logs: an abandoned pass and an empty host are the same return
+    // value, and only the log tells them apart.
+    console.warn(
+      `[ssh-relay] Superseded relay listing failed; no pass ran: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    )
     return []
   }
   const sockPaths = listing
