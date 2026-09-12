@@ -241,30 +241,33 @@ export function DiffSectionItem({
   const renderDiff = useCallback(
     () =>
       fileDiff ? (
-        <PierreDiffSurface
-          key={renderKey ?? editStateKey}
-          fileDiff={fileDiff}
-          sideBySide={sideBySide}
-          settings={settings}
-          isEditable={isEditable && editReady}
-          editStateKey={editStateKey}
-          collapseUnchanged
-          worktreeId={worktreeId ?? ''}
-          filePath={section.path}
-          language={detectLanguage(section.path)}
-          comments={comments}
-          onDeleteComment={handleDeleteComment}
-          onUpdateComment={handleUpdateComment}
-          onEditChange={handleEditChange}
-          onPostRender={handlePostRender}
-          onAddComment={hasLineCommentAction ? handleAddComment : undefined}
-          commentableLineNumbers={commentableLineNumbers}
-          pendingComment={pendingComment}
-          addCommentPlaceholder={addLineCommentPlaceholder}
-          addCommentLabel={addLineCommentLabel}
-          onCancelComment={() => setPendingComment(null)}
-          onSubmitComment={handleSubmitComment}
-        />
+        <>
+          {parseError ? <PierreDiffLoading error={parseError} onRetry={retryParse} /> : null}
+          <PierreDiffSurface
+            key={renderKey ?? editStateKey}
+            fileDiff={fileDiff}
+            sideBySide={sideBySide}
+            settings={settings}
+            isEditable={isEditable && editReady}
+            editStateKey={editStateKey}
+            collapseUnchanged
+            worktreeId={worktreeId ?? ''}
+            filePath={section.path}
+            language={detectLanguage(section.path)}
+            comments={comments}
+            onDeleteComment={handleDeleteComment}
+            onUpdateComment={handleUpdateComment}
+            onEditChange={handleEditChange}
+            onPostRender={handlePostRender}
+            onAddComment={hasLineCommentAction ? handleAddComment : undefined}
+            commentableLineNumbers={commentableLineNumbers}
+            pendingComment={pendingComment}
+            addCommentPlaceholder={addLineCommentPlaceholder}
+            addCommentLabel={addLineCommentLabel}
+            onCancelComment={() => setPendingComment(null)}
+            onSubmitComment={handleSubmitComment}
+          />
+        </>
       ) : (
         <PierreDiffLoading error={parseError} onRetry={retryParse} />
       ),

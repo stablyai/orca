@@ -37,6 +37,16 @@ describe('shouldFocusPierreDiffHost', () => {
     expect(shouldFocusPierreDiffHost(host, document.body, clickPath(code, host))).toBe(true)
   })
 
+  it('focuses the host for a read-only click through Pierre shadow', () => {
+    const host = document.createElement('div')
+    const diffs = document.createElement('diffs-container')
+    host.append(diffs)
+    const shadow = diffs.attachShadow({ mode: 'open' })
+    const code = document.createElement('span')
+    shadow.append(code)
+    expect(shouldFocusPierreDiffHost(host, document.body, clickPath(code, diffs, host))).toBe(true)
+  })
+
   it('does not steal focus from a contenteditable inside Pierre shadow', () => {
     const host = document.createElement('div')
     const diffs = document.createElement('diffs-container')

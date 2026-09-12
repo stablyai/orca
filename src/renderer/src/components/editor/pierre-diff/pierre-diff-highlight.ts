@@ -46,8 +46,9 @@ export function preparePierreDiffHighlight(
     }, HIGHLIGHT_SETTLE_CEILING_MS)
     const finish = (error?: unknown, cancelTask = true) => {
       clearTimeout(ceiling)
-      signal.removeEventListener('abort', abort)
       if (cancelTask) {
+        // Timeout leaves the listener so unmount can still detach if the worker never notifies.
+        signal.removeEventListener('abort', abort)
         pool.cleanUpTasks(renderer)
       }
       if (settled) {

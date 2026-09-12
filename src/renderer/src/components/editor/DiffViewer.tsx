@@ -266,6 +266,7 @@ export default function DiffViewer({
           />
         ) : fileDiff ? (
           <PierreDiffProviders scrollContainerRef={scrollContainerRef}>
+            {parseError ? <PierreDiffLoading error={parseError} onRetry={retryParse} /> : null}
             <PierreDiffSurface
               key={modelKey}
               fileDiff={fileDiff}

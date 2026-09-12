@@ -97,3 +97,20 @@ it('still detaches when a timed-out highlight later notifies the instance', asyn
     vi.useRealTimers()
   }
 })
+
+it('still detaches a timed-out highlight when the caller aborts', async () => {
+  vi.useFakeTimers()
+  try {
+    const controller = new AbortController()
+    const promise = preparePierreDiffHighlight(diff, controller.signal)
+    const renderer = pool.highlightDiffAST.mock.calls[0][0]
+    const rejection = expect(promise).rejects.toThrow('timed out')
+    await vi.advanceTimersByTimeAsync(30_000)
+    await rejection
+    expect(pool.cleanUpTasks).not.toHaveBeenCalled()
+    controller.abort()
+    expect(pool.cleanUpTasks).toHaveBeenCalledWith(renderer)
+  } finally {
+    vi.useRealTimers()
+  }
+})

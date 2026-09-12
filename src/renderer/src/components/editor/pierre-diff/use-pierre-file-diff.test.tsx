@@ -169,3 +169,28 @@ it('surfaces a prime-on-flip highlight failure so the retry affordance still app
   expect(result.current.fileDiff).toBe(diff)
   expect(result.current.editReady).toBe(false)
 })
+
+it('re-primes on retry after a prime-on-flip highlight failure', async () => {
+  vi.mocked(requestPierreFileDiff).mockResolvedValue(diff)
+  let failPrime: (error: Error) => void = () => {}
+  prepareHighlight.mockImplementation(
+    () => new Promise((_, reject) => (failPrime = reject as (error: Error) => void))
+  )
+  const { result, rerender } = renderHook(({ editable }) => usePierreFileDiff(input, editable), {
+    initialProps: { editable: false }
+  })
+  await act(async () => vi.runOnlyPendingTimers())
+  await act(async () => rerender({ editable: true }))
+  await act(async () => failPrime(new Error('worker died')))
+  expect(result.current.editReady).toBe(false)
+  expect(prepareHighlight).toHaveBeenCalledTimes(1)
+
+  let finishPrime: (value: void) => void = () => {}
+  prepareHighlight.mockImplementation(() => new Promise<void>((resolve) => (finishPrime = resolve)))
+  await act(async () => result.current.retry())
+  await act(async () => vi.runOnlyPendingTimers())
+  expect(prepareHighlight).toHaveBeenCalledTimes(2)
+  await act(async () => finishPrime())
+  expect(result.current.editReady).toBe(true)
+  expect(result.current.error).toBeNull()
+})

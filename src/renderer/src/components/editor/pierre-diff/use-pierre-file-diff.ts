@@ -115,7 +115,9 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
       }
     )
     return () => controller.abort()
-  }, [editable, fileDiff])
+    // Why attempt: retry is the only recovery after a prime rejection, and parse can
+    // return the same FileDiffMetadata object, which would otherwise skip this effect.
+  }, [attempt, editable, fileDiff])
 
   return {
     fileDiff,
