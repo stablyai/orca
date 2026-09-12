@@ -239,3 +239,11 @@ describe('same-cap roll scripts accept every same-cap cell', () => {
     assert.doesNotMatch(capacityWorkflow, /--approved-cells/)
   })
 })
+
+// Both trusted versions must prove the same authenticated drain boundary.
+it('proves rehome trust for protocol 3 on forward and rollback rolls', () => {
+  const step = workflow.split('name: Prove exact per-host trust and idempotent no-neighbor behavior')[1].split('\n      - name:')[0]
+  assert.match(step, /inputs\.rollback-rehome-protocol != '0'/)
+  assert.match(step, /inputs\.target-rehome-protocol != '0'/)
+  assert.match(step, /probe-relay-rehome-trust\.mjs/)
+})

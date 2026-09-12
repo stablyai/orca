@@ -599,7 +599,7 @@ jobs:
             | jq -e '.control.enabled == false' >/dev/null
 
       - name: Prove exact per-host trust and idempotent no-neighbor behavior
-        if: ${{ inputs.mode != 'verify' && ((inputs.mode == 'rollback' && inputs.rollback-rehome-protocol == '1') || (inputs.mode != 'rollback' && inputs.target-rehome-protocol == '1')) }}
+        if: ${{ inputs.mode != 'verify' && ((inputs.mode == 'rollback' && inputs.rollback-rehome-protocol != '0') || (inputs.mode != 'rollback' && inputs.target-rehome-protocol != '0')) }}
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
         run: |

@@ -43,7 +43,7 @@ export function parseCapacityPlanArguments(argv) {
     (!values['rollback-image'] ||
       !values['rehome-director-service-account'] ||
       !values['rehome-audience'] ||
-      !['0', '1'].includes(values['regional-rehome-protocol']))
+      !['0', '1', '3'].includes(values['regional-rehome-protocol']))
   ) throw new Error('same-cap validation requires rollback image and rehome trust config')
   if (values.mode !== 'same-cap-cell' && values['regional-rehome-protocol'] !== undefined) {
     throw new Error('--regional-rehome-protocol applies only to same-cap-cell validation')
