@@ -95,7 +95,8 @@ function forEachMarkdownReviewLine(
   let lineNumber = 1
   for (let index = 0; index <= content.length; index += 1) {
     if (index < content.length && content.charCodeAt(index) !== 10) {
-      continue
+      const newline = content.indexOf('\n', index)
+      index = newline === -1 ? content.length : newline
     }
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
     if (visit(content.slice(lineStart, lineEnd), lineNumber) === false) {
