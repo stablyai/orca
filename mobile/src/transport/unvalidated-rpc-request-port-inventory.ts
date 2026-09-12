@@ -90,7 +90,9 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/host-screen/use-host-worktree-actions.ts', references: 3 },
 
   // src/notifications/ — push registration and delivery
-  { file: 'src/notifications/mobile-notifications.ts', references: 2 },
+  { file: 'src/notifications/mobile-notifications.ts', references: 1 },
+  { file: 'src/notifications/push-dismissal-reconciliation.ts', references: 2 },
+  { file: 'src/notifications/push-registration.ts', references: 3 },
 
   // src/session/ — session screen: chat, diff review, PR actions, tabs
   { file: 'src/session/ai-vault-resume-launch.ts', references: 3 },
@@ -144,6 +146,9 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
 
   // src/settings/ — settings screen actions
   { file: 'src/settings/native-voice-settings-operations.ts', references: 1 },
+
+  // src/settings/ — notification display probe
+  { file: 'src/settings/notification-display-test.tsx', references: 1 },
 
   // src/source-control/ — source control: review, commit, branch
   { file: 'src/source-control/mobile-branch-base-ref.ts', references: 3 },
@@ -215,7 +220,7 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/transport/pairing-candidate-race.ts', references: 1 },
   { file: 'src/transport/pairing-relay-candidate.ts', references: 4 },
   { file: 'src/transport/pre-profile-pairing-coordinator.ts', references: 2 },
-  { file: 'src/transport/runtime-capability-probe.ts', references: 1 },
+  { file: 'src/transport/runtime-capability-probe.ts', references: 2 },
 
   // src/worktree/ — worktree activation and resume
   { file: 'src/worktree/home-host-worktree-fetch.ts', references: 2 },
