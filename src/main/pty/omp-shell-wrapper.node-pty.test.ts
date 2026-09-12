@@ -189,6 +189,47 @@ exit 0
     expect(readFileSync(wrappedAfterPi, 'utf8')).toBe('')
   })
 
+  itWithBash('passes both status and prefill extensions for interactive OMP launches', async () => {
+    const tempDir = makeTempDir()
+    const binDir = join(tempDir, 'bin')
+    const ompDir = join(tempDir, 'omp-agent')
+    const extensionDir = join(ompDir, 'extensions')
+    mkdirSync(binDir)
+    mkdirSync(extensionDir, { recursive: true })
+    const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+    const prefillExtension = join(extensionDir, 'orca-prefill.ts')
+    writeFileSync(statusExtension, 'export default {}')
+    writeFileSync(prefillExtension, 'export default {}')
+    writeFakeOmp(binDir)
+
+    const captureFile = join(tempDir, 'prefill-capture')
+    await runInteractivePosixPty({
+      cwd: tempDir,
+      rcfileContent: getPosixOmpShellWrapper(),
+      shell: 'bash',
+      env: {
+        ...process.env,
+        HOME: tempDir,
+        PATH: `${binDir}:${process.env.PATH ?? ''}`,
+        ORCA_OMP_STATUS_EXTENSION: statusExtension,
+        ORCA_OMP_PREFILL_EXTENSION: prefillExtension,
+        ORCA_FAKE_OMP_DEFAULT_DIR: ompDir,
+        ORCA_CAPTURE_FILE: captureFile,
+        TERM: process.env.TERM || 'xterm-256color'
+      },
+      input: `omp ask
+exit 0
+`
+    })
+
+    const capture = readFileSync(captureFile, 'utf8')
+    expect(capture).toContain('ARG1=--extension')
+    expect(capture).toContain(`ARG2=${statusExtension}`)
+    expect(capture).toContain('ARG3=--extension')
+    expect(capture).toContain(`ARG4=${prefillExtension}`)
+    expect(capture).toContain('ARG5=ask')
+  })
+
   itWithBash('runs OMP config subcommands without redirecting the home', async () => {
     const tempDir = makeTempDir()
     const binDir = join(tempDir, 'bin')

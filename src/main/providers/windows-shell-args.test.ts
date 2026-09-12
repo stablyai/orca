@@ -132,7 +132,14 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const duplicateStateGuardIndex = command.indexOf('Test-Path variable:global:__OrcaOsc133State')
     const languageModeGuardIndex = command.indexOf('LanguageMode -eq "FullLanguage"')
     const ompWrapperIndex = command.indexOf('function Global:omp')
-    const ompExtensionIndex = command.indexOf('--extension $env:ORCA_OMP_STATUS_EXTENSION')
+    // Why: the outer `if ($env:ORCA_OMP_STATUS_EXTENSION -or …)` also names the
+    // var; use the body assignment that only exists inside the omp wrapper.
+    const ompExtensionIndex = command.indexOf(
+      "$orcaExtArgs += @('--extension', $env:ORCA_OMP_STATUS_EXTENSION)"
+    )
+    const ompPrefillExtensionIndex = command.indexOf(
+      "$orcaExtArgs += @('--extension', $env:ORCA_OMP_PREFILL_EXTENSION)"
+    )
     const codexRestoreIndex = command.indexOf('$env:CODEX_HOME = $env:ORCA_CODEX_HOME')
     const promptIndex = command.indexOf('function Global:prompt')
     const cwdRestoreIndex = command.indexOf(
@@ -152,6 +159,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(outputEncodingIndex).toBeGreaterThan(duplicateStateGuardIndex)
     expect(ompWrapperIndex).toBeGreaterThan(outputEncodingIndex)
     expect(ompExtensionIndex).toBeGreaterThan(ompWrapperIndex)
+    expect(ompPrefillExtensionIndex).toBeGreaterThan(ompExtensionIndex)
     expect(promptIndex).toBeGreaterThan(ompWrapperIndex)
     expect(cwdRestoreIndex).toBeGreaterThan(promptIndex)
     expect(command).toContain('Esc = [char]27')
@@ -389,7 +397,8 @@ describe('resolveWindowsShellLaunchArgs', () => {
     // Why .zshenv: the omp wrapper is part of the epilogue defined there.
     const zshEnv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     for (const wrapperFile of [bashRcfile, zshEnv]) {
-      expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
+      expect(wrapperFile).toContain('command omp "${__orca_ext_args[@]}" "$@"')
+      expect(wrapperFile).toContain('ORCA_OMP_PREFILL_EXTENSION')
       expect(wrapperFile).toContain('function omp { __orca_omp "$@"; }')
       expect(wrapperFile).not.toContain('prime-agent()')
       expect(wrapperFile).not.toContain('__orca_prime_agent')
