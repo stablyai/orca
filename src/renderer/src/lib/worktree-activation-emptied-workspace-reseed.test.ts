@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { getRemoteConnectionIdForWorktree } from '@/store/terminals/terminal-workspace-routing'
 import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorkspace,
@@ -75,10 +76,7 @@ describe('activating a workspace whose last terminal was closed', () => {
     }
   )
 
-  // Why: an agent selection suppresses the *pre-emptive* seed at create time, but the gate's
-  // `empty` outcome is its evidence that the agent surface never arrived (dead PTY, unreadable
-  // census, null startup plan). Suppressing the re-seed on that evidence leaves the workspace with
-  // no tabs and no recovery; only an explicit caller promise may. See #19940 and STA-5701.
+  // An empty gate invalidates agent-based suppression; only an explicit caller surface survives.
   it.each([
     ['an agent selection', { agent: 'codex' as const }, 1],
     [
@@ -344,31 +342,45 @@ describe('activating a folder workspace whose last terminal was closed', () => {
     }
   )
 
-  // Why: folder workspaces activate through their own entry point — setActiveWorktree(folderKey)
-  // never reaches it — so the split has to be pinned on this path too, not just the git one.
+  // This must use the folder entry point; setActiveWorktree(folderWorkspaceKey(...)) takes the git path.
   it.each([
-    ['an agent selection', { agent: 'codex' as const }, 1],
+    ['a local agent selection', { agent: 'codex' as const }, 'local' as const, 1],
+    ['an SSH agent selection', { agent: 'codex' as const }, SSH_HOST_ID, 1],
     [
       'an agent selection whose caller promised its own surface',
       { agent: 'codex' as const, providesInitialSurface: true },
+      'local' as const,
       0
     ]
-  ])('re-seeds a gate-reported empty workspace for %s', async (_label, selection, expectedTabs) => {
-    seedEmptiedFolderWorkspaceOnTwoHosts()
-    useAppStore.setState({
-      sleepingAgentSessionsByPaneKey: {
-        'pane-1': { worktreeId: FOLDER_KEY }
-      } as never
-    })
-    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
-    gate.mockResolvedValue('empty')
+  ])(
+    're-seeds a gate-reported empty workspace for %s',
+    async (_label, selection, executionHostId, expectedTabs) => {
+      seedEmptiedFolderWorkspaceOnTwoHosts()
+      const folderWorkspaces = useAppStore
+        .getState()
+        .folderWorkspaces.filter((workspace) => workspace.executionHostId === executionHostId)
+      useAppStore.setState({
+        folderWorkspaces,
+        sleepingAgentSessionsByPaneKey: {
+          'pane-1': { worktreeId: FOLDER_KEY }
+        } as never
+      })
+      const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
+      gate.mockResolvedValue('empty')
 
-    activateAndRevealFolderWorkspace(FOLDER_ID, { ...selection, executionHostId: 'local' })
-    await gate.mock.results[0]?.value
+      activateAndRevealFolderWorkspace(FOLDER_ID, { ...selection, executionHostId })
+      await gate.mock.results[0]?.value
 
-    expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
-    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY] ?? []).toHaveLength(expectedTabs)
-  })
+      expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
+      expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(executionHostId)
+      expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY] ?? []).toHaveLength(expectedTabs)
+      if (expectedTabs > 0) {
+        expect(getRemoteConnectionIdForWorktree(useAppStore.getState(), FOLDER_KEY)).toBe(
+          executionHostId === 'local' ? null : 'conn-1'
+        )
+      }
+    }
+  )
 
   it('re-seeds a terminal when the workspace is opened', () => {
     seedEmptiedFolderWorkspaceOnTwoHosts()

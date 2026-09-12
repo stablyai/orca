@@ -33,7 +33,7 @@ import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-wor
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
 import {
   activationProvidesInitialSurface,
-  gatedEmptyOutcomeReseedSuppressed,
+  gatedEmptyWorkspaceReseedPolicy,
   type WorktreeActivationOptions,
   type WorktreeActivationSurfaceSelection
 } from './worktree-activation-surface-selection'
@@ -150,8 +150,8 @@ export function activateAndRevealFolderWorkspace(
   }
   if (shouldGateAgentActivation) {
     void gateWorktreeAgentActivation(workspaceKey).then((outcome) => {
-      if (outcome === 'empty') {
-        reseedGatedEmptyWorkspace(workspaceKey, gatedEmptyOutcomeReseedSuppressed(opts))
+      if (outcome === 'empty' && gatedEmptyWorkspaceReseedPolicy(opts) === 'reseed') {
+        reseedGatedEmptyWorkspace(workspaceKey, false)
       }
     })
   }
@@ -249,8 +249,8 @@ export function activateAndRevealWorktree(
   }
   if (shouldGateAgentActivation) {
     void gateWorktreeAgentActivation(worktreeId).then((outcome) => {
-      if (outcome === 'empty') {
-        reseedGatedEmptyWorkspace(worktreeId, gatedEmptyOutcomeReseedSuppressed(opts))
+      if (outcome === 'empty' && gatedEmptyWorkspaceReseedPolicy(opts) === 'reseed') {
+        reseedGatedEmptyWorkspace(worktreeId, false)
       }
     })
   }
