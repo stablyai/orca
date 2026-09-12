@@ -59,6 +59,7 @@ export function encodeRawMarkdownHtmlForRichEditor(
   { htmlSuperscriptLinks = false }: { htmlSuperscriptLinks?: boolean } = {}
 ): string {
   const normalizedContent = normalizeMarkdownReferenceLinks(content)
+  const lastBracketClose = normalizedContent.lastIndexOf(']]')
   const { transport } = codec
   let index = 0
   let isLineStart = true
@@ -156,7 +157,10 @@ export function encodeRawMarkdownHtmlForRichEditor(
     // Why: authored text that happens to contain this editor's random envelope
     // prefix must remain literal even in HTML-free documents and after edits.
     if (normalizedContent.startsWith(transport.authoredPrefix, index)) {
-      const authoredEnd = normalizedContent.indexOf(']]', index + transport.authoredPrefix.length)
+      const authoredEnd =
+        index + transport.authoredPrefix.length > lastBracketClose
+          ? -1
+          : normalizedContent.indexOf(']]', index + transport.authoredPrefix.length)
       const authoredOccurrence =
         authoredEnd === -1
           ? transport.authoredPrefix
@@ -190,7 +194,8 @@ export function encodeRawMarkdownHtmlForRichEditor(
       normalizedContent[index + 1] === '[' &&
       !isEscaped(normalizedContent, index)
     ) {
-      const closingIndex = normalizedContent.indexOf(']]', index + 2)
+      const closingIndex =
+        index + 2 > lastBracketClose ? -1 : normalizedContent.indexOf(']]', index + 2)
       if (closingIndex !== -1) {
         const rawTarget = normalizedContent.slice(index + 2, closingIndex)
         const link = parseMarkdownDocLink(rawTarget)
