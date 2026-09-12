@@ -22,6 +22,26 @@ import {
   makeTreeWritable,
   shareTree
 } from './space-sharing-copy.mjs'
+function canCreateFileSymlinks(): boolean {
+  const probeDir = mkdtempSync(path.join(tmpdir(), 'orca-symlink-capability-'))
+  const targetPath = path.join(probeDir, 'target')
+  const linkPath = path.join(probeDir, 'link')
+  try {
+    writeFileSync(targetPath, '')
+    symlinkSync(targetPath, linkPath)
+    return true
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (process.platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) {
+      return false
+    }
+    throw error
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
+}
+
+const symlinksAvailable = canCreateFileSymlinks()
 
 const roots: string[] = []
 
@@ -37,7 +57,9 @@ function makeTree(): { root: string; source: string } {
   const source = path.join(root, 'source')
   mkdirSync(path.join(source, 'nested'), { recursive: true })
   writeFileSync(path.join(source, 'nested', 'file'), 'contents')
-  symlinkSync(path.join('nested', 'file'), path.join(source, 'relative-link'))
+  if (symlinksAvailable) {
+    symlinkSync(path.join('nested', 'file'), path.join(source, 'relative-link'))
+  }
   return { root, source }
 }
 
@@ -56,13 +78,18 @@ describe('shareTree', () => {
     )
   })
 
-  it('keeps relative symlinks unresolved on whatever this host supports', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'shared')
-    expect(shareTree(source, destination)).toBeTruthy()
-    expect(readFileSync(path.join(destination, 'nested', 'file'), 'utf8')).toBe('contents')
-    expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
-  })
+  it.skipIf(!symlinksAvailable)(
+    'keeps relative symlinks unresolved on whatever this host supports',
+    () => {
+      const { root, source } = makeTree()
+      const destination = path.join(root, 'shared')
+      expect(shareTree(source, destination)).toBeTruthy()
+      expect(readFileSync(path.join(destination, 'nested', 'file'), 'utf8')).toBe('contents')
+      expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(
+        path.join('nested', 'file')
+      )
+    }
+  )
 
   it('falls from reflink to hardlink on Linux, where ext4 has no reflinks', () => {
     const { root, source } = makeTree()
@@ -108,15 +135,20 @@ describe('shareTree', () => {
 })
 
 describe('hardlinkTree', () => {
-  it('shares inodes for files but recreates symlinks as their own entries', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'linked')
-    hardlinkTree(source, destination)
-    expect(statSync(path.join(destination, 'nested', 'file')).ino).toBe(
-      statSync(path.join(source, 'nested', 'file')).ino
-    )
-    expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
-  })
+  it.skipIf(!symlinksAvailable)(
+    'shares inodes for files but recreates symlinks as their own entries',
+    () => {
+      const { root, source } = makeTree()
+      const destination = path.join(root, 'linked')
+      hardlinkTree(source, destination)
+      expect(statSync(path.join(destination, 'nested', 'file')).ino).toBe(
+        statSync(path.join(source, 'nested', 'file')).ino
+      )
+      expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(
+        path.join('nested', 'file')
+      )
+    }
+  )
 
   it('propagates a write through the shared inode, which is why callers must protect it', () => {
     const { root, source } = makeTree()
@@ -218,18 +250,23 @@ describe('copyPrivateTree', () => {
     expect(result.mechanism === 'reflink' || result.mechanism === null).toBe(true)
   })
 
-  it('copies bytes on a platform with no private mechanism at all', () => {
-    const { root, source } = makeTree()
-    const destination = path.join(root, 'private')
-    const hardlink = vi.fn()
-    expect(copyPrivateTree(source, destination, { platform: 'win32', hardlink })).toEqual({
-      mechanism: null,
-      copyError: null
-    })
-    expect(hardlink).not.toHaveBeenCalled()
-    expect(readFileSync(path.join(destination, 'nested', 'file'), 'utf8')).toBe('contents')
-    expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(path.join('nested', 'file'))
-  })
+  it.skipIf(!symlinksAvailable)(
+    'copies bytes on a platform with no private mechanism at all',
+    () => {
+      const { root, source } = makeTree()
+      const destination = path.join(root, 'private')
+      const hardlink = vi.fn()
+      expect(copyPrivateTree(source, destination, { platform: 'win32', hardlink })).toEqual({
+        mechanism: null,
+        copyError: null
+      })
+      expect(hardlink).not.toHaveBeenCalled()
+      expect(readFileSync(path.join(destination, 'nested', 'file'), 'utf8')).toBe('contents')
+      expect(readlinkSync(path.join(destination, 'relative-link'))).toBe(
+        path.join('nested', 'file')
+      )
+    }
+  )
 
   it('reports the private mechanism it used', () => {
     const { root, source } = makeTree()

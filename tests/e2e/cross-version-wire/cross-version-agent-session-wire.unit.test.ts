@@ -40,7 +40,7 @@ import {
 } from './versioned-agent-session-wire'
 
 // Why: a cold CI run extracts the baseline checkout before the first pairing.
-const SUITE_TIMEOUT_MS = 180_000
+const SUITE_TIMEOUT_MS = 300_000
 
 const SESSION = 'session-alpha'
 const WORKSPACE = 'workspace-1'
@@ -149,12 +149,14 @@ const STRUCTURED_CALLS: {
 let baselineRef: string
 let current: AgentSessionWireBuild
 let baseline: AgentSessionWireBuild
+let releasedCurrent: AgentSessionWireBuild
 let operations = 0
 
 beforeAll(async () => {
   baselineRef = resolveBaselineReleaseRef()
   current = await loadAgentSessionWireBuild(WORKING_TREE)
   baseline = await loadAgentSessionWireBuild(baselineRef)
+  releasedCurrent = await loadAgentSessionWireBuild('HEAD')
 }, SUITE_TIMEOUT_MS)
 
 /** `<13-digit ms>-<32 hex>`, the only shape the durable ledger accepts. */
@@ -524,7 +526,6 @@ describe('cross-version structured agent sessions', () => {
         // runner's module graph. It is the only place the "registered means
         // usable" claim is executable today, because the baseline registers none
         // of these methods — so it has to carry the whole manifest, not a sample.
-        const releasedCurrent = await loadAgentSessionWireBuild('HEAD')
         expect(releasedCurrent.capabilities).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
         expect(
           releasedCurrent.methodNames.filter((name) => name.startsWith('agentSession.'))
@@ -596,6 +597,7 @@ describe('cross-version structured agent sessions', () => {
   describe('an old client against a structured-owned AI Vault row', () => {
     let root: string
     let store: AgentSessionRecordStore
+    let host: StructuredAgentSessionHost
     let runtime: Record<string, unknown>
     let createMobileSessionTerminal: ReturnType<typeof vi.fn>
 
@@ -605,7 +607,7 @@ describe('cross-version structured agent sessions', () => {
         directory: join(root, 'store'),
         hostId: 'local'
       })
-      const host = new StructuredAgentSessionHost({
+      host = new StructuredAgentSessionHost({
         store,
         adapter: {
           acquire: async ({ fence }) => ({
@@ -674,6 +676,7 @@ describe('cross-version structured agent sessions', () => {
 
     afterEach(async () => {
       setStructuredAgentSessionHost(null)
+      await host.flushAllStreamedEvents()
       await rm(root, { recursive: true, force: true })
     })
 
@@ -784,6 +787,7 @@ describe('cross-version structured agent sessions', () => {
     let root: string
     let store: AgentSessionRecordStore
     let runtime: unknown
+    const hosts: StructuredAgentSessionHost[] = []
 
     /** Phase 2 owns provider processes; the adapter is the only stub here. */
     function adapter(): StructuredAgentSessionAdapter {
@@ -837,6 +841,7 @@ describe('cross-version structured agent sessions', () => {
         probeOwner: async () => ({ outcome: 'pid-absent' }),
         now: () => NOW
       })
+      hosts.push(host)
       setStructuredAgentSessionHost(host)
       return host
     }
@@ -896,7 +901,10 @@ describe('cross-version structured agent sessions', () => {
 
     afterEach(async () => {
       setStructuredAgentSessionHost(null)
-      await rm(root, { recursive: true, force: true })
+      for (const host of hosts.splice(0)) {
+        await host.flushAllStreamedEvents()
+      }
+      await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 })
     })
 
     it('resumes from the cursor the client held, with no snapshot and no replay', async () => {

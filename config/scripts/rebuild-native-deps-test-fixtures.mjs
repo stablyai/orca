@@ -19,6 +19,9 @@ const sourceInstallScriptPath = fileURLToPath(
 const sourceNodePtyJobOwnershipPath = fileURLToPath(
   new URL('./node-pty-job-ownership.cjs', import.meta.url)
 )
+const sourceWindowsProcessTreeCreationTimePath = fileURLToPath(
+  new URL('./windows-process-tree-creation-time.cjs', import.meta.url)
+)
 const sourceWindowsProcessTreeGypRebuildPath = fileURLToPath(
   new URL('./windows-process-tree-gyp-rebuild.mjs', import.meta.url)
 )
@@ -93,6 +96,10 @@ export function mkTempProject() {
   copyFileSync(
     sourceNodePtyJobOwnershipPath,
     join(projectDir, 'config', 'scripts', 'node-pty-job-ownership.cjs')
+  )
+  copyFileSync(
+    sourceWindowsProcessTreeCreationTimePath,
+    join(projectDir, 'config', 'scripts', 'windows-process-tree-creation-time.cjs')
   )
   copyFileSync(
     sourceWindowsProcessTreeGypRebuildPath,
@@ -369,7 +376,10 @@ export function writeFakeWindowsRegistry(projectDir) {
 export function writeFakeWindowsProcessTree(projectDir) {
   const processTreeDir = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
   mkdirSync(processTreeDir, { recursive: true })
-  writeFileSync(join(processTreeDir, 'index.js'), 'module.exports = {}\n')
+  writeFileSync(
+    join(processTreeDir, 'index.js'),
+    'module.exports = { supportedProcessDataFlags: 4 }\n'
+  )
 }
 
 export function writeFakeWindowsProcessTreeWithNodeAddonApi(

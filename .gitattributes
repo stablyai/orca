@@ -14,6 +14,8 @@
 # Windows-built client disagree with a mac/Linux-built one on the same release,
 # so one host ends up with two relay trees (#17886 review).
 /config/relay-assets/** text eol=lf
+# Byte-exact node-pty source fixture; keep LF so its upstream hash matches.
+/config/scripts/__fixtures__/node-pty-1.1.0-unix-pty.cc text eol=lf
 # Pin the bytes so a patch reads and diffs identically on every host. It is NOT
 # what makes the hash right: pnpm hashes a patch LF-normalized, so a CRLF checkout
 # cannot change it. Believing otherwise put a hand-computed raw digest in the

@@ -185,6 +185,7 @@ describe('PR workflow parallelism', () => {
 
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
+      .map((testFile) => testFile.replaceAll(String.fromCharCode(92), '/'))
       // Why this file is excluded: it carries the detector pattern as a literal
       // and would otherwise match itself.
       .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')

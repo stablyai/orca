@@ -583,8 +583,8 @@ describe('renderer startup runtime routing', () => {
     expect(checkpointBlock).toContain(
       'const shutdownCheckpointPersist = createShutdownCheckpointPersist({'
     )
-    expect(checkpointBlock).toContain(
-      'buildWorkspaceSessionHostSnapshots(\n          buildWorkspaceSessionPayload(freshState),\n          freshState\n        )'
+    expect(checkpointBlock.replace(/\s+/g, ' ')).toContain(
+      'buildWorkspaceSessionHostSnapshots( buildWorkspaceSessionPayload(freshState), freshState )'
     )
     expect(checkpointBlock).toContain('buildUiPatch: () => buildActiveViewUnloadPatch(')
     // Why pin the exact gate: the degrade tiers must arm only for intentional
@@ -603,8 +603,8 @@ describe('renderer startup runtime routing', () => {
     expect(source).toContain(
       'window.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.abandonAttempt)'
     )
-    expect(source).toContain(
-      'ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,\n      shutdownCheckpoint.abortAfterCheckpointFailure'
+    expect(source.replace(/\s+/g, ' ')).toContain(
+      'ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT, shutdownCheckpoint.abortAfterCheckpointFailure'
     )
     expect(source).toContain(
       'window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.abandonAttempt)'

@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:net'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import { ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS } from '../../shared/orchestration-timing-budgets'
@@ -25,13 +25,19 @@ afterEach(async () => {
   servers.clear()
 })
 
+function runtimeEndpoint(userDataPath: string): string {
+  return process.platform === 'win32'
+    ? `\\\\.\\pipe\\orca-runtime-test-${basename(userDataPath)}`
+    : join(userDataPath, 'runtime.sock')
+}
+
 function writeRuntimeConnection(userDataPath: string, endpoint: string, runtimeId: string): void {
   writeFileSync(
     join(userDataPath, 'orca-runtime.json'),
     JSON.stringify({
       runtimeId,
       pid: 1,
-      transports: [{ kind: 'unix', endpoint }],
+      transports: [{ kind: process.platform === 'win32' ? 'named-pipe' : 'unix', endpoint }],
       authToken: 'token',
       startedAt: 1
     })
@@ -73,7 +79,7 @@ describe('RuntimeClient orchestration recovery identity', () => {
 
   it('attaches the request and exact retry identity to a real RPC failure response', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-recovery-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
+    const endpoint = runtimeEndpoint(userDataPath)
     const server = createServer((socket) => {
       let buffer = ''
       socket.setEncoding('utf8')
@@ -154,7 +160,7 @@ describe('RuntimeClient orchestration recovery identity', () => {
 
   it('keeps durable prompt retry when failure metadata proves the preflight runtime', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-current-prompt-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
+    const endpoint = runtimeEndpoint(userDataPath)
     const server = createServer((socket) => {
       socket.once('data', (data) => {
         const request = JSON.parse(String(data).trim()) as { id: string }
@@ -201,7 +207,7 @@ describe('RuntimeClient orchestration recovery identity', () => {
 
   it('keeps the prompt retry ID when the attested runtime times out in transport', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-rt-timeout-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
+    const endpoint = runtimeEndpoint(userDataPath)
     let receivedRequest: Record<string, unknown> | undefined
     const server = createServer((socket) => {
       socket.once('data', (data) => {
@@ -245,7 +251,7 @@ describe('RuntimeClient orchestration recovery identity', () => {
 
   it('blocks retry when a downgraded runtime rejects after capability preflight', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-downgraded-prompt-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
+    const endpoint = runtimeEndpoint(userDataPath)
     let receivedRequest: Record<string, unknown> | undefined
     const server = createServer((socket) => {
       socket.once('data', (data) => {
@@ -292,7 +298,7 @@ describe('RuntimeClient orchestration recovery identity', () => {
 
   it('blocks retry when a downgraded runtime loses the prompt reply', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-lost-prompt-reply-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
+    const endpoint = runtimeEndpoint(userDataPath)
     let receivedRequest: Record<string, unknown> | undefined
     const server = createServer((socket) => {
       socket.once('data', (data) => {
@@ -334,7 +340,7 @@ describe('RuntimeClient orchestration recovery identity', () => {
 
   it('reports an unknown legacy prompt outcome without advertising an unsafe retry', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-legacy-prompt-'))
-    const endpoint = join(userDataPath, 'runtime.sock')
+    const endpoint = runtimeEndpoint(userDataPath)
     let receivedRequest: Record<string, unknown> | undefined
     const server = createServer((socket) => {
       socket.once('data', (data) => {

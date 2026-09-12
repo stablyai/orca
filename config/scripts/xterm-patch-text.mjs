@@ -6,6 +6,9 @@
  * tests exercise it with no network and no build.
  */
 
+/** Git settings that keep checked-out and diffed patch trees LF-normalized. */
+export const GIT_EOL_ISOLATION = ['-c', 'core.autocrlf=false', '-c', 'core.eol=lf']
+
 /**
  * Flags pnpm@12 passes to `git diff` in its own `diff_folders()`. A patch built
  * with anything else is a patch pnpm may re-diff differently on the next
@@ -57,7 +60,108 @@ export function escapeRegExp(value) {
 function trimSurroundingSlashes(value) {
   return value[0] === '/' || value.endsWith('/') ? value.replace(/^\/|\/$/g, '') : value
 }
+const GIT_SIMPLE_ESCAPES = {
+  '"': '"',
+  '\\': '\\',
+  a: '\x07',
+  b: '\b',
+  f: '\f',
+  n: '\n',
+  r: '\r',
+  t: '\t',
+  v: '\v'
+}
 
+function decodeGitQuotedPath(value) {
+  let decoded = ''
+  for (let index = 0; index < value.length;) {
+    if (value[index] !== '\\') {
+      decoded += value[index++]
+      continue
+    }
+    const escaped = value[index + 1]
+    if (escaped === undefined) {
+      decoded += '\\'
+      index += 1
+      continue
+    }
+    if (Object.hasOwn(GIT_SIMPLE_ESCAPES, escaped)) {
+      decoded += GIT_SIMPLE_ESCAPES[escaped]
+      index += 2
+      continue
+    }
+    if (/[0-7]/.test(escaped)) {
+      const bytes = []
+      while (value[index] === '\\' && /[0-7]/.test(value[index + 1] ?? '')) {
+        const octal = value.slice(index + 1, index + 4).match(/^[0-7]{1,3}/)[0]
+        bytes.push(Number.parseInt(octal, 8))
+        index += 1 + octal.length
+      }
+      decoded += Buffer.from(bytes).toString('utf8')
+      continue
+    }
+    // A raw Windows separator is not a C escape; preserve it for slash
+    // normalization below. Git's actual C escapes are handled above.
+    decoded += '\\'
+    index += 1
+  }
+  return decoded
+}
+function stripGitHeaderQuoteDelimiters(value) {
+  let stripped = ''
+  let inQuote = false
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index]
+    let precedingBackslashes = 0
+    for (let previous = index - 1; previous >= 0 && value[previous] === '\\'; previous -= 1) {
+      precedingBackslashes += 1
+    }
+    const escaped = precedingBackslashes % 2 === 1
+    const opensToken = !inQuote && character === '"' && (index === 0 || value[index - 1] === ' ')
+    const closesToken =
+      inQuote &&
+      character === '"' &&
+      !escaped &&
+      (index === value.length - 1 || value[index + 1] === ' ')
+    if (opensToken || closesToken) {
+      inQuote = !inQuote
+      continue
+    }
+    stripped += character
+  }
+  return stripped
+}
+
+function normalizeWindowsDiffHeaders(stdout) {
+  let inHunk = false
+  return stdout
+    .split('\n')
+    .map((line) => {
+      if (line.startsWith('diff --git ')) {
+        inHunk = false
+      } else if (line.startsWith('@@ ')) {
+        inHunk = true
+      }
+      if (
+        inHunk ||
+        (!line.startsWith('diff --git ') && !line.startsWith('--- ') && !line.startsWith('+++ '))
+      ) {
+        return line
+      }
+      const match = /^(diff --git |--- |\+\+\+ )("?[ab]\/.*)$/.exec(line)
+      if (!match || !match[2].includes('\\')) {
+        return line
+      }
+      // Git quotes Windows paths because the backslashes are special. pnpm's
+      // normalized patch uses portable slash-separated paths while preserving
+      // literal quotes that belong to a filename.
+      const unquoted = stripGitHeaderQuoteDelimiters(match[2])
+      return `${match[1]}${decodeGitQuotedPath(unquoted)
+        .replaceAll('\\', '/')
+        .replace(/\/{2,}/g, '/')}`
+    })
+    .join('\n')
+}
 /**
  * Reproduces pnpm's post-processing of the raw `git diff` output: strip the two
  * scratch folder prefixes, drop a trailing no-newline marker, and remove
@@ -66,7 +170,7 @@ function trimSurroundingSlashes(value) {
 export function normalizePnpmDiff(stdout, folderA, folderB) {
   const a = folderA.replace(/\\/g, '/')
   const b = folderB.replace(/\\/g, '/')
-  return stdout
+  return normalizeWindowsDiffHeaders(stdout)
     .replace(new RegExp(`(a|b)(${escapeRegExp(`/${trimSurroundingSlashes(a)}/`)})`, 'g'), '$1/')
     .replace(new RegExp(`(a|b)${escapeRegExp(`/${trimSurroundingSlashes(b)}/`)}`, 'g'), '$1/')
     .replace(new RegExp(escapeRegExp(`${a}/`), 'g'), '')

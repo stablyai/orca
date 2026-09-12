@@ -18,6 +18,7 @@ import {
 } from './regenerate-xterm-patches.mjs'
 import {
   CHECKOUT_DIFF_FLAGS,
+  GIT_EOL_ISOLATION,
   PNPM_DIFF_FLAGS,
   assertSourceDerivationsAgree,
   firstDifferenceIndex,
@@ -64,11 +65,11 @@ async function writeTree(root, files) {
   }
 }
 
-/** The three exported diff pieces, composed the way the generator composes them. */
+/** The three exported diff pieces, composed exactly as the generator composes them. */
 function diffFolders(folderA, folderB) {
   let stdout
   try {
-    stdout = execFileSync('git', [...PNPM_DIFF_FLAGS, folderA, folderB], {
+    stdout = execFileSync('git', [...GIT_EOL_ISOLATION, ...PNPM_DIFF_FLAGS, folderA, folderB], {
       encoding: 'utf8',
       env: pnpmDiffEnvironment(),
       stdio: ['ignore', 'pipe', 'pipe']
@@ -141,6 +142,61 @@ describe('pnpm diff format', () => {
     expect(patch).toContain('diff --git a/lib/widget.js b/lib/widget.js')
     expect(patch).toContain('--- a/src/Widget.ts')
     expect(patch).toContain('+++ b/src/Widget.ts')
+  })
+  it('normalizes quoted Windows headers without rewriting hunk bodies', () => {
+    const windowsDiff = [
+      'diff --git "a/lib\\widget.js" "b/lib\\widget.js"',
+      '--- "a/lib\\widget.js"',
+      '+++ "b/lib\\widget.js"',
+      '@@ -1 +1 @@',
+      '--- \\server\\deleted',
+      '+++ \\server\\added',
+      ''
+    ].join('\n')
+
+    expect(normalizePnpmDiff(windowsDiff, '/pristine', '/patched')).toBe(
+      [
+        'diff --git a/lib/widget.js b/lib/widget.js',
+        '--- a/lib/widget.js',
+        '+++ b/lib/widget.js',
+        '@@ -1 +1 @@',
+        '--- \\server\\deleted',
+        '+++ \\server\\added',
+        ''
+      ].join('\n')
+    )
+  })
+  it('decodes Git C-style escapes in quoted Windows headers', () => {
+    const escapedDiff = [
+      'diff --git "a/na\\303\\251me\\\\widget.js" "b/na\\303\\251me\\\\widget.js"',
+      '--- "a/na\\303\\251me\\\\widget.js"',
+      '+++ "b/na\\303\\251me\\\\widget.js"',
+      '@@ -1 +1 @@',
+      '--- \\303\\251me',
+      ''
+    ].join('\n')
+
+    const normalized = normalizePnpmDiff(escapedDiff, '/pristine', '/patched')
+    const eAcute = String.fromCodePoint(0xe9)
+    expect(normalized).toContain(`diff --git a/na${eAcute}me/widget.js b/na${eAcute}me/widget.js`)
+    expect(normalized).toContain('--- \\303\\251me')
+  })
+  it('preserves literal quotes inside quoted Windows path headers', () => {
+    const quotedDiff = String.raw`diff --git "a/with\"quote\\name" "b/with\"quote\\name"
+--- "a/with\"quote\\name"
++++ "b/with\"quote\\name"
+@@ -1 +1 @@`
+
+    expect(normalizePnpmDiff(quotedDiff, '/pristine', '/patched')).toContain(
+      'diff --git a/with"quote/name b/with"quote/name'
+    )
+  })
+  it('strips delimiters after even backslash runs', () => {
+    const trailingSlashDiff = String.raw`diff --git "a/dir\\" "b/dir\\"`
+
+    expect(normalizePnpmDiff(trailingSlashDiff, '/pristine', '/patched')).toContain(
+      'diff --git a/dir/ b/dir/'
+    )
   })
 
   it('drops a trailing no-newline marker and .DS_Store entries', () => {
@@ -216,7 +272,11 @@ describe('round-trip stability', () => {
     await writeTree(replay, PRISTINE)
     const patchFile = path.join(root, 'round-trip.patch')
     await writeFile(patchFile, patch)
-    execFileSync('git', ['apply', '-p1', '--whitespace=nowarn', patchFile], { cwd: replay })
+    execFileSync(
+      'git',
+      ['-c', 'core.autocrlf=false', 'apply', '-p1', '--whitespace=nowarn', patchFile],
+      { cwd: replay, env: pnpmDiffEnvironment() }
+    )
 
     expect(await readFile(path.join(replay, 'lib/widget.js'), 'utf8')).toBe(
       PATCHED['lib/widget.js']
@@ -235,7 +295,11 @@ describe('round-trip stability', () => {
 
     const replay = path.join(root, 'replay')
     await writeTree(replay, PRISTINE)
-    execFileSync('git', ['apply', '-p1', '--whitespace=nowarn', patchFile], { cwd: replay })
+    execFileSync(
+      'git',
+      ['-c', 'core.autocrlf=false', 'apply', '-p1', '--whitespace=nowarn', patchFile],
+      { cwd: replay, env: pnpmDiffEnvironment() }
+    )
 
     expect(await readFile(path.join(replay, 'src/Widget.ts'), 'utf8')).toBe(
       PATCHED['src/Widget.ts']

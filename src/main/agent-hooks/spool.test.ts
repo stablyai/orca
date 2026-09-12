@@ -219,35 +219,40 @@ describe('agent hook spool', () => {
     }
   })
 
-  it('spools when the endpoint is present but the receiver is unavailable', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-spool-failure-'))
-    const endpointDir = join(dir, 'agent-hooks')
-    mkdirSync(endpointDir, { recursive: true })
-    const endpoint = join(endpointDir, 'endpoint.env')
-    writeFileSync(
-      endpoint,
-      'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\nORCA_AGENT_HOOK_ENV=production\nORCA_AGENT_HOOK_VERSION=1\n'
-    )
-    const script = join(dir, 'codex-hook.sh')
-    writeFileSync(script, codexInternals.getManagedScript('posix'))
-    chmodSync(script, 0o755)
-    execFileSync('/bin/sh', [script], {
-      input: '{"hook_event_name":"SubagentStop","agent_id":"child"}\n',
-      env: {
-        ...process.env,
-        ORCA_AGENT_HOOK_ENDPOINT: endpoint,
-        ORCA_PANE_KEY: 'tab-failure:0',
-        ORCA_TAB_ID: 'tab-failure',
-        ORCA_AGENT_LAUNCH_TOKEN: 'generation-token'
-      },
-      timeout: 5000
-    })
-    const spoolFiles = readdirSync(join(endpointDir, 'spool'))
-    expect(spoolFiles).toHaveLength(1)
-    expect(readFileSync(join(endpointDir, 'spool', spoolFiles[0]!), 'utf8')).toContain(
-      'SubagentStop'
-    )
-  })
+  // Windows hook execution is covered by text assertions; this POSIX shell replay remains
+  // intentionally POSIX-only until a Windows .cmd spool smoke test exists.
+  it.skipIf(process.platform === 'win32')(
+    'spools when the endpoint is present but the receiver is unavailable',
+    () => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-spool-failure-'))
+      const endpointDir = join(dir, 'agent-hooks')
+      mkdirSync(endpointDir, { recursive: true })
+      const endpoint = join(endpointDir, 'endpoint.env')
+      writeFileSync(
+        endpoint,
+        'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\nORCA_AGENT_HOOK_ENV=production\nORCA_AGENT_HOOK_VERSION=1\n'
+      )
+      const script = join(dir, 'codex-hook.sh')
+      writeFileSync(script, codexInternals.getManagedScript('posix'))
+      chmodSync(script, 0o755)
+      execFileSync('/bin/sh', [script], {
+        input: '{"hook_event_name":"SubagentStop","agent_id":"child"}\n',
+        env: {
+          ...process.env,
+          ORCA_AGENT_HOOK_ENDPOINT: endpoint,
+          ORCA_PANE_KEY: 'tab-failure:0',
+          ORCA_TAB_ID: 'tab-failure',
+          ORCA_AGENT_LAUNCH_TOKEN: 'generation-token'
+        },
+        timeout: 5000
+      })
+      const spoolFiles = readdirSync(join(endpointDir, 'spool'))
+      expect(spoolFiles).toHaveLength(1)
+      expect(readFileSync(join(endpointDir, 'spool', spoolFiles[0]!), 'utf8')).toContain(
+        'SubagentStop'
+      )
+    }
+  )
 
   it('does not mark a non-terminal downtime replay as runtime-observed', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-spool-observed-'))

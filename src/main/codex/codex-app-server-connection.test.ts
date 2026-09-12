@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type * as CodexAppServerProcessTeardownModule from './codex-app-server-process-teardown'
 import type { spawnProcess } from '../../shared/child-process/run-process'
 import {
   isCodexAppServerRequestError,
@@ -11,6 +12,24 @@ import {
   type CodexAppServerConnectionHandlers
 } from './codex-app-server-connection'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
+
+// The connection tests use synthetic children; do not invoke the real Windows taskkill command
+// for their fake PID. The process-tree implementation has its own platform-specific tests.
+vi.mock('./codex-app-server-process-teardown', async (importOriginal) => {
+  const actual = await importOriginal<typeof CodexAppServerProcessTeardownModule>()
+  if (process.platform !== 'win32') {
+    return actual
+  }
+  return {
+    ...actual,
+    terminateCodexAppServerProcessTree: async (
+      child: Parameters<typeof actual.terminateCodexAppServerProcessTree>[0]
+    ) => {
+      child.kill('SIGKILL')
+      return true
+    }
+  }
+})
 
 const originalCodexHome = process.env.CODEX_HOME
 
@@ -428,7 +447,9 @@ describe('openCodexAppServerConnection', () => {
     await vi.advanceTimersByTimeAsync(4_100)
 
     await expect(Promise.all([first, second])).resolves.toEqual([true, true])
-    expect(child.kill.mock.calls.map(([signal]) => signal)).toEqual(['SIGSTOP', 'SIGKILL'])
+    expect(child.kill.mock.calls.map(([signal]) => signal)).toEqual(
+      process.platform === 'win32' ? ['SIGKILL'] : ['SIGSTOP', 'SIGKILL']
+    )
   })
 
   it('allows a later close to observe exit after an unproven attempt', async () => {

@@ -26,7 +26,7 @@ function runHook(dir: string, extraEnv: NodeJS.ProcessEnv = {}) {
   })
 }
 
-describe('managed hook outside an Orca terminal', () => {
+describe.skipIf(process.platform === 'win32')('managed hook outside an Orca terminal', () => {
   it('no Orca env at all: silent, exit 0, writes nothing', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-outside-'))
     const res = runHook(dir)

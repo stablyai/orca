@@ -3,7 +3,8 @@
 // at once: a managed Windows .cmd hook posts through curl.exe and spawns no interpreter.
 // Generated under a mocked win32 platform, not executed, so the POSIX CI legs guard it too.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync } from 'node:fs'
+import { rm as rmAsync } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as osModule from 'node:os'
@@ -84,15 +85,20 @@ describe('Windows managed hook post interpreter', () => {
     homedirMock.mockReturnValue(home)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     if (previousUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
-    rmSync(isolatedUserDataDir, { recursive: true, force: true })
+    await rmAsync(isolatedUserDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 20,
+      retryDelay: 250
+    })
     homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
-    rmSync(home, { recursive: true, force: true })
+    await rmAsync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     home = ''
   })
 

@@ -38,6 +38,12 @@ import {
 } from './structured-agent-session-runtime'
 
 const journals = createTrackedJournalOpener()
+// The fake app-server has no child process. Keep this integration test focused
+// on the agentSession wire instead of host-specific descendant enumeration.
+vi.mock('../codex/codex-structured-turn-processes', () => ({
+  captureCodexTurnProcesses: async () => null,
+  terminateCodexTurnProcesses: async () => true
+}))
 
 const SESSION = 'session-integration-1'
 const THREAD = 'thread-integration'
