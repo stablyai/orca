@@ -12,6 +12,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
 const createPromptRuntime = createAgentPromptSubmissionRuntime
+const CODEX_COMPOSER_READY_BYTES = '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([
@@ -450,6 +451,7 @@ describe('agent prompt submission runtime', () => {
         runtime.onPtyData('pty-prompt', 'output from the existing turn', Date.now())
       }
     }, 'codex')
+    runtime.onPtyData('pty-prompt', CODEX_COMPOSER_READY_BYTES, Date.now())
     runtime.onPtyData(
       'pty-prompt',
       '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
@@ -565,6 +567,7 @@ describe('agent prompt submission runtime', () => {
     vi.setSystemTime(1_000)
     const hook = { state: 'working' as const, stateStartedAt: 1_000 }
     const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook, 'codex')
+    runtime.onPtyData('pty-prompt', CODEX_COMPOSER_READY_BYTES, Date.now())
 
     const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
       acceptQueued: true,
@@ -766,6 +769,7 @@ describe('agent prompt submission runtime', () => {
   it('reserves a lifecycle transition for only one queued prompt receipt', async () => {
     vi.useFakeTimers()
     const { runtime, handle } = await createAgentPromptSubmissionRuntime(() => undefined, 'codex')
+    runtime.onPtyData('pty-prompt', CODEX_COMPOSER_READY_BYTES, Date.now())
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
 
     const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {

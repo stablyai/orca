@@ -31,6 +31,7 @@ describe('agent prompt receipt correlation', () => {
       () => undefined,
       'codex'
     )
+    runtime.onPtyData('pty-prompt', '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m', Date.now())
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
 
     const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {

@@ -8,6 +8,8 @@ import {
   buildTerminalSendPayload
 } from './terminal-send-payload'
 import { buildAgentPromptPasteBytes } from '../../shared/agent-prompt-injection'
+import { waitForPtyDraftInputReady } from './runtime-pty-draft-input-ready'
+import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
 
 export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected controllerKnowsPtyIsLive(ptyId: string): boolean {
@@ -135,6 +137,16 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       }
       await assertTerminalInputWithinLimitWithYield(payload)
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
+      // Why: native/Structured Chat can own the pane with no composer; wait would hide typed refusal.
+      agentSessionPtyWriteGate.assertAdmitted(pty.pty.ptyId)
+      await this.waitForCodexPromptComposer(pty.pty.ptyId, options.signal)
+      if (
+        this.getPtyLifecycleGeneration(pty.pty.ptyId) !== generation ||
+        this.ptysById.get(pty.pty.ptyId) !== pty.pty ||
+        !pty.pty.connected
+      ) {
+        throw new Error('terminal_exited')
+      }
       const delivery = await this.serializeAgentPromptSubmission(
         pty.pty.ptyId,
         generation,
@@ -169,11 +181,21 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
       throw new Error('terminal_not_writable')
     }
-    const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
-    const delivery = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
-      this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
-      this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
+    const ptyId = leaf.ptyId
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    agentSessionPtyWriteGate.assertAdmitted(ptyId)
+    await this.waitForCodexPromptComposer(ptyId, options.signal)
+    if (this.getPtyLifecycleGeneration(ptyId) !== generation) {
+      throw new Error('terminal_exited')
+    }
+    const current = this.getLiveLeafForHandle(handle).leaf
+    if (!current.writable || current.ptyId !== ptyId || (await this.isLeafPtyProvenAbsent(ptyId))) {
+      throw new Error('terminal_not_writable')
+    }
+    const delivery = await this.serializeAgentPromptSubmission(ptyId, generation, async () => {
+      this.assertLiveTerminalHandleTargetsPty(handle, ptyId)
+      this.assertAgentPromptGeneration(ptyId, generation)
+      return await this.writeTerminalAgentPrompt(handle, ptyId, generation, payload, options)
     })
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
     return {
@@ -181,6 +203,26 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       accepted: true,
       bytesWritten,
       ...(delivery.prompt ? { prompt: delivery.prompt } : {})
+    }
+  }
+
+  protected async waitForCodexPromptComposer(ptyId: string, signal?: AbortSignal): Promise<void> {
+    const pty = this.ptysById.get(ptyId)
+    if ((pty?.launchAgent ?? pty?.foregroundAgent) !== 'codex') {
+      return
+    }
+    const ready = await waitForPtyDraftInputReady(
+      {
+        subscribeToData: (id, listener) => this.subscribeToTerminalData(id, listener),
+        readRecentOutput: (id) => this.recentPtyOutputById.get(id)?.read(),
+        subscribeToExit: (id, listener) => this.subscribeToPtyExit(id, listener)
+      },
+      ptyId,
+      'codex',
+      signal
+    )
+    if (!ready) {
+      throw new Error('agent_composer_not_ready')
     }
   }
 }

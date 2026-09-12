@@ -44,6 +44,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
       await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(true)
+      runtime.onPtyData('pty-bg', '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m', Date.now())
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
       await vi.advanceTimersByTimeAsync(1_199)
       expect(writes).not.toContain('\r')
@@ -116,6 +117,7 @@ describe('OrcaRuntimeService', () => {
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         launchAgent: 'codex'
       })
+      runtime.onPtyData('pty-bg', '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m', Date.now())
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
       await vi.advanceTimersByTimeAsync(8_000)

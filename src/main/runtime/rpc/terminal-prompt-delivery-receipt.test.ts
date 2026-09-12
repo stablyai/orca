@@ -49,6 +49,8 @@ function request(
   }
 }
 
+const CODEX_COMPOSER_READY_BYTES = '\x1b[?2004h\x1b[?1049h\x1b[1m›\x1b[0m'
+
 async function createHarness(agent: TuiAgent, busy = false) {
   const created = await createAgentPromptSubmissionRuntime(() => undefined, agent)
   created.runtime.setPtyController({
@@ -68,6 +70,9 @@ async function createHarness(agent: TuiAgent, busy = false) {
       `\x1b]9999;{"state":"working","agentType":"${agent}"}\x07`,
       Date.now()
     )
+  }
+  if (agent === 'codex') {
+    created.runtime.onPtyData('pty-prompt', CODEX_COMPOSER_READY_BYTES, Date.now())
   }
   return {
     ...created,
