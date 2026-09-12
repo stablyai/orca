@@ -295,3 +295,44 @@ describe('FloatingTerminalToggleButton attention dot', () => {
     expect(hasProp(element, 'data-floating-terminal-attention')).toBe(false)
   })
 })
+
+describe('FloatingTerminalToggleButton idle transparency', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    hookRuntime.effects = []
+    hookRuntime.layoutEffects = []
+    hookRuntime.index = 0
+    hookRuntime.values = []
+    storeState.hasFloatingUnread = false
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn(),
+      innerHeight: 800,
+      innerWidth: 1200,
+      localStorage: { getItem: vi.fn(() => null), setItem: vi.fn() },
+      removeEventListener: vi.fn()
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('fades the parked launcher and restores it on hover or focus', async () => {
+    const element = await renderToggle(false)
+    const className = getToggleButton(element).props.className as string
+    expect(className).toContain('opacity-45')
+    expect(className).toContain('hover:opacity-100')
+    expect(className).toContain('focus-visible:opacity-100')
+  })
+
+  it('keeps the control opaque while the panel is open', async () => {
+    const element = await renderToggle(true)
+    expect(getToggleButton(element).props.className as string).not.toContain('opacity-45')
+  })
+
+  it('keeps the control opaque while activity is pending', async () => {
+    storeState.hasFloatingUnread = true
+    const element = await renderToggle(false)
+    expect(getToggleButton(element).props.className as string).not.toContain('opacity-45')
+  })
+})
