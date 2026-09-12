@@ -251,12 +251,12 @@ export function mergeCatalogUpdatedAt(left: number, right: number): number {
   return Math.max(known, other)
 }
 
-function createProjectFromRepo(repo: Repo): Project {
+function createProjectFromRepo(repo: Repo, projectId: string): Project {
   const identity = getProjectProviderIdentity(repo)
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
   const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
   return {
-    id: getProjectId(repo),
+    id: projectId,
     displayName: repo.displayName,
     badgeColor: repo.badgeColor,
     ...(repo.repoIcon !== undefined ? { repoIcon: repo.repoIcon } : {}),
@@ -319,7 +319,7 @@ export function projectHostSetupProjectionFromRepos(
     if (existing) {
       mergeProjectRepo(existing, repo)
     } else {
-      const project = createProjectFromRepo(repo)
+      const project = createProjectFromRepo(repo, projectId)
       projectById.set(projectId, { project, sourceRepoIds: new Set(project.sourceRepoIds) })
     }
     // Why normalize here: a repo row is untrusted persisted/wire data too, and these
