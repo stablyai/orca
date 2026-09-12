@@ -49,11 +49,6 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       if (state.mainWindow?.isDestroyed()) {
         return
       }
-      // Why: the renderer still derives structured rows from its own feed subscription; forwarding
-      // these too would give one pane key two writers until that bridge is retired.
-      if (structuredHost) {
-        return
-      }
       if (providerSessionOnly) {
         // Why: session_start just refreshes durable resume identity while Pi is idle; forward it without titles, telemetry, or status UI.
         state.mainWindow?.webContents.send('agentStatus:set', {
@@ -72,7 +67,9 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         })
         return
       }
-      if (!restoredUnconfirmed) {
+      if (!restoredUnconfirmed && !structuredHost) {
+        // Why not structured rows: first-work branch rename is a PTY-agent feature whose
+        // structured-session gap is tracked on its own; publishing the row must not enable it.
         options.maybeAutoRenameBranchOnFirstWork({ paneKey, tabId, worktreeId, payload, isReplay })
       }
       const runtime = state.runtime
@@ -102,7 +99,8 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
         ...(observation ? { observation } : {}),
-        ...(orchestration ? { orchestration } : {})
+        ...(orchestration ? { orchestration } : {}),
+        ...(structuredHost ? { structuredHost } : {})
       }
       state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
       if (!suppressSyntheticCodexAutoApprovalTitle || isAskUserQuestionTool(payload.toolName)) {
@@ -113,6 +111,8 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       const profile = getSyntheticAgentTitleProfile(payload.agentType)
       if (
         profile &&
+        // A structured session has no PTY and no terminal title slot to inject one into.
+        !structuredHost &&
         shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state) &&
         !suppressSyntheticCodexAutoApprovalTitle
       ) {

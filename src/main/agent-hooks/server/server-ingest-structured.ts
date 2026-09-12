@@ -54,8 +54,10 @@ export abstract class AgentHookServerIngestStructured extends AgentHookServerIng
   }
 
   /** The host no longer holds the session; its last projection is history the journal keeps.
-   *  `dropStatusEntry`, not `clearPaneState`: the renderer's own bridge still owns this pane key,
-   *  so a pane-status-clear would make main a second writer for it. */
+   *  `dropStatusEntry`, not `clearPaneState`: the pane caches and authority fences a pane-status
+   *  clear tears down belong to a PTY, and a structured session never had any. The renderer's copy
+   *  is taken out by the surface teardown in `StructuredAgentSessionStatusBridge`, since this drop
+   *  emits no renderer clear. */
   dropStructuredStatus(sessionId: string): void {
     this.dropStatusEntry(structuredAgentSessionPaneKey(sessionId), {
       preserveResumeIdentity: false

@@ -152,9 +152,10 @@ describe('agentStatus:getSnapshot IPC', () => {
     expect(handler!({})).toEqual(snapshot)
   })
 
-  // The half-migration seam: until PR 2 retires the renderer's own feed bridge, main must not
-  // publish structured rows to the renderer at all — one pane key, one writer.
-  it('omits structured rows the renderer feed bridge still owns', async () => {
+  // PR 2b: the renderer subscribes instead of deriving, so a replay pull after hydration has to
+  // carry structured rows too — otherwise a native chat has no sidebar row until its next journal
+  // edge, and a settled one never comes back at all.
+  it('includes structured rows so a hydration replay does not lose native chats', async () => {
     getStatusSnapshot.mockReturnValue([
       {
         paneKey: PANE_KEY,
@@ -179,8 +180,12 @@ describe('agentStatus:getSnapshot IPC', () => {
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers()
 
-    const rows = handleHandlers.get('agentStatus:getSnapshot')!({}) as { paneKey: string }[]
-    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY])
+    const rows = handleHandlers.get('agentStatus:getSnapshot')!({}) as {
+      paneKey: string
+      structuredHost?: string
+    }[]
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY, CHILD_PANE_KEY])
+    expect(rows[1]?.structuredHost).toBe('owned')
   })
 
   it('enriches the hook cache snapshot with runtime lineage metadata', async () => {
