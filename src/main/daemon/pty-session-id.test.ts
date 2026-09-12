@@ -113,6 +113,15 @@ describe('isSafePtySessionId', () => {
 })
 
 describe('parsePtySessionId', () => {
+  it('round-trips a minted folder workspace session', () => {
+    const workspaceId = 'folder:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    expect(parsePtySessionId(mintPtySessionId(workspaceId))).toEqual({ worktreeId: workspaceId })
+  })
+
+  it('rejects an empty folder workspace identity', () => {
+    expect(parsePtySessionId('folder:@@deadbeef')).toEqual({ worktreeId: null })
+  })
+
   it('round-trips a minted id back to its worktreeId', () => {
     const wt = 'repo-abc::/Users/me/wt/feature'
     expect(parsePtySessionId(mintPtySessionId(wt))).toEqual({ worktreeId: wt })
