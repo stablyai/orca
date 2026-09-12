@@ -7049,8 +7049,6 @@
           "ad6c529693": "Cuentas de proveedores de IA",
           "ec1ba547f7": "Administra agentes de IA, define uno predeterminado y personaliza comandos.",
           "8afa676615": "Agentes",
-          "add3b97ee6": "\"",
-          "3c88ec55d6": "No se encontraron configuraciones para \"",
           "c7ad095d96": "Cargando ajustes...",
           "acc7bbdefd": "Presiona ESC de nuevo para salir de ajustes",
           "43b68e10f0": "Tienes cambios no guardados de Git AI Author. Al salir se descartarán.",
@@ -7068,7 +7066,8 @@
           "devDescription": "Herramientas solo de desarrollo para probar estados de la UI.",
           "linearTitle": "Linear",
           "linearDescription": "Cómo funciona Linear en Orca, lista de configuración, habilidad del agente y ejemplos de prompts.",
-          "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas."
+          "tasksDescription": "Conecta proveedores, instala la habilidad de Linear y elige qué aparece en Tareas.",
+          "noSettingsFoundForQuery": "No se encontraron configuraciones para \"{{value0}}\""
         },
         "SettingsFormControls": {
           "42a4d15a30": "No hay fuentes coincidentes.",

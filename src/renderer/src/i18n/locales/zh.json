@@ -7100,8 +7100,6 @@
           "ad6c529693": "AI 提供商账户",
           "ec1ba547f7": "管理 AI 智能体、设置默认值并自定义命令。",
           "8afa676615": "智能体",
-          "add3b97ee6": "”",
-          "3c88ec55d6": "找不到“的设置",
           "c7ad095d96": "正在加载设置...",
           "acc7bbdefd": "再按一次 ESC 退出设置",
           "43b68e10f0": "您有未保存的 Git AI Author 更改。离开将丢弃它们。",
@@ -7119,7 +7117,8 @@
           "devDescription": "仅用于调试 UI 状态的开发工具。",
           "linearTitle": "Linear",
           "linearDescription": "Linear 在 Orca 中的工作方式、设置清单、智能体技能和提示词示例。",
-          "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。"
+          "tasksDescription": "连接提供商、安装 Linear 技能并选择要在任务中显示的内容。",
+          "noSettingsFoundForQuery": "找不到“{{value0}}”的设置"
         },
         "SettingsFormControls": {
           "42a4d15a30": "没有匹配的字体。",

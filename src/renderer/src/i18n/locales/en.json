@@ -8192,8 +8192,6 @@
           "ad6c529693": "AI Provider Accounts",
           "ec1ba547f7": "Manage AI agents, set a default, and customize commands.",
           "8afa676615": "Agents",
-          "add3b97ee6": "\"",
-          "3c88ec55d6": "No settings found for \"",
           "c7ad095d96": "Loading settings...",
           "acc7bbdefd": "Press ESC again to exit settings",
           "43b68e10f0": "You have unsaved Git AI Author changes. Leaving will discard them.",
@@ -8211,7 +8209,8 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
+          "noSettingsFoundForQuery": "No settings found for \"{{value0}}\""
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",

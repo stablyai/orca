@@ -7071,8 +7071,6 @@
           "ad6c529693": "AI プロバイダーアカウント",
           "ec1ba547f7": "AI Agent を管理し、デフォルトを設定し、コマンドをカスタマイズします。",
           "8afa676615": "Agent",
-          "add3b97ee6": "」",
-          "3c88ec55d6": "検索条件に一致する設定が見つかりませんでした:「",
           "c7ad095d96": "設定を読み込んでいます…",
           "acc7bbdefd": "もう一度 ESC を押して設定を終了します",
           "43b68e10f0": "Git AI Author の変更が保存されていません。離れるとそれらは破棄されます。",
@@ -7090,7 +7088,8 @@
           "devDescription": "UI の状態を確認するための開発者専用ツール。",
           "linearTitle": "Linear",
           "linearDescription": "Orca での Linear の仕組み、セットアップチェックリスト、Agent スキル、プロンプト例。",
-          "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。"
+          "tasksDescription": "プロバイダーを接続し、Linear スキルをインストールして、タスクに表示する項目を選択します。",
+          "noSettingsFoundForQuery": "検索条件に一致する設定が見つかりませんでした:「{{value0}}」"
         },
         "SettingsFormControls": {
           "42a4d15a30": "一致するフォントがありません。",

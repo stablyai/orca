@@ -7884,8 +7884,6 @@
           "ad6c529693": "Comptes de fournisseurs d'IA",
           "ec1ba547f7": "Gérez les agents IA, définissez-en un par défaut et personnalisez les commandes.",
           "8afa676615": "Agents",
-          "add3b97ee6": "\"",
-          "3c88ec55d6": "Aucun paramètre trouvé pour \"",
           "c7ad095d96": "Chargement des paramètres...",
           "acc7bbdefd": "Appuyez à nouveau sur ESC pour quitter les paramètres",
           "43b68e10f0": "Vous avez des modifications Git AI Author non enregistrées. Quitter les abandonnera.",
@@ -7903,7 +7901,8 @@
           "devDescription": "Outils réservés au développement pour exercer les états de l'UI.",
           "linearTitle": "Linear",
           "linearDescription": "Fonctionnement de Linear dans Orca, checklist de configuration, skill d'agent et exemples de prompts.",
-          "tasksDescription": "Connectez des fournisseurs, installez le skill Linear et choisissez ce qui apparaît dans Tâches."
+          "tasksDescription": "Connectez des fournisseurs, installez le skill Linear et choisissez ce qui apparaît dans Tâches.",
+          "noSettingsFoundForQuery": "Aucun paramètre trouvé pour \"{{value0}}\""
         },
         "SettingsFormControls": {
           "42a4d15a30": "Aucune police correspondante.",

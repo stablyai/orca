@@ -7039,8 +7039,6 @@
           "ad6c529693": "AI 제공업체 계정",
           "ec1ba547f7": "AI agents를 관리하고, 기본값을 설정하고, 명령을 사용자 정의하세요.",
           "8afa676615": "에이전트",
-          "add3b97ee6": "\"",
-          "3c88ec55d6": "\"에 대한 설정을 찾을 수 없습니다.",
           "c7ad095d96": "설정 로드 중...",
           "acc7bbdefd": "설정을 종료하려면 ESC를 다시 누르세요.",
           "43b68e10f0": "저장되지 않은 Git AI Author 변경사항이 있습니다. 떠나면 폐기됩니다.",
@@ -7058,7 +7056,8 @@
           "devDescription": "UI 상태를 시험해 보기 위한 개발 전용 도구입니다.",
           "linearTitle": "Linear",
           "linearDescription": "Orca에서 Linear가 작동하는 방식, 설정 체크리스트, 에이전트 스킬, 프롬프트 예시입니다.",
-          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요."
+          "tasksDescription": "제공업체를 연결하고 Linear 스킬을 설치한 다음 작업에 표시할 항목을 선택하세요.",
+          "noSettingsFoundForQuery": "\"{{value0}}\"에 대한 설정을 찾을 수 없습니다."
         },
         "SettingsFormControls": {
           "42a4d15a30": "일치하는 글꼴이 없습니다.",
