@@ -94,6 +94,44 @@ describe('markdown review notes', () => {
     expect(charCodeAt.mock.calls.length).toBeLessThan(64)
   })
 
+  it('preserves empty, trailing, and mixed line endings across excerpt ranges', () => {
+    for (const content of [
+      '',
+      'one',
+      '\n',
+      'one\n',
+      'one\r\n\r\ntwo\r',
+      'one\rtwo',
+      Array.from({ length: 15 }, (_, i) => `line ${i}`).join('\n')
+    ]) {
+      const sourceLines = content
+        .split('\n')
+        .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
+      for (let start = -1; start <= sourceLines.length + 1; start += 1) {
+        for (let end = start; end <= sourceLines.length + 1; end += 1) {
+          const first = Math.max(1, start)
+          const selected = sourceLines.slice(first - 1, Math.max(first, end))
+          const bounded =
+            selected.length <= 8
+              ? selected
+              : [...selected.slice(0, 4), '...', ...selected.slice(-4)]
+          expect(
+            getMarkdownReviewExcerpt(content, note({ startLine: start, lineNumber: end }))
+          ).toBe(bounded.map((line) => `> ${line}`).join('\n'))
+        }
+      }
+    }
+  })
+
+  it('finds late excerpts without checking every prefix character in JavaScript', () => {
+    const content = `${'x'.repeat(100_000)}\r\ntarget\nignored`
+    const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
+    const excerpt = getMarkdownReviewExcerpt(content, note({ lineNumber: 2 }))
+    const checks = charCodeAt.mock.calls.length
+    expect(excerpt).toBe('> target')
+    expect(checks).toBeLessThanOrEqual(2)
+  })
+
   it('prefers exact selected text for card highlights', () => {
     const highlighted = getMarkdownReviewHighlightedText(
       'one\ntwo broad line\nthree',
