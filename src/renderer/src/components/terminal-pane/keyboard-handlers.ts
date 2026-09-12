@@ -4,7 +4,7 @@ export type { SearchState, SearchNavigationDirection } from './terminal-keyboard
 
 export {
   resolveTerminalKeyboardShortcutAction,
-  recordKeyboardCreatedTerminalPaneSplit,
+  completeKeyboardCreatedTerminalPaneSplit,
   matchSearchNavigate,
   runTerminalSearchNavigation,
   matchFileSearchShortcut
