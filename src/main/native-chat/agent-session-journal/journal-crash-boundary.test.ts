@@ -352,6 +352,21 @@ describe('reconciliation matching', () => {
     expect(outcomes[0]).toMatchObject({ reason: 'ambiguous_match' })
   })
 
+  it('does not assign one matching item to the first of two identical sends', () => {
+    const outcomes = reconcileSubmissions({
+      submissions,
+      history: window([
+        history({ itemId: 'item-1', clientId: null, text: 'same text', ordinal: 0 })
+      ])
+    })
+
+    expect(outcomes.map((outcome) => outcome.outcome)).toEqual(['unknown', 'unknown'])
+    expect(outcomes.map((outcome) => ('reason' in outcome ? outcome.reason : null))).toEqual([
+      'ambiguous_match',
+      'ambiguous_match'
+    ])
+  })
+
   it('uses a unique fingerprint only as a tiebreak when no id is echoed', () => {
     const [outcome] = reconcileSubmissions({
       submissions: [submissions[0]!],

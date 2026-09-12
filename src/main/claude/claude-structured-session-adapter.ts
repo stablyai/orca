@@ -32,6 +32,7 @@ import {
 } from './claude-structured-session-close'
 import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 export type {
@@ -163,6 +164,17 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })()
     return exit.settlementPromise
   }
+
+  /** Restart reconciliation reads the transcript a resume replays; these maps track liveness. */
+  providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = (
+    input
+  ) =>
+    resolveClaudeProviderHistoryWindow({
+      identity: input.identity,
+      accountHomePath: input.accountHome.path,
+      hasLiveSession:
+        this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId)
+    })
 
   private async persistSessionHandle(sessionId: string, session: ClaudeSession): Promise<void> {
     try {
