@@ -104,20 +104,17 @@ describe('workspace terminal seeding authority', () => {
   })
 
   it.each(['offline', 'error'] as const)(
-    'falls back to none when a sync terminates in %s without ever hydrating',
+    'keeps a sync that terminates in %s unverifiable',
     (phase) => {
-      // The regression this guards: remoteWorkspaceHydratedTargetIds is add-only in practice
-      // (clearRemoteWorkspaceHydrated has no production caller), so without a floor one failed sync
-      // leaves every git worktree on this target terminal-less and its sleeping agents unresumable
-      // for the rest of the app session — strictly worse than the pre-gate behaviour, and escapable
-      // only by creating a tab by hand.
       const store = createTestStore()
       seedDirectSsh(store)
       store.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, { phase, direction: 'pull' })
 
-      expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe('none')
-      expect(ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID)).toBeTruthy()
-      expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(1)
+      expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe(
+        'unverifiable'
+      )
+      expect(ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID)).toBeNull()
+      expect(terminalTabCount(store, SSH_WORKTREE_ID)).toBe(0)
     }
   )
 
@@ -136,15 +133,15 @@ describe('workspace terminal seeding authority', () => {
     expect(ensureWorktreeHasInitialTerminal(store.getState(), SSH_WORKTREE_ID)).toBeNull()
   })
 
-  it('keeps a hydrated target on none even if a later sync errors', () => {
-    // Once the host has answered, a subsequent transport error is not evidence it holds nothing new
-    // — but it is also not a reason to start refusing. The hydrated branch wins.
+  it('revokes automatic launch authority when a later sync errors', () => {
     const store = createTestStore()
     seedDirectSsh(store)
     store.getState().markRemoteWorkspaceHydrated(TARGET_ID)
     store.getState().setRemoteWorkspaceSyncStatus(TARGET_ID, { phase: 'error', direction: 'pull' })
 
-    expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe('none')
+    expect(resolveWorkspaceTerminalHostAuthority(store.getState(), SSH_WORKTREE_ID)).toBe(
+      'unverifiable'
+    )
   })
 
   it('treats a conflicting host snapshot as unanswered', () => {
