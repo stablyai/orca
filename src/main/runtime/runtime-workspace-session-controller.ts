@@ -7,7 +7,7 @@ import {
 } from '../../shared/execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree/id'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -47,6 +47,13 @@ export class RuntimeWorkspaceSessionController {
       return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
+    // Why the singular lookup first: a floating terminal carries no `repoId::path`, and this runs
+    // on the mobile hydrate poll path, so enumerating every repo to learn that no row owns the id
+    // is pure cost. Same answer either way — an unowned id routes to local (#9343).
+    if (!splitWorktreeId(resolvedWorktreeId)) {
+      const repo = store.getRepo?.(resolvedWorktreeId)
+      return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+    }
     const repoId = getRepoIdFromWorktreeId(resolvedWorktreeId)
     const repos = store.getRepos?.() ?? []
     const routing = resolveWorktreeHostRouting(repos, { repoId })
