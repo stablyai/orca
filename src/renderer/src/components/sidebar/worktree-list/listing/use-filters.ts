@@ -31,6 +31,8 @@ export function useSidebarWorktreeFilters() {
   )
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
+  const setFocusedProjectGroupId = useAppStore((s) => s.setFocusedProjectGroupId)
+  const focusedProjectGroupId = useAppStore((s) => s.focusedProjectGroupId)
 
   // Why: count hideDefaultBranchWorkspace as a filter so the Clear Filters escape hatch stays reachable when it alone empties the list.
   const filterState = useMemo(
@@ -44,7 +46,8 @@ export function useSidebarWorktreeFilters() {
       hideWorkspacesFromOtherDevices,
       alwaysShowDefaultBranchWorkspace,
       visibleWorkspaceHostIds,
-      workspaceHostScope
+      workspaceHostScope,
+      focusedProjectGroupId
     }),
     [
       showSleepingWorkspaces,
@@ -56,7 +59,8 @@ export function useSidebarWorktreeFilters() {
       hideWorkspacesFromOtherDevices,
       alwaysShowDefaultBranchWorkspace,
       visibleWorkspaceHostIds,
-      workspaceHostScope
+      workspaceHostScope,
+      focusedProjectGroupId
     ]
   )
 
@@ -89,6 +93,9 @@ export function useSidebarWorktreeFilters() {
     if (actions.resetVisibleWorkspaceHostIds) {
       setVisibleWorkspaceHostIds(null)
     }
+    if (actions.resetFocusedProjectGroupId) {
+      setFocusedProjectGroupId(null)
+    }
   }, [
     setShowSleepingWorkspaces,
     setFilterRepoIds,
@@ -99,6 +106,7 @@ export function useSidebarWorktreeFilters() {
     setHideWorkspacesFromOtherDevices,
     setAlwaysShowDefaultBranchWorkspace,
     setVisibleWorkspaceHostIds,
+    setFocusedProjectGroupId,
     filterState
   ])
 

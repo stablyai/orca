@@ -8,6 +8,7 @@ import {
 } from './add-repo-existing-workspaces-telemetry'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
+import { assignAddedRepoToTargetClient } from './assign-added-repo-to-target-client'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 type CompleteGitRepoAddOptions = {
@@ -64,6 +65,7 @@ export function useCompleteGitRepoAdd({
         detectedTelemetryTrackedRef.current.add(repoId)
         track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
       }
+      await assignAddedRepoToTargetClient(repoId)
       if (finishProjectAdd) {
         await finishProjectAdd(repoId, source, executionHostId)
         return

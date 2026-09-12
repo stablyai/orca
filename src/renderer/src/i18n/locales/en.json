@@ -151,6 +151,21 @@
           "statusItem": "status item",
           "activity": "activity"
         }
+      },
+      "windowControlsPosition": {
+        "title": "Window Controls Position",
+        "description": "Place minimize, maximize, and close on the left or right on Linux.",
+        "left": "Left",
+        "right": "Right",
+        "keyword": {
+          "titlebar": "titlebar",
+          "window": "window",
+          "controls": "controls",
+          "linux": "linux",
+          "left": "left",
+          "right": "right",
+          "close": "close"
+        }
       }
     },
     "browser": {
@@ -5299,7 +5314,8 @@
           "5c9c7c16aa": "Add a project to create workspaces",
           "a30e34eb5c": "Close workspace board",
           "views": "Sidebar view",
-          "addProject": "Add project"
+          "addProject": "Add project",
+          "a52adae158": "More workspace actions"
         },
         "SidebarNav": {
           "80611a8b10": "Search",
@@ -5910,6 +5926,38 @@
               "7c2f009786": "In progress",
               "6798dc7c94": "In review",
               "5076efc3d2": "Done"
+            },
+            "rows": {
+              "ProjectGroupDialogs": {
+                "055a11853b": "New client inside",
+                "dae3986701": "Create a client folder nested under this one, then move projects into it."
+              },
+              "project": {
+                "group": {
+                  "header": {
+                    "actions": {
+                      "3699214712": "Move into another client",
+                      "4adc3326bf": "Show all clients",
+                      "5d2c57d3b0": "Show only this client",
+                      "8d6183b3de": "Add project…",
+                      "7461bea203": "New client inside…",
+                      "02bb9199b2": "Top level",
+                      "b410ee777b": "Create another client first",
+                      "140510344b": "Add project to {{value0}}"
+                    }
+                  }
+                }
+              },
+              "use": {
+                "project": {
+                  "group": {
+                    "dialogs": {
+                      "bcfdab3596": "Failed to create client",
+                      "d942d83a68": "Orca could not create the nested client. Try again after reconnecting if this is a remote host."
+                    }
+                  }
+                }
+              }
             }
           }
         },
@@ -6278,6 +6326,19 @@
           "title": "Worktree scan failed for {{value0}}",
           "retry": "Retry scan",
           "retained": "Existing worktrees are kept until a scan succeeds. Click to retry."
+        },
+        "SidebarClientScopeSwitcher": {
+          "bf84d099da": "All clients",
+          "159d02ed2f": "Switch client: {{value0}}",
+          "1fc28be149": "Clients · {{value0}}",
+          "5f9196f74c": "Focus client",
+          "068ae2c11d": "New client inside…",
+          "95d7cdc817": "New client…",
+          "c4ff9de729": "New client inside {{value0}}",
+          "deeb49e60c": "New client",
+          "086b546962": "Create a client nested under {{value0}}, then use + on it to add projects.",
+          "be14f13df1": "Create a client folder, then use + on the client to add projects into it.",
+          "dca8fcfb2d": "Create"
         }
       },
       "shared": {

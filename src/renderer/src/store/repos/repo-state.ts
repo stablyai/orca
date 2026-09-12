@@ -193,7 +193,10 @@ export type RepoSlice = {
     runtimeEnvironmentId?: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
-  createProjectGroup: (name: string) => Promise<ProjectGroup | null>
+  createProjectGroup: (
+    name: string,
+    options?: { parentGroupId?: string | null; hostId?: ExecutionHostId }
+  ) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
     args: {
       projectGroupId: string
@@ -231,7 +234,9 @@ export type RepoSlice = {
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the group's own host owns the call.
   updateProjectGroup: (
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+    >,
     options?: { hostId?: ExecutionHostId }
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string, options?: { hostId?: ExecutionHostId }) => Promise<boolean>

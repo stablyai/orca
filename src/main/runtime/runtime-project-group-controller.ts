@@ -80,7 +80,9 @@ export class RuntimeProjectGroupController {
 
   async updateGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<
+      Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'parentGroupId'>
+    >
   ): Promise<ProjectGroup | null> {
     const store = this.deps.getStore()
     if (!store?.updateProjectGroup) {

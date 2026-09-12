@@ -53,7 +53,8 @@ describe('useVisibleSidebarWorktrees', () => {
           hideWorkspacesFromOtherDevices: false,
           alwaysShowDefaultBranchWorkspace: true,
           visibleWorkspaceHostIds: null,
-          workspaceHostScope: 'all'
+          workspaceHostScope: 'all',
+          focusedProjectGroupId: null
         },
         sortBy: 'recent',
         sortedIds: [local.id, ssh.id],
@@ -88,7 +89,8 @@ describe('useVisibleSidebarWorktrees', () => {
           hideWorkspacesFromOtherDevices: false,
           alwaysShowDefaultBranchWorkspace: true,
           visibleWorkspaceHostIds: ['ssh:box'],
-          workspaceHostScope: 'all'
+          workspaceHostScope: 'all',
+          focusedProjectGroupId: null
         },
         sortBy: 'recent',
         sortedIds: [local.id, ssh.id],
@@ -119,7 +121,8 @@ describe('useVisibleSidebarWorktrees', () => {
         hideWorkspacesFromOtherDevices: false,
         alwaysShowDefaultBranchWorkspace: true,
         visibleWorkspaceHostIds: null,
-        workspaceHostScope: 'all'
+        workspaceHostScope: 'all',
+        focusedProjectGroupId: null
       },
       sortBy: 'recent',
       sortedIds: [worktree.id],

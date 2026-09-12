@@ -18,7 +18,9 @@ import {
   MAC_TRAFFIC_LIGHTS_WIDTH,
   WINDOW_CONTROLS_HEIGHT,
   WINDOW_CONTROLS_WIDTH,
-  hasCustomTitleBar
+  hasCustomTitleBar,
+  resolveCustomWindowControlsSide,
+  windowControlsSideInsets
 } from './app-shell/app-window-chrome'
 import { useAppChromeLayout } from './app-shell/use-app-chrome-layout'
 import { useAppSessionPersistence } from './app-shell/use-app-session-persistence'
@@ -31,12 +33,16 @@ import { useOnboardingAndFeatureTips } from './app-shell/use-onboarding-and-feat
 import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
 import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
 import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-effects'
+import { useAppStore } from './store'
 
 function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
   const clearUnreadDockBadge = useUnreadDockBadge()
+  const windowControlsPreference = useAppStore((s) => s.settings?.windowControlsPosition)
+  const windowControlsSide = resolveCustomWindowControlsSide(windowControlsPreference)
+  const windowControlsInsets = windowControlsSideInsets(windowControlsSide)
 
   // Why enabled && open: the overlay only renders while the feature is on, and its panel is
   // aria-hidden while closed — so that pair is what "on screen" means for the floating workspace.
@@ -55,11 +61,15 @@ function App(): React.JSX.Element {
   // (sheets, dialogs) mount outside it and would otherwise fall back to 0px and
   // render their controls under the Windows/Linux window-controls overlay.
   useEffect(() => {
+    const insets = windowControlsSideInsets(windowControlsSide)
     const root = document.documentElement.style
     root.setProperty('--window-controls-width', WINDOW_CONTROLS_WIDTH)
     root.setProperty('--window-controls-height', WINDOW_CONTROLS_HEIGHT)
+    root.setProperty('--window-controls-left', insets.left)
+    root.setProperty('--window-controls-right', insets.right)
+    root.setProperty('--window-controls-right-edge-height', insets.rightEdgeHeight)
     root.setProperty('--mac-traffic-lights-width', MAC_TRAFFIC_LIGHTS_WIDTH)
-  }, [])
+  }, [windowControlsSide])
 
   const { cancelReturnFocusFrame } = floatingWorkspace
   const setAppRootNode = useCallback(
@@ -82,8 +92,11 @@ function App(): React.JSX.Element {
           '--collapsed-sidebar-header-width': `${layout.collapsedSidebarHeaderWidth}px`,
           // Shared so surfaces can avoid the Windows/Linux window-controls overlay without hardcoding 138px everywhere.
           '--window-controls-width': WINDOW_CONTROLS_WIDTH,
-          // Side-position activity bar uses this to push icons below the Windows/Linux window-controls overlay.
+          '--window-controls-left': windowControlsInsets.left,
+          '--window-controls-right': windowControlsInsets.right,
+          // Side-position activity bar uses this to push icons below the right-edge window-controls overlay.
           '--window-controls-height': WINDOW_CONTROLS_HEIGHT,
+          '--window-controls-right-edge-height': windowControlsInsets.rightEdgeHeight,
           // Full-bleed surfaces use this to keep the macOS traffic lights uncovered.
           '--mac-traffic-lights-width': MAC_TRAFFIC_LIGHTS_WIDTH
         } as React.CSSProperties
@@ -109,7 +122,7 @@ function App(): React.JSX.Element {
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />
       {/* Why: Electron's drag-region hit-test is DOM-order-based (ignores z-index); render last so WindowControls stay clickable. */}
-      {hasCustomTitleBar && <WindowControls />}
+      {hasCustomTitleBar && <WindowControls side={windowControlsSide} />}
     </div>
   )
 }

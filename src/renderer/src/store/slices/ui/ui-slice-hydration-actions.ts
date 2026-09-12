@@ -55,6 +55,7 @@ import {
   hydrateUnexpectedSignoutDismissal,
   normalizeHydratedVisibleWorkspaceHostIds,
   preserveStringArrayIdentity,
+  sanitizeFocusedProjectGroupId,
   sanitizeHydratedActiveView,
   sanitizePersistedRepoIds,
   sanitizeShowDotfilesByWorktree,
@@ -68,20 +69,15 @@ import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydra
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
-const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
-const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
-const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
-const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
-const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
 function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
   let items = migrateStatusBarItems(ui.statusBarItems)
   const defaults = [
-    ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
-    ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
-    ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
-    ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
-    ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
+    ['_portsStatusBarDefaultAdded', 'ports'],
+    ['_kimiStatusBarDefaultAdded', 'kimi'],
+    ['_minimaxStatusBarDefaultAdded', 'minimax'],
+    ['_antigravityStatusBarDefaultAdded', 'antigravity'],
+    ['_grokStatusBarDefaultAdded', 'grok']
   ] as const
   for (const [flag, item] of defaults) {
     if (!ui[flag] && !items.includes(item)) {
@@ -175,6 +171,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             validRepoIds.size === 0
               ? persistedFilterRepoIds
               : persistedFilterRepoIds.filter((repoId) => validRepoIds.has(repoId)),
+          focusedProjectGroupId: sanitizeFocusedProjectGroupId(ui.focusedProjectGroupId),
           agentsVisibleHostIds: preserveStringArrayIdentity(
             s.agentsVisibleHostIds,
             normalizeVisibleExecutionHostIds(ui.agentsVisibleHostIds)

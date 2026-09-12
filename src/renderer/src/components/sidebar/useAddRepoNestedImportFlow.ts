@@ -19,6 +19,7 @@ import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions, type CapturedRuntimeOwner } from './add-repo-runtime-owner'
 import { completeNestedFolderOpen } from './complete-nested-folder-open'
 import { defaultProjectGroupNameForPath } from './add-repo-dialog-types'
+import { assignNestedImportToTargetClient } from './assign-added-repo-to-target-client'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export function useAddRepoNestedImportFlow({
@@ -201,6 +202,10 @@ export function useAddRepoNestedImportFlow({
             }
           )
         }
+        await assignNestedImportToTargetClient({
+          groupId: result.group?.id,
+          projectIds: importedRepoIds
+        })
         const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
         if (repo) {
           const source: AddRepoExistingWorkspaceSource = nestedConnectionId

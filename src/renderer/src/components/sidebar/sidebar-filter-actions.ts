@@ -22,7 +22,8 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
     // default, so Clear Filters must be able to undo it like any other filter.
     state.alwaysShowDefaultBranchWorkspace === false ||
     state.visibleWorkspaceHostIds != null ||
-    (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
+    (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE) ||
+    (typeof state.focusedProjectGroupId === 'string' && state.focusedProjectGroupId.length > 0)
   )
 }
 
@@ -38,6 +39,7 @@ export type ClearFilterActions = {
   resetHideWorkspacesFromOtherDevices: boolean
   resetAlwaysShowDefaultBranchWorkspace: boolean
   resetVisibleWorkspaceHostIds: boolean
+  resetFocusedProjectGroupId: boolean
 }
 
 /**
@@ -62,7 +64,9 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
     resetAlwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace === false,
     resetVisibleWorkspaceHostIds:
       state.visibleWorkspaceHostIds != null ||
-      (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
+      (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE),
+    resetFocusedProjectGroupId:
+      typeof state.focusedProjectGroupId === 'string' && state.focusedProjectGroupId.length > 0
   }
 }
 

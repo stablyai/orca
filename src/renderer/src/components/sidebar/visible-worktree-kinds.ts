@@ -61,6 +61,8 @@ export type SidebarFilterState = {
   alwaysShowDefaultBranchWorkspace?: boolean
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   workspaceHostScope?: ExecutionHostScope
+  /** Client/group focus; null/absent = all groups. */
+  focusedProjectGroupId?: string | null
 }
 
 /**

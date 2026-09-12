@@ -6,6 +6,12 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
+import {
+  filterProjectGroupsForFocus,
+  getFocusedProjectGroupSubtreeIds,
+  isMembershipInFocusedProjectGroup,
+  resolveFocusedProjectGroupId
+} from '../../../../../../shared/project-group-focus'
 import type { SidebarWorktreeFilters } from './use-filters'
 import { filterFolderWorkspacesFromOtherDevices } from '../../workspace-creator-visibility'
 import {
@@ -15,7 +21,7 @@ import {
 } from './host-filtering'
 
 // Narrows repos, project groups, and folder workspaces to the hosts (and devices) the
-// current host filter admits.
+// current host filter admits, then optionally to one focused client/group subtree.
 export function useSidebarHostVisibleScope(args: {
   filterState: SidebarWorktreeFilters['filterState']
   defaultHostId: ExecutionHostId
@@ -23,6 +29,7 @@ export function useSidebarHostVisibleScope(args: {
   projectGroups: readonly ProjectGroup[]
   folderWorkspaces: readonly FolderWorkspace[]
   pairedDeviceIdsByEnvironment: Parameters<typeof filterFolderWorkspacesFromOtherDevices>[1]
+  focusedProjectGroupId?: string | null
 }) {
   const { filterState, defaultHostId, repos, projectGroups, folderWorkspaces } = args
   const { visibleWorkspaceHostIds, workspaceHostScope, hideWorkspacesFromOtherDevices } =
@@ -31,20 +38,37 @@ export function useSidebarHostVisibleScope(args: {
     () => getVisibleSidebarHostIdSet(visibleWorkspaceHostIds, workspaceHostScope),
     [visibleWorkspaceHostIds, workspaceHostScope]
   )
-  const visibleReposForRows = useMemo(() => {
-    if (!visibleHostIdSet) {
-      return repos
-    }
-    return repos.filter((repo) => {
-      const hostId =
-        repo.connectionId || repo.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
-      return visibleHostIdSet.has(hostId)
-    })
-  }, [defaultHostId, repos, visibleHostIdSet])
-  const visibleProjectGroupsForRows = useMemo(
-    () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
-    [defaultHostId, projectGroups, visibleHostIdSet]
+  const focusedSubtreeIds = useMemo(
+    () => getFocusedProjectGroupSubtreeIds(projectGroups, args.focusedProjectGroupId),
+    [args.focusedProjectGroupId, projectGroups]
   )
+  const resolvedFocusedProjectGroupId = useMemo(
+    () => resolveFocusedProjectGroupId(projectGroups, args.focusedProjectGroupId),
+    [args.focusedProjectGroupId, projectGroups]
+  )
+  const visibleReposForRows = useMemo(() => {
+    const hostVisible = !visibleHostIdSet
+      ? repos
+      : repos.filter((repo) => {
+          const hostId =
+            repo.connectionId || repo.executionHostId ? getRepoExecutionHostId(repo) : defaultHostId
+          return visibleHostIdSet.has(hostId)
+        })
+    if (!focusedSubtreeIds) {
+      return hostVisible
+    }
+    return hostVisible.filter((repo) =>
+      isMembershipInFocusedProjectGroup(repo.projectGroupId, focusedSubtreeIds)
+    )
+  }, [defaultHostId, focusedSubtreeIds, repos, visibleHostIdSet])
+  const visibleProjectGroupsForRows = useMemo(() => {
+    const hostVisible = filterProjectGroupsForVisibleHosts(
+      projectGroups,
+      visibleHostIdSet,
+      defaultHostId
+    )
+    return filterProjectGroupsForFocus(hostVisible, focusedSubtreeIds)
+  }, [defaultHostId, focusedSubtreeIds, projectGroups, visibleHostIdSet])
   const visibleFolderWorkspacesForRows = useMemo(() => {
     const hostVisibleWorkspaces = filterFolderWorkspacesForVisibleHosts(
       folderWorkspaces,
@@ -52,21 +76,33 @@ export function useSidebarHostVisibleScope(args: {
       visibleHostIdSet,
       defaultHostId
     )
-    if (!hideWorkspacesFromOtherDevices) {
-      return hostVisibleWorkspaces
+    const deviceVisible = hideWorkspacesFromOtherDevices
+      ? filterFolderWorkspacesFromOtherDevices(
+          hostVisibleWorkspaces,
+          args.pairedDeviceIdsByEnvironment
+        )
+      : hostVisibleWorkspaces
+    if (!focusedSubtreeIds) {
+      return deviceVisible
     }
-    return filterFolderWorkspacesFromOtherDevices(
-      hostVisibleWorkspaces,
-      args.pairedDeviceIdsByEnvironment
+    return deviceVisible.filter((workspace) =>
+      isMembershipInFocusedProjectGroup(workspace.projectGroupId, focusedSubtreeIds)
     )
   }, [
     args.pairedDeviceIdsByEnvironment,
     defaultHostId,
+    focusedSubtreeIds,
     folderWorkspaces,
     hideWorkspacesFromOtherDevices,
     projectGroups,
     visibleHostIdSet
   ])
 
-  return { visibleReposForRows, visibleProjectGroupsForRows, visibleFolderWorkspacesForRows }
+  return {
+    visibleReposForRows,
+    visibleProjectGroupsForRows,
+    visibleFolderWorkspacesForRows,
+    focusedSubtreeIds,
+    resolvedFocusedProjectGroupId
+  }
 }

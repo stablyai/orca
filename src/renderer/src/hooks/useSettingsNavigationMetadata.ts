@@ -9,7 +9,11 @@ import {
   getWebRuntimeEnvironmentsSearchEntry
 } from '@/components/settings/runtime-environments-search'
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
-import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import {
+  isLinuxUserAgent,
+  isMacUserAgent,
+  isWindowsUserAgent
+} from '@/components/terminal-pane/pane-helpers'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
@@ -36,6 +40,7 @@ export { isWebClientLocation } from '@/lib/web-client-location'
 export function buildSettingsNavigationMetadata({
   isMac,
   isWindows,
+  isLinux = !isMac && !isWindows,
   isLocalWindowsHost = isWindows,
   isWindowsTerminalHost = isWindows,
   isWebClient,
@@ -47,6 +52,7 @@ export function buildSettingsNavigationMetadata({
 }: {
   isMac: boolean
   isWindows: boolean
+  isLinux?: boolean
   isLocalWindowsHost?: boolean
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
@@ -73,6 +79,7 @@ export function buildSettingsNavigationMetadata({
   const options: SettingsNavigationBuildOptions = {
     isMac,
     isWindows,
+    isLinux,
     isLocalWindowsHost,
     isWindowsTerminalHost,
     isWebClient,
@@ -115,6 +122,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   )
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
+  const isLinux = isLinuxUserAgent()
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
@@ -152,6 +160,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       buildSettingsNavigationMetadata({
         isMac,
         isWindows,
+        isLinux,
         isLocalWindowsHost,
         isWindowsTerminalHost,
         isWebClient,
@@ -165,6 +174,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     [
       isMac,
       isWindows,
+      isLinux,
       isLocalWindowsHost,
       isWindowsTerminalHost,
       isWebClient,

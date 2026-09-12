@@ -22,6 +22,7 @@ import {
   getThemeEntries,
   getTitlebarEntries,
   getTypographyEntries,
+  getWindowControlsPositionEntries,
   getZoomEntries
 } from './appearance-search'
 import {
@@ -41,6 +42,7 @@ type AppearanceInterfaceSectionProps = {
   fontSuggestions: string[]
   isDesktopMac: boolean
   isDesktopWindows: boolean
+  isDesktopLinux: boolean
   onRequestFontSuggestions?: () => void
   forceVisiblePrimary?: boolean
 }
@@ -52,6 +54,7 @@ export function AppearanceInterfaceSection({
   fontSuggestions,
   isDesktopMac,
   isDesktopWindows,
+  isDesktopLinux,
   onRequestFontSuggestions,
   forceVisiblePrimary = false
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
@@ -66,10 +69,12 @@ export function AppearanceInterfaceSection({
   const themeEntry = getThemeEntries()[0]
   const themeLabel = translate('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
   const titlebarEntry = getTitlebarEntries()[0]
+  const windowControlsPositionEntry = getWindowControlsPositionEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
   const advancedEntries = [
     ...getTitlebarEntries(),
+    ...(isDesktopLinux ? getWindowControlsPositionEntries() : []),
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
@@ -217,6 +222,65 @@ export function AppearanceInterfaceSection({
                 }
               />
             </SearchableSetting>
+
+            {isDesktopLinux ? (
+              <SearchableSetting
+                title={translate(
+                  'settings.appearance.windowControlsPosition.title',
+                  'Window Controls Position'
+                )}
+                description={windowControlsPositionEntry?.description}
+                keywords={
+                  windowControlsPositionEntry?.keywords ?? [
+                    'titlebar',
+                    'window',
+                    'controls',
+                    'linux',
+                    'left',
+                    'right'
+                  ]
+                }
+              >
+                <SettingsRow
+                  label={translate(
+                    'settings.appearance.windowControlsPosition.title',
+                    'Window Controls Position'
+                  )}
+                  description={translate(
+                    'settings.appearance.windowControlsPosition.description',
+                    'Place minimize, maximize, and close on the left or right on Linux.'
+                  )}
+                  control={
+                    <SettingsSegmentedControl
+                      ariaLabel={translate(
+                        'settings.appearance.windowControlsPosition.title',
+                        'Window Controls Position'
+                      )}
+                      value={settings.windowControlsPosition === 'left' ? 'left' : 'right'}
+                      onChange={(option) => {
+                        updateSettings({ windowControlsPosition: option })
+                      }}
+                      options={[
+                        {
+                          value: 'left',
+                          label: translate(
+                            'settings.appearance.windowControlsPosition.left',
+                            'Left'
+                          )
+                        },
+                        {
+                          value: 'right',
+                          label: translate(
+                            'settings.appearance.windowControlsPosition.right',
+                            'Right'
+                          )
+                        }
+                      ]}
+                    />
+                  }
+                />
+              </SearchableSetting>
+            ) : null}
 
             {isDesktopWindows ? (
               <SearchableSetting
