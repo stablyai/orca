@@ -83,7 +83,7 @@ export function hasNodeModulesBinSpawn(contents) {
       if (segment === '.' || segment === '') {
         continue
       }
-      if (segment === '..' && folded.length && folded[folded.length - 1] !== '..') {
+      if (segment === '..' && folded.length && folded.at(-1) !== '..') {
         folded.pop()
         continue
       }
