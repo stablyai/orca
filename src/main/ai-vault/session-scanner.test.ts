@@ -716,7 +716,25 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
+    await mkdir(join(roots.zeroclawStateDir, 'sessions'), { recursive: true })
+    await writeFile(
+      join(roots.zeroclawStateDir, 'sessions', 'zeroclaw-session.jsonl'),
+      jsonLines([
+        {
+          type: 'session',
+          id: 'zeroclaw-session',
+          timestamp: '2026-05-01T10:12:00.000Z',
+          cwd: '/tmp/zeroclaw'
+        },
+        {
+          type: 'message',
+          timestamp: '2026-05-01T10:12:01.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'ZeroClaw title' }] }
+        }
+      ])
+    )
+
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 30 })
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
@@ -763,6 +781,9 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
+    )
+    expect(commandByAgent.get('zeroclaw')).toBe(
+      "cd '/tmp/zeroclaw' && zeroclaw --session 'zeroclaw-session'"
     )
 
     const ompSession = result.sessions.find((session) => session.agent === 'omp')

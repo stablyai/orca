@@ -306,6 +306,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'zeroclaw',
+    label: translate('auto.lib.agent.catalog.zeroclaw', 'ZeroClaw'),
+    cmd: 'zeroclaw',
+    faviconDomain: 'zeroclaw.dev',
+    homepageUrl: 'https://github.com/zeroclaw-labs/zeroclaw'
   }
 ])
 

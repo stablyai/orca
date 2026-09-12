@@ -69,7 +69,8 @@ describe('collectAgentTitleEvidence', () => {
     ['openclaw', 'openclaw'],
     ['aider', 'aider'],
     ['grok', 'grok'],
-    ['devin', 'devin']
+    ['devin', 'devin'],
+    ['zeroclaw', 'zeroclaw']
   ] as const)('collects the free-text token %s without claiming identity', (token, agent) => {
     expect(collectAgentTitleEvidence(`review the ${token} integration`)).toMatchObject({
       agent: null,

@@ -13,14 +13,21 @@ export const SUBAGENT_DIR_NAME = 'subagents'
 export const SUBAGENT_TRANSCRIPT_PREFIX = 'agent-'
 
 export function isSubagentTranscriptFileName(name: string, isFile: boolean): boolean {
+  if (!isFile || name.toLowerCase().endsWith('.meta.json')) {
+    return false
+  }
+  const ext = extname(name).toLowerCase()
+  if (ext !== '.jsonl' && ext !== '.json') {
+    return false
+  }
   return (
-    isFile &&
-    name.startsWith(SUBAGENT_TRANSCRIPT_PREFIX) &&
-    extname(name).toLowerCase() === '.jsonl'
+    name.startsWith(SUBAGENT_TRANSCRIPT_PREFIX) ||
+    name.startsWith('subagent-') ||
+    name.startsWith('swarm-')
   )
 }
 
-// Claude writes subagent transcripts to a sibling directory named after the
+// Claude and ZeroClaw write subagent transcripts to a sibling directory named after the
 // parent transcript file (…/<enc>/<uuid>.jsonl → …/<enc>/<uuid>/subagents/).
 // These survive intact even when the parent conversation persisted zero turns,
 // so they are the recoverable signal that keeps such a session from being hidden.
@@ -45,11 +52,12 @@ export async function countSubagentTranscripts(transcriptFilePath: string): Prom
   return entries.filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile())).length
 }
 
-// Direct child of a subagents dir: `<parent>/<uuid>/subagents/agent-<id>.jsonl`.
-// The `agent-` prefix mirrors the local count/list predicate so remote badges
+// Direct child of a subagents dir: `<parent>/<uuid>/subagents/(agent|subagent|swarm)-<id>.(jsonl|json)`.
+// The prefix mirrors the local count/list predicate so remote badges
 // can't over-count. Greedy prefix means nested subagent trees attribute to their
 // nearest parent, matching the local direct-children-only readdir semantics.
-const SUBAGENT_DIRECT_CHILD_PATTERN = /^(.*)[\\/]subagents[\\/]agent-[^\\/]+\.jsonl$/i
+const SUBAGENT_DIRECT_CHILD_PATTERN =
+  /^(.*)[\\/]subagents[\\/](?:agent-|subagent-|swarm-)[^\\/]+\.(?:jsonl|json)$/i
 const SUBAGENT_SUBTREE_PATTERN = /[\\/]subagents[\\/]/i
 
 // One walked-listing partition: transcripts that are real session candidates,

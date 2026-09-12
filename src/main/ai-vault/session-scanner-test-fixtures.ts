@@ -25,7 +25,8 @@ export function isolatedScanRoots(root: string) {
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
     clineSessionsDir: join(root, 'cline-sessions'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
+    kimiSessionsDir: join(root, 'kimi-sessions'),
+    zeroclawStateDir: join(root, 'zeroclaw-state')
   }
 }
 
