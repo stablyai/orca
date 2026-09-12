@@ -110,7 +110,7 @@ describe('parseOpenCodeUsageRow', () => {
           input: 1000,
           output: 250,
           reasoning: 100,
-          total: 1350,
+          total: 1775,
           cache: { read: 400, write: 25 }
         },
         time: {
@@ -125,11 +125,11 @@ describe('parseOpenCodeUsageRow', () => {
       cwd: `${WORKTREE}/packages/app`,
       model: 'anthropic/claude-sonnet-4-5',
       estimatedCostUsd: 0.0123,
-      inputTokens: 1000,
-      cachedInputTokens: 400,
+      inputTokens: 1425,
+      cachedInputTokens: 425,
       outputTokens: 250,
       reasoningOutputTokens: 100,
-      totalTokens: 1350
+      totalTokens: 1775
     })
   })
 })
@@ -195,6 +195,7 @@ describe('parseOpenCodeUsageDatabase', () => {
         tokens_output INTEGER,
         tokens_reasoning INTEGER,
         tokens_cache_read INTEGER,
+        tokens_cache_write INTEGER,
         time_created INTEGER,
         time_updated INTEGER
       );
@@ -203,9 +204,9 @@ describe('parseOpenCodeUsageDatabase', () => {
     db.prepare(
       `INSERT INTO session (
         id, project_id, directory, title, model, cost,
-        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read,
+        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write,
         time_created, time_updated
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       'session-1',
       'project-1',
@@ -217,6 +218,7 @@ describe('parseOpenCodeUsageDatabase', () => {
       500,
       100,
       250,
+      50,
       1_777_777_700_000,
       1_777_777_800_000
     )
@@ -230,21 +232,21 @@ describe('parseOpenCodeUsageDatabase', () => {
       primaryModel: 'anthropic/claude-sonnet-4-5',
       primaryProjectLabel: 'Repo',
       eventCount: 1,
-      totalInputTokens: 1000,
-      totalCachedInputTokens: 250,
+      totalInputTokens: 1300,
+      totalCachedInputTokens: 300,
       totalOutputTokens: 500,
       totalReasoningOutputTokens: 100,
-      totalTokens: 1600,
+      totalTokens: 1900,
       estimatedCostUsd: 0.06
     })
     expect(parsed.dailyAggregates).toEqual([
       expect.objectContaining({
         projectLabel: 'Repo',
-        inputTokens: 1000,
-        cachedInputTokens: 250,
+        inputTokens: 1300,
+        cachedInputTokens: 300,
         outputTokens: 500,
         reasoningOutputTokens: 100,
-        totalTokens: 1600,
+        totalTokens: 1900,
         estimatedCostUsd: 0.06
       })
     ])
@@ -297,9 +299,141 @@ describe('parseOpenCodeUsageDatabase', () => {
     expect(parsed.sessions[0]).toMatchObject({
       primaryModel: 'openai/gpt-5.5',
       primaryProjectLabel: 'Repo',
-      totalTokens: 1050,
+      totalTokens: 1150,
       estimatedCostUsd: 0.03
     })
+  })
+
+  it('treats a session table without tokens_cache_write as zero cache writes', async () => {
+    const { db, path } = createTempDb()
+    createSessionTotalsSchema(db)
+    db.prepare(
+      `INSERT INTO session (
+        id, directory, title, model, cost,
+        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read,
+        time_created, time_updated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'session-1',
+      WORKTREE,
+      'Session',
+      null,
+      0,
+      10,
+      5,
+      0,
+      1000,
+      1_777_777_700_000,
+      1_777_777_800_000
+    )
+    db.close()
+
+    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+
+    expect(parsed.sessions[0]).toMatchObject({
+      totalInputTokens: 1010,
+      totalCachedInputTokens: 1000,
+      totalTokens: 1015
+    })
+  })
+
+  it('counts materialized session totals the same as the per-message rows they summarize', async () => {
+    // Real OpenCode shape: `input` is uncached, cache hits dominate, `total` sums everything.
+    const tokens = {
+      input: 638,
+      output: 390,
+      reasoning: 120,
+      cache: { read: 642_944, write: 2_313 }
+    }
+    const total = 638 + 390 + 120 + 642_944 + 2_313
+
+    const materialized = createTempDb()
+    materialized.db.exec(`
+      CREATE TABLE session (
+        id TEXT PRIMARY KEY,
+        directory TEXT,
+        title TEXT,
+        time_created INTEGER,
+        time_updated INTEGER,
+        cost REAL,
+        tokens_input INTEGER,
+        tokens_output INTEGER,
+        tokens_reasoning INTEGER,
+        tokens_cache_read INTEGER,
+        tokens_cache_write INTEGER
+      );
+    `)
+    materialized.db
+      .prepare(
+        `INSERT INTO session (
+          id, directory, title, time_created, time_updated, cost,
+          tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        'session-1',
+        WORKTREE,
+        'Session',
+        1_777_777_700_000,
+        1_777_777_800_000,
+        0,
+        tokens.input,
+        tokens.output,
+        tokens.reasoning,
+        tokens.cache.read,
+        tokens.cache.write
+      )
+    materialized.db.close()
+
+    const perMessage = createTempDb()
+    perMessage.db.exec(`
+      CREATE TABLE session (
+        id TEXT PRIMARY KEY,
+        directory TEXT,
+        title TEXT,
+        time_created INTEGER,
+        time_updated INTEGER
+      );
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT,
+        time_created INTEGER,
+        time_updated INTEGER,
+        data TEXT
+      );
+    `)
+    perMessage.db
+      .prepare(
+        'INSERT INTO session (id, directory, title, time_created, time_updated) VALUES (?, ?, ?, ?, ?)'
+      )
+      .run('session-1', WORKTREE, 'Session', 1_777_777_700_000, 1_777_777_800_000)
+    perMessage.db
+      .prepare(
+        'INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)'
+      )
+      .run(
+        'message-1',
+        'session-1',
+        1_777_777_700_000,
+        1_777_777_800_000,
+        JSON.stringify({ role: 'assistant', tokens: { ...tokens, total } })
+      )
+    perMessage.db.close()
+
+    const [fromTotals, fromMessages] = await Promise.all([
+      parseOpenCodeUsageDatabase(materialized.path, worktrees()),
+      parseOpenCodeUsageDatabase(perMessage.path, worktrees())
+    ])
+    const pick = (session: (typeof fromTotals.sessions)[number] | undefined) => ({
+      totalInputTokens: session?.totalInputTokens,
+      totalCachedInputTokens: session?.totalCachedInputTokens,
+      totalOutputTokens: session?.totalOutputTokens,
+      totalReasoningOutputTokens: session?.totalReasoningOutputTokens,
+      totalTokens: session?.totalTokens
+    })
+
+    expect(pick(fromTotals.sessions[0])).toEqual(pick(fromMessages.sessions[0]))
+    expect(fromTotals.sessions[0]?.totalTokens).toBe(total)
   })
 
   it('reports the session ids the database counted', async () => {
@@ -374,7 +508,7 @@ describe('parseOpenCodeUsageDatabase', () => {
 
     const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
 
-    expect(parsed.sessions[0]?.totalTokens).toBe(120)
+    expect(parsed.sessions[0]?.totalTokens).toBe(130)
     expect(parsed.sessions[0]?.eventCount).toBe(1)
   })
 })

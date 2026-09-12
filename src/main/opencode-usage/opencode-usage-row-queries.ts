@@ -27,6 +27,7 @@ type OpenCodeSessionUsageRow = {
   tokens_output: number
   tokens_reasoning: number
   tokens_cache_read: number
+  tokens_cache_write: number
 }
 
 function getProjectJoin(db: Database.Database): string {
@@ -78,11 +79,15 @@ function getSessionUsageRowCount(db: Database.Database): number {
 function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
   const projectJoin = getProjectJoin(db)
   const sessionModelSelect = getSessionModelSelect(db)
+  const cacheWriteSelect = columnExists(db, 'session', 'tokens_cache_write')
+    ? 's.tokens_cache_write'
+    : '0 AS tokens_cache_write'
   const rows = db
     .prepare(
       `SELECT s.id, s.id AS session_id, s.time_created, s.time_updated,
               s.directory, s.title, p.worktree, ${sessionModelSelect},
-              s.cost, s.tokens_input, s.tokens_output, s.tokens_reasoning, s.tokens_cache_read
+              s.cost, s.tokens_input, s.tokens_output, s.tokens_reasoning, s.tokens_cache_read,
+              ${cacheWriteSelect}
        FROM session s
        ${projectJoin}
        WHERE s.tokens_input + s.tokens_output + s.tokens_reasoning + s.tokens_cache_read > 0
@@ -99,16 +104,23 @@ function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
     title: row.title,
     worktree: row.worktree,
     session_model: row.session_model,
+    // Why: mirror OpenCode's own message `tokens` shape (total includes cache)
+    // so materialized and per-message rows parse identically.
     data: JSON.stringify({
       cost: row.cost,
       tokens: {
         input: row.tokens_input,
         output: row.tokens_output,
         reasoning: row.tokens_reasoning,
-        total: row.tokens_input + row.tokens_output + row.tokens_reasoning,
+        total:
+          row.tokens_input +
+          row.tokens_output +
+          row.tokens_reasoning +
+          row.tokens_cache_read +
+          row.tokens_cache_write,
         cache: {
           read: row.tokens_cache_read,
-          write: 0
+          write: row.tokens_cache_write
         }
       }
     })
