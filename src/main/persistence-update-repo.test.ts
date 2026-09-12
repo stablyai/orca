@@ -544,6 +544,23 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBe('upstream')
   })
 
+  it('updateRepo persists and clears ghAccount bindings', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      ghAccount: { host: ' GitHub.COM ', user: ' Alice ' }
+    })
+    expect(updated!.ghAccount).toEqual({ host: 'github.com', user: 'Alice' })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.ghAccount).toEqual({ host: 'github.com', user: 'Alice' })
+
+    const cleared = reloaded.updateRepo('r1', { ghAccount: null })
+    expect(cleared!.ghAccount).toBeUndefined()
+  })
+
   it('updateRepo persists fork sync mode across reloads', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())

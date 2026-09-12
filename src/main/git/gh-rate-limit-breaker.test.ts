@@ -6,6 +6,7 @@ import {
   createGhRateLimitBlockedError,
   getGhRateLimitBlockedUntilMs,
   isGhPrimaryRateLimitStderr,
+  isGhLocalOnlyCommand,
   isGhRateLimitProbe,
   notifyGhPrimaryRateLimit,
   parseGhRateLimitScopeKey,
@@ -36,6 +37,18 @@ describe('classifyGhRateLimitBucket', () => {
     expect(classifyGhRateLimitBucket(['api', 'graphql', '-f', 'query=…'])).toBe('graphql')
     expect(classifyGhRateLimitBucket(['api', 'repos/a/b/pulls?per_page=36'])).toBe('core')
     expect(classifyGhRateLimitBucket(['pr', 'list', '--limit', '36'])).toBe('core')
+  })
+})
+
+describe('isGhLocalOnlyCommand', () => {
+  it('exempts keyring token reads and nothing else', () => {
+    expect(
+      isGhLocalOnlyCommand(['auth', 'token', '--user', 'alice', '--hostname', 'github.com'])
+    ).toBe(true)
+    expect(isGhLocalOnlyCommand(['auth', 'token', '--help'])).toBe(true)
+    expect(isGhLocalOnlyCommand(['auth', 'status'])).toBe(false)
+    expect(isGhLocalOnlyCommand(['auth', 'refresh', '-s', 'project'])).toBe(false)
+    expect(isGhLocalOnlyCommand(['api', 'user'])).toBe(false)
   })
 })
 

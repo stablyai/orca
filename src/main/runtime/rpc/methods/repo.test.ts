@@ -389,6 +389,41 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('persists normalized ghAccount bindings and clear sentinels', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        ghAccount: { host: 'github.com', user: 'Alice' }
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: { host: ' GitHub.COM ', user: ' Alice ' } }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      ghAccount: { host: 'github.com', user: 'Alice' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', ghAccount: { host: 'github.com', user: 'Alice' } } }
+    })
+
+    await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { ghAccount: null }
+      })
+    )
+    expect(runtime.updateRepo).toHaveBeenLastCalledWith('repo-1', { ghAccount: null })
+  })
+
   it('persists agent worktree visibility updates', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
