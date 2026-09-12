@@ -81,6 +81,10 @@ for (const theme of ['dark', 'light'] as const) {
     await dialog.getByRole('button', { name: 'Delete Workspace', exact: true }).click()
     await expect(row).toHaveCount(0)
     await expect(orcaPage.getByText('Deleting workspace…', { exact: true })).toHaveCount(0)
+    await expect(orcaPage.getByText('Worktree deleted, branch kept', { exact: true })).toBeVisible()
+    await expect(
+      orcaPage.getByRole('button', { name: 'Force Delete Branch', exact: true })
+    ).toBeVisible()
 
     const screenshot = testInfo.outputPath(`retained-branch-${theme}.png`)
     await orcaPage.screenshot({ path: screenshot, animations: 'disabled' })
@@ -88,10 +92,6 @@ for (const theme of ['dark', 'light'] as const) {
       path: screenshot,
       contentType: 'image/png'
     })
-    await expect(orcaPage.getByText('Worktree deleted, branch kept', { exact: true })).toBeVisible()
-    await expect(
-      orcaPage.getByRole('button', { name: 'Force Delete Branch', exact: true })
-    ).toBeVisible()
     expect(await git(seededRepoPath, ['rev-parse', 'feature/unmerged-work'])).toBe(head)
   })
 }

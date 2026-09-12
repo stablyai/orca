@@ -34,6 +34,7 @@ registerWorktreeSuiteHooks()
 describe('removeWorktree branch retention', () => {
   const beforeRemoval =
     'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
+  const beforeRemovalNul = `${beforeRemoval.replaceAll('\n', '\0')}\0`
   const afterRemoval = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
   const preserved = { preservedBranch: { branchName: 'feature/test', head: 'def456' } }
 
@@ -44,7 +45,7 @@ describe('removeWorktree branch retention', () => {
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const command = args.join(' ')
       if (command === 'worktree list --porcelain -z') {
-        return { stdout: beforeRemoval }
+        return { stdout: beforeRemovalNul }
       }
       if (command === 'worktree list --porcelain') {
         return {
