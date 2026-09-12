@@ -1,19 +1,25 @@
 import {
-  AGY_AGENT_NAME_RE,
   CLAUDE_IDLE,
-  DROID_AGENT_NAME_RE,
   GEMINI_IDLE,
   GEMINI_PERMISSION,
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
-  HERMES_AGENT_NAME_RE,
   containsAgentSpinnerGlyph,
   isClaudeIdentityFrameSegment,
+  hasGenericClaudeStatusPrefix,
   isClaudeManagementTitle,
-  isCursorNativeAgentTitle,
-  titleHasAgentName
+  isCursorNativeAgentTitle
 } from './agent-title-core'
+import {
+  DISPLAY_LABELS,
+  agentForBareName,
+  agentForIdentityFrame,
+  agentForWholeTitle,
+  namesIn,
+  stripBareNameDecoration
+} from './agent-title-name-anchoring'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
 import {
@@ -21,7 +27,6 @@ import {
   SYNTHETIC_AGENT_TITLE_PROFILES
 } from './synthetic-agent-title'
 import type { TuiAgent } from './tui-agent'
-import { TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 /**
  * Order-independent identity evidence from a terminal title.
@@ -57,48 +62,6 @@ export type AgentTitleEvidence = {
   readonly reason: AgentTitleEvidenceReason
 }
 
-/** Names matched as whole tokens, paired with the agent each identifies. */
-const NAME_TOKENS: readonly (readonly [string, TuiAgent])[] = [
-  ['claude', 'claude'],
-  ['openclaude', 'openclaude'],
-  ['codex', 'codex'],
-  ['copilot', 'copilot'],
-  ['cursor', 'cursor'],
-  ['gemini', 'gemini'],
-  ['antigravity', 'antigravity'],
-  ['opencode', 'opencode'],
-  ['mimo', 'mimo-code'],
-  ['openclaw', 'openclaw'],
-  ['aider', 'aider'],
-  ['grok', 'grok'],
-  ['devin', 'devin']
-]
-
-/** Agents whose name is matched by a dedicated pattern rather than a plain token. */
-const PATTERN_NAMES: readonly (readonly [RegExp, TuiAgent])[] = [
-  [AGY_AGENT_NAME_RE, 'antigravity'],
-  [DROID_AGENT_NAME_RE, 'droid'],
-  [HERMES_AGENT_NAME_RE, 'hermes']
-]
-
-/** Catalog labels known to be emitted as terminal titles, not merely presented in Orca's UI. */
-const EMITTED_DISPLAY_LABEL_AGENTS = [
-  'claude-agent-teams',
-  'mimo-code',
-  'prime-agent',
-  'command-code',
-  'copilot'
-] as const satisfies readonly TuiAgent[]
-
-const DISPLAY_LABELS = [
-  ...EMITTED_DISPLAY_LABEL_AGENTS.map(
-    (agent) => [TUI_AGENT_DISPLAY_NAMES[agent].toLowerCase(), agent] as const
-  ),
-  ['claude code', 'claude'],
-  ['gemini cli', 'gemini'],
-  ['agent teams', 'claude-agent-teams']
-] satisfies readonly (readonly [string, TuiAgent])[]
-
 const GEMINI_GLYPHS = [GEMINI_WORKING, GEMINI_SILENT_WORKING, GEMINI_IDLE, GEMINI_PERMISSION]
 const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[·—:-]\s*|\s+)gemini\s+\d/i
 
@@ -108,7 +71,6 @@ const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[·—:-]\s*|\s+)g
  * worktree name (`review-14600-codex`), which is a directory, not an owner declaration.
  */
 const OWNER_SUFFIX_RE = /\s-\s+([A-Za-z][\w-]*)\s*$/
-const WINDOWS_LAUNCHER_SUFFIX_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const WRAPPER_SEPARATOR = ' | '
 const MAX_WRAPPER_EVIDENCE_SEGMENTS = 8
 const RESERVED_OWNER_IDS: ReadonlyMap<string, TuiAgent> = new Map([
@@ -133,63 +95,6 @@ function getEvidenceTitleSegments(title: string): string[] {
     }
   }
   return segments
-}
-
-function namesIn(text: string): TuiAgent[] {
-  const found = new Set<TuiAgent>()
-  for (const [token, agent] of NAME_TOKENS) {
-    if (titleHasAgentName(text, token)) {
-      found.add(agent)
-    }
-  }
-  for (const [pattern, agent] of PATTERN_NAMES) {
-    if (pattern.test(text)) {
-      found.add(agent)
-    }
-  }
-  return [...found]
-}
-
-function stripBareNameDecoration(text: string): string {
-  return text
-    .trim()
-    .replace(/^[^\p{L}\p{N}]+/u, '')
-    .replace(/[^\p{L}\p{N}]+$/u, '')
-}
-
-function agentForBareName(text: string): TuiAgent | null {
-  const trimmed = text.trim()
-  if (!trimmed || /[\\/]/.test(trimmed)) {
-    return null
-  }
-  const stripped = stripBareNameDecoration(trimmed)
-  // Why labels too: an agent may write its own display name as the entire title (`⠐ Claude Code`).
-  // That is the same claim as a bare token, just spelled the way the vendor spells it.
-  const label = DISPLAY_LABELS.find(([text]) => text === stripped.toLowerCase())
-  if (label) {
-    return label[1]
-  }
-  const bareToken = stripped.replace(WINDOWS_LAUNCHER_SUFFIX_RE, '')
-  const names = namesIn(bareToken)
-  // Why the length check: the remainder must BE the name, not merely contain it. "agy" anchors;
-  // "fix the agy hook" does not, and neither does a hyphenated worktree name like "codex-split".
-  return names.length === 1 && /^[\p{L}\p{N}]+$/u.test(bareToken) ? names[0] : null
-}
-
-function agentForWholeTitle(text: string): TuiAgent | null {
-  const trimmed = text.trim()
-  if (!trimmed || /[\\/]/.test(trimmed)) {
-    return null
-  }
-  const stripped = stripBareNameDecoration(trimmed)
-  const label = DISPLAY_LABELS.find(([text]) => text === stripped.toLowerCase())
-  if (label) {
-    return label[1]
-  }
-  if (!WINDOWS_LAUNCHER_SUFFIX_RE.test(stripped)) {
-    return null
-  }
-  return agentForBareName(stripped)
 }
 
 function agentForOwnerSuffix(text: string): TuiAgent | null {
@@ -361,4 +266,59 @@ export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
     agent: null,
     reason: freeTextNames.length > 0 ? 'free-text-only' : 'no-evidence'
   }
+}
+
+/**
+ * Every agent a title PRESENTS, as opposed to merely mentions. Memoized as a set rather than
+ * per-agent: both tab-strip resolvers ask this per pane on every render.
+ */
+const titlePresentedAgents = memoizeTitleClassification((title: string): ReadonlySet<TuiAgent> => {
+  const evidence = collectAgentTitleEvidence(title)
+  const presented = new Set<TuiAgent>(evidence.anchoredNames)
+
+  for (const marker of evidence.vendorMarkers) {
+    // Why Claude's marker is excluded and Gemini's and Cursor's are not: a vendor marker is
+    // unforgeable only when it is the agent's OWN sigil. Claude's status decorations are generic —
+    // OpenCode emits '. ' and '* ' too (#8940) — so they prove activity, not identity. A title
+    // that really does present Claude carries an identity frame, which the grammar below matches.
+    if (marker !== 'claude' || !hasGenericClaudeStatusPrefix(title)) {
+      presented.add(marker)
+    }
+  }
+
+  for (const segment of getEvidenceTitleSegments(title)) {
+    const framed = agentForIdentityFrame(segment)
+    if (framed) {
+      presented.add(framed)
+    }
+  }
+
+  return presented
+})
+
+/**
+ * Whether `title` PRESENTS `agent` as the pane's identity rather than merely mentioning it. This
+ * is the gate a title must pass before it may take a pane away from a known owner (#8940) — for
+ * every agent, not only Claude.
+ *
+ * This is NOT collectAgentTitleEvidence with a different signature. The parser answers "who does
+ * this title name, given no owner"; this answers "may this title take a pane". The second needs
+ * to know WHERE the name sits, which the first discards — `getAgentLabel` mints identity from
+ * `titleHasAgentName`, which asks only whether a name occurs anywhere, so one route there covers
+ * both `codex working` and `⠋ Fix the codex plugin launcher`. The two models therefore differ on
+ * purpose, in both directions, each pinned by test:
+ *
+ *   more permissive — a name in an identity POSITION is enough here, which admits `⠋ Codex`; the
+ *   parser files that as `free-text-only` because codex sets `synthesizeWorkingTitle: false`.
+ *
+ *   less permissive — the parser resolves a lone vendor marker to its agent, including Claude's
+ *   generic status decorations. Those are not identity here, or a `. `-prefixed OpenCode task
+ *   title would reclaim the pane #8940 exists to protect.
+ *
+ * Because they differ, agreement cannot be enforced by sharing code. It is enforced instead by
+ * the corpus ratchet in terminal-title-pane-claim-corpus.test.ts, which fails the moment a route
+ * `getAgentLabel` mints identity from stops being claimable here.
+ */
+export function titlePresentsAgent(title: string, agent: TuiAgent): boolean {
+  return titlePresentedAgents(title).has(agent)
 }

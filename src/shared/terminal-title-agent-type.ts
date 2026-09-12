@@ -4,7 +4,11 @@ import {
   HERMES_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
-import { containsAgentSpinnerGlyph, isCursorAgentTitle } from './agent-title-core'
+import {
+  containsAgentSpinnerGlyph,
+  isCursorAgentTitle,
+  hasGenericClaudeStatusPrefix
+} from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   getPiCompatibleSyntheticAgentLabel,
@@ -239,16 +243,6 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   Hermes: 'hermes',
   Pi: 'pi',
   OMP: 'omp'
-}
-
-function hasGenericClaudeStatusPrefix(title: string): boolean {
-  return (
-    containsAgentSpinnerGlyph(title) ||
-    title.startsWith('✳ ') ||
-    title === '✳' ||
-    title.startsWith('. ') ||
-    title.startsWith('* ')
-  )
 }
 
 export { isClaudeIdentityFrameTitle } from './agent-title-core'

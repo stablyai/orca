@@ -149,6 +149,21 @@ export function isCursorNativeAgentTitle(title: string): boolean {
   return title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER
 }
 
+/**
+ * Claude's bare status decorations. Generic on purpose: OpenCode emits '. ' and '* ' too (#8940)
+ * and several agents animate a spinner, so these prove a pane is ACTIVE, never which agent it is.
+ * Callers asking an identity question must not read one as a Claude vendor emission.
+ */
+export function hasGenericClaudeStatusPrefix(title: string): boolean {
+  return (
+    containsAgentSpinnerGlyph(title) ||
+    title.startsWith(`${CLAUDE_IDLE} `) ||
+    title === CLAUDE_IDLE ||
+    title.startsWith('. ') ||
+    title.startsWith('* ')
+  )
+}
+
 const CLAUDE_IDENTITY_FRAME_RE =
   /^claude(?: code)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
 

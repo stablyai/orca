@@ -21,7 +21,8 @@ import {
   type CompatibleAgentOwnerOptions
 } from '../../../../shared/agent-title-owner'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
-import { isClaudeIdentityFrameTitle } from '../../../../shared/terminal-title-agent-type'
+import { titlePresentsAgent } from '../../../../shared/agent-title-evidence'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 /** Fixed, not per-process: title rows are a pure projection of the current title, so they are
  *  comparable across restarts in a way a sequenced authority's rows are not. Ordering against
@@ -32,7 +33,10 @@ const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
 const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
 const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> = {}
 
-const TITLE_AGENT_LABEL_TO_TYPE: Record<string, AgentType> = {
+// Partial, not Record: `label` is arbitrary text parsed off a terminal title, so a lookup misses
+// for anything outside this fixed set and the `?? 'unknown'` below is live. Without `Partial` the
+// index type promises a hit that the runtime does not, and the unknown-label guard reads as dead.
+const TITLE_AGENT_LABEL_TO_TYPE: Partial<Record<string, TuiAgent>> = {
   'Claude Code': 'claude',
   OpenClaude: 'openclaude',
   Codex: 'codex',
@@ -231,19 +235,21 @@ export function resolveTitleDerivedAgentType(
   ownerAgentType?: AgentType | null
 ): AgentType | null {
   const agentType = TITLE_AGENT_LABEL_TO_TYPE[label] ?? 'unknown'
-  if (agentType !== 'claude') {
+  if (agentType === 'unknown') {
     return agentType
   }
   // Why: Claude's task-title spinner heuristic has no provider identity. In
   // split panes it can match arbitrary terminal spinners, so sidebar rows only
   // accept Claude when the title itself names Claude.
-  if (!CLAUDE_AGENT_TOKEN_RE.test(title)) {
+  if (agentType === 'claude' && !CLAUDE_AGENT_TOKEN_RE.test(title)) {
     return null
   }
-  // Why: a "claude" word inside another agent's task text is a mention, not identity.
-  // Only a title that PRESENTS Claude may take a pane away from its known owner (#8940).
+  // Why: a name inside another agent's task text is a mention, not identity. Only a title that
+  // PRESENTS that agent may take a pane away from its known owner (#8940). Agent-neutral on
+  // purpose: while this was scoped to Claude, every other name in a Claude pane's task text
+  // short-circuited above the guard and took the row.
   const owner = ownerAgentType && ownerAgentType !== 'unknown' ? ownerAgentType : null
-  if (owner && owner !== 'claude' && !isClaudeIdentityFrameTitle(title)) {
+  if (owner && owner !== agentType && !titlePresentsAgent(title, agentType)) {
     return null
   }
   return agentType

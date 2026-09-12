@@ -4,6 +4,11 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/ter
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
+import {
+  resolveAgentTypeFromTerminalTitle,
+  resolveTitleDerivedAgentType
+} from './worktree-title-derived-agent-rows'
+import { resolveRowAgentType } from './worktree-agent-row-type'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
@@ -380,5 +385,127 @@ describe('buildTitleDerivedAgentRows', () => {
     })
 
     expect(rows).toHaveLength(0)
+  })
+})
+
+/**
+ * #14938: the owner guard below `resolveTitleDerivedAgentType`'s early return was only ever
+ * reached for the Claude label, so a Claude pane working on a task whose text names another agent
+ * was listed as that agent's row — label, icon and agentType.
+ */
+describe('a foreign name in a Claude pane task title', () => {
+  const FOREIGN_NAME_TASK_TITLES = [
+    '⠋ Fix the codex plugin launcher',
+    '⠋ add grok support to the tab bar',
+    '⠋ port the gemini status parser'
+  ]
+
+  it('does not hand the row to the named agent', () => {
+    for (const title of FOREIGN_NAME_TASK_TITLES) {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { launchAgent: 'claude' })],
+        entries: [],
+        retained: [],
+        runtimePaneTitlesByTabId: { 'tab-1': { 1: title } },
+        ptyIdsByTabId: { 'tab-1': ['pty-claude'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        now: 2000
+      })
+      expect(rows.map((row) => row.agentType)).toEqual(['claude'])
+    }
+  })
+
+  it('declines at both title resolvers so the caller can fall back to the owner', () => {
+    expect(
+      resolveTitleDerivedAgentType('⠋ Fix the codex plugin launcher', 'Codex', 'claude')
+    ).toBeNull()
+    expect(
+      resolveAgentTypeFromTerminalTitle('⠋ Fix the codex plugin launcher', 'claude')
+    ).toBeNull()
+  })
+
+  // #14938 named this consumer specifically: it passes tab.launchAgent as the owner the guard used
+  // to discard, so a hook row with a missing or 'unknown' agentType flipped to the named agent too.
+  it('keeps resolveRowAgentType on the launch owner for an unknown-typed hook row', () => {
+    const entry = {
+      paneKey: makePaneKey('tab-1', LEAF_ID_1),
+      state: 'working',
+      prompt: 'x',
+      updatedAt: 0,
+      stateStartedAt: 0,
+      stateHistory: [],
+      agentType: 'unknown',
+      terminalTitle: '⠋ Fix the codex plugin launcher'
+    } as unknown as Parameters<typeof resolveRowAgentType>[0]
+    expect(resolveRowAgentType(entry, makeTab('tab-1', { launchAgent: 'claude' }))).toBe('claude')
+  })
+
+  // The reverse direction, which #8940 already guarded. Both directions are now one rule; this is
+  // the assertion that fails if the guard is ever made one-way again.
+  it('is symmetric with the Claude-token-in-foreign-task-text direction', () => {
+    expect(
+      resolveTitleDerivedAgentType('⠋ port the claude hook installer', 'Claude Code', 'codex')
+    ).toBeNull()
+    expect(
+      resolveTitleDerivedAgentType('⠋ Fix the codex plugin launcher', 'Codex', 'claude')
+    ).toBeNull()
+  })
+
+  it('still accepts a genuine identity frame on a reused pane', () => {
+    expect(resolveTitleDerivedAgentType('⠋ Codex', 'Codex', 'claude')).toBe('codex')
+    expect(resolveTitleDerivedAgentType('⠋ Codex: fix cursor offsets', 'Codex', 'claude')).toBe(
+      'codex'
+    )
+    expect(resolveTitleDerivedAgentType('⠋ Claude Code', 'Claude Code', 'codex')).toBe('claude')
+  })
+
+  // Non-discriminating: an unowned pane has nothing to protect, so the title answers either way.
+  it('still answers from the title when the pane has no known owner', () => {
+    expect(resolveTitleDerivedAgentType('⠋ Fix the codex plugin launcher', 'Codex', null)).toBe(
+      'codex'
+    )
+  })
+
+  // A vendor marker is the agent's own sigil, so it must still take the row from a prior owner.
+  // Reading only anchoredNames printed a Claude row, with a Claude label, for a live Gemini pane.
+  it('lets a vendor-marker title take the row from a prior owner', () => {
+    expect(
+      resolveTitleDerivedAgentType('\u2726 Analyzing the repository', 'Gemini CLI', 'claude')
+    ).toBe('gemini')
+    expect(resolveTitleDerivedAgentType('\u25c7 waiting', 'Gemini CLI', 'claude')).toBe('gemini')
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'claude' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: '\u2726 Analyzing the repository' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-gemini'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+    expect(rows.map((row) => [row.agentType, row.entry.prompt])).toEqual([['gemini', 'Gemini CLI']])
+  })
+
+  // #10258: Cursor's status-less native literal still identifies the pane, even against an owner.
+  it('lets the native cursor literal take the row from a prior owner', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'claude' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Cursor Agent' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-cursor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+    expect(rows.map((row) => row.agentType)).toEqual(['cursor'])
+  })
+
+  // The label map is missing every label outside its fixed set, so the unknown-label branch is
+  // live at runtime. Nothing said so in the types until the value type was narrowed to TuiAgent,
+  // and deleting the branch on the compiler's advice would return undefined here instead.
+  it('returns unknown for a label the map does not carry', () => {
+    expect(resolveTitleDerivedAgentType('⠋ Something Else', 'Something Else', null)).toBe('unknown')
+    expect(resolveTitleDerivedAgentType('⠋ Something Else', 'Something Else', 'claude')).toBe(
+      'unknown'
+    )
   })
 })
