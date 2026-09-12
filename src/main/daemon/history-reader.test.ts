@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
@@ -429,6 +429,36 @@ describe('HistoryReader', () => {
   })
 
   describe('TUI truncation (scrollback.bin fallback path)', () => {
+    it.each(['\x1b[?1049h', '\x1b[?1049l'])(
+      'does not rescan the remaining history for each %j marker',
+      async (marker) => {
+        const scrollback = `normal\r\n${`output${marker}`.repeat(1000)}`
+        writeSessionWithScrollback(dir, 'repeated-switch', makeMeta(), scrollback)
+        let searchedCharacters = 0
+        const originalIndexOf = String.prototype.indexOf
+        const spy = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
+          this: string,
+          search: string,
+          position?: number
+        ) {
+          const found = originalIndexOf.call(this, search, position)
+          if (search === '\x1b[?1049h' || search === '\x1b[?1049l') {
+            searchedCharacters +=
+              (found < 0 ? this.length : found + search.length) - (position ?? 0)
+          }
+          return found
+        })
+        let info
+        try {
+          info = await reader.detectColdRestore('repeated-switch')
+        } finally {
+          spy.mockRestore()
+        }
+        expect(info?.snapshotAnsi).toBe(marker.endsWith('h') ? 'normal\r\noutput' : scrollback)
+        expect(searchedCharacters).toBeLessThanOrEqual(2 * scrollback.length)
+      }
+    )
+
     it('preserves content when alt-screen is properly closed', async () => {
       const scrollback = [
         'before vim\r\n',
