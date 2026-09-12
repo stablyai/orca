@@ -210,7 +210,8 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
 
   // Trailing-edge debounce: reset timer on each new event
   if (root.batch.timer) {
-    clearTimeout(root.batch.timer)
+    root.batch.timer.refresh()
+    return
   }
   // Why: clear the handle as it fires so `batch.timer` means "a debounce window is still open", which gates the queued drain.
   root.batch.timer = setTimeout(() => {
@@ -259,6 +260,7 @@ export async function createLocalWatcher(
           // Why: after an error the native subscription may be invalid (deleted root); tear down the dead watcher so it doesn't dangle (§7.3).
           if (root.batch.timer) {
             clearTimeout(root.batch.timer)
+            root.batch.timer = null
           }
           // Why: error callback can fire before subscribe() assigns root.subscription; guard against null so cleanup doesn't crash.
           if (root.subscription) {
