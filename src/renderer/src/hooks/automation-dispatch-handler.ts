@@ -13,6 +13,7 @@ import type {
 import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
 import {
   prepareAutomationDispatchWorkspace,
+  refreshLocalAutomationDispatchWorkspace,
   resolveAutomationDispatchWorkspace
 } from './automation-dispatch-workspace'
 
@@ -37,14 +38,14 @@ export async function handleAutomationDispatchRequest({
     // here would arrive second and invalidate every host in the catalog.
     await window.api.automations.markDispatchResult(result)
   }
-  const state = useAppStore.getState()
+  let state = useAppStore.getState()
   const focusBeforeDispatch = {
     activeView: state.activeView,
     activeWorktreeId: state.activeWorktreeId,
     activeTabId: state.activeTabId,
     activeTabType: state.activeTabType
   }
-  const resolved = resolveAutomationDispatchWorkspace(state, automation, run)
+  let resolved = resolveAutomationDispatchWorkspace(state, automation, run)
   let terminalOwnership: AutomationTerminalOwnership | null = null
   const releaseTerminalOwnership = (): void => {
     const ownership = terminalOwnership
@@ -57,21 +58,29 @@ export async function handleAutomationDispatchRequest({
     return ownership?.finalize() ?? false
   }
 
-  if (!resolved.repo) {
-    await markDispatchResult({
-      runId: run.id,
-      status: 'skipped_unavailable',
-      workspaceId: run.workspaceId,
-      workspaceDisplayName: run.workspaceDisplayName ?? null,
-      error: translate(
-        'auto.hooks.useAutomationDispatchEvents.386db94f3e',
-        'The target project is no longer available.'
-      )
-    })
-    return
-  }
-
   try {
+    if (!resolved.repo) {
+      const refreshed = await refreshLocalAutomationDispatchWorkspace(
+        useAppStore.getState,
+        automation,
+        run
+      )
+      state = refreshed.state
+      resolved = refreshed.resolved
+    }
+    if (!resolved.repo) {
+      await markDispatchResult({
+        runId: run.id,
+        status: 'skipped_unavailable',
+        workspaceId: run.workspaceId,
+        workspaceDisplayName: run.workspaceDisplayName ?? null,
+        error: translate(
+          'auto.hooks.useAutomationDispatchEvents.386db94f3e',
+          'The target project is no longer available.'
+        )
+      })
+      return
+    }
     const worktree = await prepareAutomationDispatchWorkspace({
       state,
       automation,
