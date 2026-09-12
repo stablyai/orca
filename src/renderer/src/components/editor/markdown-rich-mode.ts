@@ -185,10 +185,9 @@ function stripMarkdownCode(content: string): string {
   let activeFence: '`' | '~' | null = null
   let lineStart = 0
 
-  for (let index = 0; index <= content.length; index += 1) {
-    if (index < content.length && content.charCodeAt(index) !== 10) {
-      continue
-    }
+  while (lineStart <= content.length) {
+    const newlineIndex = content.indexOf('\n', lineStart)
+    const index = newlineIndex === -1 ? content.length : newlineIndex
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
     const line = content.slice(lineStart, lineEnd)
     const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
