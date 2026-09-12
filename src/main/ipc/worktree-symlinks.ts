@@ -18,6 +18,7 @@ import {
   findExistingWorktreeSymlinkPaths,
   getSafeRelativePath
 } from '../git/worktree-symlink-detection'
+import { ensureWorktreeSharedSymlinkExclude } from './worktree-symlink-git-exclude'
 
 type WorktreeLinkedPathOptions = {
   platform?: NodeJS.Platform
@@ -343,6 +344,17 @@ export async function createWorktreeSharedPaths(
   options: WorktreeLinkedPathOptions = {}
 ): Promise<void> {
   await materializeWorktreePaths(primaryPath, worktreePath, paths, 'share', options)
+  // Why: only sharedDirectories need the exclude widen — generic linked paths
+  // (e.g. .worktreeinclude) must not all land in info/exclude. Directory-only
+  // ignore misses shared-dir symlinks so git add -A can stage mode-120000 blobs.
+  try {
+    await ensureWorktreeSharedSymlinkExclude(worktreePath, paths)
+  } catch (error) {
+    console.warn(
+      `[worktree-symlinks] Failed to ignore shared-directory symlinks against git add -A:`,
+      error
+    )
+  }
 }
 
 /** Create filesystem symlinks from the primary checkout into a freshly-created
