@@ -39,6 +39,7 @@ describe('addWorktreeOp', () => {
         targetDir: '/repo-feature',
         base: 'origin/main'
       },
+      new GitCapabilityCache(),
       'linux'
     )
 
@@ -88,12 +89,120 @@ describe('addWorktreeOp', () => {
         base: 'origin/main',
         checkoutExistingBranch: true
       },
+      new GitCapabilityCache(),
       'linux'
     )
 
     expect(git.mock.calls.map((call) => call[0])).toEqual([
-      ['worktree', 'add', '/repo-feature', 'feature/test']
+      ['worktree', 'add', '/repo-feature', 'feature/test'],
+      ['config', '--get', 'push.autoSetupRemote']
     ])
+  })
+
+  // Why: a claimed SSH branch skips branch.base (it is not a new branch) but still needs
+  // autoSetupRemote, or its first push fails with no upstream — parity with local addWorktree.
+  it('checks out an existing SSH branch and still enables push.autoSetupRemote', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get') {
+        throw Object.assign(new Error('key unset'), { code: 1 })
+      }
+      return {
+        stdout: args[0] === 'help' ? 'push.autoSetupRemote\n' : '',
+        stderr: ''
+      }
+    })
+
+    await addWorktreeOp(
+      git,
+      {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        checkoutExistingBranch: true
+      },
+      new GitCapabilityCache()
+    )
+
+    expect(git.mock.calls.map((call) => call[0])).toEqual([
+      ['worktree', 'add', '/repo-feature', 'feature/test'],
+      ['config', '--get', 'push.autoSetupRemote'],
+      ['config', '--get', 'push.default'],
+      ['help', '--config'],
+      ['config', '--local', 'push.autoSetupRemote', 'true']
+    ])
+  })
+
+  it('shows the explicit first-push command when remote Git lacks push.autoSetupRemote', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get') {
+        throw Object.assign(new Error('key unset'), { code: 1 })
+      }
+      return { stdout: args[0] === 'help' ? 'core.autocrlf\n' : '', stderr: '' }
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await addWorktreeOp(
+      git,
+      {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        checkoutExistingBranch: true
+      },
+      new GitCapabilityCache()
+    )
+
+    expect(git.mock.calls.map((call) => call[0])).toContainEqual(['help', '--config'])
+    expect(git.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'config',
+      '--local',
+      'push.autoSetupRemote',
+      'true'
+    ])
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('git push --set-upstream <remote> <branch>')
+    )
+    warnSpy.mockRestore()
+  })
+
+  it('shows explicit first-push guidance when remote push.default disables upstream setup', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'config' && args[1] === '--get' && args[2] === 'push.autoSetupRemote') {
+        throw Object.assign(new Error('key unset'), { code: 1 })
+      }
+      if (args[0] === 'config' && args[1] === '--get' && args[2] === 'push.default') {
+        return { stdout: 'matching\n', stderr: '' }
+      }
+      return { stdout: args[0] === 'help' ? 'push.autoSetupRemote\n' : '', stderr: '' }
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await addWorktreeOp(
+      git,
+      {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        checkoutExistingBranch: true
+      },
+      new GitCapabilityCache()
+    )
+
+    expect(git.mock.calls.map((call) => call[0])).toContainEqual([
+      'config',
+      '--get',
+      'push.default'
+    ])
+    expect(git.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'config',
+      '--local',
+      'push.autoSetupRemote',
+      'true'
+    ])
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('git push --set-upstream <remote> <branch>')
+    )
+    warnSpy.mockRestore()
   })
 
   it('does not write branch base config when SSH creation has no base', async () => {
@@ -106,6 +215,7 @@ describe('addWorktreeOp', () => {
         branchName: 'feature/no-base',
         targetDir: '/repo-feature'
       },
+      new GitCapabilityCache(),
       'linux'
     )
 
@@ -128,11 +238,13 @@ describe('addWorktreeOp', () => {
         targetDir: 'C:\\repo-feature',
         checkoutExistingBranch: true
       },
+      new GitCapabilityCache(),
       'win32'
     )
 
     expect(git.mock.calls.map((call) => call[0])).toEqual([
-      ['-c', 'core.longpaths=true', 'worktree', 'add', 'C:\\repo-feature', 'feature/test']
+      ['-c', 'core.longpaths=true', 'worktree', 'add', 'C:\\repo-feature', 'feature/test'],
+      ['config', '--get', 'push.autoSetupRemote']
     ])
   })
 
@@ -147,6 +259,7 @@ describe('addWorktreeOp', () => {
         targetDir: 'C:\\repo-feature',
         noCheckout: true
       },
+      new GitCapabilityCache(),
       'win32'
     )
 
@@ -174,6 +287,7 @@ describe('addWorktreeOp', () => {
         targetDir: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo-feature',
         checkoutExistingBranch: true
       },
+      new GitCapabilityCache(),
       'win32'
     )
 
@@ -203,6 +317,7 @@ describe('addWorktreeOp', () => {
           targetDir: '/repo-feature',
           base: 'origin/main'
         },
+        new GitCapabilityCache(),
         'linux'
       )
     ).resolves.toBeUndefined()

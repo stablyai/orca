@@ -62,6 +62,8 @@ describe('addWorktree', () => {
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
       .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
       .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.default (unset)
+      .mockResolvedValueOnce({ stdout: 'push.autoSetupRemote\n' }) // help --config
       .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
@@ -103,6 +105,8 @@ describe('addWorktree', () => {
         { cwd: '/repo-feature' }
       ],
       [['config', '--get', 'push.autoSetupRemote'], { cwd: '/repo-feature' }],
+      [['config', '--get', 'push.default'], { cwd: '/repo-feature' }],
+      [['help', '--config'], { cwd: '/repo-feature' }],
       [['config', '--local', 'push.autoSetupRemote', 'true'], { cwd: '/repo-feature' }]
     ])
   })
@@ -124,6 +128,8 @@ describe('addWorktree', () => {
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
       .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
       .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.default (unset)
+      .mockResolvedValueOnce({ stdout: 'push.autoSetupRemote\n' }) // help --config
       .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
@@ -155,6 +161,7 @@ describe('addWorktree', () => {
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
       .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
       .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockResolvedValueOnce({ stdout: 'push.autoSetupRemote\n' }) // help --config
       .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
@@ -298,6 +305,8 @@ describe('addWorktree', () => {
       .mockResolvedValueOnce({ stdout: '' }) // worktree add
       .mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
       .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+      .mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.default (unset)
+      .mockResolvedValueOnce({ stdout: 'push.autoSetupRemote\n' }) // help --config
       .mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
@@ -311,7 +320,7 @@ describe('addWorktree', () => {
 
     // No reset --hard or update-ref — just base resolution, drift check, local/remote
     // OIDs, ancestry check, worktree list, status, worktree add, and config writes.
-    expect(gitExecFileAsyncMock.mock.calls).toHaveLength(11)
+    expect(gitExecFileAsyncMock.mock.calls).toHaveLength(13)
     expect(gitExecFileAsyncMock.mock.calls[0]?.[0]).toEqual([
       'rev-parse',
       '--verify',
@@ -339,7 +348,9 @@ describe('addWorktree', () => {
       '--get',
       'push.autoSetupRemote'
     ])
-    expect(gitExecFileAsyncMock.mock.calls[10]?.[0]).toEqual([
+    expect(gitExecFileAsyncMock.mock.calls[10]?.[0]).toEqual(['config', '--get', 'push.default'])
+    expect(gitExecFileAsyncMock.mock.calls[11]?.[0]).toEqual(['help', '--config'])
+    expect(gitExecFileAsyncMock.mock.calls[12]?.[0]).toEqual([
       'config',
       '--local',
       'push.autoSetupRemote',
@@ -354,6 +365,8 @@ describe('addWorktree', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     resolveCreationBaseConfigWrite()
     gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.default (unset)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'push.autoSetupRemote\n' }) // help --config
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
@@ -402,6 +415,8 @@ describe('addWorktree', () => {
         ['config', '--get', 'push.autoSetupRemote'],
         expect.objectContaining({ cwd: '/repo-feature' })
       ],
+      [['config', '--get', 'push.default'], expect.objectContaining({ cwd: '/repo-feature' })],
+      [['help', '--config'], expect.objectContaining({ cwd: '/repo-feature' })],
       [
         ['config', '--local', 'push.autoSetupRemote', 'true'],
         expect.objectContaining({ cwd: '/repo-feature' })
@@ -519,6 +534,8 @@ describe('addWorktree', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
     resolveCreationBaseConfigWrite()
     gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.autoSetupRemote (unset)
+    gitExecFileAsyncMock.mockRejectedValueOnce(Object.assign(new Error('key unset'), { code: 1 })) // config --get push.default (unset)
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'push.autoSetupRemote\n' }) // help --config
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local set push.autoSetupRemote
 
     const result = await addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main', true)
@@ -579,6 +596,8 @@ describe('addWorktree', () => {
         ['config', '--get', 'push.autoSetupRemote'],
         expect.objectContaining({ cwd: '/repo-feature' })
       ],
+      [['config', '--get', 'push.default'], expect.objectContaining({ cwd: '/repo-feature' })],
+      [['help', '--config'], expect.objectContaining({ cwd: '/repo-feature' })],
       [
         ['config', '--local', 'push.autoSetupRemote', 'true'],
         expect.objectContaining({ cwd: '/repo-feature' })

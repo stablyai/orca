@@ -41,6 +41,7 @@ authority.
 | `for-each-ref-exclude`      | Exclude remote HEAD before the output limit                             | Request extra refs, then filter remote HEAD in Orca                                                                                                                                                        |
 | `merge-tree-write-tree`     | Derive real-merge conflicts and no-op tree proofs                       | Omit the conflict summary and keep conservative branch cleanup behavior before Git 2.38                                                                                                                    |
 | `merge-tree-merge-base`     | Supply the already-resolved merge base                                  | Use the older two-commit `merge-tree --write-tree` form                                                                                                                                                    |
+| `push-auto-setup-remote`    | Let the first plain push create its upstream                            | Show `git push --set-upstream <remote> <branch>` when Git predates `push.autoSetupRemote` or `push.default` is not `simple`, `upstream`, or `current`                                                      |
 
 ### Placeholders That Fail Open
 
@@ -66,7 +67,8 @@ capability problem.
 ## CI Contract
 
 PR checks run the capability contract against real Git 2.25.5, 2.38.1, and
-2.49.1 binaries. This spans the pre-2.29 serialized `FETCH_HEAD` fallback, the transitional
+2.49.1 binaries. This spans the pre-2.29 serialized `FETCH_HEAD` fallback, the
+transitional `push.autoSetupRemote` boundary, the transitional
 `merge-tree --write-tree` behavior before `--merge-base`, and current Git.
 
 Keep the unit tests alongside that matrix. They cover concurrent probes,

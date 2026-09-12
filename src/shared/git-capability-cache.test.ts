@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { GIT_CAPABILITY_RETRY_INTERVAL_MS, GitCapabilityCache } from './git-capability-cache'
+import {
+  GIT_CAPABILITY_RETRY_INTERVAL_MS,
+  GitCapabilityCache,
+  isPushAutoSetupRemoteApplicable,
+  supportsPushAutoSetupRemote
+} from './git-capability-cache'
 
 describe('GitCapabilityCache', () => {
   it('retries a capability after the compatibility interval', () => {
@@ -129,5 +134,34 @@ describe('GitCapabilityCache', () => {
       )
     ).resolves.toBe('cached-fallback')
     expect(laterPreferred).not.toHaveBeenCalled()
+  })
+
+  it('caches a missing push.autoSetupRemote variable', async () => {
+    const cache = new GitCapabilityCache()
+    const readConfigVariables = vi.fn(async () => 'core.autocrlf\n')
+
+    await expect(supportsPushAutoSetupRemote(cache, readConfigVariables)).resolves.toBe(false)
+    await expect(supportsPushAutoSetupRemote(cache, readConfigVariables)).resolves.toBe(false)
+    expect(readConfigVariables).toHaveBeenCalledTimes(1)
+  })
+
+  it('caches a supported push.autoSetupRemote variable', async () => {
+    const cache = new GitCapabilityCache()
+    const readConfigVariables = vi.fn(async () => 'push.autoSetupRemote\n')
+
+    await expect(supportsPushAutoSetupRemote(cache, readConfigVariables)).resolves.toBe(true)
+    await expect(supportsPushAutoSetupRemote(cache, readConfigVariables)).resolves.toBe(true)
+    expect(readConfigVariables).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    [undefined, true],
+    ['simple', true],
+    ['upstream', true],
+    ['current', true],
+    ['matching', false],
+    ['nothing', false]
+  ])('checks whether push.default=%s supports automatic upstream setup', (value, expected) => {
+    expect(isPushAutoSetupRemoteApplicable(value)).toBe(expected)
   })
 })
