@@ -77,6 +77,7 @@ export type GlobalSettings = {
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
   theme: 'system' | 'dark' | 'light'
+  coloredFileIcons?: boolean
   /** Controls the left sidebar surface without changing terminal brightness. */
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
