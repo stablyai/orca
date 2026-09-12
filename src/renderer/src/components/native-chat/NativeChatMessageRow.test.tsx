@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { MessageRow } from './NativeChatMessageRow'
@@ -24,6 +24,32 @@ function renderMessage(role: NativeChatMessage['role'], timestamp: number | null
 }
 
 describe('MessageRow control visibility', () => {
+  it('renders and copies a fenced code block through the markdown path', async () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window, { api: { ui: { writeClipboardText } } })
+
+    render(
+      <MessageRow
+        message={{
+          id: 'message',
+          role: 'assistant',
+          timestamp: 0,
+          source: 'transcript',
+          blocks: [{ type: 'text', text: '```ts\nconst answer = 42\n```' }]
+        }}
+        expandSignal={false}
+        onScrollMessageToTop={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('ts')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy code' }))
+
+    await waitFor(() => {
+      expect(writeClipboardText).toHaveBeenCalledWith('const answer = 42\n')
+    })
+  })
+
   it('appends time to the existing agent controls and inherits their reveal', () => {
     renderMessage('assistant')
     const copy = screen.getByRole('button', { name: 'Copy message' })
