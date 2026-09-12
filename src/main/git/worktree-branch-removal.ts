@@ -8,6 +8,10 @@ import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
 import { isBranchCheckedOutInWorktreeError } from '../../shared/git-branch-delete-refusal'
+import {
+  BranchDeletionUnverifiedError,
+  verifyDeletedBranchCheckout
+} from '../../shared/git-branch-delete-verification'
 import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from './worktree-operation-options'
 import { gitExecOptions, normalizeLocalBranchRef } from './worktree-operation-options'
 
@@ -18,61 +22,34 @@ export async function deleteBranchAfterWorktreeRemoval(
   options: RemoveWorktreeOptions
 ): Promise<RemoveWorktreeResult> {
   try {
-    // Why: also drop the now-orphaned branch so delete-worktree leaves none; `-d` (not `-D`) preserves
-    // unmerged work, and forceBranchDelete opts into `-D` for failed-creation rollback.
-    const branchDeleteResult = await deleteLocalBranchAfterWorktreeRemoval(
-      repoPath,
-      branchName,
-      options.forceBranchDelete === true,
-      options
-    )
-    if (branchDeleteResult === 'checked-out') {
+    if (options.forceBranchDelete) {
+      await forceDeleteBranchAfterRollback(repoPath, branchName, options)
       return {}
     }
-    return {}
-  } catch (error) {
-    if (!options.forceBranchDelete && branchHead) {
-      try {
-        if (
-          await deleteAlreadyMergedBranchAfterSafeDeleteFailure(
-            repoPath,
-            branchName,
-            branchHead,
-            options
-          )
-        ) {
-          return {}
-        }
-      } catch (alreadyMergedDeleteError) {
-        // Why: worktree is already gone; a raced branch cleanup should degrade to preserved-branch recovery, not fail delete.
-        console.warn(
-          `[git] Failed to delete already-merged local branch "${branchName}" after removing worktree`,
-          alreadyMergedDeleteError
-        )
-      }
+    if (
+      branchHead &&
+      (await deleteMergedBranchAfterWorktreeRemoval(repoPath, branchName, branchHead, options))
+    ) {
+      return {}
     }
-    // Keep an unmerged/unpublished branch: deleting a worktree must never silently discard commits.
-    console.warn(
-      `[git] Preserved local branch "${branchName}" after removing worktree (not fully merged)`,
-      error
-    )
-    return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
+  } catch (error) {
+    if (error instanceof BranchDeletionUnverifiedError) {
+      throw error
+    }
+    // Removal already succeeded; a failed or raced proof must preserve the branch.
+    console.warn(`[git] Preserved local branch "${branchName}" after removing worktree`, error)
   }
+  return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
 }
 
-async function deleteLocalBranchAfterWorktreeRemoval(
+async function forceDeleteBranchAfterRollback(
   repoPath: string,
   branchName: string,
-  forceBranchDelete: boolean,
   options: GitWorktreeExecOptions = {}
-): Promise<'deleted' | 'checked-out'> {
-  const deleteFlag = forceBranchDelete ? '-D' : '-d'
+): Promise<void> {
   try {
-    await gitExecFileAsync(
-      ['branch', deleteFlag, '--', branchName],
-      gitExecOptions(repoPath, options)
-    )
-    return 'deleted'
+    await gitExecFileAsync(['branch', '-D', '--', branchName], gitExecOptions(repoPath, options))
+    return
   } catch (error) {
     if (!isBranchCheckedOutInWorktreeError(error)) {
       throw error
@@ -80,28 +57,24 @@ async function deleteLocalBranchAfterWorktreeRemoval(
   }
 
   try {
-    // Why: only pay for `worktree prune` when a stale admin record may be blocking `branch -d`.
+    // Prune only when a stale checkout registration may block rollback.
     await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options))
   } catch (error) {
     console.warn(`[git] Failed to prune worktrees before deleting branch "${branchName}"`, error)
-    return 'checked-out'
+    return
   }
 
   try {
-    await gitExecFileAsync(
-      ['branch', deleteFlag, '--', branchName],
-      gitExecOptions(repoPath, options)
-    )
-    return 'deleted'
+    await gitExecFileAsync(['branch', '-D', '--', branchName], gitExecOptions(repoPath, options))
   } catch (error) {
     if (isBranchCheckedOutInWorktreeError(error)) {
-      return 'checked-out'
+      return
     }
     throw error
   }
 }
 
-async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
+async function deleteMergedBranchAfterWorktreeRemoval(
   repoPath: string,
   branchName: string,
   branchHead: string,
@@ -113,17 +86,27 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
       ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {})
     })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
-  // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
+  // A tracking branch proves publication, not integration into the base.
   const hasNoUnmergedChanges = await withLocalGitCapabilityCacheForExecution(
     { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
     (capabilities) =>
-      branchHasNoUnmergedChangesWithLazyTargetRefresh(runGit, branchName, targetRefs, capabilities)
+      branchHasNoUnmergedChangesWithLazyTargetRefresh(
+        runGit,
+        branchName,
+        targetRefs,
+        capabilities,
+        branchHead
+      )
   )
   if (!hasNoUnmergedChanges) {
     return false
   }
-  await forceDeleteLocalBranch(repoPath, branchName, branchHead, (args, cwd) =>
-    gitExecFileAsync(args, gitExecOptions(cwd, options))
+  await forceDeleteLocalBranch(
+    repoPath,
+    branchName,
+    branchHead,
+    (args, cwd) => gitExecFileAsync(args, gitExecOptions(cwd, options)),
+    { pruneStaleWorktrees: true }
   )
   return true
 }
@@ -135,7 +118,8 @@ export async function forceDeleteLocalBranch(
   runGit: (args: string[], cwd: string) => Promise<{ stdout: string; stderr: string }> = (
     args,
     cwd
-  ) => gitExecFileAsync(args, { cwd })
+  ) => gitExecFileAsync(args, { cwd }),
+  options: { pruneStaleWorktrees?: boolean } = {}
 ): Promise<void> {
   if (!branchName || branchName.includes('\0')) {
     throw new Error('Invalid branch name')
@@ -145,7 +129,12 @@ export async function forceDeleteLocalBranch(
       `Cannot force-delete local branch "${branchName}" without the commit Git preserved.`
     )
   }
-  if (await isLocalBranchCheckedOut(repoPath, branchName, runGit)) {
+  let checkedOut = await isLocalBranchCheckedOut(repoPath, branchName, runGit)
+  if (checkedOut && options.pruneStaleWorktrees) {
+    await runGit(['worktree', 'prune'], repoPath)
+    checkedOut = await isLocalBranchCheckedOut(repoPath, branchName, runGit)
+  }
+  if (checkedOut) {
     throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
   }
   // Why: stale toast actions must not delete a branch that moved; `update-ref -d` deletes only if the ref still == expectedHead.
@@ -160,17 +149,11 @@ export async function forceDeleteLocalBranch(
       `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
     )
   }
-  if (await isLocalBranchCheckedOut(repoPath, branchName, runGit)) {
-    try {
-      await runGit(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)
-    } catch (restoreError) {
-      console.warn(
-        `[git] Failed to restore local branch "${branchName}" after concurrent checkout`,
-        restoreError
-      )
-    }
-    throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
-  }
+  await verifyDeletedBranchCheckout(
+    branchName,
+    () => isLocalBranchCheckedOut(repoPath, branchName, runGit),
+    () => runGit(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)
+  )
   try {
     await runGit(['config', '--remove-section', `branch.${branchName}`], repoPath)
   } catch {

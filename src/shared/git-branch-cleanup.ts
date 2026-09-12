@@ -54,11 +54,16 @@ export async function getBranchCleanupTargetRefs(
     candidates,
     await readOptionalGitStdout(runGit, ['config', '--get', `branch.${branchName}.base`])
   )
+  if (candidates.length > 0) {
+    return candidates
+  }
   addCandidateRef(
     candidates,
     await readOptionalGitStdout(runGit, ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
   )
-  addCandidateRef(candidates, 'HEAD')
+  if (candidates.length === 0) {
+    addCandidateRef(candidates, 'HEAD')
+  }
   return candidates
 }
 
@@ -91,11 +96,11 @@ async function resolveCommitOid(runGit: GitBranchCleanupExec, ref: string): Prom
   return readOptionalGitStdout(runGit, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
 }
 
-async function hasBranchOnlyMergeCommits(
+async function readBranchOnlyMergeCount(
   runGit: GitBranchCleanupExec,
   targetOid: string,
   branchRef: string
-): Promise<boolean> {
+): Promise<number | null> {
   const stdout = await readOptionalGitStdout(runGit, [
     'rev-list',
     '--right-only',
@@ -103,7 +108,7 @@ async function hasBranchOnlyMergeCommits(
     '--count',
     `${targetOid}...${branchRef}`
   ])
-  return Number(stdout ?? 0) > 0
+  return stdout !== null && /^\d+$/.test(stdout) ? Number(stdout) : null
 }
 
 async function branchMergesWithoutTreeChanges(
@@ -230,19 +235,31 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
   runGit: GitBranchCleanupExec,
   branchName: string,
   targetRefs: string[],
-  capabilities: GitCapabilityCache
+  capabilities: GitCapabilityCache,
+  expectedHead?: string
 ): Promise<boolean> {
-  const branchRef = `refs/heads/${branchName}`
+  const branchRef = expectedHead ?? `refs/heads/${branchName}`
 
   for (const targetRef of targetRefs) {
     const targetOid = await resolveCommitOid(runGit, targetRef)
     if (!targetOid) {
       continue
     }
+    if (
+      expectedHead &&
+      (await readOptionalGitStdout(runGit, ['merge-base', targetOid, expectedHead])) ===
+        expectedHead
+    ) {
+      return true
+    }
     if (await branchMergesWithoutTreeChanges(runGit, targetOid, branchRef, capabilities)) {
       return true
     }
-    if (await hasBranchOnlyMergeCommits(runGit, targetOid, branchRef)) {
+    const mergeCount = await readBranchOnlyMergeCount(runGit, targetOid, branchRef)
+    if (mergeCount === null) {
+      continue
+    }
+    if (mergeCount > 0) {
       if (
         await branchNetPatchMatchesTargetSquashCommit(runGit, targetOid, branchRef, capabilities)
       ) {
@@ -262,13 +279,20 @@ export async function branchHasNoUnmergedChangesWithLazyTargetRefresh(
   runGit: GitBranchCleanupExec,
   branchName: string,
   targetRefs: string[],
-  capabilities: GitCapabilityCache
+  capabilities: GitCapabilityCache,
+  expectedHead?: string
 ): Promise<boolean> {
   // Why: an unrefreshed remote-tracking ref may no longer represent the remote's branch contents.
   const localTargetRefs = targetRefs.filter(isLocalTargetRef)
   const refreshDependentTargetRefs = targetRefs.filter((targetRef) => !isLocalTargetRef(targetRef))
   if (
-    await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, localTargetRefs, capabilities)
+    await branchHasNoUnmergedChangesOnAnyTarget(
+      runGit,
+      branchName,
+      localTargetRefs,
+      capabilities,
+      expectedHead
+    )
   ) {
     return true
   }
@@ -277,6 +301,7 @@ export async function branchHasNoUnmergedChangesWithLazyTargetRefresh(
     runGit,
     branchName,
     refreshDependentTargetRefs,
-    capabilities
+    capabilities,
+    expectedHead
   )
 }

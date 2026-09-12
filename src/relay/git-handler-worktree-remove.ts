@@ -1,9 +1,10 @@
 import * as path from 'node:path'
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
 import { isBranchCheckedOutInWorktreeError } from '../shared/git-branch-delete-refusal'
+import { BranchDeletionUnverifiedError } from '../shared/git-branch-delete-verification'
 import { assertWorktreeUnlockedForRemoval } from '../shared/worktree/removal'
 import { isSubmoduleWorktreeRemovalRefusal } from '../shared/worktree/submodule-removal'
-import { deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure } from './git-handler-branch-cleanup'
+import { deleteMergedRelayBranchAfterWorktreeRemoval } from './git-handler-branch-cleanup'
 import type { GitExec } from './git-handler-ops'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import { readRelayWorktreeList } from './git-handler-worktree-list'
@@ -61,16 +62,14 @@ async function listRelayWorktreesForRemoval(
   }
 }
 
-async function deleteRelayBranchAfterWorktreeRemoval(
+async function forceDeleteRelayBranchAfterRollback(
   git: GitExec,
   repoPath: string,
-  branchName: string,
-  forceBranchDelete: boolean
-): Promise<'deleted' | 'checked-out'> {
-  const deleteFlag = forceBranchDelete ? '-D' : '-d'
+  branchName: string
+): Promise<void> {
   try {
-    await git(['branch', deleteFlag, '--', branchName], repoPath)
-    return 'deleted'
+    await git(['branch', '-D', '--', branchName], repoPath)
+    return
   } catch (error) {
     if (!isBranchCheckedOutInWorktreeError(error)) {
       throw error
@@ -78,23 +77,21 @@ async function deleteRelayBranchAfterWorktreeRemoval(
   }
 
   try {
-    // Why: branch deletion is the cheap live-checkout guard. Only prune when
-    // Git reports a checked-out branch, which may be stale worktree metadata.
+    // Prune only when a stale checkout registration may block rollback.
     await git(['worktree', 'prune'], repoPath)
   } catch (error) {
     console.warn(
       `relay removeWorktree: failed to prune worktrees before deleting branch "${branchName}"`,
       error
     )
-    return 'checked-out'
+    return
   }
 
   try {
-    await git(['branch', deleteFlag, '--', branchName], repoPath)
-    return 'deleted'
+    await git(['branch', '-D', '--', branchName], repoPath)
   } catch (error) {
     if (isBranchCheckedOutInWorktreeError(error)) {
-      return 'checked-out'
+      return
     }
     throw error
   }
@@ -160,48 +157,32 @@ export async function removeWorktreeOp(
     return {}
   }
 
-  // Why: SSH worktree deletion should mirror local deletion. Dropping the
-  // branch also removes its upstream config, which lets fork-remotes cleanup
-  // after the last PR review worktree is gone.
   try {
-    // Why: use `-d` (not `-D`) to mirror the local removeWorktree fix.
-    const branchDeleteResult = await deleteRelayBranchAfterWorktreeRemoval(
-      git,
-      repoPath,
-      branchName,
-      forceBranchDelete
-    )
-    if (branchDeleteResult === 'checked-out') {
+    if (forceBranchDelete) {
+      await forceDeleteRelayBranchAfterRollback(git, repoPath, branchName)
       return {}
     }
-    return {}
-  } catch (error) {
-    if (!forceBranchDelete && branchHead) {
-      try {
-        if (
-          await deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
-            git,
-            repoPath,
-            branchName,
-            branchHead,
-            capabilities
-          )
-        ) {
-          return {}
-        }
-      } catch (alreadyMergedDeleteError) {
-        // Why: worktree is gone; preserve branch recovery on cleanup races.
-        console.warn(
-          `relay removeWorktree: failed to delete already-merged local branch "${branchName}" after removing worktree`,
-          alreadyMergedDeleteError
-        )
-      }
+    if (
+      branchHead &&
+      (await deleteMergedRelayBranchAfterWorktreeRemoval(
+        git,
+        repoPath,
+        branchName,
+        branchHead,
+        capabilities
+      ))
+    ) {
+      return {}
     }
-    // Expected when the branch still has unmerged/unpublished commits: keep it.
+  } catch (error) {
+    // Removal already succeeded; a failed or raced proof must preserve the branch.
+    if (error instanceof BranchDeletionUnverifiedError) {
+      throw error
+    }
     console.warn(
-      `relay removeWorktree: preserved local branch "${branchName}" after removing worktree (not fully merged)`,
+      `relay removeWorktree: preserved local branch "${branchName}" after removing worktree`,
       error
     )
-    return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
   }
+  return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
 }
