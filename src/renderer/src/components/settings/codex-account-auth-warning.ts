@@ -3,7 +3,7 @@ import type {
   RateLimitRuntimeTarget
 } from '../../../../shared/rate-limit-types'
 import type { CodexSystemDefaultIdentity } from '../../../../shared/managed-account-types'
-import { isCodexAuthError } from '../../../../shared/codex-auth-errors'
+import { isCodexApiKeyRateLimitError, isCodexAuthError } from '../../../../shared/codex-auth-errors'
 
 type AccountRuntime = {
   runtime: 'host' | 'wsl'
@@ -48,6 +48,12 @@ export function getCodexAccountAuthWarning(args: {
     return null
   }
   if (args.limits?.status !== 'error' || !isCodexAuthError(args.limits.error)) {
+    return null
+  }
+  // Why: authKind only resolves for the host home, so a WSL system default reaches
+  // here as undefined and misses the guard above (#9313). This rejection is specific
+  // to reading ChatGPT usage and never means the active sign-in is stale.
+  if (isCodexApiKeyRateLimitError(args.limits.error)) {
     return null
   }
   return 'stale-sign-in'
