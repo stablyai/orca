@@ -28,7 +28,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'zcode',
   'dsh',
   'jcode',
-  'kiro'
+  'kiro',
+  'bob'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -214,7 +215,11 @@ export function extractAgentProviderSession(
     case 'droid':
     // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
     // falls through
-    case 'kimi': {
+    case 'kimi':
+    // Why: Bob's hook `session_id` is its rootTaskId — the exact value `bob --resume` takes
+    // (round-tripped on 2.0.2: the id from SessionStart restored the conversation).
+    // falls through
+    case 'bob': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
