@@ -174,13 +174,19 @@ export function PierreDiffSurface({
     shiftWheelPostRender,
     nativeViewPostRender
   })
-  postRenderRef.current = {
-    onPostRender,
-    navigateToNote,
-    searchPostRender,
-    shiftWheelPostRender,
-    nativeViewPostRender
-  }
+  // Why layout and not render: Pierre treats a new onPostRender identity as forceRender, so the
+  // callback below must stay stable and read its chain from here. Writing during render is impure
+  // -- React can discard that work. useRef seeds the first render's chain, and this effect is
+  // declared before every consumer's own effects, so each Pierre post-render sees current values.
+  useLayoutEffect(() => {
+    postRenderRef.current = {
+      onPostRender,
+      navigateToNote,
+      searchPostRender,
+      shiftWheelPostRender,
+      nativeViewPostRender
+    }
+  }, [onPostRender, navigateToNote, searchPostRender, shiftWheelPostRender, nativeViewPostRender])
   const handlePostRender = useCallback(
     (node: HTMLElement, instance: PierreDiffInstance, phase: PostRenderPhase) => {
       const chain = postRenderRef.current
