@@ -248,6 +248,9 @@ describe('NativeChatStructuredSession', () => {
     act(() => mocks.approvalCardProps?.onChoose('allow'))
     expect(mocks.respond).toHaveBeenCalledWith(approvalItems[0], 'allow')
     expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
+
+    act(() => mocks.approvalCardProps?.onCancel?.())
+    expect(mocks.cancel).toHaveBeenCalledWith('turn-approval')
   })
 
   // Every background-task test mounts the same local Claude session; only the ids
