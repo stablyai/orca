@@ -54,6 +54,11 @@ export function useDetectedAgents(
 ): UseDetectedAgentsResult {
   const target = normalizeAgentDetectionTarget(connectionId)
   const observedRemoteTargetKeysRef = useRef<Set<string>>(new Set())
+  // Why: remounted local launch surfaces (TabBar/QuickLaunch) must re-probe after
+  // a cold-start empty [] without requiring a project/context switch (#8366).
+  // Observe each local context once so A → B still retries B, and A → B → A
+  // does not thrash. A new mount still has an empty set, so remount retries.
+  const observedLocalEmptyRetryKeysRef = useRef<Set<string>>(new Set())
   // Why: undefined means "store not yet hydrated" — we don't know if the
   // worktree is local or remote yet. This prevents flashing local agents for
   // remote worktrees during hydration.
@@ -169,7 +174,16 @@ export function useDetectedAgents(
         void state.ensureRuntimeDetectedAgents(targetId)
       }
     } else {
+      // Why: local/WSL cold-start soft-fails to [] (#8366). Store non-sticky empty
+      // is not enough — TabBar/QuickLaunch only re-enter via this hook, so mirror
+      // SSH/runtime: one fresh probe per observed local context, including remount.
+      const emptyRetryKey = `local:${localContextKey ?? ''}:${localWorktreeId ?? ''}`
+      const isNewLocalContext = !observedLocalEmptyRetryKeysRef.current.has(emptyRetryKey)
       if (detectedIds === null) {
+        observedLocalEmptyRetryKeysRef.current.add(emptyRetryKey)
+        void state.ensureDetectedAgents(localWorktreeId)
+      } else if (detectedIds.length === 0 && isNewLocalContext) {
+        observedLocalEmptyRetryKeysRef.current.add(emptyRetryKey)
         void state.ensureDetectedAgents(localWorktreeId)
       }
     }
