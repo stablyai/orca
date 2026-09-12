@@ -53,7 +53,6 @@ export async function openChecks(page: Page, worktreeId: string): Promise<void> 
           // instead of hanging on a locator that stopped matching mid-action.
           await checksButton.click({ timeout: 2_000 }).catch(() => undefined)
         }
-        await page.waitForTimeout(250)
         return page.evaluate(() => window.__store?.getState().rightSidebarTab)
       },
       { timeout: 10_000 }
