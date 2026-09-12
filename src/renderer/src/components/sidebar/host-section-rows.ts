@@ -14,6 +14,7 @@ import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Row } from './worktree-list/grouping/row-types'
 import { getFolderWorkspaceHostId } from './folder-workspace-host-id'
+import { getProjectGroupExecutionHostIdForRows } from './worktree-list/listing/host-filtering'
 
 export type HostHeaderRow = {
   type: 'host-header'
@@ -66,6 +67,9 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
     case 'folder-workspace':
       return getFolderWorkspaceHostId(row.folderWorkspace, row.projectGroup, defaultHostId)
     case 'header':
+      if (row.projectGroup?.id != null) {
+        return getProjectGroupExecutionHostIdForRows(row.projectGroup, defaultHostId)
+      }
       return row.repo ? getRepoHostId(row.repo, defaultHostId) : null
   }
 }
