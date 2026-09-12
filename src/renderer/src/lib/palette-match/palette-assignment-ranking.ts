@@ -35,8 +35,14 @@ function phrasePlacement(field: PaletteIndexedField, normalizedQuery: string): n
     return 0
   }
   let index = text.indexOf(normalizedQuery, 1)
+  let wordIndex = 0
   while (index !== -1) {
-    if (field.words.some((word) => word.start === index)) {
+    let wordStart = field.words[wordIndex]?.start
+    while (wordStart !== undefined && wordStart < index) {
+      wordIndex += 1
+      wordStart = field.words[wordIndex]?.start
+    }
+    if (wordStart === index) {
       return 1
     }
     index = text.indexOf(normalizedQuery, index + 1)
