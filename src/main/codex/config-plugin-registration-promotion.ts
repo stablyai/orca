@@ -173,6 +173,11 @@ function planMarketplaceRefreshPromotion(
   if (!runtimeUpdated || runtimeUpdated.multiline || runtimeRevision?.multiline) {
     return []
   }
+  // Why: promoting the timestamp alone would clear a canonical revision the runtime
+  // cannot replace, publishing exactly the mismatched pair the pairing rule prevents.
+  if (!runtimeRevision && systemEntry.fields.has('last_revision')) {
+    return []
+  }
   const runtimeTimestamp = parseCodexRegistrationTimestamp(runtimeUpdated.raw)
   if (runtimeTimestamp === null) {
     return []

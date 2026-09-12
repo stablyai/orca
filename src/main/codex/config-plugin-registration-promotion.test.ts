@@ -364,6 +364,34 @@ describe('codex marketplace refresh metadata promotion', () => {
     expect(readSystemConfig()).toContain('last_revision = "aaaa111"')
   })
 
+  // Why: Date.parse rolls an impossible day forward, which would read as newer.
+  it('rejects an impossible calendar date instead of rolling it forward', () => {
+    seedMirroredMarketplace()
+
+    simulateCodexRegistrationFieldWrite('last_updated', '"2026-02-30T00:00:00Z"')
+    simulateCodexRegistrationFieldWrite('last_revision', '"rolled99"')
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readSystemConfig()).toContain('last_updated = "2026-01-05T10:00:00Z"')
+    expect(readSystemConfig()).toContain('last_revision = "aaaa111"')
+  })
+
+  it('skips the refresh when the runtime cannot supply the paired last_revision', () => {
+    seedMirroredMarketplace()
+
+    writeFileSync(
+      runtimeConfigPath(),
+      readRuntimeConfig()
+        .replace('last_updated = "2026-01-05T10:00:00Z"', 'last_updated = "2026-09-01T00:00:00Z"')
+        .replace('last_revision = "aaaa111"\n', ''),
+      'utf-8'
+    )
+    syncSystemConfigIntoManagedCodexHome()
+
+    expect(readSystemConfig()).toContain('last_updated = "2026-01-05T10:00:00Z"')
+    expect(readSystemConfig()).toContain('last_revision = "aaaa111"')
+  })
+
   it('leaves the canonical config in control when the marketplace source changed', () => {
     seedMirroredMarketplace()
 

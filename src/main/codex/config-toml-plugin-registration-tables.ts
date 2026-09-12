@@ -110,6 +110,20 @@ function readRegistrationBlock(lines: string[], start: number, end: number): str
     .trimEnd()
 }
 
+const REGISTRATION_TIMESTAMP_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})[Tt ]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})?$/
+
+function isRealCalendarDate(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1) {
+    return false
+  }
+  // Day 0 of the following month is the last day of this one; setUTCFullYear avoids
+  // the two-digit-year remapping the Date constructor applies.
+  const lastOfMonth = new Date(0)
+  lastOfMonth.setUTCFullYear(year, month, 0)
+  return day <= lastOfMonth.getUTCDate()
+}
+
 /** Compares values by meaning, so quote style and a trailing comment never read as a change. */
 export function normalizeCodexRegistrationValue(raw: string): string {
   const stripped = stripTomlTrailingComment(raw)
@@ -125,7 +139,10 @@ export function parseCodexRegistrationTimestamp(raw: string): number | null {
   const stripped = stripTomlTrailingComment(raw)
   const quoted = parseTomlSingleLineStringValue(stripped, 0)
   const text = quoted && quoted.end === stripped.length ? quoted.value : stripped
-  if (!/^\d{4}-\d{2}-\d{2}[Tt ]\d{2}:\d{2}:\d{2}(\.\d+)?([Zz]|[+-]\d{2}:\d{2})?$/.test(text)) {
+  const match = REGISTRATION_TIMESTAMP_PATTERN.exec(text)
+  // Why: Date.parse rolls `2025-02-30` forward to March 2 rather than rejecting it,
+  // so a malformed runtime value would read as NEWER and win against canonical.
+  if (!match || !isRealCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]))) {
     return null
   }
   const parsed = Date.parse(text.replace(' ', 'T'))
