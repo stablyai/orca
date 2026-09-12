@@ -45,7 +45,11 @@ jobs:
           npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay^...' build
 
       - name: Test shard
+        env:
+          ORCA_BALANCE_UNIT_SHARDS: '1'
+          ORCA_BACKGROUND_LAUNCH: '1'
         run: |
+          export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
           pnpm exec vitest run --config config/vitest.config.ts \
             --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
             --exclude=src/main/daemon/shell-ready.test.ts \
@@ -65,3 +69,12 @@ jobs:
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+
+      - name: Upload unit shard assignment
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-shard-node-${{ matrix.node }}-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: ci-shards/
+          retention-days: 14
+          if-no-files-found: warn
