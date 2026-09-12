@@ -25,21 +25,26 @@ const ACK_SNIPPET_MAX_LENGTH = 72
 
 /** First readable line of a comment body, minus HTML comments and markdown markers. */
 function summarizePRCommentBody(body: string): string {
-  const line = replaceHtmlComments(body, ' ')
-    .split('\n')
-    .map((candidate) =>
-      candidate
-        .replace(/^[\s>#*\-_`]+/, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-    )
-    .find((candidate) => candidate.length > 0)
-  if (!line) {
-    return ''
+  const cleaned = replaceHtmlComments(body, ' ')
+  let start = 0
+  while (start <= cleaned.length) {
+    const newline = cleaned.indexOf('\n', start)
+    const line = cleaned
+      .slice(start, newline === -1 ? cleaned.length : newline)
+      .replace(/^[\s>#*\-_`]+/, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (line) {
+      return line.length > ACK_SNIPPET_MAX_LENGTH
+        ? `${line.slice(0, ACK_SNIPPET_MAX_LENGTH - 1).trimEnd()}…`
+        : line
+    }
+    if (newline === -1) {
+      break
+    }
+    start = newline + 1
   }
-  return line.length > ACK_SNIPPET_MAX_LENGTH
-    ? `${line.slice(0, ACK_SNIPPET_MAX_LENGTH - 1).trimEnd()}…`
-    : line
+  return ''
 }
 
 /** Short "what this was" label so the batched reply names each item without quoting it whole. */
