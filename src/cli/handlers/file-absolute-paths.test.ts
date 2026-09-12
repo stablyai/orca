@@ -271,6 +271,30 @@ describe('absolute file CLI paths', () => {
     })
   })
 
+  it.each([
+    ['POSIX', '/tmp/repo', '/tmp/repo/src/lib/../App.tsx', '/tmp'],
+    ['Windows', 'C:\\repo', 'C:\\repo\\src\\lib\\..\\App.tsx', 'C:\\users\\ada']
+  ])('normalizes dot segments in %s absolute paths', async (_flavor, root, path, cwd) => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: buildWorktree(root, 'feature') }),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(['file', 'open', '--path', path, '--worktree', 'id:wt-1'], cwd)
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.show', { worktree: 'id:wt-1' })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx'
+    })
+  })
+
   it('keeps relative paths on the single-rpc path', async () => {
     queueFixtures(
       callMock,
@@ -291,24 +315,159 @@ describe('absolute file CLI paths', () => {
     })
   })
 
-  it('leaves outside-worktree absolute paths for the runtime guard', async () => {
-    const absolutePath = '/tmp/elsewhere/App.tsx'
+  it.each(['open', 'diff'])(
+    'rejects outside-worktree file %s paths with a command-neutral error',
+    async (command) => {
+      const absolutePath = '/tmp/elsewhere/App.tsx'
+      queueFixtures(
+        callMock,
+        okFixture('req_show', { worktree: buildWorktree('/tmp/repo', 'feature') })
+      )
+
+      await main(['file', command, '--path', absolutePath, '--worktree', 'id:wt-1'], '/tmp')
+
+      expect(process.exitCode).toBe(1)
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('Path is outside the selected worktree (/tmp/repo).')
+      )
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('This command only supports files inside a worktree')
+      )
+      expect(callMock).toHaveBeenCalledTimes(1)
+      expect(callMock).toHaveBeenCalledWith('worktree.show', { worktree: 'id:wt-1' })
+    }
+  )
+
+  it.each([
+    ['Windows', 'C:\\repo', 'C:\\elsewhere\\App.tsx', 'C:\\users\\ada'],
+    ['SSH POSIX', '/home/deploy/repo', '/var/elsewhere/App.tsx', '/tmp'],
+    ['folder workspace', '/Users/ada/notes', '/Users/ada/Downloads/App.tsx', '/Users/ada/notes']
+  ])(
+    'rejects an outside %s path with the worktree root in the error',
+    async (_flavor, root, absolutePath, cwd) => {
+      queueFixtures(callMock, okFixture('req_show', { worktree: buildWorktree(root, 'feature') }))
+
+      await main(['file', 'open', '--path', absolutePath, '--worktree', 'id:wt-1'], cwd)
+
+      expect(process.exitCode).toBe(1)
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining(`Path is outside the selected worktree (${root}).`)
+      )
+      expect(callMock).toHaveBeenCalledTimes(1)
+      expect(callMock).toHaveBeenCalledWith('worktree.show', { worktree: 'id:wt-1' })
+    }
+  )
+
+  it('rejects parent-segment relative paths that escape the worktree', async () => {
     queueFixtures(
       callMock,
-      okFixture('req_show', { worktree: buildWorktree('/tmp/repo', 'feature') }),
+      okFixture('req_show', { worktree: buildWorktree('/tmp/repo', 'feature') })
+    )
+
+    // Why: escape is vs the selected worktree root, not client cwd. The
+    // previous candidate resolved `../` against cwd, so this used to require
+    // cwd === worktree to fail for the right reason.
+    await main(['file', 'open', '--path', '../shared/config.yaml', '--worktree', 'id:wt-1'], '/tmp')
+
+    expect(process.exitCode).toBe(1)
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('Path is outside the selected worktree (/tmp/repo).')
+    )
+    expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ['POSIX client cwd', '/home/deploy/repo', '/tmp'],
+    ['Windows client cwd', '/home/deploy/repo', 'C:\\users\\ada']
+  ])('resolves dotted relatives against the worktree root with a %s', async (_label, root, cwd) => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: buildWorktree(root, 'feature') }),
       okFixture('req_open', {
         worktree: 'wt-1',
-        relativePath: absolutePath,
+        relativePath: 'src/App.tsx',
         kind: 'text',
         opened: true
       })
     )
 
-    await main(['file', 'open', '--path', absolutePath, '--worktree', 'id:wt-1'], '/tmp')
+    await main(['file', 'open', '--path', 'src/lib/../App.tsx', '--worktree', 'id:wt-1'], cwd)
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.show', { worktree: 'id:wt-1' })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx'
+    })
+  })
+
+  it('does not give a POSIX absolute path Windows separator semantics from a Windows cwd', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: buildWorktree('/home/deploy/repo', 'feature') }),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/a\\b.ts',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(
+      ['file', 'open', '--path', '/home/deploy/repo/src/a\\b.ts', '--worktree', 'id:wt-1'],
+      'C:\\users\\ada'
+    )
 
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:wt-1',
-      relativePath: absolutePath
+      relativePath: 'src/a\\b.ts'
+    })
+    expect(callMock.mock.calls.some((call) => call[1]?.relativePath === 'src/a/b.ts')).toBe(false)
+  })
+
+  it.each(['src/lib/../a\\b.ts', '/home/deploy/repo/src/lib/../a\\b.ts'])(
+    'normalizes POSIX dot segments while preserving a literal backslash: %s',
+    async (path) => {
+      queueFixtures(
+        callMock,
+        okFixture('req_show', { worktree: buildWorktree('/home/deploy/repo', 'feature') }),
+        okFixture('req_open', {
+          worktree: 'wt-1',
+          relativePath: 'src/a\\b.ts',
+          kind: 'text',
+          opened: true
+        })
+      )
+
+      await main(['file', 'open', '--path', path, '--worktree', 'id:wt-1'], 'C:\\users\\ada')
+
+      expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+        worktree: 'id:wt-1',
+        relativePath: 'src/a\\b.ts'
+      })
+    }
+  )
+
+  it('relativizes parent-segment paths that stay inside the worktree', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: buildWorktree('/tmp/repo', 'feature') }),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(
+      ['file', 'open', '--path', 'src/lib/../App.tsx', '--worktree', 'id:wt-1'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.show', { worktree: 'id:wt-1' })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx'
     })
   })
 
