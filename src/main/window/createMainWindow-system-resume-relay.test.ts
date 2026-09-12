@@ -48,6 +48,7 @@ describe('createMainWindow', () => {
         on: vi.fn((event: string, handler: (...args: any[]) => void) => {
           windowHandlers[event] = handler
         }),
+        removeListener: vi.fn(),
         isDestroyed: vi.fn(() => false),
         // Why: maximized keeps forceRepaint from scheduling its size-nudge timer.
         isMaximized: vi.fn(() => true),

@@ -7,6 +7,7 @@ import { getBrowserClientHostId } from '../browser/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { installRendererUnresponsiveBreadcrumb } from '../crash-reporting/renderer-unresponsive-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import type { Store } from '../persistence'
 import { closeDashboardPopout } from './dashboard-popout-window'
@@ -190,6 +191,9 @@ export function createMainWindow(
     reloadMainWindow: (observer) => loadMainWindow(mainWindow, observer),
     rendererWebContentsId
   })
+  const rendererUnresponsiveBreadcrumb = installRendererUnresponsiveBreadcrumb({
+    window: mainWindow
+  })
   // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
   installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
@@ -207,6 +211,7 @@ export function createMainWindow(
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
     focus.dispose()
+    rendererUnresponsiveBreadcrumb.dispose()
     browserManager.setDictationShortcutForwardingPredicate(null)
     powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)
