@@ -112,6 +112,7 @@ ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree id:<parentRepoId>::<parentPath> --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --no-parent --json
+ORCA worktree set --worktree active --pin --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
@@ -204,6 +205,8 @@ flags leave links unchanged; literal `null` clears only the named link on `set` 
 is refused on `create`. Folder-based repos can store numeric links, but missing
 source/remote identity prevents URL validation and may leave provider links unavailable.
 Old runtimes that predate these existing fields may ignore them; verify with `worktree show --json`.
+
+Pinning uses `--pin` / `--unpin`; `worktree ps` and `worktree list` report the current value as `pinned`.
 
 ## Terminals
 
