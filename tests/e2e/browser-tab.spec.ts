@@ -299,10 +299,19 @@ async function expectBrowserTabActive(
 
 async function expectBrowserTabOpenedInBackground(
   page: Parameters<typeof getActiveWorktreeId>[0],
+  worktreeId: string,
   sourceTabId: string,
+  url: string,
   title: string
 ): Promise<void> {
-  const openedTabId = await waitForTabIdByExactTitle(page, title)
+  let openedTabId: string | null = null
+  await expect
+    .poll(async () => {
+      openedTabId =
+        (await getBrowserTabs(page, worktreeId)).find((tab) => tab.url === url)?.id ?? null
+      return openedTabId
+    })
+    .not.toBeNull()
   await expect(page.locator(`[data-browser-overlay-tab-id="${sourceTabId}"]`)).toHaveCSS(
     'opacity',
     '1'
@@ -311,6 +320,9 @@ async function expectBrowserTabOpenedInBackground(
     'opacity',
     '0'
   )
+  await switchToBrowserTab(page, worktreeId, openedTabId!)
+  await expectBrowserTabActive(page, title)
+  await switchToBrowserTab(page, worktreeId, sourceTabId)
 }
 
 async function readBrowserInputValue(
@@ -665,7 +677,13 @@ test.describe('Browser Tab', () => {
       await orcaPage
         .getByRole('menuitem', { name: 'Open Link In Orca Browser', exact: true })
         .click()
-      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Linked destination')
+      await expectBrowserTabOpenedInBackground(
+        orcaPage,
+        worktreeId,
+        sourceTab!.id,
+        new URL('/destination', linkServer.sourceUrl).href,
+        'Linked destination'
+      )
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-link', {
         frameSelector: '#link-frame'
       })
@@ -678,19 +696,33 @@ test.describe('Browser Tab', () => {
       })
       await expectBrowserTabOpenedInBackground(
         orcaPage,
+        worktreeId,
         sourceTab!.id,
+        new URL('/frame-modifier-destination', linkServer.sourceUrl).href,
         'Frame modifier destination'
       )
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-middle-link', {
         button: 'middle',
         frameSelector: '#link-frame'
       })
-      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Frame middle destination')
+      await expectBrowserTabOpenedInBackground(
+        orcaPage,
+        worktreeId,
+        sourceTab!.id,
+        new URL('/frame-middle-destination', linkServer.sourceUrl).href,
+        'Frame middle destination'
+      )
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#modifier-link', {
         modifiers: process.platform === 'darwin' ? ['meta'] : ['control']
       })
-      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Modifier destination')
+      await expectBrowserTabOpenedInBackground(
+        orcaPage,
+        worktreeId,
+        sourceTab!.id,
+        new URL('/modifier-destination', linkServer.sourceUrl).href,
+        'Modifier destination'
+      )
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-shift-middle-link', {
         button: 'middle',
@@ -708,7 +740,13 @@ test.describe('Browser Tab', () => {
       await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(tabCountBeforeCancelledClick)
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#middle-link', { button: 'middle' })
-      await expectBrowserTabOpenedInBackground(orcaPage, sourceTab!.id, 'Middle-click destination')
+      await expectBrowserTabOpenedInBackground(
+        orcaPage,
+        worktreeId,
+        sourceTab!.id,
+        new URL('/middle-destination', linkServer.sourceUrl).href,
+        'Middle-click destination'
+      )
       await expect
         .poll(() => electronApp.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().length), {
           timeout: 5_000

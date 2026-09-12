@@ -24,10 +24,12 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
     if (!worktreeId) {
       throw new Error('Host has no active worktree for the paired Cmd-J fixture')
     }
+    // Why: only an activated host tab lands in a rendered group, which is what the seeding step
+    // below requires of the mirrored remote group before it will seed the collision rows.
     const workspace = state.createBrowserTab(
       worktreeId,
       'data:text/html,<title>Remote browser proof</title>',
-      { activate: false, title: 'Remote browser proof' }
+      { activate: true, title: 'Remote browser proof' }
     )
     return { worktreeId, workspaceId: workspace.id }
   })

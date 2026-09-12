@@ -104,14 +104,13 @@ jobs:
     needs: [build, prepare-native-cache]
     if: inputs.test_files == ''
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Fourteen scheduled runs averaged 24.6 minutes per shard; shards 4
-          # and 9 repeatedly hit the 30-minute cap. A 12-way trial still left
-          # one 30-minute shard, so 14 gives the suite enough failure headroom.
+          # Fourteen scheduled runs averaged 24.6 minutes per shard; 35 minutes
+          # leaves setup and failure-artifact headroom after a 29-minute suite.
           - shard: '1/14'
             shard_name: 1-of-14
           - shard: '2/14'
