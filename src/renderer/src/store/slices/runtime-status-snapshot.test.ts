@@ -82,13 +82,13 @@ it('represents failed verification honestly without manufacturing a session rest
     generation
   )
   viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(3))
-  // The connection epoch is not the runtime session: regaining contact opens a new epoch
-  // (reads issued before the outage were against the lost connection, and the session
-  // mirror needs this edge to resume), while the runtime session is unchanged — same
-  // runtime id, no restart hook, no toast.
+  // Regaining contact on the same runtime is neither a new connection nor a new session: the
+  // generation holds so the session mirror is not rebuilt (#19647), and only the contact epoch
+  // — the mirror's resubscribe trigger — moves. No restart hook, no toast.
   expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
-    (generation ?? 0) + 1
+    generation
   )
+  expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.hostContactEpoch).toBe(1)
   expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
     'rt-1'
   )
@@ -100,7 +100,7 @@ it('represents failed verification honestly without manufacturing a session rest
   viewer
     .getState()
     .applyRuntimeHostStatusSnapshot(snapshot(4, { status: { runtimeId: 'rt-2' } as RuntimeStatus }))
-  // A replacement runtime id is a restart, and it advances the epoch exactly once more.
+  // A replacement runtime id is a restart: a genuinely new connection, so the generation moves.
   expect(viewer.getState().runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration).toBe(
     (reconnectedGeneration ?? 0) + 1
   )
