@@ -136,3 +136,30 @@ describe('HermesRunHistory', () => {
     expect(readOutputRefs).toHaveBeenCalledTimes(202)
   })
 })
+
+it('loads summaries without hydrating logs and resolves selected IDs within the job refs', async () => {
+  const readOutputRun = vi.fn(async (ref: HermesOutputRunRef, summaryOnly?: boolean) => ({
+    ...ref,
+    output_content: summaryOnly ? null : 'full log'
+  }))
+  const history = new HermesRunHistory(
+    sources({ readOutputRefs: async () => [outputRef(16), outputRef(15)], readOutputRun })
+  )
+  const summary = await history.listRuns({ provider: 'hermes', jobId: 'job-1', summaryOnly: true })
+  expect(summary.runs).toHaveLength(2)
+  expect(summary.runs[0]).toMatchObject({ output_content: null, output_content_deferred: true })
+  expect(readOutputRun).toHaveBeenCalledWith(outputRef(16), true)
+  readOutputRun.mockClear()
+  const detail = await history.listRuns({
+    provider: 'hermes',
+    jobId: 'job-1',
+    runId: outputRef(15).id
+  })
+  expect(detail.runs).toEqual([{ ...outputRef(15), output_content: 'full log' }])
+  expect(readOutputRun).toHaveBeenCalledTimes(1)
+  readOutputRun.mockClear()
+  expect(
+    (await history.listRuns({ provider: 'hermes', jobId: 'job-1', runId: '../other' })).runs
+  ).toEqual([])
+  expect(readOutputRun).not.toHaveBeenCalled()
+})

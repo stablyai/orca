@@ -160,11 +160,14 @@ export async function readHermesOutputFileRunRefs(jobId: string): Promise<Hermes
     }))
 }
 
-export async function readHermesOutputFileRun(ref: HermesOutputRunRef): Promise<unknown> {
+export async function readHermesOutputFileRun(
+  ref: HermesOutputRunRef,
+  summaryOnly = false
+): Promise<unknown> {
   try {
     const content = await readFile(ref.output_path, 'utf-8')
     const parsed = parseHermesOutput(content)
-    const outputContent = await appendReferencedLogFile(parsed.outputContent)
+    const outputContent = summaryOnly ? null : await appendReferencedLogFile(parsed.outputContent)
     return {
       id: ref.id,
       job_id: ref.job_id,

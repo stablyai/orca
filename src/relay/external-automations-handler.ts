@@ -31,6 +31,9 @@ export class ExternalAutomationsHandler {
 
   constructor(dispatcher: RelayDispatcher) {
     dispatcher.onRequest('externalAutomations.list', (params) => this.providers.listJobs(params))
+    dispatcher.onRequest('externalAutomations.runHistory', (params) =>
+      this.runHistory.listRuns(params)
+    )
     dispatcher.onRequest('externalAutomations.runs', (params) => this.runHistory.listRuns(params))
     dispatcher.onRequest('externalAutomations.create', (params) => this.commands.createJob(params))
     dispatcher.onRequest('externalAutomations.update', (params) => this.commands.updateJob(params))

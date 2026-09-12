@@ -26,11 +26,21 @@ import { readHermesCronOutputRunsPage } from './hermes-cron-output'
  */
 async function requestRemoteExternalRuns(
   connectionId: string,
-  params: { provider: ExternalAutomationProvider; jobId: string; page: number; pageSize: number }
+  params: {
+    provider: ExternalAutomationProvider
+    jobId: string
+    page: number
+    pageSize: number
+    summaryOnly?: boolean
+    runId?: string
+  }
 ): Promise<{ total?: number; runs?: unknown[] }> {
   try {
+    // Old relays ignore optional flags, so negotiate projection through a distinct method.
     return (await requireExternalAutomationMultiplexer(connectionId).request(
-      'externalAutomations.runs',
+      params.summaryOnly || params.runId !== undefined
+        ? 'externalAutomations.runHistory'
+        : 'externalAutomations.runs',
       params
     )) as {
       total?: number
@@ -38,6 +48,9 @@ async function requestRemoteExternalRuns(
     }
   } catch (error) {
     if (isRelayMethodNotFoundError(error)) {
+      if (params.summaryOnly && params.runId === undefined) {
+        return requestRemoteExternalRuns(connectionId, { ...params, summaryOnly: false })
+      }
       throw new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.runsUnsupported)
     }
     throw error
@@ -65,12 +78,19 @@ export async function listExternalAutomationRuns(
   }
   const result =
     input.target.type === 'local'
-      ? await readHermesCronOutputRunsPage(input.jobId, { page, pageSize })
+      ? await readHermesCronOutputRunsPage(input.jobId, {
+          page,
+          pageSize,
+          summaryOnly: input.summaryOnly,
+          runId: input.runId
+        })
       : await requestRemoteExternalRuns(input.target.connectionId, {
           provider: input.provider,
           jobId: input.jobId,
           page,
-          pageSize
+          pageSize,
+          summaryOnly: input.summaryOnly,
+          runId: input.runId
         })
   return {
     ...identity,

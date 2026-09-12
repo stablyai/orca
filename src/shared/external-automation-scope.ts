@@ -107,6 +107,8 @@ export type ScopedExternalManagerListRequest = ScopedExternalAutomationRequest &
 }
 
 export type ScopedExternalManagerRunsRequest = ScopedExternalAutomationRequest & {
+  summaryOnly?: boolean
+  runId?: string
   jobId: string
   page: number
   pageSize: number
