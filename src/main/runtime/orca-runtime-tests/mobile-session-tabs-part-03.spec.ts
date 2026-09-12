@@ -303,6 +303,64 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('places a runtime-owned terminal after every leaf in the anchored split parent', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-created-after-split' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:split-placement',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: 'split::left',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'split::left',
+              parentTabId: 'split',
+              leafId: 'left',
+              title: 'Split',
+              isActive: true
+            },
+            {
+              type: 'terminal',
+              id: 'split::right',
+              parentTabId: 'split',
+              leafId: 'right',
+              title: 'Split',
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: 'trailing::leaf',
+              parentTabId: 'trailing',
+              leafId: 'leaf',
+              title: 'Trailing',
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+
+    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      afterTabId: 'split::left'
+    })
+
+    expect(
+      (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs.map((tab) => tab.id)
+    ).toEqual(['split::left', 'split::right', created.tab.id, 'trailing::leaf'])
+  })
+
   it('leases renderer publication for a paired create and preserves host-owned inventory', async () => {
     const leafId = '91919191-9191-4919-8919-919191919191'
     const spawn = vi.fn()

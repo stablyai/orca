@@ -12,11 +12,14 @@ import type { Terminal, TerminalCreateResult } from './mobile-session-route-type
 import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { createMobileStructuredAgentSession } from './mobile-structured-agent-session-launch'
+import { placeCreatedSessionTab } from '../../../src/shared/session-tab-placement'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 
 export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttachmentsModel) {
   const {
     worktreeId,
     client,
+    hostCapabilities,
     connState,
     setTerminals,
     terminalsRef,
@@ -104,9 +107,12 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           return
         }
       }
+      // Why: one anchor for both the request and the optimistic paint below; when they disagreed the
+      // new tab painted at the end and jumped to its real slot on the next host snapshot.
+      const afterTabId = activeSessionTabId ?? undefined
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
-        afterTabId: activeSessionTabId ?? undefined,
+        afterTabId,
         clientMutationId,
         ...(options?.startupCommand ? { command: options.startupCommand } : {}),
         ...(options?.startupCommandDelivery
@@ -134,7 +140,11 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           if (prev.some((tab) => tab.id === created.id)) {
             return prev
           }
-          return [...prev, { ...created, isActive: true }]
+          return placeCreatedSessionTab(prev, { ...created, isActive: true }, afterTabId, {
+            afterParentGroup: hostCapabilities?.includes(
+              SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
+            )
+          })
         })
         if (typeof created.terminal === 'string') {
           const createdHandle = created.terminal

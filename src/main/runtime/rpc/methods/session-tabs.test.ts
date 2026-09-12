@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
 
@@ -493,6 +496,41 @@ describe('session tab RPC methods', () => {
         clientMutationId: 'create-1',
         clientNavigationId: 'device-a',
         navigation: 'caller'
+      })
+    )
+  })
+
+  it('passes split-group placement support to paired terminal creation', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal: vi.fn().mockResolvedValue({
+        tab: { type: 'terminal', id: 'tab-1::leaf-1' },
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('session.tabs.createTerminal', {
+        worktree: 'id:wt-1',
+        afterTabId: 'tab-1',
+        clientMutationId: 'create-1'
+      }),
+      () => {},
+      {
+        clientKind: 'runtime',
+        pairedDeviceId: 'device-a',
+        clientCapabilities: [SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY]
+      }
+    )
+
+    expect(runtime.createMobileSessionTerminal).toHaveBeenCalledWith(
+      'id:wt-1',
+      expect.objectContaining({
+        afterTabId: 'tab-1',
+        clientNavigationId: 'device-a',
+        supportsSplitGroupPlacement: true
       })
     )
   })

@@ -1,9 +1,6 @@
 import type WebSocket from 'ws'
 import type { E2EEKeypair } from '../e2ee-keypair'
-import type {
-  RelayConnectionOpenMessage,
-  RelayDrainMessage,
-} from './relay-control-protocol'
+import type { RelayConnectionOpenMessage, RelayDrainMessage } from './relay-control-protocol'
 
 export type RelayControlClientOptions = {
   cellUrl: string
