@@ -69,6 +69,7 @@ export type TerminalState = {
       }
       showSessionRestoredBanner?: boolean
       telemetry?: AgentStartedTelemetry
+      quickCommandSubmission?: boolean
     }
   >
   pendingInitialCwdByTabId: Record<string, string>

@@ -104,7 +104,8 @@ export function runQuickCommandInNewTab({
   })
 
   store.queueTabStartupCommand(tab.id, {
-    command: flattenTerminalQuickCommand(command).command
+    command: flattenTerminalQuickCommand(command).command,
+    quickCommandSubmission: true
   })
 
   // Why: match `+` button's createNewTerminalTab — without this, a worktree

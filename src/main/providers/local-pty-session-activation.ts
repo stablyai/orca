@@ -179,7 +179,8 @@ export function activateLocalPtySession(args: {
         readiness.setStartupCommandCleanup(cleanup)
       },
       {
-        bracketedPasteSafe
+        bracketedPasteSafe,
+        quickCommandSubmission: spawn.quickCommandSubmission === true
       }
     )
   }

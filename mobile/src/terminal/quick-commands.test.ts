@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
+  buildQuickCommandSubmission,
+  flattenTerminalQuickCommand
+} from '../../../src/shared/terminal-quick-commands'
+import {
   buildMobileQuickCommandLaunch,
   getQuickCommandDisplayPreview,
   getQuickCommandPreview,
@@ -27,14 +31,27 @@ describe('mobile quick-command launch', () => {
     expect(supportsMobileQuickCommands(['terminal.quick-commands.v1'])).toBe(true)
   })
 
-  it('joins multiline runnable commands with "; " to match desktop', () => {
+  it('preserves trailing LF for shell-ready mobile launch commands', () => {
+    const commandText = 'echo one\necho two\n'
+    expect(
+      buildQuickCommandSubmission(
+        flattenTerminalQuickCommand(command({ command: commandText })).command,
+        {
+          submit: '\r',
+          bracketedPasteSafe: true
+        }
+      )
+    ).toBe(`\x1b[200~${commandText}\x1b[201~\r`)
+  })
+
+  it('preserves multiline runnable commands to match desktop', () => {
     // Parity with desktop flattenTerminalQuickCommand: the same saved command
     // must run identically on desktop and mobile.
     expect(
       buildMobileQuickCommandLaunch(command({ command: 'cd app\nnpm install\nnpm test' }))
     ).toEqual({
       options: {
-        startupCommand: 'cd app; npm install; npm test',
+        startupCommand: 'cd app\nnpm install\nnpm test',
         startupCommandDelivery: 'shell-ready'
       }
     })

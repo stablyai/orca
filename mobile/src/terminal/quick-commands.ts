@@ -75,7 +75,7 @@ export function buildMobileQuickCommandLaunch(
     : {
         // Why: raw commands that resemble bare agent launches can otherwise
         // select the fast path and race slow native, WSL, or SSH shell startup.
-        // flattenTerminalQuickCommand joins multiline bodies exactly as desktop
+        // flattenTerminalQuickCommand normalizes multiline bodies exactly as desktop
         // does so the same saved command runs identically on both.
         options: {
           startupCommand: flattenTerminalQuickCommand(command).command,

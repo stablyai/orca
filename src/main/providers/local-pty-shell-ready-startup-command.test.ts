@@ -134,7 +134,6 @@ describe('writeStartupCommandWhenShellReady', () => {
     expect(proc._writes).toEqual(['codex\n'])
   })
 
-  // Why: multiline startup commands must be bracketed-paste wrapped (ESC[200~ … ESC[201~) so shells insert them literally instead of treating each LF as Enter.
   it('wraps a multiline startup command in bracketed paste when the shell supports it', async () => {
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     const proc = createMockProc()
@@ -182,5 +181,40 @@ describe('writeStartupCommandWhenShellReady', () => {
     await Promise.resolve()
 
     expect(proc._writes).toEqual([`${command}\n`])
+  })
+
+  it('preserves trailing LF inside quick-command bracketed paste submissions', async () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    const command = 'echo one\necho two\n'
+    writeStartupCommandWhenShellReady(ready, proc, command, () => {}, {
+      bracketedPasteSafe: true,
+      quickCommandSubmission: true
+    })
+
+    await ready
+    proc._emitData('\r\nuser@host % ')
+    vi.advanceTimersByTime(30)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~\n`])
+  })
+
+  it('submits Windows quick commands ending in LF with CR when bracketed paste is unavailable', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const proc = createMockProc()
+    const ready = Promise.resolve()
+    const command = 'git status\n'
+    writeStartupCommandWhenShellReady(ready, proc, command, () => {}, {
+      quickCommandSubmission: true
+    })
+
+    await ready
+    proc._emitData('\r\nPS C:\\repo> ')
+    vi.advanceTimersByTime(30)
+    await Promise.resolve()
+
+    expect(proc._writes).toEqual(['git status\r'])
   })
 })

@@ -1,3 +1,4 @@
+import { buildStartupCommandSubmission } from './startup-command-submission'
 import { isTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type {
   TerminalAgentQuickCommand,
@@ -247,26 +248,52 @@ export function applyTerminalQuickCommandMutation(
   return commands.map((command, index) => (index === existingIndex ? mutation.command : command))
 }
 
-export function buildTerminalQuickCommandInput(command: TerminalCommandQuickCommand): string {
-  return command.appendEnter ? `${command.command}\r` : command.command
+const BRACKETED_PASTE_START = '\x1b[200~'
+const BRACKETED_PASTE_END = '\x1b[201~'
+
+export function buildQuickCommandSubmission(
+  command: string,
+  options: { submit: string; bracketedPasteSafe: boolean }
+): string {
+  const { submit, bracketedPasteSafe } = options
+  // Why: quick-command scripts may end with an intentional trailing newline; agent
+  // launch strips that before bracketed paste, but saved command text must not.
+  if (bracketedPasteSafe && (command.includes('\n') || command.includes('\r'))) {
+    return `${BRACKETED_PASTE_START}${command}${BRACKETED_PASTE_END}${submit}`
+  }
+  const trailingTerminator = /\r\n$|\r$|\n$/.exec(command)?.[0] ?? ''
+  if (trailingTerminator && submit && trailingTerminator !== submit) {
+    return `${command.slice(0, -trailingTerminator.length)}${submit}`
+  }
+  return buildStartupCommandSubmission(command, { submit, bracketedPasteSafe })
+}
+
+export function buildTerminalQuickCommandInput(
+  command: TerminalCommandQuickCommand,
+  bracketedPasteSafe = true
+): string {
+  return buildQuickCommandSubmission(command.command, {
+    submit: command.appendEnter ? '\r' : '',
+    bracketedPasteSafe
+  })
 }
 
 const LINE_BREAK_RE = /\r\n|\r|\n/
 
-// Why: quick-command lines are independent shell commands; one shell command
-// list prevents foreground programs from reading later lines as stdin.
+// Why: multiline quick commands are shell scripts; newlines must survive intact
+// so continuations, grouped statements, and bracket tests stay valid.
 export function flattenTerminalQuickCommand(
   command: TerminalCommandQuickCommand
 ): TerminalCommandQuickCommand {
   if (!LINE_BREAK_RE.test(command.command)) {
     return command
   }
+  const normalized = command.command.replace(/\r\n|\r/g, '\n')
+  if (normalized === command.command) {
+    return command
+  }
   return {
     ...command,
-    command: command.command
-      .split(LINE_BREAK_RE)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .join('; ')
+    command: normalized
   }
 }
