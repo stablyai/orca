@@ -92,13 +92,30 @@ describe('reconcileSerializedMarkdown', () => {
     expect(reconciled).toBe(originalSource)
   })
 
-  it('falls back to canonical when either string exceeds the size cap (branch 3)', () => {
-    const big = 'line of text\n'.repeat(9000) // ~117 KB, above the size cap
-    const originalSource = `${big}_x_\n`
-    const edited = `${big}*x* y\n`
+  it('preserves untouched non-canonical bytes above the size cap via the line merge (branch 3, #16469)', () => {
+    // A large doc (over the cap) whose untouched region carries non-canonical style;
+    // the user edits one line far away. The old behavior re-canonicalized the whole
+    // file, corrupting untouched content; the line merge keeps it byte-for-byte.
+    const head = '_keep this emphasis_\n* bullet item\n'
+    const filler = 'line of text\n'.repeat(9000) // pushes the doc over the size cap
+    const originalSource = `${head}${filler}_edit me_\n`
+    const baseCanonical = fakeCanonicalize(originalSource)
+    const edited = fakeCanonicalize(originalSource).replace('*edit me*', '*edit me* now')
 
-    // Non-canonical source + real semantic change, but oversize → canonical fallback.
-    expect(reconcileWithFake(originalSource, edited)).toBe(edited)
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip
+    })
+
+    // Untouched non-canonical bytes survive even though the doc is oversize.
+    expect(reconciled).toContain('_keep this emphasis_')
+    expect(reconciled).toContain('* bullet item')
+    expect(reconciled).not.toContain('*keep this emphasis*')
+    expect(reconciled).not.toContain('- bullet item')
+    // The far-away edit is applied.
+    expect(reconciled).toContain('*edit me* now')
   })
 
   it('bounds diff work for replacement-heavy edits instead of using the 1s library default', () => {
@@ -141,9 +158,10 @@ describe('reconcileSerializedMarkdown', () => {
       })
 
       expect(reconciled).toBe(edited)
-      // The dependency reads the clock when diffing; zero reads proves the
-      // repetitive-input preflight returned before its unbounded half-match scan.
-      expect(dateNow).not.toHaveBeenCalled()
+      // The repetitive-input preflight returns before the char-level half-match scan;
+      // the lossless line-merge fallback only runs a bounded line diff (a handful of
+      // clock reads), never the dependency's unbounded per-character scan.
+      expect(dateNow.mock.calls.length).toBeLessThan(10)
     } finally {
       dateNow.mockRestore()
     }
