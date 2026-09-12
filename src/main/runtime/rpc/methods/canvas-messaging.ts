@@ -1,5 +1,9 @@
-import { z } from 'zod'
-import { canvasActorSchema, canvasSendSchema } from '../../../../shared/canvas-messaging'
+import {
+  canvasActorSchema,
+  canvasSendSchema,
+  canvasInboxSchema,
+  canvasHistorySchema
+} from '../../../../shared/canvas-messaging'
 import { getCanvasMessaging } from '../../canvas/canvas-messaging-runtime'
 import { defineMethod } from '../core'
 
@@ -18,7 +22,7 @@ export const CANVAS_MESSAGING_METHODS = [
   }),
   defineMethod({
     name: 'canvas.inbox',
-    params: canvasActorSchema.extend({ canvasId: z.string().min(1).max(16384) }),
+    params: canvasInboxSchema,
     handler: (params, { runtime }) => ({
       messages: getCanvasMessaging(runtime).inbox(
         params.canvasId,
@@ -29,7 +33,7 @@ export const CANVAS_MESSAGING_METHODS = [
   }),
   defineMethod({
     name: 'canvas.history',
-    params: z.object({ canvasId: z.string().min(1).max(16384) }),
+    params: canvasHistorySchema,
     handler: (params, { runtime }) => ({
       messages: getCanvasMessaging(runtime).journal.history(params.canvasId)
     })

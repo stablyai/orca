@@ -10,6 +10,7 @@ minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - pdfjs-dist@6.3.289
   - zod@4.5.4
+  - electron@43.7.0
 shamefullyHoist: true
 
 # Orca always launches the user's own resolved Claude CLI via
@@ -52,7 +53,7 @@ allowBuilds:
   windows-native-registry: false
 
 overrides:
-  monaco-editor>dompurify: 3.4.13
+  monaco-editor>dompurify: 3.4.14
 
 patchedDependencies:
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch

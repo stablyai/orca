@@ -176,8 +176,17 @@ describe('OrcaRuntimeService.fetchRemoteWithCache', () => {
     expect(caches.fetchLastCompletedAt.has('/repo/cache-0::origin')).toBe(false)
   })
 
-  it.each(['main', 'a'.repeat(40), 'refs/remotes/main', ''])(
-    'does not launch Git for a base without a remote/branch separator: %s',
+  it.each([
+    'main',
+    'a'.repeat(40),
+    'refs/remotes/main',
+    '',
+    'origin/',
+    '/main',
+    'refs/remotes/origin/',
+    'refs/remotes//main'
+  ])(
+    'does not launch Git for a base without both remote and branch components: %s',
     async (base) => {
       const runtime = new OrcaRuntimeService(null)
       await expect(runtime.resolveRemoteTrackingBase('/repo/e', base)).resolves.toBeNull()

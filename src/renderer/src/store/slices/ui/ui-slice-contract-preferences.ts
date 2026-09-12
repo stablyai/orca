@@ -73,6 +73,8 @@ export type UISlicePreferences = {
   setAgentsShowChildAgents: (v: boolean) => void
   agentsCompactMode: boolean
   setAgentsCompactMode: (v: boolean) => void
+  agentsShowSearch: boolean
+  setAgentsShowSearch: (v: boolean) => void
   agentsReadFilter: ThreadReadFilter
   setAgentsReadFilter: (v: ThreadReadFilter) => void
   agentsGroupBy: ActivityGroupBy
@@ -173,6 +175,10 @@ export type UISlicePersistence = {
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
+  /** App version that dismissed the unexpected-sign-out card; null = never dismissed. */
+  dismissedUnexpectedSignoutVersion: string | null
+  unexpectedSignoutDismissedVersions: string[]
+  dismissUnexpectedSignoutCard: (version: string) => void
   /** Dev-only channel override; null follows the running build's own channel. */
   releaseChannelOverride: ReleaseChannel | null
   setReleaseChannelOverride: (channel: ReleaseChannel | null) => void

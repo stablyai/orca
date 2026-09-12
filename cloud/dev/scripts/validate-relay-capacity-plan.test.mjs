@@ -756,6 +756,10 @@ test('the rehome protocol argument is required by same-cap-cell mode alone', () 
       .regionalRehomeProtocol,
     '0'
   )
+  assert.equal(
+    parseCapacityPlanArguments(sameCapArguments('--regional-rehome-protocol', '3')).regionalRehomeProtocol,
+    '3'
+  )
   assert.throws(
     () => parseCapacityPlanArguments(sameCapArguments()),
     /requires rollback image and rehome trust config/

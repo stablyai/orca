@@ -9,6 +9,7 @@ import {
   evaluateIncidentSample,
   FRESHNESS_FAILURE_CODES,
   preDrainDryRunPassed,
+  type IncidentFailure,
   type IncidentSample
 } from './incident-monitor.js'
 import { createIncidentSampleCollector } from './incident-monitor-sources.js'
@@ -68,6 +69,17 @@ const PreflightStateSchema = z.object({
     })
   }
 })
+
+// Keep the source/code prefix other tooling matches on, then name the signal and
+// its numbers so a frozen wave is attributable without re-reading the sample.
+function describeFailure(failure: IncidentFailure): string {
+  const detail = [
+    failure.signal,
+    failure.observed === undefined ? null : `observed=${failure.observed}`,
+    failure.threshold === undefined ? null : `threshold=${failure.threshold}`
+  ].filter((part): part is string => part !== null && part !== undefined)
+  return [`${failure.source}/${failure.code}`, ...detail].join(' ')
+}
 
 export async function runIncidentLivePreflight(
   argv: string[],
@@ -175,7 +187,7 @@ export async function runIncidentLivePreflight(
     if (!freshnessOnly || attempt === attempts || budgetExhausted) {
       throw new Error(
         `relay live preflight failed: ${evaluation.failures
-          .map((failure) => `${failure.source}/${failure.code}`)
+          .map(describeFailure)
         .join(',')}`
       )
     }

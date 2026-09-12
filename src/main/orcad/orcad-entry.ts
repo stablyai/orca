@@ -5,7 +5,7 @@
  * desktop uses, installs a PTY controller via `registerHeadlessPtyRuntime`, and
  * serves runtime RPC. See docs/design/node-only-runtime-backend.html.
  *
- * Desktop UI surfaces stay uninstalled: no notifications, no renderer window. The
+ * Desktop UI surfaces stay uninstalled: no native notifications, no renderer window. The
  * renderer window is faked as a destroyed one because `registerPtyHandlers` takes a
  * non-null `BrowserWindow`. Browser automation is different — it is installed through
  * the runtime factory, but only when an Electron serve sidecar or an operator-supplied
@@ -16,18 +16,15 @@ import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environ
 import { setSecretStore, type SecretStore } from '../../shared/secret-store'
 import type { ServeReadiness } from '../server/serve-readiness'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
-import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
+import { resolveOrcadBrowserProvider } from './orcad-browser-provider'
 import { resolveOrcadInstallRoot, resolveOrcadPath, resolveUserDataPath } from './orcad-app-paths'
 import {
   describeOrcadBindExposure,
   OrcadBindAddressError,
   resolveOrcadBindHost
 } from './orcad-bind-address'
-import {
-  acquireOrcadInstanceLock,
-  OrcadInstanceLockError,
-  type OrcadInstanceLock
-} from './orcad-instance-lock'
+import { acquireOrcadInstanceLock, OrcadInstanceLockError } from './orcad-instance-lock'
+import { startOrcadWithLifecycle } from './orcad-lifecycle'
 
 let runOrcadQuitHandlers = (): void => {}
 
@@ -116,22 +113,24 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
     headless: browserProvider !== null,
     ...(browserProvider ? { isAvailable: () => browserProvider.isAvailable() } : {})
   })
-  try {
-    return await startOrcadRuntime(options, browserProvider, instanceLock)
-  } catch (error) {
-    await browserProvider?.stop()
-    setRuntimeBrowserCommandsFactory(null)
-    runOrcadQuitHandlers()
-    instanceLock.release()
-    throw error
-  }
+  return startOrcadWithLifecycle(
+    (registerCleanup) => startOrcadRuntime(options, registerCleanup),
+    async () => {
+      try {
+        await browserProvider?.stop()
+      } finally {
+        setRuntimeBrowserCommandsFactory(null)
+        runOrcadQuitHandlers()
+        instanceLock.release()
+      }
+    }
+  )
 }
 
 async function startOrcadRuntime(
   options: OrcadOptions,
-  browserProvider: OrcadBrowserProvider | null,
-  instanceLock: OrcadInstanceLock
-): Promise<OrcadHandle> {
+  registerCleanup: (cleanup: () => Promise<void>) => void
+): Promise<Pick<OrcadHandle, 'readiness'>> {
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const { OrcaRuntimeRpcServer } = await import('../runtime/runtime-rpc')
   const { registerHeadlessPtyRuntime, getLocalPtyProvider, getSshPtyProvider } =
@@ -146,10 +145,41 @@ async function startOrcadRuntime(
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
   const { collectOrcadHealth } = await import('./orcad-health')
+  // Why importable here: the singleton's module tree never reaches Electron, and orcad supplies
+  // its persistence and endpoint paths explicitly below.
+  const { agentHookServer } = await import('../agent-hooks/server')
+  const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
+  const { installHookStatusSessionTabsRepublish } =
+    await import('../agent-hooks/hook-status-session-tabs-republish')
+  const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
+    await import('../runtime/agent-status-observed-pane-identity')
+
+  let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
+  let uninstallHookStatusRepublish = (): void => {}
+  let uninstallObservedStatusIdentity = (): void => {}
+  registerCleanup(async () => {
+    try {
+      await rpc?.stop()
+    } finally {
+      try {
+        // Why disconnect and not shut down: the daemon must outlive this process, or an
+        // orcad restart goes back to killing every running terminal.
+        await stopOrcadDaemon()
+      } finally {
+        uninstallObservedStatusIdentity()
+        uninstallHookStatusRepublish()
+        agentHookServer.stop()
+      }
+    }
+  })
+  const { DesktopPushService } = await import('../runtime/push/desktop-push-service')
+  const { resolvePushGatewayOrigin } = await import('../runtime/push/push-gateway-origin')
 
   const runtimeUserDataPath = getAppEnvironment().getPath('userData')
   initOrcaProfilePaths()
   const profile = ensureActiveOrcaProfile(runtimeUserDataPath)
+  const observedPaneIdentities = new AgentStatusObservedPaneIdentities()
+  const observedStatusCapture = new AgentStatusObservedPaneIdentityCapture(observedPaneIdentities)
   // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`
   // and the read paths that use `this.store?.x ?? []` quietly answer "empty" instead —
   // a server that pairs and lists nothing looks healthy and is not.
@@ -159,6 +189,13 @@ async function startOrcadRuntime(
   // Why: every SSH connect consults this sidecar. Left unbound it reports nothing trusted,
   // which is safe but silently discards accept records on every launch.
   initSshHostKeyStoreFile(profile.dataFile)
+
+  uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
+    observedStatusCapture.observe(enriched)
+  )
+  if (isAgentStatusHooksEnabled(store.getSettings())) {
+    await agentHookServer.start({ env: 'production', userDataPath: runtimeUserDataPath })
+  }
 
   // Why before the runtime and the PTY handlers: `setLocalPtyProvider` installs the daemon
   // adapter as THE local provider, and the registry's contract is that it lands before
@@ -180,8 +217,37 @@ async function startOrcadRuntime(
     // Why 'blocked': `'openable'` means a desktop window can be opened here, which is
     // what powers serve→desktop promotion. A Node host can never do that, and the
     // constructor's default would advertise it.
-    getDesktopWindowStatus: () => 'blocked'
+    getDesktopWindowStatus: () => 'blocked',
+    // Why here too and not only on the desktop: main's OSC parse is the only producer for a
+    // PTY agent on this host, and the store is the only place `worktree.ps` and the mobile
+    // projection read from — unwired, orcad lists no PTY agents at all.
+    onTerminalAgentStatus: (event) => agentHookServer.ingestTerminalStatus(event),
+    // Why here too and not only on the desktop: orcad serves `worktree.ps` and `agentSession.*`,
+    // so without these a headless host publishes its structured chats nowhere and lists no agents.
+    getAgentStatusSnapshot: () =>
+      agentHookServer.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+    getAgentProviderSessionSnapshot: () => agentHookServer.getStatusSnapshot(),
+    getAgentProviderSessionRowsForPane: (paneKey) =>
+      agentHookServer.getStatusSnapshotForPane(paneKey),
+    // Why captured rather than resolved at read: the fleet snapshot remints cached rows on every
+    // read, so a row observed under one process otherwise acquires whatever process owns the pane now.
+    readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
+    structuredAgentStatusSink: {
+      publish: (summary) => agentHookServer.ingestStructuredStatus(summary),
+      forget: (sessionId) => agentHookServer.dropStructuredStatus(sessionId)
+    },
+    reconcileAgentStatusForEndedProcess: (paneKeys) =>
+      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys),
+    buildAgentHookPtyEnv: () =>
+      isAgentStatusHooksEnabled(store.getSettings()) ? agentHookServer.buildPtyEnv() : {}
   })
+
+  // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a
+  // pane's status row changes, and orcad's whole job is serving paired clients.
+  uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
+    agentHookServer,
+    () => runtime
+  )
 
   // Why the headless entry point rather than registerPtyHandlers directly: this is the
   // same call `--serve` makes, and it threads the store through. Without the store the
@@ -200,8 +266,11 @@ async function startOrcadRuntime(
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
 
+  // Recovery binds terminal and dispatch identities; only now can startup observations be fenced.
+  observedStatusCapture.attach(runtime)
+
   const bindHost = resolveOrcadBindHost(options.bind)
-  const rpc = new OrcaRuntimeRpcServer({
+  rpc = new OrcaRuntimeRpcServer({
     runtime,
     userDataPath: runtimeUserDataPath,
     enableWebSocket: true,
@@ -213,6 +282,13 @@ async function startOrcadRuntime(
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
   await rpc.start()
+  const pushService = DesktopPushService.create({
+    runtime,
+    runtimeRpc: rpc,
+    gatewayUrl: resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged())
+  })
+  pushService?.start()
+  getAppEnvironment().onWillQuit(() => pushService?.stop())
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 
   const boundEndpoint = rpc.getWebSocketEndpoint()
@@ -259,23 +335,7 @@ async function startOrcadRuntime(
     mode: options.json ? 'json' : 'human'
   })
 
-  return {
-    readiness,
-    stop: async () => {
-      try {
-        await rpc.stop()
-      } finally {
-        // Why disconnect and not shut down: the daemon must outlive this process, or an
-        // orcad restart goes back to killing every running terminal. See
-        // orcad-daemon-supervision.ts.
-        await stopOrcadDaemon()
-        await browserProvider?.stop()
-        setRuntimeBrowserCommandsFactory(null)
-        runOrcadQuitHandlers()
-        instanceLock.release()
-      }
-    }
-  }
+  return { readiness }
 }
 
 export function parseArgs(argv: string[]): OrcadOptions {

@@ -202,6 +202,11 @@ function findChildrenByType(node: unknown, typeName: string): ReactElementLike[]
     if (matchedName === typeName) {
       results.push(el)
     }
+    if (matchedName === 'TabBarStaticCreateMenu' && typeof el.type === 'function') {
+      // Expand the deferred pure menu component in this shallow renderer.
+      visit(el.type(el.props))
+      return
+    }
     if (el.props && 'children' in el.props) {
       visit(el.props.children)
     }

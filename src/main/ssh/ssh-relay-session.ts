@@ -640,6 +640,8 @@ export class SshRelaySession {
       // claim another connection holds. Notify the callback but still rethrow.
       // RelayEndpointHeldError is terminal for the same reason: a live incumbent owns the
       // socket path, and backoff cannot make it hand it over. The user resolves it.
+      // RelayEndpointUnresponsiveError is deliberately NOT here: a relay that never answered
+      // may be stalled, and silence is not a decision — it falls through to retry.
       if (
         isRelayVersionMismatchError(err) ||
         isRelayEndpointHeldError(err) ||
@@ -1118,11 +1120,18 @@ export class SshRelaySession {
     if (consumerOwnerState?.outputFlowControl) {
       this.sourceAckPublisherCleanup = installSshPtySourceAckPublisher(
         providerGeneration,
+        // ACK delivery is idempotent and re-derived from credit state, so it consumes
+        // the two-valued projection of the write settlement rather than the three arms.
         (batch, onSettled) =>
           mux.notifyWithSettlement(
             'pty.ackData',
             batch as unknown as Record<string, unknown>,
-            onSettled
+            (settlement) =>
+              onSettled(
+                settlement.outcome === 'accepted'
+                  ? { ok: true }
+                  : { ok: false, error: settlement.error }
+              )
           )
       )
       this.sourceCancellationPublisherCleanup = installSshPtySourceCancellationPublisher(
@@ -1670,10 +1679,9 @@ export class SshRelaySession {
 
     if (reason === 'shutdown') {
       clearPtyOwnershipForConnection(this.targetId)
-    } else {
-      // Why: handlers detached above, so no late event can re-stamp status between this clear and reconnect replay.
-      agentHookServer.clearStatusEntriesForConnection(this.targetId)
     }
+    // Connection loss makes remote status unverifiable, not exited. Keep the last observation;
+    // replay or certified process teardown will update or remove it on the execution host.
 
     const ptyProvider = getSshPtyProvider(this.targetId)
     if (ptyProvider && 'dispose' in ptyProvider) {

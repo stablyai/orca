@@ -91,8 +91,8 @@ export function SourceControlBranchSection({
           <Button
             type="button"
             variant="ghost"
-            size="sm"
-            className="h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+            size="xs"
+            className="px-1.5 text-muted-foreground hover:text-foreground"
             onClick={(e) => {
               e.stopPropagation()
               if (currentWorktreeId && worktreePath && branchSummary) {

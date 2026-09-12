@@ -72,6 +72,11 @@ function clearCloudSessionIfUnchanged(
   if (current.status === 'found' && current.session.refreshToken !== failed.refreshToken) {
     return
   }
+  // A session we were denied is not a session we may delete: the token we would be clearing might
+  // not even be the one that failed, and `clearOrcaCloudSession` unlinks the file outright.
+  if (current.status === 'unreadable') {
+    return
+  }
   if (active.profile.cloud) {
     tombstoneCloudSession(
       cloudSessionIdentity(active.profile.id, active.profile.cloud),

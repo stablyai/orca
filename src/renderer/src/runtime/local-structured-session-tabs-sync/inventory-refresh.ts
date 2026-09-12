@@ -21,9 +21,13 @@ export function restoreLocalStructuredSessionTabsOnce(
   )
 }
 
-/** Fetch the current host inventory even after the startup restore has settled. */
+/** Fetch the current host inventory even after the startup restore has settled.
+ *
+ *  `authoritative` is opt-in and belongs to the repair lane alone: the startup restore stays
+ *  fenced exactly as before, so nothing about first paint changes. */
 export function refreshLocalStructuredSessionTabs(
-  expectedGeneration = localStructuredSessionGeneration()
+  expectedGeneration = localStructuredSessionGeneration(),
+  options: { authoritative?: boolean } = {}
 ): Promise<RuntimeMobileSessionTabsResult[]> {
   return window.api.runtime
     .call({ method: 'session.tabs.listAll', params: {} })
@@ -34,7 +38,7 @@ export function refreshLocalStructuredSessionTabs(
       const result = response.result as { snapshots?: RuntimeMobileSessionTabsResult[] }
       const snapshots = result.snapshots ?? []
       if (isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
-        applyStructuredSessionTabSnapshots(snapshots)
+        applyStructuredSessionTabSnapshots(snapshots, undefined, options)
       }
       return snapshots
     })

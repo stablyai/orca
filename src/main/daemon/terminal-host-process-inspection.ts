@@ -1,4 +1,5 @@
 import { isShellProcess } from '../../shared/agent-detection'
+import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { RemoteForegroundEvidence } from '../../shared/foreground-process-evidence'
 import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
 import { getStrictProcessTableSnapshotWithAge } from '../../shared/process-table-snapshot-reader'
@@ -100,9 +101,16 @@ export async function inspectTerminalHostProcess(args: {
       clearSteadyStateAnchor(session)
     }
   }
+  const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
+  // Evidence names recognized agents only, so its null must not erase an ordinary command (#18078).
+  const ordinaryForeground =
+    nonShellForeground && !recognizeAgentProcess(foregroundProcess) ? foregroundProcess : null
   return {
-    foregroundProcess: evidence.verdict === 'live' ? evidence.processName : foregroundProcess,
-    hasChildProcesses: foregroundProcess !== null && !isShellProcess(foregroundProcess),
+    foregroundProcess:
+      evidence.verdict === 'live'
+        ? (evidence.processName ?? ordinaryForeground)
+        : foregroundProcess,
+    hasChildProcesses: nonShellForeground,
     foregroundProcessEvidence: evidence
   }
 }

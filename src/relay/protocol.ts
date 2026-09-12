@@ -41,6 +41,9 @@ export type HandshakeMessage =
   | { type: 'orca-relay-handshake'; version: string; endpointCredential?: string }
   | { type: 'orca-relay-handshake-ok'; version: string }
   | { type: 'orca-relay-handshake-mismatch'; expected: string; got: string }
+  // Why a distinct reply: the bridge exits with its own code so the client can tell a refused
+  // credential from a crashed relay. Old bridges reject the unknown type and exit 1 pre-sentinel.
+  | { type: 'orca-relay-handshake-credential-mismatch' }
 
 export function encodeHandshakeFrame(msg: HandshakeMessage): Buffer {
   const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
@@ -53,7 +56,8 @@ export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
   if (
     t !== 'orca-relay-handshake' &&
     t !== 'orca-relay-handshake-ok' &&
-    t !== 'orca-relay-handshake-mismatch'
+    t !== 'orca-relay-handshake-mismatch' &&
+    t !== 'orca-relay-handshake-credential-mismatch'
   ) {
     throw new Error(`Unknown handshake type: ${t}`)
   }

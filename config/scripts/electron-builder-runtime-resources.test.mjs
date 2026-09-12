@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve } from 'node:path'
+import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
@@ -35,6 +35,135 @@ describe('packaged runtime resources', () => {
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `\\${entry}`),
+        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('verifies literal dynamic imports from the packaged main bundle', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-dynamic-imports-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      // The first is the exact shape oxc emits for the memoized SDK import in a
+      // shipped build; the second is the spaced variant the pattern also accepts.
+      const sources = new Map([
+        [
+          'out/main/index.js',
+          'let p=null;function q(){return p??=import(`@anthropic-ai/claude-agent-sdk`),p}'
+        ],
+        [
+          'out/main/agent-hooks/managed-agent-hook-controls.js',
+          'import (`@anthropic-ai/claude-agent-sdk`)'
+        ]
+      ])
+      const asar = {
+        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
+        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(
+        /@anthropic-ai\/claude-agent-sdk/
+      )
+
+      await mkdir(join(resourcesDir, 'node_modules', '@anthropic-ai', 'claude-agent-sdk'), {
+        recursive: true
+      })
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('still fails when a required packaged main entry is missing entirely', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-missing-entry-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      const asar = {
+        listPackage: () => ['/out/main/index.js'],
+        extractFile: () => Buffer.from('', 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(
+        /managed-agent-hook-controls\.js was not found/
+      )
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('verifies bare imports that rolldown hoisted into a shared main chunk', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-chunk-imports-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      // The entry points themselves carry no specifier; only the shared chunk does.
+      const sources = new Map([
+        ['out/main/index.js', ''],
+        ['out/main/agent-hooks/managed-agent-hook-controls.js', ''],
+        ['out/main/chunks/managed-agent-hook-controls-CWf8D-KR.js', 'require(`jsonc-parser`)']
+      ])
+      // Real listPackage emits directory nodes too, and extractFile throws on them,
+      // so the `.js` anchor is load-bearing -- keep the mock able to catch that.
+      const directories = ['/out', '/out/main', '/out/main/chunks']
+      const asar = {
+        listPackage: () => [...directories, ...[...sources.keys()].map((entry) => `/${entry}`)],
+        extractFile: (_asarPath, internalPath) => {
+          const source = sources.get(internalPath)
+          if (source === undefined) {
+            throw new Error(`Expected to find file at: ${internalPath} but found a directory`)
+          }
+          return Buffer.from(source, 'utf8')
+        }
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(/jsonc-parser/)
+
+      await mkdir(join(resourcesDir, 'node_modules', 'jsonc-parser'), { recursive: true })
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).not.toThrow()
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a spread require, whose leading dots are not member access', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-spread-require-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      const sources = new Map([
+        ['out/main/index.js', 'const all=[...require("jsonc-parser")]'],
+        ['out/main/agent-hooks/managed-agent-hook-controls.js', '']
+      ])
+      const asar = {
+        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
+        extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
+      }
+
+      expect(() => verifyPackagedMainRuntimeDeps(resourcesDir, asar)).toThrow(/jsonc-parser/)
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('ignores member calls onto Orca methods that are themselves named require', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-member-require-'))
+    try {
+      await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
+
+      // electron-sidecar-tab-registry and browser-execution-host-grant-registry both
+      // expose require(key); a literal key must never read as a packaged specifier.
+      const sources = new Map([
+        ['out/main/index.js', 'registry.require("public-a");grants.require(`host-key`)'],
+        ['out/main/agent-hooks/managed-agent-hook-controls.js', 'state.import("android-sdk")']
+      ])
+      const asar = {
+        listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
         extractFile: (_asarPath, internalPath) => Buffer.from(sources.get(internalPath), 'utf8')
       }
 
@@ -132,6 +261,15 @@ describe('packaged runtime resources', () => {
       )
     ).toBe(true)
     expect(packagedTargets).toContain(join('node_modules', 'proper-lockfile'))
+  })
+
+  it('includes the Claude agent SDK in every desktop package plan', () => {
+    for (const platform of ['darwin', 'linux', 'win32']) {
+      const packagedTargets = createPackagedRuntimeNodeModuleResources(platform).map(
+        (resource) => resource.to
+      )
+      expect(packagedTargets).toContain(join('node_modules', '@anthropic-ai', 'claude-agent-sdk'))
+    }
   })
 
   it('prunes non-target @parcel/watcher architecture subpackages', async () => {
@@ -248,6 +386,72 @@ describe('packaged runtime resources', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'prunes non-target native packages before the Linux glibc gate',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-after-pack-prune-order-'))
+      const previousPath = process.env.PATH
+      try {
+        const appOutDir = join(root, 'linux-unpacked')
+        const resourcesDir = join(appOutDir, 'resources')
+        await cp(
+          join(process.cwd(), 'resources', 'plugins', 'launch'),
+          join(resourcesDir, 'plugins', 'launch'),
+          { recursive: true }
+        )
+
+        const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
+        await mkdir(unpackedMainDir, { recursive: true })
+        await writeFile(join(unpackedMainDir, 'daemon-entry.js'), '', 'utf8')
+        await writeFile(
+          join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json'),
+          `${JSON.stringify({ name: 'orca-compiled-output', type: 'commonjs', private: true })}\n`,
+          'utf8'
+        )
+
+        const unpackedCliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+        await mkdir(join(unpackedCliDir, 'handlers'), { recursive: true })
+        await writeFile(join(unpackedCliDir, 'handlers', 'skills.js'), '', 'utf8')
+        await writeFile(join(unpackedCliDir, 'index.js'), '', 'utf8')
+
+        const target =
+          process.arch === 'x64'
+            ? { electronArch: 3, machine: 0xb7, nonTarget: 'x64' }
+            : { electronArch: 1, machine: 0x3e, nonTarget: 'arm64' }
+        const wrongArchPackage = join(
+          resourcesDir,
+          'node_modules',
+          '@parcel',
+          `watcher-linux-${target.nonTarget}-glibc`
+        )
+        await mkdir(wrongArchPackage, { recursive: true })
+        const wrongArchElf = Buffer.alloc(20)
+        wrongArchElf.set([0x7f, 0x45, 0x4c, 0x46])
+        wrongArchElf[5] = 1
+        wrongArchElf.writeUInt16LE(target.machine, 18)
+        await writeFile(join(wrongArchPackage, 'watcher.node'), wrongArchElf)
+
+        const stubBinDir = join(root, 'bin')
+        await mkdir(stubBinDir)
+        await writeFile(join(stubBinDir, 'objdump'), '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+        process.env.PATH = `${stubBinDir}${delimiter}${previousPath ?? ''}`
+
+        await expect(
+          electronBuilderConfig.afterPack({
+            appOutDir,
+            electronPlatformName: 'linux',
+            arch: target.electronArch,
+            packager: { appInfo: { version: '9.9.9' } }
+          })
+        ).resolves.toBeUndefined()
+        await expect(stat(wrongArchPackage)).rejects.toMatchObject({ code: 'ENOENT' })
+      } finally {
+        process.env.PATH = previousPath
+        await rm(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'marks packaged Unix CLI launchers executable',

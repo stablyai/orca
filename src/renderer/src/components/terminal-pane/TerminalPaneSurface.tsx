@@ -9,7 +9,7 @@ import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
 import { isPaneOwnerUnverifiedError, TerminalErrorToast } from './TerminalErrorToast'
 import { requestTerminalPaneRecovery } from './terminal-pane-recovery'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
-import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
+import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { SessionRestoredBannerPortals } from './SessionRestoredBannerPortals'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
@@ -48,6 +48,7 @@ export function TerminalPaneSurface({
     dismissTerminalError,
     expectedLayoutLeafIdsAttr,
     expandedPaneId,
+    effectiveChatViewMode,
     handleCancelClose,
     handleConfirmClose,
     handleContextMenuToggleNativeChat,
@@ -117,6 +118,7 @@ export function TerminalPaneSurface({
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
         data-terminal-tab-id={tabId}
+        data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
@@ -174,7 +176,10 @@ export function TerminalPaneSurface({
                       return requestTerminalPaneRecovery({
                         tabId,
                         ptyId,
-                        reason: 'reattach-unverifiable'
+                        reason: 'reattach-unverifiable',
+                        // The user asking again is the new trigger that reopens
+                        // a reason an observed failure has closed.
+                        trigger: 'user'
                       }).then((recovered) => {
                         if (recovered) {
                           dismissTerminalError()
@@ -260,10 +265,7 @@ export function TerminalPaneSurface({
         canCopyAgentSessionId={menuAgentSessionId !== null}
         onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
       />
-      <TerminalLinkActionPopover
-        request={terminalLinkActionRequest}
-        onClose={closeTerminalLinkActions}
-      />
+      <LinkActionPopover request={terminalLinkActionRequest} onClose={closeTerminalLinkActions} />
       {quickCommandEditorOpen ? (
         <TerminalQuickCommandEditorDialog
           command={quickCommandDraft}

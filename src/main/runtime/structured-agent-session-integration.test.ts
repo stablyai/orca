@@ -290,6 +290,7 @@ beforeEach(async () => {
   configuredCodexProfile = 'configured'
   const runtime = {
     getRuntimeId: () => 'runtime-1',
+    getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     resolveStructuredAgentSessionCreateIntent: async () => {
       const {
@@ -660,8 +661,10 @@ describe('a structured codex session over agentSession.*', () => {
     expect(older.page.hasOlder).toBe(false)
     // Every step of the conversation, in order, from the durable journal alone —
     // no page overlaps another, and nothing the live stream showed is missing.
+    // The turn's lifecycle row outlives the turn: it is revised, never tombstoned.
     expect([...older.page.items, ...tail.page.items].map((item) => item.body?.kind)).toEqual([
       'message',
+      'status',
       'message',
       'tool-call',
       'approval',
@@ -670,6 +673,7 @@ describe('a structured codex session over agentSession.*', () => {
     ])
     expect([...older.page.items, ...tail.page.items].map(textOf)).toEqual([
       'list files',
+      '',
       'Two files.',
       '',
       '',

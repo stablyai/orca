@@ -111,6 +111,33 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     }
   })
 
+  it('quietly distinguishes present and absent branch refs', async () => {
+    const head = (await runGit(['rev-parse', 'HEAD'])).stdout.trim()
+    await runGit(['branch', 'quiet-probe-present', head])
+    await expect(
+      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-present'])
+    ).resolves.toMatchObject({ stdout: `${head}\n`, stderr: '' })
+    await expect(
+      runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-absent'])
+    ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
+  })
+
+  it('distinguishes an absent branch from a ref pointing at a missing object', async () => {
+    const missingObject = 'a'.repeat(40)
+    const refPath = join(repoPath, '.git', 'refs', 'heads', 'quiet-probe-dangling')
+    await writeFile(refPath, `${missingObject}\n`)
+    try {
+      await expect(
+        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling'])
+      ).resolves.toMatchObject({ stdout: `${missingObject}\n`, stderr: '' })
+      await expect(
+        runGit(['rev-parse', '--verify', '--quiet', 'refs/heads/quiet-probe-dangling^{commit}'])
+      ).rejects.toMatchObject({ code: 1, stdout: '', stderr: '' })
+    } finally {
+      await rm(refPath)
+    }
+  })
+
   it('recognizes worktree-list and rev-parse compatibility boundaries', async () => {
     await expectPreferredOrRecognizedFallback(
       ['worktree', 'list', '--porcelain', '-z'],
@@ -175,6 +202,16 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     const remaining = await runGit(['worktree', 'list', '--porcelain'])
     expect(remaining.stdout).not.toContain('deferred-wt')
     await rm(join(repoPath, 'deferred-trash'), { recursive: true, force: true })
+  })
+
+  it('removes locked prepared worktrees without a separate unlock', async () => {
+    await runGit(['worktree', 'add', '--detach', '--no-checkout', 'compat-discard', 'HEAD'])
+    await runGit(['-C', 'compat-discard', 'reset', '--hard', 'HEAD'])
+    await runGit(['worktree', 'lock', '--reason', 'owned preparation', 'compat-discard'])
+    await runGit(['worktree', 'remove', '--force', '--force', 'compat-discard'])
+    expect((await runGit(['worktree', 'list', '--porcelain'])).stdout).not.toContain(
+      'compat-discard'
+    )
   })
 
   it('supports prepared worktree creation and finalization', async () => {

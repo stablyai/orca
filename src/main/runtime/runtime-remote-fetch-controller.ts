@@ -231,7 +231,7 @@ export class RuntimeRemoteFetchController {
       ? baseBranch.slice(remoteRefPrefix.length)
       : baseBranch
     // A remote-tracking base needs both a configured remote and a branch component.
-    if (!shortBaseBranch.includes('/')) {
+    if (shortBaseBranch.indexOf('/') <= 0 || shortBaseBranch.endsWith('/')) {
       return null
     }
     let remotes: string[]

@@ -3,6 +3,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionTurnActivity } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
@@ -26,7 +27,18 @@ export type StructuredAgentSessionAppendOptions = {
   coalescingKey?: string
   /** Marks a critical lifecycle operation for lifecycle barriers and diagnostics. */
   lifecycle?: boolean
+  /** Host clock to stamp on the row instead of its append time. */
+  observedAt?: number
 }
+
+export type StructuredAgentSessionLifecycleJournal = Pick<
+  AgentSessionJournal,
+  'epoch' | 'visitItems'
+>
+
+export type StructuredAgentSessionLifecycleIdentityResolver = (
+  journal: StructuredAgentSessionLifecycleJournal
+) => AgentJournalItemIdentity | null
 
 export type StructuredAgentSessionEventSink = {
   appendItem(
@@ -43,11 +55,20 @@ export type StructuredAgentSessionEventSink = {
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
   publish(options?: StructuredAgentSessionAppendOptions): void
+  setActivity?(activity: AgentSessionTurnActivity | null): void
   tryAppendItem?(
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
+  /** Queues one journal-derived lifecycle append; a null resolution is a no-op. */
+  tryAppendLifecycleTransition?(
+    identitySizeBound: AgentJournalItemIdentity,
+    body: AgentJournalItemBody,
+    resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver
+  ): StructuredAgentSessionSinkAdmission
+  /** Current durable epoch, when this deferred sink is bound to its journal. */
+  journalEpoch?(): string | null
   appendLifecycleBatch?(
     settlementId: string,
     mutations: readonly JournalLifecycleMutationInput[],
@@ -66,7 +87,7 @@ export type StructuredAgentSessionEventSink = {
 export type StructuredAgentSessionEventTarget = {
   journal: AgentSessionJournal
   fence: number
-  publish: () => void
+  publish: (activity?: AgentSessionTurnActivity | null) => void
 }
 
 export type DeferredStructuredAgentSessionEventSink = {
@@ -160,7 +181,11 @@ export function createDeferredStructuredAgentSessionEventSink(
           {
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
-            run: (bound) => bound.journal.appendItem(identity, body, { fence: bound.fence })
+            run: (bound) =>
+              bound.journal.appendItem(identity, body, {
+                fence: bound.fence,
+                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
+              })
           },
           options
         )
@@ -170,10 +195,36 @@ export function createDeferredStructuredAgentSessionEventSink(
           {
             bytes: estimateStructuredAgentSessionItemBytes(identity, body),
             coalescingKey: options.coalescingKey,
-            run: (bound) => bound.journal.appendItem(identity, body, { fence: bound.fence })
+            run: (bound) =>
+              bound.journal.appendItem(identity, body, {
+                fence: bound.fence,
+                ...(options.observedAt === undefined ? {} : { observedAt: options.observedAt })
+              })
           },
           options
         ),
+      tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity) => {
+        const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
+        return queue.submit(
+          {
+            bytes,
+            lifecycle: true,
+            run: async (bound) => {
+              const identity = resolveIdentity(bound.journal)
+              if (identity === null) {
+                return
+              }
+              if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
+                throw new Error('structured agent-session item identity exceeded its reserved size')
+              }
+              await bound.journal.appendItem(identity, body, { fence: bound.fence })
+              bound.publish()
+            }
+          },
+          { lifecycle: true }
+        )
+      },
+      journalEpoch: queue.journalEpoch,
       appendLifecycleBatch: (settlementId, mutations, options = {}) => {
         const admission = appendLifecycleBatch(settlementId, mutations, options)
         if (!admission.accepted) {
@@ -208,6 +259,13 @@ export function createDeferredStructuredAgentSessionEventSink(
         ),
       publish: (options = {}) => {
         publish(options)
+      },
+      setActivity: (activity) => {
+        queue.submit({
+          bytes: Buffer.byteLength(JSON.stringify(activity), 'utf8') + 64,
+          coalescingKey: 'turn-activity',
+          run: (bound) => bound.publish(activity)
+        })
       },
       tryPublish: publish
     },

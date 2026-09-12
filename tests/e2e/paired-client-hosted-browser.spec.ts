@@ -151,13 +151,19 @@ async function waitForMirroredBrowserPage(
   worktreeId: string,
   url: string
 ): Promise<MirroredBrowserPage> {
+  let mirrored: MirroredBrowserPage | null = null
   await expect
-    .poll(() => findMirroredBrowserPage(page, worktreeId, url), {
-      timeout: 20_000,
-      message: `paired client never materialized ${url}`
-    })
+    .poll(
+      async () => {
+        mirrored = await findMirroredBrowserPage(page, worktreeId, url)
+        return mirrored
+      },
+      {
+        timeout: 20_000,
+        message: `paired client never materialized ${url}`
+      }
+    )
     .not.toBeNull()
-  const mirrored = await findMirroredBrowserPage(page, worktreeId, url)
   if (!mirrored) {
     throw new Error(`Mirrored browser page disappeared for ${url}`)
   }

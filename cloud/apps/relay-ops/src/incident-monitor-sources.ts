@@ -558,6 +558,7 @@ export async function directorSignals(
     selector,
     cells: statuses.map(({ cell }) => ({
       cellId: cell.cellId,
+      region: cell.region,
       runtimeKnown: true,
       powered: true,
       expectedAdmissionState: selectorCellState(expectedSelector, cell.cellId)

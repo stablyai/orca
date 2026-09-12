@@ -46,9 +46,12 @@ export async function cancelClaudeTurn(
 export async function stopClaudeBackgroundTasks(
   session: ClaudeSession,
   timeoutMs: number | undefined,
-  isCurrent: ClaudeTurnCancellationGuard = () => true
+  isCurrent: ClaudeTurnCancellationGuard = () => true,
+  taskId?: string
 ): Promise<{ cancelled: boolean }> {
-  const taskIds = session.backgroundTasks.stoppableTaskIds
+  const stoppableTaskIds = session.backgroundTasks.stoppableTaskIds
+  const taskIds =
+    taskId === undefined ? stoppableTaskIds : stoppableTaskIds.includes(taskId) ? [taskId] : []
   let cancelled = false
   for (const taskId of taskIds) {
     if (!isCurrent()) {

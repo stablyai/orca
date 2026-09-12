@@ -13,6 +13,7 @@ import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import { OffscreenBrowserBackend } from '../browser/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
+import { getDesktopRelayStatus, publishDesktopRelayStatus } from './main-process-relay-status'
 import { DesktopRelayService } from '../runtime/relay/desktop-relay-service'
 import { getServeOptions, getBundledWebClientRoot, printServeReady } from './main-process-serve'
 import {
@@ -35,6 +36,7 @@ import { CliInstaller } from '../cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from '../cli/linux-bare-orca-dispatcher'
 import { scheduleAllPendingHistoryTreeRemovals } from '../terminal-history-deletion'
 import { triggerStartupNotificationRegistration } from '../ipc/startup-notification-registration'
+import { startDesktopPushService } from './main-process-push-startup'
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
 
@@ -91,7 +93,7 @@ function installRuntimeRpc(
   })
   state.runtimeRpc = runtimeRpc
   registerMobileHandlers(runtimeRpc, {
-    getRelayStatus: () => state.desktopRelayStatus,
+    getRelayStatus: getDesktopRelayStatus,
     consumePendingUnpairedDeviceAuthFailure: (webContentsId) => {
       if (
         !state.mainWindow ||
@@ -158,6 +160,9 @@ async function launchServeMode(
     console.error('[runtime] Failed to start headless RPC transport:', error)
     throw error
   })
+  // Why: a phone paired to a headless host still registers and unregisters its token;
+  // it simply never receives a push, because nothing dispatches notifications here.
+  startDesktopPushService(runtimeRpc)
   settleDesktopActivation()
   // Why: every attempt must reach app.quit(); a page beforeunload can veto an earlier signal.
   registerServeSignalHandlers(process, () => app.quit())
@@ -241,6 +246,9 @@ async function launchDesktopMode(
   // fetcher until the persisted proxy lands, so this only has to keep the launch phase itself
   // ordered ahead of the relay — it must not gate the renderer.
   await state.initialProxyApplicationReady
+  // Why after the proxy await: the push gateway client is an app-owned fetcher, so it must not
+  // issue its first request ahead of the persisted proxy.
+  startDesktopPushService(runtimeRpc)
   const cloudAuth = getOrcaCloudAuthConfig()
   if (cloudAuth.configured) {
     try {
@@ -249,10 +257,7 @@ async function launchDesktopMode(
         userDataPath: getProfileUserDataPath(),
         appVersion: app.getVersion(),
         runtimeRpc,
-        onStatus: (status) => {
-          state.desktopRelayStatus = status
-          state.mainWindow?.webContents.send('mobile:relayStatusChanged', status)
-        }
+        onStatus: publishDesktopRelayStatus
       })
       state.desktopRelayService = relayService
       runtimeRpc.setMobileRelayPairingProvider({

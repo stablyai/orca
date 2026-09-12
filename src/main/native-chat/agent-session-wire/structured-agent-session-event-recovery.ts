@@ -22,6 +22,7 @@ export class StructuredAgentSessionEventRecovery {
       sessions: Map<string, StructuredAgentSessionHostSession>
       flushLifecycle: (sessionId: string) => Promise<StructuredAgentSessionSinkBarrier>
       publishFence: (sessionId: string, session: StructuredAgentSessionHostSession) => void
+      publishStatus?: (sessionId: string) => void
       hasResumeCapableHolder: (sessionId: string) => boolean
       serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
       now: () => number

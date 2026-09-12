@@ -90,7 +90,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: main
-          fetch-depth: 0
+          # Version helpers only read HEAD; published versions come from the release API.
+          fetch-depth: 1
           # Why: this job only reads stablyai/orca and never pushes; every write
           # goes to the daily repo through a minted App token passed by env.
           # Not persisting the checkout credential shrinks the blast radius if a

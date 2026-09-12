@@ -11,9 +11,8 @@ import {
   claudeMessageBody,
   claudeMessageIdentity,
   claudeHasReplayContent,
-  claudeRecord,
+  claudeOutputEnvelope,
   claudeStreamingMessageBody,
-  claudeText,
   claudeThinkingIdentity,
   claudeThinkingText,
   claudeToolBody,
@@ -29,17 +28,23 @@ import {
   claudeQuestionItems
 } from './claude-structured-prompt-items'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
-import { readableProviderFrameText } from '../native-chat/agent-session-wire/unhandled-provider-frame'
+import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
 import {
-  CLAUDE_UNRENDERABLE_CONTENT_TEXT,
+  appendUnmodeledClaudeContent,
   claudeProviderFrameKind,
   claudeResultFailure,
   createClaudeProviderFrameFallback,
-  isModeledClaudeContent,
   isSettledClaudeResultKind
 } from './claude-structured-provider-fallback'
+import { ClaudeSubagentRoster } from './claude-subagent-roster'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
+import {
+  claudeTurnEndForResult,
+  claudeTurnLifecycleItem,
+  type ClaudeCurrentTurn,
+  type ClaudeTurnEnd
+} from './claude-turn-lifecycle-item'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
@@ -72,26 +77,23 @@ export function createClaudeSessionJournalTranslator(
     : null
 }
 
-function lifecycleIdentity(sessionId: string, turnId: string): AgentJournalItemIdentity {
-  return {
-    provider: 'legacy',
-    agent: 'claude',
-    sessionId,
-    recordId: `turn-lifecycle:${turnId}`
-  }
-}
-
 export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
 ): ClaudeJournalTranslator {
   const tools = new Map<string, ClaudeToolUse>()
   const promptItems = new Map<string, AgentJournalItemIdentity[]>()
   const streamedBlocks = createClaudeStreamedBlockRegistry()
-  let currentTurn: { sessionId: string; turnId: string } | null = null
+  let currentTurn: ClaudeCurrentTurn | null = null
+  const groupKeyOf = (turn: ClaudeCurrentTurn | null): string | null =>
+    turn ? `${turn.sessionId}:${turn.turnId}` : null
   const providerFallback = createClaudeProviderFrameFallback(
     deps.sink,
     deps.fallbackIdPrefix ?? 'acquisition'
   )
+  const subagents = new ClaudeSubagentRoster({
+    sink: deps.sink,
+    currentGroupKey: () => groupKeyOf(currentTurn)
+  })
   const streamedText = createClaudeStreamedTextCheckpoints({
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
@@ -101,18 +103,21 @@ export function createClaudeJournalTranslator(
     }
   })
 
-  const publishLifecycle = (sessionId: string, turnId: string, running: boolean): void => {
-    const identity = lifecycleIdentity(sessionId, turnId)
-    if (running) {
-      deps.sink.appendItem(identity, {
-        kind: 'status',
-        text: 'Claude is working…',
-        turnLifecycle: { turnId, state: 'running' }
-      })
-    } else {
-      deps.sink.appendTombstone(identity)
+  const publishLifecycle = (turn: ClaudeCurrentTurn, end?: ClaudeTurnEnd): void => {
+    const item = claudeTurnLifecycleItem(turn, end)
+    deps.sink.appendItem(item.identity, item.body, item.options)
+    // Preserve first-work evidence when completion arrives before the journal drains.
+    deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
+  }
+
+  const publishActivity = (kind: string, payload: unknown): void => {
+    if (!currentTurn) {
+      return
     }
-    deps.sink.publish()
+    const text = claudeProviderFrameActivity(kind, payload)
+    if (text !== undefined) {
+      deps.sink.setActivity?.(text ? { turnId: currentTurn.turnId, text } : null)
+    }
   }
 
   const handleStream = (message: Record<string, unknown>): boolean => {
@@ -124,13 +129,21 @@ export function createClaudeJournalTranslator(
     return true
   }
 
-  const handleMessage = (message: Record<string, unknown>, startsTurn: boolean): boolean => {
+  const handleMessage = (
+    message: Record<string, unknown>,
+    startsTurn: boolean,
+    observedAt: number
+  ): boolean => {
     const envelope = readClaudeMessageEnvelope(message)
     if (!envelope) {
       return false
     }
     let changed = false
-    const body = claudeMessageBody(envelope)
+    if (envelope.parentToolUseId) {
+      subagents.observeChildActivity(envelope.parentToolUseId)
+    }
+    const outputEnvelope = claudeOutputEnvelope(envelope)
+    const body = claudeMessageBody(outputEnvelope)
     // The final frame of a streamed block lands on the block's identity, not its own uuid.
     const identity =
       (body && envelope.role === 'assistant' ? streamedBlocks.reconcile(envelope) : null) ??
@@ -140,7 +153,7 @@ export function createClaudeJournalTranslator(
       deps.sink.appendItem(identity, body)
       changed = true
     }
-    for (const tool of claudeToolUses(envelope)) {
+    for (const tool of claudeToolUses(outputEnvelope)) {
       tools.set(tool.id, tool)
       deps.sink.appendItem(
         claudeToolIdentity(envelope.sessionId, tool.id),
@@ -158,33 +171,24 @@ export function createClaudeJournalTranslator(
         claudeToolIdentity(envelope.sessionId, result.toolUseId),
         claudeToolBody({ tool, result })
       )
+      // A spawn call's result is the parent turn's evidence its child finished.
+      subagents.observeToolResult(result.toolUseId, result.failed)
       // Tool inputs are only needed until their matching result arrives.
       tools.delete(result.toolUseId)
       changed = true
     }
-    const thinking = claudeThinkingText(envelope)
+    const thinking = claudeThinkingText(outputEnvelope)
     if (thinking) {
       deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
-        kind: 'status',
-        text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [
+          { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
+        ]
       })
       changed = true
     }
-    const unhandledContent = envelope.content.filter((part) => !isModeledClaudeContent(part))
-    for (const part of unhandledContent) {
-      const partType = claudeText(claudeRecord(part)?.type) ?? 'unknown'
-      providerFallback.append(
-        `message:${envelope.role}:content:${partType}`,
-        part,
-        readableProviderFrameText(part) ?? CLAUDE_UNRENDERABLE_CONTENT_TEXT
-      )
-      changed = true
-    }
-    // An empty user frame is a replay with nothing to show, not an unknown kind.
-    if (envelope.content.length === 0 && envelope.role === 'assistant') {
-      providerFallback.append(`message:${envelope.role}:empty`, message)
-      changed = true
-    }
+    changed = appendUnmodeledClaudeContent(providerFallback, outputEnvelope, message) || changed
     if (
       envelope.role === 'user' &&
       startsTurn &&
@@ -192,10 +196,20 @@ export function createClaudeJournalTranslator(
       message.parent_tool_use_id === null
     ) {
       if (currentTurn) {
-        publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
+        // A new turn starting is the only end the previous one gets when its
+        // result never arrives; settling it later would sweep THIS turn.
+        subagents.settleTurn(groupKeyOf(currentTurn))
+        publishLifecycle(currentTurn, { state: 'interrupted', completedAt: observedAt })
       }
-      currentTurn = { sessionId: envelope.sessionId, turnId: envelope.uuid }
-      publishLifecycle(envelope.sessionId, envelope.uuid, true)
+      currentTurn = {
+        sessionId: envelope.sessionId,
+        turnId: envelope.uuid,
+        startedAt: observedAt,
+        // A user echo lands on its own message identity, so this is the user row's key.
+        userItemId: agentJournalItemKey(identity)
+      }
+      publishLifecycle(currentTurn)
+      deps.sink.setActivity?.(null)
     }
     if (changed) {
       deps.sink.publish()
@@ -231,10 +245,17 @@ export function createClaudeJournalTranslator(
     handle: (event) => {
       if (event.type === 'ended') {
         streamedText.flush()
+        // No event will ever settle a child once the provider is gone.
+        subagents.settleSession()
         if (currentTurn) {
-          publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
+          // The host saw the child end, so the turn's end is observed, not lost.
+          publishLifecycle(currentTurn, {
+            state: 'interrupted',
+            completedAt: event.observedAt ?? Date.now()
+          })
           currentTurn = null
         }
+        deps.sink.setActivity?.(null)
         return
       }
       if (event.type === 'message' && handleStream(event.message)) {
@@ -250,10 +271,17 @@ export function createClaudeJournalTranslator(
         promptItems.delete(event.promptKey)
         deps.sink.publish()
       } else if (event.type === 'message' && event.message.type === 'result') {
+        // The turn is over however it ended, so a foreground child still
+        // reported as working will never be settled by an event.
+        subagents.settleTurn(groupKeyOf(currentTurn))
         if (currentTurn) {
-          publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
+          publishLifecycle(
+            currentTurn,
+            claudeTurnEndForResult(event.message, event.observedAt ?? Date.now())
+          )
           currentTurn = null
         }
+        deps.sink.setActivity?.(null)
         // The turn is over. A block still awaiting its final keeps the text the
         // flush above journaled, but its live state goes: an interrupted turn
         // would otherwise retain that text for the life of the session.
@@ -266,11 +294,19 @@ export function createClaudeJournalTranslator(
           providerFallback.append(kind, event.message, failure?.text)
         }
       } else if (event.type === 'message') {
-        if (!handleMessage(event.message, event.startsTurn === true)) {
-          providerFallback.append(claudeProviderFrameKind(event.message), event.message)
+        // These frames stay `status-chrome`: the roster reads them here, and the
+        // fallback below still drops the raw frame instead of printing an opcode.
+        subagents.observeSystemFrame(event.message)
+        const kind = claudeProviderFrameKind(event.message)
+        if (
+          !handleMessage(event.message, event.startsTurn === true, event.observedAt ?? Date.now())
+        ) {
+          providerFallback.append(kind, event.message)
         }
+        publishActivity(kind, event.message)
       } else if (event.type === 'provider-frame') {
         providerFallback.append(event.kind, event.payload)
+        publishActivity(event.kind, event.payload)
       }
     },
     flush: streamedText.flush,
@@ -282,6 +318,7 @@ export function createClaudeJournalTranslator(
       tools.clear()
       promptItems.clear()
       streamedBlocks.clear()
+      subagents.dispose()
     }
   }
 }

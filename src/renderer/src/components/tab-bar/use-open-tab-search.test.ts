@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
@@ -12,6 +12,8 @@ import type { AppState } from '@/store/types'
 import { useOpenTabSearch } from './use-open-tab-search'
 
 const initialAppState = useAppStore.getInitialState()
+
+afterEach(() => vi.restoreAllMocks())
 
 function makeWorktree(id: string, displayName: string): Worktree {
   return {
@@ -385,6 +387,33 @@ describe('useOpenTabSearch', () => {
     })
 
     expect(result.current.results.map((entry) => entry.title)).toEqual(['zebra epsilon'])
+  })
+
+  it('uses a fresh shared clock when the tab snapshot changes', () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const { result } = renderSearch()
+
+    clock.mockReturnValue(2_000)
+    const state = useAppStore.getState()
+    act(() => {
+      useAppStore.setState({
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          'wt-1': (state.unifiedTabsByWorktree['wt-1'] ?? []).map((tab) =>
+            tab.id === 'tab-a'
+              ? { ...tab, lastFocusedAt: 1_800 }
+              : tab.id === 'tab-b'
+                ? { ...tab, lastFocusedAt: 1_900 }
+                : tab
+          )
+        }
+      })
+    })
+
+    expect(result.current.results.slice(0, 2).map((entry) => entry.title)).toEqual([
+      'zebra beta',
+      'zebra alpha'
+    ])
   })
 
   it('reflects the generated-titles setting in matched titles', () => {

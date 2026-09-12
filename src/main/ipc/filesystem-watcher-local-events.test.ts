@@ -12,6 +12,7 @@ vi.mock('fs/promises', () => ({ stat: statMock }))
 vi.mock('./parcel-watcher-process', () => ({ subscribeViaWatcherProcess: subscribeMock }))
 
 import { createLocalWatcher } from './filesystem-watcher-local-events'
+import { cancelLocalBatchFlush } from './filesystem-watcher-batch-control'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -168,6 +169,35 @@ describe('local filesystem watcher flush serialization', () => {
         isDirectory: path.endsWith('-0.ts')
       }))
     )
+  })
+
+  it('starts no further stats when a full inflight batch is cancelled', async () => {
+    const eventCount = 5_000
+    const pendingStats = deferred<{ isDirectory: () => boolean }>()
+    statMock.mockReturnValue(pendingStats.promise)
+    const root = await createLocalWatcher('/repo', '/repo')
+    root.listeners.set(1, sender as never)
+
+    watcherCallback?.(
+      null,
+      Array.from({ length: eventCount }, (_, index) => ({
+        type: 'update' as const,
+        path: `/repo/file-${index}.ts`
+      }))
+    )
+    vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+    await flushMicrotasks()
+    expect(statMock).toHaveBeenCalledTimes(8)
+
+    cancelLocalBatchFlush(root)
+    pendingStats.resolve({ isDirectory: () => false })
+    for (let i = 0; i < eventCount * 4 && root.batch.flushInFlight; i++) {
+      await Promise.resolve()
+    }
+
+    expect(root.batch.flushInFlight).toBe(false)
+    expect(statMock).toHaveBeenCalledTimes(8)
+    expect(sender.send).not.toHaveBeenCalled()
   })
 
   it('leaves an open debounce window to the armed timer instead of draining early', async () => {

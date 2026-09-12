@@ -14,7 +14,10 @@ type UnifiedTab = UnifiedTabsByWorktree[string][number]
 const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
 // Why: this handoff flag is stripped from workspace sessions, so toggling it
 // alone should not rebuild and rewrite the durable session payload.
-const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>(['pendingActivationSpawn'])
+const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
+  'pendingActivationSpawn',
+  'recovery'
+])
 
 function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boolean {
   if (prev === next) {
@@ -233,12 +236,13 @@ export function createSessionWriteSubscriber({
       prev === null
         ? [...SESSION_RELEVANT_FIELDS]
         : SESSION_RELEVANT_FIELDS.filter((key) => prev?.[key] !== next[key])
+    // Equivalent projections still consume the new source identities.
+    prevTabsSource = state.tabsByWorktree
+    prevUnifiedTabsSource = state.unifiedTabsByWorktree
     if (changedFields.length === 0 && pendingChangedFields.size === 0) {
       return
     }
     prev = next
-    prevTabsSource = state.tabsByWorktree
-    prevUnifiedTabsSource = state.unifiedTabsByWorktree
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }

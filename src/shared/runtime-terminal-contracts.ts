@@ -217,6 +217,23 @@ export type RuntimeTerminalSend = {
    * old client sees the `accepted: false` it already handles and ignores this field.
    */
   agentSessionRefusal?: AgentSessionPtyWriteRefusal
+  prompt?: RuntimeTerminalPromptDelivery
+}
+
+export type RuntimeTerminalPromptStage = 'input_accepted' | 'turn_started'
+
+export type RuntimeTerminalPromptDelivery = {
+  requestId: string
+  stages: RuntimeTerminalPromptStage[]
+  provider: 'claude' | 'codex' | 'unsupported' | 'old-host'
+  observation: 'supported' | 'unsupported' | 'incarnation_replaced' | 'permission'
+  processIncarnation: string
+  generation: number
+  baselineWorkingSequence: number
+  /** Hook turn-start timestamp before this prompt was accepted. */
+  baselineExplicitWorkingStartedAt?: number | null
+  /** Permission observations seen before this prompt was accepted. */
+  baselinePermissionSequence?: number
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
@@ -315,6 +332,10 @@ export type RuntimeTerminalClose = {
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
 
+// Why both spellings: the codex-* members were published by every host before the agent-neutral
+// rename, so they are permanent — a client still has to read them off an older host. This build
+// keeps a codex-* reason only where the matched wording is plausibly Codex's own; every matcher
+// that inspects no agent publishes the agent-* spelling.
 export type RuntimeTerminalWaitBlockedReason =
   | 'codex-update-prompt'
   | 'codex-trust-workspace'
@@ -322,6 +343,11 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'codex-model-migration-prompt'
   | 'codex-hooks-review-prompt'
   | 'codex-interactive-prompt'
+  | 'agent-update-prompt'
+  | 'agent-trust-workspace'
+  | 'agent-cwd-prompt'
+  | 'agent-hooks-review-prompt'
+  | 'agent-interactive-prompt'
   | 'agent-approval-prompt'
 
 export type RuntimeTerminalWait = {

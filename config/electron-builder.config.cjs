@@ -19,6 +19,7 @@ const {
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
+const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -278,16 +279,6 @@ module.exports = {
     }
   },
   afterPack: async (context) => {
-    // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
-    // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
-    // Fail packaging if any bundled native binary exceeds the supported floor.
-    if (context.electronPlatformName === 'linux') {
-      // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
-      // so a cross-built slice could ship the host's pty.node and only fail at runtime.
-      verifyLinuxGlibcFloor(context.appOutDir, {
-        targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
-      })
-    }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
         ? join(
@@ -325,6 +316,19 @@ module.exports = {
     }
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
+    // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
+    // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
+    // Fail packaging if any bundled native binary exceeds the supported floor.
+    // Why after the prune: cross-builds intentionally install every optional
+    // native variant, so an arm64 slice still carries the x64 @parcel/watcher
+    // until prunePackagedRuntimeNodeModules drops it.
+    if (context.electronPlatformName === 'linux') {
+      // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
+      // so a cross-built slice could ship the host's pty.node and only fail at runtime.
+      verifyLinuxGlibcFloor(context.appOutDir, {
+        targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
+      })
+    }
     verifyPackagedMainRuntimeDeps(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
     // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
@@ -401,9 +405,17 @@ module.exports = {
     // name is absent. An unsigned build that still claimed 'SignPath Foundation'
     // would therefore reject its own channel's next build — and its way back to
     // stable with it. Dropping it is what makes dev→dev and dev→stable work.
-    ...(isWinDevChannel
-      ? { verifyUpdateCodeSignature: false }
-      : { signtoolOptions: { publisherName: 'SignPath Foundation' } }),
+    // Why a sign hook on a build that does not sign: it is the only moment
+    // electron-builder exposes the NSIS uninstaller (built in its own makensis
+    // pass, embedded, then deleted). The hook signs nothing — it relays the file
+    // to and from the CI SignPath request, and is inert when the relay env vars
+    // are unset, so local and dev builds are unaffected. publisherName stays on
+    // its existing channel split above.
+    signtoolOptions: {
+      sign: signWindowsUninstallerViaSignPath,
+      ...(isWinDevChannel ? {} : { publisherName: 'SignPath Foundation' })
+    },
+    ...(isWinDevChannel ? { verifyUpdateCodeSignature: false } : {}),
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('win32'),

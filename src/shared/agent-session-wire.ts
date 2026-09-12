@@ -1,3 +1,12 @@
+import type {
+  AgentSessionBackgroundTask,
+  AgentSessionBackgroundTaskState
+} from './agent-session-background-task-wire'
+import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
+import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+
+export * from './agent-session-wire-refusals'
+import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 // ─── Structured agent-session wire contract ─────────────────────────────────
 // The shapes `agentSession.*` accepts and publishes. Phase 2 builds provider
 // adapters and clients against exactly these types, so everything here must be
@@ -12,8 +21,13 @@ import type {
   AgentJournalResolution,
   AgentJournalSubmission
 } from './agent-session-journal-types'
-import type { AgentSessionHandoffStage, AgentSessionOwnerRuntimeKind } from './agent-session-record'
+import type {
+  AgentSessionHandoffStage,
+  AgentSessionOwnerRuntimeKind,
+  AgentSessionRecord
+} from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
 
 export type AgentSessionHandoffDirection = 'to-tui' | 'to-native'
 export type AgentSessionHandoffMode = 'now' | 'after-turn' | 'stop-turn'
@@ -49,16 +63,16 @@ export type AgentSessionHandoffRequest = {
 
 export type AgentSessionHandoffResult = { status: AgentSessionHandoffStatus }
 
-export type AgentSessionBackgroundTask = {
-  id: string
-  kind: 'agent' | 'workflow' | 'command' | 'monitor' | 'unknown'
-  description?: string
-}
+export type {
+  AgentSessionBackgroundTask,
+  AgentSessionBackgroundTaskRunState,
+  AgentSessionBackgroundTaskState
+} from './agent-session-background-task-wire'
+export { agentSessionBackgroundTasksEqual } from './agent-session-background-task-wire'
 
-export type AgentSessionBackgroundTaskState = {
-  state: 'monitoring'
-  /** Optional so mixed-version clients can consume state-only hosts. */
-  tasks?: AgentSessionBackgroundTask[]
+export type AgentSessionTurnActivity = {
+  turnId: string
+  text: string
 }
 
 /** Backward paging is the client's normal read; 40 matches the page size the
@@ -106,6 +120,9 @@ export type AgentSessionHistoryPage = {
   hasNewer: boolean
   /** Present on hosts that expose provider-owned background task lifecycle. */
   backgroundTasks?: AgentSessionBackgroundTaskState | null
+  /** Host wall clock (ms epoch) when the page was read, so a client attaching mid-turn
+   *  can anchor a live counter on the real start. Absent from older hosts. */
+  hostNow?: number
 }
 
 export type AgentSessionHistoryResult =
@@ -130,16 +147,23 @@ export type AgentSessionJournalBatch = {
   submissions: AgentJournalSubmission[]
 }
 
+/** Host wall clock (ms epoch) stamped once per published frame; see `AgentSessionHistoryPage`. */
+type AgentSessionHostClockField = { hostNow?: number }
+
 export type AgentSessionSubscribeEvent =
-  | {
+  | ({
       type: 'snapshot'
       sessionId: string
       page: AgentSessionHistoryPage
       fence: number
       handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
-    }
-  | {
+      /** Omitted when unchanged; null clears a previous provider catalog. */
+      commands?: AgentSessionSlashCommand[] | null
+      /** Latest provider-authored turn activity; optional for mixed-version hosts. */
+      activity?: AgentSessionTurnActivity | null
+    } & AgentSessionHostClockField)
+  | ({
       type: 'batch'
       sessionId: string
       batch: AgentSessionJournalBatch
@@ -147,8 +171,12 @@ export type AgentSessionSubscribeEvent =
       fence?: number
       handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
-    }
-  | {
+      /** Omitted when unchanged; null clears a previous provider catalog. */
+      commands?: AgentSessionSlashCommand[] | null
+      /** Additive ephemeral state; it never creates or advances journal rows. */
+      activity?: AgentSessionTurnActivity | null
+    } & AgentSessionHostClockField)
+  | ({
       type: 'reset'
       sessionId: string
       reset: AgentJournalResetReason
@@ -156,7 +184,47 @@ export type AgentSessionSubscribeEvent =
       fence: number
       handoff?: AgentSessionHandoffStatus
       backgroundTasks?: AgentSessionBackgroundTaskState | null
-    }
+      /** Omitted when unchanged; null clears a previous provider catalog. */
+      commands?: AgentSessionSlashCommand[] | null
+      activity?: AgentSessionTurnActivity | null
+    } & AgentSessionHostClockField)
+  | { type: 'end' }
+
+// ─── Status feed ────────────────────────────────────────────────────────────
+
+/** What a session list needs to know about one session. The host projects it
+ *  from the journal so no client has to replay a transcript to learn whether a
+ *  turn is running. Additive surface: an older host has no such method. */
+export type AgentSessionStatusSummary = {
+  rewindBlockedReason?: AgentSessionRewindReason
+  sessionId: string
+  workspaceId: string
+  agent: AgentSessionRecord['provider']
+  /** Null until the journal holds a persisted user or assistant message. */
+  status: StructuredAgentSessionProjectedStatus | null
+  /** Present only while this host has the provider child executing the session. */
+  hostExecutionOwned?: true
+  latestPrompt: string
+  /** Provider model in force for the next turn; absent until the host has read the options. */
+  model?: string
+  /** The tool the running turn is inside. Absent unless `status` is 'working'. */
+  toolName?: string
+  toolInput?: string
+  /** Preview of the newest assistant prose, so a settled row says what the agent said. */
+  lastAssistantMessage?: string
+  /** Live provider-owned background tasks, so session lists can render
+   *  subagent children without holding a journal reader open. Optional for
+   *  mixed-version hosts. */
+  backgroundTasks?: AgentSessionBackgroundTask[]
+  providerSession?: AgentProviderSessionMetadata
+  updatedAt: number
+}
+
+/** A summary outlives its provider child: an evicted idle session is still idle, so the host
+ *  keeps the last projection and never retracts one. Tabs, not this feed, decide what is listed. */
+export type AgentSessionStatusEvent =
+  | { type: 'snapshot'; sessions: AgentSessionStatusSummary[] }
+  | { type: 'status'; session: AgentSessionStatusSummary }
   | { type: 'end' }
 
 // ─── Mutation envelope ──────────────────────────────────────────────────────
@@ -173,35 +241,6 @@ export type AgentSessionMutationEnvelope = {
   expectedRuntimeFence: number | null
   /** Client-declared; the host recomputes it and compares. */
   payloadFingerprint: string
-}
-
-export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
-  'structured_agent_session_unsupported',
-  'agent_session_checkpoint_stale',
-  'agent_session_conflict',
-  'agent_session_ownership_unknown',
-  'agent_session_operation_conflict',
-  'agent_session_operation_expired',
-  'agent_session_operation_capacity',
-  'agent_session_operation_invalid',
-  'agent_session_operation_unknown',
-  'agent_session_item_revision_stale',
-  'agent_session_already_resolved',
-  'agent_session_identity_required',
-  'agent_session_journal_unreadable',
-  'execution_owner_reconciling'
-] as const
-export type AgentSessionWireRefusalCode = (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number]
-
-export type AgentSessionWireRefusal = {
-  code: AgentSessionWireRefusalCode
-  message: string
-  /** On a stale fence, so the client can retry without another round trip. */
-  currentFence?: number
-  /** On a lost compare-and-set: the winning answer and who gave it. */
-  resolution?: AgentJournalResolution
-  /** On a lost compare-and-set: the revision the host actually holds. */
-  currentRevision?: number
 }
 
 export type AgentSessionMutationResult<TValue> =
@@ -264,9 +303,32 @@ export type AgentSessionModelOption = {
   efforts: AgentSessionOptionChoice[]
 }
 
+/** One entry of the `/` menu the running provider reports for itself. `skill`
+ *  marks a name the session loaded as a skill rather than a built-in command;
+ *  commands the provider reserves for a terminal UI are already removed. */
+export type AgentSessionSlashCommand = {
+  name: string
+  kind: 'command' | 'skill'
+  /** Membership is authoritative, but this provider report did not classify the name. */
+  kindUnspecified?: true
+  /** Provider-authored row text; absent when the report carried names only. */
+  description?: string
+  /** Provider-authored argument sketch, e.g. `<issue-url>`. */
+  argumentHint?: string
+}
+
+/** The provider's own command surface, read per session. Additive read-only
+ *  surface: a host that predates it answers `method_not_found`, and the client
+ *  keeps rendering its curated catalog. */
+export type AgentSessionCommandsResult = {
+  commands?: AgentSessionSlashCommand[]
+}
+
 /** Provider-reported choices and effective next-turn values. Additive read-only
  *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
+  rewind?: AgentSessionRewindSupport
+  conversationCommands?: readonly AgentSessionConversationCommand[]
   models: AgentSessionModelOption[]
   current: {
     model: string

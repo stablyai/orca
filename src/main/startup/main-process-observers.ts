@@ -3,9 +3,8 @@ import { join } from 'node:path'
 import { AgentAwakeService } from '../agent-awake-service'
 import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
-import { agentHookServer, type AgentHookProviderSessionIdentity } from '../agent-hooks/server'
-import { createHookProviderSessionInvalidator } from '../agent-hooks/hook-provider-session-invalidation'
-import { createHookStatusSessionTabsInvalidator } from '../agent-hooks/hook-status-session-tabs-invalidation'
+import { agentHookServer } from '../agent-hooks/server'
+import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
 import { initTelemetry, track } from '../telemetry/client'
 import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetry'
 import { initObservability } from '../observability'
@@ -40,55 +39,20 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
-  const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
-  const publishProviderSessionChanges = (identities: AgentHookProviderSessionIdentity[]): void => {
-    const ownedIdentities = identities.map((identity) => ({
-      ...identity,
-      worktreeId:
-        identity.worktreeId ??
-        state.runtime?.getTerminalWorktreeIdForPaneKey(identity.paneKey) ??
-        undefined
-    }))
-    for (const worktreeId of collectChangedProviderSessionWorktrees(ownedIdentities)) {
-      // Why not `notifyMobileSessionTabsChanged` alone: it re-emits at the unchanged
-      // `snapshotVersion`, which every client drops on its monotonic gate.
-      state.runtime?.touchMobileSessionTabsForWorktree(worktreeId, { immediate: true })
-    }
-  }
-  state.publishProviderSessionChanges = publishProviderSessionChanges
   const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
     state.agentAwakeService?.setStatuses(statuses)
   })
-  // Healthy session.tabs streams need a push when transcript identity changes.
-  const unsubscribeProviderSessionChanges = agentHookServer.subscribeProviderSessionChanges(
-    (sessions) => publishProviderSessionChanges(sessions)
+  const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
+    state.agentAwakeService?.observeStatusFreshness(status)
+  })
+  const uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
+    agentHookServer,
+    () => state.runtime
   )
-  // Why: hook rows are the only carrier of live agent state on a headless host, and
-  // nothing else republishes `session.tabs` when one changes — so a paired client
-  // would keep the pane's last projection until an unrelated PTY touch came along.
-  const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
-  const unsubscribeHookStatusSessionTabs = agentHookServer.subscribeEnrichedStatus((enriched) => {
-    if (hookStatusChangedSessionTabs(enriched)) {
-      state.runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
-    }
-  })
-  // Teardown: agent exit, pane close, and the SSH transient-disconnect batch all land
-  // here. Without it the live state published above becomes a zombie question card.
-  const unsubscribeHookStatusClear = agentHookServer.subscribePaneStatusClear((clear) => {
-    const clearedPaneKeys =
-      'paneKey' in clear
-        ? [clear.paneKey]
-        : hookStatusChangedSessionTabs.forgetConnection(clear.connectionId)
-    for (const paneKey of clearedPaneKeys) {
-      hookStatusChangedSessionTabs.forgetPane(paneKey)
-      state.runtime?.touchMobileSessionTabsForPane(paneKey)
-    }
-  })
   state.unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
-    unsubscribeProviderSessionChanges()
-    unsubscribeHookStatusSessionTabs()
-    unsubscribeHookStatusClear()
+    unsubscribeStatusFreshness()
+    uninstallHookStatusRepublish()
   }
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)

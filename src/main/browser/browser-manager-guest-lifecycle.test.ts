@@ -288,19 +288,17 @@ describe('browserManager', () => {
       webContentsId: 102,
       rendererWebContentsId
     })
-    // Why: attach-before-registration teardown skips unregisterGuest, so global
-    // cleanup must independently release the private click-routing token.
-    browserManager.attachGuestPolicies({ ...guest, id: 103 } as never)
+    // Guests attached before registration still need their policy listeners released.
+    const unregisteredGuestOff = vi.fn()
+    browserManager.attachGuestPolicies({ ...guest, id: 103, off: unregisteredGuestOff } as never)
 
     browserManager.unregisterAll()
 
     expect(browserManager.getGuestWebContentsId('browser-1')).toBeNull()
     expect(browserManager.getGuestWebContentsId('browser-2')).toBeNull()
     expect(guestOffMock).toHaveBeenCalled()
-    const managerState = browserManager as unknown as {
-      clickedLinkFrameNameByGuestId: Map<number, unknown>
-    }
-    expect(managerState.clickedLinkFrameNameByGuestId.size).toBe(0)
+    expect(unregisteredGuestOff).toHaveBeenCalledWith('dom-ready', expect.any(Function))
+    expect(unregisteredGuestOff).toHaveBeenCalledWith('frame-created', expect.any(Function))
   })
 
   it('rejects non-webview guest types to prevent privilege escalation', () => {

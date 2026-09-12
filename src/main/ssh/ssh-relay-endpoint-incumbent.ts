@@ -306,3 +306,26 @@ export class RelayEndpointHeldError extends Error {
 export function isRelayEndpointHeldError(err: unknown): err is RelayEndpointHeldError {
   return err instanceof RelayEndpointHeldError
 }
+
+/**
+ * Thrown when a relay holds the endpoint but never refused us: it accepted a connection or is
+ * enumerated as the holder, yet our --connect got no handshake answer. That is a stalled or
+ * overloaded relay, not a decision — so unlike `RelayEndpointHeldError` this is retryable, and
+ * the session routes it through the relay-lost backoff rather than the terminal error path.
+ */
+export class RelayEndpointUnresponsiveError extends Error {
+  readonly name = 'RelayEndpointUnresponsiveError'
+  constructor(readonly incumbent: RelayEndpointIncumbent) {
+    super(
+      `A relay still owns ${incumbent.sockPath} but did not answer the handshake ` +
+        `(${describeRelayEndpointIncumbent(incumbent)}). Orca will retry rather than replace it; ` +
+        'if it never recovers, use Reset Relay for this host.'
+    )
+  }
+}
+
+export function isRelayEndpointUnresponsiveError(
+  err: unknown
+): err is RelayEndpointUnresponsiveError {
+  return err instanceof RelayEndpointUnresponsiveError
+}

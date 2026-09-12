@@ -2,14 +2,26 @@
 import { OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller } from './orca-runtime-verify-orchestration-compatibility-caller'
 import type { OrchestrationCompatibilityTerminalAuthority } from './runtime-terminal-contracts'
 import { createHash } from 'node:crypto'
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { RECENT_PTY_OUTPUT_LIMIT, RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import { appendRecentPtyPathCandidates } from './terminal-output-path-candidates'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
+import {
+  resolveTerminalOrchestrationCliCommand,
+  type OrchestrationCliCommand
+} from './orchestration/cli-command'
+import { getAppEnvironment } from '../../shared/app-environment'
+import type { FleetAgentStatusEvidence } from '../../shared/orchestration-fleet-agent-status-evidence'
+import { readOrchestrationFleetAgentStatusSnapshot } from './orchestration-fleet-agent-status-snapshot'
+import { resolveStructuredWorkerAuthority } from './structured-worker-authority'
 
 export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller {
   /** Every pane key this PTY could be addressed by, including restored receipts. */
@@ -31,9 +43,53 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
     return paneKeys
   }
 
+  /** Status cleanup also owns runtime-admitted legacy OSC rows; orchestration authority does not. */
+  protected collectAgentStatusPaneKeysForPty(ptyId: string): Set<string> {
+    const paneKeys = this.collectPaneKeysForPty(ptyId)
+    const terminalHandles = new Set(this.getExistingTerminalHandlesForPtyId(ptyId))
+    // The provider-session snapshot is the unfiltered store view, so certified exit can also
+    // retire a dismissed row's identity-only remnant after its pane binding moved.
+    for (const row of this.getAgentProviderSessionSnapshotFn?.() ?? []) {
+      if (row.terminalHandle && terminalHandles.has(row.terminalHandle)) {
+        paneKeys.add(row.paneKey)
+      }
+    }
+    const ptyPaneKey = this.ptysById.get(ptyId)?.paneKey
+    if (ptyPaneKey && parseLegacyNumericPaneKey(ptyPaneKey)) {
+      paneKeys.add(ptyPaneKey)
+    }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      const paneKey = this.makeRuntimePaneKey(leaf)
+      if (parseLegacyNumericPaneKey(paneKey)) {
+        paneKeys.add(paneKey)
+      }
+    }
+    return paneKeys
+  }
+
   getOrchestrationDispatchAuthority(
     terminalHandle: string
   ): OrchestrationCompatibilityTerminalAuthority | null {
+    const structured = resolveStructuredWorkerAuthority(
+      terminalHandle,
+      this.getOrchestrationDbIfAvailable?.() ?? null
+    )
+    if (structured) {
+      return {
+        runtimeId: this.runtimeId,
+        terminalHandle,
+        // Both EMPTY on purpose. `verifyOrchestrationCompatibilityCaller` falls back to the
+        // restored-authority receipt keyed by ptyId when there is no launch token, so filling
+        // either of these in would silently open hook attestation to a session that has no PTY,
+        // no launch secret, and no hook to attest with.
+        ptyId: '',
+        worktreeId: structured.identity.worktreeId,
+        processIncarnation: structured.identity.processIncarnation,
+        paneKey: structured.identity.paneKey,
+        launchTokenHash: null,
+        hostScope: structured.identity.hostScope
+      }
+    }
     let ptyId: string | null
     try {
       ptyId =
@@ -188,7 +244,11 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       : undefined
   }
 
-  getTerminalOrchestrationCliCommand(handle: string): 'orca' | 'orca-ide' {
+  getOrchestrationFleetAgentStatusSnapshot(): readonly FleetAgentStatusEvidence[] {
+    return readOrchestrationFleetAgentStatusSnapshot(this)
+  }
+
+  getTerminalOrchestrationCliCommand(handle: string): OrchestrationCliCommand {
     let pty: RuntimePtyWorktreeRecord | null = null
     try {
       const ptyId = this.resolveLeafForHandle(handle)?.ptyId
@@ -203,6 +263,8 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       connectionId: pty.connectionId,
       isWsl: pty.isWsl,
       worktreeId: pty.worktreeId,
+      // Dev builds run the CLI as `orca-dev`; a packaged app must not advertise it.
+      runtimeCliCommand: getAppEnvironment().isPackaged() ? undefined : 'orca-dev',
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined

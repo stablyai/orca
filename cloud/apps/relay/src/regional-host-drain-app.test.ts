@@ -5,7 +5,9 @@ vi.mock('./admin-token-verifier.js', () => ({
   createAdminTokenVerifier: () => async (token: string, route?: string) =>
     token === 'deploy-token' ||
     (token === 'monitor-token' &&
-      (!route || route === '/v1/admin/regional-rehome-control')),
+      (!route ||
+        route === '/v1/admin/regional-rehome-control' ||
+        route === '/v1/admin/regional-rehome-preview')),
   createReadOnlyAdminTokenVerifier: () => async () => false,
   createRegionalRehomeControlApplyTokenVerifier: () => async (token: string) =>
     token === 'deploy-token',
@@ -41,7 +43,83 @@ const request = {
   graceMs: 60_000
 }
 
+describe('idle regional cutover endpoint', () => {
+  it('authenticates and fences the source before invoking a cutover', async () => {
+    const idleRehome = vi.fn(async () => ({ outcome: 'busy' }))
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {} as never,
+      drain: vi.fn(),
+      idleRehome,
+      cellIncarnation,
+      ready: vi.fn(async () => true)
+    } as Parameters<typeof createRelayApp>[1])
+    const input = {
+      v: 1,
+      attemptId: request.attemptId,
+      userId: request.userId,
+      relayHostId: request.relayHostId,
+      sourceCellId: request.sourceCellId,
+      sourceCellIncarnation: cellIncarnation,
+      sourceAssignmentEpoch: 7,
+      sourceGeneration: 1,
+      targetCellId: 'target-cell',
+      cohortPercent: 100,
+      directorSafety: {
+        observedAt: 100, sqlFailures: 0, reconnects: 0, controlActivityRecoveryFailures: 0,
+        databasePoolWaiting: 0, databasePoolWaitersMax: 0, databasePoolWaitMsMax: 0
+      }
+    }
+    const path = '/v1/admin/host-idle-rehome'
+    expect((await postPath(app, path, 'runtime-token', input)).status).toBe(401)
+    expect(
+      (
+        await postPath(app, path, 'rehome-token', {
+          ...input,
+          sourceCellIncarnation: '33333333-3333-4333-8333-333333333333'
+        })
+      ).status
+    ).toBe(409)
+    expect(idleRehome).not.toHaveBeenCalled()
+    const response = await postPath(app, path, 'rehome-token', input)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ v: 1, outcome: 'busy' })
+    expect(idleRehome).toHaveBeenCalledExactlyOnceWith(input)
+  })
+})
+
 describe('regional host drain endpoint', () => {
+  it('exposes aggregate preview to monitors without a mutation path', async () => {
+    const preview = { counts: { 'eligible:asia-east2-to-us-central1': 2 } }
+    const safety = { observedAt: 100 }
+    const previewRegionalRehomeEligibility = vi.fn(async () => preview)
+    const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
+      store: {} as never,
+      assignments: {
+        previewRegionalRehomeEligibility,
+        regionCorrectionOutcomes: async () => []
+      } as never,
+      regionalRehomeSafetySnapshot: () => safety as never,
+      drain: vi.fn(),
+      ready: vi.fn(async () => true)
+    })
+    const path = '/v1/admin/regional-rehome-preview'
+    expect((await app.request(path)).status).toBe(401)
+    expect(previewRegionalRehomeEligibility).not.toHaveBeenCalled()
+    const response = await app.request(path, { headers: { authorization: 'Bearer monitor-token' } })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ v: 1, preview, outcomes: [] })
+    expect(previewRegionalRehomeEligibility).toHaveBeenCalledExactlyOnceWith(safety)
+    expect(
+      (
+        await app.request(path, {
+          method: 'POST',
+          headers: { authorization: 'Bearer deploy-token' }
+        })
+      ).status
+    ).toBe(404)
+  })
+
   it('accepts only the dedicated identity and exact cell generation', async () => {
     const drainHost = vi.fn(() => 'accepted' as const)
     const app = createRelayApp(config(), {
@@ -60,12 +138,64 @@ describe('regional host drain endpoint', () => {
 
     expect((await post(app, 'deploy-token', request)).status).toBe(401)
     expect(
-      (await post(app, 'rehome-token', {
-        ...request,
-        sourceCellIncarnation: '33333333-3333-4333-8333-333333333333'
-      })).status
+      (
+        await post(app, 'rehome-token', {
+          ...request,
+          sourceCellIncarnation: '33333333-3333-4333-8333-333333333333'
+        })
+      ).status
     ).toBe(409)
     expect(drainHost).toHaveBeenCalledOnce()
+  })
+
+  it('waits for an asynchronous drain operation before acknowledging', async () => {
+    let grant!: (value: 'accepted') => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const drainHost = vi.fn(() => {
+      entered()
+      return new Promise<'accepted'>((resolve) => {
+        grant = resolve
+      })
+    })
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {} as never,
+      drain: vi.fn(),
+      drainHost,
+      cellIncarnation,
+      ready: vi.fn(async () => true)
+    })
+    const pending = post(app, 'rehome-token', request)
+    let acknowledged = false
+    void pending.then(() => {
+      acknowledged = true
+    })
+    await started
+    await Promise.resolve()
+    expect(acknowledged).toBe(false)
+    grant('accepted')
+    const response = await pending
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ v: 1, outcome: 'accepted' })
+  })
+
+  it('rejects a failed asynchronous drain instead of acknowledging it', async () => {
+    const app = createRelayApp(config(), {
+      store: {} as never,
+      assignments: {} as never,
+      drain: vi.fn(),
+      drainHost: async () => {
+        throw new Error('activity_cell_not_authoritative')
+      },
+      cellIncarnation,
+      ready: vi.fn(async () => true)
+    })
+    const response = await post(app, 'rehome-token', request)
+    expect(response.status).toBe(409)
+    expect(await response.json()).toEqual({ error: 'activity_cell_not_authoritative' })
   })
 
   it('rejects malformed identities before touching the session registry', async () => {
@@ -224,7 +354,7 @@ describe('regional rehome director controls', () => {
       v: 1,
       cellId: 'production-gce-c7',
       cellIncarnation,
-      regionalRehomeProtocol: 1,
+      regionalRehomeProtocol: 2,
       safety: {
         observedAt: 100,
         sqlFailures: 0,
@@ -235,12 +365,7 @@ describe('regional rehome director controls', () => {
         databasePoolWaitMsMax: 0
       }
     }
-    const response = await postPath(
-      app,
-      '/v1/admin/cell-rehome-status',
-      'runtime-token',
-      body
-    )
+    const response = await postPath(app, '/v1/admin/cell-rehome-status', 'runtime-token', body)
 
     expect(response.status).toBe(200)
     expect(recordCellRegionalRehomeStatus).toHaveBeenCalledWith(body)
@@ -266,18 +391,13 @@ describe('regional rehome director controls', () => {
       v: 1,
       cellId: 'production-gce-c7',
       cellIncarnation,
-      regionalRehomeProtocol: 1,
+      regionalRehomeProtocol: 2,
       safety: {
         ...observability.regionalRehomeRuntimeSafety(),
         ...emptyPostgresPoolPressureCounts()
       }
     }
-    const response = await postPath(
-      app,
-      '/v1/admin/cell-rehome-status',
-      'runtime-token',
-      body
-    )
+    const response = await postPath(app, '/v1/admin/cell-rehome-status', 'runtime-token', body)
 
     expect(response.status).toBe(200)
     expect(recordCellRegionalRehomeStatus).toHaveBeenCalledWith(body)
@@ -301,12 +421,14 @@ describe('regional rehome director controls', () => {
       drain: vi.fn(),
       ready: vi.fn(async () => true)
     })
-    expect((await postPath(
-      app,
-      '/v1/admin/regional-rehome-control',
-      'deploy-token',
-      { v: 1, action: 'inspect' }
-    )).status).toBe(200)
+    expect(
+      (
+        await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', {
+          v: 1,
+          action: 'inspect'
+        })
+      ).status
+    ).toBe(200)
     const apply = {
       v: 1,
       action: 'apply',
@@ -315,34 +437,39 @@ describe('regional rehome director controls', () => {
       notBefore: 100,
       ratePerMinute: 10,
       preferenceMaxAgeMs: 24 * 60 * 60_000,
+      hostCooldownMs: 7 * 24 * 60 * 60_000,
       drainGraceMs: 60_000,
       confirmation: 'ENABLE_REGIONAL_REHOMING'
     }
-    expect((await postPath(
-      app,
-      '/v1/admin/regional-rehome-control',
-      'deploy-token',
-      apply
-    )).status).toBe(200)
+    expect(
+      (await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', apply)).status
+    ).toBe(200)
     expect(applyRegionalRehomeControl).toHaveBeenCalledOnce()
-    expect((await postPath(
-      app,
-      '/v1/admin/regional-rehome-control',
-      'monitor-token',
-      { v: 1, action: 'inspect' }
-    )).status).toBe(200)
-    expect((await postPath(
-      app,
-      '/v1/admin/regional-rehome-control',
-      'monitor-token',
-      apply
-    )).status).toBe(403)
-    expect((await postPath(
-      app,
-      '/v1/admin/regional-rehome-control',
-      'deploy-token',
-      { ...apply, confirmation: 'DISABLE_REGIONAL_REHOMING' }
-    )).status).toBe(400)
+    expect(
+      (
+        await postPath(app, '/v1/admin/regional-rehome-control', 'monitor-token', {
+          v: 1,
+          action: 'inspect'
+        })
+      ).status
+    ).toBe(200)
+    expect(
+      (await postPath(app, '/v1/admin/regional-rehome-control', 'monitor-token', apply)).status
+    ).toBe(403)
+    expect(
+      (
+        await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', {
+          ...apply,
+          confirmation: 'DISABLE_REGIONAL_REHOMING'
+        })
+      ).status
+    ).toBe(400)
+    // The per-host cooldown is part of the durable shape an operator must state.
+    const { hostCooldownMs: _omitted, ...withoutCooldown } = apply
+    expect(
+      (await postPath(app, '/v1/admin/regional-rehome-control', 'deploy-token', withoutCooldown))
+        .status
+    ).toBe(400)
   })
 
   it('probes dedicated trust twice and returns only aggregate proof', async () => {
@@ -373,12 +500,11 @@ describe('regional rehome director controls', () => {
       }) as typeof fetch,
       ready: vi.fn(async () => true)
     })
-    const response = await postPath(
-      app,
-      '/v1/admin/regional-rehome-trust-probe',
-      'deploy-token',
-      { v: 1, sourceCellId: 'production-gce-c7', sourceCellIncarnation: cellIncarnation }
-    )
+    const response = await postPath(app, '/v1/admin/regional-rehome-trust-probe', 'deploy-token', {
+      v: 1,
+      sourceCellId: 'production-gce-c7',
+      sourceCellIncarnation: cellIncarnation
+    })
 
     expect(response.status).toBe(200)
     const responseBody = await response.json()
@@ -411,6 +537,76 @@ describe('regional rehome director controls', () => {
     expect(JSON.stringify(responseBody)).not.toContain('rehome-token')
   })
 
+  it('probes a source cell in any region, not only the default one', async () => {
+    // Rehoming moves hosts in both directions, so an asia-east2 cell is a
+    // source too and its trust has to be provable the same way.
+    const cellDeploymentStatus = vi.fn().mockResolvedValue({
+      cellId: 'production-gce-c27',
+      cellUrl: 'https://c27.relay.example.test',
+      region: 'asia-east2',
+      runtime: {
+        cellIncarnation,
+        ready: true,
+        heartbeatFresh: true,
+        regionalRehomeProtocol: 1
+      }
+    })
+    const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
+      store: {} as never,
+      assignments: { cellDeploymentStatus } as never,
+      drain: vi.fn(),
+      regionalRehomeIdentityToken: vi.fn(async () => 'rehome-token'),
+      regionalRehomeFetch: (async () =>
+        Response.json({
+          v: 1,
+          outcome: 'host-not-connected',
+          sharedRuntimeIdentityRejected: true
+        })) as typeof fetch,
+      ready: vi.fn(async () => true)
+    })
+
+    const response = await postPath(app, '/v1/admin/regional-rehome-trust-probe', 'deploy-token', {
+      v: 1,
+      sourceCellId: 'production-gce-c27',
+      sourceCellIncarnation: cellIncarnation
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ proven: true })
+  })
+
+  it('still refuses a trust probe against a cell without the drain protocol', async () => {
+    const cellDeploymentStatus = vi.fn().mockResolvedValue({
+      cellId: 'production-gce-c27',
+      cellUrl: 'https://c27.relay.example.test',
+      region: 'asia-east2',
+      runtime: {
+        cellIncarnation,
+        ready: true,
+        heartbeatFresh: true,
+        regionalRehomeProtocol: 0
+      }
+    })
+    const sourceFetch = vi.fn<typeof fetch>()
+    const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
+      store: {} as never,
+      assignments: { cellDeploymentStatus } as never,
+      drain: vi.fn(),
+      regionalRehomeIdentityToken: vi.fn(async () => 'rehome-token'),
+      regionalRehomeFetch: sourceFetch,
+      ready: vi.fn(async () => true)
+    })
+
+    const response = await postPath(app, '/v1/admin/regional-rehome-trust-probe', 'deploy-token', {
+      v: 1,
+      sourceCellId: 'production-gce-c27',
+      sourceCellIncarnation: cellIncarnation
+    })
+
+    expect(response.status).toBe(409)
+    expect(sourceFetch).not.toHaveBeenCalled()
+  })
+
   it('restricts trust probes to deploy authorization and strict input', async () => {
     const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
       store: {} as never,
@@ -423,18 +619,17 @@ describe('regional rehome director controls', () => {
       sourceCellId: 'production-gce-c7',
       sourceCellIncarnation: cellIncarnation
     }
-    expect((await postPath(
-      app,
-      '/v1/admin/regional-rehome-trust-probe',
-      'monitor-token',
-      body
-    )).status).toBe(401)
-    expect((await postPath(
-      app,
-      '/v1/admin/regional-rehome-trust-probe',
-      'deploy-token',
-      { ...body, unexpected: true }
-    )).status).toBe(400)
+    expect(
+      (await postPath(app, '/v1/admin/regional-rehome-trust-probe', 'monitor-token', body)).status
+    ).toBe(401)
+    expect(
+      (
+        await postPath(app, '/v1/admin/regional-rehome-trust-probe', 'deploy-token', {
+          ...body,
+          unexpected: true
+        })
+      ).status
+    ).toBe(400)
   })
 
   it('fails closed when the source rejects the dedicated identity', async () => {
@@ -448,9 +643,9 @@ describe('regional rehome director controls', () => {
         regionalRehomeProtocol: 1
       }
     })
-    const sourceFetch = vi.fn<typeof fetch>().mockResolvedValue(
-      Response.json({ error: 'invalid_token' }, { status: 401 })
-    )
+    const sourceFetch = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ error: 'invalid_token' }, { status: 401 }))
     const app = createRelayApp(config({ role: 'director', cellId: 'director' }), {
       store: {} as never,
       assignments: { cellDeploymentStatus } as never,
@@ -459,12 +654,11 @@ describe('regional rehome director controls', () => {
       regionalRehomeFetch: sourceFetch,
       ready: vi.fn(async () => true)
     })
-    const response = await postPath(
-      app,
-      '/v1/admin/regional-rehome-trust-probe',
-      'deploy-token',
-      { v: 1, sourceCellId: 'production-gce-c7', sourceCellIncarnation: cellIncarnation }
-    )
+    const response = await postPath(app, '/v1/admin/regional-rehome-trust-probe', 'deploy-token', {
+      v: 1,
+      sourceCellId: 'production-gce-c7',
+      sourceCellIncarnation: cellIncarnation
+    })
 
     expect(response.status).toBe(409)
     expect(sourceFetch).toHaveBeenCalledOnce()

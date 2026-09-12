@@ -10,6 +10,10 @@ inputs:
     description: Node.js version override; defaults to the version declared in package.json.
     required: false
     default: ''
+  cache-dependency-path:
+    description: Lockfiles for the pnpm download store; include mobile/pnpm-lock.yaml only when the job installs mobile dependencies.
+    required: false
+    default: pnpm-lock.yaml
   persist-native-cache:
     description: Save restored native modules at job end. Set false when a later step overwrites the same path with a different ABI.
     required: false
@@ -39,9 +43,7 @@ runs:
       with:
         install: false
 
-    # Why both lockfiles: setup-node keys the pnpm store on the root lockfile alone, so
-    # jobs that also install mobile restored a store with none of the React Native tree
-    # in it and re-downloaded the lot on every run.
+    # Desktop-only jobs should not miss their download cache when mobile dependencies change.
     - name: Setup Node.js
       id: default-node
       if: inputs.node-version == ''
@@ -49,9 +51,7 @@ runs:
       with:
         node-version-file: package.json
         cache: pnpm
-        cache-dependency-path: |
-          pnpm-lock.yaml
-          mobile/pnpm-lock.yaml
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
 
     - name: Setup requested Node.js
       id: requested-node
@@ -60,9 +60,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: pnpm
-        cache-dependency-path: |
-          pnpm-lock.yaml
-          mobile/pnpm-lock.yaml
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
 
     - name: Validate native runtime
       shell: bash
@@ -76,14 +74,6 @@ runs:
             exit 2
             ;;
         esac
-
-    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
-    - name: Use external node-gyp
-      if: runner.os == 'Linux' && inputs.native-runtime != 'none'
-      shell: bash
-      run: |
-        npm install -g node-gyp@11.5.0
-        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
     - name: Prepare dependency install
       shell: bash
@@ -174,6 +164,22 @@ runs:
           node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
           node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
         key: native-modules-${{ runner.os }}-${{ steps.native-cache-scope.outputs.scope }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+
+    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
+    - name: Use external node-gyp
+      if: runner.os == 'Linux' && inputs.native-runtime != 'none'
+      shell: bash
+      env:
+        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
+        NATIVE_CACHE_HIT: ${{ steps.native-cache-restore.outputs.cache-hit || steps.native-cache-restore-only.outputs.cache-hit }}
+      run: |
+        # A cache hit can contain unusable addons; probe before skipping the rebuild toolchain.
+        if [ "$NATIVE_RUNTIME" = node ] && [ "$NATIVE_CACHE_HIT" = true ] &&
+          node config/scripts/ensure-native-runtime.mjs --check-only; then
+          exit 0
+        fi
+        npm install -g node-gyp@11.5.0
+        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
 
     - name: Prepare native runtime
       if: inputs.native-runtime != 'none'

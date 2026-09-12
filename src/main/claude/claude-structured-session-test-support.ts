@@ -52,6 +52,7 @@ export function fakeClaude(
     initModel?: string
     initProof?: 'init' | 'session-start' | 'none'
     initAccount?: unknown
+    initCommands?: unknown
     exitBeforeInit?: string
     settings?: unknown
     replayUuid?: string | null
@@ -111,6 +112,7 @@ export function fakeClaude(
         }
         return {
           models: [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
+          ...(options.initCommands === undefined ? {} : { commands: options.initCommands }),
           ...(options.initAccount === undefined ? {} : { account: options.initAccount })
         }
       },
@@ -196,7 +198,8 @@ export function adapterFor(
   initTimeoutMs?: number,
   readTranscriptLeaf?: ClaudeStructuredSessionAdapterDeps['readTranscriptLeaf'],
   persistHandle?: ClaudeStructuredSessionAdapterDeps['persistHandle'],
-  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged']
+  onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged'],
+  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 ): ClaudeStructuredSessionAdapter {
   return new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -214,13 +217,13 @@ export function adapterFor(
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
     ...(initTimeoutMs === undefined ? {} : { initTimeoutMs }),
-    dispatchAckTimeoutMs: 10,
     persistHandle:
       persistHandle ??
       (async (handle) => {
         persistedHandles.push(handle)
       }),
     ...(onBackgroundTasksChanged ? { onBackgroundTasksChanged } : {}),
+    ...(onDispatchSettledLate ? { onDispatchSettledLate } : {}),
     ...(readTranscriptLeaf ? { readTranscriptLeaf } : {})
   })
 }
@@ -228,9 +231,20 @@ export function adapterFor(
 export async function acquired(
   claude: ReturnType<typeof fakeClaude>,
   launch: Partial<ClaudeStructuredLaunch> = {},
-  events: ClaudeStructuredSessionEvent[] = []
+  events: ClaudeStructuredSessionEvent[] = [],
+  onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
 ): Promise<ClaudeStructuredSessionAdapter> {
-  const adapter = adapterFor(claude, launch, events)
+  const adapter = adapterFor(
+    claude,
+    launch,
+    events,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    onDispatchSettledLate
+  )
   await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
   return adapter
 }

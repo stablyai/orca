@@ -1,13 +1,13 @@
 import { withSpan } from '../../../observability/tracer'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
 import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
 import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'
 import { isStructuredNativeChatEnabled } from './structured-agent-session-policy'
 
-export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
+export const SESSION_TAB_CLOSE_METHODS = [
   defineMethod({
     name: 'session.tabs.close',
     params: CloseTab,
@@ -21,9 +21,7 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           raw,
           context.clientKind,
           context.clientCapabilities,
-          context.clientKind === 'mobile'
-            ? isStructuredNativeChatEnabled(context.runtime)
-            : undefined
+          isStructuredNativeChatEnabled(context.runtime)
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(
@@ -100,9 +98,7 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           raw,
           context.clientKind,
           context.clientCapabilities,
-          context.clientKind === 'mobile'
-            ? isStructuredNativeChatEnabled(context.runtime)
-            : undefined
+          isStructuredNativeChatEnabled(context.runtime)
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
         assertAgentSessionTabDestructiveMutationSupported(

@@ -19,12 +19,27 @@ import type {
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
 import { releaseStoredStructuredAgentSessionOwner } from './structured-agent-session-lease-release'
+import { resumeHeldStructuredAgentSession } from './structured-agent-session-hold-resume'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 
 export type StructuredAgentSessionLifetimeContext = {
   deps: StructuredAgentSessionHostDeps
   runtimeState: StructuredAgentSessionHostRuntimeState
   sessions: Map<string, StructuredAgentSessionHostSession>
   now: () => number
+  /** Drops the session's row from the agent-status store; see `forgetStructuredAgentSession`. */
+  forgetStatus: (sessionId: string) => void
+}
+
+/** Dropping a session and dropping its status row are ONE operation: the store keeps the row until
+ *  told, so a caller that only deletes strands a live-looking row no reader can ever decay. */
+export async function forgetStructuredAgentSession(
+  context: StructuredAgentSessionLifetimeContext,
+  sessionId: string
+): Promise<void> {
+  await context.sessions.get(sessionId)?.journal.close()
+  context.sessions.delete(sessionId)
+  context.forgetStatus(sessionId)
 }
 
 function hasProviderChild(
@@ -48,10 +63,7 @@ export async function evictHeldStructuredAgentSession(
     hasProviderChild: hasProviderChild(context, sessionId),
     eventSink: context.runtimeState.eventSinkFor(sessionId),
     adapter: context.deps.adapter,
-    forget: async () => {
-      await context.sessions.get(sessionId)?.journal.close()
-      context.sessions.delete(sessionId)
-    },
+    forget: () => forgetStructuredAgentSession(context, sessionId),
     discardSink: () => context.runtimeState.discardEventSink(sessionId),
     releaseLease: () =>
       releaseStoredStructuredAgentSessionOwner({
@@ -67,16 +79,43 @@ export async function evictHeldStructuredAgentSession(
   )
 }
 
+/** The first hold on a childless session: reconcile the lease, settle recovery, then attach. */
+export async function resumeStructuredAgentSessionForHold(
+  context: StructuredAgentSessionLifetimeContext & {
+    reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
+  },
+  sessionId: string,
+  attach: Parameters<typeof resumeHeldStructuredAgentSession>[0]['attach']
+): Promise<void> {
+  const unreconciled = await context.reconcileLeases(sessionId)
+  if (unreconciled) {
+    throw new Error(unreconciled.code)
+  }
+  await context.runtimeState.resolveRecovery(sessionId)
+  await resumeHeldStructuredAgentSession({
+    sessionId,
+    deps: context.deps,
+    now: context.now,
+    attach
+  })
+}
+
 export function createStructuredAgentSessionHolds(
   context: StructuredAgentSessionLifetimeContext,
   input: {
-    resume: (sessionId: string) => Promise<void>
-    evict: (sessionId: string) => Promise<void>
+    reconcileLeases: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
+    attach: Parameters<typeof resumeHeldStructuredAgentSession>[0]['attach']
+    close: (sessionId: string) => Promise<void>
   }
 ): StructuredAgentSessionHolds {
   return new StructuredAgentSessionHolds({
-    resume: input.resume,
-    evict: input.evict,
+    resume: (sessionId) =>
+      resumeStructuredAgentSessionForHold(
+        { ...context, reconcileLeases: input.reconcileLeases },
+        sessionId,
+        input.attach
+      ),
+    evict: input.close,
     hasProviderChild: (sessionId) => hasProviderChild(context, sessionId),
     isTurnActive: (sessionId) => {
       const session = context.sessions.get(sessionId)

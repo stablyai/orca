@@ -19,14 +19,14 @@ import type {
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import { deriveRelayHostId } from './relay-http-client'
 import { RelayDemandLedger } from './relay-demand-ledger'
-import { createRelayRegionPreferenceReader } from './relay-region-preference'
+import { createRelayRegionPreferenceReader } from './relay-region-preference-reader'
 
 type DesktopRelayServiceOptions = {
   authConfig: OrcaCloudAuthConfig
   userDataPath: string
   appVersion: string
   runtimeRpc: OrcaRuntimeRpcServer
-  onStatus: (status: RelayBrokerStatus) => void
+  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
 }
 
 export function pairingAuthorizationForContext(
@@ -71,7 +71,7 @@ export class DesktopRelayService {
       revokeOutbox: this.revokeOutbox,
       relayHostId: deriveRelayHostId(keypair.publicKey)
     })
-    const resolvePreferredRegion = createRelayRegionPreferenceReader(options)
+    const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
       readContext: () => readRelayAuthContext(options.authConfig, options.userDataPath),
       hasDemand: ({ identity }) =>
@@ -88,7 +88,9 @@ export class DesktopRelayService {
           mobileSocketWiring,
           isCurrent,
           refreshAccessToken,
-          resolvePreferredRegion,
+          resolvePreferredRegion: regionPreference.resolvePreferredRegion,
+          measureRegionDecision: regionPreference.measureRegionDecision,
+          onAssignedCellActive: regionPreference.noteAssignedCell,
           onStatus: options.onStatus
         })
         void this.flushRevokeOutbox(broker)
@@ -326,10 +328,8 @@ export class DesktopRelayService {
     if (expiresAt !== null) {
       // Why: an unscanned QR must stop holding a standing control when its
       // server invite expires, even if no renderer survives to report closure.
-      this.demandExpiryTimer = setTimeout(
-        () => this.refreshDemand(),
-        Math.max(1, expiresAt - Date.now() + 1)
-      )
+      const delay = Math.max(1, expiresAt - Date.now() + 1)
+      this.demandExpiryTimer = setTimeout(() => this.refreshDemand(), delay)
     }
   }
 }

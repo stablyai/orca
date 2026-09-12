@@ -39,3 +39,8 @@ export const canvasSendSchema = canvasActorSchema.extend({
   replyTo: z.string().max(128).optional(),
   requestId: z.string().uuid()
 })
+
+export const canvasInboxSchema = canvasActorSchema.extend({
+  canvasId: z.string().min(1).max(16384)
+})
+export const canvasHistorySchema = z.object({ canvasId: z.string().min(1).max(16384) })

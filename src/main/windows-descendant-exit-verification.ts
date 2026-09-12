@@ -1,3 +1,4 @@
+import { getProcessTableIndex } from '../shared/process-table-index'
 import type { DescendantTreeVerdict } from './pty-descendant-exit-verification'
 import { windowsDescendantsFromRows } from './providers/windows-foreground-process-rows'
 import { readWindowsProcessTableFresh } from './windows/windows-process-table'
@@ -57,6 +58,9 @@ function delay(ms: number): Promise<void> {
  * Snapshot a Windows root's descendants while it is still alive. Resolves null
  * (never rejects) when the table is unreadable or the root is absent — the same
  * contract as the POSIX walk, because "cannot see" is never "nothing is there".
+ *
+ * Stale parent links are pruned by creation time, so a backwards clock step
+ * between two spawns can drop a live descendant — accepted over a certain stall.
  */
 export async function captureWindowsDescendantSnapshot(
   rootPid: number,
@@ -69,9 +73,35 @@ export async function captureWindowsDescendantSnapshot(
   // One table read, not a walk plus an identity read: each is bounded in
   // seconds, and this runs inside the close ladder's budget.
   const table = await (deps.readTable ?? readWindowsProcessTableFresh)().catch(() => null)
-  const descendants = table && windowsDescendantsFromRows(table, rootPid)
-  const root = table?.find((row) => row.pid === rootPid)
-  if (!descendants || typeof root?.creationTimeMs !== 'number') {
+  if (!table) {
+    return null
+  }
+  // One index for both lookups, so a repeated pid resolves to the same row for
+  // the root and for a parent link: `byPid` is first-wins, a Map is not.
+  const rowsByPid = getProcessTableIndex(table).byPid
+  const root = rowsByPid.get(rootPid)
+  if (typeof root?.creationTimeMs !== 'number') {
+    return null
+  }
+  const rootCreationTimeMs = root.creationTimeMs
+  // Windows keeps a process's original parent PID after that parent exits, so a
+  // reused PID is not ancestry: no real child predates the parent it claims.
+  // The root's start backstops the undefined-time bypass, which admits a row
+  // unchecked and leaves its children no parent time to compare against. Ties
+  // pass -- FILETIMEs truncated to ms make a same-millisecond parent and child
+  // collide exactly, so `>` would drop true descendants.
+  const currentRows = table.filter((row) => {
+    const parentCreationTimeMs = rowsByPid.get(row.ppid)?.creationTimeMs
+    return (
+      // Its own ppid can be recycled too, and a pruned root loses the snapshot.
+      row.pid === rootPid ||
+      row.creationTimeMs === undefined ||
+      (row.creationTimeMs >= rootCreationTimeMs &&
+        (parentCreationTimeMs === undefined || row.creationTimeMs >= parentCreationTimeMs))
+    )
+  })
+  const descendants = windowsDescendantsFromRows(currentRows, rootPid)
+  if (!descendants) {
     return null
   }
   return {

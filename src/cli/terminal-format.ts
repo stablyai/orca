@@ -1,5 +1,6 @@
 import { PTY_LIVE_NOTE, describeUnconfirmedStop } from '../shared/pty-liveness-verdict'
 import { structuredChatPtyWriteRefusalCopy } from '../shared/agent-session-pty-write-refusal-copy'
+import { describeTerminalWaitBlockedReason } from '../shared/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import type {
   RuntimeTerminalClose,
@@ -118,7 +119,10 @@ function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
   if (!agentWait) {
     return 'none'
   }
-  return `${agentWait.reason ?? 'interactive prompt'} (via ${agentWait.source})`
+  if (!agentWait.reason) {
+    return `interactive prompt (via ${agentWait.source})`
+  }
+  return `${describeTerminalWaitBlockedReason(agentWait.reason)} (via ${agentWait.source})`
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
@@ -178,7 +182,50 @@ export function formatTerminalSend(result: { send: RuntimeTerminalSend }): strin
       return copy
     }
   }
-  return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
+  if (!result.send.accepted) {
+    const reason = result.send.refusedReason ? `: ${result.send.refusedReason}` : ''
+    return `Input refused by ${result.send.handle}${reason}.`
+  }
+  const prompt = result.send.prompt
+  if (!prompt) {
+    return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
+  }
+  return [
+    `Prompt ${prompt.requestId} on ${result.send.handle}: ${prompt.stages.join(' -> ')}.`,
+    `provider: ${prompt.provider}`,
+    `delivery observation: ${prompt.observation}`,
+    ...terminalSendWarnings(result.send).map((warning) => `warning: ${warning}`)
+  ].join('\n')
+}
+
+/** The same warnings the text formatter prints, so a --json caller sees them too. */
+export function terminalSendWarnings(send: RuntimeTerminalSend): string[] {
+  const warning = send.accepted && send.prompt ? promptObservationWarning(send.prompt) : null
+  return warning ? [warning] : []
+}
+
+function promptObservationWarning(
+  prompt: NonNullable<RuntimeTerminalSend['prompt']>
+): string | null {
+  if (prompt.observation === 'permission') {
+    return `delivery was not observed because the provider requires permission. Resolve the permission prompt in the terminal, then reissue the exact command with --retry-request ${prompt.requestId} and --wait-submit <seconds>.`
+  }
+  if (prompt.observation === 'incarnation_replaced') {
+    return 'delivery was not observed because the terminal process was replaced. Inspect the current terminal before sending a new prompt; do not retry with this request ID.'
+  }
+  // Ordered before the unsupported arm: an agent provider that never reached turn_started
+  // needs the swallowed-Enter recovery even if this host could not observe the submit.
+  if (prompt.provider !== 'unsupported' && prompt.provider !== 'old-host') {
+    return prompt.stages.includes('turn_started')
+      ? null
+      : `input was accepted but no turn start was observed, so the Enter may have been swallowed. Confirm delivery by reissuing the exact command with --retry-request ${prompt.requestId} --wait-submit <seconds>; the same request ID replays the receipt instead of sending the prompt again.`
+  }
+  if (prompt.observation === 'unsupported') {
+    return prompt.provider === 'old-host'
+      ? 'this host predates durable prompt receipts. Update Orca on the execution host, and inspect the terminal before retrying an ambiguous send.'
+      : 'input was accepted, but this provider cannot report delivery. Inspect the terminal before retrying.'
+  }
+  return null
 }
 
 export function formatTerminalRename(result: { rename: RuntimeTerminalRename }): string {
@@ -235,7 +282,7 @@ export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): strin
     `exitCode: ${result.wait.exitCode ?? 'null'}`
   ]
   if (result.wait.blockedReason) {
-    lines.push(`blockedReason: ${result.wait.blockedReason}`)
+    lines.push(`blockedReason: ${describeTerminalWaitBlockedReason(result.wait.blockedReason)}`)
   }
   return lines.join('\n')
 }

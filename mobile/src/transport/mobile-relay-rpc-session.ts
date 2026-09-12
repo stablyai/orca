@@ -294,6 +294,7 @@ export function connectMobileRelayRpcSession(args: {
     closed = true
     failure = error
     livenessWatchdog.stop(livenessIdentity)
+    streams.clear()
     link.close()
     pending.rejectAll(error)
     publishState(error instanceof MobileE2EEAuthenticationError ? 'auth-failed' : 'disconnected')

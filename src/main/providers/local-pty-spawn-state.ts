@@ -1,6 +1,7 @@
 import type { PtySpawnResult } from './types'
 import {
   pendingLocalPtySpawns,
+  ptyIncarnations,
   ptyProcesses,
   ptyWslDistroById,
   type PendingLocalPtySpawn
@@ -60,6 +61,7 @@ export function reattachLocalPty(id: string, cols: number, rows: number): PtySpa
   }
   return {
     id,
+    ...(ptyIncarnations.has(id) ? { incarnationId: ptyIncarnations.get(id) } : {}),
     pid: existing.pid,
     ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {}),
     isReattach: true,

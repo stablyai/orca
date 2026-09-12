@@ -5,6 +5,7 @@ import type { SshConnection } from './ssh-connection'
 import type { Store } from '../persistence'
 import type { SshPortForwardManager } from './ssh-port-forward'
 import { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
+import { RelayEndpointUnresponsiveError } from './ssh-relay-endpoint-incumbent'
 import type { BrowserWindow } from 'electron'
 
 const { filesystemProviderConstructorMock } = vi.hoisted(() => ({
@@ -196,6 +197,30 @@ describe('SshRelaySession terminal relay error (RelayVersionMismatchError)', () 
     await expect(session.establish(mockConn)).rejects.toThrow('boom')
     expect(onTerminal).not.toHaveBeenCalled()
     expect(session.getState()).toBe('idle')
+  })
+
+  it('routes RelayEndpointUnresponsiveError on reconnect() to onRelayLost, not the terminal path', async () => {
+    const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+    const onTerminal = vi.fn()
+    const onLost = vi.fn()
+    session.setOnTerminalRelayError(onTerminal)
+    session.setOnRelayLost(onLost)
+
+    await session.establish(mockConn)
+    const silent = new RelayEndpointUnresponsiveError({
+      sockPath: '/home/u/.orca-remote/relay-x/relay.sock',
+      verdict: 'live',
+      evidence: 'accepted-connection',
+      socketPresent: true,
+      holders: [],
+      holdersEnumerable: false
+    })
+    vi.mocked(deployAndLaunchRelay).mockRejectedValueOnce(silent)
+
+    await session.reconnect(mockConn)
+    expect(onTerminal).not.toHaveBeenCalled()
+    expect(onLost).toHaveBeenCalledWith('target-1')
   })
 
   it('fires onTerminalRelayError on reconnect() when deploy throws RelayVersionMismatchError', async () => {

@@ -6,7 +6,7 @@ import { applyTabOrderSortValues, partitionPinnedTabOrder } from './tabs-tab-ord
 import {
   mirrorTabPinnedToHost,
   mirrorTabViewModeToHost,
-  patchTerminalTabPinned
+  patchTerminalTabRow
 } from './tabs-host-mirroring'
 
 export function createTabsLabelActions(
@@ -62,7 +62,13 @@ export function createTabsLabelActions(
     },
 
     setTabViewMode: (tabId, mode) => {
-      set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode }) ?? {})
+      set((state) => ({
+        ...patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: mode }),
+        // Why the row too: viewMode is declared on both types and host-sync
+        // already writes it to the row. Only these local toggles skipped it, so
+        // readers had to OR the two indices to find out who owns the surface.
+        ...patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: mode })
+      }))
       mirrorTabViewModeToHost(get(), tabId, mode)
     },
 
@@ -86,7 +92,10 @@ export function createTabsLabelActions(
             (terminal) => terminal.id === found.tab.entityId
           )?.launchAgent ?? null
         toggled = { from: fromMode, to: nextMode, agent }
-        return patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }) ?? {}
+        return {
+          ...patchTab(state.unifiedTabsByWorktree, tabId, { viewMode: nextMode }),
+          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { viewMode: nextMode })
+        }
       })
       // Why: emit after the state write so the event reflects the committed mode.
       const committed = toggled as {
@@ -141,7 +150,7 @@ export function createTabsLabelActions(
             [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
           },
           // Why: reconcile derives pin from the TerminalTab, so mirror it there too or a host snapshot recomputes isPinned:false and un-pins during the echo window.
-          ...patchTerminalTabPinned(state.tabsByWorktree, worktreeId, tabId, true),
+          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: true }),
           groupsByWorktree: {
             ...state.groupsByWorktree,
             [worktreeId]: updateGroup(groups, { ...group, tabOrder })
@@ -178,7 +187,7 @@ export function createTabsLabelActions(
             ...state.unifiedTabsByWorktree,
             [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
           },
-          ...patchTerminalTabPinned(state.tabsByWorktree, worktreeId, tabId, false),
+          ...patchTerminalTabRow(state.tabsByWorktree, tabId, { isPinned: false }),
           groupsByWorktree: {
             ...state.groupsByWorktree,
             [worktreeId]: updateGroup(groups, { ...group, tabOrder })

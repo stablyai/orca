@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentCanvasAttachments } from './AgentCanvasAttachments'
 import { emptyCanvasDocument, type CanvasNode } from './agent-canvas-document'
 
 afterEach(cleanup)
 
-it('closes the attachment list before opening a note for inspection', () => {
+it('closes the attachment list before opening a note for inspection', async () => {
   const onConnect = vi.fn()
   const note: CanvasNode = {
     id: 'note',
@@ -31,6 +31,6 @@ it('closes the attachment list before opening a note for inspection', () => {
   fireEvent.click(view.getByRole('button', { name: 'Attached notes' }))
   expect(view.getByRole('dialog')).toBeTruthy()
   fireEvent.click(view.getByRole('button', { name: 'Requirements' }))
-  expect(onConnect).toHaveBeenCalledWith('note', 'agent')
+  await waitFor(() => expect(onConnect).toHaveBeenCalledWith('note', 'agent'))
   expect(view.queryByRole('dialog')).toBeNull()
 })

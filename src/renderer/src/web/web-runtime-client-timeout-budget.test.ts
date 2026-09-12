@@ -70,7 +70,7 @@ describe('WebRuntimeClient timeout budget', () => {
 
     await vi.advanceTimersByTimeAsync(60_000)
     expect(settled).toBe(false)
-    expect(waitForConnected).toHaveBeenCalledWith(25)
+    expect(waitForConnected).toHaveBeenCalledWith(25, undefined)
 
     resolveConnection()
     await Promise.resolve()

@@ -20,10 +20,7 @@ import {
 } from '@/lib/agent-launch-prompt-delivery'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import {
-  getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
@@ -37,15 +34,9 @@ import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
-import {
-  hasExplicitTuiLaunchCustomization,
-  hasExplicitTuiAgentArgs,
-  resolveAgentLaunchRoute
-} from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { launchAgentInStructuredNewTab } from '@/lib/launch-agent-in-new-tab-structured'
+import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
+import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 
 /**
  * Create a new terminal tab and queue the agent's launch command, optionally
@@ -173,57 +164,32 @@ function launchAgentInNewTabInternal(
     }
   }
 
-  const workspaceKind =
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      ? 'floating'
-      : worktreeId.startsWith('folder:')
-        ? 'folder'
-        : 'git-worktree'
-  const launchRoute =
+  // Why: the legacy re-entry is the plan's own fallback; deciding a route again would loop.
+  const plan =
     forceLegacy || args.viewMode === 'terminal'
-      ? 'legacy-native-chat'
-      : resolveAgentLaunchRoute({
+      ? null
+      : planAgentSessionLaunch(store, {
           agent,
-          settings: store.settings,
-          executionHostId: getExecutionHostIdForWorktree(store, worktreeId),
-          platform: CLIENT_PLATFORM,
-          hostCapabilities: readLocalRuntimeCapabilities(),
-          workspaceKind,
-          projectRuntime: getLocalProjectExecutionRuntimeContext(store, worktreeId),
+          workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
+          prompt: trimmedPrompt,
           promptDelivery: viewModePromptDelivery,
-          launchText: trimmedPrompt,
-          nativeChatTranscriptIsLocalReadable:
-            initialViewModeOptions.nativeChatTranscriptIsLocalReadable,
-          requiresTuiLaunchCustomization:
-            Boolean(initialCwd?.trim()) ||
-            hasExplicitTuiAgentArgs(agent, agentArgs) ||
-            hasExplicitTuiLaunchCustomization(store.settings, agent),
-          initialSessionOptions: startupPlan.sessionOptions
+          tuiCustomization: { cwd: initialCwd, agentArgs },
+          initialSessionOptions: startupPlan.sessionOptions,
+          onPromptDelivered
         })
-  if (launchRoute === 'structured-native-chat' && isAgentSessionHandleProvider(agent)) {
-    const structuredLaunch = startStructuredAgentLaunch(worktreeId, agent, {
-      prompt: trimmedPrompt,
-      ...(promptDelivery === 'submit-after-ready' ? { promptDelivery } : {}),
-      onPromptDelivered
+  if (plan?.route === 'structured-native-chat') {
+    const structured = launchAgentInStructuredNewTab({
+      plan,
+      legacyLaunch: () => launchAgentInNewTabInternal(args, true)
     })
-    void structuredLaunch
-      .claimDefinitiveRefusalFallback(() => {
-        const fallback = launchAgentInNewTabInternal(args, true)
-        return (
-          fallback?.promptDeliveryResult ??
-          (hasPrompt
-            ? { delivered: Boolean(fallback), failureNotified: fallback === null }
-            : undefined)
-        )
-      })
-      .catch((error) => console.error('Structured Codex fallback failed', error))
     return {
       tabId: null,
       startupPlan,
       pasteDraftAfterLaunch: false,
       focusAfterMenuClose: 'structured-session',
-      ...(structuredLaunch.promptDeliveryResult
-        ? { promptDeliveryResult: structuredLaunch.promptDeliveryResult }
+      structuredSettlement: structured.structuredSettlement,
+      ...(structured.promptDeliveryResult
+        ? { promptDeliveryResult: structured.promptDeliveryResult }
         : {})
     }
   }

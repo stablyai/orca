@@ -1,3 +1,4 @@
+import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
@@ -33,6 +34,7 @@ export type LaunchAgentInNewTabResult = {
   /** The host will publish and focus a structured tab asynchronously. */
   focusAfterMenuClose?: 'structured-session'
   promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
+  structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
 } | null
 
 export function shouldQueueTerminalFocusAfterMenuClose(

@@ -94,6 +94,8 @@ jobs:
         run: node -e 'const fs = require("node:fs"); const { expo } = require("./app.json"); fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${expo.version}\nbuild_number=${expo.ios.buildNumber}\n`)'
 
       - name: Expo prebuild
+        env:
+          ORCA_IOS_APS_ENVIRONMENT: production
         run: npx expo prebuild --platform ios --no-install
 
       - name: Install CocoaPods

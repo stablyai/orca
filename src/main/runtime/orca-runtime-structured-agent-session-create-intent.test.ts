@@ -7,7 +7,15 @@ describe('structured agent-session create intent', () => {
     const runtime = new OrcaRuntimeService(
       {
         getSettings: () => ({
-          agentDefaultEnv: { codex: { CODEX_HOME: '/configured/home' } }
+          agentDefaultEnv: { codex: { CODEX_HOME: '/configured/home' } },
+          nativeChatSessionOptions: {
+            codex: {
+              model: 'gpt-5.6-sol',
+              valuesByModel: {
+                'gpt-5.6-sol': { effort: 'medium', fastMode: true, personality: 'concise' }
+              }
+            }
+          }
         })
       } as never,
       undefined,
@@ -51,6 +59,7 @@ describe('structured agent-session create intent', () => {
       variable: 'CODEX_HOME',
       path: '/accounts/selected/home'
     })
+    expect(intent.options).toEqual({ model: 'gpt-5.6-sol', effort: 'medium' })
   })
 
   it('pins the configured Claude launch home without Codex launch preparation', async () => {
@@ -60,6 +69,12 @@ describe('structured agent-session create intent', () => {
         getSettings: () => ({
           agentDefaultEnv: {
             claude: { CLAUDE_CONFIG_DIR: '/configured/claude-home' }
+          },
+          nativeChatSessionOptions: {
+            claude: {
+              model: 'opus',
+              valuesByModel: { opus: { effort: 'high', fastMode: true } }
+            }
           }
         })
       } as never,
@@ -101,6 +116,7 @@ describe('structured agent-session create intent', () => {
       variable: 'CLAUDE_CONFIG_DIR',
       path: '/configured/claude-home'
     })
+    expect(intent.options).toEqual({ model: 'opus', effort: 'high' })
   })
 
   it('uses the managed Claude launch home before falling back to ~/.claude', async () => {

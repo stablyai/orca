@@ -67,8 +67,8 @@ jobs:
           [[ "${TARGET_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
           [[ "${ROLLBACK_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]
           test "${TARGET_IMAGE_DIGEST}" != "${ROLLBACK_IMAGE_DIGEST}"
-          [[ "${TARGET_REHOME_PROTOCOL}" =~ ^[01]$ ]]
-          [[ "${ROLLBACK_REHOME_PROTOCOL}" =~ ^[01]$ ]]
+          [[ "${TARGET_REHOME_PROTOCOL}" =~ ^(0|1|3)$ ]]
+          [[ "${ROLLBACK_REHOME_PROTOCOL}" =~ ^(0|1|3)$ ]]
           [[ "${EXPECTED_SELECTOR_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
           [[ "${EXPECTED_REHOME_GENERATION}" =~ ^(0|[1-9][0-9]*)$ ]]
           [[ "${WAVE_INDEX}" =~ ^[0-3]$ ]]
@@ -599,7 +599,7 @@ jobs:
             | jq -e '.control.enabled == false' >/dev/null
 
       - name: Prove exact per-host trust and idempotent no-neighbor behavior
-        if: ${{ inputs.mode != 'verify' && ((inputs.mode == 'rollback' && inputs.rollback-rehome-protocol == '1') || (inputs.mode != 'rollback' && inputs.target-rehome-protocol == '1')) }}
+        if: ${{ inputs.mode != 'verify' && ((inputs.mode == 'rollback' && inputs.rollback-rehome-protocol != '0') || (inputs.mode != 'rollback' && inputs.target-rehome-protocol != '0')) }}
         env:
           ORCA_RELAY_ADMIN_ID_TOKEN: ${{ steps.post-auth.outputs.id_token }}
         run: |

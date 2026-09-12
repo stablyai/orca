@@ -1,6 +1,11 @@
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
+import {
+  groupedQuestionPromptKey,
+  projectGroupedQuestion,
+  type GroupedQuestionDraft
+} from './mobile-structured-grouped-question'
 
 export type StructuredApprovalItem = AgentJournalRenderItem & {
   body: Extract<AgentJournalRenderItem['body'], { kind: 'approval' }>
@@ -143,14 +148,24 @@ export function projectStructuredPermission(
 }
 
 export function projectStructuredQuestion(
-  prompt: StructuredQuestionItem | null
+  prompt: StructuredQuestionItem | null,
+  groupedDraft: GroupedQuestionDraft | null = null
 ): MobileChatQuestion | null {
   if (prompt?.body.kind !== 'question') {
     return null
   }
+  if (prompt.body.questions) {
+    return projectGroupedQuestion(
+      prompt.body.questions,
+      groupedDraft,
+      groupedQuestionPromptKey(prompt.itemId, prompt.revision)
+    )
+  }
+  const optionDescriptions = prompt.body.options.map((option) => option.description)
   return {
     question: prompt.body.question,
     options: prompt.body.options.map((option) => option.label),
+    ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: false,
     allowOther: Boolean(prompt.body.freeTextQuestionId),
     optionTokens: prompt.body.options.map((option) =>

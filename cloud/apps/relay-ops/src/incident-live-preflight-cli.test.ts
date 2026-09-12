@@ -72,6 +72,7 @@ function sample(): IncidentSample {
     expectedSelector: selector,
     cells: [{
       cellId: 'production-gce-c1',
+      region: 'us-central1',
       runtimeKnown: true,
       powered: true,
       expectedAdmissionState: 'existing-only'
@@ -251,6 +252,30 @@ describe('relay incident live preflight', () => {
       ['--state-file', stateFile()],
       { now: () => now, collect: async () => unhealthy }
     )).rejects.toThrow('cloud-monitoring/threshold_max')
+  })
+
+  // Why: a frozen wave has to name what froze it without re-reading the sample.
+  it('names the signal and its numbers in the failure message', async () => {
+    const slowCell = sample()
+    slowCell.sources['active-probe']!.signals[
+      'cell.production-gce-c1.latency_ms'
+    ]!.value = 2_568
+    await expect(runIncidentLivePreflight(
+      ['--state-file', stateFile()],
+      { now: () => now, collect: async () => slowCell }
+    )).rejects.toThrow(
+      'relay live preflight failed: active-probe/threshold_max cell.production-gce-c1.latency_ms observed=2568 threshold=2000'
+    )
+
+    // A failure with no signal keeps the source/code token and drops the rest.
+    const stale = sample()
+    stale.sources['active-probe']!.observedAt = new Date(now - 60_001).toISOString()
+    await expect(runIncidentLivePreflight(
+      ['--state-file', stateFile()],
+      { now: () => now, collect: async () => stale }
+    )).rejects.toThrow(
+      'relay live preflight failed: active-probe/source_stale observed=60001 threshold=60000'
+    )
   })
 
   it('enforces the signed migration policy', async () => {

@@ -2201,8 +2201,6 @@
         "recentChatsTerminalsHeader": "Chats et terminaux récents",
         "27f10cca63": "Rechercher chats, terminaux, worktrees, paramètres et actions...",
         "2770f02910": "Rechercher chats, terminaux, worktrees, paramètres et actions",
-        "paletteOpenTabBranch": "Nom de branche",
-        "paletteOpenTabWorkspace": "Nom de l'espace de travail",
         "lastActiveTime": "Dernière activité il y a {{value0}}"
       },
       "github": {
@@ -5040,12 +5038,11 @@
           "keepDefaultBranchAria": "Garder la branche par défaut visible tout en masquant les espaces de travail en veille"
         },
         "SidebarHeader": {
-          "25a95899c9": "Ajouter un projet",
           "92154beb7e": "Nouvel espace de travail",
           "49f62c5665": "Tableau des espaces de travail",
           "5c9c7c16aa": "Ajoutez un projet pour créer des espaces de travail",
-          "ca6f729da2": "Nouvel espace de travail ({{value0}})",
-          "a30e34eb5c": "Fermer le tableau des espaces de travail"
+          "a30e34eb5c": "Fermer le tableau des espaces de travail",
+          "addProject": "Ajouter un projet"
         },
         "SidebarNav": {
           "80611a8b10": "Recherche",
@@ -15462,11 +15459,23 @@
           "770d458144": "Grouper l'activité des agents par",
           "795cbf26e2": "Filtrer...",
           "4616ea39fd": "Aller à l'espace de travail",
+          "threadListOptionsFiltered": "Options de la liste des fils, filtres actifs",
+          "showSearch": "Afficher la recherche",
+          "showUnreadOnly": "Afficher uniquement les fils non lus",
+          "showChildAgents": "Afficher les agents enfants",
+          "filtersSection": "Filtres",
+          "viewSection": "Affichage",
           "59b131fbd9": "Marquer le fil comme non lu",
           "beb2c19173": "Non lus",
           "5651b216c6": "Projet inconnu",
           "22b22034bc": "Terminal autonome indisponible dans Activité.",
           "afdc2139a8": "Terminal de l'agent fermé. Ouvrez un nouveau terminal dans cet espace de travail pour continuer."
+        },
+        "ActivityScopeFilterControls": {
+          "resetScope": "Afficher tous les hôtes et projets"
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "Effacer la notification"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "non lu",
@@ -16580,5 +16589,13 @@
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats."
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "attend une réponse",
+      "working": "en cours",
+      "stopped": "arrêté",
+      "finished": "terminé"
+    }
   }
 }

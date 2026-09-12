@@ -39,8 +39,8 @@ export function restoreJournalStore(
     publishRepairEpoch: () =>
       collaborators.epochController.start('unreconcilable_prefix', host.state().highestFence),
     adopt: host.adopt,
-    appendDisclosure: (identity, body, fence) =>
-      host.journal().appendItem(identity, body, { fence }),
+    appendItem: (identity, body, fence) => host.journal().appendItem(identity, body, { fence }),
+    agent: host.identity.agent,
     highestFence: () => host.state().highestFence,
     malformedRows: host.malformedRows,
     setMalformedRows: host.setMalformedRows,

@@ -16,7 +16,10 @@ import {
   type CodexStructuredSessionAdapterDeps
 } from '../codex/codex-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from '../claude/claude-structured-session-adapter'
-import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
+import {
+  StructuredAgentSessionHost,
+  type StructuredAgentSessionHostDeps
+} from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -76,6 +79,11 @@ export type StructuredAgentSessionRuntimeDeps = {
   resolveEnvironment?: () => Promise<NodeJS.ProcessEnv>
   resolveCodexOverrides?: () => NodeJS.ProcessEnv
   onError?: (input: { scope: string; error: unknown }) => void
+  /** Every structured-session status projection, for host-side reactions such as the first-work
+   *  workspace rename that CLI agents get from their hooks. */
+  onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
+  /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
+  statusSink?: StructuredAgentSessionHostDeps['statusSink']
   handoffTransport?: StructuredAgentSessionHandoffTransport
   reapOrphanChildren?: typeof stopOrphanAgentSessionChildren
 }
@@ -219,6 +227,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       }),
       ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+      onBackgroundTasksChanged: (sessionId, state) =>
+        host?.publishBackgroundTaskState(sessionId, state),
       onEvent: (event) => {
         if (event.type !== 'ended' || !('cause' in event) || event.cause !== 'unexpected-exit') {
           return
@@ -260,6 +270,14 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       },
       onBackgroundTasksChanged: (sessionId, state) =>
         host?.publishBackgroundTaskState(sessionId, state),
+      onDispatchSettledLate: (settlement) => {
+        void host?.settleLateDispatch(settlement).catch((error) =>
+          deps.onError?.({
+            scope: `structured-agent-session-late-settlement:${settlement.sessionId}`,
+            error
+          })
+        )
+      },
       ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
     })
@@ -281,6 +299,10 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         : {}),
       onEventSinkError: ({ sessionId, error }) =>
         deps.onError?.({ scope: `structured-agent-session-journal:${sessionId}`, error }),
+      ...(deps.onSessionStatusChanged
+        ? { onSessionStatusChanged: deps.onSessionStatusChanged }
+        : {}),
+      ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
       persistTuiProviderHandle: async ({ sessionId, link, now }) => {
         await store.transitionHandoff(sessionId, (record) =>
           recordAgentSessionProviderHandle({ record, fence: record.lease.runtimeFence, link, now })

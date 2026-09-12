@@ -12,6 +12,7 @@ import type { PtyProcessInspection } from '../providers/pty-process-inspection'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export class DaemonPtyRouter implements IPtyProvider {
   private current: DaemonPtyAdapter
@@ -93,7 +94,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.adapterFor(id).write(id, data)
   }
 
-  writeWithSettlement(id: string, data: string): Promise<boolean> {
+  writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
     return this.adapterFor(id).writeWithSettlement(id, data)
   }
 

@@ -1,5 +1,6 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { createSshPtyAppliedSizeReader } from './ssh-pty-applied-size'
 import type {
@@ -45,7 +46,7 @@ export class SshPtyProvider implements IPtyProvider {
   deleteWorktreeHistory = (worktreeId: string): Promise<void> =>
     this.rpcOperations.deleteWorktreeHistory(worktreeId)
   write = (id: string, data: string): boolean => this.rpcOperations.write(id, data)
-  writeWithSettlement = (id: string, data: string): Promise<boolean> =>
+  writeWithSettlement = (id: string, data: string): Promise<WriteSettlement> =>
     this.rpcOperations.writeWithSettlement(id, data)
   resize = (id: string, cols: number, rows: number): void =>
     this.rpcOperations.resize(id, cols, rows)

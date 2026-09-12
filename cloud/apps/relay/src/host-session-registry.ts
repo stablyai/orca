@@ -1,6 +1,7 @@
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import {
   ASSIGNMENT_LIMITS,
+  RELAY_DEFAULT_REGION,
   AuthRefreshSchema,
   buildHostChallengePlaintext,
   buildHostProofMacInput,
@@ -13,23 +14,28 @@ import {
   HostChallengeAckSchema,
   HostHelloSchema,
   InviteCreateSchema,
+  RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS,
+  RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME,
   RELAY_PROTOCOL_LIMITS,
   RELAY_CLOSE_CODE,
-  type RelayHostCloseReason
+  type RelayHostCloseReason,
+  type RelayRegion
 } from '@orca-cloud/relay-contract'
 import nacl from 'tweetnacl'
 import type WebSocket from 'ws'
 import type { RawData } from 'ws'
 import type { RelayConfig } from './config.js'
 import type { RelayAssignmentStore } from './assignment-store.js'
-import {
-  RelayCredentialStore,
-  type CredentialReservation
-} from './credential-store.js'
+import { RelayCredentialStore, type CredentialReservation } from './credential-store.js'
 import { HostCloseReasonMemory } from './host-close-reason-memory.js'
 import { relayHostLogDigest } from './relay-host-log-digest.js'
 import type { RelayTokenClaims } from './relay-token-verifier.js'
-import type { RelayRuntimeObserver } from './relay-observability.js'
+import {
+  percentile,
+  type RelayClientAcceptStage,
+  type RelayClientAcceptTimedStage,
+  type RelayRuntimeObserver
+} from './relay-observability.js'
 import type { PendingHostDataReservation } from './relay-connection-ledger.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
 import { ProcessQueuedByteBudget, wireSplice } from './splice-forwarder.js'
@@ -45,6 +51,20 @@ function printableCloseReason(reason: Buffer | string): string {
 type VerifyRelayToken = (token: string) => Promise<RelayTokenClaims | null>
 type HostState = 'proving' | 'active' | 'orphaned' | 'drain-only' | 'closed'
 
+// A host's distance to its cell moves on the scale of a rehome, not a heartbeat,
+// so a short window is enough to ride out one stalled ping.
+const CONTROL_RTT_WINDOW = 8
+const CONTROL_RTT_LOG_SAMPLE_THRESHOLD = 4
+const CONTROL_RTT_LOG_INTERVAL_MS = 60 * 60 * 1000
+// A pong claiming a multi-minute round trip is clock skew, not distance.
+const CONTROL_RTT_MAX_PLAUSIBLE_MS = 120_000
+
+// Wall clock can step backwards mid-accept; a negative latency would poison the
+// percentiles it feeds.
+function nonNegativeMs(elapsedMs: number): number {
+  return Math.max(0, elapsedMs)
+}
+
 const CONTROL_ACTIVITY_RENEWAL_INTERVAL_MS = RELAY_PROTOCOL_LIMITS.controlPingIntervalMs * 2
 // Preserve the existing 75s renewal runway after doubling the successful-call interval.
 const CONTROL_ACTIVITY_LEASE_MS =
@@ -56,7 +76,7 @@ export type HostSession = {
   identity: RelayTokenClaims
   readonly relayHostId: string
   readonly generation: number
-  readonly assignmentEpoch: number
+  assignmentEpoch: number
   readonly controlActivityId: string | null
   readonly controlResumeSecret: string
   // Why: reconnect churn is only actionable once it can be pinned to a client build.
@@ -68,6 +88,11 @@ export type HostSession = {
   orphanTimer: ReturnType<typeof setTimeout> | null
   heartbeatTimer: ReturnType<typeof setInterval> | null
   lastPongAt: number
+  // The `t` of the ping still waiting for its echo; null once one has answered it.
+  pendingPingAt: number | null
+  controlRttSamplesMs: number[]
+  controlRttLoggedAt: number | null
+  authorityRevision: number
   activityRenewalDueAt: number
   activityRenewalAttempt: number
   activityRenewalCompletedAttempt: number
@@ -82,10 +107,7 @@ export type HostSession = {
   regionalDrainExpiresAt: number | null
 }
 
-export type RegionalHostDrainOutcome =
-  | 'accepted'
-  | 'already-accepted'
-  | 'host-not-connected'
+export type RegionalHostDrainOutcome = 'accepted' | 'already-accepted' | 'host-not-connected'
 
 type PendingConnection = {
   connId: string
@@ -95,6 +117,15 @@ type PendingConnection = {
   attachTimer: ReturnType<typeof setTimeout>
   credentialActivityId: string | null
   capacityReservation?: PendingHostDataReservation
+  timing: ClientAcceptTiming
+}
+
+// Carries the phone-side accept clock across to the desktop's data leg, which
+// lands in a separate call and is the only place the accept is known to succeed.
+type ClientAcceptTiming = {
+  startedAt: number
+  connOpenAt: number
+  stageMs: Record<RelayClientAcceptStage, number>
 }
 
 function decodeCanonicalBase64(value: string, bytes: number): Uint8Array | null {
@@ -129,6 +160,16 @@ function send(socket: WebSocket, type: string, message: object): void {
 // stalled predecessor only accumulates doomed sockets.
 const ACTIVATION_QUEUE_WAIT_MS = 30_000
 
+// Why: this lease bounds how long a host lingers on a cell after a missed drain,
+// and rebinding it is the only passive rebalancing we have, so it has to stay
+// finite. 6h keeps both properties while cutting control-activation traffic on
+// the contended cell-inventory lock ~6x; the relay JWT (5 min, refreshed by the
+// desktop) and the 75s silence watchdog are enforced separately, so a longer
+// grant authorizes nothing extra. Symmetric jitter walks same-minute reconnect
+// cohorts apart across cycles without changing the mean rebind rate.
+export const CONTROL_LEASE_MS = 6 * 60 * 60 * 1000
+export const CONTROL_LEASE_JITTER_MS = 30 * 60 * 1000
+
 export class HostSessionRegistry {
   private readonly sessions = new Map<string, HostSession>()
   private readonly activationQueues = new Map<string, Promise<void>>()
@@ -136,7 +177,115 @@ export class HostSessionRegistry {
   // but a signed-out desktop never comes back, so the phone that asks minutes
   // later would otherwise find nothing to explain its rejection with.
   private readonly hostCloseReasons = new HostCloseReasonMemory(() => this.now())
+  private readonly hostCapabilities = new WeakMap<WebSocket, ReadonlySet<string>>()
   private draining = false
+
+  private readonly idleWork = new Map<string, number>()
+  private readonly idleAttempts = new Map<
+    string,
+    {
+      attemptId: string
+      authorityKey: string
+      promise: Promise<{ outcome: 'committed' | 'deferred' | 'stale' }>
+    }
+  >()
+
+  async idleRehome(
+    input: {
+      attemptId: string
+      userId: string
+      relayHostId: string
+      sourceAssignmentEpoch: number
+      sourceGeneration: number
+      sourceCellIncarnation: string
+      targetCellId: string
+    },
+    commit: () => Promise<{ outcome: 'committed' | 'deferred' | 'stale' }>,
+    reconcile: () => Promise<'committed' | 'not-committed' | 'stale'>
+  ): Promise<{ outcome: 'busy' | 'committed' | 'deferred' | 'stale' }> {
+    const authorityKey = JSON.stringify([
+      input.userId,
+      input.sourceAssignmentEpoch,
+      input.sourceGeneration,
+      input.sourceCellIncarnation,
+      input.targetCellId
+    ])
+    const prior = this.idleAttempts.get(input.relayHostId)
+    if (prior) {
+      if (prior.attemptId !== input.attemptId) return { outcome: 'busy' }
+      return prior.authorityKey === authorityKey ? prior.promise : { outcome: 'stale' }
+    }
+    const session = this.get(input)
+    if (
+      this.draining ||
+      !session ||
+      session.state !== 'active' ||
+      session.generation !== input.sourceGeneration ||
+      session.assignmentEpoch !== input.sourceAssignmentEpoch ||
+      this.cellIncarnation !== input.sourceCellIncarnation
+    ) {
+      const durable = await reconcile()
+      return { outcome: durable === 'committed' ? 'committed' : 'stale' }
+    }
+    if (
+      !session.socket ||
+      !this.hostCapabilities.get(session.socket)?.has(RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME)
+    )
+      return { outcome: 'deferred' }
+    if (
+      (this.idleWork.get(input.relayHostId) ?? 0) !== 0 ||
+      session.activeConnIds.size !== 0 ||
+      session.activeSplices.size !== 0 ||
+      session.pendingConns.size !== 0
+    )
+      return { outcome: 'busy' }
+    const revision = session.authorityRevision
+    const promise = Promise.resolve().then(async () => {
+      let outcome: 'committed' | 'deferred' | 'stale'
+      try {
+        outcome = (await commit()).outcome
+        if (outcome === 'deferred') {
+          const durable = await reconcile()
+          outcome = durable === 'not-committed' ? 'deferred' : durable
+        }
+      } catch {
+        let delay = 100
+        for (;;) {
+          try {
+            const durable = await reconcile()
+            outcome = durable === 'not-committed' ? 'deferred' : durable
+            break
+          } catch {
+            await new Promise<void>((resolve) => {
+              const timer = setTimeout(resolve, delay)
+              timer.unref?.()
+            })
+            delay = Math.min(delay * 2, 5000)
+          }
+        }
+      }
+      if (this.get(input) === session) {
+        if (outcome !== 'deferred' || this.draining || session.authorityRevision !== revision) {
+          this.closeDrainedSession(session)
+        }
+      }
+      if (this.idleAttempts.get(input.relayHostId)?.promise === promise)
+        this.idleAttempts.delete(input.relayHostId)
+      return { outcome }
+    })
+    this.idleAttempts.set(input.relayHostId, { attemptId: input.attemptId, authorityKey, promise })
+    return promise
+  }
+
+  private beginIdleWork(hostId: string): (() => void) | null {
+    if (this.idleAttempts.has(hostId)) return null
+    this.idleWork.set(hostId, (this.idleWork.get(hostId) ?? 0) + 1)
+    return () => {
+      const remaining = (this.idleWork.get(hostId) ?? 1) - 1
+      if (remaining === 0) this.idleWork.delete(hostId)
+      else this.idleWork.set(hostId, remaining)
+    }
+  }
 
   constructor(
     private readonly config: RelayConfig,
@@ -145,10 +294,37 @@ export class HostSessionRegistry {
     private readonly assignments: RelayAssignmentStore,
     private readonly queuedByteBudget: ProcessQueuedByteBudget,
     private readonly observer: RelayRuntimeObserver,
-    private readonly now: () => number = Date.now
+    private readonly now: () => number = Date.now,
+    private readonly random: () => number = Math.random,
+    private readonly cellIncarnation?: string
   ) {}
 
+  // Uniform over [CONTROL_LEASE_MS - jitter, CONTROL_LEASE_MS + jitter).
+  private controlLeaseExpiresAt(): number {
+    const offset = Math.floor((this.random() * 2 - 1) * CONTROL_LEASE_JITTER_MS)
+    return this.now() + CONTROL_LEASE_MS + offset
+  }
+
   async acceptClient(
+    socket: WebSocket,
+    hostId: string,
+    credential: string,
+    capacityReservation?: PendingHostDataReservation
+  ): Promise<void> {
+    const release = this.beginIdleWork(hostId)
+    if (!release) {
+      capacityReservation?.release()
+      this.rejectClient(socket, RELAY_CLOSE_CODE.WRONG_CELL)
+      return
+    }
+    try {
+      await this.acceptClientUnfenced(socket, hostId, credential, capacityReservation)
+    } finally {
+      release()
+    }
+  }
+
+  private async acceptClientUnfenced(
     socket: WebSocket,
     hostId: string,
     credential: string,
@@ -159,10 +335,42 @@ export class HostSessionRegistry {
       this.rejectClient(socket, RELAY_CLOSE_CODE.DRAINING)
       return
     }
+    // Why: the accept runs several serialized Postgres calls behind the contended
+    // cell-inventory lock, and phones bound their dial. Finishing the work for a
+    // phone that already hung up took an activity lease held for the 10s attach
+    // deadline, then failed at bind with host_data_reservation_already_bound.
+    const acceptStartedAt = this.now()
+    const abandonedByClient = (stage: RelayClientAcceptStage, cleanup?: () => void): boolean => {
+      if (socket.readyState === socket.OPEN) return false
+      capacityReservation?.release()
+      cleanup?.()
+      const elapsedMs = this.now() - acceptStartedAt
+      this.observer.recordClientAcceptAbandoned?.(stage, elapsedMs)
+      console.warn(
+        JSON.stringify({ event: 'orca_relay_client_accept_abandoned', stage, elapsedMs })
+      )
+      return true
+    }
+    const stageMs: Record<RelayClientAcceptStage, number> = {
+      assignment: 0,
+      credential: 0,
+      activity: 0
+    }
+    let stageCursor = acceptStartedAt
+    const markStage = (stage: RelayClientAcceptStage): void => {
+      const at = this.now()
+      stageMs[stage] = at - stageCursor
+      stageCursor = at
+    }
     if (this.config.role === 'cell') {
-      const outerIdentity =
-        (await this.store.resolveResume(hostId, credential)) ??
-        (await this.store.resolveInviteForMove(hostId, credential))
+      // Each lookup is its own pooled round trip; stop between them once the phone
+      // has left instead of running the rest of the chain for nobody.
+      let outerIdentity = await this.store.resolveResume(hostId, credential)
+      if (abandonedByClient('assignment')) return
+      if (!outerIdentity) {
+        outerIdentity = await this.store.resolveInviteForMove(hostId, credential)
+        if (abandonedByClient('assignment')) return
+      }
       const assignment = outerIdentity
         ? await this.assignments.resolve({ userId: outerIdentity.userId, relayHostId: hostId })
         : null
@@ -172,7 +380,9 @@ export class HostSessionRegistry {
         this.rejectClient(socket, RELAY_CLOSE_CODE.WRONG_CELL)
         return
       }
+      if (abandonedByClient('assignment')) return
     }
+    markStage('assignment')
     const reservation = await this.store.reserveCredential(hostId, credential)
     if (!reservation) {
       capacityReservation?.release()
@@ -181,6 +391,8 @@ export class HostSessionRegistry {
       return
     }
     this.observer.recordAuth(true)
+    if (abandonedByClient('credential', () => this.failReservationBestEffort(reservation))) return
+    markStage('credential')
     const sessionKey = this.key(reservation.userId, hostId)
     const session = this.sessions.get(sessionKey)
     if (
@@ -206,6 +418,7 @@ export class HostSessionRegistry {
       this.rejectClient(socket, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
       return
     }
+    const admittingSocket = session.socket
     const connId = randomUUID()
     const connTicket = randomBytes(32).toString('base64url')
     const identity = { userId: reservation.userId, relayHostId: hostId }
@@ -227,6 +440,29 @@ export class HostSessionRegistry {
         return
       }
     }
+    if (
+      abandonedByClient('activity', () => {
+        this.failReservationBestEffort(reservation)
+        if (credentialActivityId) this.releaseActivityBestEffort(identity, credentialActivityId)
+      })
+    ) {
+      return
+    }
+    // Admission may have crossed a drain or control replacement while persisting activity.
+    if (
+      this.draining ||
+      this.sessions.get(sessionKey) !== session ||
+      session.state !== 'active' ||
+      session.socket !== admittingSocket ||
+      admittingSocket.readyState !== admittingSocket.OPEN
+    ) {
+      capacityReservation?.release()
+      this.failReservationBestEffort(reservation)
+      if (credentialActivityId) this.releaseActivityBestEffort(identity, credentialActivityId)
+      this.rejectClient(socket, RELAY_CLOSE_CODE.WRONG_CELL)
+      return
+    }
+    markStage('activity')
     const attachTimer = setTimeout(() => {
       session.pendingConns.delete(connId)
       capacityReservation?.release()
@@ -241,7 +477,10 @@ export class HostSessionRegistry {
       client: socket,
       attachTimer,
       credentialActivityId,
-      capacityReservation
+      capacityReservation,
+      // Attach starts where the activity stage ended, so the conn-open send is
+      // charged to it and no wall-clock gap goes unattributed.
+      timing: { startedAt: acceptStartedAt, connOpenAt: stageCursor, stageMs }
     }
     capacityReservation?.bind(connId)
     session.pendingConns.set(connId, pending)
@@ -272,6 +511,27 @@ export class HostSessionRegistry {
     connTicket: string,
     generation: number
   ): Promise<boolean> {
+    const owner = [...this.sessions.values()].find((candidate) =>
+      candidate.pendingConns.has(connId)
+    )
+    const release = owner ? this.beginIdleWork(owner.relayHostId) : () => {}
+    if (!release) {
+      socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'idle cutover in progress')
+      return false
+    }
+    try {
+      return await this.acceptHostDataUnfenced(socket, connId, connTicket, generation)
+    } finally {
+      release()
+    }
+  }
+
+  private async acceptHostDataUnfenced(
+    socket: WebSocket,
+    connId: string,
+    connTicket: string,
+    generation: number
+  ): Promise<boolean> {
     const session = [...this.sessions.values()].find((candidate) =>
       candidate.pendingConns.has(connId)
     )
@@ -288,6 +548,7 @@ export class HostSessionRegistry {
       return false
     }
     this.observer.recordAuth(true)
+    const attachedAt = this.now()
     clearTimeout(pending.attachTimer)
     session.pendingConns.delete(connId)
     session.activeConnIds.add(connId)
@@ -323,6 +584,27 @@ export class HostSessionRegistry {
       }
       this.rejectClient(pending.client, RELAY_CLOSE_CODE.LIMIT_EXCEEDED)
       socket.close(RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'basis persistence failed')
+      return false
+    }
+    // Already admitted attachments may finish a regional drain, but never a retired generation.
+    if (
+      this.draining ||
+      this.sessions.get(this.key(identity.userId, identity.relayHostId)) !== session ||
+      this.get(identity)?.state === 'closed' ||
+      !session.activeConnIds.has(connId) ||
+      socket.readyState !== socket.OPEN ||
+      pending.client.readyState !== pending.client.OPEN
+    ) {
+      session.activeConnIds.delete(connId)
+      pending.capacityReservation?.release()
+      this.deactivateBasisBestEffort(connId)
+      this.failReservationBestEffort(pending.reservation)
+      if (spliceActivityId) this.releaseActivityBestEffort(identity, spliceActivityId)
+      if (pending.credentialActivityId) {
+        this.releaseActivityBestEffort(identity, pending.credentialActivityId)
+      }
+      this.rejectClient(pending.client, RELAY_CLOSE_CODE.DRAINING)
+      socket.close(RELAY_CLOSE_CODE.DRAINING, 'host retired during attachment')
       return false
     }
     const close = wireSplice({
@@ -361,6 +643,7 @@ export class HostSessionRegistry {
       close()
       return false
     }
+    const helloAt = this.now()
     send(pending.client, 'relay-hello', {
       ok: true,
       credentialKind: pending.reservation.credentialKind,
@@ -376,14 +659,106 @@ export class HostSessionRegistry {
           }
         : {})
     })
+    this.recordClientAcceptCompleted(session, pending, attachedAt, helloAt)
     return true
+  }
+
+  // The stages tile the whole accept, so their sum is the total minus only the
+  // clamping above: `basis` is the splice lease and connection-basis writes that
+  // land between the host data leg and relay-hello.
+  private recordClientAcceptCompleted(
+    session: HostSession,
+    pending: PendingConnection,
+    attachedAt: number,
+    helloAt: number
+  ): void {
+    const stageMs: Record<RelayClientAcceptTimedStage, number> = {
+      assignment: nonNegativeMs(pending.timing.stageMs.assignment),
+      credential: nonNegativeMs(pending.timing.stageMs.credential),
+      activity: nonNegativeMs(pending.timing.stageMs.activity),
+      attach: nonNegativeMs(attachedAt - pending.timing.connOpenAt),
+      basis: nonNegativeMs(helloAt - attachedAt)
+    }
+    const totalMs = nonNegativeMs(helloAt - pending.timing.startedAt)
+    this.observer.recordClientAcceptCompleted?.({ totalMs, stageMs })
+    console.log(
+      JSON.stringify({
+        event: 'orca_relay_client_accept_completed',
+        ...this.logIdentity(),
+        ...this.sessionPlacementLogFields(session),
+        credentialKind: pending.reservation.credentialKind,
+        stageMs,
+        totalMs,
+        relayHostIdDigest: relayHostLogDigest(session.relayHostId)
+      })
+    )
+  }
+
+  private sessionPlacementLogFields(session: HostSession) {
+    return {
+      assignmentEpoch: session.assignmentEpoch,
+      controlGeneration: session.generation,
+      drainMode: session.regionalDrainAttemptId ? 'deadline' : 'none'
+    }
+  }
+
+  // Matches the runtime metrics event so a log line and a metric point can be
+  // joined back to the process that emitted them.
+  private logIdentity(): { role: string; cellId: string; region: RelayRegion } {
+    return {
+      role: this.config.role,
+      cellId: this.config.cellId,
+      region: this.config.region ?? RELAY_DEFAULT_REGION
+    }
+  }
+
+  // Every desktop build already echoes the ping's `t`, so a pong is only timed when
+  // it answers the outstanding ping: at most one sample per ping this cell sent,
+  // however many a host floods. A pong that lost the race to the next ping is
+  // dropped here but still counts as proof of life for the silence watchdog.
+  private recordControlRtt(session: HostSession, echoedPingAt: unknown): void {
+    if (typeof echoedPingAt !== 'number' || echoedPingAt !== session.pendingPingAt) return
+    session.pendingPingAt = null
+    const now = this.now()
+    const rttMs = now - echoedPingAt
+    if (rttMs < 0 || rttMs > CONTROL_RTT_MAX_PLAUSIBLE_MS) return
+    this.observer.recordControlRtt?.(rttMs)
+    const samples = session.controlRttSamplesMs
+    samples.push(rttMs)
+    if (samples.length > CONTROL_RTT_WINDOW) samples.shift()
+    if (samples.length < CONTROL_RTT_LOG_SAMPLE_THRESHOLD) return
+    if (
+      session.controlRttLoggedAt !== null &&
+      now - session.controlRttLoggedAt < CONTROL_RTT_LOG_INTERVAL_MS
+    ) {
+      return
+    }
+    session.controlRttLoggedAt = now
+    console.log(
+      JSON.stringify({
+        event: 'orca_relay_host_control_rtt',
+        ...this.logIdentity(),
+        ...this.sessionPlacementLogFields(session),
+        relayHostIdDigest: relayHostLogDigest(session.relayHostId),
+        rttMsMedian: percentile(samples, 0.5),
+        sampleCount: samples.length
+      })
+    )
   }
 
   acceptControl(
     socket: WebSocket,
     identity: RelayTokenClaims,
-    connectionInclusionWatermark?: number
+    connectionInclusionWatermark?: number,
+    hostCapabilities?: ReadonlySet<string>
   ): void {
+    if (this.idleAttempts.has(identity.relayHostId)) {
+      socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'idle cutover in progress')
+      return
+    }
+    // Keyed by socket, not session: a rebind swaps the session's socket, and the
+    // successor's own advertisement is the only one that describes its decoder.
+    if (hostCapabilities?.size) this.hostCapabilities.set(socket, hostCapabilities)
     if (this.draining) {
       socket.close(RELAY_CLOSE_CODE.DRAINING, 'relay draining')
       return
@@ -421,8 +796,7 @@ export class HostSessionRegistry {
     socket: WebSocket | null,
     context: string
   ): void {
-    void Promise.resolve()
-      .then(task)
+    void (async () => task())()
       .catch((error: unknown) => {
         const message = (error instanceof Error ? error.message : 'unknown')
           // Untruncated, unlike peer-supplied close reasons: this is the
@@ -472,6 +846,7 @@ export class HostSessionRegistry {
     this.draining = true
     for (const session of this.sessions.values()) {
       if (session.state === 'closed') continue
+      session.authorityRevision += 1
       session.state = 'drain-only'
       if (session.socket) send(session.socket, 'drain', { graceMs, recovery: 'resolve-director' })
       setTimeout(() => this.closeDrainedSession(session), graceMs)
@@ -484,7 +859,8 @@ export class HostSessionRegistry {
     relayHostId: string
     sourceAssignmentEpoch: number
     graceMs: number
-  }): RegionalHostDrainOutcome {
+    sourceCellIncarnation?: string
+  }): RegionalHostDrainOutcome | Promise<RegionalHostDrainOutcome> {
     const session = this.get(input)
     if (!session || session.state === 'closed') return 'host-not-connected'
     if (session.assignmentEpoch !== input.sourceAssignmentEpoch) {
@@ -497,13 +873,11 @@ export class HostSessionRegistry {
       this.reassertRegionalDrain(session)
       return 'already-accepted'
     }
+    session.authorityRevision += 1
     session.regionalDrainAttemptId = input.attemptId
     session.regionalDrainExpiresAt = this.now() + input.graceMs
     this.reassertRegionalDrain(session)
-    session.regionalDrainTimer = setTimeout(
-      () => this.closeDrainedSession(session),
-      input.graceMs
-    )
+    session.regionalDrainTimer = setTimeout(() => this.closeDrainedSession(session), input.graceMs)
     return 'accepted'
   }
 
@@ -559,9 +933,9 @@ export class HostSessionRegistry {
     const existing = this.sessions.get(key)
     const rebind = Boolean(
       existing &&
-        hello.data.controlResumeSecret &&
-        hello.data.controlResumeSecret === existing.controlResumeSecret &&
-        (existing.state === 'orphaned' || existing.state === 'active')
+      hello.data.controlResumeSecret &&
+      hello.data.controlResumeSecret === existing.controlResumeSecret &&
+      (existing.state === 'orphaned' || existing.state === 'active')
     )
     const generation = rebind ? existing!.generation : (existing?.generation ?? 0) + 1
     const ephemeral = nacl.box.keyPair()
@@ -603,7 +977,9 @@ export class HostSessionRegistry {
     }, 10_000)
     socket.once('message', (raw, isBinary) => {
       clearTimeout(proofTimer)
-      const ack = isBinary ? null : HostChallengeAckSchema.safeParse(payload(raw, 'host-challenge-ack'))
+      const ack = isBinary
+        ? null
+        : HostChallengeAckSchema.safeParse(payload(raw, 'host-challenge-ack'))
       const proof = ack?.success ? decodeCanonicalBase64(ack.data.proofB64, 32) : null
       if (
         !ack?.success ||
@@ -645,6 +1021,11 @@ export class HostSessionRegistry {
     appVersion: string,
     connectionInclusionWatermark?: number
   ): Promise<void> {
+    const release = this.beginIdleWork(identity.relayHostId)
+    if (!release) {
+      socket.close(RELAY_CLOSE_CODE.WRONG_CELL, 'idle cutover in progress')
+      return Promise.resolve()
+    }
     const key = this.key(identity.sub, identity.relayHostId)
     const previous = this.activationQueues.get(key) ?? Promise.resolve()
     // The timeout only fails this waiting socket; the queue entry still chains
@@ -655,26 +1036,29 @@ export class HostSessionRegistry {
       socket.close(RELAY_CLOSE_CODE.LIMIT_EXCEEDED, 'control activation queue stalled')
     }, ACTIVATION_QUEUE_WAIT_MS)
     queueWaitTimer.unref?.()
-    const activation = previous.catch(() => undefined).then(async () => {
-      clearTimeout(queueWaitTimer)
-      if (queueWaitExpired) return
-      if ((this.sessions.get(key) ?? null) !== existing) {
-        socket.close(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
-        return
-      }
-      await this.activateCurrent(
-        socket,
-        identity,
-        existing,
-        generation,
-        rebind,
-        assignmentEpoch,
-        appVersion,
-        connectionInclusionWatermark
-      )
-    })
+    const activation = previous
+      .catch(() => undefined)
+      .then(async () => {
+        clearTimeout(queueWaitTimer)
+        if (queueWaitExpired) return
+        if ((this.sessions.get(key) ?? null) !== existing) {
+          socket.close(RELAY_CLOSE_CODE.PEER_DROPPED, 'control activation superseded')
+          return
+        }
+        await this.activateCurrent(
+          socket,
+          identity,
+          existing,
+          generation,
+          rebind,
+          assignmentEpoch,
+          appVersion,
+          connectionInclusionWatermark
+        )
+      })
     this.activationQueues.set(key, activation)
     const cleanup = (): void => {
+      release()
       if (this.activationQueues.get(key) === activation) this.activationQueues.delete(key)
     }
     void activation.then(cleanup, cleanup)
@@ -700,7 +1084,11 @@ export class HostSessionRegistry {
             cellId: this.config.cellId,
             assignmentEpoch,
             generation,
-            connectionInclusionWatermark
+            connectionInclusionWatermark,
+            idleRegionalRehome:
+              this.hostCapabilities.get(socket)?.has(RELAY_HOST_CAPABILITY_IDLE_REGIONAL_REHOME) ??
+              false,
+            cellIncarnation: this.cellIncarnation
           }
         )
         await this.assignments.markMigrationTargetRegistered(
@@ -737,13 +1125,15 @@ export class HostSessionRegistry {
       const previousSocket = existing.socket
       if (existing.orphanTimer) clearTimeout(existing.orphanTimer)
       existing.orphanTimer = null
+      existing.authorityRevision += 1
+      existing.assignmentEpoch = assignmentEpoch
       existing.socket = socket
       existing.state = existing.regionalDrainAttemptId ? 'drain-only' : 'active'
       existing.appVersion = appVersion
-      existing.leaseExpiresAt = this.now() + 55 * 60 * 1000
+      existing.leaseExpiresAt = this.controlLeaseExpiresAt()
       existing.lastPongAt = this.now()
-      existing.activityRenewalDueAt =
-        this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
+      existing.pendingPingAt = null
+      existing.activityRenewalDueAt = this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs
       this.wireActiveControl(existing)
       this.sendHelloAck(existing)
       if (existing.regionalDrainAttemptId) this.reassertRegionalDrain(existing)
@@ -791,10 +1181,14 @@ export class HostSessionRegistry {
       appVersion,
       state: 'active',
       socket,
-      leaseExpiresAt: this.now() + 55 * 60 * 1000,
+      leaseExpiresAt: this.controlLeaseExpiresAt(),
       orphanTimer: null,
       heartbeatTimer: null,
       lastPongAt: this.now(),
+      pendingPingAt: null,
+      controlRttSamplesMs: [],
+      controlRttLoggedAt: null,
+      authorityRevision: 0,
       activityRenewalDueAt: this.now() + RELAY_PROTOCOL_LIMITS.controlPingIntervalMs,
       activityRenewalAttempt: 0,
       activityRenewalCompletedAttempt: 0,
@@ -843,7 +1237,9 @@ export class HostSessionRegistry {
           ` splices=${session.closingCounts?.splices ?? session.activeSplices.size}` +
           ` pending=${session.closingCounts?.pending ?? session.pendingConns.size}` +
           ` code=${code} reason=${JSON.stringify(printableCloseReason(reason))}` +
-          (socketError === null ? '' : ` error=${JSON.stringify(printableCloseReason(socketError))}`)
+          (socketError === null
+            ? ''
+            : ` error=${JSON.stringify(printableCloseReason(socketError))}`)
       )
     })
     socket.on('message', (raw, isBinary) => {
@@ -852,6 +1248,7 @@ export class HostSessionRegistry {
         const parsed = JSON.parse(raw.toString()) as Record<string, unknown>
         if (parsed.type === 'pong') {
           session.lastPongAt = this.now()
+          this.recordControlRtt(session, parsed.t)
           return
         }
         if (parsed.type === 'auth-refresh') {
@@ -891,6 +1288,19 @@ export class HostSessionRegistry {
   }
 
   private async acceptRefresh(session: HostSession, raw: RawData): Promise<void> {
+    const release = this.beginIdleWork(session.relayHostId)
+    if (!release) {
+      session.socket?.close(RELAY_CLOSE_CODE.DRAINING, 'resolve-director')
+      return
+    }
+    try {
+      await this.acceptRefreshUnfenced(session, raw)
+    } finally {
+      release()
+    }
+  }
+
+  private async acceptRefreshUnfenced(session: HostSession, raw: RawData): Promise<void> {
     const parsed = AuthRefreshSchema.safeParse(payload(raw, 'auth-refresh'))
     if (!parsed.success) return
     const refreshed = await this.verifyRelayToken(parsed.data.relayJwt)
@@ -921,6 +1331,16 @@ export class HostSessionRegistry {
     if (controlActivityId && now >= session.activityRenewalDueAt) {
       const attempt = ++session.activityRenewalAttempt
       const startedAt = now
+      const socket = session.socket
+      const authorityRevision = session.authorityRevision
+      const current = (): boolean =>
+        this.sessions.get(key) === session &&
+        session.state !== 'closed' &&
+        session.socket === socket &&
+        socket.readyState === socket.OPEN &&
+        session.controlActivityId === controlActivityId &&
+        session.authorityRevision === authorityRevision &&
+        attempt > session.activityRenewalCompletedAttempt
       void this.assignments
         .renewControlActivity(
           { userId: session.identity.sub, relayHostId: session.relayHostId },
@@ -931,11 +1351,16 @@ export class HostSessionRegistry {
           }
         )
         .then(() => {
-          if (attempt <= session.activityRenewalCompletedAttempt) return
+          if (!current()) return
           session.activityRenewalCompletedAttempt = attempt
           session.activityRenewalDueAt = startedAt + CONTROL_ACTIVITY_RENEWAL_INTERVAL_MS
         })
         .catch(async (error: unknown) => {
+          if (!current()) return
+          if (error instanceof Error && error.message === 'assignment_not_found') {
+            socket.close(RELAY_CLOSE_CODE.DRAINING, 'control assignment missing')
+            return
+          }
           if (error instanceof Error && error.message === 'activity_cell_not_authoritative') {
             // Completion fences a late drain-only heartbeat after all source work is gone.
             session.socket?.close(RELAY_CLOSE_CODE.DRAINING, 'control migration completed')
@@ -958,8 +1383,22 @@ export class HostSessionRegistry {
                   cellId: this.config.cellId
                 }
               )
+              if (!current()) {
+                // A replaced activity must not remain leased after its owner disappears.
+                if (
+                  !this.sessions.get(key) ||
+                  this.sessions.get(key)?.controlActivityId !== controlActivityId
+                ) {
+                  this.releaseActivityBestEffort(
+                    { userId: session.identity.sub, relayHostId: session.relayHostId },
+                    controlActivityId
+                  )
+                }
+                return
+              }
               this.observer.recordControlActivityRecovery?.(true)
             } catch (acquireError: unknown) {
+              if (!current()) return
               this.observer.recordControlActivityRecovery?.(false)
               if (
                 acquireError instanceof Error &&
@@ -999,11 +1438,18 @@ export class HostSessionRegistry {
       session.socket.close(RELAY_CLOSE_CODE.DRAINING, 'control lease expired')
       return
     }
+    session.pendingPingAt = now
     send(session.socket, 'ping', { t: now })
   }
 
   private sendHelloAck(session: HostSession): void {
     if (!session.socket) return
+    // Without these a host that missed the conn-open cannot dial the pending
+    // connection: it would have to guess the pairing kind and the device the
+    // relay authorized. Only sent to a host that said it can read them.
+    const details = this.hostCapabilities
+      .get(session.socket)
+      ?.has(RELAY_HOST_CAPABILITY_PENDING_CONN_DETAILS)
     send(session.socket, 'host-hello-ack', {
       v: 1,
       generation: session.generation,
@@ -1012,13 +1458,34 @@ export class HostSessionRegistry {
       activeConnIds: [...session.activeConnIds],
       pendingConns: [...session.pendingConns.values()].map((pending) => ({
         connId: pending.connId,
-        connTicket: pending.connTicket
+        connTicket: pending.connTicket,
+        ...(details
+          ? {
+              kind: pending.reservation.credentialKind,
+              relayDeviceId: pending.reservation.relayDeviceId
+            }
+          : {})
       }))
     })
   }
 
   private closeDrainedSession(session: HostSession): void {
     if (session.state === 'closed') return
+    const forcedConnections = session.activeConnIds.size + session.pendingConns.size
+    if (forcedConnections > 0) {
+      console.warn(
+        JSON.stringify({
+          event: 'orca_relay_host_drain_forced_close',
+          ...this.logIdentity(),
+          ...this.sessionPlacementLogFields(session),
+          relayHostIdDigest: relayHostLogDigest(session.relayHostId),
+          reason: this.draining ? 'emergency' : 'regional-deadline',
+          forcedConnections,
+          splices: session.activeSplices.size,
+          pending: session.pendingConns.size
+        })
+      )
+    }
     if (session.heartbeatTimer) clearInterval(session.heartbeatTimer)
     if (session.orphanTimer) clearTimeout(session.orphanTimer)
     if (session.regionalDrainTimer) clearTimeout(session.regionalDrainTimer)
@@ -1051,11 +1518,7 @@ export class HostSessionRegistry {
     session.pendingConns.clear()
     session.state = 'closed'
     if (session.socket) {
-      closeRelayWebSocket(
-        session.socket,
-        RELAY_CLOSE_CODE.DRAINING,
-        'resolve configured director'
-      )
+      closeRelayWebSocket(session.socket, RELAY_CLOSE_CODE.DRAINING, 'resolve configured director')
     }
     const key = this.key(session.identity.sub, session.relayHostId)
     if (this.sessions.get(key) === session) this.sessions.delete(key)
@@ -1076,6 +1539,23 @@ export class HostSessionRegistry {
   }
 
   private async acceptControlCommand(
+    session: HostSession,
+    type: unknown,
+    raw: RawData
+  ): Promise<void> {
+    const release = this.beginIdleWork(session.relayHostId)
+    if (!release) {
+      session.socket?.close(RELAY_CLOSE_CODE.DRAINING, 'resolve-director')
+      return
+    }
+    try {
+      await this.acceptControlCommandUnfenced(session, type, raw)
+    } finally {
+      release()
+    }
+  }
+
+  private async acceptControlCommandUnfenced(
     session: HostSession,
     type: unknown,
     raw: RawData
@@ -1116,10 +1596,7 @@ export class HostSessionRegistry {
       }
       if (type === 'device-credential-install') {
         const request = DeviceCredentialInstallSchema.parse(payload(raw, type))
-        if (
-          session.state !== 'active' &&
-          request.authorization.mode === 'authenticated-direct'
-        ) {
+        if (session.state !== 'active' && request.authorization.mode === 'authenticated-direct') {
           throw new Error('authorization_expired')
         }
         const installActivityId = `install:${request.reqId}`

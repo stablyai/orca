@@ -56,8 +56,11 @@ describe('supportsClaudeStructuredLocation', () => {
 
   it('accepts Windows local locations once creation-time proof is available', () => {
     previousPlatform = setPlatform('win32')
+    // supportedProcessDataFlags is the addon's own report; the enum alone is
+    // not proof, because pnpm patches the source over the tarball's prebuilt.
     __setWindowsProcessTreeLoaderForTests(() => ({
       ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
+      supportedProcessDataFlags: 7,
       getAllProcesses: () => undefined
     }))
     expect(

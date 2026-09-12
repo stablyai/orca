@@ -4390,11 +4390,10 @@
           "92154beb7e": "新規ワークスペース",
           "49f62c5665": "ワークスペースボード",
           "5c9c7c16aa": "プロジェクトを追加してワークスペースを作成する",
-          "ca6f729da2": "新規ワークスペース ({{value0}})",
           "a30e34eb5c": "ワークスペースボードを閉じる",
-          "25a95899c9": "プロジェクトを追加",
           "spaces": "スペース",
-          "views": "サイドバービュー"
+          "views": "サイドバービュー",
+          "addProject": "プロジェクトを追加"
         },
         "SidebarNav": {
           "80611a8b10": "検索",
@@ -14180,12 +14179,40 @@
           "770d458144": "グループ化",
           "795cbf26e2": "フィルター…",
           "4616ea39fd": "ワークスペースにジャンプ",
+          "threadListOptionsFiltered": "スレッドリストのオプション、フィルターが有効",
+          "showSearch": "検索を表示",
           "markThreadRead": "スレッドを既読としてマーク",
           "59b131fbd9": "スレッドを未読としてマークする",
           "beb2c19173": "未読",
           "5651b216c6": "不明なプロジェクト",
           "22b22034bc": "スタンドアロンターミナルはアクティビティでは使用できません。",
-          "afdc2139a8": "Agent ターミナルが閉じられました。続行するには、このワークスペースで新規ターミナルを開いてください。"
+          "afdc2139a8": "Agent ターミナルが閉じられました。続行するには、このワークスペースで新規ターミナルを開いてください。",
+          "clearCompleted": "完了済みをクリア",
+          "none": "なし",
+          "search": "検索",
+          "showUnreadOnly": "未読のみ表示",
+          "showChildAgents": "子 Agent を表示",
+          "activityOptions": "アクティビティのオプション",
+          "interrupted": "中断",
+          "state": {
+            "working": "作業中",
+            "monitoring": "バックグラウンドタスクを監視中",
+            "blocked": "ブロック",
+            "waiting": "入力待ち",
+            "failed": "失敗",
+            "done": "完了",
+            "idle": "アイドル",
+            "unverifiable": "最近の更新なし",
+            "permission": "要対応"
+          },
+          "filtersSection": "フィルター",
+          "viewSection": "表示"
+        },
+        "ActivityScopeFilterControls": {
+          "resetScope": "すべてのホストとプロジェクトを表示"
+        },
+        "ActivityThreadRow": {
+          "clearNotification": "通知を消去"
         },
         "ActivityTitlebarControls": {
           "f915168c8e": "未読",
@@ -14870,7 +14897,11 @@
   "dashboard": {
     "sidebar": {
       "label": "Agent",
-      "dashboardLabel": "Agent ダッシュボード"
+      "dashboardLabel": "Agent ダッシュボード",
+      "openActivity": "アクティビティを表示",
+      "closeActivity": "アクティビティビューを閉じる",
+      "projects": "プロジェクト",
+      "workspaces": "ワークスペース"
     }
   },
   "browser": {
@@ -14925,6 +14956,14 @@
       "hide": "Agent を隠す",
       "action": "Agent を試す",
       "hiddenToast": "Agent タブを非表示にしました。設定 → 実験的機能で再度有効にできます。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "入力待ち",
+      "working": "処理中",
+      "stopped": "停止",
+      "finished": "完了"
     }
   }
 }

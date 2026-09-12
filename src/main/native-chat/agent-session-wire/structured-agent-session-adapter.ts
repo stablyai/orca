@@ -1,3 +1,7 @@
+import type {
+  AgentSessionRewindReason,
+  AgentSessionRewindSupport
+} from '../../../shared/agent-session-rewind'
 // What the wire needs from a provider adapter.
 //
 // Phase 2 implements this over the Codex app-server and the Claude Agent SDK;
@@ -8,6 +12,7 @@
 
 import type {
   AgentJournalItemIdentity,
+  AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
@@ -19,6 +24,7 @@ import type {
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionOptionsResult,
+  AgentSessionSlashCommand,
   AgentSessionWireRefusalCode
 } from '../../../shared/agent-session-wire'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -30,6 +36,12 @@ export class AgentSessionAcquisitionRefusal extends Error {
   ) {
     super(message)
     this.name = 'AgentSessionAcquisitionRefusal'
+  }
+}
+
+export class AgentSessionRewindRefusal extends AgentSessionAcquisitionRefusal {
+  constructor(readonly rewindReason: AgentSessionRewindReason) {
+    super(`agent_session_rewind:${rewindReason}`)
   }
 }
 
@@ -79,6 +91,13 @@ export function isAgentSessionPreSpawnError(error: unknown): error is AgentSessi
 export type AgentSessionDispatchOutcome =
   /** The provider owns the turn now, under this identity. */
   | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
+  /**
+   * The provider transport took the message; identity settles later, out of band.
+   * The submission stays `pending`: a message queued behind a running turn is
+   * acknowledged only when that turn starts, so elapsed time is not evidence of
+   * anything and never promotes this to `unknown`.
+   */
+  | { state: 'admitted' }
   | { state: 'rejected'; reason: string }
   /** The call did not settle. Never re-send on the user's behalf. */
   | { state: 'unknown'; reason: string }
@@ -90,12 +109,22 @@ export type StructuredAgentSessionLifecycleEvent = {
   cause: 'unexpected-exit' | 'requested-close'
   fence: number
   acquisitionGeneration: string
+  /** Host receipt of the child exit, retained across settlement retries. */
+  observedAt?: number
   /** Translator could not admit terminal rows; host recovery must append its bounded fallback. */
   settlementRetryRequired?: boolean
 }
 
 export type StructuredAgentSessionAcquireInput = {
   identity: AgentSessionJournalIdentity
+  rewind?: {
+    targetUuid: string
+    previousLeafUuid: string
+    dropsTurn?: string
+    onProved?: (leafUuid: string) => Promise<void>
+  }
+  /** Recovery restores an unproved rewind's original cursor with ordinary branch proof. */
+  rewindRecovery?: { leafUuid: string; onProved: () => Promise<void> }
   fence: number
   spawnToken: string
   options?: Readonly<Record<string, string>>
@@ -130,6 +159,33 @@ export type StructuredAgentSessionAdapter = {
     body: AgentJournalMessageItem
     fence: number
   }): Promise<AgentSessionDispatchOutcome>
+  rewindSupport?(sessionId: string): AgentSessionRewindSupport
+  recoverRewind?(input: {
+    sessionId: string
+    fence: number
+    beforeTurnId: string
+  }): Promise<
+    | { ok: true; items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
+    | { ok: false; reason: AgentSessionRewindReason }
+  >
+  rewind?(input: {
+    sessionId: string
+    fence: number
+    beforeTurnId: string
+    onPrepared?: (
+      items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[]
+    ) => Promise<void>
+    onReverted?: () => Promise<void>
+  }): Promise<
+    | { ok: true; items?: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] }
+    | { ok: false; reason: AgentSessionRewindReason }
+  >
+  compact?(input: {
+    turnId: string
+    sessionId: string
+    fence: number
+    onLateResult?: (result: { error?: string }) => Promise<void>
+  }): Promise<{ error?: string }>
   /** Cancels one turn, not the session: a session-wide interrupt would also kill
    *  a turn the client never asked to stop. */
   cancelTurn(input: {
@@ -137,8 +193,15 @@ export type StructuredAgentSessionAdapter = {
     turnId: string
     fence: number
   }): Promise<{ cancelled: boolean }>
-  stopBackgroundTasks?(input: { sessionId: string; fence: number }): Promise<{ cancelled: boolean }>
+  stopBackgroundTasks?(input: {
+    sessionId: string
+    fence: number
+    taskId?: string
+  }): Promise<{ cancelled: boolean }>
   backgroundTaskState?(sessionId: string): AgentSessionBackgroundTaskState | null | undefined
+  /** The `/` surface the running provider reports for itself. Undefined when the
+   *  provider never reports one, which is what keeps the client on its catalog. */
+  readCommands?(sessionId: string): AgentSessionSlashCommand[] | undefined
   /** Fires the provider callback for an approval or a question. The wire calls
    *  this only after the durable compare-and-set won, so it runs exactly once. */
   answerPrompt(input: {

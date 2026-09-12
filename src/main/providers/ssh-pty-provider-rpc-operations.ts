@@ -1,6 +1,7 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 type SshPtyProviderRpcContext = {
   mux: SshChannelMultiplexer
@@ -14,7 +15,7 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
       await mux.request('pty.deleteWorktreeHistory', { worktreeId })
     },
     write: (id: string, data: string): boolean => writeToSshPty(mux, toRelayPtyId(id), data),
-    writeWithSettlement: (id: string, data: string): Promise<boolean> =>
+    writeWithSettlement: (id: string, data: string): Promise<WriteSettlement> =>
       writeToSshPtyWithSettlement(mux, toRelayPtyId(id), data),
     resize: (id: string, cols: number, rows: number): void => {
       mux.notify('pty.resize', { id: toRelayPtyId(id), cols, rows })

@@ -4,6 +4,7 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { readCodexSessionIndexTitle } from './session-scanner-codex-title-index'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
+  accumulatorSessionIdentity,
   cloneSessionAccumulator,
   createAccumulator,
   finalizeSession,
@@ -22,6 +23,7 @@ import type {
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   addCodexUsage,
   asRecord,
@@ -29,18 +31,22 @@ import {
   extractModel,
   extractString,
   normalizeCodexUsage,
-  normalizeTitleText,
   parseJsonObject,
   subtractCodexUsage
 } from './session-scanner-values'
 import { remoteSessionContentLines } from './remote-session-content-lines'
 import { readCodexTimelineOnlyRecord } from './session-scanner-codex-record-fast-path'
+import {
+  extractCodexSessionMetadataTitle,
+  isCodexWorkerSession
+} from './session-scanner-codex-session-meta'
 
 export async function parseCodexSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
   codexHome: string | null = null,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
@@ -53,6 +59,7 @@ export async function parseCodexSessionFile(
     platform,
     codexHome,
     executionHostId,
+    messages,
     titleReader: (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
   })
 }
@@ -89,12 +96,16 @@ type CodexSessionParseState = {
   titleSource: 'meta' | 'user' | null
 }
 
-function createCodexParseState(file: FileWithMtime): CodexSessionParseState {
+function createCodexParseState(
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
+): CodexSessionParseState {
   return {
     accumulator: createAccumulator({
       agent: 'codex',
       file,
-      sessionId: sessionIdFromFileName(file.path)
+      sessionId: sessionIdFromFileName(file.path),
+      messages
     }),
     previousTotals: null,
     rejectedWorkerSession: false,
@@ -143,19 +154,13 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
       accumulator.title = metadataTitle
       state.titleSource = 'meta'
     }
-    const cwd = extractString(payload.cwd)
-    if (cwd) {
-      accumulator.cwd = cwd
-    }
+    accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
     return
   }
 
   if (record.type === 'turn_context' && payload) {
-    const cwd = extractString(payload.cwd)
-    if (cwd) {
-      accumulator.cwd = cwd
-    }
+    accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     const model = extractModel(payload)
     if (model) {
       accumulator.model = model
@@ -167,7 +172,7 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     return
   }
 
-  if (record.type === 'response_item' && payload.type === 'message') {
+  if (record.type === 'response_item') {
     if (state.historyMode === 'paginated') {
       return
     }
@@ -257,10 +262,13 @@ async function finalizeCodexParseState(
 
 export function createCodexSessionResumeState(
   file: FileWithMtime,
-  codexHome: string | null
+  codexHome: string | null,
+  messages?: TranscriptMessageSink
 ): ResumableSessionParseState {
-  return codexResumeStateFromParseState(createCodexParseState(file), codexHome, (sessionId) =>
-    readCodexSessionIndexTitle(file.path, codexHome, sessionId)
+  return codexResumeStateFromParseState(
+    createCodexParseState(file, messages),
+    codexHome,
+    (sessionId) => readCodexSessionIndexTitle(file.path, codexHome, sessionId)
   )
 }
 
@@ -272,7 +280,10 @@ function codexResumeStateFromParseState(
   return {
     consumeLine: (line) => consumeCodexRecordLine(state, line),
     consumeLineBytes: (line) => {
-      const timelineOnlyRecord = readCodexTimelineOnlyRecord(line)
+      const timelineOnlyRecord = readCodexTimelineOnlyRecord(
+        line,
+        state.accumulator.messages.active && state.historyMode !== 'paginated'
+      )
       if (timelineOnlyRecord) {
         updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
       } else {
@@ -280,6 +291,7 @@ function codexResumeStateFromParseState(
       }
     },
     shouldStop: () => state.rejectedWorkerSession,
+    identity: () => accumulatorSessionIdentity(state.accumulator),
     clone: () =>
       codexResumeStateFromParseState(cloneCodexParseState(state), codexHome, titleReader),
     touchFile: (file) => {
@@ -298,8 +310,9 @@ async function parseCodexSessionLines(args: {
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
   titleReader?: (sessionId: string) => Promise<string | null>
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
-  const state = createCodexParseState(args.file)
+  const state = createCodexParseState(args.file, args.messages)
   for await (const line of args.lines) {
     consumeCodexRecordLine(state, line)
     if (state.rejectedWorkerSession) {
@@ -313,22 +326,4 @@ async function parseCodexSessionLines(args: {
     executionHostId: args.executionHostId,
     executionHostPlatform: args.executionHostPlatform
   })
-}
-
-function isCodexWorkerSession(payload: Record<string, unknown>): boolean {
-  const threadSource = extractString(payload.thread_source) ?? extractString(payload.threadSource)
-  if (threadSource) {
-    return threadSource.toLowerCase() !== 'user'
-  }
-
-  const source = asRecord(payload.source)
-  return Boolean(asRecord(source?.subagent))
-}
-
-function extractCodexSessionMetadataTitle(payload: Record<string, unknown>): string | null {
-  return (
-    normalizeTitleText(extractString(payload.title) ?? '') ??
-    normalizeTitleText(extractString(payload.thread_name) ?? '') ??
-    normalizeTitleText(extractString(payload.threadName) ?? '')
-  )
 }

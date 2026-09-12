@@ -12,6 +12,7 @@ import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { DirectSshPaneRetryAttempt } from '@/store/slices/direct-ssh-terminal-recovery'
 import { directSshAuthoritiesEqual } from '@/store/slices/direct-ssh-terminal-authority-ledger'
 
+import { settleTerminalPaneRecovery } from '../terminal-pane-recovery'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession): void {
@@ -235,11 +236,16 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
     }
     return canAdopt
   }
-  session.settleDirectSshPaneRetryAttempt = (
+  // One settle for this pane's attach attempt, reporting to both ledgers that
+  // track it: the direct-SSH pane retry (when a lease owns this attempt) and
+  // the tab's recovery ledger. Keeping them on one call is what stops a second
+  // settle path drifting out of step with the first.
+  session.settlePaneAttachAttempt = (
     attempt: DirectSshRetryLease | undefined,
-    status: 'failed' | 'timed-out'
+    status: 'success' | 'failed' | 'timed-out'
   ): void => {
-    if (!attempt) {
+    settleTerminalPaneRecovery(session.deps.tabId, session.terminalRecoveryGeneration, status)
+    if (!attempt || status === 'success') {
       return
     }
     useAppStore.getState().settleDirectSshPaneRetry?.({

@@ -113,6 +113,7 @@ export function installActiveSessionTabsSubscription({
       environmentId,
       {
         expectedEnvironmentPairingRevision: activeWorktreeRuntimePairingRevision,
+        expectedRuntimeId: runtimeId,
         getCurrentState: () => useAppStore.getState()
       }
     )
@@ -140,13 +141,16 @@ export function installActiveSessionTabsSubscription({
     const hasLiveLocalPty = localTabs.some(
       (tab) => (syncState.ptyIdsByTabId[tab.id] ?? []).length > 0
     )
-    const bootstrap = shouldBootstrapInitialWebRuntimeTerminal({
-      event: recoveredEvent,
-      activeWorktreeId,
-      requestedInitialTerminal,
-      snapshotIsFresh: decision.apply,
-      localTerminalCount
-    })
+    const skipAutomaticTerminal = shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
+    const bootstrap =
+      !skipAutomaticTerminal &&
+      shouldBootstrapInitialWebRuntimeTerminal({
+        event: recoveredEvent,
+        activeWorktreeId,
+        requestedInitialTerminal,
+        snapshotIsFresh: decision.apply,
+        localTerminalCount
+      })
     const respawn = shouldRespawnWebRuntimeTerminalAfterWake({
       event: recoveredEvent,
       activeWorktreeId,
@@ -154,7 +158,7 @@ export function installActiveSessionTabsSubscription({
       snapshotIsFresh: decision.apply,
       localTerminalCount,
       hasLiveLocalPty,
-      skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
+      skipWakeRespawn: skipAutomaticTerminal
     })
     let settle: HostSessionMirrorSettle | null = decision.apply
       ? null

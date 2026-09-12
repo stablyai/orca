@@ -1,8 +1,10 @@
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import {
+  readWindowsProcessIdentityTableFresh,
   readWindowsProcessTable,
   readWindowsProcessTableFresh,
   resetWindowsProcessTableForTests,
+  type WindowsProcessIdentityRow,
   type WindowsProcessRow as NativeWindowsProcessRow
 } from '../windows/windows-process-table'
 
@@ -60,6 +62,16 @@ function projectProcessRows(native: readonly NativeWindowsProcessRow[]): Windows
  */
 export async function queryWindowsProcessRowsFresh(): Promise<readonly WindowsProcessRow[]> {
   return projectProcessRows(await readWindowsProcessTableFresh())
+}
+
+/**
+ * The same fresh scan for an ancestry walk, which reads only pid/ppid.
+ *
+ * Returns identity rows so the command line is not merely unused but absent:
+ * asking for it costs an `OpenProcess` per process on the box.
+ */
+export async function queryWindowsProcessLinksFresh(): Promise<WindowsProcessIdentityRow[]> {
+  return readWindowsProcessIdentityTableFresh()
 }
 
 export async function queryWindowsProcessDescendants(

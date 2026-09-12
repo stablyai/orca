@@ -4,6 +4,7 @@ import type { AgentSessionJournalIdentity } from '../../shared/agent-session-jou
 import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-provider-handle'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
+import { structuredWorkerChildIdentityEnv } from '../runtime/structured-worker-child-identity-env'
 import {
   CLAUDE_AUTH_ENV_CONFLICT_MESSAGE,
   CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE,
@@ -37,6 +38,7 @@ export type ClaudeStructuredSdkOptions = Pick<
   | 'sessionId'
   | 'resume'
   | 'resumeSessionAt'
+  | 'resumeDropsTurn'
 >
 
 /**
@@ -236,7 +238,9 @@ export function createClaudeStructuredLaunchResolver(
     // user's own key is their sign-in and must reach the child.
     const env = withCliRuntimeOnPath(
       command,
-      {
+      // Only a dispatched structured worker gets the orchestration identity and the Orca CLI on
+      // PATH; an ordinary chat session's env passes through untouched.
+      structuredWorkerChildIdentityEnv(record.sessionId, {
         ...applyClaudeEnvPatch(
           cloneDefinedEnv(process.env),
           {},
@@ -246,7 +250,7 @@ export function createClaudeStructuredLaunchResolver(
           }
         ),
         ...(overlay ? cloneDefinedEnv(overlay) : {})
-      },
+      }),
       { platform: process.platform }
     )
     return {

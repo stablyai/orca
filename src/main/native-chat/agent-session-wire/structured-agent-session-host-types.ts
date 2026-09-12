@@ -1,14 +1,27 @@
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionSpawnTokenScan } from '../../runtime/agent-session-spawn-token-process-scan'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import type { StructuredAgentSessionHandoffTransport } from './structured-agent-session-handoff-types'
+import type { StructuredAgentSessionStatusSink } from './structured-agent-session-status-feed'
 
 export type StructuredAgentSessionCaller = { callerKey: string }
+
+/** What the host believes about a session it just made addressable again. The workspace and agent
+ *  come from the record, so a caller publishes the host's view rather than a client's assertion.
+ *  `readable` is false when the journal could not be opened — the tab is still worth publishing,
+ *  because attach recovers what read restore cannot. */
+export type StructuredAgentSessionReveal = {
+  sessionId: string
+  workspaceId: string
+  agent: 'claude' | 'codex'
+  readable: boolean
+}
 
 export type StructuredAgentSessionHostSession = {
   journal: AgentSessionJournal
@@ -51,5 +64,15 @@ export type StructuredAgentSessionHostDeps = {
   /** How long a session outlives its last surface. Tests drive this; production takes the default. */
   releaseGraceMs?: number
   onEventSinkError?: (input: { sessionId: string; error: unknown }) => void
+  /** Every status projection this host publishes. `replay` marks a re-projection of state the host
+   *  already knew (restore, an arriving subscriber) rather than a fresh journal edge. */
+  onSessionStatusChanged?: (
+    summary: AgentSessionStatusSummary,
+    options: { replay: boolean }
+  ) => void
+  /** The agent-status store every held session's projection is written to and, on close,
+   *  removed from. Both production hosts pass one — the desktop and headless `orcad`; absent,
+   *  every reader of that store simply lists no structured session. */
+  statusSink?: StructuredAgentSessionStatusSink
   handoffTransport?: StructuredAgentSessionHandoffTransport
 }
