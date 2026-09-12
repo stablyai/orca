@@ -9,13 +9,14 @@ import type { TerminalCreateController } from './use-terminal-create-actions'
 export function useTerminalCloseActions(controller: TerminalCreateController) {
   const { consumeSuppressedPtyExit } = controller
   const handleCloseTab = useCallback((tabId: string) => {
-    closeTerminalTab(tabId)
+    closeTerminalTab(tabId, { userInitiated: true })
   }, [])
 
   const handleCloseBrowserTab = useCallback((tabId: string) => {
     dispatchWorkspaceTabCommand({
       type: 'close',
-      target: { kind: 'browser-source', sourceId: tabId }
+      target: { kind: 'browser-source', sourceId: tabId },
+      userInitiated: true
     })
   }, [])
 

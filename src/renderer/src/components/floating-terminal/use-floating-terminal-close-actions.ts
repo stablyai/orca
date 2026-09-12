@@ -8,7 +8,7 @@ import {
 import { armFloatingPanelReclaimIntent } from '@/lib/floating-workspace-focus-reclaim'
 import { useAppStore } from '@/store'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
-import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
+import { guardTabClose, resolveTabLabel } from '@/store/tab-close-guard'
 import type { Tab } from '../../../../shared/tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { FloatingTerminalEditorCloseQueue } from './use-floating-terminal-editor-close-queue'
@@ -95,9 +95,10 @@ export function useFloatingTerminalCloseActions({
         return
       }
       const state = useAppStore.getState()
-      guardPinnedTabClose({
+      guardTabClose({
         isPinned: item.isPinned === true,
-        tabLabel: resolvePinnedTabLabel(state, FLOATING_TERMINAL_WORKTREE_ID, visibleId),
+        tabLabel: resolveTabLabel(state, FLOATING_TERMINAL_WORKTREE_ID, visibleId),
+        userInitiated: options?.guestOwned !== true,
         onClose: () => {
           const latest = useAppStore.getState()
           if (item.contentType === 'browser') {

@@ -15,7 +15,7 @@ export function useTabGroupCloseScopeCommands({
   worktreeId: string
   group: TabGroup | null
   groupTabs: Tab[]
-  closeItem: (itemId: string, opts?: { skipEmptyCheck?: boolean }) => void
+  closeItem: (itemId: string, opts?: { skipEmptyCheck?: boolean; userInitiated?: boolean }) => void
   closeMany: (itemIds: string[]) => void
   leaveWorktreeIfEmpty: () => void
 }) {
@@ -26,7 +26,7 @@ export function useTabGroupCloseScopeCommands({
       (item) => item.groupId === groupId
     )
     for (const item of items) {
-      closeItem(item.id, { skipEmptyCheck: true })
+      closeItem(item.id, { skipEmptyCheck: true, userInitiated: false })
     }
     // Why: closing tabs doesn't remove the group shell; empty split groups are layout state, collapse the placeholder pane here.
     closeEmptyGroup(worktreeId, groupId)
@@ -41,7 +41,7 @@ export function useTabGroupCloseScopeCommands({
         item.contentType === 'conflict-review' ||
         item.contentType === 'check-details'
       ) {
-        closeItem(item.id)
+        closeItem(item.id, { userInitiated: false })
       }
     }
   }, [closeItem, groupTabs])

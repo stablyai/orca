@@ -25,10 +25,10 @@ vi.mock('../../store', () => ({
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))
-vi.mock('../../store/pinned-tab-close-guard', () => ({
-  guardPinnedTabClose: vi.fn(),
+vi.mock('../../store/tab-close-guard', () => ({
+  guardTabClose: vi.fn(),
   isUnifiedTabPinned: vi.fn(),
-  resolvePinnedTabLabel: vi.fn()
+  resolveTabLabel: vi.fn()
 }))
 
 import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'

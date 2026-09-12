@@ -13,9 +13,10 @@ import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 
-/** Confirmation prompt shown when a pinned tab is about to be closed. Driven by
- *  store state so every close path (keyboard, native menu, CLI) can route a
- *  pinned tab through it without threading React context. */
+/** Confirmation prompt shown when a tab is about to be closed. Driven by store
+ *  state so every close path (keyboard, native menu, CLI) can route a tab
+ *  through it without threading React context. Renders pinned-specific or
+ *  generic copy based on the request's `variant`. */
 export default function PinnedTabCloseDialog(): React.JSX.Element {
   const checkboxId = useId()
   const request = useAppStore((state) => state.pinnedTabCloseConfirm)
@@ -26,6 +27,7 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
   const [previousRequest, setPreviousRequest] = useState(request)
 
   const tabLabel = request?.tabLabel.trim()
+  const isPinnedVariant = (request?.variant ?? 'pinned') === 'pinned'
 
   // Why: a new store request is a new confirmation, so reset its checkbox before
   // paint while keeping a cancelled request's state inert until the next open.
@@ -38,10 +40,37 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
 
   const handleConfirm = (): void => {
     if (dontAskAgain) {
-      void updateSettings({ confirmClosePinnedTab: false })
+      void updateSettings(
+        isPinnedVariant ? { confirmClosePinnedTab: false } : { confirmCloseAnyTab: false }
+      )
     }
     confirmPinnedTabClose()
   }
+
+  const title = isPinnedVariant
+    ? translate(
+        'auto.components.terminal.pane.PinnedTabCloseDialog.6c190f295a',
+        'Close pinned tab?'
+      )
+    : translate('auto.components.terminal.pane.PinnedTabCloseDialog.close_any_title', 'Close tab?')
+  const description = isPinnedVariant
+    ? translate(
+        'auto.components.terminal.pane.PinnedTabCloseDialog.0d1963f4a6',
+        'This tab is pinned. Are you sure you want to close it?'
+      )
+    : translate(
+        'auto.components.terminal.pane.PinnedTabCloseDialog.close_any_description',
+        'Are you sure you want to close this tab?'
+      )
+  const dontAskLabel = isPinnedVariant
+    ? translate(
+        'auto.components.terminal.pane.PinnedTabCloseDialog.dont_ask_again',
+        "Don't ask again for pinned tabs"
+      )
+    : translate(
+        'auto.components.terminal.pane.PinnedTabCloseDialog.dont_ask_again_any',
+        "Don't ask again when closing tabs"
+      )
 
   return (
     <Dialog
@@ -54,18 +83,8 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
     >
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {translate(
-              'auto.components.terminal.pane.PinnedTabCloseDialog.6c190f295a',
-              'Close pinned tab?'
-            )}
-          </DialogTitle>
-          <DialogDescription className="text-xs">
-            {translate(
-              'auto.components.terminal.pane.PinnedTabCloseDialog.0d1963f4a6',
-              'This tab is pinned. Are you sure you want to close it?'
-            )}
-          </DialogDescription>
+          <DialogTitle className="text-sm">{title}</DialogTitle>
+          <DialogDescription className="text-xs">{description}</DialogDescription>
         </DialogHeader>
         {tabLabel ? (
           <p className="truncate text-xs font-medium text-foreground" title={tabLabel}>
@@ -79,10 +98,7 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
             onCheckedChange={(checked) => setDontAskAgain(checked === true)}
           />
           <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
-            {translate(
-              'auto.components.terminal.pane.PinnedTabCloseDialog.dont_ask_again',
-              "Don't ask again for pinned tabs"
-            )}
+            {dontAskLabel}
           </Label>
         </div>
         <DialogFooter className="gap-2">

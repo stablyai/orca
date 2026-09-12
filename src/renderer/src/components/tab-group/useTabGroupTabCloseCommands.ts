@@ -12,7 +12,10 @@ export function useTabGroupTabCloseCommands({
 }) {
   return useMemo(
     () => ({
-      closeItem: (tabId: string, opts?: { skipEmptyCheck?: boolean }) => {
+      closeItem: (
+        tabId: string,
+        opts?: { skipEmptyCheck?: boolean; userInitiated?: boolean }
+      ) => {
         dispatchWorkspaceTabCommand({
           type: 'close',
           target: { kind: 'tab', worktreeId, tabId },

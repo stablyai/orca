@@ -56,7 +56,7 @@ vi.mock('@/components/terminal/terminal-tab-actions', async () => {
   ).createTerminalTabActionsModule()
 })
 
-vi.mock('@/store/pinned-tab-close-guard', async () => {
+vi.mock('@/store/tab-close-guard', async () => {
   return (
     await import('./floating-terminal-panel-test-module-mocks')
   ).createPinnedTabCloseGuardModule()
