@@ -1,13 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RateLimitService } from './service'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import {
   errorProvider,
   okProvider,
-  resetRateLimitProviderMocks
+  resetRateLimitProviderMocks,
+  unavailableProvider
 } from './rate-limit-service-test-harness'
+
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
@@ -54,46 +60,29 @@ describe('RateLimitService Antigravity usage', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
   })
 
-  it('does not republish a Gemini failure as an Antigravity refresh failure', async () => {
+  it('publishes Antigravity usage while Gemini is failing', async () => {
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(
       errorProvider('gemini', 'Gemini project ID not found')
     )
-    const service = new RateLimitService()
-
-    await service.refresh()
-
-    const state = service.getState()
-    expect(state.antigravity?.status).toBe('unavailable')
-    expect(state.antigravity?.error).not.toContain('Gemini project ID not found')
-    expect(state.antigravity?.session).toBeNull()
-    // Why: the real Gemini failure must still surface under its own provider.
-    expect(state.gemini?.status).toBe('error')
-    expect(state.gemini?.error).toBe('Gemini project ID not found')
-  })
-
-  it('keeps mirroring a successful Gemini read under the Antigravity provider', async () => {
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 42))
     const service = new RateLimitService()
 
     await service.refresh()
 
     const state = service.getState()
     expect(state.antigravity?.status).toBe('ok')
-    expect(state.antigravity?.provider).toBe('antigravity')
     expect(state.antigravity?.session?.usedPercent).toBe(42)
+    expect(state.gemini?.status).toBe('error')
   })
 
-  it('never leaves a cached Antigravity snapshot in the error retry lane', async () => {
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValueOnce(okProvider('gemini', 42, Date.now()))
+  it('never leaves an unreachable language server in the error retry lane', async () => {
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValueOnce(okProvider('antigravity', 42))
     const service = new RateLimitService()
     await service.refresh()
 
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(
-      errorProvider('gemini', 'Token refresh failed')
-    )
+    vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(unavailableProvider('antigravity'))
     await service.refresh()
 
-    // Why: stale-retention would otherwise show Gemini numbers as "Refresh failed" Antigravity usage.
     expect(service.getState().antigravity?.status).toBe('unavailable')
     expect(service.getState().antigravity?.session).toBeNull()
   })
