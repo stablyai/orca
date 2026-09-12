@@ -27,6 +27,8 @@ import {
   FolderTree
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { WorktreeDeveloperMenu } from './WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from './WorkspaceSleepMenuItems'
@@ -100,6 +102,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     worktree,
     workspaceStatuses
   } = model
+  const runtimeEnvironmentId = useAppStore((s) =>
+    getExplicitRuntimeEnvironmentIdForWorktree(s, worktree.id)
+  )
   const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
   return (
     <div
@@ -175,6 +180,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <WorktreeOpenInSubMenu
                 worktreePath={worktree.path}
                 connectionId={repo?.connectionId ?? null}
+                runtimeEnvironmentId={runtimeEnvironmentId}
                 disabled={isDeleting}
               />
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>

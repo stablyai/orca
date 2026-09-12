@@ -17,6 +17,7 @@ type FileExplorerToolbarProps = {
   repoName: string
   worktreePath: string
   connectionId?: string | null
+  runtimeEnvironmentId?: string | null
   refresh: {
     isRefreshing: boolean
     showRefreshSpinner: boolean
@@ -36,6 +37,7 @@ export function FileExplorerToolbar({
   repoName,
   worktreePath,
   connectionId,
+  runtimeEnvironmentId,
   refresh,
   canRefresh,
   canCollapseAll,
@@ -173,6 +175,7 @@ export function FileExplorerToolbar({
           <WorktreeOpenInMenuItems
             worktreePath={worktreePath}
             connectionId={connectionId}
+            runtimeEnvironmentId={runtimeEnvironmentId}
             labelPrefix="Open in "
           />
         </DropdownMenuContent>
