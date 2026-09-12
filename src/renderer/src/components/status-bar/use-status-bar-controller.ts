@@ -117,6 +117,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
+  const hasPiLinkedCodexAccount =
+    settings?.codexManagedAccounts.some((account) => account.credentialSource === 'pi') === true
   const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
@@ -129,7 +131,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const showCodex =
     visibleCodex !== null &&
     statusBarItems.includes('codex') &&
-    isStatusBarItemAvailable('codex', detectedAgentIds)
+    isStatusBarItemAvailable('codex', detectedAgentIds, hasPiLinkedCodexAccount)
   const showGemini =
     visibleGemini !== null &&
     statusBarItems.includes('gemini') &&
@@ -236,6 +238,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     anyVisible,
     compact,
     containerRefCallback,
+    codexUsageAvailable: isStatusBarItemAvailable(
+      'codex',
+      detectedAgentIds,
+      hasPiLinkedCodexAccount
+    ),
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,

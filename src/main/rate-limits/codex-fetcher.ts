@@ -38,6 +38,7 @@ import {
   resolveHiddenRateLimitPtyCwd
 } from './hidden-rate-limit-pty-cwd'
 import { quoteHiddenRateLimitShellValue } from './hidden-rate-limit-shell'
+import { hasPiCodexAuthSource } from '../codex-accounts/pi-codex-auth'
 
 const RPC_TIMEOUT_MS = 10_000
 const WSL_RPC_TIMEOUT_MS = 25_000
@@ -189,6 +190,25 @@ export async function fetchCodexRateLimits(
 ): Promise<ProviderRateLimits> {
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
+  }
+  if (options?.codexHomePath && hasPiCodexAuthSource(options.codexHomePath)) {
+    try {
+      const result = await fetchCodexRateLimitsViaBackend(fetchCodexUsage, options)
+      if (options.signal?.aborted) {
+        return abortedCodexRateLimitResult()
+      }
+      return result
+        ? supplementCodexRateLimitResetCredits(result, fetchCodexResetCredits, options)
+        : codexUnavailable('Pi Codex usage is unavailable. Check your Pi login.', 'error')
+    } catch (error) {
+      if (options.signal?.aborted) {
+        return abortedCodexRateLimitResult()
+      }
+      return codexUnavailable(
+        error instanceof Error ? error.message : 'Pi Codex usage is unavailable',
+        'error'
+      )
+    }
   }
   const authPresence = await probeCodexAuthPresence(options?.codexHomePath, {
     signal: options?.signal

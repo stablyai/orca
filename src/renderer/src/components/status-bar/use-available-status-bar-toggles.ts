@@ -8,5 +8,15 @@ export function useAvailableStatusBarToggles<T extends { id: StatusBarItem }>(
   toggles: readonly T[]
 ): T[] {
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
-  return toggles.filter((t) => isStatusBarItemAvailable(t.id, detectedAgentIds))
+  const hasPiLinkedCodexAccount = useAppStore(
+    (s) =>
+      s.settings?.codexManagedAccounts.some((account) => account.credentialSource === 'pi') === true
+  )
+  return toggles.filter((toggle) =>
+    isStatusBarItemAvailable(
+      toggle.id,
+      detectedAgentIds,
+      toggle.id === 'codex' && hasPiLinkedCodexAccount
+    )
+  )
 }

@@ -68,6 +68,7 @@ export function toCodexManagedAccountSummary(
     managedHomeRuntime: account.managedHomeRuntime ?? 'host',
     wslDistro: account.wslDistro ?? null,
     providerAccountId: account.providerAccountId ?? null,
+    credentialSource: account.credentialSource,
     workspaceLabel: account.workspaceLabel ?? null,
     workspaceAccountId: account.workspaceAccountId ?? null,
     createdAt: account.createdAt,

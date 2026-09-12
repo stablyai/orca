@@ -177,10 +177,18 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.registration.addFromHome(sourceHome, target))
   }
 
+  async addAccountFromPi(): Promise<CodexRateLimitAccountsState> {
+    return this.serializeMutation(() => this.registration.addFromPi())
+  }
+
   async reauthenticateAccount(
     accountId: string,
     options?: CodexAccountReauthenticateOptions
   ): Promise<CodexRateLimitAccountsState> {
+    const account = this.listAccounts().accounts.find((entry) => entry.id === accountId)
+    if (account?.credentialSource === 'pi') {
+      throw new Error('This account is managed by Pi. Sign in again through Pi instead.')
+    }
     return this.serializeMutation(() => this.registration.reauthenticate(accountId, options))
   }
 

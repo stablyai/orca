@@ -6489,7 +6489,14 @@
           "4e32e030b2": "Stored locally. Orca sends it only to platform.minimax.io for usage refreshes.",
           "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
           "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
-          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
+          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
+          "piImportSuccess": "Imported Codex usage from Pi.",
+          "piLinked": "Pi-linked",
+          "usageOnly": "Usage only",
+          "piSignInOutOfDate": "Pi could not refresh this sign-in",
+          "piUsageDescription": "Usage refreshes through Pi; Codex CLI is not used",
+          "importCodexFromPi": "Import from Pi",
+          "piActiveSignInOutOfDate": "Pi could not refresh this Codex sign-in. Sign in again through Pi to restore usage updates."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
