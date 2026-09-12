@@ -11,6 +11,27 @@ import { resolveWslExecutablePath } from './wsl-executable-path'
  * Gated behind an env var and win32 because it mutates the distro's `~/.profile`
  * to reproduce #14288. Run with:
  *   ORCA_REAL_WSL_RUNNER_TEST=1 pnpm vitest run src/main/wsl/wsl-runner.wsl.test.ts
+ *
+ * DO NOT run this against a distro you share. The teardown below works, but it
+ * has no margin, and all three of its failure modes land on a real user:
+ *   - the appended `sleep 60` is in `$HOME/.profile` for the duration, so any
+ *     login shell started in that window stalls a minute;
+ *   - an aborted run (crash, timeout, Ctrl-C) never reaches `afterAll`, and the
+ *     stall becomes permanent;
+ *   - the backup is `cp … || true` to a FIXED path, so if it fails, or a stale
+ *     copy from an earlier abort is present, teardown's `|| rm -f "$HOME/.profile"`
+ *     deletes or reverts the user's profile.
+ * Verified by hashing `$HOME/.profile` either side of a run, which is the check
+ * to repeat if you must run it somewhere shared -- do not assume the restore.
+ *
+ * The mutation has to be distro-global: the stall it reproduces happens inside
+ * `getWslGuestEnvironment`'s probe, which takes no HOME from the caller. So for
+ * the length of this describe, every login shell in the distro blocks for 60s —
+ * including any run by a sibling suite in the same Vitest invocation. That is
+ * not hypothetical: it silently timed out the login-shell contrast read in
+ * `local-worktree-filesystem-wsl-banner.wsl.test.ts`, which passed alone and
+ * failed in the pair. Any new WSL suite that needs a predictable `~/.profile`
+ * must own the HOME it reads rather than the distro user's, as that one now does.
  */
 const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
 const enabled = process.platform === 'win32' && process.env.ORCA_REAL_WSL_RUNNER_TEST === '1'
