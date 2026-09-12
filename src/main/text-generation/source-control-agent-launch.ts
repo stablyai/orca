@@ -53,7 +53,10 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
     process.platform === 'win32'
       ? resolveCliCommand(input.binary, { pathEnv: spawnEnv.PATH ?? spawnEnv.Path ?? null })
       : input.binary
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, input.args)
+  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(resolvedBinary, input.args, {
+    allowPowerShellShimFallback: true,
+    env: spawnEnv
+  })
   const child = spawnProcess({
     program: spawnCmd,
     args: spawnArgs,
