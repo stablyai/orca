@@ -43,7 +43,7 @@ describe('the checked-in baseline', () => {
     const current = await collectElectronImporters()
     const baseline = readBaseline(readFileSync('config/runtime-electron-baseline.txt', 'utf8'))
     expect(diffAgainstBaseline(current, baseline)).toEqual({ added: [], removed: [] })
-  }, 120_000)
+  }, 60_000)
 
   // Why an exact-empty assertion now: the reachable set reached zero, so "may only
   // shrink" has no room left and any entry at all is a regression. This is strictly
