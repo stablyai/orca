@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { create } from 'zustand'
 import { toast } from 'sonner'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
 import {
@@ -10,70 +8,20 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
-  createRuntimeStatusSlice,
-  type RuntimeStatusSlice,
   getRuntimeEnvironmentConnectionGeneration
 } from './runtime-status'
+import {
+  createSliceStore,
+  makeEnvironment,
+  makeStatus,
+  stubRuntimeEnvironmentApi
+} from './runtime-status-slice-test-fixture'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { getPairedDeviceIdsByEnvironment } from '@/components/sidebar/workspace-creator-visibility'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), dismiss: vi.fn() }
 }))
-
-function createSliceStore() {
-  return create<RuntimeStatusSlice>()((...a) => ({
-    ...createRuntimeStatusSlice(...(a as unknown as Parameters<typeof createRuntimeStatusSlice>))
-  }))
-}
-
-function makeStatus(overrides: Partial<RuntimeStatus> = {}): RuntimeStatus {
-  return {
-    runtimeId: 'rt',
-    rendererGraphEpoch: 0,
-    graphStatus: 'ready',
-    authoritativeWindowId: null,
-    liveTabCount: 0,
-    liveLeafCount: 0,
-    runtimeProtocolVersion: 3,
-    minCompatibleRuntimeClientVersion: 3,
-    ...overrides
-  } as RuntimeStatus
-}
-
-function makeEnvironment(
-  overrides: Partial<PublicKnownRuntimeEnvironment> = {}
-): PublicKnownRuntimeEnvironment {
-  return {
-    id: 'env-a',
-    name: 'Dev Box',
-    createdAt: 1,
-    updatedAt: 1,
-    lastUsedAt: null,
-    runtimeId: null,
-    endpoints: [{ id: 'ws-a', kind: 'websocket', label: 'WebSocket', endpoint: 'ws://x' }],
-    preferredEndpointId: 'ws-a',
-    ...overrides
-  }
-}
-
-function stubRuntimeEnvironmentApi({
-  getStatus = vi.fn(),
-  list = vi.fn()
-}: {
-  getStatus?: ReturnType<typeof vi.fn>
-  list?: ReturnType<typeof vi.fn>
-}) {
-  vi.stubGlobal('window', {
-    api: {
-      runtimeEnvironments: {
-        getStatus,
-        list
-      }
-    }
-  })
-  return { getStatus, list }
-}
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {}
@@ -708,30 +656,6 @@ describe('runtime-status slice', () => {
       callRuntimeRpc(target, 'repo.list', undefined, { reuseRecentCompatibilityFailure: true })
     ).rejects.toThrow('offline')
     clearRuntimeCompatibilityCacheForTests()
-  })
-
-  // #19647: a failed status.get dials its own fresh socket, so a refresh must not overwrite a
-  // recorded live verdict with null — that retires the host's session-tabs mirror and dims its
-  // still-live rows on a fault the client could not even ask through.
-  it('preserves a recorded live verdict when a refresh probe fails', async () => {
-    const getStatus = vi.fn().mockRejectedValue(new Error('closed'))
-    stubRuntimeEnvironmentApi({ getStatus })
-    const store = createSliceStore()
-    const cached = makeStatus()
-    store.getState().setRuntimeEnvironmentStatus('env-a', { status: cached, checkedAt: 1 })
-
-    const reachable = await store.getState().refreshRuntimeEnvironmentStatus('env-a')
-
-    expect(reachable).toBe(false)
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(cached)
-  })
-
-  it('records null on a first-contact refresh failure, so host coverage completes', async () => {
-    stubRuntimeEnvironmentApi({ getStatus: vi.fn().mockRejectedValue(new Error('closed')) })
-    const store = createSliceStore()
-
-    expect(await store.getState().refreshRuntimeEnvironmentStatus('env-a')).toBe(false)
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(null)
   })
 
   it('preserves successful reachability when reading its snapshot fails', async () => {
