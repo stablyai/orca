@@ -23,6 +23,7 @@ import {
   type SessionParseStats
 } from './session-scanner-parse-cache'
 import { recordSessionScanIssue } from './session-scan-issues'
+import { canStopParsingSessions } from './session-scan-cutoff'
 import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
 import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
 import { cursorChatMetaRefusals, withCursorChatMetaScan } from './session-scanner-cursor-chat-meta'
@@ -295,21 +296,4 @@ function withSessionExecutionHost(
     executionHostId,
     id: `${executionHostId}:${session.agent}:${session.sessionId}:${session.filePath}`
   }
-}
-
-function canStopParsingSessions(
-  sessions: CodexSessionCollection,
-  limit: number,
-  nextCandidateMtimeMs: number | undefined
-): boolean {
-  if (sessions.size < limit || typeof nextCandidateMtimeMs !== 'number') {
-    return false
-  }
-  const visibleCutoff = Array.from(sessions.values(), sessionSortTime)
-    .sort((left, right) => right - left)
-    .at(limit - 1)
-
-  // Transcript mtime is already our discovery bound and fallback sort key; older
-  // files cannot displace the current visible set once the cutoff is newer.
-  return typeof visibleCutoff === 'number' && nextCandidateMtimeMs < visibleCutoff
 }
