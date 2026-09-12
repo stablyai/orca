@@ -120,7 +120,9 @@ export async function bulkDiscardChanges(
     const trackedPaths: string[] = []
     const untrackedPaths: string[] = []
     filePaths.forEach((filePath) => {
-      const targetPaths = isTrackedPathSpec(filePath, trackedPathSpecs) ? trackedPaths : untrackedPaths
+      const targetPaths = isTrackedPathSpec(filePath, trackedPathSpecs)
+        ? trackedPaths
+        : untrackedPaths
       targetPaths.push(filePath)
     })
     await removeSafeUntrackedDiscardTargets(
