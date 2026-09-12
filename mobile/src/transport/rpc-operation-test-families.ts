@@ -34,8 +34,6 @@ export const workspaceListOrThrow = defineRpcOperation({
   method: 'worktree.ps',
   acceptance: 'require-result-or-throw',
   barrier: 'on-settle',
-  consumes: ['worktrees.id'],
-  schedules: [],
   read: workspaceRowsOrLegacyReader
 })
 
@@ -46,8 +44,6 @@ export const workspaceListOrNull = defineRpcOperation({
   method: 'worktree.ps',
   acceptance: 'object-result-or-null',
   barrier: 'on-settle',
-  consumes: ['worktrees.id'],
-  schedules: [],
   read: workspaceRowsReader
 })
 
@@ -55,18 +51,14 @@ export const worktreePsProbe = defineRpcOperation({
   name: 'test.worktreePsProbe',
   method: 'worktree.ps',
   acceptance: 'method-not-found-refusal',
-  barrier: 'on-settle',
-  consumes: [],
-  schedules: []
+  barrier: 'on-settle'
 })
 
 export const terminalStreamOpener = defineRpcOperation({
   name: 'test.terminalStreamOpener',
   method: 'terminal.subscribe',
   acceptance: 'streaming-opener',
-  barrier: 'on-settle',
-  consumes: [],
-  schedules: []
+  barrier: 'on-settle'
 })
 
 export const workspaceListAtBarrier = defineRpcOperation({
@@ -74,8 +66,6 @@ export const workspaceListAtBarrier = defineRpcOperation({
   method: 'worktree.ps',
   acceptance: 'require-result-or-throw',
   barrier: 'after-all-requests',
-  consumes: ['worktrees.id'],
-  schedules: ['test-poll'],
   read: workspaceRowsReader
 })
 
@@ -84,8 +74,6 @@ export const terminalListAtBarrier = defineRpcOperation({
   method: 'terminal.list',
   acceptance: 'object-result-or-null',
   barrier: 'after-all-requests',
-  consumes: ['terminals'],
-  schedules: [],
   read: rpcResultVariant('terminals', z.object({ terminals: z.array(z.unknown()) }))
 })
 
@@ -93,9 +81,7 @@ export const worktreePsProbeAtBarrier = defineRpcOperation({
   name: 'test.worktreePsProbeAtBarrier',
   method: 'worktree.ps',
   acceptance: 'method-not-found-refusal',
-  barrier: 'after-all-requests',
-  consumes: [],
-  schedules: []
+  barrier: 'after-all-requests'
 })
 
 export function rpcSuccess(result: unknown, streaming?: true): RpcResponse {

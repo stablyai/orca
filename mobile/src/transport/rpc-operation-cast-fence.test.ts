@@ -13,8 +13,8 @@ import { describe, expect, it } from 'vitest'
  * drift the contract removed — and it buys it silently, since the code still compiles and the
  * types still read as validated.
  *
- * The fenced region is computed, not listed: a non-test file is in it if it imports the
- * operation API, the operation contract or the result-reader factory, or if it re-exports a
+ * The fenced region includes the operation API, contract and result-reader factory, plus
+ * non-test files importing them and files that re-export a
  * file that is (transitively). Step 4's operation modules therefore land inside the fence the
  * moment they are written, with nothing to remember.
  *
@@ -162,7 +162,7 @@ function moduleKey(path: string): string {
   return path.replace(/\.[jt]sx?$/, '')
 }
 
-const region = new Set<string>()
+const region = new Set(scanned.filter((path) => REGION_SEEDS.has(moduleKey(path))))
 for (const [path, { imports }] of edges) {
   if (imports.some((target) => REGION_SEEDS.has(target))) {
     region.add(path)
@@ -209,6 +209,7 @@ describe('RPC operation cast fence', () => {
   it('puts every operation module in the fenced region', () => {
     for (const file of [
       'src/transport/rpc-operation.ts',
+      'src/transport/rpc-operation-contract.ts',
       'src/transport/rpc-operation-test-families.ts',
       'src/transport/rpc-operation-compile-fence.ts',
       'src/transport/rpc-operation-result-reader.ts',

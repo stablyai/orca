@@ -68,8 +68,6 @@ export function defineRpcOperation(definition: RpcOperationDefinitionInput): Any
     method: definition.method,
     acceptance: definition.acceptance,
     barrier: definition.barrier,
-    consumes: Object.freeze([...definition.consumes]),
-    schedules: Object.freeze([...definition.schedules]),
     // Why: classifyReply only ever hands a reader the payload its own policy admitted, so
     // the object policy's narrower parameter is sound to store as unknown.
     read: definition.read as RpcCompatibleReader<unknown, string, unknown> | undefined

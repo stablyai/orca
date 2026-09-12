@@ -120,8 +120,6 @@ describe('salvage through a descriptor', () => {
     method: 'worktree.ps',
     acceptance: 'require-result-or-throw',
     barrier: 'on-settle',
-    consumes: ['worktrees.id'],
-    schedules: [],
     read: salvagingReader
   })
 

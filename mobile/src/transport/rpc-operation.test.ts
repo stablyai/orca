@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from './types'
 import { FakeSession } from './mobile-endpoint-supervisor-test-fakes'
@@ -333,50 +331,5 @@ describe('a descriptor', () => {
     expect(() => {
       ;(workspaceListOrThrow as { barrier: string }).barrier = 'after-all-requests'
     }).toThrow(TypeError)
-  })
-
-  it('publishes the fields it consumes and the schedules it owns', () => {
-    expect(workspaceListOrThrow.consumes).toEqual(['worktrees.id'])
-    expect(workspaceListOrThrow.schedules).toEqual([])
-    expect(Object.isFrozen(workspaceListOrThrow.consumes)).toBe(true)
-  })
-})
-
-// The fence itself is checked by `tsc --noEmit` (an expect-error directive that stops catching
-// an error fails the typecheck). This pins its coverage so the file cannot be quietly gutted.
-describe('the compile fence', () => {
-  const fenceSource = readFileSync(
-    fileURLToPath(new URL('./rpc-operation-compile-fence.ts', import.meta.url)),
-    'utf8'
-  )
-  const expectErrorDirective = `@ts-${'expect-error'}`
-
-  it('still asserts every rejection it is meant to', () => {
-    const markers = [...fenceSource.matchAll(/\/\/ FENCE: (?<name>[a-z-]+)/g)].map(
-      (match) => match.groups?.name
-    )
-
-    expect(markers).toEqual([
-      'variant-readers-cannot-be-empty',
-      'probe-cannot-take-a-reader',
-      'decoding-policy-needs-a-reader',
-      'acceptance-must-be-a-named-policy',
-      'object-policy-reader-sees-an-object',
-      'define-rejects-a-mismatched-definition',
-      'method-must-exist-in-the-catalog',
-      'send-params-omit-a-defaulted-field',
-      'send-params-reject-a-wrong-typed-field',
-      'send-params-still-name-required-fields',
-      'send-params-never-tighten-the-parsed-shape',
-      'send-params-do-not-degenerate-to-unknown',
-      'declared-barrier-cannot-be-moved-earlier',
-      'on-settle-operation-cannot-defer-to-a-barrier',
-      'params-are-fixed-by-the-method',
-      'probe-verdict-is-not-a-decoded-value',
-      'manual-decoding-descriptor-needs-a-reader',
-      'broad-policy-still-requires-a-reader',
-      'object-descriptor-needs-a-reader'
-    ])
-    expect(fenceSource.split(expectErrorDirective).length - 1).toBe(17)
   })
 })

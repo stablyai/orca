@@ -73,10 +73,6 @@ export type RpcOperation<
   readonly name: string
   readonly method: Method
   readonly barrier: Barrier
-  /** Reply fields this family reads — the host contract a wire change has to respect. */
-  readonly consumes: readonly string[]
-  /** Refresh/poll schedules this family owns; empty when it only runs on user intent. */
-  readonly schedules: readonly string[]
 } & {
   [Policy in RpcAcceptanceName]: {
     readonly acceptance: Policy
@@ -89,7 +85,7 @@ export type RpcOperation<
 // Internal interpreter view; public send APIs retain the policy/reader correlation.
 export type AnyRpcOperation = Pick<
   RpcOperation<RpcMethodName, RpcAcceptanceName, string, unknown, RpcInterpretationBarrier>,
-  'name' | 'method' | 'acceptance' | 'barrier' | 'consumes' | 'schedules'
+  'name' | 'method' | 'acceptance' | 'barrier'
 > & { readonly read: RpcCompatibleReader<unknown, string, unknown> | undefined }
 
 /** The verdict the declared policy yields. Not a per-call choice. */
@@ -117,8 +113,6 @@ type RpcOperationDefinition<
   name: string
   method: Method
   barrier: Barrier
-  consumes: readonly string[]
-  schedules: readonly string[]
 }
 
 export type RequireResultRpcDefinition<
