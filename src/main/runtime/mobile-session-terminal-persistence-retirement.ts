@@ -43,6 +43,8 @@ function recordTerminalSurfaceRetirement(
   surface: RetiredTerminalSurface,
   paneKey: string
 ): WorkspaceSessionState {
+  const terminalWorkOriginsByPaneKey = { ...session.terminalWorkOriginsByPaneKey }
+  delete terminalWorkOriginsByPaneKey[paneKey]
   const terminalPtyIncarnationsByPaneKey = {
     ...session.terminalPtyIncarnationsByPaneKey
   }
@@ -55,6 +57,7 @@ function recordTerminalSurfaceRetirement(
     {
       ...session,
       terminalPtyIncarnationsByPaneKey,
+      terminalWorkOriginsByPaneKey,
       terminalSurfaceTombstonesByPaneKey
     },
     surface.worktreeId

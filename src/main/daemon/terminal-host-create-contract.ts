@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
@@ -20,6 +21,7 @@ export type CreateOrAttachOptions = {
   command?: string
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
+  workOrigin?: WorkOrigin
   /** Missing ownership is not permission to create during stable-pane adoption. */
   attachOnly?: boolean
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
@@ -50,6 +52,7 @@ export type CreateOrAttachResult = {
   shellState: ShellReadyState
   historySeeded?: boolean
   launchAgent?: TuiAgent
+  workOrigin?: WorkOrigin
   wslDistro: string | null
   attachToken: symbol
   incarnationId: PtyIncarnationId

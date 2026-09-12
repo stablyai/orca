@@ -297,6 +297,17 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     'sleepingAgentSessionsByPaneKey',
     sleepingAgentSessionsByPaneKeySchema
   ),
+  terminalWorkOriginsByPaneKey: salvagedOptional(
+    'terminalWorkOriginsByPaneKey',
+    salvagingRecord(
+      z.string(),
+      z.union([
+        z.object({ kind: z.literal('host') }),
+        z.object({ kind: z.literal('paired-device'), deviceId: z.string().min(1) }),
+        z.null()
+      ])
+    )
+  ),
   terminalPtyIncarnationsByPaneKey: salvagedOptional(
     'terminalPtyIncarnationsByPaneKey',
     salvagingRecord(z.string(), z.string().min(1).max(128))

@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -14,6 +15,7 @@ export type TerminalHostOptions = {
     command?: string
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
+    workOrigin?: WorkOrigin
     shellOverride?: string
     terminalWindowsWslDistro?: string | null
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'

@@ -87,11 +87,7 @@ export function prepareWebSessionTabsSnapshotBase(
       expectedCurrentLocalTabId === currentVisibleLocalTabId)
       ? matchingFocusIntentTab
       : null
-  const followIntentTab =
-    snapshot.navigationIntent === 'follow'
-      ? (snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ?? null)
-      : null
-  const navigationIntentTab = callerFocusIntentTab ?? followIntentTab
+  const navigationIntentTab = callerFocusIntentTab
   const honorSnapshotActiveFocus = navigationIntentTab !== null
   if (matchingFocusIntentTab) {
     clearWebSessionFocusIntent({ environmentId }, worktreeId)

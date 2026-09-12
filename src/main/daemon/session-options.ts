@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
@@ -9,6 +10,7 @@ export type SessionOptions = {
   rows: number
   terminalHandle?: string
   launchAgent?: TuiAgent
+  workOrigin?: WorkOrigin
   subprocess: SubprocessHandle
   shellReadySupported: boolean
   shellReadyTimeoutMs?: number

@@ -154,6 +154,18 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       !client.isRemote && shouldUseRendererBackedInteractiveTerminal(command)
     const focus = flags.get('focus') === true
     const result = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
+      ...(process.env.ORCA_WORK_ORIGIN_SESSION_ID && process.env.ORCA_AGENT_SESSION_SPAWN_TOKEN
+        ? {
+            callerOriginSession: {
+              sessionId: process.env.ORCA_WORK_ORIGIN_SESSION_ID,
+              spawnToken: process.env.ORCA_AGENT_SESSION_SPAWN_TOKEN
+            }
+          }
+        : {}),
+      cliProvenanceRequest: {},
+      ...(process.env.ORCA_TERMINAL_HANDLE
+        ? { callerTerminalHandle: process.env.ORCA_TERMINAL_HANDLE }
+        : {}),
       worktree: await getBrowserWorktreeSelector(flags, cwd, client),
       command,
       title: getOptionalStringFlag(flags, 'title'),
@@ -179,6 +191,16 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError('invalid_argument', '--direction must be horizontal or vertical')
     }
     const result = await client.call<{ split: RuntimeTerminalSplit }>('terminal.split', {
+      ...(process.env.ORCA_WORK_ORIGIN_SESSION_ID && process.env.ORCA_AGENT_SESSION_SPAWN_TOKEN
+        ? {
+            callerOriginSession: {
+              sessionId: process.env.ORCA_WORK_ORIGIN_SESSION_ID,
+              spawnToken: process.env.ORCA_AGENT_SESSION_SPAWN_TOKEN
+            }
+          }
+        : {}),
+      callerTerminalHandle: process.env.ORCA_TERMINAL_HANDLE,
+      cliProvenanceRequest: {},
       terminal: await getTerminalHandle(flags, cwd, client),
       direction: directionFlag,
       command: getOptionalStringFlag(flags, 'command')

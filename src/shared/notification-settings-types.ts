@@ -1,3 +1,4 @@
+import type { WorkOrigin } from './work-origin'
 import type { AgentStatusState, AgentType } from './agent-status-types'
 
 export type NotificationSettings = {
@@ -25,6 +26,7 @@ export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
+  workOrigin?: WorkOrigin
   notificationId?: string
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
@@ -49,6 +51,7 @@ export type NotificationDispatchResult = {
   delivered: boolean
   /** Why delivery was skipped (set when delivered is false); 'blocked-by-system' = macOS would silently swallow it. */
   reason?:
+    | 'not-recipient'
     | 'disabled'
     | 'source-disabled'
     | 'suppressed-focus'

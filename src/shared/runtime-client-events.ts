@@ -40,6 +40,7 @@ export type RuntimeClientEvent =
     }
   | {
       type: 'activateWorktree'
+      recipientDeviceId?: string
       repoId: string
       worktreeId: string
       setup?: WorktreeSetupLaunch

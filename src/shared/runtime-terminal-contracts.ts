@@ -1,8 +1,6 @@
+import type { WorkOrigin } from './work-origin'
 import type { AgentSessionPtyWriteRefusal } from './agent-session-pty-write-admission'
-import type {
-  AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
-} from './agent-session-resume'
+import type * as AgentSessionResume from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
@@ -245,6 +243,7 @@ export type RuntimeTerminalAgentStatus = {
 export type RuntimeTerminalPresentation = 'background' | 'focused'
 
 type RuntimeTerminalCreateBaseRequestPayload = {
+  workOrigin?: WorkOrigin
   requestId: string
   worktreeId?: string
   afterTabId?: string
@@ -253,8 +252,8 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
-  launchConfig?: SleepingAgentLaunchConfig
-  resumeProviderSession?: AgentProviderSessionMetadata
+  launchConfig?: AgentSessionResume.SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentSessionResume.AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent
   viewMode?: 'terminal' | 'chat'

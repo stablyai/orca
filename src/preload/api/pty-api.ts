@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -31,6 +32,7 @@ export type PtyApi = {
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
+    workOrigin?: WorkOrigin
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
     connectionId?: string | null
@@ -51,6 +53,7 @@ export type PtyApi = {
     id: string
     /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
     incarnationId?: string
+    workOrigin?: WorkOrigin
     launchAgent?: TuiAgent
     launchConfig?: SleepingAgentLaunchConfig
     snapshot?: string

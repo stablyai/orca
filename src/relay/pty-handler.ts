@@ -1,3 +1,4 @@
+import { normalizeWorkOrigin, type WorkOrigin } from '../shared/work-origin'
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
@@ -196,6 +197,7 @@ function parseSourceRecoveryRequest(value: unknown): PtySourceRecoveryRequest | 
 }
 
 type ManagedPty = {
+  workOrigin?: WorkOrigin
   id: string
   incarnationId: string
   pty: IPty
@@ -1834,6 +1836,7 @@ export class PtyHandler {
   ): Promise<{
     id: string
     incarnationId: string
+    workOrigin?: WorkOrigin
     sourceActivation?: PtySourceReceivingActivation
     shellReadyArmed?: boolean
   }> {
@@ -1977,6 +1980,7 @@ export class PtyHandler {
     const managed: ManagedPty = {
       id,
       incarnationId: randomUUID(),
+      workOrigin: normalizeWorkOrigin(params.workOrigin),
       pty: term,
       initialCwd: cwd,
       createdAt: Date.now(),
@@ -2049,6 +2053,7 @@ export class PtyHandler {
     return {
       id,
       incarnationId: managed.incarnationId,
+      workOrigin: managed.workOrigin,
       ...(sourceActivation ? { sourceActivation } : {}),
       shellReadyArmed: rendererShellReadySupported
     }
@@ -2059,6 +2064,7 @@ export class PtyHandler {
     context?: RequestContext
   ): Promise<{
     incarnationId: string
+    workOrigin?: WorkOrigin
     replay?: string
     sourceRecovery?: PtySourceRecoveryResult
     sourceActivation?: PtySourceReceivingActivation
@@ -2157,6 +2163,7 @@ export class PtyHandler {
       if (params.suppressReplayNotification) {
         return {
           incarnationId: managed.incarnationId,
+          workOrigin: managed.workOrigin,
           replay,
           ...(sourceActivation ? { sourceActivation } : {})
         }
@@ -2165,6 +2172,7 @@ export class PtyHandler {
     }
     return {
       incarnationId: managed.incarnationId,
+      workOrigin: managed.workOrigin,
       ...(sourceActivation ? { sourceActivation } : {})
     }
   }

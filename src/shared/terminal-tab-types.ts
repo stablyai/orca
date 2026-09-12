@@ -1,3 +1,4 @@
+import type { WorkOrigin } from './work-origin'
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
 import type { TuiAgent } from './tui-agent'
 
@@ -55,6 +56,8 @@ export type TerminalTabRecoveryLedger = {
 
 // ─── Terminal Tab (legacy — used by persistence and TerminalContentSlice) ─
 export type TerminalTab = {
+  workOrigin?: WorkOrigin
+  workOriginsByLeafId?: Record<string, WorkOrigin>
   id: string
   ptyId: string | null
   worktreeId: string

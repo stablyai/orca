@@ -1,3 +1,4 @@
+import type { WorkOrigin } from './work-origin'
 import type { AgentStatusEntry } from './agent-status-types'
 import type { BrowserCertificateFailure, BrowserLoadError } from './browser-workspace-types'
 import type { RuntimeBrowserPlacement } from './runtime-browser-placement'
@@ -6,6 +7,7 @@ import type { TerminalLayoutSnapshot } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 
 export type RuntimeMobileSessionTerminalTab = {
+  workOrigin?: WorkOrigin
   type: 'terminal'
   id: string
   title: string

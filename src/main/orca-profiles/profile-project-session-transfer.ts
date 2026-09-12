@@ -121,6 +121,12 @@ export function extractSessionForTransfer(
       return separator > 0 && copiedTerminalTabIds.has(paneKey.slice(0, separator))
     })
   )
+  transferred.terminalWorkOriginsByPaneKey = Object.fromEntries(
+    Object.entries(source.terminalWorkOriginsByPaneKey ?? {}).filter(([paneKey]) => {
+      const separator = paneKey.lastIndexOf(':')
+      return separator > 0 && copiedTerminalTabIds.has(paneKey.slice(0, separator))
+    })
+  )
   transferred.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
     Object.entries(source.terminalSurfaceTombstonesByPaneKey ?? {}).flatMap(
       ([paneKey, tombstone]) =>

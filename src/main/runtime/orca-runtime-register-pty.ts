@@ -1,9 +1,12 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './orca-runtime-invalidate-all-handles-for-pty'
+import { structuredWorkerIdentities } from './structured-worker-identity'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
-import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 
 export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
@@ -15,6 +18,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       tabId: string
       leafId: string
       incarnationId?: PtyIncarnationId
+      workOrigin?: WorkOrigin
       /** Handle allocated for the replacement incarnation, when one is known. */
       terminalHandle?: string
       agentLaunchAuthority?: { launchToken: string; launchAgent: TuiAgent }
@@ -80,6 +84,12 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
+    if (incarnationChanged) {
+      delete pty.workOrigin
+    }
+    if (binding?.workOrigin !== undefined) {
+      pty.workOrigin = binding.workOrigin
+    }
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (paneKey && binding?.incarnationId && hostScope) {
       this._orchestrationDb?.retainReplacedWorkerTerminalResources({
@@ -137,6 +147,48 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     if (binding && paneKey) {
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
     }
+  }
+
+  getTerminalWorkOrigin(handle: string): WorkOrigin | undefined {
+    const structured = structuredWorkerIdentities.get(handle)
+    if (structured) {
+      return getStructuredAgentSessionHost()?.getWorkOrigin(structured.sessionId)
+    }
+    const live = this.getLivePtyForHandle(handle)
+    if (!live?.pty.connected) {
+      return undefined
+    }
+    return this.getPaneWorkOrigin(live.pty.worktreeId, live.pty.paneKey, live.pty)
+  }
+
+  getPaneWorkOrigin(
+    worktreeId: string,
+    paneKey: string | null,
+    pty?: {
+      workOrigin?: WorkOrigin
+      ptyId?: string
+      incarnationId?: string | null
+      connectionId?: string | null
+    }
+  ): WorkOrigin | undefined {
+    if (pty?.workOrigin !== undefined) {
+      return pty.workOrigin
+    }
+    if (!paneKey) {
+      return undefined
+    }
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const pane = parsePaneKey(paneKey)
+    if (
+      pty?.ptyId &&
+      pane &&
+      (session?.terminalLayoutsByTabId?.[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] !== pty.ptyId ||
+        (pty.incarnationId &&
+          session?.terminalPtyIncarnationsByPaneKey?.[paneKey] !== pty.incarnationId))
+    ) {
+      return undefined
+    }
+    return session?.terminalWorkOriginsByPaneKey?.[paneKey]
   }
 
   assertPtyRegistrationAllowed(ptyId: string, incarnationId?: PtyIncarnationId): void {

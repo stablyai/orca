@@ -36,7 +36,7 @@ type Dependencies = {
   sendFollowup(handle: string, followup: WorktreeStartupFollowup): void
   provision(
     args: WorktreeTerminalProvisioningArgs
-  ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }>
+  ): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null; warning?: string }>
   activate(
     repoId: string,
     worktreeId: string,
@@ -72,7 +72,9 @@ export async function createRuntimeRemoteManagedWorktree(
   deps.invalidateWorktreeScan(repo.id)
   deps.notifyWorktreesChanged(repo.id)
 
-  const shouldActivate = args.activate === true || args.runHooks === true
+  const wantsReveal = args.activate === true
+  const addressed = args.workOrigin !== undefined && args.workOrigin?.kind !== 'host'
+  const shouldActivate = wantsReveal && !addressed
   let warning = result.warning
   let didSpawnStartup = false
   // Why: same no-double-spawn contract as the local path — once runtime
@@ -161,6 +163,9 @@ export async function createRuntimeRemoteManagedWorktree(
         // remote Setup tab runs the same script the sequenced agent waits on.
         ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
       })
+      if (provisioned.warning) {
+        warning = [warning, provisioned.warning].filter(Boolean).join(' ')
+      }
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
     }
@@ -212,8 +217,11 @@ export async function createRuntimeRemoteManagedWorktree(
     })
     // Why: runtime owns setup spawning here, so omit setup from the RPC result
     // to keep the headless/mobile caller from launching it a second time.
-    if (args.awaitTerminalProvisioning) {
+    if (args.awaitTerminalProvisioning || addressed) {
       const provisioned = await provisioning
+      if (provisioned.warning) {
+        warning = [warning, provisioned.warning].filter(Boolean).join(' ')
+      }
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
     } else {
@@ -233,6 +241,9 @@ export async function createRuntimeRemoteManagedWorktree(
     }
   }
 
+  if (wantsReveal && addressed) {
+    deps.activate(repo.id, result.worktree.id)
+  }
   return finishRuntimeRemoteWorktreeCreate({
     result,
     request: args,

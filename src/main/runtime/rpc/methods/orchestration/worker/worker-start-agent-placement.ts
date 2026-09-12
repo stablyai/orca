@@ -157,6 +157,7 @@ async function createWorkerAgentSurface(
   if (mode.mode === 'structured') {
     const structuredSession = await createStructuredWorkerSessionForWorktree({
       runtime: args.runtime,
+      workOrigin: args.runtime.getTerminalWorkOrigin(args.params.from) ?? null,
       worktreeId,
       agent: args.agent as TuiAgent,
       dispatchId: args.dispatchId,
@@ -167,6 +168,7 @@ async function createWorkerAgentSurface(
   }
   const terminal = await createExistingWorktreeWorkerTerminal({
     runtime: args.runtime,
+    workOrigin: args.runtime.getTerminalWorkOrigin(args.params.from) ?? null,
     worktreeId,
     agent: args.agent as TuiAgent,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),

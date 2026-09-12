@@ -1,3 +1,4 @@
+import { resolveRpcWorkOrigin } from '../../work-origin-context'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
@@ -52,6 +53,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           params.reconcileExisting === true,
           (canonicalWorktreeSelector, preAllocatedHandle) =>
             runtime.createTerminal(canonicalWorktreeSelector, {
+              workOrigin: resolveRpcWorkOrigin({ runtime, pairedDeviceId, clientKind }, params),
               command: params.command,
               startupCommandDelivery: params.startupCommandDelivery,
               env: params.env,
@@ -81,8 +83,10 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
     name: 'terminal.split',
     params: TerminalSplit,
-    handler: async (params, { runtime }) => ({
-      split: await runtime.splitTerminal(params.terminal, {
+    handler: async (params, context) => ({
+      split: await context.runtime.splitTerminal(params.terminal, {
+        workOrigin: resolveRpcWorkOrigin(context, params),
+        ...(context.pairedDeviceId ? { surfaceOwner: false, activate: false } : {}),
         direction: params.direction,
         command: params.command,
         env: params.env,

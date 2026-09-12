@@ -124,7 +124,9 @@ export async function createRuntimeFolderWorktree(args: {
     path: worktree.path,
     branch: worktree.branch
   })
-  const shouldActivate = request.activate === true || request.runHooks === true
+  const wantsReveal = request.activate === true
+  const addressed = request.workOrigin !== undefined && request.workOrigin?.kind !== 'host'
+  const shouldActivate = wantsReveal && !addressed
   let warning: string | undefined
   let didSpawnStartup = false
   let startupTerminal: CreateWorktreeResult['startupTerminal']
@@ -183,6 +185,9 @@ export async function createRuntimeFolderWorktree(args: {
         : initialWarning
       console.warn(`[worktree-create] ${warning}`)
     }
+  }
+  if (wantsReveal && addressed) {
+    deps.activate(repo.id, worktree.id)
   }
   return {
     worktree: {

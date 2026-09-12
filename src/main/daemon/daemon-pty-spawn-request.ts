@@ -116,6 +116,9 @@ export abstract class DaemonPtySpawnRequest extends DaemonPtyRuntimeState {
         command: context.attachOnly ? undefined : opts.command,
         startupCommandDelivery: context.attachOnly ? undefined : opts.startupCommandDelivery,
         launchAgent: context.attachOnly ? undefined : opts.launchAgent,
+        ...(context.attachOnly || opts.workOrigin === undefined
+          ? {}
+          : { workOrigin: opts.workOrigin }),
         ...(context.attachOnly && !context.emulateLegacyAttachOnly ? { attachOnly: true } : {}),
         shellOverride: context.attachOnly ? undefined : opts.shellOverride,
         terminalWindowsWslDistro: context.attachOnly ? undefined : opts.terminalWindowsWslDistro,

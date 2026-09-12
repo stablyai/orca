@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
@@ -46,6 +47,7 @@ export type RuntimePtyController = {
     cwd?: string
     command?: string
     launchAgent?: TuiAgent
+    workOrigin?: WorkOrigin
     commandDelivery?: 'renderer' | 'provider'
     startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
     env?: Record<string, string>

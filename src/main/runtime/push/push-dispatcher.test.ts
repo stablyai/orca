@@ -10,6 +10,22 @@ import {
 } from './push-dispatcher.test-fixture'
 
 describe('PushDispatcher', () => {
+  it.each([
+    [{ kind: 'paired-device', deviceId: 'a' }, ['reg-a']],
+    [null, []],
+    [{ kind: 'paired-device', deviceId: 'revoked' }, []]
+  ] as const)('routes attributed work only to its device: %j', async (workOrigin, recipients) => {
+    const harness = createHarness({
+      devices: [
+        { deviceId: 'a', pushRegistration: registration({ registrationId: 'reg-a' }) },
+        { deviceId: 'b', pushRegistration: registration({ registrationId: 'reg-b' }) }
+      ]
+    })
+    harness.dispatcher.enqueue(notification({ workOrigin }))
+    await flush()
+    expect(harness.sends.flatMap((send) => send.registrationIds)).toEqual(recipients)
+  })
+
   it('batches every matching registration into one send', async () => {
     const harness = createHarness({
       devices: [

@@ -3320,8 +3320,8 @@
       "coveredProviders": ["local", "orca-server"],
       "coverageNotes": "A real two-client integration harness pairs two authenticated devices to one OrcaRuntimeService over WebSockets with E2EE and drives worktree.create through the real RPC dispatcher, in both headed-notifier and headless orca-serve shapes. The headless case is a modeled `orca serve` runtime shape — no notifier, no attached window — not a CLI bootstrap, and the in-process reveal non-regression calls createManagedWorktree directly. A headed Electron journey runs the desktop app as the remote server with two independently paired web clients in separate partitions and asserts each client's rendered active worktree. Windows and Linux are covered by the platform-neutral contract only; the reported field topology was a Windows server with mixed-OS clients.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/11027"],
-      "invariant": "View intent belongs to the connection that requested it. With no explicit navigation target, a workspace create arriving over a paired desktop/web client connection activates only that caller; it must not emit an activateWorktree client event to sibling connections or drive the host renderer. An explicit navigation of host/clients/all remains an allowed, tested follow intent. Shared model state — repo/worktree catalogs, terminals, agent output — must keep propagating to every client unchanged. In-process and CLI creates keep notifying the host and all clients so a headless server's only viewer still gets its reveal.",
-      "oracle": "notifyActivateWorktree takes its navigation target as a required parameter, so a create call site that forgets to forward it is a compile error rather than a silent fallback to broadcasting — mutation testing confirmed all six call sites (folder, git, and remote/SSH branches, startup and no-startup each) are killed by typecheck. Behaviorally: two paired clients subscribe to runtime.clientEvents. Client A creates a workspace with activate:true; a reposChanged fence emitted after the create must be the next frame each client sees, proving no activation frame was interleaved, while worktreesChanged still arrives on both streams. The host notifier's activateWorktree is asserted not called and the host's mirrored selection is unchanged. Repeated ordinary worktree.activate calls by A are the negative control. The same file asserts the in-process create still reaches host and clients, headed and headless. The Electron journey asserts the observer's data-rendered-active-worktree-id is unchanged while the created workspace still appears in its sidebar.",
+      "invariant": "Each viewer owns navigation. Paired UI requests never steer other viewers, including explicit legacy host/clients/all targets. CLI activation inherits its launching run's device; unknown origin stays background. Host-origin creates reveal only on the host. New clients reject unaddressed activation and ambient follow snapshots from old hosts.",
+      "oracle": "Two authenticated WebSocket clients subscribe to client events. Current and legacy CLI payloads inherit A's terminal origin; A receives addressed activation while B receives shared catalog updates and a reposChanged fence with no activation. The host selection is unchanged. Tests cover headed-notifier and headless service shapes, reconnect with no replay, caller selection, host-only activation, and crossed runtime identities.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/multi-client-navigation-isolation.integration.test.ts src/main/runtime/rpc/methods/worktree-create-navigation.test.ts",
         "pnpm run test:e2e:multi-client-navigation -- tests/e2e/multi-client-navigation-isolation.spec.ts"
@@ -3336,10 +3336,10 @@
           "file": "src/main/runtime/multi-client-navigation-isolation.integration.test.ts",
           "assertions": [
             "keeps a paired client workspace create-with-activate off every other client and the host",
-            "still reveals to every client when a paired caller asks for all-surface navigation",
+            "isolates current and legacy CLI activation (headless=%s)",
             "does not replay a missed create activation to a reconnecting observer",
             "keeps create activation caller-scoped on a headless orca serve host",
-            "still reveals a host-originated create-with-activate on the host and every client",
+            "reveals a host-originated create only on the host",
             "keeps worktree navigation local to each paired runtime client by default",
             "routes explicit host and paired-client follow intent without changing the default"
           ]
@@ -3349,8 +3349,8 @@
           "assertions": [
             "resolves create activation from the paired runtime client kind",
             "resolves create activation from the paired mobile client kind",
-            "honors an explicit follow navigation on create",
-            "keeps an explicit all-surface reveal from a paired caller"
+            "keeps explicit follow navigation local to its caller",
+            "keeps explicit all-surface navigation local to its caller"
           ]
         },
         {
