@@ -115,7 +115,7 @@ export function PaletteOpenTabPrimaryLine({
           <span
             data-slot="palette-open-tab-secondary"
             title={secondary.elided ? secondaryText : undefined}
-            className="min-w-0 max-w-[min(38%,20rem)] truncate text-[12px] font-medium text-muted-foreground/92"
+            className="min-w-0 max-w-[min(26%,13rem)] truncate text-[12px] font-medium text-muted-foreground/92"
           >
             <HighlightedText text={secondary.text} matchRanges={secondary.ranges} />
           </span>

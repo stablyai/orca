@@ -5,6 +5,7 @@ import {
 } from './palette-secondary-text-window'
 
 const URL = 'help.pulley.com/en/articles/4856643-how-do-i-convert-a-safe-or-convertible-note'
+const LONG_HOST_URL = 'knowledge.workspace.google.com/admin/is-there-a-log-of-messages-sent'
 
 function highlighted(text: string, ranges: readonly { start: number; end: number }[]): string {
   return ranges.map((range) => text.slice(range.start, range.end)).join('|')
@@ -19,7 +20,7 @@ describe('windowPaletteSecondaryText', () => {
 
   it('keeps the head and trims the tail when nothing matched', () => {
     const result = windowPaletteSecondaryText(URL)
-    expect(result.text).toBe('help.pulley.com/en/articles/4856643-h…')
+    expect(result.text).toBe('help.pulley.com/en/articl…')
     expect(result.text.length).toBe(PALETTE_SECONDARY_TEXT_BUDGET)
     expect(result.elided).toBe(true)
   })
@@ -27,8 +28,15 @@ describe('windowPaletteSecondaryText', () => {
   it('keeps the host and pulls in a window around a match past the budget', () => {
     const start = URL.indexOf('safe')
     const result = windowPaletteSecondaryText(URL, [{ start, end: start + 4 }])
-    expect(result.text).toBe('help.pulley.com…ert-a-safe-or-convert…')
+    expect(result.text).toBe('help.pulley.com…rt-a-safe…')
     expect(highlighted(result.text, result.ranges)).toBe('safe')
+  })
+
+  it('trims a long host rather than giving up the match window', () => {
+    const start = LONG_HOST_URL.indexOf('messages')
+    const result = windowPaletteSecondaryText(LONG_HOST_URL, [{ start, end: start + 8 }])
+    expect(result.text).toBe('knowledge.worksp…messages…')
+    expect(highlighted(result.text, result.ranges)).toBe('messages')
   })
 
   it('rebases every match the window still shows', () => {
@@ -38,7 +46,7 @@ describe('windowPaletteSecondaryText', () => {
       { start: first, end: first + 6 },
       { start: second, end: second + 8 }
     ])
-    expect(highlighted(result.text, result.ranges)).toBe('pulley|articles')
+    expect(highlighted(result.text, result.ranges)).toBe('pulley|articl')
   })
 
   it('drops matches the window cut away', () => {
@@ -53,20 +61,19 @@ describe('windowPaletteSecondaryText', () => {
   it('clamps the window to the end of the text', () => {
     const start = URL.length - 4
     const result = windowPaletteSecondaryText(URL, [{ start, end: start + 4 }])
-    expect(result.text.endsWith('note')).toBe(true)
+    expect(result.text).toBe('help.pulley.com…ible-note')
     expect(highlighted(result.text, result.ranges)).toBe('note')
   })
 
   it('joins the head to the window with no gap when they are contiguous', () => {
-    const start = URL.indexOf('articles') + 1
-    const result = windowPaletteSecondaryText(URL, [{ start, end: start + 20 }])
-    expect(result.text).toBe('help.pulley.com/en/articles/4856643-…')
-    expect(highlighted(result.text, result.ranges)).toBe('rticles/4856643-')
+    const result = windowPaletteSecondaryText(URL, [{ start: 21, end: 41 }])
+    expect(result.text).toBe('help.pulley.com…ticles/48…')
+    expect(highlighted(result.text, result.ranges)).toBe('ticles/48')
   })
 
-  it('falls back to head truncation when the budget leaves no useful window', () => {
+  it('falls back to head truncation when the budget leaves no room to jump', () => {
     const start = URL.indexOf('safe')
-    const result = windowPaletteSecondaryText(URL, [{ start, end: start + 4 }], 24)
-    expect(result.text).toBe('help.pulley.com/en/arti…')
+    const result = windowPaletteSecondaryText(URL, [{ start, end: start + 4 }], 12)
+    expect(result.text).toBe('help.pulley…')
   })
 })

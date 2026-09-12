@@ -51,9 +51,9 @@ describe('PaletteOpenTabPrimaryLine', () => {
     const title = container.querySelector('[data-slot="palette-open-tab-title"]')
     expect(title?.textContent).toBe(TITLE)
     const secondary = secondaryElement()
-    expect(secondary.textContent).toBe('help.pulley.com/en/articles/4856643-h…')
+    expect(secondary.textContent).toBe('help.pulley.com/en/articl…')
     expect(secondary.getAttribute('title')).toBe(URL)
-    expect(secondary.className).toContain('max-w-[min(38%,20rem)]')
+    expect(secondary.className).toContain('max-w-[min(26%,13rem)]')
   })
 
   it('keeps a matched url segment visible in the elided text', () => {
