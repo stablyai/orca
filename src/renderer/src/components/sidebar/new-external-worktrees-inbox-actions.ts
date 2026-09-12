@@ -103,7 +103,7 @@ export async function keepNewExternalWorktreeInboxHidden(
 
 export async function importNewExternalWorktreeInboxPaths(
   args: NewExternalWorktreesInboxActionDeps
-): Promise<void> {
+): Promise<boolean> {
   const importedExternalWorktreePaths = mergeExternalWorktreeInboxPaths(
     args.repo.importedExternalWorktreePaths,
     args.worktreePaths
@@ -112,7 +112,7 @@ export async function importNewExternalWorktreeInboxPaths(
     args.repo.externalWorktreeInboxBaselinePaths,
     args.worktreePaths
   )
-  await refreshAfterRepoInboxUpdate(
+  return await refreshAfterRepoInboxUpdate(
     args,
     { importedExternalWorktreePaths, externalWorktreeInboxBaselinePaths },
     {
