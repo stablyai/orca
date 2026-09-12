@@ -587,4 +587,13 @@ describe('tab create entry path validation', () => {
       expect(() => validateNewTabEntryAbsolutePath(path), path).toThrow()
     }
   })
+
+  it('rejects absolute-looking paths with trailing separators or controls', () => {
+    expect(() => validateNewTabEntryAbsolutePath('/tmp/notes.md/', 'posix')).toThrow(
+      'directory path'
+    )
+    expect(() => validateNewTabEntryAbsolutePath('/tmp/notes\u0000.md', 'posix')).toThrow(
+      'control characters'
+    )
+  })
 })
