@@ -3,7 +3,15 @@ import { minidumpSignatureDetails, parseMinidumpCrashSignature } from './minidum
 
 const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_EXCEPTION = 6
+const STREAM_TYPE_SYSTEM_INFO = 7
 const STREAM_TYPE_CRASHPAD_INFO = 0x43500001
+
+// MINIDUMP_SYSTEM_INFO.PlatformId (Crashpad's MinidumpOS). A module is only
+// attributed to ExceptionAddress on Windows, where that field is the faulting
+// instruction; elsewhere it is a data address, so the dump has to say which.
+const SYSTEM_INFO_BYTES = 56
+const PLATFORM_ID = { windows: 2, macos: 0x8101, linux: 0x8201 } as const
+const CONTEXT_AMD64_BYTES = 1232
 
 /**
  * Builds real Crashpad-layout minidumps so the parser is tested against the
@@ -87,11 +95,22 @@ type BuiltDump = { dump: Buffer }
 function buildDump(options: {
   annotations?: Record<string, string>
   simpleAnnotations?: Record<string, string>
-  exception?: { code: number; address: bigint }
+  exception?: {
+    code: number
+    address: bigint
+    /** MINIDUMP_SYSTEM_INFO.PlatformId; omitted for a dump that names no platform. */
+    platform?: keyof typeof PLATFORM_ID
+    /** Crashing thread's CONTEXT Rip, where the faulting instruction really lives. */
+    instructionPointer?: bigint
+  }
   modules?: { base: bigint; size: number; name: string }[]
 }): BuiltDump {
+  const platform = options.exception?.platform
   const streamCount =
-    1 + (options.exception ? 1 : 0) + (options.modules && options.modules.length > 0 ? 1 : 0)
+    1 +
+    (options.exception ? 1 : 0) +
+    (platform ? 1 : 0) +
+    (options.modules && options.modules.length > 0 ? 1 : 0)
   const builder = new MinidumpBuilder(32 + streamCount * 12)
   const streams: { type: number; size: number; rva: number }[] = []
 
@@ -162,6 +181,17 @@ function buildDump(options: {
     rva: crashpadInfoRva
   })
 
+  if (platform) {
+    const systemInfo = Buffer.alloc(SYSTEM_INFO_BYTES)
+    systemInfo.writeUInt16LE(9, 0) // PROCESSOR_ARCHITECTURE_AMD64
+    systemInfo.writeUInt32LE(PLATFORM_ID[platform], 20) // PlatformId
+    streams.push({
+      type: STREAM_TYPE_SYSTEM_INFO,
+      size: SYSTEM_INFO_BYTES,
+      rva: builder.append(systemInfo)
+    })
+  }
+
   if (options.modules && options.modules.length > 0) {
     const nameRvas = options.modules.map((module) => builder.utf16String(module.name))
     const listBuf = Buffer.alloc(4 + options.modules.length * 108)
@@ -184,6 +214,14 @@ function buildDump(options: {
     exceptionBuf.writeUInt32LE(1234, 0) // ThreadId
     exceptionBuf.writeUInt32LE(options.exception.code, 8)
     exceptionBuf.writeBigUInt64LE(options.exception.address, 24)
+    if (options.exception.instructionPointer !== undefined) {
+      const context = Buffer.alloc(CONTEXT_AMD64_BYTES)
+      context.writeUInt32LE(0x0010000f, 0x30) // CONTEXT_AMD64 | CONTEXT_FULL
+      context.writeBigUInt64LE(options.exception.instructionPointer, 0xf8) // Rip
+      const contextRva = builder.append(context)
+      exceptionBuf.writeUInt32LE(context.length, 160) // ThreadContext
+      exceptionBuf.writeUInt32LE(contextRva, 164)
+    }
     streams.push({
       type: STREAM_TYPE_EXCEPTION,
       size: exceptionBuf.length,
@@ -333,7 +371,11 @@ describe('parseMinidumpCrashSignature', () => {
 
   it('resolves the faulting module from the exception address', () => {
     const { dump } = buildDump({
-      exception: { code: 0x80000003, address: 0x7ff8_0000_1234n },
+      exception: {
+        code: 0x80000003,
+        address: 0x7ff8_0000_1234n,
+        platform: 'windows'
+      },
       modules: [
         {
           base: 0x7ff7_0000_0000n,
@@ -365,7 +407,14 @@ describe('parseMinidumpCrashSignature', () => {
       name: `/Applications/Orca.app/Contents/Frameworks/lib${index}.dylib`
     }))
     const { dump } = buildDump({
-      exception: { code: 11, address: 0x1_0000_0000n + 1030n * 0x1_0000n + 0x24n },
+      // EXC_BAD_ACCESS is the one Mach class whose ExceptionAddress is a data
+      // address, so the module has to come through the thread context.
+      exception: {
+        code: 1,
+        address: 0x1_0000_0000n + 1030n * 0x1_0000n + 0x24n,
+        platform: 'macos',
+        instructionPointer: 0x1_0000_0000n + 1030n * 0x1_0000n + 0x24n
+      },
       modules
     })
 
@@ -377,7 +426,8 @@ describe('parseMinidumpCrashSignature', () => {
 
   it('still drops the module list when the claimed module count is absurd', () => {
     const { dump } = buildDump({
-      exception: { code: 11, address: 0x7ff7_0000_0010n },
+      // Windows: ExceptionAddress is the instruction, so the lookup really runs.
+      exception: { code: 11, address: 0x7ff7_0000_0010n, platform: 'windows' },
       modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/orca/orca' }]
     })
     const corrupt = Buffer.from(dump)
@@ -389,7 +439,7 @@ describe('parseMinidumpCrashSignature', () => {
 
   it('omits the faulting module when no image range covers the address', () => {
     const { dump } = buildDump({
-      exception: { code: 11, address: 0x10n },
+      exception: { code: 11, address: 0x10n, platform: 'windows' },
       modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/orca/orca' }]
     })
 
@@ -431,7 +481,11 @@ describe('minidumpSignatureDetails', () => {
         ptype: 'renderer',
         channel: 'stable'
       },
-      exception: { code: 0x80000003, address: 0x7ff8_0000_1234n },
+      exception: {
+        code: 0x80000003,
+        address: 0x7ff8_0000_1234n,
+        platform: 'windows'
+      },
       modules: [{ base: 0x7ff8_0000_0000n, size: 0x10_0000, name: 'chrome_elf.dll' }]
     })
 
