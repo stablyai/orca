@@ -62,4 +62,15 @@ export type FilterState = {
   alwaysShowDefaultBranch?: boolean
 }
 
-export type Section = { key: string; title: string; icon?: 'pin'; data: Worktree[] }
+export type WorkspaceListSectionKind = 'pinned' | 'lane' | 'project-group' | 'repo'
+export type WorkspaceListSectionIcon = 'pin' | 'folder'
+
+export type Section = {
+  key: string
+  title: string
+  kind: WorkspaceListSectionKind
+  depth: number
+  icon?: WorkspaceListSectionIcon
+  count: number
+  data: Worktree[]
+}

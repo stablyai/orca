@@ -4,6 +4,10 @@ import { setCachedRepos } from '../cache/repo-cache'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
 import type { RepoSummary } from '../worktree/host-worktree-rpc-types'
+import {
+  buildRepoProjectGroupIdByRepoId,
+  readProjectGroupListResult
+} from '../worktree/mobile-project-groups'
 import { repoColor } from '../worktree/repo-color'
 import {
   buildHostLabelById,
@@ -63,10 +67,12 @@ export function useHostRepoMetadata(args: {
     repoMetadataFetchedAtRef,
     setHostLabelById,
     setHostPlatform,
+    setProjectGroups,
     setRepoColorsByName,
     setRepoHostIdByRepoId,
     setRepoIconsByName,
-    setRepoIdsByName
+    setRepoIdsByName,
+    setRepoProjectGroupIdByRepoId
   } = state
 
   const fetchRepoMetadata = useCallback(
@@ -90,13 +96,18 @@ export function useHostRepoMetadata(args: {
       try {
         do {
           fetchRepoMetadataPendingRef.current.delete(requestClient)
-          const repoResponse = await requestClient.sendRequest('repo.list')
+          const [repoResponse, projectGroupResult] = await Promise.all([
+            requestClient.sendRequest('repo.list'),
+            requestResult(requestClient, 'projectGroup.list')
+          ])
           if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
             return
           }
           const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
           repoMetadataFetchedAtRef.current = Date.now()
           setCachedRepos(requestHostId, repoResult.repos)
+          setRepoProjectGroupIdByRepoId(buildRepoProjectGroupIdByRepoId(repoResult.repos))
+          setProjectGroups(readProjectGroupListResult(projectGroupResult))
           setRepoColorsByName(
             new Map(
               repoResult.repos.map((repo) => [

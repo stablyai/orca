@@ -14,7 +14,12 @@ import { handleMockAccountRequest } from './mock-server-account-rpc'
 import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
 import { handleMockSessionTabsRequest } from './mock-server-session-tabs-fixture'
 import { handleMockTerminalRequest } from './mock-server-terminal-stream'
-import { createMockRepos, createMockWorktrees, readScenarioNumber } from './mobile-lag-scenario'
+import {
+  createMockProjectGroups,
+  createMockRepos,
+  createMockWorktrees,
+  readScenarioNumber
+} from './mobile-lag-scenario'
 
 const MOCK_REPO_COUNT = readScenarioNumber('MOCK_REPO_COUNT', 2)
 const MOCK_WORKTREE_COUNT = readScenarioNumber('MOCK_WORKTREE_COUNT', 2)
@@ -163,6 +168,10 @@ export function handleRequest(
 
     case 'repo.list':
       respond(success(request.id, { repos: FAKE_REPOS }))
+      break
+
+    case 'projectGroup.list':
+      respond(success(request.id, { groups: createMockProjectGroups() }))
       break
 
     case 'settings.get':

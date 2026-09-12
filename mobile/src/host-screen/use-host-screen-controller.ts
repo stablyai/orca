@@ -124,7 +124,9 @@ export function useHostScreenController({
     repoIdsByName: state.repoIdsByName,
     repoColorsByName: state.repoColorsByName,
     collapsedGroups: state.collapsedGroups,
-    workspaceStatuses: state.workspaceStatuses
+    workspaceStatuses: state.workspaceStatuses,
+    projectGroups: state.projectGroups,
+    repoProjectGroupIdByRepoId: state.repoProjectGroupIdByRepoId
   })
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
   const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections)

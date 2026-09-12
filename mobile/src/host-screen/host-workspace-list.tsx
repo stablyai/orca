@@ -1,9 +1,7 @@
-import { Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight, Pin } from 'lucide-react-native'
+import { RefreshControl, SectionList, View } from 'react-native'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
-import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
 import { WorktreeListRow } from '../components/WorktreeListRow'
@@ -14,6 +12,7 @@ import { getWorktreeStatus } from '../worktree/workspace-list-sections'
 import { repoColor } from '../worktree/repo-color'
 import { hostScreenStyles as styles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
+import { WorkspaceListSectionHeader } from './workspace-list-section-header'
 
 export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
   const {
@@ -122,36 +121,25 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             }
             const isCollapsed = state.collapsedGroups.has(section.key)
             const rawSection = rawSections.find((s) => s.key === section.key)
-            const count = rawSection?.data.length ?? 0
-            const repoSectionColor =
-              state.groupMode === 'repo' ? uniqueRepoColors.get(section.title) : null
-            const repoSectionIcon =
-              state.groupMode === 'repo' ? state.repoIconsByName.get(section.title) : null
+            const count = rawSection?.count ?? 0
             return (
-              <Pressable
-                style={styles.sectionHeader}
+              <WorkspaceListSectionHeader
+                title={section.title}
+                count={count}
+                depth={section.depth}
+                kind={section.kind}
+                icon={section.icon}
+                collapsed={isCollapsed}
+                repoColor={
+                  section.kind === 'repo' ? (uniqueRepoColors.get(section.title) ?? null) : null
+                }
+                repoIcon={
+                  section.kind === 'repo'
+                    ? (state.repoIconsByName.get(section.title) ?? null)
+                    : null
+                }
                 onPress={() => settings.toggleCollapsed(section.key)}
-              >
-                {isCollapsed ? (
-                  <ChevronRight size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                ) : (
-                  <ChevronDown size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {section.icon === 'pin' && (
-                  <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                )}
-                {state.groupMode === 'repo' ? (
-                  <View style={styles.sectionRepoIcon}>
-                    <MobileRepoIcon
-                      repoIcon={repoSectionIcon}
-                      size={14}
-                      color={repoSectionColor ?? colors.textSecondary}
-                    />
-                  </View>
-                ) : null}
-                <Text style={styles.sectionTitle}>{section.title}</Text>
-                <Text style={styles.sectionCount}>{count}</Text>
-              </Pressable>
+              />
             )
           }}
           ItemSeparatorComponent={ListSeparator}

@@ -9,7 +9,6 @@ import {
   ConductorProgressIcon,
   ConductorReviewIcon
 } from '../../workspace-status-icons'
-import { UNGROUPED_PROJECT_GROUP_KEY } from '../../../../../../shared/project-groups'
 import type { AppState } from '../../../../store/types'
 import {
   getGitHubPRCacheKey,
@@ -17,6 +16,8 @@ import {
 } from '../../../../store/slices/github-cache-key'
 import { translate } from '@/i18n/i18n'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+
+export { getProjectGroupHeaderKey } from '../../../../../../shared/project-groups'
 
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
@@ -70,10 +71,6 @@ export const PROJECT_GROUP_META = {
   tone: 'text-foreground',
   icon: FolderTree
 } as const
-
-export function getProjectGroupHeaderKey(groupId: string | null): string {
-  return groupId ? `project-group:${groupId}` : UNGROUPED_PROJECT_GROUP_KEY
-}
 
 export const PINNED_GROUP_KEY = 'pinned'
 
