@@ -1,6 +1,9 @@
 import { normalizeAgentStatusPayload } from './agent-status-types'
 import type { AgentHookSource } from './agent-hook-relay'
-import { extractAgentProviderSession } from './agent-session-resume'
+import {
+  extractAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from './agent-session-resume'
 import {
   canAcceptClaudeCompactCompletion,
   isClaudeCompactCompletionConsumed,
@@ -36,11 +39,14 @@ export function normalizeHookPayload(
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
     hookPayloadRecord.hookEventName
-  // Codex child hooks expose the child's session_id on the parent's pane.
-  const providerSession =
-    source === 'codex' && readString(hookPayloadRecord, 'agent_id')
-      ? null
-      : extractAgentProviderSession(source, hookPayloadRecord)
+  // Why: Codex child hooks expose the child's session_id on the parent's pane;
+  // treating it as the root resume id would replace the terminal's real session.
+  // Peek only — cache writes wait until a root event is accepted, except the
+  // intentional SessionStart metadata write inside normalizeCodexEvent.
+  const isCodexChild = source === 'codex' && Boolean(readString(hookPayloadRecord, 'agent_id'))
+  const providerSession = isCodexChild
+    ? null
+    : (resolveHookProviderSession(state, source, paneKey, hookPayloadRecord) ?? null)
   const providerPromptId =
     source === 'claude' ? normalizeClaudePromptId(hookPayloadRecord.prompt_id) : undefined
   const compactTrigger =
@@ -126,6 +132,12 @@ export function normalizeHookPayload(
   if (!transportPayload) {
     return null
   }
+  if (source === 'codex' && !isCodexChild) {
+    const extracted = extractAgentProviderSession(source, hookPayloadRecord)
+    if (extracted) {
+      state.lastProviderSessionByPaneKey.set(paneKey, extracted)
+    }
+  }
 
   return {
     paneKey,
@@ -170,4 +182,17 @@ export function normalizeHookPayload(
     ...(providerSessionOnly ? { providerSessionOnly: true } : {}),
     payload: transportPayload
   }
+}
+
+function resolveHookProviderSession(
+  state: HookListenerState,
+  source: AgentHookSource,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): AgentProviderSessionMetadata | undefined {
+  const extracted = extractAgentProviderSession(source, hookPayload) ?? undefined
+  if (source !== 'codex') {
+    return extracted
+  }
+  return extracted ?? state.lastProviderSessionByPaneKey.get(paneKey)
 }

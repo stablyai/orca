@@ -32,6 +32,7 @@ describe('config-toml-trust public API', () => {
         'normalizeCodexHookSourcePath',
         'normalizeCodexProjectPathForLookup',
         'normalizeCodexProjectPathForRevocationLookup',
+        'moveHookTrustEntriesInContent',
         'normalizeHookTrustKeyForLookup',
         'parseCodexProjectHeaderPath',
         'parseTrustKey',

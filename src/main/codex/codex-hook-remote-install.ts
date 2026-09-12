@@ -15,7 +15,13 @@ import {
   writeManagedScriptRemote,
   writeTextFileRemoteAtomic
 } from '../agent-hooks/installer-utils-remote'
-import { upsertHookTrustEntriesInContent, type CodexTrustEntry } from './config-toml-trust'
+import {
+  moveHookTrustEntriesInContent,
+  upsertHookTrustEntriesInContent,
+  type CodexHookTrustKeyMove,
+  type CodexTrustEntry
+} from './config-toml-trust'
+import { collectPrependedRemoteUserTrustMoves } from './codex-hook-remote-user-trust-moves'
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
@@ -71,19 +77,29 @@ export async function installCodexHooksRemote(
     }
 
     const trustEntries: CodexTrustEntry[] = []
+    const userTrustMoves: CodexHookTrustKeyMove[] = []
     for (const eventName of CODEX_EVENTS) {
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       const cleaned = removeManagedCommands(current, isManagedCommand)
       const definition: HookDefinition = {
         hooks: [buildManagedCommandHook(command)]
       }
-      nextHooks[eventName] = redirectedCodexHome
-        ? [definition, ...cleaned]
-        : [...cleaned, definition]
+      // Why: local installs already place Orca first; remote installs must
+      // not wait behind slow user hooks before publishing terminal status.
+      nextHooks[eventName] = [definition, ...cleaned]
+      userTrustMoves.push(
+        ...collectPrependedRemoteUserTrustMoves(
+          remoteConfigPath,
+          eventName,
+          current,
+          cleaned,
+          isManagedCommand
+        )
+      )
       trustEntries.push({
         sourcePath: remoteConfigPath,
         eventLabel: CODEX_EVENT_LABEL[eventName],
-        groupIndex: redirectedCodexHome ? 0 : cleaned.length,
+        groupIndex: 0,
         handlerIndex: 0,
         command,
         timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
@@ -108,7 +124,8 @@ export async function installCodexHooksRemote(
         }
       }
       const existingToml = existingTomlRaw ?? ''
-      const updatedToml = upsertHookTrustEntriesInContent(existingToml, trustEntries)
+      const movedUserTrust = moveHookTrustEntriesInContent(existingToml, userTrustMoves)
+      const updatedToml = upsertHookTrustEntriesInContent(movedUserTrust, trustEntries)
       if (updatedToml !== existingToml) {
         await writeTextFileRemoteAtomic(sftp, remoteTomlPath, updatedToml)
       }

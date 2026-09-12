@@ -1,4 +1,5 @@
 import type { AgentStatusState } from '../agent-status-types'
+import type { AgentProviderSessionMetadata } from '../agent-session-resume'
 import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
 import type { CodexSubagentRoster } from '../codex-subagent-roster'
 import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
@@ -10,6 +11,9 @@ export type HookListenerState = {
   warnedEnvs: Set<string>
   lastPromptByPaneKey: Map<string, string>
   lastToolByPaneKey: Map<string, ToolSnapshot>
+  /** Provider session identity can arrive on a metadata-only SessionStart before
+   *  the first visible status event. Keep it pane-scoped until that event. */
+  lastProviderSessionByPaneKey: Map<string, AgentProviderSessionMetadata>
   lastStatusByPaneKey: Map<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
   ampCompletedCacheKeys: Set<string>
@@ -61,6 +65,7 @@ export function createHookListenerState(): HookListenerState {
     warnedEnvs: new Set(),
     lastPromptByPaneKey: new Map(),
     lastToolByPaneKey: new Map(),
+    lastProviderSessionByPaneKey: new Map(),
     lastStatusByPaneKey: new Map(),
     antigravityCompletedTranscriptByPaneKey: new Map(),
     ampCompletedCacheKeys: new Set(),
@@ -80,6 +85,7 @@ export function createHookListenerState(): HookListenerState {
 export function clearPaneCacheState(state: HookListenerState, paneKey: string): void {
   deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
+  deletePaneScopedCacheEntry(state.lastProviderSessionByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastStatusByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
@@ -153,6 +159,7 @@ export function movePaneCacheState(
   }
   movePaneScopedMapEntries(state.lastPromptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastToolByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.lastProviderSessionByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastStatusByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
@@ -198,6 +205,7 @@ export function deletePaneScopedSetEntry(set: Set<string>, paneKey: string): voi
 export function clearAllListenerCaches(state: HookListenerState): void {
   state.lastPromptByPaneKey.clear()
   state.lastToolByPaneKey.clear()
+  state.lastProviderSessionByPaneKey.clear()
   state.lastStatusByPaneKey.clear()
   state.antigravityCompletedTranscriptByPaneKey.clear()
   state.ampCompletedCacheKeys.clear()

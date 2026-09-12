@@ -40,6 +40,14 @@ export function buildRelayHookEnvelope(
   }
 }
 
+export function hookBodyPaneKey(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null) {
+    return null
+  }
+  const value = (body as Record<string, unknown>).paneKey
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+}
+
 export function hookBodyEnv(body: unknown): string | undefined {
   if (typeof body !== 'object' || body === null) {
     return undefined

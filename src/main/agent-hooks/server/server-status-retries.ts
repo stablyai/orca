@@ -6,6 +6,7 @@ import {
 } from '../../../shared/agent-hook-listener/grok-result-discovery'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import { CodexSubagentPollScheduler } from '../../../shared/codex-subagent-poll-scheduler'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import {
   ASSISTANT_MESSAGE_RETRY_ATTEMPTS,
@@ -28,6 +29,41 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearAllCodexSubagentPolls(): void {
     this.codexSubagentPollScheduler.clearAll()
+  }
+
+  protected canApplyCodexSessionStart(
+    status: AgentHookEventPayload | undefined,
+    expectedConnectionId?: string
+  ): boolean {
+    if (!status) {
+      return true
+    }
+    if (status.payload.agentType !== 'codex') {
+      return false
+    }
+    // Why: a delayed relay notification must not clear a newer remote target's
+    // status if pane identity is ever reused across logical connections.
+    return expectedConnectionId === undefined || status.connectionId === expectedConnectionId
+  }
+
+  protected clearStatusForSessionStart(
+    paneKey: string,
+    previousStatus?: AgentHookEventPayload,
+    expectedConnectionId?: string
+  ): void {
+    const status = previousStatus ?? this.state.lastStatusByPaneKey.get(paneKey)
+    if (!status || !this.canApplyCodexSessionStart(status, expectedConnectionId)) {
+      return
+    }
+    this.state.lastStatusByPaneKey.delete(paneKey)
+    // Why: SessionStart is an idle metadata boundary, so remove the stale row
+    // without emitting a synthetic visible status for the new session.
+    this.clearAssistantMessageRetry(paneKey)
+    this.runtimeObservedStatusPaneKeys.delete(paneKey)
+    this.promptSentDedupeByPaneKey.delete(paneKey)
+    this.scheduleStatusPersist()
+    this.notifyStatusChangeListeners()
+    this.emitPaneStatusCleared({ paneKey })
   }
 
   protected clearAssistantMessageRetry(paneKey: string): void {

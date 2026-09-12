@@ -35,6 +35,17 @@ export function equivalentInterruptAgentType(
 }
 
 // Why: validate the durable `${tabId}:${leafUuid}` leaf suffix at write/hydrate so legacy numeric rows fail closed.
+export function hookBodyPaneKey(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null) {
+    return null
+  }
+  const paneKey = (body as Record<string, unknown>).paneKey
+  if (typeof paneKey !== 'string') {
+    return null
+  }
+  return paneKey.trim() || null
+}
+
 export function isValidPaneKey(value: unknown): value is string {
   return (
     typeof value === 'string' && value.length <= MAX_PANE_KEY_LEN && parsePaneKey(value) !== null

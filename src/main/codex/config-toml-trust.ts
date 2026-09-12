@@ -11,7 +11,14 @@ import {
   parseCodexTrustKey
 } from './codex-trust-identity'
 import { writeTomlConfigAtomically } from './config-toml-atomic-write'
-import { removeHookTrustContent, upsertHookTrustContent } from './config-toml-hook-trust-edit'
+import {
+  moveHookTrustContent,
+  removeHookTrustContent,
+  upsertHookTrustContent,
+  type CodexHookTrustKeyMove
+} from './config-toml-hook-trust-edit'
+
+export type { CodexHookTrustKeyMove }
 import { CodexHookTrustEntryMap, readHookTrustContent } from './config-toml-hook-trust-read'
 import { upsertProjectTrustContent } from './config-toml-project-trust'
 import { escapeTomlBasicString, parseProjectTomlHeaderPath } from './config-toml-syntax'
@@ -115,6 +122,13 @@ export function upsertHookTrustEntriesInContent(
   entries: readonly CodexTrustEntry[]
 ): string {
   return upsertHookTrustContent(existingContent, entries)
+}
+
+export function moveHookTrustEntriesInContent(
+  existingContent: string,
+  moves: readonly CodexHookTrustKeyMove[]
+): string {
+  return moveHookTrustContent(existingContent, moves)
 }
 
 export function upsertProjectTrustLevel(

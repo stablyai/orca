@@ -256,4 +256,26 @@ describe('Codex auto-approval status suppression', () => {
       })
     ).toBe(false)
   })
+
+  it('suppresses Codex native Action Required titles when launch is yolo', () => {
+    registerCodexLaunchConfig({
+      agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalSyntheticTitle('[ ! ] Action Required | my-project', {
+        paneKey,
+        tabId: 'tab-1',
+        launchToken
+      })
+    ).toBe(true)
+    expect(
+      shouldSuppressCodexAutoApprovalSyntheticTitle('[ . ] Action Required | my-project', {
+        paneKey,
+        tabId: 'tab-1',
+        launchToken
+      })
+    ).toBe(true)
+  })
 })
