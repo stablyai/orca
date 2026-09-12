@@ -59,6 +59,38 @@ describe('DesktopScriptServeChannel', () => {
     expect(handlers.onGone).toHaveBeenCalledWith('code 1: it broke')
   })
 
+  it('reassembles chunked responses with split UTF-8 and CRLF boundaries', () => {
+    const { child, handlers } = createChannel()
+    const payload = Buffer.from('hello 😀\r\n\nnext\ntrailing', 'utf8')
+    for (const byte of payload) {
+      child.stdout.emit('data', Buffer.from([byte]))
+    }
+    expect(handlers.onLine.mock.calls.map(([line]) => line)).toEqual(['hello 😀', 'next'])
+    child.stdout.emit('data', '\n')
+    expect(handlers.onLine).toHaveBeenLastCalledWith('trailing')
+  })
+
+  it('enforces the buffer cap before a terminating newline arrives', () => {
+    const { child, handlers } = createChannel()
+    const chunk = 'a'.repeat(1024 * 1024)
+    for (let index = 0; index < 20; index += 1) {
+      child.stdout.emit('data', chunk)
+    }
+    expect(handlers.onOverflow).not.toHaveBeenCalled()
+    child.stdout.emit('data', 'a')
+    expect(handlers.onOverflow).toHaveBeenCalledOnce()
+    expect(handlers.onLine).not.toHaveBeenCalled()
+    child.stdout.emit('data', 'recovered\n')
+    expect(handlers.onLine).toHaveBeenCalledWith('recovered')
+  })
+
+  it('stops delivering a chunk when its line handler closes the channel', () => {
+    const { channel, child, handlers } = createChannel()
+    handlers.onLine.mockImplementation(() => channel.stop())
+    child.stdout.emit('data', 'first\nsecond\n')
+    expect(handlers.onLine.mock.calls.map(([line]) => line)).toEqual(['first'])
+  })
+
   describe('once stopped', () => {
     /**
      * The channel's half of the stale-callback guard, pinned here rather than
