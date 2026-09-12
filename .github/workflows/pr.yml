@@ -164,6 +164,16 @@ jobs:
       - name: Enforce React Doctor on changed lines
         run: pnpm run check:react-doctor:changed -- "${{ github.event.pull_request.base.sha }}"
 
+      # Why here and not a job of its own: this job already blocks verify, already runs for
+      # every non-docs PR, and already has the full history the merge-base diff needs.
+      # Why PR_BODY through env: a PR body is attacker-controlled text and `${{ }}` inside a
+      # run: block is substituted before the shell parses it.
+      - name: Check flipped test assertions
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: pnpm run check:flipped-test-assertions -- --require-body "$BASE_SHA"
+
       - name: Check Zustand selector fan-out budget
         run: pnpm run check:zustand-selector-fanout
 

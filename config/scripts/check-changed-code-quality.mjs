@@ -3,7 +3,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
-import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
+import {
+  resolveExistingDiffBase,
+  resolvePullRequestDiffBase
+} from './git-pull-request-diff-base.mjs'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const SOURCE_FILE_PATTERN = /\.(?:[cm]?[jt]sx?)$/
@@ -88,29 +91,8 @@ export function isRootCodeQualityPath(file) {
   return !ROOT_CODE_QUALITY_IGNORED_PREFIXES.some((prefix) => file.startsWith(prefix))
 }
 
-function resolveBase(root, requestedBase) {
-  for (const candidate of [
-    requestedBase,
-    process.env.ORCA_CODE_QUALITY_BASE,
-    'origin/main',
-    'main'
-  ]) {
-    if (!candidate) {
-      continue
-    }
-    const result = spawnSync('git', ['rev-parse', '--verify', `${candidate}^{commit}`], {
-      cwd: root,
-      stdio: 'ignore'
-    })
-    if (result.status === 0) {
-      return candidate
-    }
-  }
-  throw new Error('Pass the pull request base SHA or make origin/main available locally.')
-}
-
 export function collectAddedLineRanges(root, requestedBase) {
-  const base = resolveBase(root, requestedBase)
+  const base = resolveExistingDiffBase(root, requestedBase)
   const mergeBase = runGit(root, ['merge-base', base, 'HEAD']).trim()
   const comparisonBase = resolvePullRequestDiffBase(root, mergeBase)
   const changedFiles = splitNullDelimited(
