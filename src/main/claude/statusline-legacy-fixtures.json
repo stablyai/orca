@@ -1,0 +1,57 @@
+[
+  {
+    "ref": "c3a9a5e8a637ac76457dee15a7537b7aa1573741",
+    "path": "/synthetic/old ' home/.orca/agent-hooks/claude-statusline.sh",
+    "command": "if [ -f '/synthetic/old '\\'' home/.orca/agent-hooks/claude-statusline.sh' ] && [ -r '/synthetic/old '\\'' home/.orca/agent-hooks/claude-statusline.sh' ] && [ -x '/synthetic/old '\\'' home/.orca/agent-hooks/claude-statusline.sh' ]; then /bin/sh '/synthetic/old '\\'' home/.orca/agent-hooks/claude-statusline.sh'; else cat >/dev/null 2>&1 || :; fi",
+    "sha256": "d8df491af04495ed825ee2c65689d5ab319081d07d1f24f3b9b795cec9247f19",
+    "blobs": {
+      "src/main/claude/hook-settings.ts": "b13c98ed6a903d34be2261dc79eb65ff479f7c66",
+      "src/main/agent-hooks/installer-utils.ts": "e0688b443457e15d1fe078ba6b970d0098d114f7",
+      "src/main/agent-hooks/hook-stdin-contract.ts": "902ec543287f7159253ec093718a2efa0b2c6221"
+    }
+  },
+  {
+    "ref": "c3a9a5e8a637ac76457dee15a7537b7aa1573741",
+    "path": "C:\\Users\\old\\.orca\\agent-hooks\\claude-statusline.cmd",
+    "command": "if [ -f 'C:/Users/old/.orca/agent-hooks/claude-statusline.cmd' ]; then 'C:/Users/old/.orca/agent-hooks/claude-statusline.cmd'; else cat >/dev/null 2>&1 || :; fi",
+    "sha256": "9b76845d73f1e8cad64bebfd71f45e33f1458dc2dea049429b9a8c37a9078c73",
+    "blobs": {
+      "src/main/claude/hook-settings.ts": "b13c98ed6a903d34be2261dc79eb65ff479f7c66",
+      "src/main/agent-hooks/installer-utils.ts": "e0688b443457e15d1fe078ba6b970d0098d114f7",
+      "src/main/agent-hooks/hook-stdin-contract.ts": "902ec543287f7159253ec093718a2efa0b2c6221"
+    }
+  },
+  {
+    "ref": "f70b52e30a6dbe24e70cad4a1a6e8197c202f839",
+    "path": "D:\\Users\\old ' ; home\\.orca\\agent-hooks\\claude-statusline.cmd",
+    "command": "C:/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand aQBmACAAKABUAGUAcwB0AC0AUABhAHQAaAAgAC0ATABpAHQAZQByAGEAbABQAGEAdABoACAAJwBEADoAXABVAHMAZQByAHMAXABvAGwAZAAgACcAJwAgADsAIABoAG8AbQBlAFwALgBvAHIAYwBhAFwAYQBnAGUAbgB0AC0AaABvAG8AawBzAFwAYwBsAGEAdQBkAGUALQBzAHQAYQB0AHUAcwBsAGkAbgBlAC4AYwBtAGQAJwAgAC0AUABhAHQAaABUAHkAcABlACAATABlAGEAZgApACAAewAgACYAIAAnAEQAOgBcAFUAcwBlAHIAcwBcAG8AbABkACAAJwAnACAAOwAgAGgAbwBtAGUAXAAuAG8AcgBjAGEAXABhAGcAZQBuAHQALQBoAG8AbwBrAHMAXABjAGwAYQB1AGQAZQAtAHMAdABhAHQAdQBzAGwAaQBuAGUALgBjAG0AZAAnADsAIABlAHgAaQB0ACAAJABMAEEAUwBUAEUAWABJAFQAQwBPAEQARQAgAH0AOwAgAFsAQwBvAG4AcwBvAGwAZQBdADoAOgBJAG4ALgBSAGUAYQBkAFQAbwBFAG4AZAAoACkAIAB8ACAATwB1AHQALQBOAHUAbABsADsAIABlAHgAaQB0ACAAMAA=",
+    "sha256": "1f258b68bb321f1ee20f0167780bf12c0ac4c6fe714816d8c6677cadd8a592e0",
+    "blobs": {
+      "src/main/claude/hook-settings.ts": "c9e69abc762fd2ee430b7dc2786e8520d86b2656",
+      "src/main/agent-hooks/installer-utils.ts": "0c06d78acbfc1d8fd1d5fd35168940c6b771fde8",
+      "src/main/agent-hooks/hook-stdin-contract.ts": "a85997d87de00baa6c62eccb9bd11f26bcf10b74"
+    }
+  },
+  {
+    "ref": "f70b52e30a6dbe24e70cad4a1a6e8197c202f839",
+    "path": "/synthetic/old ' home/.orca/agent-hooks/claude-statusline.sh",
+    "command": "if [ -f '/synthetic/old '\\'' home/.orca/agent-hooks/claude-statusline.sh' ] && [ -r '/synthetic/old '\\'' home/.orca/agent-hooks/claude-statusline.sh' ] && [ -x '/synthetic/old '\\'' home/.orca/agent-hooks/claude-statusline.sh' ]; then /bin/sh '/synthetic/old '\\'' home/.orca/agent-hooks/claude-statusline.sh'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+    "sha256": "1fe0398df6797270e3c04de7ffbd3defbb55f4f2dc62f81ff1d71b973505df6a",
+    "blobs": {
+      "src/main/claude/hook-settings.ts": "c9e69abc762fd2ee430b7dc2786e8520d86b2656",
+      "src/main/agent-hooks/installer-utils.ts": "0c06d78acbfc1d8fd1d5fd35168940c6b771fde8",
+      "src/main/agent-hooks/hook-stdin-contract.ts": "a85997d87de00baa6c62eccb9bd11f26bcf10b74"
+    }
+  },
+  {
+    "ref": "f70b52e30a6dbe24e70cad4a1a6e8197c202f839",
+    "path": "C:\\Users\\old\\.orca\\agent-hooks\\claude-statusline.cmd",
+    "command": "if [ -f 'C:/Users/old/.orca/agent-hooks/claude-statusline.cmd' ]; then 'C:/Users/old/.orca/agent-hooks/claude-statusline.cmd'; else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi",
+    "sha256": "cf154934f90f8e735dfe0e230f640e20f40295c0b3ca176d100866d73cf0298b",
+    "blobs": {
+      "src/main/claude/hook-settings.ts": "c9e69abc762fd2ee430b7dc2786e8520d86b2656",
+      "src/main/agent-hooks/installer-utils.ts": "0c06d78acbfc1d8fd1d5fd35168940c6b771fde8",
+      "src/main/agent-hooks/hook-stdin-contract.ts": "a85997d87de00baa6c62eccb9bd11f26bcf10b74"
+    }
+  }
+]

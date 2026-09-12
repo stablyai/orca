@@ -1,4 +1,8 @@
-import { existsSync, rmSync, writeFileSync } from 'node:fs'
+import { rmSync } from 'node:fs'
+import {
+  readStatusLineInstallMarker,
+  writeStatusLineInstallMarker
+} from './statusline-install-marker'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
@@ -226,6 +230,12 @@ export class ClaudeHookService {
       nextConfig = this.installManagedStatusLine(nextConfig)
     }
     writeHooksJson(configPath, nextConfig)
+    if (this.options.agent === 'claude' && nextConfig.statusLine !== config.statusLine) {
+      writeStatusLineInstallMarker(
+        getStatusLineInstallMarkerPath(this.options.settings),
+        getManagedCommand(getStatusLineScriptPath(this.options.settings))
+      )
+    }
     return this.getStatus()
   }
 
@@ -234,23 +244,19 @@ export class ClaudeHookService {
   private installManagedStatusLine(config: HooksConfig): HooksConfig {
     const scriptFileName = getStatusLineScriptFileName(this.options.settings)
     const markerPath = getStatusLineInstallMarkerPath(this.options.settings)
-    const slot = getStatusLineSlotState(config, scriptFileName)
-    if (slot === 'user' || (slot === 'empty' && existsSync(markerPath))) {
+    const marker = readStatusLineInstallMarker(markerPath)
+    const slot = getStatusLineSlotState(config, scriptFileName, marker)
+    if (slot === 'user' || (slot === 'empty' && marker.present)) {
       return config
     }
     const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
     writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
-    const next = applyManagedStatusLine(
+    return applyManagedStatusLine(
       config,
       getManagedCommand(statusLineScriptPath),
-      scriptFileName
+      scriptFileName,
+      marker
     )
-    try {
-      writeFileSync(markerPath, '')
-    } catch {
-      // Best-effort: a missing marker only means one future user deletion gets re-installed once.
-    }
-    return next
   }
 
   // Why: install the Claude hook on the remote box (via SFTP); POSIX-only by design (Windows-remote deferred).
@@ -324,7 +330,8 @@ export class ClaudeHookService {
     )
     const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
       hooksRemoved,
-      getStatusLineScriptFileName(this.options.settings)
+      getStatusLineScriptFileName(this.options.settings),
+      readStatusLineInstallMarker(getStatusLineInstallMarkerPath(this.options.settings))
     )
     if (hooksChanged || statusLineChanged) {
       writeHooksJson(configPath, nextConfig)

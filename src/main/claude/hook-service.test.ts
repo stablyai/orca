@@ -730,6 +730,22 @@ describe('ClaudeHookService.installRemote', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/claude-statusline.sh')).toBeUndefined()
   })
 
+  it('preserves the complete remote user statusLine without installing a reporter', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const statusLine = {
+      type: 'command',
+      command: 'echo agent-hooks/claude-statusline.sh; printf user',
+      padding: 3
+    }
+    fs.files.set('/home/dev/.claude/settings.json', JSON.stringify({ statusLine, unrelated: 1 }))
+    expect((await new ClaudeHookService().installRemote(sftp, '/home/dev')).state).toBe('installed')
+    expect(JSON.parse(fs.files.get('/home/dev/.claude/settings.json')!)).toMatchObject({
+      statusLine,
+      unrelated: 1
+    })
+    expect([...fs.files.keys()].some((path) => path.includes('claude-statusline'))).toBe(false)
+  })
+
   it('reports parse error when remote settings.json cannot be parsed', async () => {
     const svc = new ClaudeHookService()
     const { sftp, fs } = createFakeSftp()

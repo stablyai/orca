@@ -16,6 +16,9 @@ import {
 import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
 import { isGitBashAvailable } from '../git-bash'
+import { STATUSLINE_COMMAND_SHA256 } from './statusline-command-catalog'
+import { isLegacyStatusLineCommand } from './statusline-legacy-command'
+import { statusLineCommandSha256, type StatusLineInstallMarker } from './statusline-install-marker'
 
 export type ClaudeCompatibleHookSettings = {
   configDirName: '.claude' | '.openclaude'
@@ -236,16 +239,36 @@ export type StatusLineSlotState = 'managed' | 'user' | 'empty'
 // after a prior install means the user deleted the managed entry, which install must respect.
 export function getStatusLineSlotState(
   config: HooksConfig,
-  scriptFileName = getStatusLineScriptFileName()
+  scriptFileName = getStatusLineScriptFileName(),
+  marker?: StatusLineInstallMarker
 ): StatusLineSlotState {
-  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
-  const current = config.statusLine
-  const currentCommand =
-    isPlainObject(current) && typeof current.command === 'string' ? current.command : null
-  if (!currentCommand) {
+  if (!Object.hasOwn(config, 'statusLine')) {
     return 'empty'
   }
-  return isManagedCommand(currentCommand) ? 'managed' : 'user'
+  const current = config.statusLine
+  if (
+    !isPlainObject(current) ||
+    Object.keys(current).length !== 2 ||
+    current.type !== 'command' ||
+    typeof current.command !== 'string' ||
+    !Object.hasOwn(current, 'type') ||
+    !Object.hasOwn(current, 'command')
+  ) {
+    return 'user'
+  }
+  const command = current.command
+  const hash = statusLineCommandSha256(command)
+  if (marker?.commandSha256 === hash) {
+    return 'managed'
+  }
+  if (command.length > 16384) {
+    return 'user'
+  }
+  return command === getManagedCommand(scriptFileName) ||
+    (scriptFileName.startsWith('claude-statusline.') &&
+      (STATUSLINE_COMMAND_SHA256.has(hash) || isLegacyStatusLineCommand(command)))
+    ? 'managed'
+    : 'user'
 }
 
 // Why: records that the managed statusline was installed once, so a later empty slot reads as user opt-out.
@@ -258,9 +281,10 @@ export function getStatusLineInstallMarkerPath(settings = CLAUDE_HOOK_SETTINGS):
 export function applyManagedStatusLine(
   config: HooksConfig,
   command: string,
-  scriptFileName = getStatusLineScriptFileName()
+  scriptFileName = getStatusLineScriptFileName(),
+  marker?: StatusLineInstallMarker
 ): HooksConfig {
-  if (getStatusLineSlotState(config, scriptFileName) === 'user') {
+  if (getStatusLineSlotState(config, scriptFileName, marker) === 'user') {
     return config
   }
   return { ...config, statusLine: { type: 'command', command } }
@@ -268,13 +292,10 @@ export function applyManagedStatusLine(
 
 export function removeManagedStatusLine(
   config: HooksConfig,
-  scriptFileName = getStatusLineScriptFileName()
+  scriptFileName = getStatusLineScriptFileName(),
+  marker?: StatusLineInstallMarker
 ): { config: HooksConfig; changed: boolean } {
-  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
-  const current = config.statusLine
-  const currentCommand =
-    isPlainObject(current) && typeof current.command === 'string' ? current.command : null
-  if (!currentCommand || !isManagedCommand(currentCommand)) {
+  if (getStatusLineSlotState(config, scriptFileName, marker) !== 'managed') {
     return { config, changed: false }
   }
   const next = { ...config }
