@@ -95,10 +95,7 @@ export function parseGitRemoteVerboseOutput(stdout: string): GitRemoteEntry[] {
   const entries: GitRemoteEntry[] = []
   for (const rawLine of stdout.split(/\r?\n/)) {
     const line = rawLine.trim()
-    if (!line.endsWith('(fetch)')) {
-      continue
-    }
-    const match = /^(\S+)\s+(.+?)\s+\(fetch\)$/.exec(line)
+    const match = /^(\S+)\s+(.+?)\s+\(fetch\)(?:\s+\[[^\]]+\])?$/.exec(line)
     if (!match) {
       continue
     }
