@@ -1,6 +1,10 @@
 import { useCallback, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
+import {
+  applyWorkspacePinIntent,
+  resolveFocusedWorkspacePinTarget
+} from '@/components/sidebar/workspace-pin-shortcut-target'
 import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-context'
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
 import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'
@@ -108,6 +112,15 @@ export function useWorktreeJumpPaletteQuickActions({
       intent: { kind: 'url' }
     })
   }, [])
+  // The palette is itself a modal and has no pointer to read, so this takes the focused
+  // workspace directly rather than the hover-aware shortcut resolver.
+  const toggleActiveWorkspacePinAction = useCallback(() => {
+    const state = useAppStore.getState()
+    const target = resolveFocusedWorkspacePinTarget(state)
+    if (target) {
+      applyWorkspacePinIntent(state, target, 'toggle')
+    }
+  }, [])
   const openAddQuickCommandAction = useCallback(() => {
     openSettingsTarget({ pane: 'quick-commands', repoId: null, intent: 'add-quick-command' })
     openSettingsPage()
@@ -123,11 +136,13 @@ export function useWorktreeJumpPaletteQuickActions({
         openNewTerminalTab: openNewTerminalTabInActiveWorkspace,
         openCreateWorkspace: openCreateWorkspaceAction,
         deleteActiveWorkspace: deleteActiveWorkspaceAction,
+        toggleActiveWorkspacePin: toggleActiveWorkspacePinAction,
         openAddQuickCommand: openAddQuickCommandAction
       }),
     [
       activeGroupSnapshotRef,
       deleteActiveWorkspaceAction,
+      toggleActiveWorkspacePinAction,
       openAddQuickCommandAction,
       openBrowserUrlAction,
       openCreateWorkspaceAction,
