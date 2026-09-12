@@ -202,7 +202,7 @@ describe('AgentHookServer listener replay', () => {
           baselineStateStartedAt: baseline.stateStartedAt,
           baselinePrompt: 'new host',
           baselineAgentType: 'claude',
-          intent: 'plain-escape'
+          intent: 'ctrl-c'
         })
       ).toBe(true)
     } finally {

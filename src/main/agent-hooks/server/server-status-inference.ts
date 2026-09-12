@@ -5,6 +5,7 @@ import {
 import { markCodexLeadTurnInterrupted } from '../../../shared/agent-hook-listener/providers/codex-state'
 import {
   isAgentInterruptInputIntent,
+  isNavigationEscapeIntent,
   type AgentInterruptInferenceRequest
 } from '../../../shared/agent-interrupt-intent'
 import {
@@ -68,6 +69,11 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       existing.stateStartedAt !== request.baselineStateStartedAt ||
       Date.now() - existing.receivedAt > AGENT_STATUS_STALE_AFTER_MS
     ) {
+      return false
+    }
+    // Why: re-checked here, not only in the renderer, so a stale or direct inference request
+    // cannot route around the renderer's skip and synthesize a false stopped row.
+    if (isNavigationEscapeIntent(agentType, request.intent)) {
       return false
     }
     // Why: a 'working' pane can be child-driven; Ctrl+C doesn't stop background children, so inferring done would retire live child rows.

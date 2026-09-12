@@ -348,6 +348,73 @@ describe('agent interrupt inference', () => {
     entry = undefined
   })
 
+  it.each([['claude'], ['omp'], ['pi'], ['prime-agent']] as const)(
+    'never asks main to interrupt %s on a single Escape while working',
+    (agentType) => {
+      // Why: Escape is ambiguous at the source for these TUIs, so the renderer does not spend a
+      // round-trip on it. main re-checks the same rule for requests that never came from here.
+      vi.useFakeTimers()
+      let entry: AgentStatusEntry | undefined = makeEntry({ agentType, toolName: 'Bash' })
+      const inferInterrupt = vi.fn()
+      const tracker = createAgentInterruptInference({
+        paneKey: PANE_KEY,
+        getStatusEntry: () => entry,
+        inferInterrupt,
+        now: () => 1_100
+      })
+
+      tracker.observeInputIntent('plain-escape')
+      vi.advanceTimersByTime(500)
+
+      expect(inferInterrupt).not.toHaveBeenCalled()
+      tracker.dispose()
+      entry = undefined
+    }
+  )
+
+  it.each([['claude'], ['omp']] as const)('still forwards Ctrl+C for %s', (agentType) => {
+    vi.useFakeTimers()
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType, toolName: 'Bash' })
+    const inferInterrupt = vi.fn().mockReturnValue(true)
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () => entry,
+      inferInterrupt,
+      now: () => 1_100
+    })
+
+    tracker.observeInputIntent('ctrl-c')
+    vi.advanceTimersByTime(500)
+
+    expect(inferInterrupt).toHaveBeenCalledWith({
+      paneKey: PANE_KEY,
+      baselineUpdatedAt: 1_000,
+      baselineStateStartedAt: 900,
+      baselinePrompt: 'write tests',
+      baselineAgentType: agentType,
+      intent: 'ctrl-c'
+    })
+    tracker.dispose()
+    entry = undefined
+  })
+
+  it('reports main refusing an inference instead of assuming it applied', () => {
+    vi.useFakeTimers()
+    let entry: AgentStatusEntry | undefined = makeEntry({ agentType: 'claude' })
+    const tracker = createAgentInterruptInference({
+      paneKey: PANE_KEY,
+      getStatusEntry: () => entry,
+      inferInterrupt: () => false,
+      now: () => 1_100
+    })
+
+    tracker.observeInputIntent('plain-escape')
+
+    expect(tracker.flushPending()).toBe(false)
+    tracker.dispose()
+    entry = undefined
+  })
+
   it('does not emit for non-working states', () => {
     vi.useFakeTimers()
     const inferInterrupt = vi.fn()
