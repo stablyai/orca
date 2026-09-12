@@ -61,10 +61,7 @@ export function NativeChatStructuredSession(
     id: string
     sequence: number
   } | null>(null)
-  const paneKey = useMemo(
-    () => structuredAgentSessionPaneKey(props.tabId, props.sessionId),
-    [props.sessionId, props.tabId]
-  )
+  const paneKey = useMemo(() => structuredAgentSessionPaneKey(props.sessionId), [props.sessionId])
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
   const paneCommands = useStructuredNativeChatPaneCommands({

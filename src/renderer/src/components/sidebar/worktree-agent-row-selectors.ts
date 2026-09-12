@@ -6,6 +6,7 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import {
   type LiveEntriesByWorktreeCache,
   liveEntryWorktreeId,
@@ -114,6 +115,9 @@ function getLiveTabIdToWorktreeId(
     for (const tab of tabs) {
       if (tab.contentType === 'agent-session') {
         tabIdToWorktreeId.set(tab.id, worktreeId)
+        // Why: a structured row's pane key names the session, not the surface, so a tab reused for
+        // a replacing conversation (or re-hosted at `${baseId}:history-N`) is reachable only here.
+        tabIdToWorktreeId.set(structuredAgentSessionTabId(tab.entityId), worktreeId)
       }
     }
   }

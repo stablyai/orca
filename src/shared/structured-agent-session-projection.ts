@@ -207,6 +207,15 @@ export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
 
+const STRUCTURED_AGENT_SESSION_TAB_ID_PREFIX = structuredAgentSessionTabId('')
+
+/** The session id a derived tab id (or the tab-id half of a status pane key) encodes, if any. */
+export function structuredAgentSessionIdFromTabId(tabId: string): string | null {
+  return tabId.startsWith(STRUCTURED_AGENT_SESSION_TAB_ID_PREFIX)
+    ? tabId.slice(STRUCTURED_AGENT_SESSION_TAB_ID_PREFIX.length) || null
+    : null
+}
+
 export function projectStructuredAgentSessionStatus(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
@@ -327,9 +336,15 @@ export function structuredAgentSessionStatusState(
   return status === 'working' ? 'working' : status === 'attention' ? 'blocked' : 'done'
 }
 
-export function structuredAgentSessionPaneKey(tabId: string, sessionId: string): string {
+/** A structured session's status pane key, derived from the session id alone.
+ *
+ *  Deliberately not parameterised by the surface's tab id: a mirrored session that collides with an
+ *  occupied id is re-hosted at `${baseId}:history-N` (`web-session-tabs-sync/terminal-surfaces.ts`),
+ *  and a key built from that both disagrees with the host's key for the same session and carries a
+ *  second `:`, which `parsePaneKey` rejects. The session id is the durable identity. */
+export function structuredAgentSessionPaneKey(sessionId: string): string {
   const bytes = sha256(new TextEncoder().encode(sessionId))
   const hex = Array.from(bytes.slice(0, 16), (byte) => byte.toString(16).padStart(2, '0')).join('')
   const leaf = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`
-  return `${tabId}:${leaf}`
+  return `${structuredAgentSessionTabId(sessionId)}:${leaf}`
 }

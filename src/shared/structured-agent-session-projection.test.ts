@@ -9,7 +9,9 @@ import {
   projectStructuredItemToNativeChat,
   projectStructuredAgentSessionStatus,
   projectStructuredAgentSessionStatusSummary,
-  structuredAgentSessionPaneKey
+  structuredAgentSessionIdFromTabId,
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
 } from './structured-agent-session-projection'
 
 function item(
@@ -376,10 +378,39 @@ describe('structured agent session status projection', () => {
   })
 
   it('creates a deterministic pane identity for status stores', () => {
-    const paneKey = structuredAgentSessionPaneKey('structured-agent-session-1', 'session-1')
+    const paneKey = structuredAgentSessionPaneKey('session-1')
 
-    expect(structuredAgentSessionPaneKey('structured-agent-session-1', 'session-1')).toBe(paneKey)
-    expect(parsePaneKey(paneKey)).toMatchObject({ tabId: 'structured-agent-session-1' })
+    expect(structuredAgentSessionPaneKey('session-1')).toBe(paneKey)
+    expect(parsePaneKey(paneKey)).toMatchObject({ tabId: 'structured-agent-session-session-1' })
+  })
+
+  it('reads the session back out of a derived tab id, and refuses anything else', () => {
+    // The key names the session, not the surface, so a reader that needs the surface has to invert
+    // this rather than compare tab ids.
+    expect(structuredAgentSessionIdFromTabId(structuredAgentSessionTabId('session-1'))).toBe(
+      'session-1'
+    )
+    expect(
+      structuredAgentSessionIdFromTabId(parsePaneKey(structuredAgentSessionPaneKey('s2'))!.tabId)
+    ).toBe('s2')
+    expect(structuredAgentSessionIdFromTabId('terminal-tab-1')).toBeNull()
+    expect(structuredAgentSessionIdFromTabId(structuredAgentSessionTabId(''))).toBeNull()
+  })
+
+  it('admits no surface identity into a structured row key', () => {
+    // Two writers derive this key. A tab-id parameter is how they came apart: a mirrored session
+    // that collides with an occupied id is re-hosted at `${baseId}:history-N`, and the host never
+    // sees that suffix. Taking only the session id is what keeps them in agreement.
+    expect(structuredAgentSessionPaneKey.length).toBe(1)
+    const collidedSurfaceTabId = `${structuredAgentSessionTabId('session-1')}:history-1`
+
+    const paneKey = structuredAgentSessionPaneKey('session-1')
+
+    expect(paneKey.startsWith(`${collidedSurfaceTabId}:`)).toBe(false)
+    // A second `:` makes the key unparseable, which drops the row from every sidebar bucket.
+    expect(parsePaneKey(paneKey)).toMatchObject({
+      tabId: structuredAgentSessionTabId('session-1')
+    })
   })
 
   it('requires a persisted provider conversation turn before TUI resume', () => {
