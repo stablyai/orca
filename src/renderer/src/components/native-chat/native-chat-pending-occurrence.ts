@@ -1,3 +1,4 @@
+import { nativeChatContinuationSendText } from '../../../../shared/native-chat-continuation-send'
 import {
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
@@ -153,6 +154,41 @@ export function countLeadingPendingTextsGluedToUserText(
   return 0
 }
 
+/**
+ * How many leading pending texts a row absorbed because the last of them ended
+ * in a continuation backslash. That send never submitted, so unlike glue the row
+ * need not be consumed — the rest of it was typed where this queue cannot see.
+ * The run still stops on the separator the TUI's newline normalizes to, so a
+ * longer unrelated row cannot swallow a send ("hi" ↛ "history").
+ */
+function countLeadingPendingTextsOpeningUserText(
+  pieces: readonly { text: string; continuation: boolean }[],
+  userText: string
+): number {
+  let cursor = 0
+  let opened = 0
+  for (let index = 0; index < pieces.length; index += 1) {
+    const piece = pieces[index]
+    if (!piece?.text) {
+      return opened
+    }
+    if (userText.startsWith(piece.text, cursor)) {
+      cursor += piece.text.length
+    } else if (index > 0 && userText.startsWith(` ${piece.text}`, cursor)) {
+      cursor += piece.text.length + 1
+    } else {
+      return opened
+    }
+    if (piece.continuation && (cursor === userText.length || userText[cursor] === ' ')) {
+      opened = index + 1
+    }
+    if (cursor === userText.length) {
+      return opened
+    }
+  }
+  return opened
+}
+
 /** A transcript row a glue match may consume, carrying the send boundaries it
  *  satisfies — this matcher has no clock of its own. */
 export type NativeChatGluedUserRow = {
@@ -173,13 +209,18 @@ export function selectPendingIndicesRepresentedByUserRows(
   rows: readonly NativeChatGluedUserRow[]
 ): Set<number> {
   const represented = new Set<number>()
-  if (pending.length < 2 || rows.length === 0) {
+  const remaining = pending.map((entry, index) => {
+    const continuation = nativeChatContinuationSendText(entry.text)
+    return {
+      index,
+      text: continuation ?? normalizeNativeChatPendingText(entry.text),
+      continuation: continuation !== null
+    }
+  })
+  // A continuation send can be represented on its own: it cannot be a turn.
+  if (rows.length === 0 || (pending.length < 2 && !remaining.some((entry) => entry.continuation))) {
     return represented
   }
-  const remaining = pending.map((entry, index) => ({
-    index,
-    text: normalizeNativeChatPendingText(entry.text)
-  }))
   for (const row of rows) {
     const open: typeof remaining = []
     for (const entry of remaining) {
@@ -197,11 +238,14 @@ export function selectPendingIndicesRepresentedByUserRows(
       open.map((entry) => entry.text),
       row.text
     )
-    // Why: gluedCount === 1 is an exact match — leave it to occurrence counting.
-    if (gluedCount < 2) {
+    // Why: gluedCount === 1 is an exact match — leave it to occurrence counting,
+    // unless the send held the input line open, which no exact key can match.
+    const matched =
+      gluedCount >= 2 ? gluedCount : countLeadingPendingTextsOpeningUserText(open, row.text)
+    if (matched === 0) {
       continue
     }
-    for (let i = 0; i < gluedCount; i += 1) {
+    for (let i = 0; i < matched; i += 1) {
       const entry = open[i]
       if (!entry) {
         continue
