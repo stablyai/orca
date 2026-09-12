@@ -16,6 +16,7 @@ import { issueCacheKey as getIssueCacheKey } from '../../store/github/cache-iden
 import { countWorkspaceSpaceActiveAgents } from './workspace-space-presentation'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import { getWorkspaceSpaceBranchLabel } from './workspace-space-format'
+import { formatHostedReviewLabel } from './hosted-review-label'
 
 export type WorkspaceDecisionDetails = {
   isActive: boolean
@@ -75,10 +76,6 @@ export type WorkspaceDecisionInputs = {
 
 export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
   return `${count} ${count === 1 ? singular : plural}`
-}
-
-function formatReviewState(state: string): string {
-  return state.charAt(0).toUpperCase() + state.slice(1)
 }
 
 function countLiveTerminals(
@@ -149,9 +146,7 @@ export function getWorkspaceDecisionDetails(
   const linkedPR = workspaceRecord?.linkedPR ?? null
   const reviewLabel =
     hostedReview !== undefined && hostedReview !== null
-      ? `PR #${hostedReview.number} ${formatReviewState(hostedReview.state)}${
-          hostedReview.status && hostedReview.status !== 'none' ? `, ${hostedReview.status}` : ''
-        }`
+      ? formatHostedReviewLabel(hostedReview)
       : linkedPR
         ? `PR #${linkedPR}`
         : null
