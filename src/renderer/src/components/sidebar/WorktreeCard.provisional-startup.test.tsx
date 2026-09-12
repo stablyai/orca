@@ -196,6 +196,20 @@ describe('WorktreeCard provisional startup rows', () => {
     expect(getCardSurfaceTag(markup)).not.toContain('py-2')
   })
 
+  it('skips the identity slot but still holds the title when the branch display is off', async () => {
+    worktreeCardProperties = ['status']
+    const markup = await renderCard({
+      displayName: 'hetzner-vps',
+      branch: '',
+      head: '',
+      displayNameMode: 'automatic'
+    })
+
+    expect(markup).not.toContain('data-worktree-card-identity-placeholder=""')
+    expect(markup).toContain('data-worktree-card-title-placeholder=""')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
+  })
+
   it('reserves the identity slot alongside existing host meta', async () => {
     const markup = await renderCard(
       { displayName: 'hetzner-vps', branch: '', head: '', displayNameMode: 'automatic' },

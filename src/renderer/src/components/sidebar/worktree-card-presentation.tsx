@@ -113,7 +113,11 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   // Why: a provisional row has no branch identity yet; keep the settled silhouette while the
   // scan fills the identity slot, even when other meta (host badge) already occupies the row. #20119
   const showProvisionalCardTreatment = provisionalWorktreeCatalog && newCardStyle && !isFolder
-  const reserveProvisionalIdentityRow = showProvisionalCardTreatment && detachedHeadDisplay === null
+  // Why: only reserve a slot the scan will actually fill. Without the branch card property
+  // the identity row never renders and the placeholder would vanish into nothing.
+  // Mirrors showIdentityInNewCard's hasPathIdentityEnabled gate. #20119
+  const reserveProvisionalIdentityRow =
+    showProvisionalCardTreatment && detachedHeadDisplay === null && cardProps.includes('branch')
   // Why: an automatic name is branch-derived upstream, so showing the fallback basename would
   // change under the user; hold the title slot until the scan resolves it. #20119
   const titleIsProvisional =
