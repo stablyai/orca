@@ -17,6 +17,11 @@ import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
 import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
+import {
+  TerminalThemePickerDrawer,
+  TerminalThemeSettings,
+  type TerminalThemeSlot
+} from '../src/terminal/TerminalThemeSettings'
 import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
 import {
   loadTerminalAutocompleteEnabled,
@@ -144,6 +149,7 @@ export default function TerminalSettingsScreen() {
 
   const [textScale, setTextScale] = useState(1)
   const [textSizePickerOpen, setTextSizePickerOpen] = useState(false)
+  const [themeSlot, setThemeSlot] = useState<TerminalThemeSlot | null>(null)
   useEffect(() => {
     void loadTerminalTextScale().then(setTextScale)
   }, [])
@@ -327,6 +333,8 @@ export default function TerminalSettingsScreen() {
           </Pressable>
         </View>
 
+        <TerminalThemeSettings onOpenSlot={setThemeSlot} />
+
         <Text style={[styles.groupHeading, styles.inputGroupGap]}>KEYBOARD INPUT</Text>
         <Text style={styles.groupDescription}>
           Enable phone-style autocomplete, autocorrect, and spelling suggestions in the terminal
@@ -378,6 +386,8 @@ export default function TerminalSettingsScreen() {
         onSelect={selectTextSize}
         onClose={() => setTextSizePickerOpen(false)}
       />
+
+      <TerminalThemePickerDrawer slot={themeSlot} onClose={() => setThemeSlot(null)} />
     </GestureHandlerRootView>
   )
 }
