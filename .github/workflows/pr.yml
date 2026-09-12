@@ -775,18 +775,9 @@ jobs:
           [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
 
       - name: Verify headless serve signal shutdown
-        run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
-
-      - name: Verify extracted launcher serve signal shutdown
         run: >-
           node config/scripts/run-headless-serve-shutdown-docker.mjs
-          --appimage dist/orca-linux.AppImage --entrypoint launcher
-
-      - name: Verify AppImage CLI registration and serve signal shutdown
-        run: >-
-          node config/scripts/run-headless-serve-shutdown-docker.mjs
-          --appimage dist/orca-linux.AppImage --entrypoint appimage
-          --signal-target serving-electron --int-delivery pid
+          --appimage dist/orca-linux.AppImage --all-entrypoints
 
       # A default container reproduces the hostile AppImage launch environment.
       - name: Verify Linux CLI launch contract
