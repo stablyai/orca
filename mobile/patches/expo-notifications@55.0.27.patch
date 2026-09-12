@@ -34,3 +34,20 @@ index ab518dff463bc1a92052329ce5ac7c9055cbcf62..ad164f162998b5c1e218f089be82ab47
    }
  
    // @ts-ignore: TS thinks Platform.OS could be anything and can't decide what type is it
+diff --git a/android/src/main/java/expo/modules/notifications/notifications/handling/NotificationsHandler.kt b/android/src/main/java/expo/modules/notifications/notifications/handling/NotificationsHandler.kt
+--- a/android/src/main/java/expo/modules/notifications/notifications/handling/NotificationsHandler.kt
++++ b/android/src/main/java/expo/modules/notifications/notifications/handling/NotificationsHandler.kt
+@@ -95,10 +95,9 @@
+   override fun onNotificationReceived(notification: Notification) {
+     val context = appContext.reactContext ?: return
+     val content = notification.notificationRequest.content
+-    if (content is RemoteNotificationContent && content.isDataOnly) {
+-      // We do not notify JS about data-only notifications, for consistency with iOS.
+-      // onDidReceiveNotification is triggered
+-      // and JS task will run if set up
++    if (content is RemoteNotificationContent && content.isDataOnly &&
++      content.title.isNullOrEmpty() && content.text.isNullOrEmpty()) {
++      // Silent data messages stay on the task-manager path; visible ones need presentation.
+       return
+     }
+     val task = SingleNotificationHandlerTask(
