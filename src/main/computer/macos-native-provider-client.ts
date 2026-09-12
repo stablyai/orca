@@ -1,3 +1,4 @@
+import type { ComputerUsePermissionStatusSnapshot } from '../../shared/computer-use-permissions-types'
 import { rmSync } from 'node:fs'
 import type net from 'node:net'
 import type {
@@ -41,6 +42,10 @@ export class MacOSNativeProviderClient {
   private providerCapabilities: ComputerProviderCapabilities | null = null
   private socketListenerCleanup: (() => void) | null = null
   private socketStartGeneration = 0
+  async permissionsStatus(): Promise<ComputerUsePermissionStatusSnapshot> {
+    await this.ensureCapability('observation', 'permissionStatus')
+    return (await this.call('permissionsStatus', {})) as ComputerUsePermissionStatusSnapshot
+  }
   async listApps(): Promise<ComputerListAppsResult> {
     return (await this.call('listApps', {})) as ComputerListAppsResult
   }
@@ -77,13 +82,9 @@ export class MacOSNativeProviderClient {
       socket.write(`${JSON.stringify({ id, method: 'terminate', params: {}, token })}\n`)
       socket.end()
     }
-    for (const [id, pending] of this.pending) {
-      clearTimeout(pending.timer)
-      pending.reject(
-        new RuntimeClientError('accessibility_error', 'native macOS provider shut down')
-      )
-      this.pending.delete(id)
-    }
+    this.rejectPending(
+      new RuntimeClientError('accessibility_error', 'native macOS provider shut down')
+    )
     this.cleanupSocketDirectory()
   }
   private async call(method: NativeMethod, params: unknown): Promise<unknown> {
