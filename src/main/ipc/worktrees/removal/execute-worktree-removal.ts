@@ -9,6 +9,7 @@ import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/work
 import { requireSshGitProvider } from '../../../providers/ssh-git-dispatch'
 import { resolveWorktreeRemovalMetadata } from '../../../worktree-removal-repo-owner'
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
+import { resolveWorktreeRemovalHomeForConnection } from '../../../worktree-removal-execution-host-route'
 import { removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval } from '../../../local-worktree-removal-recovery'
 import { runHook } from '../../../hooks'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
@@ -56,7 +57,8 @@ export async function executeWorktreeRemoval(
   const registeredWorktree = findRegisteredDeletableWorktree(
     repo.path,
     worktreePath,
-    registeredWorktrees
+    registeredWorktrees,
+    resolveWorktreeRemovalHomeForConnection(repo.connectionId)
   )
   if (!registeredWorktree) {
     return removeUnregisteredWorktree(

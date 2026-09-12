@@ -17,6 +17,7 @@ import {
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../../../worktree-removal-safety'
+import { resolveWorktreeRemovalHomeForConnection } from '../../../worktree-removal-execution-host-route'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
@@ -53,6 +54,7 @@ export async function removeUnregisteredWorktree(
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
   const fsProvider = repo.connectionId ? getSshFilesystemProvider(repo.connectionId) : null
+  const removalHome = resolveWorktreeRemovalHomeForConnection(repo.connectionId)
   let canCleanOrphanedDirectory = false
   if (
     canCleanupUnregisteredOrcaWorktreeDirectory({
@@ -69,16 +71,18 @@ export async function removeUnregisteredWorktree(
       canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
         worktreePath,
         repo.path,
+        removalHome,
         (path) => fsProvider.lstat!(path),
         (path) => fsProvider.readFile(path)
       )
     } else {
       const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
       canCleanOrphanedDirectory =
-        !isDangerousWorktreeRemovalPath(worktreePath, repo.path) &&
+        !isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome) &&
         (await canSafelyRemoveOrphanedWorktreeDirectory(
           toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
           toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+          removalHome,
           access.statPath,
           access.readPath
         ))
@@ -163,6 +167,7 @@ export async function removeUnregisteredWorktree(
         runtimeRepoPath: toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
         registeredWorktrees,
         statPath: access.statPath,
+        home: removalHome,
         isGitRepository: (path) => isLocalGitRepository(path, localWorktreeGitOptions)
       })
     ) {

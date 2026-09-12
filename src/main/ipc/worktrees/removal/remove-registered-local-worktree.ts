@@ -22,6 +22,7 @@ import {
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree
 } from '../../../worktree-removal-safety'
+import { CLIENT_REMOVAL_HOME } from '../../../worktree-removal-home-guard'
 import {
   cleanupUnusedWorktreePushTargetRemote,
   notifyWorktreesChanged
@@ -68,7 +69,8 @@ export async function removeRegisteredLocalWorktree(
   const refreshedRegisteredWorktree = findRegisteredDeletableWorktree(
     repo.path,
     canonicalWorktreePath,
-    refreshedWorktrees
+    refreshedWorktrees,
+    CLIENT_REMOVAL_HOME
   )
   if (!refreshedRegisteredWorktree) {
     throw new Error(
@@ -164,6 +166,7 @@ export async function removeRegisteredLocalWorktree(
           await canSafelyRemoveOrphanedWorktreeDirectory(
             toLocalWorktreeRuntimePath(canonicalWorktreePath, localWorktreeGitOptions),
             toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+            CLIENT_REMOVAL_HOME,
             access.statPath,
             access.readPath
           )
