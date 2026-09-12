@@ -4,10 +4,11 @@
 // lives under a directory the operator may not have created yet, so the write would throw ENOENT
 // *after* the desktop already provisioned the credential, losing it.
 import {
-  chmodSync,
   closeSync,
+  fchmodSync,
   constants,
   fstatSync,
+  ftruncateSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -36,13 +37,16 @@ function refuseSymlink(path) {
 }
 
 export function writeSecretFile(path, contents) {
-  mkdirSync(dirname(path), { recursive: true })
+  // 0700 so a directory this call creates under a shared parent is not traversable by others.
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
   refuseSymlink(path)
   let fd
   try {
     fd = openSync(
       path,
-      constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | NOFOLLOW,
+      // No O_TRUNC: truncating happens only after the descriptor passes the checks below, so a
+      // refused file keeps its previous contents.
+      constants.O_WRONLY | constants.O_CREAT | NOFOLLOW,
       SECRET_FILE_MODE
     )
   } catch (err) {
@@ -52,15 +56,23 @@ export function writeSecretFile(path, contents) {
     throw err
   }
   try {
-    if (!fstatSync(fd).isFile()) {
+    const stats = fstatSync(fd)
+    if (!stats.isFile()) {
       throw new Error(`refusing to write ${path}: not a regular file`)
     }
+    // Before the truncate and write, not after: a pre-existing file owned by someone else would
+    // otherwise lose its contents and then fail the chmod, leaving the token readable by its owner.
+    if (process.platform !== 'win32' && stats.uid !== process.getuid()) {
+      throw new Error(`refusing to write ${path}: owned by another user`)
+    }
+    if (process.platform !== 'win32' && (stats.mode & GROUP_AND_OTHER_BITS) !== 0) {
+      fchmodSync(fd, SECRET_FILE_MODE)
+    }
+    ftruncateSync(fd, 0)
     writeFileSync(fd, contents)
   } finally {
     closeSync(fd)
   }
-  // Fail closed rather than silently leaving a pre-existing 0644 file readable.
-  chmodSync(path, SECRET_FILE_MODE)
 }
 
 export function readSecretFile(path) {
