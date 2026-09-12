@@ -3,6 +3,8 @@
 // socket. The socket reader (scrcpy-stream-session) feeds chunks here; this file
 // has no I/O so the framing is unit-testable.
 
+import type { RelayFrameBuffer } from '../../../shared/relay-frame-buffer'
+
 const FRAME_HEADER_SIZE = 12
 const CODEC_META_SIZE = 12
 // scrcpy frames are well under this at the configured max_size; a larger
@@ -47,33 +49,28 @@ export type ScrcpyVideoFrame = {
   data: Buffer
 }
 
-export type ScrcpyFrameParseResult = { frames: ScrcpyVideoFrame[]; pending: Buffer }
-
-// Extracts complete frames from `pending + chunk`, returning the leftover bytes
-// of any partially-received frame so the caller can prepend them to the next chunk.
-export function parseScrcpyVideoFrames(pending: Buffer, chunk: Buffer): ScrcpyFrameParseResult {
-  const buffer = pending.length > 0 ? Buffer.concat([pending, chunk]) : chunk
+// Leave partial frames queued so fragmented payloads are not recopied on every chunk.
+export function parseScrcpyVideoFrames(buffer: RelayFrameBuffer): ScrcpyVideoFrame[] {
   const frames: ScrcpyVideoFrame[] = []
-  let offset = 0
 
-  while (buffer.length - offset >= FRAME_HEADER_SIZE) {
-    const meta = buffer.readBigUInt64BE(offset)
-    const size = buffer.readUInt32BE(offset + 8)
+  while (buffer.length >= FRAME_HEADER_SIZE) {
+    const header = buffer.peek(FRAME_HEADER_SIZE)
+    const meta = header.readBigUInt64BE(0)
+    const size = header.readUInt32BE(8)
     if (size > MAX_FRAME_BYTES) {
       throw new Error(`scrcpy frame size ${size} exceeds ${MAX_FRAME_BYTES}; stream desynced`)
     }
-    const dataStart = offset + FRAME_HEADER_SIZE
-    if (buffer.length - dataStart < size) {
+    if (buffer.length < FRAME_HEADER_SIZE + size) {
       break
     }
+    const packet = buffer.take(FRAME_HEADER_SIZE + size)
     frames.push({
       config: (meta & CONFIG_FLAG) !== 0n,
       keyFrame: (meta & KEY_FRAME_FLAG) !== 0n,
       pts: meta & PTS_MASK,
-      data: Buffer.from(buffer.subarray(dataStart, dataStart + size))
+      data: Buffer.from(packet.subarray(FRAME_HEADER_SIZE))
     })
-    offset = dataStart + size
   }
 
-  return { frames, pending: offset > 0 ? Buffer.from(buffer.subarray(offset)) : buffer }
+  return frames
 }
