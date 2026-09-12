@@ -17,7 +17,6 @@ export type PtyBindingFastLaneMiss =
   | 'leaf_absent'
   | 'leaf_pty'
   | 'incarnation'
-  | 'reconciled'
   | 'tombstone'
   | 'not_durable'
 
@@ -26,7 +25,6 @@ export type PtyBindingFastLaneRequest = {
   leafId: string
   ptyId: string
   incarnationId?: string
-  expectedBinding?: { ptyId: string; incarnationId?: string }
   expectedSourceBinding?: unknown
 }
 
@@ -78,12 +76,6 @@ export function evaluatePtyBindingFastLane(
   // Strict: undefined on both sides matches, undefined on one side does not.
   if (session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.incarnationId) {
     misses.push('incarnation')
-  }
-  if (
-    args.expectedBinding !== undefined &&
-    args.expectedBinding.incarnationId !== args.incarnationId
-  ) {
-    misses.push('reconciled')
   }
   if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
     misses.push('tombstone')

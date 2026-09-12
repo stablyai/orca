@@ -76,12 +76,6 @@ describe('evaluatePtyBindingFastLane', () => {
     ])
     expect(
       miss(
-        { incarnationId: 'b', expectedBinding: { ptyId: 'pty-1', incarnationId: 'a' } },
-        session({ terminalPtyIncarnationsByPaneKey: { [paneKey]: 'b' } })
-      )
-    ).toEqual(['reconciled'])
-    expect(
-      miss(
         { incarnationId: 'a' },
         session({
           terminalPtyIncarnationsByPaneKey: { [paneKey]: 'a' },
@@ -127,15 +121,10 @@ describe('evaluatePtyBindingFastLane', () => {
     ).toEqual({ eligible: true, misses: [] })
   })
 
-  it('accepts a matching incarnation and a reconciled-to-same expected binding', () => {
+  it('accepts a matching incarnation', () => {
     const state = session({ terminalPtyIncarnationsByPaneKey: { [paneKey]: 'a' } })
     expect(
-      evaluatePtyBindingFastLane(
-        { ...request, incarnationId: 'a', expectedBinding: { ptyId: 'pty-1', incarnationId: 'a' } },
-        state,
-        WORKTREE,
-        true
-      ).eligible
+      evaluatePtyBindingFastLane({ ...request, incarnationId: 'a' }, state, WORKTREE, true).eligible
     ).toBe(true)
   })
 })
