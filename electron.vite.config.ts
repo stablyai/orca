@@ -10,7 +10,7 @@ import packageJson from './package.json' with { type: 'json' }
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
   '@xterm/headless',
   '@xterm/addon-serialize',
-  'psl',
+  'tldts',
   // Why: Windows NSIS deploys app.asar before external resources; bootstrap must
   // not race the later resources/node_modules copy.
   'zod'
