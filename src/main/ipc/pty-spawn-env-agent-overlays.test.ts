@@ -1,8 +1,10 @@
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
   readFileSyncMock,
   spawnMock,
   openCodeBuildPtyEnvMock,
+  resolveDefaultOpenCodeConfigDirMock,
   mimoCodeBuildPtyEnvMock,
   piBuildPtyEnvMock
 } from './pty-ipc-mock-registry'
@@ -19,6 +21,9 @@ vi.mock('node:child_process', async (importOriginal) =>
 )
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+)
+vi.mock('../opencode/config-source', () =>
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeConfigSourceModuleMock())
 )
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
@@ -97,6 +102,25 @@ describe('registerPtyHandlers', () => {
       expect(env.OPENCODE_CONFIG_DIR).toEqual(expect.any(String))
       expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe(env.OPENCODE_CONFIG_DIR)
     })
+    it('mirrors the default OpenCode config from the PTY XDG config home', async () => {
+      const sourceDir = join('/home/xdg-user/custom-config', 'opencode')
+      resolveDefaultOpenCodeConfigDirMock.mockReturnValue(sourceDir)
+      const env = await spawnAndGetEnv({
+        HOME: '/home/xdg-user',
+        XDG_CONFIG_HOME: '/home/xdg-user/custom-config'
+      })
+
+      expect(resolveDefaultOpenCodeConfigDirMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          HOME: '/home/xdg-user',
+          XDG_CONFIG_HOME: '/home/xdg-user/custom-config'
+        })
+      )
+      expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), sourceDir)
+      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe(sourceDir)
+      expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
+    })
+
     it('mirrors the original OpenCode source dir when launched from an Orca overlay shell', async () => {
       const env = await spawnAndGetEnv({
         OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
