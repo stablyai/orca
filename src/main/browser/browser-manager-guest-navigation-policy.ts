@@ -91,10 +91,16 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     const didStartNavigationHandler = (
       _event: Electron.Event,
       url: string,
-      _isInPlace: boolean,
+      isInPlace: boolean,
       isMainFrame: boolean
     ): void => {
       if (!isMainFrame || isChromiumInternalErrorUrl(url)) {
+        return
+      }
+      if (isInPlace) {
+        // Why: a same-document navigation never emits 'did-navigate', so a pending target recorded
+        // here would never be cleared and would leak into supersededUrls on the next real
+        // navigation. 'did-navigate-in-page' owns the same-document commit instead.
         return
       }
       // Why: getURL() still reports the previous committed URL until this navigation commits, so
@@ -124,10 +130,26 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       this.notifyBrowserGuestStateChanged(guest.id)
     }
 
+    const didNavigateInPageHandler = (
+      _event: Electron.Event,
+      _url: string,
+      isMainFrame: boolean
+    ): void => {
+      if (!isMainFrame) {
+        return
+      }
+      // Why: Electron does not emit 'did-navigate' for a same-document commit, so without this a
+      // pushed host snapshot keeps the pre-navigation url while a pull reads the new one — the same
+      // stale-push class this policy's committed-navigation notify fixes for full navigations.
+      this.pendingNavigationByGuestId.delete(guest.id)
+      this.notifyBrowserGuestStateChanged(guest.id)
+    }
+
     guest.on('will-navigate', navigationGuard)
     guest.on('will-redirect', willRedirectHandler)
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
+    guest.on('did-navigate-in-page', didNavigateInPageHandler)
     guest.on('did-fail-load', didFailLoadHandler)
     const handleDestroyed = (): void => {
       // Why: guests can die before renderer registration, else attach-time closures leak until shutdown.
@@ -146,6 +168,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('will-redirect', willRedirectHandler)
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
+        guest.off('did-navigate-in-page', didNavigateInPageHandler)
         guest.off('did-fail-load', didFailLoadHandler)
       }
     }

@@ -92,6 +92,65 @@ describe('browserManager', () => {
     expect(stateChanged).toHaveBeenCalledWith('remote-worktree')
   })
 
+  it('publishes a same-document offscreen navigation, and only for the main frame', () => {
+    const stateChanged = vi.fn()
+    const guest = {
+      id: 607,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      getURL: vi.fn(() => 'https://remote.test/app#route')
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.setBrowserGuestStateChangedListener(stateChanged)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'spa-page',
+      worktreeId: 'remote-worktree',
+      webContentsId: guest.id
+    })
+    stateChanged.mockClear()
+    // Why this event and not 'did-navigate': Electron never emits a full commit for a
+    // same-document navigation, so pushState/replaceState/hash routes would otherwise leave the
+    // published snapshot on the pre-navigation url while a pull reads the new one.
+    const inPage = guest.on.mock.calls.find(([event]) => event === 'did-navigate-in-page')?.[1]
+    expect(inPage).toBeTypeOf('function')
+    inPage!(null, guest.getURL(), false)
+    expect(stateChanged).not.toHaveBeenCalled()
+    inPage!(null, guest.getURL(), true)
+    expect(stateChanged).toHaveBeenCalledWith('remote-worktree')
+  })
+
+  it('detaches the same-document navigation listener with the rest of the policy', () => {
+    const guest = {
+      id: 608,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      getURL: vi.fn(() => 'https://remote.test/app')
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'detach-page',
+      worktreeId: 'remote-worktree',
+      webContentsId: guest.id
+    })
+    const destroyed = guest.on.mock.calls.find(([event]) => event === 'destroyed')?.[1]
+    expect(destroyed).toBeTypeOf('function')
+    destroyed!()
+    // Why assert the pairing: a listener added without a matching off() outlives its guest.
+    const attached = guest.on.mock.calls.map(([event]) => event).filter((e) => e !== 'destroyed')
+    const detached = new Set(guest.off.mock.calls.map(([event]) => event))
+    for (const event of attached) {
+      expect(detached.has(event), `${event} was attached but never detached`).toBe(true)
+    }
+  })
+
   it('tracks offscreen load failures for the owning worktree snapshot', () => {
     const stateChanged = vi.fn()
     const offscreenGuest = {
