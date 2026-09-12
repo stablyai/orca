@@ -14701,6 +14701,15 @@
         }
       }
     },
+    "sparse": {
+      "preset": {
+        "validation": {
+          "nameRequired": "이름을 입력해 주세요.",
+          "nameTooLong": "이름은 80자 이하여야 합니다.",
+          "nameAlreadyExists": "\"{{name}}\" 이름의 사전 설정이 이미 있습니다."
+        }
+      }
+    },
     "native-chat": {
       "composer": {
         "imageUnsupported": "이 에이전트는 이미지 붙여넣기를 지원하지 않습니다.",

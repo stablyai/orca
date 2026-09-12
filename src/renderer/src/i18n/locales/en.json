@@ -17015,6 +17015,15 @@
       "search": "Search users",
       "empty": "No users found"
     },
+    "sparse": {
+      "preset": {
+        "validation": {
+          "nameRequired": "Name is required.",
+          "nameTooLong": "Name must be 80 characters or fewer.",
+          "nameAlreadyExists": "\"{{name}}\" already exists."
+        }
+      }
+    },
     "native-chat": {
       "taskList": {
         "title": "Tasks",
