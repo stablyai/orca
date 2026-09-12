@@ -5,7 +5,11 @@ import { ptyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider } from '../provider/registry'
-import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
+import {
+  inspectPtyProviderProcess,
+  providerObservedIncarnationExit
+} from '../../../providers/pty-process-inspection'
+import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { agentSessionPtyWriteGate } from '../../../runtime/agent-session-pty-write-gate'
 import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
@@ -109,6 +113,44 @@ export async function probePtyLivenessFromRuntimeController(
     return null
   } catch {
     return null
+  }
+}
+
+/**
+ * True only when the execution host reported an observed exit for this exact incarnation. A thrown
+ * transport, a `terminal_gone`, an unverifiable verdict and a `remote:` id are all doubt, and doubt
+ * never settles a worker (docs/reference/ssh-execution-boundary.md).
+ */
+export async function inspectExitedIncarnationFromRuntimeController(
+  ptyId: string,
+  incarnationId: PtyIncarnationId
+): Promise<boolean> {
+  // Why: no locally routed provider can authoritatively answer for a remote host's PTY.
+  if (ptyId.startsWith('remote:')) {
+    return false
+  }
+  try {
+    return await providerObservedIncarnationExit(getProviderForPty(ptyId), ptyId, incarnationId)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Best-effort acknowledgement after durable recovery. Unsupported providers/hosts retain their
+ * existing policy; failures leave evidence subject to host retention, not a retry queue.
+ */
+export async function releaseExitedIncarnationFromRuntimeController(
+  ptyId: string,
+  incarnationId: PtyIncarnationId
+): Promise<void> {
+  if (ptyId.startsWith('remote:')) {
+    return
+  }
+  try {
+    await getProviderForPty(ptyId).consumeExitReceipt?.(ptyId, incarnationId)
+  } catch {
+    // Never substitute process shutdown for unsupported or failed evidence consumption.
   }
 }
 

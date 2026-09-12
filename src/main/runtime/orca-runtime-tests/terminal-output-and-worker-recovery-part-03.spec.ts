@@ -199,7 +199,13 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce([liveProcess])
       .mockResolvedValueOnce([liveProcess])
       .mockResolvedValueOnce([])
-    const harness = makePostRevealWorkerRecoveryHarness(() => false, listProcesses)
+    // The listing going empty is not the evidence; the host answering for this exact incarnation is.
+    const harness = makePostRevealWorkerRecoveryHarness(
+      () => false,
+      listProcesses,
+      async (ptyId, incarnationId) =>
+        ptyId === 'pty-post-reveal' && incarnationId === '45454545-4545-4545-8545-454545454545'
+    )
     harness.revealTerminalSession.mockImplementation(() =>
       publishLegacyWorkerReveal(harness.runtime, {
         worktreeId: TEST_WORKTREE_ID,
@@ -326,24 +332,32 @@ describe('OrcaRuntimeService', () => {
       .fn()
       .mockResolvedValueOnce([exactProcess])
       .mockResolvedValueOnce([replacement])
-    const harness = makePostRevealWorkerRecoveryHarness(() => false, listProcesses)
+    // The host answers for the id, not for this incarnation: a replacement holds it now, and
+    // nothing here watched the worker's own shell end.
+    const harness = makePostRevealWorkerRecoveryHarness(
+      () => false,
+      listProcesses,
+      async () => false
+    )
 
     await expect(harness.runtime.reconcileLegacyWorkerTerminals()).resolves.toMatchObject({
       adoptedDispatchIds: [],
-      exitedDispatchIds: ['dispatch-post-reveal'],
-      deferredDispatchIds: []
+      exitedDispatchIds: [],
+      deferredDispatchIds: ['dispatch-post-reveal']
     })
 
     expect(harness.getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(
       harness.getSession().sleepingAgentSessionsByPaneKey?.[harness.workerPaneKey]
-    ).toBeUndefined()
+    ).toBeDefined()
+    // The surface unbinds from an id a replacement now holds — that is our own tab bookkeeping —
+    // while the dispatch defers and no exit is ever certified.
     expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
       harness.workerPaneKey,
       'rolled_back',
       harness.ptyId
     )
-    expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
+    expect(harness.resolveLegacyWorkerTerminalRecovery).not.toHaveBeenCalledWith(
       harness.workerPaneKey,
       'exited'
     )
@@ -369,7 +383,11 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce([exactProcess])
       .mockResolvedValueOnce([exactProcess])
       .mockResolvedValueOnce([replacement])
-    const harness = makePostRevealWorkerRecoveryHarness(() => false, listProcesses)
+    const harness = makePostRevealWorkerRecoveryHarness(
+      () => false,
+      listProcesses,
+      async () => false
+    )
     harness.revealTerminalSession.mockImplementation(() =>
       publishLegacyWorkerReveal(harness.runtime, {
         worktreeId: TEST_WORKTREE_ID,
@@ -379,19 +397,20 @@ describe('OrcaRuntimeService', () => {
       })
     )
 
+    // The pane surface is still rolled back — the id no longer routes to this worker — but the
+    // dispatch defers: a replacement holding the id is not an observation of this shell's exit.
     await expect(
       harness.runtime.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
     ).resolves.toMatchObject({
       adoptedDispatchIds: [],
-      exitedDispatchIds: ['dispatch-post-reveal'],
-      deferredDispatchIds: []
+      exitedDispatchIds: [],
+      deferredDispatchIds: ['dispatch-post-reveal']
     })
 
     expect(
       harness.getSession().sleepingAgentSessionsByPaneKey?.[harness.workerPaneKey]
-    ).toBeUndefined()
-    expect(harness.getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
-    expect(harness.getSession().terminalLayoutsByTabId['legacy-post-reveal']).toBeUndefined()
+    ).toBeDefined()
+    // The adopted surface IS retired: leaving it bound points the pane at the replacement shell.
     const runtimeState = harness.runtime as unknown as {
       tabs: Map<string, unknown>
       leaves: Map<string, unknown>
@@ -411,7 +430,7 @@ describe('OrcaRuntimeService', () => {
       'rolled_back',
       harness.ptyId
     )
-    expect(harness.resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(
+    expect(harness.resolveLegacyWorkerTerminalRecovery).not.toHaveBeenCalledWith(
       harness.workerPaneKey,
       'exited'
     )

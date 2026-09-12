@@ -33,6 +33,4 @@ export type TerminalHostOptions = {
     snapshot: TerminalSnapshot,
     records: TakePendingOutputResult['records']
   ) => void
-  // Why: tests need deterministic tombstone eviction without thousands of sessions.
-  maxTombstones?: number
 }

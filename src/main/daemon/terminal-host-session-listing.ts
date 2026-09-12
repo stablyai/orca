@@ -1,14 +1,15 @@
 import type { ClaimedAgentPtyOwnerRegistry } from '../../shared/claimed-agent-pty-owner'
-import type { Session } from './session'
+import { sessionFromRecord, type TerminalHostSessionRecord } from './terminal-host-session-record'
 import type { SessionInfo } from './types'
 
 export function listLiveTerminalHostSessions(
-  sessions: ReadonlyMap<string, Session>,
+  sessions: ReadonlyMap<string, TerminalHostSessionRecord>,
   agentSessionOwners: ClaimedAgentPtyOwnerRegistry
 ): SessionInfo[] {
   const result: SessionInfo[] = []
-  for (const session of sessions.values()) {
-    if (!session.isAlive) {
+  for (const record of sessions.values()) {
+    const session = sessionFromRecord(record)
+    if (!session?.isAlive) {
       continue
     }
     const size = session.getAppliedSize()

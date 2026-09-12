@@ -1,5 +1,6 @@
 import { killWithDescendantSweep } from '../pty-descendant-termination'
 import type { Session } from './session'
+import type { TerminalHostSessionRecord } from './terminal-host-session-record'
 
 type TeardownOperation = {
   promise: Promise<void>
@@ -14,7 +15,7 @@ type TeardownOperation = {
 export class TerminalSessionTeardown {
   private operations = new Map<string, TeardownOperation>()
 
-  constructor(private sessions: ReadonlyMap<string, Session>) {}
+  constructor(private sessions: ReadonlyMap<string, TerminalHostSessionRecord>) {}
 
   get(sessionId: string): Promise<void> | undefined {
     return this.operations.get(sessionId)?.promise

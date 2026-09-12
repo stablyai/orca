@@ -20,6 +20,7 @@ export type SessionTerminationControllerDeps = {
  *  force-kill fallback, and the one-shot release of the native PTY handle. */
 export class SessionTerminationController {
   private _isTerminating = false
+  private _killRequested = false
   private killTimer: ReturnType<typeof setTimeout> | null = null
   private forceKillSent = false
   private subprocessDisposed = false
@@ -29,6 +30,12 @@ export class SessionTerminationController {
 
   get isTerminating(): boolean {
     return this._isTerminating
+  }
+
+  /** The owner asked this session to end. Unlike `isTerminating` it survives the exit, so the
+   *  reaper can tell an owner-ended session from one whose exit the owner may still need. */
+  get killRequested(): boolean {
+    return this._killRequested
   }
 
   markPhysicalExit(): void {
@@ -46,6 +53,7 @@ export class SessionTerminationController {
       return false
     }
     this._isTerminating = true
+    this._killRequested = true
     // Why: a paused child can be blocked inside write(); resume before any async snapshot so it handles termination promptly.
     this.deps.releaseProducerPause({ resume: true })
     return true
@@ -118,6 +126,7 @@ export class SessionTerminationController {
     }
     if (!this._isTerminating) {
       this._isTerminating = true
+      this._killRequested = true
       this.deps.releaseProducerPause({ resume: true })
     }
     // Why: escalate a graceful termination now; waiting for the 5s timer would spend most of the physical-exit budget.
@@ -147,6 +156,7 @@ export class SessionTerminationController {
 
   private resetTerminationAfterSignalFailure(): void {
     this._isTerminating = false
+    this._killRequested = false
     this.cancelForceKillFallback()
   }
 

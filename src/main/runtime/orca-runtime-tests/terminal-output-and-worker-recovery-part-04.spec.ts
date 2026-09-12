@@ -17,6 +17,7 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 import { publishLegacyWorkerReveal } from '../orca-runtime-test-scenario-builders.spec'
 
+/** A daemon that outlived the app close, fronted by the router main actually asks. */
 describe('OrcaRuntimeService', () => {
   it('requeues an active Task before clearing recovery for an authoritatively missing worker', async () => {
     const workerPaneKey = `legacy-missing:${HEADLESS_LEAF_ID}`
@@ -82,6 +83,9 @@ describe('OrcaRuntimeService', () => {
         kill: vi.fn(() => true),
         getForegroundProcess: async () => null,
         hasPty: () => false,
+        // The empty listing settles nothing; this host answer for the stored incarnation does.
+        inspectExitedIncarnation: async (ptyId, expected) =>
+          ptyId === 'pty-missing-worker' && expected === incarnationId,
         listProcesses: async () => []
       })
       const resolveLegacyWorkerTerminalRecovery = vi.fn()
@@ -118,6 +122,79 @@ describe('OrcaRuntimeService', () => {
         'pty-missing-worker'
       )
       expect(resolveLegacyWorkerTerminalRecovery).toHaveBeenCalledWith(workerPaneKey, 'exited')
+    } finally {
+      db.close()
+    }
+  })
+
+  it('leaves an absent worker dispatched when no host answered for its incarnation', async () => {
+    const workerPaneKey = `legacy-unanswered:${HEADLESS_LEAF_ID}`
+    const incarnationId = '36363636-3636-4636-8636-363636363636'
+    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
+      sleepingAgentSessionsByPaneKey: {
+        [workerPaneKey]: {
+          paneKey: workerPaneKey,
+          tabId: 'legacy-unanswered',
+          worktreeId: TEST_WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'legacy-unanswered-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live'
+        }
+      }
+    })
+    const runtime = new OrcaRuntimeService(
+      { ...runtimeStore, flushOrThrow: vi.fn() } as never,
+      undefined,
+      { canRecoverPersistentLocalPtys: () => true }
+    )
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const task = db.createTask({ runId: 'run_legacy_local', spec: 'unanswered worker' })
+      const started = db.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        taskId: task.id,
+        startOptions: { topology: 'current', agent: 'codex' }
+      })
+      db.prepareStartingWorkerAuthority({
+        dispatchId: started.dispatch.id,
+        handle: 'term_unanswered',
+        paneKey: workerPaneKey,
+        processIncarnation: `pty-unanswered:${incarnationId}`,
+        worktreeId: TEST_WORKTREE_ID,
+        setupState: 'not_applicable',
+        effects: []
+      })
+      db.markWorkerDispatchReady(started.dispatch.id)
+      runtime.setOrchestrationDb(db)
+      // The pty is absent from the listing and the host says nothing about this incarnation, which
+      // is every disconnected host. Absence alone must not retire the worker.
+      runtime.setPtyController({
+        write: vi.fn(() => true),
+        kill: vi.fn(() => true),
+        getForegroundProcess: async () => null,
+        hasPty: () => false,
+        inspectExitedIncarnation: async () => false,
+        listProcesses: async () => []
+      })
+      const resolveLegacyWorkerTerminalRecovery = vi.fn()
+      runtime.setNotifier({ resolveLegacyWorkerTerminalRecovery } as never)
+
+      await expect(runtime.reconcileLegacyWorkerTerminals()).resolves.toMatchObject({
+        adoptedDispatchIds: [],
+        exitedDispatchIds: [],
+        deferredDispatchIds: [started.dispatch.id]
+      })
+      expect(db.getWorkerDispatch(started.dispatch.id)?.state).toBe('ready')
+      expect(db.getDispatchContextById(started.dispatch.id)?.status).toBe('dispatched')
+      expect(getSession().sleepingAgentSessionsByPaneKey?.[workerPaneKey]).toBeDefined()
+      expect(resolveLegacyWorkerTerminalRecovery).not.toHaveBeenCalled()
     } finally {
       db.close()
     }
@@ -192,6 +269,8 @@ describe('OrcaRuntimeService', () => {
         kill: vi.fn(() => true),
         getForegroundProcess: async () => null,
         hasPty: () => false,
+        inspectExitedIncarnation: async (ptyId, expected) =>
+          ptyId === 'pty-missing-retry' && expected === incarnationId,
         listProcesses: async () => []
       })
       const resolveLegacyWorkerTerminalRecovery = vi.fn()
@@ -325,6 +404,8 @@ describe('OrcaRuntimeService', () => {
       kill: vi.fn(() => true),
       getForegroundProcess: async () => null,
       hasPty: () => false,
+      inspectExitedIncarnation: async (ptyId, expected) =>
+        ptyId === 'pty-exited' && expected === incarnationId,
       listProcesses
     })
     const revealTerminalSession = vi.fn()

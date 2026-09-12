@@ -48,6 +48,11 @@ export type LegacyWorkerRecoveryPorts = {
   ) => Promise<LegacyWorkerRecoveryInventory | null>
   /** Serializes the pre-adoption liveness probe and the adoption itself against other terminal mutations. */
   runMutation: <T>(worktreeId: string, operation: () => Promise<T>) => Promise<T>
+  /** True only when the execution host observed THIS candidate's stored incarnation exit. Every
+   *  other answer — absence, mismatch, transport failure — is doubt and must defer. */
+  proveTerminalExited: (candidate: LegacyWorkerRecoveryCandidate) => Promise<boolean>
+  /** Tells the execution host the proven exit has been settled durably, so it can drop the record. */
+  releaseProvenExit: (candidate: LegacyWorkerRecoveryCandidate) => Promise<void>
   getActivation: (worktreeId: string) => { activeTabId?: string; activeGroupId?: string }
   hasExactPersistedSurface: (candidate: LegacyWorkerRecoveryCandidate) => boolean
   hasExactSurface: (candidate: LegacyWorkerRecoveryCandidate) => boolean

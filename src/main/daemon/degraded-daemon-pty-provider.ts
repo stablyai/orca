@@ -1,7 +1,7 @@
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import { shutdownDegradedFallbackSessions } from './degraded-daemon-fallback-shutdown'
-import { inspectPtyProviderProcess } from '../providers/pty-process-inspection'
+import type { PtyProcessInspectionOptions } from '../providers/pty-process-inspection'
 import type {
   IPtyProvider,
   PtyBackgroundStreamEvent,
@@ -15,6 +15,7 @@ import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
   findDaemonAdapter,
+  inspectRoutedDaemonProcess,
   listProviderSessionIds
 } from './degraded-daemon-session-routing'
 import { DegradedDaemonFreshSpawnRouter } from './degraded-daemon-fresh-spawn-routing'
@@ -133,10 +134,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     this.providerFor(id).setPtyBackgrounded?.(id, background)
   }
 
-  async shutdown(
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
+  async shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
     await this.providerFor(id).shutdown(id, opts)
     if (!opts.keepHistory) {
       this.sessionProviders.delete(id)
@@ -184,11 +182,15 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   async getForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).getForegroundProcess(id)
   }
-  inspectProcess(id: string) {
-    return this.hasPty(id)
-      ? inspectPtyProviderProcess(this.providerFor(id), id)
-      : Promise.reject(new Error('terminal_gone'))
+  inspectProcess(id: string, options?: PtyProcessInspectionOptions) {
+    const routed = this.hasPty(id) ? this.providerFor(id) : null
+    return inspectRoutedDaemonProcess(routed, this.current, id, options)
   }
+  async consumeExitReceipt(id: string, incarnationId: string): Promise<void> {
+    const owner = this.hasPty(id) ? this.providerFor(id) : this.current
+    await owner.consumeExitReceipt?.(id, incarnationId)
+  }
+
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).confirmForegroundProcess?.(id) ?? null
   }

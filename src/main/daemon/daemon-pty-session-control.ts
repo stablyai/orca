@@ -9,7 +9,7 @@ import type { ColdRestoreInfo } from './history-reader'
 import { normalizeWslColdRestoreCwd } from './wsl-cold-restore-cwd'
 import { SessionNotFoundError, type ListSessionsResult } from './types'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
-import type { PtySpawnResult } from '../providers/types'
+import type { IPtyProvider, PtySpawnResult } from '../providers/types'
 export const LIVENESS_PROBE_TIMEOUT_MS = 2_000
 
 const MAX_TOMBSTONES = 1000
@@ -85,10 +85,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     }
   }
 
-  async shutdown(
-    id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
-  ): Promise<void> {
+  async shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
     if (opts.keepHistory && this.disconnectOnlyPromise) {
       throw new Error('Cannot keep history after daemon disconnect has started')
     }
@@ -107,7 +104,7 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
 
   protected async shutdownWithHistoryLock(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: Parameters<IPtyProvider['shutdown']>[1]
   ): Promise<void> {
     // Why: shutdown can be the first lazy-client operation after restart; connect
     // before killing so a healthy daemon session is not orphaned (#7742). Connect,
@@ -162,7 +159,13 @@ export abstract class DaemonPtySessionControl extends DaemonPtySessionInput {
     }
     await this.client.request(
       'kill',
-      { sessionId: id, immediate: opts.immediate ?? false },
+      {
+        sessionId: id,
+        immediate: opts.immediate ?? false,
+        ...(opts.expectedIncarnationId === undefined
+          ? {}
+          : { expectedIncarnationId: opts.expectedIncarnationId })
+      },
       remainingDaemonRequestTimeoutMs(opts.deadlineMs)
     )
     this.activeSessionIds.delete(id)
