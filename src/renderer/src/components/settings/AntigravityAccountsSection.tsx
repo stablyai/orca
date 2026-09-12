@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { formatResetCountdown } from '../../../../shared/rate-limit-reset-format'
 import { useAppStore } from '../../store'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -71,6 +73,22 @@ export function AntigravityAccountsSection({
   const buckets = antigravityUsage?.buckets ?? []
   const hasBuckets = buckets.length > 0
   const sessionWindow = antigravityUsage?.session ?? null
+
+  const resetTimes = useMemo(() => {
+    const times: number[] = []
+    const session = antigravityUsage?.session
+    if (session?.resetsAt) {
+      times.push(session.resetsAt)
+    }
+    for (const bucket of antigravityUsage?.buckets ?? []) {
+      if (bucket.resetsAt) {
+        times.push(bucket.resetsAt)
+      }
+    }
+    return times
+  }, [antigravityUsage])
+
+  const now = useResetCountdownClock(resetTimes)
 
   return (
     <section key="antigravity" id="accounts-antigravity" className="space-y-4 scroll-mt-6">
@@ -224,28 +242,38 @@ export function AntigravityAccountsSection({
             )}
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {buckets.map((bucket) => (
-              <div
-                key={bucket.name}
-                className="flex items-center justify-between rounded-md border border-border/50 bg-muted/10 px-3 py-2 text-xs"
-              >
-                <div className="space-y-0.5">
-                  <span className="font-medium text-foreground">{bucket.name}</span>
-                  {bucket.resetDescription ? (
-                    <p className="text-[11px] text-muted-foreground">
-                      {translate(
-                        'auto.components.settings.AntigravityAccountsSection.resetsAt',
-                        'Resets {{when}}',
-                        { when: bucket.resetDescription }
-                      )}
-                    </p>
-                  ) : null}
+            {buckets.map((bucket) => {
+              const resetCountdown = bucket.resetsAt
+                ? formatResetCountdown(bucket.resetsAt - now)
+                : null
+              const resetWhen = resetCountdown ?? bucket.resetDescription
+              return (
+                <div
+                  key={bucket.name}
+                  className="flex items-center justify-between rounded-md border border-border/50 bg-muted/10 px-3 py-2 text-xs"
+                >
+                  <div className="space-y-0.5">
+                    <span className="font-medium text-foreground">{bucket.name}</span>
+                    {resetWhen ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        {translate(
+                          'auto.components.settings.AntigravityAccountsSection.resetsAt',
+                          'Resets {{when}}',
+                          { when: resetWhen }
+                        )}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Badge variant="secondary" className="tabular-nums">
+                    {translate(
+                      'auto.components.settings.AntigravityAccountsSection.usedPercent',
+                      '{{value0}}% used',
+                      { value0: String(Math.round(bucket.usedPercent)) }
+                    )}
+                  </Badge>
                 </div>
-                <Badge variant="secondary" className="tabular-nums">
-                  {Math.round(bucket.usedPercent)}% used
-                </Badge>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       ) : settings.antigravityCliOAuthEnabled && sessionWindow ? (
@@ -256,28 +284,40 @@ export function AntigravityAccountsSection({
               'Session Quota'
             )}
           </h4>
-          <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/10 px-3 py-2 text-xs">
-            <div className="space-y-0.5">
-              <span className="font-medium text-foreground">
-                {translate(
-                  'auto.components.settings.AntigravityAccountsSection.sessionWindow',
-                  '5-Hour Window'
-                )}
-              </span>
-              {sessionWindow.resetDescription ? (
-                <p className="text-[11px] text-muted-foreground">
+          {(() => {
+            const sessionCountdown = sessionWindow.resetsAt
+              ? formatResetCountdown(sessionWindow.resetsAt - now)
+              : null
+            const sessionResetWhen = sessionCountdown ?? sessionWindow.resetDescription
+            return (
+              <div className="flex items-center justify-between rounded-md border border-border/50 bg-muted/10 px-3 py-2 text-xs">
+                <div className="space-y-0.5">
+                  <span className="font-medium text-foreground">
+                    {translate(
+                      'auto.components.settings.AntigravityAccountsSection.sessionWindow',
+                      '5-Hour Window'
+                    )}
+                  </span>
+                  {sessionResetWhen ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      {translate(
+                        'auto.components.settings.AntigravityAccountsSection.resetsAt',
+                        'Resets {{when}}',
+                        { when: sessionResetWhen }
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+                <Badge variant="secondary" className="tabular-nums">
                   {translate(
-                    'auto.components.settings.AntigravityAccountsSection.resetsAt',
-                    'Resets {{when}}',
-                    { when: sessionWindow.resetDescription }
+                    'auto.components.settings.AntigravityAccountsSection.usedPercent',
+                    '{{value0}}% used',
+                    { value0: String(Math.round(sessionWindow.usedPercent)) }
                   )}
-                </p>
-              ) : null}
-            </div>
-            <Badge variant="secondary" className="tabular-nums">
-              {Math.round(sessionWindow.usedPercent)}% used
-            </Badge>
-          </div>
+                </Badge>
+              </div>
+            )
+          })()}
         </div>
       ) : null}
     </section>

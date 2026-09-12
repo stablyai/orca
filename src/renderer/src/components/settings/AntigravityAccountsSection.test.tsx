@@ -172,6 +172,35 @@ describe('AntigravityAccountsSection', () => {
     expect(screen.getByText('Resets in 4 hours')).toBeInTheDocument()
   })
 
+  it('renders live reset countdown when buckets have resetsAt timestamps', async () => {
+    const inTwoHours = Date.now() + 2 * 60 * 60 * 1000 + 5 * 60 * 1000
+    mocks.antigravityUsage.mockReturnValue({
+      provider: 'antigravity',
+      session: null,
+      weekly: null,
+      buckets: [
+        {
+          name: 'Gemini 2.5 Pro',
+          usedPercent: 45,
+          windowMinutes: 60,
+          resetsAt: inTwoHours,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    })
+
+    const model = createModel()
+    render(<AntigravityAccountsSection model={model} />)
+
+    expect(await screen.findByText('Gemini 2.5 Pro')).toBeInTheDocument()
+    // Why: a few ms elapse between computing resetsAt and render, which can
+    // floor the countdown down a minute — match either adjacent minute.
+    expect(screen.getByText(/Resets in 2h [45]m/)).toBeInTheDocument()
+  })
+
   it('triggers refreshRateLimits when Refresh quota is clicked', async () => {
     const model = createModel()
     render(<AntigravityAccountsSection model={model} />)

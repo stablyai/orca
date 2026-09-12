@@ -106,7 +106,8 @@ export async function refreshAccessToken(
   clientId: string,
   clientSecret: string
 ): Promise<RefreshTokenResult> {
-  const res = await net.fetch(GOOGLE_TOKEN_URL, {
+  const fetchFn = net?.fetch ?? fetch
+  const res = await fetchFn(GOOGLE_TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -135,21 +136,26 @@ export async function refreshAccessToken(
 }
 
 export async function loadProjectId(accessToken: string): Promise<string> {
-  const res = await net.fetch(LOAD_CODE_ASSIST_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({ metadata: { ideType: 'ANTIGRAVITY', pluginType: 'GEMINI' } }),
-    signal: AbortSignal.timeout(API_TIMEOUT_MS)
-  })
+  const fetchFn = net?.fetch ?? fetch
+  try {
+    const res = await fetchFn(LOAD_CODE_ASSIST_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ metadata: { ideType: 'ANTIGRAVITY' } }),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+    })
 
-  if (res.ok) {
-    const data = (await res.json()) as { cloudaicompanionProject?: string }
-    if (typeof data.cloudaicompanionProject === 'string' && data.cloudaicompanionProject) {
-      return data.cloudaicompanionProject
+    if (res.ok) {
+      const data = (await res.json()) as { cloudaicompanionProject?: string }
+      if (typeof data.cloudaicompanionProject === 'string' && data.cloudaicompanionProject) {
+        return data.cloudaicompanionProject
+      }
     }
+  } catch {
+    // continue to local fallback
   }
 
   // Fallback to reading projects.json
@@ -172,7 +178,7 @@ export async function loadProjectId(accessToken: string): Promise<string> {
     }
   }
 
-  return ''
+  return 'default-cli-project'
 }
 
 export async function tryRefreshTokenFromBundle(

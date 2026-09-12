@@ -47,7 +47,8 @@ async function fetchQuota(accessToken: string, projectId: string): Promise<Provi
     controller.abort()
   }, API_TIMEOUT_MS)
   try {
-    const res = await net.fetch(RETRIEVE_QUOTA_URL, {
+    const fetchFn = net?.fetch ?? fetch
+    const res = await fetchFn(RETRIEVE_QUOTA_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({ project: projectId }),
