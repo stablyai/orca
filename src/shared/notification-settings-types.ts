@@ -4,6 +4,7 @@ export type NotificationSettings = {
   enabled: boolean
   agentTaskComplete: boolean
   terminalBell: boolean
+  cloneComplete: boolean
   suppressWhenFocused: boolean
   customSoundId:
     | 'system'
@@ -21,7 +22,11 @@ export type NotificationSettings = {
   customSoundVolume: number
 }
 
-export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
+export type NotificationEventSource =
+  | 'agent-task-complete'
+  | 'terminal-bell'
+  | 'clone-complete'
+  | 'test'
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource

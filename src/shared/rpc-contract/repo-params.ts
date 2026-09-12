@@ -20,6 +20,10 @@ export const RepoClone = z.object({
   destination: requiredString('Missing clone destination')
 })
 
+export const RepoCloneAbort = z.object({
+  destination: requiredString('Missing clone destination')
+})
+
 export const RepoSetBaseRef = z.object({
   repo: requiredString('Missing repo selector'),
   ref: requiredString('Missing base ref')

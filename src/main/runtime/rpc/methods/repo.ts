@@ -14,6 +14,7 @@ import {
   ProjectGroupSelector,
   ProjectGroupUpdate,
   RepoClone,
+  RepoCloneAbort,
   RepoCreate,
   RepoIssueCommandWrite,
   RepoPath,
@@ -133,6 +134,13 @@ export const REPO_METHODS = [
         await context.runtime.cloneRepo(params.url, params.destination),
         context
       )
+    })
+  }),
+  defineMethod({
+    name: 'repo.cloneAbort',
+    params: RepoCloneAbort,
+    handler: async (params, { runtime }) => ({
+      aborted: runtime.abortClone(params.destination)
     })
   }),
   defineMethod({
