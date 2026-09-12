@@ -110,4 +110,15 @@ describe('timing-weighted shard selection', () => {
       overheadMs: 1000
     })
   })
+
+  it('reads mixed units from captured Vitest output', () => {
+    const parsed = parseTimingLog(
+      'Duration 5.14s (transform 952ms, setup 449ms, import 1.18s, tests 9.41s, environment 1ms)'
+    )
+    expect(parsed.overheadMs).toBe(2582)
+  })
+
+  it('rejects incomplete unit evidence instead of silently dropping overhead', () => {
+    expect(() => parseTimingLog('✓ src/a.test.ts (2 tests) 35ms')).toThrow('Duration summary')
+  })
 })

@@ -18,12 +18,22 @@ export function parseTimingLog(text) {
     e2e[match[1]] = (e2e[match[1]] ?? 0) + Number(match[2]) * { ms: 1, s: 1000, m: 60000 }[match[3]]
   }
   const summary = clean.match(
-    /Duration\s+[\d.]+s \(transform ([\d.]+)s, setup ([\d.]+)s, import ([\d.]+)s, tests [\d.]+s, environment ([\d.]+)s\)/
+    /Duration\s+[\d.]+(?:ms|s) \(transform ([\d.]+(?:ms|s)), setup ([\d.]+(?:ms|s)), import ([\d.]+(?:ms|s)), tests [\d.]+(?:ms|s), environment ([\d.]+(?:ms|s))\)/
   )
+  if (Object.keys(unit).length && !summary) {
+    throw new Error('Unit timing log has no supported Duration summary')
+  }
   return {
     unit,
     e2e,
-    overheadMs: summary ? summary.slice(1).reduce((sum, value) => sum + Number(value) * 1000, 0) : 0
+    overheadMs: summary
+      ? summary
+          .slice(1)
+          .reduce(
+            (sum, value) => sum + Number.parseFloat(value) * (value.endsWith('ms') ? 1 : 1000),
+            0
+          )
+      : 0
   }
 }
 
