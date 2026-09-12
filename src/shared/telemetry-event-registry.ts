@@ -15,6 +15,7 @@ import {
   agentHookUnattributedSchema,
   codexTrustGrantSchema,
   daemonAdoptedSchema,
+  daemonAttachOnlyOrphanRiskSchema,
   daemonAuditEligibilitySchema,
   daemonLifecycleSchema,
   daemonPtyCwdDeniedSchema,
@@ -122,6 +123,7 @@ export const eventSchemas = {
   agent_hook_transport_blocked: agentHookTransportBlockedSchema,
 
   daemon_start_failed: daemonStartFailedSchema,
+  daemon_attach_only_orphan_risk: daemonAttachOnlyOrphanRiskSchema,
   main_thread_hang_detected: mainThreadHangDetectedSchema,
   daemon_lifecycle: daemonLifecycleSchema,
   daemon_adopted: daemonAdoptedSchema,

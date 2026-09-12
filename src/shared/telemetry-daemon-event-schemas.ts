@@ -25,6 +25,15 @@ import { errorClassSchema, settingsChangedKeySchema } from './telemetry-property
 // Why: daemon start-failure signal (fleet-wide outage like v1.4.129-rc.1); enum-only so raw stderr never reaches the wire.
 export const daemonStartFailedSchema = z.object({ error_class: errorClassSchema }).strict()
 
+// Why (#12662): pre-v31 attachOnly ignore leaves an orphan shell when kill fails;
+// enum-only so no session paths reach the wire; rare (≪1/user/day).
+export const daemonAttachOnlyOrphanRiskSchema = z
+  .object({
+    protocol_version: z.number().int().nonnegative(),
+    kill_error_class: z.enum(['transport', 'timeout', 'not_found', 'unknown'])
+  })
+  .strict()
+
 export const runtimeRpcStartErrorClassSchema = z.enum([
   'permission_denied',
   'address_in_use',
