@@ -78,10 +78,9 @@ describe('TabGroupSplitLayout', () => {
   }
 
   function getSplitNodeElement(element: ReturnType<typeof TabGroupSplitLayout>) {
-    const layoutWrapperChildren = React.Children.toArray(
+    const splitBody = React.Children.only(
       asElement(getLayoutWrapper(element)).props.children as React.ReactNode
     )
-    const splitBody = layoutWrapperChildren[1]
     const splitNodeElement = React.Children.only(
       asElement(splitBody).props.children as React.ReactNode
     )
@@ -145,6 +144,21 @@ describe('TabGroupSplitLayout', () => {
     })
 
     expect(asElement(getLayoutWrapper(element)).props.ref).toBe(setDragRootNodeMock)
+  })
+
+  it('renders the pane body flush to the top without a spacer', () => {
+    const element = TabGroupSplitLayout({
+      layout: { type: 'leaf', groupId: 'group-1' },
+      worktreeId: 'wt-1',
+      focusedGroupId: 'group-1',
+      isWorktreeActive: true
+    })
+
+    const layoutWrapper = asElement(getLayoutWrapper(element))
+    const children = React.Children.toArray(layoutWrapper.props.children as React.ReactNode)
+
+    expect(children).toHaveLength(1)
+    expect(asElement(children[0]).props.className).toContain('flex-1')
   })
 
   it('only reserves top-right header space for the floating explorer toggle', () => {
