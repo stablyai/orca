@@ -32,8 +32,20 @@ export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   clearSidebarFilters?: boolean
 }
 
+/** Create time: a shell seeded now would land beside the agent/chat surface this selection is
+ *  about to open, so an agent selection counts as a promised surface (#19940). */
 export function activationProvidesInitialSurface(
   selection?: WorktreeActivationSurfaceSelection
 ): boolean {
   return selection?.providesInitialSurface === true || selection?.agent != null
+}
+
+/** Deliberately narrower than `activationProvidesInitialSurface`: the async gate's `empty`
+ *  outcome is evidence the agent surface never materialised (dead PTY, unreadable census, null
+ *  startup plan), so only an explicit caller promise may suppress the fail-closed re-seed —
+ *  honouring the agent half strands the workspace with zero tabs and no recovery (STA-5701). */
+export function gatedEmptyOutcomeReseedSuppressed(
+  selection?: WorktreeActivationSurfaceSelection
+): boolean {
+  return selection?.providesInitialSurface === true
 }

@@ -75,6 +75,40 @@ describe('activating a workspace whose last terminal was closed', () => {
     }
   )
 
+  // Why: an agent selection suppresses the *pre-emptive* seed at create time, but the gate's
+  // `empty` outcome is its evidence that the agent surface never arrived (dead PTY, unreadable
+  // census, null startup plan). Suppressing the re-seed on that evidence leaves the workspace with
+  // no tabs and no recovery; only an explicit caller promise may. See #19940 and STA-5701.
+  it.each([
+    ['an agent selection', { agent: 'codex' as const }, 1],
+    [
+      'an agent selection whose caller promised its own surface',
+      { agent: 'codex' as const, providesInitialSurface: true },
+      0
+    ]
+  ])('re-seeds a gate-reported empty workspace for %s', async (_label, selection, expectedTabs) => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        'pane-1': { worktreeId: worktree.id }
+      } as never
+    })
+    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
+    gate.mockResolvedValue('empty')
+
+    const result = activateAndRevealWorktree(worktree.id, {
+      ...selection,
+      notifyHostRuntime: false
+    })
+    await gate.mock.results[0]?.value
+
+    // The gate owns seeding for this activation, so the synchronous call never returns a tab.
+    expect(result === false ? null : result.primaryTabId).toBeNull()
+    expect(useAppStore.getState().tabsByWorktree[worktree.id] ?? []).toHaveLength(expectedTabs)
+  })
+
   it('re-seeds a terminal when the workspace is opened from elsewhere', () => {
     const worktree = makeWorktree()
     seedEmptyActivatableWorktree(worktree)
@@ -309,6 +343,32 @@ describe('activating a folder workspace whose last terminal was closed', () => {
       expect(useAppStore.getState().revealWorktreeInSidebar).not.toHaveBeenCalled()
     }
   )
+
+  // Why: folder workspaces activate through their own entry point — setActiveWorktree(folderKey)
+  // never reaches it — so the split has to be pinned on this path too, not just the git one.
+  it.each([
+    ['an agent selection', { agent: 'codex' as const }, 1],
+    [
+      'an agent selection whose caller promised its own surface',
+      { agent: 'codex' as const, providesInitialSurface: true },
+      0
+    ]
+  ])('re-seeds a gate-reported empty workspace for %s', async (_label, selection, expectedTabs) => {
+    seedEmptiedFolderWorkspaceOnTwoHosts()
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        'pane-1': { worktreeId: FOLDER_KEY }
+      } as never
+    })
+    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation')
+    gate.mockResolvedValue('empty')
+
+    activateAndRevealFolderWorkspace(FOLDER_ID, { ...selection, executionHostId: 'local' })
+    await gate.mock.results[0]?.value
+
+    expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
+    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY] ?? []).toHaveLength(expectedTabs)
+  })
 
   it('re-seeds a terminal when the workspace is opened', () => {
     seedEmptiedFolderWorkspaceOnTwoHosts()

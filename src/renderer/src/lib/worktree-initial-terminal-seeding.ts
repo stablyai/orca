@@ -36,7 +36,9 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
 }
 
 /** After the async activation gate reports an empty workspace: re-seed a shell unless the caller
- *  promised its own surface or the user has already moved on. */
+ *  promised its own surface or the user has already moved on.
+ *  Callers must derive the flag from `gatedEmptyOutcomeReseedSuppressed`, never from an agent
+ *  selection — `empty` means that agent surface never arrived. */
 export function reseedGatedEmptyWorkspace(
   workspaceKey: string,
   callerProvidesSurface: boolean | undefined
