@@ -10,6 +10,8 @@ export type AgentSkillSetupPanelProps = {
   description: ReactNode
   command: string
   installedCommand?: string
+  /** When set and the skill is installed, show a Remove action that runs this command. */
+  removeCommand?: string
   terminalTitle: string
   terminalAriaLabel: string
   terminalWorktreeId: string
