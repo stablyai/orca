@@ -4,6 +4,7 @@ import { readPtySlavePath } from '../../../shared/pty-slave-line-discipline-echo
 import { forceKillPosixPtyProcessGroups } from '../../pty/posix-pty-process-groups'
 import { signalPosixPtyForegroundGroup } from '../../pty/posix-pty-foreground-group'
 import { readPtsName } from '../../pty/node-pty-pts-name'
+import { ORCA_PTY_TREE_ID_ENV } from '../../pty/wsl-orca-env'
 import { terminatePtyJob } from '../../windows/windows-pty-job'
 import { isValidPtySize } from '../daemon-pty-size'
 import type { SubprocessHandle } from '../session-subprocess-handle'
@@ -61,12 +62,18 @@ export function createDaemonPtySubprocessHandle(args: {
   })
 
   const slavePath = readPtySlavePath(proc)
+  // Why recovered here, not plumbed as an arg: the spawn env already carries
+  // the marker, so the handle recovers it without touching every spawn call
+  // site. The spawn creation time is set separately (see createPtySubprocess).
+  const treeId = args.env[ORCA_PTY_TREE_ID_ENV]
+  const spawnIdentity = treeId ? { ptyTreeId: treeId } : {}
   return {
     pid: proc.pid,
     shellPath: args.shellPath,
     shellCwd: args.spawnCwd,
     shellPathEnv: args.env.PATH,
     ...(slavePath ? { slavePath } : {}),
+    ...(Object.keys(spawnIdentity).length > 0 ? { spawnIdentity } : {}),
     ...(args.startupCommandDeliveredInShellArgs
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),
