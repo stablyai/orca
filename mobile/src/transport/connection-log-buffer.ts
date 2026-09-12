@@ -1,13 +1,6 @@
 import type { ConnectionLogEntry } from './types'
 import { redactConnectionLogEntry } from '../diagnostics/connection-log-redaction'
 
-// Why: the rpc-client's onLog entries were only wired during pairing; for
-// long-lived host connections everything went to console.log, invisible to
-// users. This buffer retains the recent lifecycle events per host so a
-// "Connection log" screen (and copy-diagnostics) can show why a connection
-// is stuck without a debug build. Module-level so the log survives client
-// swaps (forceReconnect) and provider remounts (hot reload); bounded so an
-// all-night reconnect loop can't grow memory unbounded.
 const MAX_ENTRIES_PER_HOST = 200
 
 export type ConnectionLogStore = {
@@ -15,28 +8,40 @@ export type ConnectionLogStore = {
   get: (hostId: string) => readonly ConnectionLogEntry[]
   hydrate: (hostId: string) => Promise<void>
   subscribe: (hostId: string, listener: () => void) => () => void
+  forgetHost: (hostId: string) => Promise<void>
 }
 
 export type ConnectionLogPersistence = {
   load: (hostId: string) => Promise<readonly ConnectionLogEntry[]>
   save: (hostId: string, entries: readonly ConnectionLogEntry[]) => Promise<void>
+  remove: (hostId: string) => Promise<void>
+}
+
+type HostLog = {
+  entries: ConnectionLogEntry[]
+  snapshot?: readonly ConnectionLogEntry[]
+  hydrated?: boolean
+  hydrationFailed?: boolean
+  hydration?: Promise<void>
 }
 
 export function createConnectionLogStore(
   maxEntriesPerHost: number = MAX_ENTRIES_PER_HOST,
   persistence?: ConnectionLogPersistence
 ): ConnectionLogStore {
-  const entriesByHost = new Map<string, ConnectionLogEntry[]>()
+  const logsByHost = new Map<string, HostLog>()
   const listenersByHost = new Map<string, Set<() => void>>()
-  const hydratedHosts = new Set<string>()
-  const hydrationFailedHosts = new Set<string>()
-  const hydrationByHost = new Map<string, Promise<void>>()
-  const saveByHost = new Map<string, Promise<void>>()
-  // Why: useSyncExternalStore compares snapshots by reference — getSnapshot
-  // must return the SAME array until the data actually changes, or React
-  // loops re-rendering. Cache per host; invalidate on append.
-  const snapshotByHost = new Map<string, readonly ConnectionLogEntry[]>()
+  const writesByHost = new Map<string, Promise<void>>()
   const EMPTY: readonly ConnectionLogEntry[] = []
+
+  const getLog = (hostId: string): HostLog => {
+    let log = logsByHost.get(hostId)
+    if (!log) {
+      log = { entries: [] }
+      logsByHost.set(hostId, log)
+    }
+    return log
+  }
 
   const trim = (entries: ConnectionLogEntry[]): void => {
     if (entries.length > maxEntriesPerHost) {
@@ -45,7 +50,6 @@ export function createConnectionLogStore(
   }
 
   const notify = (hostId: string): void => {
-    snapshotByHost.delete(hostId)
     const listeners = listenersByHost.get(hostId)
     if (listeners) {
       for (const listener of listeners) {
@@ -54,43 +58,63 @@ export function createConnectionLogStore(
     }
   }
 
-  const persist = (hostId: string): void => {
-    if (!persistence || !hydratedHosts.has(hostId)) {
-      return
-    }
-    const snapshot = [...(entriesByHost.get(hostId) ?? [])]
-    const previous = saveByHost.get(hostId) ?? Promise.resolve()
+  const enqueueWrite = (hostId: string, write: () => Promise<void>): Promise<void> => {
+    const previous = writesByHost.get(hostId) ?? Promise.resolve()
     const pending = previous
       .catch(() => {})
       .then(async () => {
         try {
-          await persistence.save(hostId, snapshot)
+          await write()
         } catch {
-          await persistence.save(hostId, snapshot)
+          await write()
         }
       })
-      .catch(() => {})
-    saveByHost.set(hostId, pending)
+      .finally(() => {
+        if (writesByHost.get(hostId) === pending) {
+          writesByHost.delete(hostId)
+        }
+      })
+    writesByHost.set(hostId, pending)
+    return pending
   }
 
-  const hydrateHost = async (hostId: string, retryAfterFailure: boolean): Promise<void> => {
-    if (!persistence || hydratedHosts.has(hostId)) {
+  const persist = (hostId: string, log: HostLog): void => {
+    if (!persistence || !log.hydrated || logsByHost.get(hostId) !== log) {
       return
     }
-    const existing = hydrationByHost.get(hostId)
-    if (existing) {
-      return existing
-    }
-    if (!retryAfterFailure && hydrationFailedHosts.has(hostId)) {
+    const snapshot = [...log.entries]
+    void enqueueWrite(hostId, async () => {
+      if (logsByHost.get(hostId) === log) {
+        await persistence.save(hostId, snapshot)
+      }
+    }).catch(() => {})
+  }
+
+  const hydrateHost = async (
+    hostId: string,
+    log: HostLog,
+    retryAfterFailure: boolean
+  ): Promise<void> => {
+    if (!persistence || log.hydrated || logsByHost.get(hostId) !== log) {
       return
     }
-    const pending = persistence
-      .load(hostId)
+    if (log.hydration) {
+      return log.hydration
+    }
+    if (!retryAfterFailure && log.hydrationFailed) {
+      return
+    }
+    // Re-pairing must wait for retirement writes before reading persisted history.
+    const writes = writesByHost.get(hostId)
+    const loaded = writes ? writes.then(() => persistence.load(hostId)) : persistence.load(hostId)
+    const pending = loaded
       .then((stored) => {
-        const live = entriesByHost.get(hostId) ?? []
+        if (logsByHost.get(hostId) !== log) {
+          return
+        }
         const seen = new Set<string>()
         const merged: ConnectionLogEntry[] = []
-        for (const entry of [...stored, ...live]) {
+        for (const entry of [...stored, ...log.entries]) {
           const redacted = redactConnectionLogEntry(entry)
           const fingerprint = JSON.stringify(redacted)
           if (!seen.has(fingerprint)) {
@@ -100,51 +124,57 @@ export function createConnectionLogStore(
         }
         merged.sort((a, b) => a.ts - b.ts)
         trim(merged)
-        entriesByHost.set(hostId, merged)
-        hydratedHosts.add(hostId)
-        hydrationFailedHosts.delete(hostId)
+        log.entries = merged
+        log.snapshot = undefined
+        log.hydrated = true
+        log.hydrationFailed = false
         notify(hostId)
-        persist(hostId)
+        persist(hostId, log)
       })
       .catch((error: unknown) => {
-        hydrationFailedHosts.add(hostId)
+        log.hydrationFailed = true
         throw error
       })
-      .finally(() => hydrationByHost.delete(hostId))
-    hydrationByHost.set(hostId, pending)
+      .finally(() => {
+        log.hydration = undefined
+      })
+    log.hydration = pending
     return pending
   }
 
   return {
     append(hostId, entry) {
-      let entries = entriesByHost.get(hostId)
-      if (!entries) {
-        entries = []
-        entriesByHost.set(hostId, entries)
-      }
-      entries.push(redactConnectionLogEntry(entry))
-      trim(entries)
+      const log = getLog(hostId)
+      log.entries.push(redactConnectionLogEntry(entry))
+      trim(log.entries)
+      log.snapshot = undefined
       notify(hostId)
-      void hydrateHost(hostId, false)
-        .then(() => persist(hostId))
+      void hydrateHost(hostId, log, false)
+        .then(() => persist(hostId, log))
         .catch(() => {})
     },
 
     get(hostId) {
-      const cached = snapshotByHost.get(hostId)
-      if (cached) {
-        return cached
-      }
-      const entries = entriesByHost.get(hostId)
-      if (!entries || entries.length === 0) {
+      const log = logsByHost.get(hostId)
+      if (!log || log.entries.length === 0) {
         return EMPTY
       }
-      const snapshot = Object.freeze([...entries])
-      snapshotByHost.set(hostId, snapshot)
-      return snapshot
+      // useSyncExternalStore requires a stable reference until the log changes.
+      log.snapshot ??= Object.freeze([...log.entries])
+      return log.snapshot
     },
 
-    hydrate: (hostId) => hydrateHost(hostId, true),
+    hydrate: (hostId) => hydrateHost(hostId, getLog(hostId), true),
+
+    forgetHost(hostId) {
+      logsByHost.delete(hostId)
+      // Queue removal before notifying subscribers, which may start a new hydration.
+      const removed = persistence
+        ? enqueueWrite(hostId, () => persistence.remove(hostId))
+        : Promise.resolve()
+      notify(hostId)
+      return removed
+    },
 
     subscribe(hostId, listener) {
       let listeners = listenersByHost.get(hostId)

@@ -14,6 +14,9 @@ const PTY = 'wt-1__pty-1'
 
 type RuntimeInternals = {
   ptysById: Map<string, { ptyId: string; paneKey: string; worktreeId: string; tabId: string }>
+  getPtyLifecycleGeneration: (ptyId: string) => number
+  dropDisconnectedPtyRecord: (ptyId: string) => void
+  ptyLifecycleGenerationById: Map<string, number>
 }
 
 function runtimeWithBoundPane(
@@ -39,6 +42,20 @@ function reconciledPaneKeys(calls: Iterable<string>[]): string[] {
 }
 
 describe('onPtyExit agent-status reconciliation', () => {
+  it('prunes SSH lifecycle bookkeeping without treating lost contact as process exit', () => {
+    const reconcile = vi.fn()
+    const runtime = runtimeWithBoundPane(reconcile, { connectionId: 'ssh-conn-1' })
+    const internals = runtime as unknown as RuntimeInternals
+    internals.getPtyLifecycleGeneration(PTY)
+    runtime.markPtyLivenessUnverifiable(PTY, 'SSH connection lost')
+
+    internals.dropDisconnectedPtyRecord(PTY)
+
+    expect(internals.ptyLifecycleGenerationById.has(PTY)).toBe(false)
+    expect(reconcile).not.toHaveBeenCalled()
+    expect(runtime.getPtyLivenessVerdict(PTY)).toMatchObject({ status: 'unverifiable' })
+  })
+
   it('reconciles on a normal zero exit code', () => {
     const reconcile = vi.fn()
     runtimeWithBoundPane(reconcile).onPtyExit(PTY, 0)

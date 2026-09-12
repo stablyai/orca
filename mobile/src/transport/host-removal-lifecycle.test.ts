@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const removeHostMock = vi.hoisted(() => vi.fn())
 const unregisterPushMock = vi.hoisted(() => vi.fn(async () => vi.fn()))
+const forgetLogMock = vi.hoisted(() => vi.fn())
+
+vi.mock('./persisted-connection-log-store', () => ({
+  forgetConnectionLogHost: (hostId: string) => forgetLogMock(hostId)
+}))
 
 vi.mock('./host-store', () => ({
   removeHost: (hostId: string) => removeHostMock(hostId)
@@ -17,6 +22,7 @@ describe('host removal lifecycle', () => {
   beforeEach(() => {
     removeHostMock.mockReset()
     unregisterPushMock.mockClear()
+    forgetLogMock.mockClear()
   })
 
   it('closes the client only after metadata removal commits', async () => {
@@ -25,9 +31,14 @@ describe('host removal lifecycle', () => {
     const closeHostClient = vi.fn()
     const removal = removeHostAndCloseClient('host-1', closeHostClient)
     expect(closeHostClient).not.toHaveBeenCalled()
+    expect(forgetLogMock).not.toHaveBeenCalled()
     commitRemoval?.()
     await removal
     expect(closeHostClient).toHaveBeenCalledWith('host-1')
+    expect(forgetLogMock).toHaveBeenCalledWith('host-1')
+    expect(closeHostClient.mock.invocationCallOrder[0]).toBeLessThan(
+      forgetLogMock.mock.invocationCallOrder[0]
+    )
   })
 
   it('keeps the client open when metadata removal fails', async () => {
@@ -37,6 +48,7 @@ describe('host removal lifecycle', () => {
       'storage unavailable'
     )
     expect(closeHostClient).not.toHaveBeenCalled()
+    expect(forgetLogMock).not.toHaveBeenCalled()
   })
 
   it('drops the gateway push registration before the credentials it needs are gone', async () => {
