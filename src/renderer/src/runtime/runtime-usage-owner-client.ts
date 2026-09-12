@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -28,7 +29,11 @@ function unsupportedHost(hostLabel: string): OwnedRateLimitsReading {
     kind: 'unavailable',
     unavailable: {
       reason: 'unsupported-host',
-      message: `${hostLabel} does not report provider usage. Update the remote Orca server to see it here.`
+      message: translate(
+        'auto.runtime.runtimeUsageOwnerClient.unsupportedHost',
+        '{{host}} does not report provider usage. Update the remote Orca server to see it here.',
+        { host: hostLabel }
+      )
     }
   }
 }
@@ -39,7 +44,11 @@ function unsupportedHost(hostLabel: string): OwnedRateLimitsReading {
 function contactLost(hostLabel: string): OwnedRateLimitsReading {
   return {
     kind: 'contact-lost',
-    message: `Lost contact with ${hostLabel}. Showing the last usage it reported.`
+    message: translate(
+      'auto.runtime.runtimeUsageOwnerClient.contactLost',
+      'Lost contact with {{host}}. Showing the last usage it reported.',
+      { host: hostLabel }
+    )
   }
 }
 
@@ -48,7 +57,11 @@ function unreachableHost(hostLabel: string, cause: unknown): OwnedRateLimitsRead
     kind: 'unavailable',
     unavailable: {
       reason: 'unreachable-host',
-      message: `Could not read provider usage from ${hostLabel}: ${String((cause as Error)?.message ?? cause)}`
+      message: translate(
+        'auto.runtime.runtimeUsageOwnerClient.unreachableHost',
+        'Could not read provider usage from {{host}}: {{reason}}',
+        { host: hostLabel, reason: String((cause as Error)?.message ?? cause) }
+      )
     }
   }
 }
