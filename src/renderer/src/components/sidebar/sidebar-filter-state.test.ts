@@ -35,6 +35,7 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
   return {
     showSleepingWorkspaces: true,
     filterRepoIds: [],
+    filterWorkspaceStatuses: [],
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
@@ -113,6 +114,12 @@ describe('sidebarHasActiveFilters', () => {
     expect(sidebarHasActiveFilters(filterState({ filterRepoIds: ['repo1'] }))).toBe(true)
   })
 
+  it('returns true when only a workspace-status filter is selected', () => {
+    expect(sidebarHasActiveFilters(filterState({ filterWorkspaceStatuses: ['completed'] }))).toBe(
+      true
+    )
+  })
+
   it('counts an opted-out default-branch exemption as an active filter', () => {
     expect(sidebarHasActiveFilters(filterState({ alwaysShowDefaultBranchWorkspace: false }))).toBe(
       true
@@ -149,6 +156,7 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState())).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetFilterWorkspaceStatuses: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
@@ -166,6 +174,7 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState({ hideDefaultBranchWorkspace: true }))).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetFilterWorkspaceStatuses: false,
       resetHideDefaultBranchWorkspace: true,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
@@ -182,6 +191,7 @@ describe('computeClearFilterActions', () => {
     ).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetFilterWorkspaceStatuses: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: true,
       resetHideCliCreatedWorkspaces: false,
@@ -196,6 +206,7 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState({ hideCliCreatedWorkspaces: true }))).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetFilterWorkspaceStatuses: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: true,
@@ -210,10 +221,28 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState({ hideDetachedHeadWorkspaces: true }))).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetFilterWorkspaceStatuses: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
       resetHideDetachedHeadWorkspaces: true,
+      resetHideWorkspacesFromOtherDevices: false,
+      resetAlwaysShowDefaultBranchWorkspace: false,
+      resetVisibleWorkspaceHostIds: false
+    })
+  })
+
+  it('flags only the workspace-status filter for reset when it is the sole filter', () => {
+    expect(
+      computeClearFilterActions(filterState({ filterWorkspaceStatuses: ['completed'] }))
+    ).toEqual({
+      resetShowSleepingWorkspaces: false,
+      resetFilterRepoIds: false,
+      resetFilterWorkspaceStatuses: true,
+      resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: false,
+      resetHideCliCreatedWorkspaces: false,
+      resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
       resetVisibleWorkspaceHostIds: false
@@ -237,6 +266,7 @@ describe('computeClearFilterActions', () => {
     expect(computeClearFilterActions(filterState({ workspaceHostScope: 'ssh:host-1' }))).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetFilterWorkspaceStatuses: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
@@ -253,6 +283,7 @@ describe('computeClearFilterActions', () => {
     ).toEqual({
       resetShowSleepingWorkspaces: false,
       resetFilterRepoIds: false,
+      resetFilterWorkspaceStatuses: false,
       resetHideDefaultBranchWorkspace: false,
       resetHideAutomationGeneratedWorkspaces: false,
       resetHideCliCreatedWorkspaces: false,
@@ -277,6 +308,7 @@ describe('computeClearFilterActions', () => {
     ).toEqual({
       resetShowSleepingWorkspaces: true,
       resetFilterRepoIds: true,
+      resetFilterWorkspaceStatuses: false,
       resetHideDefaultBranchWorkspace: true,
       resetHideAutomationGeneratedWorkspaces: true,
       resetHideCliCreatedWorkspaces: false,

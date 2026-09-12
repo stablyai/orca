@@ -22,6 +22,7 @@ import {
 } from './folder-workspace-path-status'
 import { toast } from 'sonner'
 import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
+import { getWorkspaceStatus } from '../../../shared/workspace-statuses'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
@@ -294,6 +295,12 @@ export function activateAndRevealWorktree(
     if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {
       state.setHideDetachedHeadWorkspaces(false)
     }
+  }
+  if (
+    state.filterWorkspaceStatuses.length > 0 &&
+    !state.filterWorkspaceStatuses.includes(getWorkspaceStatus(wt, state.workspaceStatuses))
+  ) {
+    state.setFilterWorkspaceStatuses([])
   }
 
   // 6. Reveal in sidebar

@@ -9,6 +9,7 @@ export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters
 export function useSidebarWorktreeFilters() {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
+  const filterWorkspaceStatuses = useAppStore((s) => s.filterWorkspaceStatuses)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
@@ -30,6 +31,7 @@ export function useSidebarWorktreeFilters() {
     (s) => s.setAlwaysShowDefaultBranchWorkspace
   )
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
+  const setFilterWorkspaceStatuses = useAppStore((s) => s.setFilterWorkspaceStatuses)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
 
   // Why: count hideDefaultBranchWorkspace as a filter so the Clear Filters escape hatch stays reachable when it alone empties the list.
@@ -37,6 +39,7 @@ export function useSidebarWorktreeFilters() {
     () => ({
       showSleepingWorkspaces,
       filterRepoIds,
+      filterWorkspaceStatuses,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -49,6 +52,7 @@ export function useSidebarWorktreeFilters() {
     [
       showSleepingWorkspaces,
       filterRepoIds,
+      filterWorkspaceStatuses,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
@@ -67,6 +71,9 @@ export function useSidebarWorktreeFilters() {
     }
     if (actions.resetFilterRepoIds) {
       setFilterRepoIds([])
+    }
+    if (actions.resetFilterWorkspaceStatuses) {
+      setFilterWorkspaceStatuses([])
     }
     if (actions.resetHideDefaultBranchWorkspace) {
       setHideDefaultBranchWorkspace(false)
@@ -92,6 +99,7 @@ export function useSidebarWorktreeFilters() {
   }, [
     setShowSleepingWorkspaces,
     setFilterRepoIds,
+    setFilterWorkspaceStatuses,
     setHideDefaultBranchWorkspace,
     setHideAutomationGeneratedWorkspaces,
     setHideCliCreatedWorkspaces,

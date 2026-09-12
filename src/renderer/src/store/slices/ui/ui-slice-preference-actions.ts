@@ -35,6 +35,7 @@ import {
   clampWorkspaceBoardOpacity,
   cloneDefaultWorkspaceStatuses,
   normalizeWorkspaceStatuses,
+  sanitizeFilterWorkspaceStatuses,
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
 } from '../../../../../shared/workspace-statuses'
 
@@ -153,6 +154,10 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     filterRepoIds: [],
     setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
 
+    // Why: bare set — persists only via the debounced writer in use-persisted-ui-writer.ts.
+    filterWorkspaceStatuses: [],
+    setFilterWorkspaceStatuses: (ids) => set({ filterWorkspaceStatuses: ids }),
+
     agentsVisibleHostIds: null,
     setAgentsVisibleHostIds: (ids) => {
       const agentsVisibleHostIds = normalizeVisibleExecutionHostIds(ids)
@@ -238,8 +243,16 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     setWorkspaceStatuses: (statuses) => {
       const normalized = normalizeWorkspaceStatuses(statuses)
-      window.api.ui.set({ workspaceStatuses: normalized }).catch(console.error)
-      set({ workspaceStatuses: normalized })
+      // Why: drop filter ids for statuses this edit deleted/renamed, so a stale
+      // selection can't silently empty the sidebar while the badge reads "all".
+      const filterWorkspaceStatuses = sanitizeFilterWorkspaceStatuses(
+        get().filterWorkspaceStatuses,
+        normalized
+      )
+      window.api.ui
+        .set({ workspaceStatuses: normalized, filterWorkspaceStatuses })
+        .catch(console.error)
+      set({ workspaceStatuses: normalized, filterWorkspaceStatuses })
     },
 
     workspaceBoardOpacity: 1,
