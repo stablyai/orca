@@ -52,7 +52,14 @@ export function createMockWorktrees(
     const repo = repos[index % repos.length]!
     const name = `${WORKTREE_NAMES[index % WORKTREE_NAMES.length]}-${index + 1}`
     const status = index % 17 === 0 ? 'working' : index % 11 === 0 ? 'done' : 'active'
-    const agents = index % 4 === 0 ? [createMockAgent(index, now)] : []
+    const agents: RuntimeWorktreeAgentRow[] = []
+    if (index % 4 === 0) {
+      const root = createMockAgent(index, now)
+      agents.push(root, createMockAgent(index, now, 'child', root.paneKey))
+    }
+    if (index % 11 === 0) {
+      agents.push(createMockAgent(index, now, 'interrupted'))
+    }
     const linkedPR =
       index % 9 === 0 ? { number: 1000 + index, state: index % 18 === 0 ? 'draft' : 'open' } : null
 
@@ -89,22 +96,40 @@ export function createMockWorktrees(
   })
 }
 
-function createMockAgent(index: number, now: number): RuntimeWorktreeAgentRow {
-  const scenarioTitle = `Investigate mobile lag scenario ${index + 1}`
-
+function createMockAgent(
+  index: number,
+  now: number,
+  variant: 'root' | 'child' | 'interrupted' = 'root',
+  parentPaneKey: string | null = null
+): RuntimeWorktreeAgentRow {
+  const paneKey = variant === 'root' ? `agent-${index}` : `agent-${index}-${variant}`
+  const isBlockedRoot = variant === 'root' && index % 8 === 0
+  const taskTitle = `Investigate mobile lag scenario ${index + 1}`
   return {
-    paneKey: `agent-${index}`,
-    parentPaneKey: null,
-    state: index % 12 === 0 ? 'waiting' : 'working',
+    paneKey,
+    parentPaneKey,
+    state:
+      variant === 'interrupted'
+        ? 'done'
+        : isBlockedRoot
+          ? 'blocked'
+          : variant === 'child'
+            ? 'waiting'
+            : 'working',
     agentType: index % 3 === 0 ? 'claude' : 'codex',
-    prompt: scenarioTitle,
-    taskTitle: scenarioTitle,
+    prompt:
+      variant === 'child'
+        ? `Wait for parent mobile lag scenario ${index + 1}`
+        : variant === 'interrupted'
+          ? `Interrupted mobile lag scenario ${index + 1}`
+          : `Investigate mobile lag scenario ${index + 1}`,
+    taskTitle,
     displayName: `Mobile lag ${index + 1}`,
-    lastAssistantMessage: index % 6 === 0 ? 'Running focused checks' : null,
-    toolName: null,
-    toolInput: null,
-    interrupted: false,
-    stateStartedAt: now - index * 17_000,
+    lastAssistantMessage: variant === 'root' && index % 6 === 0 ? 'Running focused checks' : null,
+    toolName: isBlockedRoot ? 'Ask' : null,
+    toolInput: isBlockedRoot ? 'Needs approval' : null,
+    interrupted: variant === 'interrupted',
+    stateStartedAt: now - index * 17_000 - (variant === 'child' ? 1_000 : 0),
     updatedAt: now - index * 11_000
   }
 }
