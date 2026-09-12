@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -21,6 +21,7 @@ vi.mock('./wsl-fish-history-cleanup', () => ({
 
 import { hashWorktreeId } from './terminal-history-paths'
 import { fishHistorySessionName } from './fish-history-session'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../shared/constants'
 import {
   cancelPendingHistoryTreeRemovalRetries,
   deleteWorktreeHistoryDir,
@@ -171,6 +172,48 @@ describe('tombstoned history removal retries', () => {
       MAX_PENDING_HISTORY_TREE_REMOVALS * (HISTORY_TREE_REMOVAL_RETRY_DELAYS_MS.length + 1)
     )
     expect(readdirSync(join(distroRoot, '.pending-delete'))).toHaveLength(0)
+  })
+
+  it.each([
+    ['native', ['terminal-history']],
+    ['WSL', ['terminal-history-wsl', 'Ubuntu']]
+  ])('preserves a legacy floating-terminal tombstone in the %s drain', async (_kind, parts) => {
+    const historyRoot = join(userDataDir, ...parts)
+    const tombstone = join(
+      historyRoot,
+      '.pending-delete',
+      `${hashWorktreeId(FLOATING_TERMINAL_WORKTREE_ID)}.1700000000000.deadbeef`
+    )
+    mkdirSync(tombstone, { recursive: true })
+    writeFileSync(
+      join(tombstone, 'meta.json'),
+      JSON.stringify({
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        fishSession: fishHistorySessionName(hashWorktreeId(FLOATING_TERMINAL_WORKTREE_ID))
+      })
+    )
+
+    schedulePendingHistoryTreeRemovals(historyRoot)
+    await flushPendingWorktreeHistoryDeletions()
+
+    expect(removeHostTreeMock).not.toHaveBeenCalledWith(tombstone)
+    expect(deleteWslFishHistoryFileMock).not.toHaveBeenCalled()
+    expect(existsSync(tombstone)).toBe(true)
+  })
+
+  it('refuses explicit deletion of the floating-terminal history tree', async () => {
+    seedWorktreeHistory(FLOATING_TERMINAL_WORKTREE_ID)
+    const historyDir = join(
+      userDataDir,
+      'terminal-history',
+      hashWorktreeId(FLOATING_TERMINAL_WORKTREE_ID)
+    )
+
+    deleteWorktreeHistoryDir(FLOATING_TERMINAL_WORKTREE_ID)
+    await flushPendingWorktreeHistoryDeletions()
+
+    expect(removeHostTreeMock).not.toHaveBeenCalled()
+    expect(existsSync(historyDir)).toBe(true)
   })
 
   it('still removes the history tree when WSL fish cleanup fails', async () => {

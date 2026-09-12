@@ -21,6 +21,7 @@ import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { getStartupTerminalColorQueryReplyColors } from '../../terminal-startup-color-query-replies'
+import { shouldScopeTerminalHistoryByWorktree } from '../../../terminal-history-scope-policy'
 import {
   makePaneSpawnReservationKey,
   reservePaneSpawn,
@@ -43,7 +44,10 @@ export async function buildRuntimePtySpawnOptions(
     rows: args.rows,
     cwd: ctx.cwd,
     env: ctx.env,
-    historyIsolationEnabled: ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
+    historyIsolationEnabled: shouldScopeTerminalHistoryByWorktree(
+      ctx.deps.getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
+      args.worktreeId
+    ),
     ...(ctx.isNewDaemonSession ? { isNewSession: true } : {})
   }
   if (!args.connectionId && !ctx.isDaemonHostSpawn) {

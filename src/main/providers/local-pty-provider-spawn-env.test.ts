@@ -255,6 +255,42 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock.mock.calls.at(-1)![2].env.HISTFILE).toBe(expected)
     })
 
+    it('honors a per-spawn request to use global shell history', async () => {
+      provider.configure({ isHistoryEnabled: () => true })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'global-floating-terminal',
+        historyIsolationEnabled: false,
+        env: { HISTFILE: '/home/me/.zsh_history' }
+      })
+
+      const env = spawnMock.mock.calls.at(-1)![2].env
+      expect(env.HISTFILE).toBe('/home/me/.zsh_history')
+      expect(env.ORCA_HISTFILE).toBeUndefined()
+    })
+
+    it('preserves caller-provided global history settings when isolation is disabled', async () => {
+      provider.configure({ isHistoryEnabled: () => true })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'global-floating-terminal',
+        historyIsolationEnabled: false,
+        env: {
+          HISTFILE: '/home/me/custom_history',
+          fish_history: 'mine'
+        }
+      })
+
+      const env = spawnMock.mock.calls.at(-1)![2].env
+      expect(env.HISTFILE).toBe('/home/me/custom_history')
+      expect(env.fish_history).toBe('mine')
+      expect(env.ORCA_HISTFILE).toBeUndefined()
+    })
+
     it('does not inherit NODE_ENV from the Orca process env', async () => {
       // Why: NODE_ENV in Orca's process is Orca's build mode (electron-vite sets
       // `development` in dev runs); leaking it breaks `next build` and Vitest.
