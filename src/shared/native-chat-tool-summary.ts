@@ -298,7 +298,13 @@ export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
 }
 
 export function countToolCalls(blocks: readonly NativeChatBlock[]): number {
-  return blocks.filter(isToolCallBlock).length
+  let count = 0
+  blocks.forEach((block) => {
+    if (isToolCallBlock(block)) {
+      count += 1
+    }
+  })
+  return count
 }
 
 function toRawPreview(input: unknown): string {
