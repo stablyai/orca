@@ -68,4 +68,16 @@ describe('orchestration check command spec', () => {
       ])
     )
   })
+
+  it('warns that --peek and --all cannot acknowledge or drain a mailbox', () => {
+    const checkSpec = ORCHESTRATION_COMMAND_SPECS.find(
+      (spec) => spec.path.join(' ') === 'orchestration check'
+    )
+
+    expect(checkSpec?.notes).toEqual(
+      expect.arrayContaining([
+        '--peek and --all return at most 100 rows and no Delivery id, so the rows they show cannot be acknowledged and a peek-only loop keeps seeing the same pending ones; an --ack passed alongside them still acknowledges that Delivery. To drain a mailbox, repeat plain check and --ack each Delivery until deliveryId is null.'
+      ])
+    )
+  })
 })
