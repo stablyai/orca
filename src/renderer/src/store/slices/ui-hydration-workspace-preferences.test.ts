@@ -108,6 +108,79 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
+  it('restores the multi-id agent filter from persisted UI state', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterAgentIds: ['openclaude', 'codex']
+      })
+    )
+
+    expect(store.getState().filterAgentIds).toEqual(['openclaude', 'codex'])
+  })
+
+  it('hydrates leftover singular filterAgentId onto a one-id list', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterAgentIds: undefined,
+        filterAgentId: 'openclaude'
+      })
+    )
+
+    expect(store.getState().filterAgentIds).toEqual(['openclaude'])
+  })
+
+  it('migrates leftover cc/codex harness values onto catalog agent lists', () => {
+    const leftoverCc = createUIStore()
+    leftoverCc.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterAgentIds: undefined,
+        filterAgentId: undefined,
+        filterHarnessId: 'cc'
+      })
+    )
+    expect(leftoverCc.getState().filterAgentIds).toEqual(['claude'])
+
+    const leftoverCodex = createUIStore()
+    leftoverCodex.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterAgentIds: undefined,
+        filterAgentId: undefined,
+        filterHarnessId: 'codex'
+      })
+    )
+    expect(leftoverCodex.getState().filterAgentIds).toEqual(['codex'])
+  })
+
+  it('ignores leftover singular/harness values once filterAgentIds has been persisted', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterAgentIds: null,
+        filterAgentId: 'claude',
+        filterHarnessId: 'cc'
+      })
+    )
+
+    expect(store.getState().filterAgentIds).toBeNull()
+  })
+
+  it('ignores unknown persisted agent filter values', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        filterAgentIds: ['not-an-agent'] as never
+      })
+    )
+
+    expect(store.getState().filterAgentIds).toBeNull()
+  })
+
   it('restores selected card properties during hydration', () => {
     const store = createUIStore()
 

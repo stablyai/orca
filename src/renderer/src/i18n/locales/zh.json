@@ -4545,8 +4545,10 @@
           "680043342f": "紧凑",
           "c7591b6014": "仓库",
           "hosts": "主机",
+          "agents": "智能体",
           "showSection": "显示",
           "allHostsDetail": "显示所有主机",
+          "allAgentsDetail": "显示每个智能体",
           "configuredSshHost": "已配置 SSH",
           "projectSshHost": "项目 SSH",
           "activeRuntimeHost": "活动服务器",
@@ -5152,6 +5154,17 @@
           "3e102f111c": "所有主机",
           "visibleHostsCount": "{{value0}} 个主机"
         },
+        "sidebarAgentOptions": {
+          "allAgents": "全部智能体",
+          "visibleAgentsCount": "{{value0}} 个智能体"
+        },
+        "SidebarAgentFilterSection": {
+          "agent": "智能体"
+        },
+        "SidebarAgentScopeStrip": {
+          "scopedTo": "可见 {{value0}}",
+          "backToAll": "全部智能体"
+        },
         "SidebarHostScopeStrip": {
           "scopedTo": "{{value0}} 可见",
           "backToAll": "所有主机"
@@ -5209,7 +5222,8 @@
           "b6c7d8e9f0": "无法完成任务状态同步。",
           "c7d8e9f0a1": "已更新 {{value0}} 个",
           "d8e9f0a1b2": "已跳过 {{value0}} 个",
-          "e9f0a1b2c3": "失败 {{value0}} 个"
+          "e9f0a1b2c3": "失败 {{value0}} 个",
+          "noWorkspacesMatchFilters": "没有符合当前筛选条件的工作区"
         },
         "WorktreeParentPickerPopover": {
           "failedSetParent": "无法设置父工作树",

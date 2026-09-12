@@ -96,6 +96,7 @@ function visibleOptions(
     hideDetachedHeadWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     pairedDeviceIdsByEnvironment: new Map<string, string>(),
+    filterAgentIds: null,
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,

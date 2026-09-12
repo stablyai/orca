@@ -33,6 +33,7 @@ import { searchRepos } from '@/lib/repo-search'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
 import { translate } from '@/i18n/i18n'
+import SidebarAgentFilterSection from './SidebarAgentFilterSection'
 
 type SidebarFilterProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -68,6 +69,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
   )
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
+  const filterAgentIds = useAppStore((s) => s.filterAgentIds)
+  const setFilterAgentIds = useAppStore((s) => s.setFilterAgentIds)
   const repos = useAppStore((s) => s.repos)
   const addRepo = useAppStore((s) => s.addRepo)
 
@@ -111,6 +114,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
   }, [repos, filterRepoIds])
   const selectedCount = selectedRepoIdSet.size
   const hasRepoFilter = selectedCount > 0
+  const hasAgentFilter = filterAgentIds != null
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
   // Why counted: turning the exemption off is the only way that row narrows the
   // list — but only while its parent row is on, which is also when it renders.
@@ -125,6 +129,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     hideCliCreatedWorkspaces ||
     hideDetachedHeadWorkspaces ||
     hasSleepingExemptionFilter ||
+    hasAgentFilter ||
     hasRepoFilter
   const activeFilterCount =
     (hasSleepingFilter ? 1 : 0) +
@@ -133,6 +138,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     (hideCliCreatedWorkspaces ? 1 : 0) +
     (hideDetachedHeadWorkspaces ? 1 : 0) +
     (hasSleepingExemptionFilter ? 1 : 0) +
+    (hasAgentFilter ? 1 : 0) +
     selectedCount
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
@@ -149,6 +155,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     setHideCliCreatedWorkspaces(false)
     setHideDetachedHeadWorkspaces(false)
     setAlwaysShowDefaultBranchWorkspace(true)
+    setFilterAgentIds(null)
     setFilterRepoIds([])
   }, [
     setShowSleepingWorkspaces,
@@ -157,6 +164,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     setHideCliCreatedWorkspaces,
     setHideDetachedHeadWorkspaces,
     setAlwaysShowDefaultBranchWorkspace,
+    setFilterAgentIds,
     setFilterRepoIds
   ])
 
@@ -277,6 +285,8 @@ const SidebarFilter = React.memo(function SidebarFilter({
           checked={hideDetachedHeadWorkspaces}
           onChange={setHideDetachedHeadWorkspaces}
         />
+        <DropdownMenuSeparator />
+        <SidebarAgentFilterSection />
 
         {canFilterRepos && (
           <>
