@@ -1,6 +1,7 @@
 import type { Slice } from '@tiptap/pm/model'
 import type { EditorView } from '@tiptap/pm/view'
 import { serializeRichMarkdownSliceForClipboard } from './rich-markdown-clipboard-serialization'
+import { resolveRichMarkdownCutPlainText } from './rich-markdown-cut-plain-text'
 import { inspectRichMarkdownSourceOwningSlice } from './rich-markdown-source-owning-slice'
 import { showRichMarkdownSourceOwningCutLimitError } from './rich-markdown-source-owning-cut-feedback'
 
@@ -21,14 +22,15 @@ export function writeRichMarkdownSliceToClipboard(
     return false
   }
   const serialized = serializeRichMarkdownSliceForClipboard(view, slice)
+  const plainText = resolveRichMarkdownCutPlainText(view, slice, visibleText)
   clipboardData.setData('text/html', serialized.html)
-  clipboardData.setData('text/plain', visibleText)
+  clipboardData.setData('text/plain', plainText)
   // Why: if the clipboard rejected the write we must not delete, and we must
   // surface the same cut-limit feedback so the no-op is not silent.
   if (
     typeof clipboardData.getData === 'function' &&
     (clipboardData.getData('text/html') !== serialized.html ||
-      clipboardData.getData('text/plain') !== visibleText)
+      clipboardData.getData('text/plain') !== plainText)
   ) {
     showRichMarkdownSourceOwningCutLimitError()
     return false
