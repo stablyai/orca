@@ -4,90 +4,12 @@ import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
 import { HeadlessEmulator } from './headless-emulator'
 import type { SessionState, ShellReadyState } from './types'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { createMockSubprocess, type MockSubprocess } from './session-mock-subprocess'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
-
-// Stub the subprocess — Session talks to it via an interface, not child_process directly.
-function createMockSubprocess() {
-  const written: string[] = []
-  const signals: string[] = []
-  let onData: ((data: string) => void) | null = null
-  let onExit: ((code: number) => void) | null = null
-  let killed = false
-  let clearCalls = 0
-  let pid = 12345
-  let pauseCalls = 0
-  let resumeCalls = 0
-
-  return {
-    written,
-    signals,
-    get killed() {
-      return killed
-    },
-    get pid() {
-      return pid
-    },
-    get pauseCalls() {
-      return pauseCalls
-    },
-    get resumeCalls() {
-      return resumeCalls
-    },
-    foregroundProcess: null as string | null,
-    getForegroundProcess(): string | null {
-      return this.foregroundProcess
-    },
-    confirmShellForeground: vi.fn(async () => true),
-    write(data: string) {
-      written.push(data)
-    },
-    resize(_cols: number, _rows: number) {},
-    pause() {
-      pauseCalls++
-    },
-    resume() {
-      resumeCalls++
-    },
-    get clearCalls() {
-      return clearCalls
-    },
-    clear() {
-      clearCalls++
-    },
-    kill() {
-      killed = true
-      // Simulate async exit
-      setTimeout(() => onExit?.(0), 5)
-    },
-    terminateOwnedTree: () => 'terminated' as const,
-    forceKill() {
-      killed = true
-    },
-    signal(sig: string) {
-      signals.push(sig)
-    },
-    onData(cb: (data: string) => void) {
-      onData = cb
-    },
-    onExit(cb: (code: number) => void) {
-      onExit = cb
-    },
-    dispose() {},
-    // Helpers for tests to simulate subprocess events
-    simulateData(data: string) {
-      onData?.(data)
-    },
-    simulateExit(code: number) {
-      onExit?.(code)
-    }
-  }
-}
-
-type MockSubprocess = ReturnType<typeof createMockSubprocess>
 
 describe('Session', () => {
   let session: Session
@@ -281,6 +203,53 @@ describe('Session', () => {
       })
       expect(session.getSnapshot()?.snapshotAnsi).toContain('prompt')
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain(']10;rgb')
+    })
+
+    it('keeps armed POSIX startup authority across the renderer visibility handoff', () => {
+      createSession({
+        ownerBackend: 'posix-pty',
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
+      const onData = vi.fn()
+      session.attachClient({ onData, onExit: () => {} })
+      session.closeStartupQueryAuthority()
+
+      const foregroundQuery = '\x1b]10;?\x07'
+      const backgroundQuery = '\x1b]11;?\x07'
+      const foregroundReply = '\x1b]10;rgb:2e2e/3434/3434\x1b\\'
+      const backgroundReply = '\x1b]11;rgb:ffff/ffff/ffff\x1b\\'
+      const foregroundPtyEcho = foregroundReply.replaceAll('\x1b', '^[')
+      const backgroundPtyEcho = backgroundReply.replaceAll('\x1b', '^[')
+      const foregroundEcho = '\x071\b10;rgb:2e2e/3434/3434\x07'
+      const backgroundEcho = '\x0711;rgb:ffff/ffff/ffff\x07'
+      const suppressedStartupData = [
+        foregroundQuery,
+        backgroundQuery,
+        foregroundPtyEcho,
+        backgroundPtyEcho,
+        foregroundEcho,
+        backgroundEcho
+      ]
+      for (const data of [...suppressedStartupData, 'prompt']) {
+        subprocess.simulateData(data)
+      }
+
+      expect(subprocess.written).toEqual([foregroundReply, backgroundReply])
+      let rawEndSeq = 0
+      expect(onData.mock.calls).toEqual([
+        ...suppressedStartupData.map((data) => {
+          rawEndSeq += data.length
+          return ['', data.length, true, rawEndSeq]
+        }),
+        ['prompt']
+      ])
+
+      subprocess.simulateData(foregroundQuery)
+      expect(subprocess.written).toEqual([foregroundReply, backgroundReply])
+      expect(onData).toHaveBeenLastCalledWith(foregroundQuery)
     })
 
     it('releases a held cooked-echo prefix before taking a snapshot', () => {
