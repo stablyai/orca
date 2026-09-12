@@ -29,7 +29,7 @@ import {
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
-  scheduleTerminalWebglAtlasRecovery,
+  scheduleImagePasteWebglAtlasRecovery,
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
@@ -37,7 +37,7 @@ const {
   presentPaneViewportPreservingSynchronizedOutput
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalWebglAtlasRecovery: vi.fn(),
+  scheduleImagePasteWebglAtlasRecovery: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
@@ -65,7 +65,7 @@ vi.mock('@/lib/pane-manager/pane-webgl-renderer', async (importOriginal) => ({
 }))
 
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
+  scheduleImagePasteWebglAtlasRecovery
 }))
 
 vi.mock('@/store', () => ({

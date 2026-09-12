@@ -61,7 +61,7 @@ let transportFactoryQueue: unknown[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery: vi.fn()
+  scheduleImagePasteWebglAtlasRecovery: vi.fn()
 }))
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))

@@ -28,14 +28,12 @@ vi.mock('./internals', () => ({
     stdout: ''
   }),
   ghExecFileAsync: ghExecFileAsyncMock,
-  rateLimitGuard: () => ({ blocked: false }),
-  noteRateLimitSpend: vi.fn(),
+
   repositoryRateLimitGuard: repositoryRateLimitGuardMock,
   noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock,
   projectHostAuthenticationError: projectHostAuthenticationErrorMock,
   projectGhExecOptions: (host?: string) => ({ host: host ?? 'github.com' }),
-  classifyProjectError: (stderr: string) => ({ type: 'unknown', message: stderr }),
-  rateLimitedError: () => ({ type: 'rate_limited', message: 'rate limited' }),
+
   runGraphql: runGraphqlMock,
   runRest: runRestMock,
   validateSlugArgs: (owner: string, repo: string) =>

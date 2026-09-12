@@ -47,4 +47,16 @@ describe('runtime Git client API contract', () => {
       expect(exported[functionName]).toBeTypeOf('function')
     }
   })
+
+  // Why the declared name and not just the type: the facade is a wall of
+  // `export const x = xImplementation` aliases with interchangeable signatures, so a
+  // swap is invisible to both `tc` and a name-plus-typeof check. Pointing
+  // `unstageRuntimeGitPath` at `stageRuntimeGitPathImplementation` stayed green across
+  // the whole renderer suite (27,021 tests).
+  it('binds every facade export to the implementation of the same name', () => {
+    const exported: Record<string, unknown> = { ...runtimeGitClient }
+    for (const functionName of PUBLIC_RUNTIME_GIT_CLIENT_FUNCTIONS) {
+      expect((exported[functionName] as { name?: string }).name, functionName).toBe(functionName)
+    }
+  })
 })
