@@ -1,7 +1,9 @@
-import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import type { ProviderRateLimits, UsageRateLimitFailureKind } from '../../shared/rate-limit-types'
 import {
+  isOauthTokenExpired,
   isOauthTokenExpiring,
-  refreshClaudeOauthCredentials
+  refreshClaudeOauthCredentialsWithOutcome,
+  type ClaudeOauthRefreshFailure
 } from '../claude-accounts/oauth-refresh'
 import {
   readClaudeManagedCredentialsJson,
@@ -11,24 +13,67 @@ import {
 } from './claude-managed-account-credentials'
 import { fetchClaudeManagedUsagePanelSupplement } from './claude-managed-usage-panel'
 import { parseClaudeOAuthCredentialsJson } from './claude-oauth-credentials'
+import { makeClaudeUsageClassificationError } from './claude-oauth-recovery'
 import { fetchClaudeOAuthUsage } from './claude-oauth-usage-request'
+import { classifyClaudeOAuthUsageError } from './claude-usage-error-classification'
 import type { ClaudeManagedAccountUsageOptions } from './claude-usage-fetch-options'
 import {
   abortedClaudeRateLimitResult,
   canSupplementClaudeOAuthUsage,
+  makeClaudeUsageResult,
   mergeClaudeUsageWindows,
   warnClaudeUsageFetchFailure
 } from './claude-usage-result'
 
-function noClaudeManagedCredentialsResult(): ProviderRateLimits {
-  return {
-    provider: 'claude',
-    session: null,
-    weekly: null,
-    updatedAt: Date.now(),
-    error: 'No credentials',
-    status: 'error'
-  }
+function managedAuthProvenance(account: InactiveClaudeAccount): string {
+  return account.managedAuthRuntime === 'wsl'
+    ? `managed:${account.id}:wsl:${account.wslDistro ?? ''}`
+    : `managed:${account.id}`
+}
+
+function noClaudeManagedCredentialsResult(account: InactiveClaudeAccount): ProviderRateLimits {
+  return makeClaudeUsageResult('error', 'No credentials', {
+    attemptedSources: [],
+    failureKind: 'missing-credentials',
+    authProvenance: managedAuthProvenance(account)
+  })
+}
+
+/** Refresh failures a later poll can still recover from; the excluded ones need a new login. */
+type TransientRefreshFailure = Exclude<
+  ClaudeOauthRefreshFailure,
+  'invalid-grant' | 'no-refresh-token'
+>
+
+const REFRESH_FAILURE_KINDS: Record<TransientRefreshFailure, UsageRateLimitFailureKind> = {
+  'rate-limited': 'rate-limited',
+  rejected: 'server',
+  network: 'network',
+  'unsupported-proxy': 'network'
+}
+
+function refreshFailedResult(
+  account: InactiveClaudeAccount,
+  failure: TransientRefreshFailure
+): ProviderRateLimits {
+  return makeClaudeUsageResult('error', `Token refresh failed (${failure})`, {
+    source: 'oauth',
+    attemptedSources: ['oauth'],
+    failureKind: REFRESH_FAILURE_KINDS[failure],
+    credentialSource: 'credentials-file',
+    authProvenance: managedAuthProvenance(account)
+  })
+}
+
+// Why: a missing or dead refresh token is not transient; the row must say "sign in again" instead of retrying into 401s.
+function reauthRequiredResult(account: InactiveClaudeAccount): ProviderRateLimits {
+  return makeClaudeUsageResult('error', 'Sign in to this account again', {
+    source: 'oauth',
+    attemptedSources: ['oauth'],
+    failureKind: 'reauth-required',
+    credentialSource: 'credentials-file',
+    authProvenance: managedAuthProvenance(account)
+  })
 }
 
 export async function fetchInactiveClaudeAccountUsage(
@@ -44,30 +89,58 @@ export async function fetchInactiveClaudeAccountUsage(
     return abortedClaudeRateLimitResult()
   }
   if (!location || !credentialsJson) {
-    return noClaudeManagedCredentialsResult()
+    return noClaudeManagedCredentialsResult(account)
   }
 
-  let token = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file').token
+  let oauthCredentials = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file')
   if (isOauthTokenExpiring(credentialsJson)) {
-    const refreshed = await refreshClaudeOauthCredentials(credentialsJson)
+    const refresh = await refreshClaudeOauthCredentialsWithOutcome(credentialsJson, {
+      networkProxySettings: options.networkProxySettings,
+      signal: options.signal
+    })
     if (options.signal?.aborted) {
       return abortedClaudeRateLimitResult()
     }
-    if (refreshed) {
+    if (refresh.credentialsJson) {
       try {
-        await writeClaudeManagedCredentialsJson(location, refreshed)
+        await writeClaudeManagedCredentialsJson(location, refresh.credentialsJson)
       } catch {
         // Keep the refreshed token for this fetch; a later poll can persist it.
       }
-      credentialsJson = refreshed
-      token = parseClaudeOAuthCredentialsJson(refreshed, 'credentials-file').token
+      credentialsJson = refresh.credentialsJson
+      oauthCredentials = parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file')
+    } else if (refresh.failure === 'invalid-grant') {
+      return reauthRequiredResult(account)
+    } else if (refresh.failure && isOauthTokenExpired(credentialsJson)) {
+      // Why: an already-expired token can only turn into a 401; report the refresh failure and let the next open retry.
+      // Why: a blob with no stored refresh token has nothing to retry, so it is a login prompt, not a transient failure.
+      return refresh.failure === 'no-refresh-token'
+        ? reauthRequiredResult(account)
+        : refreshFailedResult(account, refresh.failure)
     }
+    // Why: inside the refresh buffer the stored token is still accepted; a transient refresh failure just means we use it once more.
   }
 
+  const token = oauthCredentials.token
   if (!token) {
-    return noClaudeManagedCredentialsResult()
+    return noClaudeManagedCredentialsResult(account)
   }
-  const oauthLimits = await fetchClaudeOAuthUsage(token, options.signal)
+  let oauthLimits: ProviderRateLimits
+  try {
+    oauthLimits = await fetchClaudeOAuthUsage(token, options.signal)
+  } catch (error) {
+    if (options.signal?.aborted) {
+      return abortedClaudeRateLimitResult()
+    }
+    warnClaudeUsageFetchFailure(undefined, oauthCredentials, error)
+    // Why: same classification as the active account, so the switcher can tell a 429 from a dead login.
+    return makeClaudeUsageClassificationError({
+      error,
+      classification: classifyClaudeOAuthUsageError(error),
+      attempts: { attemptedSources: ['oauth'] },
+      oauthCredentials
+    })
+  }
   if (options.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
@@ -94,11 +167,7 @@ export async function fetchInactiveClaudeAccountUsage(
       })
     )
   } catch (error) {
-    warnClaudeUsageFetchFailure(
-      undefined,
-      parseClaudeOAuthCredentialsJson(credentialsJson, 'credentials-file'),
-      error
-    )
+    warnClaudeUsageFetchFailure(undefined, oauthCredentials, error)
     return oauthLimits
   }
 }
