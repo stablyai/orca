@@ -217,6 +217,22 @@ describe('WorktreeCard provisional startup rows', () => {
     expect(markup).toContain('data-worktree-card-title-placeholder=""')
   })
 
+  it('renders real identity and title for cached rows that already resolved a branch', async () => {
+    // A non-authoritative catalog can coexist with richer cached rows that already carry
+    // a branch; those are settled data and must not be masked. #20119
+    const markup = await renderCard({
+      displayName: 'Live feature',
+      branch: 'live-branch',
+      head: 'abc123',
+      displayNameMode: 'automatic'
+    })
+
+    expect(markup).not.toContain('data-worktree-card-title-placeholder=""')
+    expect(markup).not.toContain('data-worktree-card-identity-placeholder=""')
+    expect(getInlineRenameTitleText(markup)).toContain('Live feature')
+    expect(markup).toContain('live-branch')
+  })
+
   it('reserves the identity slot alongside existing host meta', async () => {
     const markup = await renderCard(
       { displayName: 'hetzner-vps', branch: '', head: '', displayNameMode: 'automatic' },

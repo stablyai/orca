@@ -117,12 +117,18 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   // the identity row never renders and the placeholder would vanish into nothing.
   // Mirrors showIdentityInNewCard's hasPathIdentityEnabled gate. #20119
   const reserveProvisionalIdentityRow =
-    showProvisionalCardTreatment && detachedHeadDisplay === null && cardProps.includes('branch')
+    showProvisionalCardTreatment &&
+    !identityDisplay &&
+    detachedHeadDisplay === null &&
+    cardProps.includes('branch')
   // Why: an automatic name is branch-derived upstream, so showing the fallback basename would
   // change under the user; hold the title slot until the scan resolves it. An omitted mode is
-  // legacy rows that predate the field and behave as automatic. #20119
+  // legacy rows that predate the field and behave as automatic. A row that already resolves
+  // its own identity (a richer cached SSH row alongside a non-authoritative catalog) is
+  // settled data, so it must not be masked. #20119
   const titleIsProvisional =
     showProvisionalCardTreatment &&
+    !identityDisplay &&
     (worktree.displayNameMode === undefined || worktree.displayNameMode === 'automatic')
   const hasMetaRow = baseHasMetaRow || reserveProvisionalIdentityRow
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
