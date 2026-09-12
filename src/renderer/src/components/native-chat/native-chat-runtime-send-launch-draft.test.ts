@@ -161,7 +161,7 @@ describe('sendNativeChatMessage with a parked multi-line draft', () => {
 describe('image sends with a parked multi-line draft', () => {
   it('clears every draft line before pasting, so no line rides along with the image', () => {
     const clearInput = buildAgentTuiClearInputForText(DRAFT)
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'caption', ['/tmp/a.png'], {
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'claude', 'caption', ['/tmp/a.png'], {
       clearInput
     })
     expect(writes()[0]).toBe(clearInput)
@@ -169,7 +169,7 @@ describe('image sends with a parked multi-line draft', () => {
 
   it('clears exactly once — a second Ctrl+U would wipe the just-pasted image', () => {
     const clearInput = buildAgentTuiClearInputForText(DRAFT)
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'caption', ['/tmp/a.png'], {
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'claude', 'caption', ['/tmp/a.png'], {
       clearInput
     })
     vi.advanceTimersByTime(10_000)
@@ -178,7 +178,7 @@ describe('image sends with a parked multi-line draft', () => {
 
   it('submits the image send before a queued message starts', async () => {
     const clearInput = buildAgentTuiClearInputForText(DRAFT)
-    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'caption', ['/tmp/a.png'], {
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'claude', 'caption', ['/tmp/a.png'], {
       clearInput,
       confirmCleared: () => true
     })
