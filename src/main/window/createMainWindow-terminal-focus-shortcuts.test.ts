@@ -118,6 +118,75 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalled()
   })
 
+  it('still forwards the toggle-mode dictation chord when no STT model is selected (#18691)', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isDevToolsOpened: vi.fn(),
+      openDevTools: vi.fn(),
+      closeDevTools: vi.fn()
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn(),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(() => Promise.resolve()),
+      loadURL: vi.fn(() => Promise.resolve())
+    }
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+
+    // Voice is on, but the user never downloaded/selected an STT model —
+    // the renderer's startDictation() is responsible for surfacing that.
+    const voice = { enabled: true, sttModel: '', dictationMode: 'toggle' as const }
+    createMainWindow({
+      getUI: () => ({}) as never,
+      getSettings: () => ({ windowBackgroundBlur: false, voice }) as never,
+      updateUI: vi.fn()
+    } as never)
+
+    const isDarwin = process.platform === 'darwin'
+    const dictationInput = {
+      type: 'keyDown',
+      code: 'KeyE',
+      key: 'e',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: false
+    }
+
+    const preventDefault = vi.fn()
+    windowHandlers['before-input-event']({ preventDefault } as never, dictationInput as never)
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
+
+    // Voice fully disabled must still be a no-op, model or not.
+    webContents.send.mockClear()
+    voice.enabled = false
+    const disabledPreventDefault = vi.fn()
+    windowHandlers['before-input-event'](
+      { preventDefault: disabledPreventDefault } as never,
+      dictationInput as never
+    )
+    expect(disabledPreventDefault).not.toHaveBeenCalled()
+    expect(webContents.send).not.toHaveBeenCalled()
+  })
+
   it('only intercepts double-tap dictation when enabled toggle mode can handle it', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
