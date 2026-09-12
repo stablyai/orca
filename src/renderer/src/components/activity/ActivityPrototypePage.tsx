@@ -11,7 +11,10 @@ import {
 } from './activity-portal-thread-reconciliation'
 import { useAgentPaneThreads } from './use-agent-pane-threads'
 import { handleActivityFilterFocusShortcut } from './activity-filter-focus-shortcut'
-import { hasActivityThreadWorkspace } from './activity-thread-actions'
+import {
+  clearWorktreeUnreadIfNoOtherAttention,
+  hasActivityThreadWorkspace
+} from './activity-thread-actions'
 import { useActivityThreadActionBindings } from './use-activity-thread-action-bindings'
 import { ActivityThreadListPane } from './activity-thread-list-pane'
 import { ActivityThreadDetailPane } from './activity-thread-detail-pane'
@@ -297,6 +300,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     if (selectedThreadHasDetailOnlyView || selectedThreadIsVisibleTerminal) {
       autoAcknowledgedTurnRef.current = autoAcknowledgeKey
       storeData.acknowledgeAgents([selectedThread.paneKey])
+      clearWorktreeUnreadIfNoOtherAttention(selectedThread.worktree.id)
     }
   }, [
     selectedHasLiveTab,
@@ -305,7 +309,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     stagedThread,
     storeData,
     visiblePortalReady,
-    visibleThread
+    visibleThread,
+    clearWorktreeUnreadIfNoOtherAttention
   ])
 
   // Why (page padding): no top/horizontal padding so the page reaches the window edges; the titlebar and the right pane's title row (pt-2) supply the top spacing.
