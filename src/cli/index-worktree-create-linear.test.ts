@@ -247,4 +247,85 @@ describe('orca cli worktree awareness', () => {
 
     process.exitCode = priorExitCode
   })
+  it('passes a linked pull request number through worktree.create', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_create_pr', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/review-pr-42', 'review-pr-42', 'abc', 'repo-1'),
+          linkedPR: 42
+        },
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'review-pr-42',
+        '--pr',
+        '42',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.create', {
+      repo: 'id:repo-1',
+      name: 'review-pr-42',
+      displayName: 'review-pr-42',
+      displayNameKind: 'user',
+      baseBranch: undefined,
+      linkedIssue: undefined,
+      linkedPR: 42,
+      comment: undefined,
+      runHooks: false,
+      activate: false,
+      parentWorktree: undefined,
+      noParent: true,
+      callerTerminalHandle: undefined,
+      cliProvenanceRequest: {}
+    })
+  })
+
+  it('rejects null and non-numeric pull request values on worktree.create before RPC', async () => {
+    for (const value of ['null', 'abc']) {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const priorExitCode = process.exitCode
+
+      await main(
+        [
+          'worktree',
+          'create',
+          '--repo',
+          'id:repo-1',
+          '--name',
+          'feature',
+          '--pr',
+          value,
+          '--no-parent',
+          '--json'
+        ],
+        '/tmp/repo'
+      )
+
+      expect(callMock).not.toHaveBeenCalled()
+      expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+        'Invalid numeric value for --pr'
+      )
+      expect(process.exitCode).toBe(1)
+
+      process.exitCode = priorExitCode
+      logSpy.mockRestore()
+      errSpy.mockRestore()
+    }
+  })
 })

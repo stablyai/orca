@@ -90,7 +90,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'create'],
     summary: 'Create a new Orca-managed worktree',
     usage:
-      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
+      'orca worktree create --name <name> [--repo <selector>|--project <id> [--host <host-id>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'repo',
@@ -102,6 +102,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'prompt',
       'base-branch',
       'issue',
+      'pr',
       'linear-issue',
       'comment',
       'setup',
@@ -124,7 +125,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'With --agent --json, read the new agent handle from result.agentTerminalHandle; older runtimes return only result.startupTerminal.handle, and may return neither for folder-based repos.',
       'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
       'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
-      'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.'
+      'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.',
+      '--issue links a GitHub issue number; use --pr for a pull request number.'
     ],
     examples: [
       'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
@@ -134,19 +136,21 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca worktree create --repo id:<repoId> --name agent-task --agent codex --prompt "hi" --json',
       'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
       'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
-      'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
+      'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json',
+      'orca worktree create --repo id:<repoId> --name review-pr-123 --pr 123 --json'
     ]
   },
   {
     path: ['worktree', 'set'],
     summary: 'Update Orca metadata for a worktree',
     usage:
-      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
+      'orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--pr <number|null>] [--linear-issue <identifier-or-url|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'worktree',
       'display-name',
       'issue',
+      'pr',
       'linear-issue',
       'comment',
       'workspace-status',
@@ -155,11 +159,13 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
-      'Pass --linear-issue null to clear the Linear issue link.'
+      'Pass --linear-issue null to clear the Linear issue link.',
+      'Pass --pr null to clear the pull request link.'
     ],
     examples: [
       'orca worktree set --worktree active --linear-issue STA-335 --json',
-      'orca worktree set --worktree active --linear-issue null --json'
+      'orca worktree set --worktree active --linear-issue null --json',
+      'orca worktree set --worktree active --pr null --json'
     ]
   },
   {
