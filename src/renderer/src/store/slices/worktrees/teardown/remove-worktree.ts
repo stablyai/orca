@@ -7,7 +7,7 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import { readableIpcErrorMessage } from '@/lib/ipc-error-message'
+import { readableIpcErrorMessage } from '@/lib/ipc-error'
 import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import {

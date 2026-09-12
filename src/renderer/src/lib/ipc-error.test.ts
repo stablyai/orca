@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readableIpcErrorMessage } from './ipc-error-message'
+import { extractIpcErrorMessage, readableIpcErrorMessage } from './ipc-error'
 
 describe('readableIpcErrorMessage', () => {
   it('strips the channel and the error class a failed removal arrives wrapped in (#19334)', () => {
@@ -28,5 +28,17 @@ describe('readableIpcErrorMessage', () => {
     expect(readableIpcErrorMessage('Error invoking remote method without a channel')).toBe(
       'Error invoking remote method without a channel'
     )
+  })
+})
+
+// Guards the difference from the incumbent helper, which stops at the first newline and would
+// drop a failed hook's output.
+describe('extractIpcErrorMessage vs readableIpcErrorMessage', () => {
+  const wrapped =
+    "Error invoking remote method 'worktrees:remove': Error: Archive hook failed.\nbackup target unreachable"
+
+  it('keeps the detail lines the single-line extractor drops', () => {
+    expect(extractIpcErrorMessage(new Error(wrapped), 'fallback')).toBe('Archive hook failed.')
+    expect(readableIpcErrorMessage(wrapped)).toBe('Archive hook failed.\nbackup target unreachable')
   })
 })
