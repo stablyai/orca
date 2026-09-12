@@ -41,12 +41,11 @@ function isInsideSpan(index: number, spans: number[]): boolean {
   return false
 }
 
-const FENCE_PREFIX_RE = /\s*(?:```|~~~)/y
+const FENCE_PREFIX_RE = /[^\S\n]*(?:```|~~~)/y
 
 function startsCodeFence(content: string, lineStart: number, lineEnd: number): boolean {
   FENCE_PREFIX_RE.lastIndex = lineStart
-  // Why: a sticky `\s*` run can cross the newline into the next line, so an
-  // out-of-line match is rejected to stay identical to the old per-line regex.
+  // Bound whitespace to this line so blank runs cannot trigger repeated suffix scans.
   return FENCE_PREFIX_RE.test(content) && FENCE_PREFIX_RE.lastIndex <= lineEnd
 }
 
