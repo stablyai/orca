@@ -50,18 +50,29 @@ export function isQuickOpenRemoteQueryTooLarge(query: string): boolean {
 export function rankQuickOpenFiles(
   query: string,
   files: readonly QuickOpenIndexedFile[],
-  limit = QUICK_OPEN_RESULT_LIMIT
+  limit = QUICK_OPEN_RESULT_LIMIT,
+  recents?: readonly string[]
 ): QuickOpenSearchResult[] {
   if (limit <= 0 || isQuickOpenQueryTooLarge(query)) {
     return []
   }
 
   const normalizedQuery = normalizeQuickOpenQuery(query)
+  const recencyRanks = recencyRankByNormalizedPath(recents)
   const results: QuickOpenRankedResult[] = []
   for (const file of files) {
     const score = normalizedQuery ? fuzzyMatchIndexedFile(normalizedQuery, file) : 0
     if (score !== -1) {
-      retainTopResult(results, { path: file.path, score, inputIndex: file.inputIndex }, limit)
+      retainTopResult(
+        results,
+        {
+          path: file.path,
+          score,
+          inputIndex: file.inputIndex,
+          recencyRank: recencyRankForPath(file.path, recencyRanks)
+        },
+        limit
+      )
     }
   }
   return finalizeResults(results)
@@ -110,6 +121,29 @@ function normalizeQuickOpenQuery(query: string): string {
   return query.trim().replace(/\\/g, '/').toLowerCase()
 }
 
+function recencyRankByNormalizedPath(
+  recents: readonly string[] | undefined
+): ReadonlyMap<string, number> | null {
+  if (!recents || recents.length === 0) {
+    return null
+  }
+  const ranks = new Map<string, number>()
+  for (let index = 0; index < recents.length; index++) {
+    const key = recents[index].replace(/\\/g, '/')
+    if (!ranks.has(key)) {
+      ranks.set(key, index)
+    }
+  }
+  return ranks
+}
+
+function recencyRankForPath(
+  path: string,
+  ranks: ReadonlyMap<string, number> | null
+): number | undefined {
+  return ranks?.get(path.replace(/\\/g, '/'))
+}
+
 function prepareQuickOpenFile(path: string, inputIndex: number): QuickOpenIndexedFile {
   const searchPath = path.replace(/\\/g, '/')
   const lastSlash = searchPath.lastIndexOf('/')
@@ -155,6 +189,7 @@ function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): numbe
 
 type QuickOpenRankedResult = QuickOpenSearchResult & {
   inputIndex: number
+  recencyRank?: number
 }
 
 function retainTopResult(
@@ -213,5 +248,30 @@ function finalizeResults(results: QuickOpenRankedResult[]): QuickOpenSearchResul
 }
 
 function compareRankedResult(a: QuickOpenRankedResult, b: QuickOpenRankedResult): number {
-  return a.score - b.score || compareFileNames(a.path, b.path) || a.inputIndex - b.inputIndex
+  const scoreCmp = a.score - b.score
+  if (scoreCmp !== 0) {
+    return scoreCmp
+  }
+  const recencyCmp = compareRecencyRank(a.recencyRank, b.recencyRank)
+  if (recencyCmp !== 0) {
+    return recencyCmp
+  }
+  // Why: unranked equal-score ties must keep input order, not path sort.
+  if (a.recencyRank === undefined && b.recencyRank === undefined) {
+    return a.inputIndex - b.inputIndex || compareFileNames(a.path, b.path)
+  }
+  return compareFileNames(a.path, b.path) || a.inputIndex - b.inputIndex
+}
+
+function compareRecencyRank(a: number | undefined, b: number | undefined): number {
+  if (a === b) {
+    return 0
+  }
+  if (a === undefined) {
+    return 1
+  }
+  if (b === undefined) {
+    return -1
+  }
+  return a - b
 }
