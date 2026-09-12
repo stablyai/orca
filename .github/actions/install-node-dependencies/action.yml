@@ -10,6 +10,10 @@ inputs:
     description: Node.js version override; defaults to the version declared in package.json.
     required: false
     default: ''
+  cache-dependency-path:
+    description: Lockfiles for the pnpm download store; include mobile/pnpm-lock.yaml only when the job installs mobile dependencies.
+    required: false
+    default: pnpm-lock.yaml
   persist-native-cache:
     description: Save restored native modules at job end. Set false when a later step overwrites the same path with a different ABI.
     required: false
@@ -39,9 +43,7 @@ runs:
       with:
         install: false
 
-    # Why both lockfiles: setup-node keys the pnpm store on the root lockfile alone, so
-    # jobs that also install mobile restored a store with none of the React Native tree
-    # in it and re-downloaded the lot on every run.
+    # Desktop-only jobs should not miss their download cache when mobile dependencies change.
     - name: Setup Node.js
       id: default-node
       if: inputs.node-version == ''
@@ -49,9 +51,7 @@ runs:
       with:
         node-version-file: package.json
         cache: pnpm
-        cache-dependency-path: |
-          pnpm-lock.yaml
-          mobile/pnpm-lock.yaml
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
 
     - name: Setup requested Node.js
       id: requested-node
@@ -60,9 +60,7 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: pnpm
-        cache-dependency-path: |
-          pnpm-lock.yaml
-          mobile/pnpm-lock.yaml
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
 
     - name: Validate native runtime
       shell: bash

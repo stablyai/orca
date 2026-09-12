@@ -38,15 +38,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
       - name: Setup pnpm
         uses: pnpm/setup@v2
         with:
           install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: mobile/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -66,6 +68,22 @@ jobs:
 
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
+
+      # setup-gradle also extracts compiler caches independently of its include paths.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
+
+      - name: Cache Gradle dependency downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.gradle/caches/modules-2
+            ~/.gradle/wrapper/dists
+          key: gradle-downloads-v1-${{ runner.os }}-${{ runner.arch }}-jdk17-${{ hashFiles('mobile/android/gradle/wrapper/gradle-wrapper.properties') }}-${{ hashFiles('mobile/pnpm-lock.yaml', 'mobile/pnpm-workspace.yaml', 'mobile/patches/**', 'mobile/android/**/*.gradle', 'mobile/android/**/*.gradle.kts', 'mobile/android/**/gradle.properties', 'mobile/android/gradle/wrapper/gradle-wrapper.properties', 'mobile/android/gradle/libs.versions.toml') }}
+          restore-keys: |
+            gradle-downloads-v1-${{ runner.os }}-${{ runner.arch }}-jdk17-${{ hashFiles('mobile/android/gradle/wrapper/gradle-wrapper.properties') }}-
 
       - name: Build Android release APK
         run: cd android && ./gradlew assembleRelease
