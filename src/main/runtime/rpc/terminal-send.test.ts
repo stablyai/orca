@@ -57,6 +57,7 @@ describe('terminal send RPC', () => {
 
   it('reports runtime-owned terminal agent status', async () => {
     const runtime = stubRuntime({
+      isTerminalRunningSettledPromptAgent: vi.fn().mockResolvedValue(true),
       getTerminalAgentStatus: vi.fn().mockResolvedValue({
         handle: 'terminal-1',
         isRunningAgent: true,
@@ -79,7 +80,8 @@ describe('terminal send RPC', () => {
       agentStatus: {
         handle: 'terminal-1',
         isRunningAgent: true,
-        status: 'permission'
+        status: 'permission',
+        supportsGuardedAgentPrompt: true
       }
     })
     expect(runtime.getTerminalAgentStatus).toHaveBeenCalledWith('terminal-1')
