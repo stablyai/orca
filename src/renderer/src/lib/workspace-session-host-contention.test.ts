@@ -330,10 +330,10 @@ describe('read-time primary is the one the write path honours', () => {
     }
   }
 
-  it('keeps an SSH claimant in the local partition it actually persists in', () => {
-    // Why this shape: the claims catalog sorts `runtime:` before `ssh:`, so picking a primary from
-    // claimants sent the SSH workspace's rows into the runtime partition.
-    expect(buildHostIdByWorktreeId(sshVersusRuntimeState())(SHARED_ID)).toBe('local')
+  it('keeps an SSH claimant out of the rotating runtime partition', () => {
+    // Why this shape: the claims catalog sorts `runtime:` before `ssh:`, so a plain sort sent the
+    // SSH workspace's rows into the runtime partition. It now persists in its own.
+    expect(buildHostIdByWorktreeId(sshVersusRuntimeState())(SHARED_ID)).toBe(SSH_HOST)
   })
 
   it('does not strand the runtime co-claimant when the SSH row is written', async () => {
@@ -355,8 +355,8 @@ describe('read-time primary is the one the write path honours', () => {
     expect(runtimeWrite?.tabsByWorktree[SHARED_ID]?.map((entry) => entry.id)).toEqual([
       'runtime-tab'
     ])
-    const localWrite = set.mock.calls.find(([, hostId]) => hostId === undefined)?.[0]
-    expect(localWrite?.tabsByWorktree[SHARED_ID]?.map((entry) => entry.id)).toEqual(['ssh-tab'])
+    const sshWrite = set.mock.calls.find(([, hostId]) => hostId === SSH_HOST)?.[0]
+    expect(sshWrite?.tabsByWorktree[SHARED_ID]?.map((entry) => entry.id)).toEqual(['ssh-tab'])
   })
 
   it('writes a row back to the only partition that had it instead of copying it', async () => {
