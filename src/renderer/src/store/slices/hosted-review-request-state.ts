@@ -9,6 +9,7 @@ export const inflightHostedReviewRequests = new Map<
   {
     promise: Promise<HostedReviewInfo | null>
     force: boolean
+    currentHeadOid: string | null
     generation: number
     startedAt: number
   }
@@ -26,6 +27,12 @@ const hostedReviewRevalidationLanes = new Map<string, HostedReviewRevalidationLa
 
 export function hostedReviewRequestKey(cacheKey: string, hintKey: string): string {
   return `${cacheKey}\0${hintKey}`
+}
+
+/** Only requests for the same Git head can supply a current merged-review result. */
+export function getHostedReviewRequestForHead(requestKey: string, currentHeadOid?: string | null) {
+  const request = inflightHostedReviewRequests.get(requestKey)
+  return request?.currentHeadOid === (currentHeadOid ?? null) ? request : undefined
 }
 
 function requiredHostedReviewRevalidationIdleMs(lane: HostedReviewRevalidationLane): number {
@@ -177,13 +184,15 @@ export function registerInflightHostedReviewRequest(
   entry: {
     promise: Promise<HostedReviewInfo | null>
     force: boolean
+    currentHeadOid: string | null
     generation: number
     startedAt: number
   }
-): void {
+): Promise<HostedReviewInfo | null> {
   inflightHostedReviewRequests.set(requestKey, entry)
   supersedeHostedReviewRevalidation(requestKey, {
     promise: entry.promise,
     startedAt: entry.startedAt
   })
+  return entry.promise
 }

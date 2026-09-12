@@ -33,6 +33,7 @@ import {
 } from './hosted-review-cache-state'
 import { clearHostedReviewConflictingPrCache } from './hosted-review-pr-cache'
 import {
+  getHostedReviewRequestForHead,
   hostedReviewRequestKey,
   hostedReviewRequestGenerations as requestGenerations,
   inflightHostedReviewRequests,
@@ -184,7 +185,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       return cached.data
     }
 
-    const inflightRequest = inflightHostedReviewRequests.get(requestKey)
+    const inflightRequest = getHostedReviewRequestForHead(requestKey, options?.currentHeadOid)
     const startRequest = (): Promise<HostedReviewInfo | null> => {
       const generation = (requestGenerations.get(cacheKey) ?? 0) + 1
       const requestStartedAt = Date.now()
@@ -291,25 +292,25 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
         }
       })()
 
-      registerInflightHostedReviewRequest(requestKey, {
+      return registerInflightHostedReviewRequest(requestKey, {
         promise: request,
         force: Boolean(options?.force),
+        currentHeadOid: options?.currentHeadOid ?? null,
         generation,
         startedAt: requestStartedAt
       })
-      return request
     }
 
     if (
       !options?.force &&
       !linkedRefetch &&
       !scopedResultRefetch &&
+      !staleMergedHeadRefetch &&
       options?.staleWhileRevalidate &&
       cached !== undefined &&
       cached.data !== null
     ) {
-      // Why: sidebar PR metadata can stay visible while a quiet refresh updates
-      // it; don't block card rendering on a quota-bound GitHub round trip.
+      // Keep valid cached cards visible during refresh; an outdated merged head must await revalidation.
       queueHostedReviewRevalidation(requestKey, startRequest, inflightRequest)
       return cached.data
     }
