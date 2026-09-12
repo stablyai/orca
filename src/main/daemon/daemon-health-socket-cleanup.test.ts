@@ -63,7 +63,9 @@ describe('daemon health socket listener cleanup', () => {
     netConnectMock.mockReturnValueOnce(socket)
 
     const result = healthCheckDaemon(socketPath, tokenPath)
-    await vi.advanceTimersByTimeAsync(3_000)
+    // Why: HEALTH_CHECK_TIMEOUT_MS must cover the daemon's worst-case ~8s
+    // ptySpawnHealth reply (see daemon-health.ts), so advance past that budget.
+    await vi.advanceTimersByTimeAsync(10_000)
 
     await expect(result).resolves.toBe(false)
     expect(socket.listenerCount('connect')).toBe(0)
