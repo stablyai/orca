@@ -30,15 +30,22 @@ export async function prepareCodexRuntimeHomeForLaunch(
     }
   }
   const ensureRealHomeHooksIfSelected = async (): Promise<boolean> => {
-    if (target?.runtime === 'wsl' || !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)) {
+    if (
+      target?.runtime === 'wsl' ||
+      // Why skip rather than sweep: ~/.codex is user-global and Orca entries are matched by
+      // script filename, so honoring THIS profile's off switch here deletes the hook and trust
+      // records another Orca profile installed (STA-5679). Removal stays on the Settings toggle.
+      !isAgentStatusHooksEnabled(state.store?.getSettings()) ||
+      !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)
+    ) {
       return false
     }
-    // Why (flag ON, system default): the hook entry must exist — appended last
-    // and trusted by codex's own app-server grant — in the real ~/.codex before
+    // Why (flag ON, hooks on, system default): the hook entry must exist — appended
+    // last and trusted by codex's own app-server grant — in the real ~/.codex before
     // the pane spawns. An incapable grant flips the lane gate so the launch
     // below falls back to the managed home instead of a status-blind pane.
     await ensureRealHomeCodexHookState({
-      hooksEnabled: isAgentStatusHooksEnabled(state.store?.getSettings()),
+      hooksEnabled: true,
       userDataPath: app.getPath('userData')
     })
     return true
