@@ -17,17 +17,15 @@ import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-opti
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { isDiffComment } from '@/lib/diff-comment-compat'
 import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from './editor-shortcuts'
-import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from './LargeDiffFallback'
 import { getLargeDiffRenderLimit } from './large-diff-render-limit'
 import { useDiffViewerLargeDiffLifecycle } from './useDiffViewerLargeDiffLifecycle'
 import { getDiffViewerLargeDiffSaveAction } from './diff-viewer-large-diff-save-action'
 import type { DiffViewerProps } from './diff-viewer-props'
-import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
-import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
+import { buildDiffViewerEditorOptions } from './diff-viewer-editor-options'
+import { resolveDiffRenderSideBySide } from './diff-added-file-inline-mode'
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
-import { monacoFindOptions } from './monaco-find-options'
 
 export default function DiffViewer({
   modelKey,
@@ -361,18 +359,39 @@ export default function DiffViewer({
     }
   }, [modelKey])
 
+  // Why: a created file renders inline whatever the toolbar says, so the
+  // gutter policy has to follow the effective mode, not the raw setting.
+  const effectiveSideBySide = resolveDiffRenderSideBySide(sideBySide, {
+    originalContent,
+    modifiedContent
+  })
+
   useEffect(() => {
     const diffEditor = diffEditorRef.current
     if (!diffEditor) {
       return
     }
     lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(
+      diffEditor,
+      effectiveSideBySide
+    )
     return () => {
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
     }
-  }, [sideBySide])
+  }, [effectiveSideBySide])
+
+  const diffEditorOptions = buildDiffViewerEditorOptions({
+    editable: editable ?? false,
+    sideBySide,
+    originalContent,
+    modifiedContent,
+    fontSize: diffEditorFontSize,
+    fontFamily: resolveEditorFontFamily(settings),
+    wordWrap: settings?.diffWordWrap,
+    showWhitespace: settings?.diffShowWhitespace
+  })
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
@@ -417,23 +436,7 @@ export default function DiffViewer({
             modifiedModelPath={currentDiffModelPaths.modifiedModelPath}
             keepCurrentOriginalModel
             keepCurrentModifiedModel
-            options={{
-              readOnly: !editable,
-              originalEditable: false,
-              renderSideBySide: sideBySide,
-              minimap: { enabled: false },
-              scrollBeyondLastLine: false,
-              fontSize: diffEditorFontSize,
-              fontFamily: resolveEditorFontFamily(settings),
-              lineNumbers: 'on',
-              ...buildDiffEditorWordWrapOptions(settings?.diffWordWrap),
-              ...buildDiffEditorWhitespaceOptions(settings?.diffShowWhitespace),
-              automaticLayout: true,
-              renderOverviewRuler: true,
-              scrollbar: diffEditorScrollbarOptions,
-              padding: { top: 0 },
-              find: monacoFindOptions
-            }}
+            options={diffEditorOptions}
           />
         )}
       </div>

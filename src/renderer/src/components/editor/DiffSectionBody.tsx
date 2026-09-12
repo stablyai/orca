@@ -13,6 +13,7 @@ import { LargeDiffFallback } from './LargeDiffFallback'
 import { LargeDiffLoadPrompt } from './LargeDiffLoadPrompt'
 import { buildDiffEditorWhitespaceOptions } from './diff-editor-whitespace-options'
 import { buildDiffEditorWordWrapOptions } from './diff-editor-word-wrap-options'
+import { resolveDiffRenderSideBySide } from './diff-added-file-inline-mode'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
 
@@ -146,7 +147,7 @@ export function DiffSectionBody({
             modifiedContent={section.diffResult.modifiedContent}
             filePath={section.path}
             mimeType={section.diffResult.mimeType}
-            sideBySide={sideBySide}
+            sideBySide={resolveDiffRenderSideBySide(sideBySide, section.diffResult)}
             layout={useIntrinsicImageHeight ? 'intrinsic' : 'fill'}
           />
         ) : (
@@ -206,7 +207,7 @@ export function DiffSectionBody({
           options={{
             readOnly: !isEditable,
             originalEditable: false,
-            renderSideBySide: sideBySide,
+            renderSideBySide: resolveDiffRenderSideBySide(sideBySide, section),
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             fontSize: diffEditorFontSize,
