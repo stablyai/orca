@@ -182,6 +182,16 @@ export function buildDashboardSnapshot(
         layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
           ? layoutPtyId
           : null
+      // A live local row without a PTY cannot be opened or focused. Retained rows
+      // intentionally outlive their completed terminal; remote absence is unverifiable.
+      if (
+        includeCardDetails &&
+        !ptyId &&
+        row.rowSource !== 'retained' &&
+        workspace.remoteHostKind === null
+      ) {
+        continue
+      }
       // Why: only a live pty can open a preview terminal, and only a
       // card-rendering caller can open one — the sidebar's bucket counts must
       // not pay host resolution on every agent-status tick.
