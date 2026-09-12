@@ -145,7 +145,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Auto-run commands on worktree create.
 - Repo icons for the sidebar: choose an icon, full searchable emoji picker, uploaded image, website favicon, or GitHub avatar, then pick a preset or custom hex badge color.
 - Source Control AI overrides for commit messages, pull request details, and branch names.
-- **Worktree Shared Paths** — gitignored paths to materialize from the primary checkout into each new worktree (APFS clone-copy on macOS when possible, otherwise symlink). Complements repo-checked-in `worktree.sharedDirectories` in `orca.yaml` and `.worktreeinclude` (see [Worktrees](/docs/model/worktrees)).
+- **Worktree Shared Paths** — gitignored paths to materialize from the primary checkout into each new worktree (a copy-on-write clone when the filesystem supports one — APFS clone-copy on macOS, reflink on Linux — otherwise a symlink). Complements repo-checked-in `worktree.sharedDirectories` in `orca.yaml` and `.worktreeinclude` (see [Worktrees](/docs/model/worktrees)).
 
 ## Floating Workspace
 
