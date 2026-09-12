@@ -31,6 +31,7 @@ import { errorMessage } from './session-scanner-values'
 import { mapRemoteScanBatches } from './remote-session-scan-batching'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { recordSessionScanIssue } from './session-scan-issues'
+import { canStopParsingSessions } from './session-scan-cutoff'
 import { refreshCodexTitleFromIndex } from './session-scanner-codex-cached-title'
 import { limitRemoteScanFilesystemConcurrency } from './remote-session-scan-concurrency'
 import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
@@ -145,7 +146,7 @@ async function parseRemoteSessionCandidates(args: {
   let index = 0
 
   while (index < args.candidates.length) {
-    if (canStopParsingRemoteSessions(sessions, args.limit, args.candidates[index]?.file.mtimeMs)) {
+    if (canStopParsingSessions(sessions, args.limit, args.candidates[index]?.file.mtimeMs)) {
       break
     }
 
@@ -309,23 +310,6 @@ function isRemoteSessionInScope(session: AiVaultSession, scopePaths: readonly st
 
 function normalizeRemoteScopePaths(scopePaths: readonly string[]): string[] {
   return scopePaths.map((scopePath) => scopePath.trim()).filter(Boolean)
-}
-
-function canStopParsingRemoteSessions(
-  sessions: CodexSessionCollection,
-  limit: number,
-  nextCandidateMtimeMs: number | undefined
-): boolean {
-  if (sessions.size < limit || typeof nextCandidateMtimeMs !== 'number') {
-    return false
-  }
-  const visibleCutoff = Array.from(sessions.values(), sessionSortTime)
-    .sort((left, right) => right - left)
-    .at(limit - 1)
-
-  // Transcript mtimes bound the remaining candidate order; once the visible
-  // cutoff is newer, older files cannot enter the unscoped top-N result.
-  return typeof visibleCutoff === 'number' && nextCandidateMtimeMs < visibleCutoff
 }
 
 function isAiVaultSession(session: AiVaultSession | null): session is AiVaultSession {
