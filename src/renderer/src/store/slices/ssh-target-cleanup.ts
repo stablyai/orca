@@ -182,7 +182,10 @@ function clearSshTargetTabPtyState(
       }
     }
     if (nextTabs !== tabs) {
-      nextTabsByWorktree = { ...nextTabsByWorktree, [worktreeId]: nextTabs }
+      if (nextTabsByWorktree === state.tabsByWorktree) {
+        nextTabsByWorktree = { ...nextTabsByWorktree }
+      }
+      nextTabsByWorktree[worktreeId] = nextTabs
     }
   }
 
