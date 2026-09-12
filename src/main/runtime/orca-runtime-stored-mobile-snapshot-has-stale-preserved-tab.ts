@@ -7,7 +7,6 @@ import type {
 } from '../../shared/runtime-types'
 import { getMobileSessionSnapshotTabIdentityKeys } from './mobile-session-tab-merge'
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
-import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 
 export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs {
@@ -55,14 +54,25 @@ export class OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab extends Orc
         typeof tab.browserPageId === 'string'
           ? getRuntimeBrowserPageRegistry(this).getPage(tab.browserPageId)
           : undefined
-      if (
-        liveClientPage?.workspaceId === snapshot.worktree &&
-        tab.placement?.kind === 'client' &&
-        sameRuntimeBrowserPlacement(liveClientPage.placement, tab.placement)
-      ) {
+      // Why: the page registry holds only renderer-owned (client-placed) pages, so
+      // a hit here that still names THIS worktree is a live desktop-owned browser
+      // page, not a stale entry — preserve it. This is the browser analogue of the
+      // terminal serve/SSH-owned survival predicate below: page liveness + worktree
+      // ownership, NOT an exact placement/generation match. A merged renderer
+      // snapshot omits every worktree outside the incremental publish set, so
+      // requiring sameRuntimeBrowserPlacement here pruned the desktop's already-open
+      // page whenever its host generation had advanced past the stored tab's — it
+      // then vanished from the stored snapshot and never reached a freshly
+      // subscribing mobile client until the renderer's next FULL republish (which
+      // today only opening a NEW mobile browser tab forces). reconcileHeadless-
+      // MobileSessionBrowserTabs refreshes the live rows on the next notify, so a
+      // momentarily stale preserved placement is corrected, not load-bearing.
+      if (liveClientPage && liveClientPage.workspaceId === snapshot.worktree) {
         return true
       }
-      // Why: headless offscreen browser tabs exist only server-side, so a renderer-graph merge must keep them, not prune as "not in the graph".
+      // Why: headless offscreen browser tabs exist only server-side (no client-page
+      // registry entry, so the check above never fires for them) — a renderer-graph
+      // merge must keep them, not prune as "not in the graph".
       if (!this.offscreenBrowserBackend) {
         return false
       }

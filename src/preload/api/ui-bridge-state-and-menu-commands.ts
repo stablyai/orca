@@ -173,5 +173,18 @@ export const uiStateAndMenuCommandsApi = {
   },
   replyTabCreate: (reply: { requestId: string; browserPageId?: string; error?: string }): void => {
     ipcRenderer.send('browser:tabCreateReply', reply)
+  },
+  onRequestGraphResync: (
+    callback: (data: { requestId: string; worktreeId: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { requestId: string; worktreeId: string }
+    ) => callback(data)
+    ipcRenderer.on('browser:requestGraphResync', listener)
+    return () => ipcRenderer.removeListener('browser:requestGraphResync', listener)
+  },
+  replyGraphResync: (reply: { requestId: string; ok?: boolean }): void => {
+    ipcRenderer.send('browser:requestGraphResyncReply', reply)
   }
 } satisfies Partial<PreloadApi['ui']>
