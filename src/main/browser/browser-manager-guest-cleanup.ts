@@ -10,6 +10,7 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
     const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
     const isPrimaryGuest = browserTabId !== undefined
     if (browserTabId && this.webContentsIdByTabId.get(browserTabId) === guestWebContentsId) {
+      this.downloadCapture.cancelPage(browserTabId)
       this.webContentsIdByTabId.delete(browserTabId)
     }
     this.tabIdByWebContentsId.delete(guestWebContentsId)

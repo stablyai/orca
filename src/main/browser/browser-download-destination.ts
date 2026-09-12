@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync } from 'node:fs'
+import { lstatSync, mkdirSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 
 import { app } from 'electron'
@@ -18,6 +18,7 @@ export type BrowserDownloadDestination = {
 type BrowserDownloadDestinationOptions = {
   downloadsPath?: string
   pathExists?: (filePath: string) => boolean
+  realpath?: (directory: string) => string
   platform?: NodeJS.Platform
 }
 
@@ -29,16 +30,36 @@ function normalizeReservationKey(filePath: string, platform: NodeJS.Platform): s
     : normalizedPath
 }
 
+function destinationExists(filePath: string): boolean {
+  try {
+    lstatSync(filePath)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+}
+
 export class BrowserDownloadDestinationReservations {
   private readonly reservedPathKeys = new Set<string>()
   private readonly pathExists: (filePath: string) => boolean
   private readonly downloadsPath: () => string
+  private readonly realpath: (directory: string) => string
   private readonly platform: NodeJS.Platform
 
   constructor(options: BrowserDownloadDestinationOptions = {}) {
-    this.pathExists = options.pathExists ?? existsSync
+    this.pathExists = options.pathExists ?? destinationExists
+    this.realpath = options.realpath ?? realpathSync.native
     this.downloadsPath = () => options.downloadsPath ?? app.getPath('downloads')
     this.platform = options.platform ?? process.platform
+  }
+
+  private reservationKey(savePath: string): string {
+    // Resolve only the parent: the requested leaf need not exist and must not redirect writes.
+    const directory = this.realpath(path.dirname(savePath))
+    return normalizeReservationKey(path.join(directory, path.basename(savePath)), this.platform)
   }
 
   reserve(filename: string): BrowserDownloadDestination {
@@ -48,7 +69,7 @@ export class BrowserDownloadDestinationReservations {
     for (let attempt = 0; attempt < MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS; attempt += 1) {
       const candidateFilename = buildBrowserDownloadCollisionCandidate(safeFilename, attempt)
       const savePath = path.join(downloadsPath, candidateFilename)
-      const reservationKey = normalizeReservationKey(savePath, this.platform)
+      const reservationKey = this.reservationKey(savePath)
       if (this.reservedPathKeys.has(reservationKey) || this.pathExists(savePath)) {
         continue
       }
@@ -72,11 +93,11 @@ export class BrowserDownloadDestinationReservations {
 
   reserveRequestedPath(requestedPath: string): BrowserDownloadDestination {
     const savePath = path.resolve(requestedPath)
-    const reservationKey = normalizeReservationKey(savePath, this.platform)
+    mkdirSync(path.dirname(savePath), { recursive: true })
+    const reservationKey = this.reservationKey(savePath)
     if (this.reservedPathKeys.has(reservationKey) || this.pathExists(savePath)) {
       throw new Error('The requested download path already exists or is in use.')
     }
-    mkdirSync(path.dirname(savePath), { recursive: true })
     this.reservedPathKeys.add(reservationKey)
     return { filename: path.basename(savePath), savePath, reservationKey }
   }

@@ -1,3 +1,4 @@
+import { mkdtempSync, rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const browserMocks = vi.hoisted(() => ({
@@ -65,11 +66,14 @@ const SERVER_GUEST_WEB_CONTENTS_ID = 6103
 const BROWSER_PAGE_ID = 'client-page-1'
 
 describe('client-hosted downloads', () => {
+  let downloadsPath: string
   let rendererSendMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
     resetBrowserManagerState()
+    downloadsPath = mkdtempSync(path.join(tmpdir(), 'orca-client-downloads-'))
+    browserMocks.appGetPathMock.mockReturnValue(downloadsPath)
     resetBrowserClientDownloadRouting()
     resetBrowserRouteGuestPopupOwnership()
     rendererSendMock = vi.fn()
@@ -110,6 +114,8 @@ describe('client-hosted downloads', () => {
   })
 
   afterEach(() => {
+    browserManager.unregisterAll()
+    rmSync(downloadsPath, { recursive: true, force: true })
     resetBrowserClientDownloadRouting()
     resetBrowserRouteGuestPopupOwnership()
   })
@@ -292,7 +298,7 @@ describe('client-hosted downloads', () => {
     browserManager.handleGuestWillDownload({ guestWebContentsId: GUEST_WEB_CONTENTS_ID, item })
 
     expect(item.cancel).not.toHaveBeenCalled()
-    expect(savedTo(item)).toContain('/downloads/')
+    expect(savedTo(item)).toBe(path.join(downloadsPath, 'report.csv'))
   })
 
   it('leaves ordinary browser guests on their desktop Downloads path', () => {
@@ -312,7 +318,7 @@ describe('client-hosted downloads', () => {
 
     expect(routed).toEqual([SERVER_GUEST_WEB_CONTENTS_ID])
     expect(item.cancel).not.toHaveBeenCalled()
-    expect(savedTo(item)).toContain('/downloads/')
+    expect(savedTo(item)).toBe(path.join(downloadsPath, 'report.csv'))
   })
 })
 

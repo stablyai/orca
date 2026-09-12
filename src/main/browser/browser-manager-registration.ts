@@ -93,6 +93,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     if (isWorkspaceDocPageId(browserTabId)) {
       return
     }
+    this.downloadCapture.cancelPage(browserTabId)
     // Why: teardown mid-grab must cancel it so the renderer gets a signal, not a dangling Promise.
     this.cancelGrabOp(browserTabId, 'evicted')
 

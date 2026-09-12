@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -59,12 +61,17 @@ const {
 } = browserMocks
 
 describe('browserManager', () => {
+  let downloadsPath: string
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
     resetBrowserManagerState()
+    downloadsPath = mkdtempSync(join(tmpdir(), 'orca-downloads-'))
+    browserMocks.appGetPathMock.mockReturnValue(downloadsPath)
   })
 
   afterEach(() => {
+    browserManager.unregisterAll()
+    rmSync(downloadsPath, { recursive: true, force: true })
     vi.useRealTimers()
   })
 
@@ -141,11 +148,11 @@ describe('browserManager', () => {
         origin: 'https://example.com',
         totalBytes: 2048,
         mimeType: 'text/csv',
-        savePath: join('/downloads', 'report.csv'),
+        savePath: join(downloadsPath, 'report.csv'),
         status: 'downloading'
       })
     )
-    expect(item.setSavePath).toHaveBeenCalledWith(join('/downloads', 'report.csv'))
+    expect(item.setSavePath).toHaveBeenCalledWith(join(downloadsPath, 'report.csv'))
   })
 
   it('sets the download save path immediately and reports progress and completion', () => {
@@ -179,7 +186,7 @@ describe('browserManager', () => {
     })
     browserManager.handleGuestWillDownload({ guestWebContentsId: guest.id, item })
 
-    expect(item.setSavePath).toHaveBeenCalledWith(join('/downloads', 'report.csv'))
+    expect(item.setSavePath).toHaveBeenCalledWith(join(downloadsPath, 'report.csv'))
     expect(item.on).toHaveBeenCalledWith('updated', expect.any(Function))
     expect(item.once).toHaveBeenCalledWith('done', expect.any(Function))
     expect(rendererSendMock).toHaveBeenCalledWith(
@@ -187,7 +194,7 @@ describe('browserManager', () => {
       expect.objectContaining({
         browserPageId: 'browser-1',
         filename: 'report.csv',
-        savePath: join('/downloads', 'report.csv'),
+        savePath: join(downloadsPath, 'report.csv'),
         status: 'downloading'
       })
     )
@@ -212,7 +219,7 @@ describe('browserManager', () => {
       expect.objectContaining({
         browserPageId: 'browser-1',
         status: 'completed',
-        savePath: join('/downloads', 'report.csv'),
+        savePath: join(downloadsPath, 'report.csv'),
         error: null
       })
     )
@@ -289,6 +296,42 @@ describe('browserManager', () => {
     expect(item.cancel).toHaveBeenCalledTimes(1)
     expect(managerState.downloadsById.size).toBe(0)
   })
+
+  it.each(['unregister', 'destroyed'] as const)(
+    'retires unclaimed captures on authoritative %s teardown',
+    async (teardown) => {
+      vi.useFakeTimers()
+      const guest = {
+        id: 411,
+        isDestroyed: vi.fn(() => false),
+        getType: vi.fn(() => 'webview'),
+        setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+        setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+        on: guestOnMock,
+        off: guestOffMock
+      }
+      webContentsFromIdMock.mockImplementation((id: number) => (id === guest.id ? guest : null))
+      browserManager.attachGuestPolicies(guest as never)
+      browserManager.registerGuest({
+        browserPageId: 'closing',
+        webContentsId: guest.id,
+        rendererWebContentsId
+      })
+      const path = join(downloadsPath, 'pending.txt')
+      const pending = browserManager.downloadCapture.begin('closing', path)
+      if (teardown === 'unregister') {
+        browserManager.unregisterGuest('closing')
+      } else {
+        const destroyed = guestOnMock.mock.calls.find(([event]) => event === 'destroyed')?.[1]
+        expect(destroyed).toBeTypeOf('function')
+        destroyed()
+      }
+      await expect(pending.result).rejects.toMatchObject({ code: 'browser_download_canceled' })
+      expect(browserManager.downloadCapture.hasPending('closing')).toBe(false)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(() => browserManager.downloadCapture.begin('replacement', path)).not.toThrow()
+    }
+  )
 
   it('cancels active downloads when the owning browser tab closes', () => {
     const rendererSendMock = vi.fn()

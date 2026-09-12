@@ -19,6 +19,7 @@ export type BrowserDownloadReceipt = {
 type Capture = {
   destination: BrowserDownloadDestination
   claimed: boolean
+  ownerPageId: string
   cancelItem?: () => void
   finish(event?: BrowserDownloadFinishedEvent, error?: Error): void
 }
@@ -49,12 +50,12 @@ export class BrowserDownloadCapture {
               : 'No download started within 60 seconds.'
           )
         )
-        capture.cancelItem?.()
       }, BROWSER_DOWNLOAD_TIMEOUT_MS)
       let settled = false
       capture = {
         destination,
         claimed: false,
+        ownerPageId: browserPageId,
         finish: (event, error) => {
           if (settled) {
             return
@@ -68,8 +69,12 @@ export class BrowserDownloadCapture {
             }
           }
           browserDownloadDestinationReservations.release(destination.reservationKey)
+          const cancelItem = capture.cancelItem
+          capture.cancelItem = undefined
           if (error) {
-            return reject(error)
+            reject(error)
+            cancelItem?.()
+            return
           }
           if (event?.status !== 'completed' || event.savePath !== destination.savePath) {
             return reject(
@@ -107,7 +112,6 @@ export class BrowserDownloadCapture {
       result,
       cancel: (error: Error) => {
         capture.finish(undefined, error)
-        capture.cancelItem?.()
       }
     }
   }
@@ -142,7 +146,6 @@ export class BrowserDownloadCapture {
       undefined,
       new BrowserError('browser_download_failed', 'Download link navigation failed.')
     )
-    capture?.cancelItem?.()
   }
 
   hasPending(browserPageId: string): boolean {
@@ -155,9 +158,23 @@ export class BrowserDownloadCapture {
     if (!capture || capture.claimed) {
       return undefined
     }
+    capture.ownerPageId = browserPageId
     capture.claimed = true
     capture.cancelItem = cancelItem
     return capture
+  }
+
+  cancelPage(browserPageId: string): void {
+    const capture = this.capturesByPage.get(browserPageId)
+    if (capture?.claimed && capture.ownerPageId !== browserPageId) {
+      this.capturesByPage.delete(browserPageId)
+      this.navigationByPage.delete(browserPageId)
+      return
+    }
+    capture?.finish(
+      undefined,
+      new BrowserError('browser_download_canceled', 'Download page was closed.')
+    )
   }
 
   cancelAll(): void {
@@ -166,7 +183,6 @@ export class BrowserDownloadCapture {
         undefined,
         new BrowserError('browser_download_canceled', 'Browser downloads were closed.')
       )
-      capture.cancelItem?.()
     }
   }
 }

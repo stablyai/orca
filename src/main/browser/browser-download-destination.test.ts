@@ -10,6 +10,7 @@ describe('BrowserDownloadDestinationReservations', () => {
   it('uses the downloads folder and preserves a safe basename', () => {
     const reservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
+      realpath: (directory) => path.resolve(directory),
       pathExists: vi.fn(() => false),
       platform: 'linux'
     })
@@ -27,6 +28,7 @@ describe('BrowserDownloadDestinationReservations', () => {
   it('falls back to download for empty or unsafe filenames', () => {
     const reservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
+      realpath: (directory) => path.resolve(directory),
       pathExists: vi.fn(() => false),
       platform: 'linux'
     })
@@ -43,6 +45,7 @@ describe('BrowserDownloadDestinationReservations', () => {
     ])
     const reservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
+      realpath: (directory) => path.resolve(directory),
       pathExists: vi.fn((filePath: string) => existingPaths.has(filePath)),
       platform: 'linux'
     })
@@ -53,6 +56,7 @@ describe('BrowserDownloadDestinationReservations', () => {
   it('reserves simultaneous same-name downloads before files exist', () => {
     const reservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
+      realpath: (directory) => path.resolve(directory),
       pathExists: vi.fn(() => false),
       platform: 'linux'
     })
@@ -71,11 +75,13 @@ describe('BrowserDownloadDestinationReservations', () => {
   it('uses case-insensitive path identity on Windows and macOS', () => {
     const windowsReservations = new BrowserDownloadDestinationReservations({
       downloadsPath: 'C:\\Users\\orca\\Downloads',
+      realpath: (directory) => path.resolve(directory),
       pathExists: vi.fn(() => false),
       platform: 'win32'
     })
     const macReservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
+      realpath: (directory) => path.resolve(directory),
       pathExists: vi.fn(() => false),
       platform: 'darwin'
     })
@@ -89,6 +95,7 @@ describe('BrowserDownloadDestinationReservations', () => {
   it('rewrites Windows reserved device basenames', () => {
     const reservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
+      realpath: (directory) => path.resolve(directory),
       pathExists: vi.fn(() => false),
       platform: 'win32'
     })
@@ -113,6 +120,7 @@ describe('BrowserDownloadDestinationReservations', () => {
   it('preserves Windows device-like names on other platforms', () => {
     const reservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
+      realpath: (directory) => path.resolve(directory),
       pathExists: vi.fn(() => false),
       platform: 'linux'
     })
@@ -123,6 +131,7 @@ describe('BrowserDownloadDestinationReservations', () => {
   it('fails after bounded collision attempts', () => {
     const reservations = new BrowserDownloadDestinationReservations({
       downloadsPath,
+      realpath: (directory) => path.resolve(directory),
       pathExists: vi.fn(() => true),
       platform: 'linux'
     })
