@@ -102,18 +102,12 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
-  // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
-  // Why: Antigravity visibility also requires geminiCliOAuthEnabled because its usage snapshot mirrors the Gemini fetch.
-  const antigravityUsageConfigured =
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
-  // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
   const usageSettings = {
     ...settings,
-    antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
     minimaxApiKeyConfigured: rateLimits.minimaxApiKeyConfigured,
-    grokAuthConfigured: rateLimits.grokAuthConfigured
+    grokAuthConfigured: rateLimits.grokAuthConfigured,
+    antigravityAuthConfigured: rateLimits.antigravityAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)

@@ -3,6 +3,7 @@ import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
   CodexConfigSyncApi,
+  AntigravityAccountsApi,
   GrokAccountsApi,
   MinimaxCredentialsApi
 } from './api/agent-account-api'
@@ -141,6 +142,7 @@ export type PreloadApi = {
   rateLimits: RateLimitsApi
   minimaxCredentials: MinimaxCredentialsApi
   grokAccounts: GrokAccountsApi
+  antigravityAccounts: AntigravityAccountsApi
   ssh: SshApi
   automations: AutomationsApi
   wsl: RuntimeApi['wsl']

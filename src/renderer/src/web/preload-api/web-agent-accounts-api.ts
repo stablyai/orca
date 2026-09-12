@@ -27,6 +27,20 @@ export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAc
   }
 }
 
+export function createAntigravityAccountsApi(): NonNullable<
+  Partial<PreloadApi>['antigravityAccounts']
+> {
+  const unsigned = {
+    signedIn: false,
+    email: null,
+    tokenFresh: false,
+    error: null
+  }
+  return {
+    getStatus: () => Promise.resolve(unsigned)
+  }
+}
+
 export function createAccountsApi(): never {
   const empty = {
     accounts: [],

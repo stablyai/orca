@@ -8867,7 +8867,11 @@
             "b2c4e7f1a8": "endpoint",
             "3a9b6d2c4e": "api key",
             "5d8f1a3b7c": "china",
-            "7e2a4b8c1d": "overseas"
+            "7e2a4b8c1d": "overseas",
+            "antigravityTitle": "Antigravity",
+            "antigravityDescription": "Shows the Google sign-in from your Antigravity CLI session.",
+            "antigravityKeyword": "antigravity",
+            "agyKeyword": "agy"
           }
         },
         "advanced": {
@@ -11841,6 +11845,25 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "AntigravityAccountsSection": {
+          "title": "Antigravity",
+          "description": "Shows the Google sign-in from your Antigravity CLI session (~/.gemini/antigravity-cli).",
+          "docs": "Antigravity CLI docs",
+          "loading": "Loading…",
+          "signedIn": "Signed in",
+          "signedInHint": "Signed in. Orca reads the Antigravity CLI session stored on disk.",
+          "expiredHint": "Session expired — run agy on the computer running Orca and wait for it to start. If prompted, complete sign-in, then click Refresh usage. No chat message is needed.",
+          "notSignedIn": "Not signed in to Antigravity CLI",
+          "signInHint": "In a terminal, run agy and complete Google sign-in, then click Refresh usage here.",
+          "refresh": "Refresh usage",
+          "sessionUsage": "Session usage",
+          "sessionUsageHint": "Same 5-hour and weekly windows as agy /usage.",
+          "weeklyUsage": "Weekly usage",
+          "weeklyUsageHint": "Weekly Antigravity CLI quota window.",
+          "resets": "Resets {{when}}",
+          "usage": "Usage",
+          "usageUnknown": "Orca found the Antigravity CLI sign-in but could not read a usage percentage."
         }
       },
       "right": {

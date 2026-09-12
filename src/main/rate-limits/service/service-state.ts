@@ -21,6 +21,7 @@ import {
   DEFAULT_POLL_MS
 } from './service-types'
 import { readGrokAuthSession } from '../grok-auth'
+import { readAntigravityAuthSession } from '../antigravity-oauth-sources'
 
 export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
@@ -34,6 +35,7 @@ export abstract class RateLimitServiceState {
     grok: null
   }
   protected grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  protected antigravityAuthConfigured = readAntigravityAuthSession().status === 'ok'
   protected pollInterval: number = DEFAULT_POLL_MS
   protected timer: ReturnType<typeof setInterval> | null = null
   protected deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
