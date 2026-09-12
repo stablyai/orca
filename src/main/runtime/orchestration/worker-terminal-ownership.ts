@@ -35,6 +35,8 @@ export type WorkerTerminalResourceRow = {
   worktree_id: string | null
   terminal_handle: string
   pane_key: string | null
+  /** Serialized OrchestrationPrincipal; write-only until the resolver PRs. */
+  principal: string | null
   process_incarnation: string | null
   endpoint_id: string | null
   endpoint_incarnation: string | null

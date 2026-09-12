@@ -43,7 +43,11 @@ const VERSIONED_POST_V6_COLUMNS = [
   { version: 36, table: 'remote_dispatch_attachments', column: 'consumer_generation' },
   { version: 37, table: 'dispatch_contexts', column: 'creator_handle' },
   { version: 37, table: 'dispatch_contexts', column: 'creator_pane_key' },
-  { version: 40, table: 'remote_dispatch_attachments', column: 'home_run_id' }
+  { version: 40, table: 'remote_dispatch_attachments', column: 'home_run_id' },
+  { version: 41, table: 'runs', column: 'coordinator_principal' },
+  { version: 41, table: 'dispatch_contexts', column: 'assignee_principal' },
+  { version: 41, table: 'dispatch_contexts', column: 'creator_principal' },
+  { version: 41, table: 'worker_terminal_resources', column: 'principal' }
 ] as const
 
 // Why: v34 shipped without these two, so a v34 stamp proves nothing about them; v35 repairs both
