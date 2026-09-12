@@ -410,7 +410,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       function makeCooldownHarness(takeResult: {
         overflowed: boolean
-        appendResult?: 'ok' | 'needs-checkpoint'
+        appendResult?: 'ok' | 'checkpoint-needed' | 'needs-checkpoint'
         checkpointResult?: 'committed' | 'retryable' | 'unavailable'
         snapshotRecords?: PendingOutputRecord[]
       }): CooldownInternals {
@@ -480,10 +480,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(2)
       })
 
-      it('defers log-cap (needs-checkpoint) snapshots inside the cooldown', async () => {
+      it('defers accepted-batch rotation inside the cooldown', async () => {
         const internals = makeCooldownHarness({
           overflowed: false,
-          appendResult: 'needs-checkpoint'
+          appendResult: 'checkpoint-needed'
         })
         internals.lastFullCheckpointAt.set('capped', Date.now())
 
