@@ -1,5 +1,9 @@
 import { getShortcutPlatform } from './shortcut-platform'
 
+export function isEditorKeyboardTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.closest('[data-editor-keyboard-scope]') !== null
+}
+
 // Why: shared across global keyboard listeners (App-level shortcuts and the
 // onboarding flow) so an in-progress text edit never gets hijacked by a
 // capture-phase keydown handler.
@@ -15,7 +19,7 @@ export function isEditableTarget(target: EventTarget | null): boolean {
     return false
   }
 
-  if (target.isContentEditable) {
+  if (target.isContentEditable || isEditorKeyboardTarget(target)) {
     return true
   }
   return (

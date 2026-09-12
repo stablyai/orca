@@ -15,8 +15,10 @@ async function flushMicrotasks(): Promise<void> {
 }
 
 describe('combined diff load scheduler', () => {
-  it('defaults to serial section loads', async () => {
-    const blockers = [deferred(), deferred()]
+  it('defaults to loading several sections in parallel', async () => {
+    // Why: the renderer highlights in a worker pool now, so fetches are no
+    // longer serialized behind per-section editor construction.
+    const blockers = [deferred(), deferred(), deferred(), deferred(), deferred()]
     const started: number[] = []
     const scheduler = createCombinedDiffLoadScheduler({
       schedule: (callback) => callback(),
@@ -26,15 +28,18 @@ describe('combined diff load scheduler', () => {
       }
     })
 
-    scheduler.request(1)
-    scheduler.request(2)
-    expect(started).toEqual([1])
+    for (let index = 1; index <= 5; index += 1) {
+      scheduler.request(index)
+    }
+    expect(started).toEqual([1, 2, 3, 4])
 
     blockers[0]!.resolve()
     await flushMicrotasks()
-    expect(started).toEqual([1, 2])
+    expect(started).toEqual([1, 2, 3, 4, 5])
 
-    blockers[1]!.resolve()
+    for (const blocker of blockers.slice(1)) {
+      blocker.resolve()
+    }
     await flushMicrotasks()
   })
 

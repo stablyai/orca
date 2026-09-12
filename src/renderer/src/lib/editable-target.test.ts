@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { isSelectAllShortcut } from './editable-target'
+import { isEditableTarget, isSelectAllShortcut } from './editable-target'
 
 const originalUserAgent = navigator.userAgent
 
@@ -42,4 +42,21 @@ describe('isSelectAllShortcut', () => {
 
     expect(isSelectAllShortcut(keyEvent(modifiers))).toBe(false)
   })
+})
+
+it('reserves shortcuts for a retargeted shadow host and its read-only surface', () => {
+  const surface = document.createElement('div')
+  surface.setAttribute('data-editor-keyboard-scope', '')
+  const host = document.createElement('diffs-container')
+  surface.append(host)
+  expect(isEditableTarget(surface)).toBe(true)
+  expect(isEditableTarget(host)).toBe(true)
+  expect(isEditableTarget(document.createElement('div'))).toBe(false)
+})
+
+it('preserves normal input handling and the terminal textarea exception', () => {
+  const input = document.createElement('textarea')
+  expect(isEditableTarget(input)).toBe(true)
+  input.className = 'xterm-helper-textarea'
+  expect(isEditableTarget(input)).toBe(false)
 })

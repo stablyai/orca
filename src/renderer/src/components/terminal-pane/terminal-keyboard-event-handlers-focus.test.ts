@@ -3,6 +3,40 @@ import { describe, expect, it, vi } from 'vitest'
 import { createTerminalKeyboardEventHandlers } from './terminal-keyboard-event-handlers'
 
 describe('terminal keyboard pane ownership', () => {
+  it.each([
+    { key: 's', code: 'KeyS', altKey: false },
+    { key: 'c', code: 'KeyC', altKey: true },
+    { key: 'g', code: 'KeyG', altKey: false }
+  ])('leaves Ctrl+$key to a diff host before reading terminal search or IME state', (chord) => {
+    const surface = document.createElement('div')
+    surface.setAttribute('data-editor-keyboard-scope', '')
+    const host = document.createElement('diffs-container')
+    surface.append(host)
+    const getActivePane = vi.fn(() => {
+      throw new Error('Diff shortcuts must not consult the terminal')
+    })
+    const resolveShortcutEvent = vi.fn()
+    const handlers = createTerminalKeyboardEventHandlers({
+      isMac: false,
+      isWindows: false,
+      nativeOnlyShortcutTracker: { prepareKeyDown: vi.fn() },
+      managerRef: { current: { getActivePane } },
+      keyboardScopeRef: { current: null },
+      resolveShortcutEvent
+    } as never)
+    surface.addEventListener('keydown', handlers.onKeyDown, true)
+    const event = new KeyboardEvent('keydown', {
+      ...chord,
+      ctrlKey: true,
+      cancelable: true,
+      bubbles: true
+    })
+    host.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(getActivePane).not.toHaveBeenCalled()
+    expect(resolveShortcutEvent).not.toHaveBeenCalled()
+  })
+
   it('submits Enter through the helper textarea pane when active state is stale', () => {
     const scope = document.createElement('div')
     const firstElement = document.createElement('div')

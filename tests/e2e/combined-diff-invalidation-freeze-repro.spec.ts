@@ -88,10 +88,14 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
           let editorCount = 0
           while (performance.now() - startedAt < 30_000) {
             await new Promise((resolve) => window.setTimeout(resolve, 50))
-            editorCount = document.querySelectorAll('.monaco-diff-editor').length
+            editorCount = Array.from(document.querySelectorAll('diffs-container')).filter((host) =>
+              host.shadowRoot?.querySelector('[data-content] [data-line]')
+            ).length
             if (editorCount > 0) {
               await new Promise((resolve) => window.setTimeout(resolve, 1_500))
-              editorCount = document.querySelectorAll('.monaco-diff-editor').length
+              editorCount = Array.from(document.querySelectorAll('diffs-container')).filter(
+                (host) => host.shadowRoot?.querySelector('[data-content] [data-line]')
+              ).length
               break
             }
           }
@@ -148,7 +152,9 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
             maxLagMs,
             p95LagMs: sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : 0,
             sampleCount: samples.length,
-            editorCount: document.querySelectorAll('.monaco-diff-editor').length,
+            editorCount: Array.from(document.querySelectorAll('diffs-container')).filter((host) =>
+              host.shadowRoot?.querySelector('[data-content] [data-line]')
+            ).length,
             loadingRowCount: Array.from(
               document.querySelectorAll('[data-combined-diff-section-row]')
             ).filter((row) => row.textContent?.includes('Loading diff')).length,
@@ -175,7 +181,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
     test.setTimeout(240_000)
     await waitForSessionReady(orcaPage)
     // Why: few but very large sections — the reported freeze is a *large* diff view,
-    // where every remount re-runs Monaco's diff over thousands of changed lines.
+    // where every remount recomputes thousands of changed lines.
     const fixture = createIsolatedManyFileStagedDiffRepo(8, 15_000)
 
     try {
@@ -196,10 +202,14 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
           let editorCount = 0
           while (performance.now() - startedAt < 30_000) {
             await new Promise((resolve) => window.setTimeout(resolve, 50))
-            editorCount = document.querySelectorAll('.monaco-diff-editor').length
+            editorCount = Array.from(document.querySelectorAll('diffs-container')).filter((host) =>
+              host.shadowRoot?.querySelector('[data-content] [data-line]')
+            ).length
             if (editorCount > 0) {
               await new Promise((resolve) => window.setTimeout(resolve, 1_500))
-              editorCount = document.querySelectorAll('.monaco-diff-editor').length
+              editorCount = Array.from(document.querySelectorAll('diffs-container')).filter(
+                (host) => host.shadowRoot?.querySelector('[data-content] [data-line]')
+              ).length
               break
             }
           }
@@ -235,7 +245,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
             }
           }
 
-          // Why: opening 8 huge Monaco diffs is itself expensive. Wait for the main thread to go
+          // Why: opening 8 huge diffs is itself expensive. Wait for the main thread to go
           // quiet first, so the burst window reports invalidation cost and not open cost.
           const stopSettle = startLagMeter()
           const settleStartedAt = performance.now()
@@ -250,7 +260,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
           const settle = { ...stopSettle(), settleWindows }
 
           // Why: settling still leaves occasional multi-hundred-ms stalls from the 8 mounted
-          // 15k-line Monaco editors. Measure an identical idle window so the burst is judged
+          // 15k-line diffs. Measure an identical idle window so the burst is judged
           // against this machine's floor rather than a fixed number.
           const stopBaseline = startLagMeter()
           await new Promise((resolve) => window.setTimeout(resolve, burstDurationMs))
@@ -284,7 +294,9 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
             baseline,
             burst,
             expectedSampleCount: Math.floor(burstDurationMs / intervalMs),
-            editorCount: document.querySelectorAll('.monaco-diff-editor').length,
+            editorCount: Array.from(document.querySelectorAll('diffs-container')).filter((host) =>
+              host.shadowRoot?.querySelector('[data-content] [data-line]')
+            ).length,
             sectionRowCount: rows.length,
             stuckLoadingRowCount: rows.filter((row) => row.textContent?.includes('Loading diff'))
               .length

@@ -155,6 +155,8 @@
   --orca-security-ring: #a1a1a1;
   --background: #fff;
   --editor-surface: #ffffff;
+  /* Match Monaco's default text-selection colors across editor surfaces. */
+  --editor-selection-background: #add6ff;
   --foreground: #0a0a0a;
   --card: #fff;
   --card-foreground: #0a0a0a;
@@ -273,6 +275,7 @@
   --orca-security-ring: #737373;
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
+  --editor-selection-background: #264f78;
   --foreground: #fafafa;
   --card: #171717;
   --card-foreground: #fafafa;
@@ -3029,4 +3032,21 @@ html.native-shell .app-layout {
   box-shadow:
     inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
     0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+/* Why: inside a Pierre annotation row the diff already owns placement, so the
+   note draft drops the overlay's absolute positioning and fills the row. */
+.orca-diff-comment-popover-inline {
+  position: static;
+  width: 100%;
+  max-width: none;
+}
+
+/* Why: Pierre positions its gutter slot 14px into the line-number column. Pull
+   the add-note button back into the glyph margin so it never covers a number. */
+.orca-diff-comment-add-btn-gutter {
+  position: relative;
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
 }

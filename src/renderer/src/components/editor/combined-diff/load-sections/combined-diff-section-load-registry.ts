@@ -27,18 +27,23 @@ export type CombinedDiffSectionLoadRegistry = {
   reloadTimersRef: React.RefObject<Map<number, number>>
   renderedIndicesRef: React.RefObject<Set<number>>
   requestSectionReloadRef: React.RefObject<(index: number) => void>
+  /** Re-drives a reload only for a row that refused one while dirty. */
+  retryDeferredSectionReloadRef: React.RefObject<(index: number) => void>
+  /** Keys whose reload was refused because the row was dirty; keyed by section, not index. */
+  deferredReloadKeysRef: React.RefObject<Set<string>>
+  /** False once the viewer unmounts, so a late save cannot revive load bookkeeping. */
+  registryLiveRef: React.RefObject<boolean>
   retrySectionRef: React.RefObject<(index: number) => void>
   sectionLoadTokensRef: React.RefObject<Map<number, number>>
   sectionsRef: React.RefObject<DiffSection[]>
 }
 
 export function useCombinedDiffSectionLoadRegistry(
-  sections: DiffSection[]
+  sectionsRef: React.RefObject<DiffSection[]>
 ): CombinedDiffSectionLoadRegistry {
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const deferredLoadRequestsRef = useRef<Set<number>>(new Set())
-  const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
   // Why: per-section reload token, so a sibling's reload can't discard this section's in-flight load.
   const sectionLoadTokensRef = useRef<Map<number, number>>(new Map())
@@ -47,18 +52,26 @@ export function useCombinedDiffSectionLoadRegistry(
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
   const retrySectionRef = useRef<(index: number) => void>(() => {})
   const requestSectionReloadRef = useRef<(index: number) => void>(() => {})
+  const retryDeferredSectionReloadRef = useRef<(index: number) => void>(() => {})
+  const deferredReloadKeysRef = useRef<Set<string>>(new Set())
+  const registryLiveRef = useRef(true)
   const loadSchedulerRef = useRef<ReturnType<typeof createCombinedDiffLoadScheduler>>(undefined!)
   loadSchedulerRef.current ??= createCombinedDiffLoadScheduler({
     loadSection: (index) => loadSectionRef.current(index)
   })
-  sectionsRef.current = sections
+  // Why in render AND in the effect below: child effects run before this parent's, so a
+  // render-only write covers that window; StrictMode replays setup -> cleanup -> setup with no
+  // render in between, so an effect-only write is needed to survive the replayed cleanup.
+  registryLiveRef.current = true
 
   useEffect(() => {
     // Why: React StrictMode replays effect cleanup in dev; reset revives the scheduler for the replayed mount.
     const scheduler = loadSchedulerRef.current
     const reloadTimers = reloadTimersRef.current
     scheduler.reset()
+    registryLiveRef.current = true
     return () => {
+      registryLiveRef.current = false
       clearPendingSectionReloadTimers(reloadTimers)
       scheduler.dispose()
     }
@@ -74,6 +87,9 @@ export function useCombinedDiffSectionLoadRegistry(
     reloadTimersRef,
     renderedIndicesRef,
     requestSectionReloadRef,
+    retryDeferredSectionReloadRef,
+    deferredReloadKeysRef,
+    registryLiveRef,
     retrySectionRef,
     sectionLoadTokensRef,
     sectionsRef

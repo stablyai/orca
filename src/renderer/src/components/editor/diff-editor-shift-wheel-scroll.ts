@@ -27,7 +27,7 @@ function canScrollHorizontally(editor: HorizontalScrollEditor): boolean {
   return editor.getScrollWidth() > editor.getLayoutInfo().contentWidth
 }
 
-function installPaneShiftWheelScroll(editor: HorizontalScrollEditor): () => void {
+export function installPaneShiftWheelScroll(editor: HorizontalScrollEditor): () => void {
   const container = editor.getContainerDomNode()
   const handleWheel = (event: WheelEvent): void => {
     if (event.defaultPrevented || !event.shiftKey) {

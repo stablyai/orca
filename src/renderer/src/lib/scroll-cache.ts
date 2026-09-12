@@ -1,4 +1,4 @@
-import type { editor, ISelection } from 'monaco-editor'
+import type { ISelection } from 'monaco-editor'
 
 // Why: 20 entries covers a typical working set of open/recently-viewed files.
 // Eviction only means losing a scroll position (user sees top of file), not a
@@ -46,8 +46,6 @@ export const editorSelectionCache = new Map<string, readonly ISelection[]>()
 export type PdfViewPosition = { pageNumber: number; top: number; left: number }
 export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
 
-// Why: Diff editors need more than a numeric scroll offset to restore the same
-// working context. Monaco's diff view state also carries cursor/selection state
-// for both sides plus diff model state, which matches VS Code's restore path
-// more closely than Orca's previous scroll-only cache.
-export const diffViewStateCache = new Map<string, editor.IDiffEditorViewState>()
+// Why: diff tabs keep their own scroll map, keyed by tab identity rather than
+// file path so two live diffs of one file don't restore onto each other.
+export const diffScrollTopCache = new Map<string, number>()

@@ -82,13 +82,16 @@ const controller = {
   terminalShortcutPolicy: 'orca-first'
 } as unknown as TerminalActivationController
 
-function pressCmdS(): (EditorRequestCmdSaveDetail | undefined)[] {
+function pressCmdS(editorTarget = false): (EditorRequestCmdSaveDetail | undefined)[] {
   const details: (EditorRequestCmdSaveDetail | undefined)[] = []
   const listener = (event: Event): void => {
     details.push((event as CustomEvent<EditorRequestCmdSaveDetail>).detail ?? undefined)
   }
   window.addEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, listener)
   const target = document.createElement('div')
+  if (editorTarget) {
+    target.setAttribute('data-editor-keyboard-scope', '')
+  }
   document.body.appendChild(target)
   const event = new KeyboardEvent('keydown', { key: 's', metaKey: true, cancelable: true })
   Object.defineProperty(event, 'target', { value: target })
@@ -115,6 +118,10 @@ describe('handleTerminalWorkspaceKeyDown editor.save', () => {
 
   it('dispatches the save request with the resolved file id', () => {
     expect(pressCmdS()).toEqual([{ fileId: 'file-1' }])
+  })
+
+  it('leaves a diff surface save to its local handler', () => {
+    expect(pressCmdS(true)).toEqual([])
   })
 
   it('resolves the floating panel editor when the panel owns the event', () => {

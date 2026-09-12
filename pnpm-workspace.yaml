@@ -10,6 +10,7 @@ minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - pdfjs-dist@6.3.289
   - zod@4.5.4
+  - '@pierre/diffs@1.4.1'
   - electron@43.7.0
 shamefullyHoist: true
 
@@ -64,3 +65,4 @@ patchedDependencies:
   '@xterm/xterm@6.1.0-beta.303': config/patches/@xterm__xterm@6.1.0-beta.303.patch
   lint-staged@16.4.0: config/patches/lint-staged@16.4.0.patch
   '@vscode/windows-process-tree@0.8.0': config/patches/@vscode__windows-process-tree@0.8.0.patch
+  '@pierre/diffs@1.4.1': config/patches/@pierre__diffs@1.4.1.patch

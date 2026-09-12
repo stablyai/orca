@@ -72,6 +72,9 @@ export function useCombinedDiffSectionLoader({
 
       const gen = generationRef.current
       const loadToken = sectionLoadTokensRef.current.get(index) ?? 0
+      // Why: `dirty` flips back to false once a save is acknowledged, so it cannot tell us whether
+      // the draft moved while this fetch was in flight. Pin the draft identity instead.
+      const draftAtFetchStart = sectionsRef.current[index]?.modifiedContent
       const entries: (GitStatusEntry | GitBranchChangeEntry)[] = isAllMode
         ? allEntries
         : isBranchMode
@@ -148,13 +151,31 @@ export function useCombinedDiffSectionLoader({
       ) {
         return
       }
+      // `dirty` flips back to false once a save is acknowledged, so it cannot tell a stale payload
+      // from a fresh one. If the draft moved while this fetch was in flight, only commit when the
+      // payload actually agrees with that draft — otherwise this reverts the user's saved text on
+      // screen and wipes undo history when the remount finds mismatched content.
+      const liveSection = sectionsRef.current[index]
+      const liveDraft = liveSection?.modifiedContent
+      const payloadMatchesLive =
+        storedContent.modifiedContent === liveDraft &&
+        storedContent.originalContent === liveSection?.originalContent
+      if (liveDraft !== draftAtFetchStart && !payloadMatchesLive) {
+        // Why: re-drive the fetch so a rejected payload does not pin the section stale. Do not
+        // clear `loadedIndices` here — requestSectionReload clears it itself when it proceeds,
+        // and refuses while the row is dirty. Clearing unconditionally would strand the index
+        // unscheduled, making the next virtualizer scroll-in refetch a row being typed in.
+        requestSectionReloadRef.current(index)
+        return
+      }
       if (wasShowingContent) {
-        // Why: content really changed, so the old Monaco height no longer describes this row.
+        // Why: content really changed, so the old measured height no longer describes this row.
+        // Must follow the skip above, or a rejected payload resizes the row being typed in.
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       }
       setSections((prev) => {
         return prev.map((s, i) =>
-          i === index
+          i === index && !s.dirty
             ? {
                 ...s,
                 diffResult: storedResult,

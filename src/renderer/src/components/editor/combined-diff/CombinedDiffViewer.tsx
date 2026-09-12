@@ -1,11 +1,11 @@
 import React, { useCallback, useRef, useState } from 'react'
+import { useCombinedDiffSectionsState } from './use-combined-diff-sections-state'
 import { useAppStore } from '@/store'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
 import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import type { OpenFile } from '@/store/slices/editor'
 import '@/lib/monaco-setup'
-import type { DiffSection } from '../diff-section-types'
 import {
   EMPTY_GIT_BRANCH_ENTRIES,
   EMPTY_GIT_STATUS_ENTRIES,
@@ -38,6 +38,7 @@ import {
 import { useCombinedDiffNotesActions } from './review-controls/use-combined-diff-notes-actions'
 import { useCombinedDiffSectionActions } from './review-controls/use-combined-diff-section-actions'
 import { useCombinedDiffViewPreferences } from './review-controls/use-combined-diff-view-preferences'
+import { PierreDiffProviders } from '../pierre-diff/PierreDiffProviders'
 
 export default function CombinedDiffViewer({
   file,
@@ -64,11 +65,8 @@ export default function CombinedDiffViewer({
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
-  const [sections, setSections] = useState<DiffSection[]>([])
+  const { sections, sectionsRef, setSections } = useCombinedDiffSectionsState()
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [generation, setGeneration] = useState(0)
   // Why: a browser scroll clamp must re-pin the restore without being recorded as user intent.
@@ -76,7 +74,7 @@ export default function CombinedDiffViewer({
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  const registry = useCombinedDiffSectionLoadRegistry(sections)
+  const registry = useCombinedDiffSectionLoadRegistry(sectionsRef)
   const entrySet = useCombinedDiffEntrySet({
     file,
     gitStatusEntries,
@@ -118,6 +116,7 @@ export default function CombinedDiffViewer({
   const { ensureSectionLoaded, requestSectionReload, retrySection } = useCombinedDiffSectionRetry({
     invalidateViewStateCache: restore.invalidateViewStateCache,
     registry,
+    sections,
     setSectionHeights,
     setSections
   })
@@ -172,7 +171,7 @@ export default function CombinedDiffViewer({
         registry.loadSchedulerRef.current.request(index)
       }
     },
-    [registry.loadSchedulerRef, registry.sectionsRef]
+    [registry.loadSchedulerRef, registry.sectionsRef, setSections]
   )
 
   const treeNavigation = useCombinedDiffTreeNavigation({
@@ -196,21 +195,20 @@ export default function CombinedDiffViewer({
     shouldAutoReloadFromGitStatus: entrySet.shouldAutoReloadFromGitStatus,
     treeMode: entrySet.treeMode
   })
-  const { handleSectionSaveRef, modifiedEditorsRef, openSection, openSectionPreview } =
-    useCombinedDiffSectionActions({
-      activeGroupId,
-      branchCompare: entrySet.branchCompare,
-      canOpenWorkspaceFileBrowserForPath,
-      commitCompare: entrySet.commitCompare,
-      file,
-      isAllMode: entrySet.isAllMode,
-      isBranchMode: entrySet.isBranchMode,
-      isCommitMode: entrySet.isCommitMode,
-      sections,
-      sectionsRef: registry.sectionsRef,
-      setSectionHeights,
-      setSections
-    })
+  const { handleSectionSaveRef, openSection, openSectionPreview } = useCombinedDiffSectionActions({
+    activeGroupId,
+    branchCompare: entrySet.branchCompare,
+    canOpenWorkspaceFileBrowserForPath,
+    commitCompare: entrySet.commitCompare,
+    file,
+    isAllMode: entrySet.isAllMode,
+    isBranchMode: entrySet.isBranchMode,
+    isCommitMode: entrySet.isCommitMode,
+    retryDeferredSectionReloadRef: registry.retryDeferredSectionReloadRef,
+    sectionsRef: registry.sectionsRef,
+    setSectionHeights,
+    setSections
+  })
 
   useCombinedDiffViewPersist({
     combinedGitStatusSignature,
@@ -313,7 +311,7 @@ export default function CombinedDiffViewer({
   const allSectionsCollapsed = sectionRowKeys.allSectionsCollapsed
 
   return (
-    <>
+    <PierreDiffProviders scrollContainerRef={scrollContainerRef}>
       <div className="flex flex-col flex-1 min-h-0">
         <CombinedDiffToolbar
           activeGroupId={activeGroupId}
@@ -357,6 +355,7 @@ export default function CombinedDiffViewer({
             onNavigate={treeNavigation.handleTreeNavigate}
           />
           <CombinedDiffSectionList
+            viewStateKey={viewStateKey}
             activeGroupId={activeGroupId}
             canOpenWorkspaceFileBrowserForPath={canOpenWorkspaceFileBrowserForPath}
             diffCommentsForWorktree={diffCommentsForWorktree}
@@ -365,11 +364,9 @@ export default function CombinedDiffViewer({
             isAllMode={entrySet.isAllMode}
             isBranchMode={entrySet.isBranchMode}
             isCommitMode={entrySet.isCommitMode}
-            isDark={isDark}
             loadSection={loadSection}
             loadDeferredSection={loadDeferredSection}
             markDirectScrollInput={markDirectScrollInput}
-            modifiedEditorsRef={modifiedEditorsRef}
             onScrollbarPointerDown={handleScrollbarPointerDown}
             openSection={openSection}
             openSectionPreview={openSectionPreview}
@@ -395,6 +392,6 @@ export default function CombinedDiffViewer({
         open={notes.clearNotesDialogVisible}
         setOpen={notes.setClearNotesDialogOpen}
       />
-    </>
+    </PierreDiffProviders>
   )
 }

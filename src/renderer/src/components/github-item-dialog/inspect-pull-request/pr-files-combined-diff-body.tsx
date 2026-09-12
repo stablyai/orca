@@ -1,6 +1,5 @@
 import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
-import type { editor as monacoEditor } from 'monaco-editor'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
 import { translate } from '@/i18n/i18n'
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
@@ -17,6 +16,7 @@ export function PRFilesCombinedDiffBody({
   repoPath,
   repoId,
   prNumber,
+  viewStateKey,
   fileTreeCollapsed,
   allSectionsCollapsed,
   sideBySide,
@@ -31,7 +31,6 @@ export function PRFilesCombinedDiffBody({
   scrollContainerRef,
   virtualizer,
   sections,
-  isDark,
   settings,
   sectionHeights,
   inlineReviewComments,
@@ -43,7 +42,6 @@ export function PRFilesCombinedDiffBody({
   handleAddLineComment,
   setSectionHeights,
   setSections,
-  modifiedEditorsRef,
   handleSectionSaveRef,
   getCommentableLineNumbers
 }: {
@@ -51,6 +49,7 @@ export function PRFilesCombinedDiffBody({
   repoPath: string
   repoId: string
   prNumber: number
+  viewStateKey: string
   fileTreeCollapsed: boolean
   allSectionsCollapsed: boolean
   sideBySide: boolean
@@ -65,7 +64,6 @@ export function PRFilesCombinedDiffBody({
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
   sections: DiffSection[]
-  isDark: boolean
   settings: DiffSectionItemProps['settings']
   sectionHeights: Record<number, number>
   inlineReviewComments: DecoratedDiffComment[]
@@ -82,7 +80,6 @@ export function PRFilesCombinedDiffBody({
   getCommentableLineNumbers: (section: DiffSection) => readonly number[] | undefined
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
-  modifiedEditorsRef: React.RefObject<Map<number, monacoEditor.IStandaloneCodeEditor>>
   handleSectionSaveRef: React.MutableRefObject<(index: number) => Promise<void>>
 }): React.JSX.Element {
   return (
@@ -125,10 +122,10 @@ export function PRFilesCombinedDiffBody({
                 >
                   <DiffSectionItem
                     section={section}
+                    editStateKey={`${viewStateKey}:${section.key}`}
                     index={virtualItem.index}
                     isBranchMode={false}
                     sideBySide={sideBySide}
-                    isDark={isDark}
                     settings={settings}
                     sectionHeight={sectionHeights[virtualItem.index]}
                     worktreeId={`github-pr:${repoId}:${prNumber}`}
@@ -154,7 +151,6 @@ export function PRFilesCombinedDiffBody({
                     getCommentableLineNumbers={getCommentableLineNumbers}
                     setSectionHeights={setSectionHeights}
                     setSections={setSections}
-                    modifiedEditorsRef={modifiedEditorsRef}
                     handleSectionSaveRef={handleSectionSaveRef}
                   />
                 </div>

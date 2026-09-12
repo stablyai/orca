@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it } from 'vitest'
+import { useRef } from 'react'
 import { cleanup, renderHook } from '@testing-library/react'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
@@ -36,10 +37,14 @@ function buildAllModeEntrySet(
   }
 }
 
+function statusEntry(path: string): GitStatusEntry {
+  return { path, status: 'modified', area: 'unstaged', added: 1 }
+}
+
 function restoreSections(entrySet: CombinedDiffEntrySet, viewStateKey: string): DiffSection[] {
   let sections: DiffSection[] = []
   renderHook(() => {
-    const registry = useCombinedDiffSectionLoadRegistry([])
+    const registry = useCombinedDiffSectionLoadRegistry(useRef([]))
     return useCombinedDiffViewRestore({
       entrySet,
       gitStatusEntries: [],
@@ -146,4 +151,30 @@ describe('useCombinedDiffViewRestore deferral', () => {
     )
     expect(sections.map((section) => section.loadOnDemand)).toEqual([false, false])
   })
+})
+
+it('clears deferred reload records when the entry set is rebuilt', () => {
+  // Why: the rebuilt rows load fresh, so a refusal recorded against the old set would charge the
+  // next save of that path a git diff it no longer needs.
+  let keys: Set<string> | undefined
+  const view = renderHook(
+    ({ entrySet }: { entrySet: CombinedDiffEntrySet }) => {
+      const registry = useCombinedDiffSectionLoadRegistry(useRef([]))
+      keys = registry.deferredReloadKeysRef.current
+      useCombinedDiffViewRestore({
+        entrySet,
+        gitStatusEntries: [],
+        registry,
+        setGeneration: () => {},
+        setSectionHeights: () => {},
+        setSections: () => {},
+        setSideBySide: () => {},
+        viewStateKey: 'rebuild'
+      })
+    },
+    { initialProps: { entrySet: buildAllModeEntrySet([statusEntry('a.ts')], []) } }
+  )
+  keys?.add('a.ts')
+  view.rerender({ entrySet: buildAllModeEntrySet([statusEntry('a.ts'), statusEntry('b.ts')], []) })
+  expect([...(keys ?? [])]).toEqual([])
 })
