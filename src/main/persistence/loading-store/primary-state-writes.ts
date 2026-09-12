@@ -116,21 +116,23 @@ export class PrimaryStateWriteOperations {
 }
 
 export function enqueueWrite(owner: PrimaryStateWriteOperations): Promise<void> {
+  const pendingWrite = owner[primaryStateWriteOperationsContext].runtime.pendingWrite
   const previousWrite = Promise.all([
-    owner[primaryStateWriteOperationsContext].runtime.pendingWrite ??
-      owner[primaryStateWriteOperationsContext].runtime.staleTempCleanup,
+    pendingWrite
+      ? pendingWrite.catch(() => {})
+      : owner[primaryStateWriteOperationsContext].runtime.staleTempCleanup,
     owner[primaryStateWriteOperationsContext].runtime.pendingSnapshotFileWork ?? Promise.resolve()
   ]).then(() => {})
   const write = previousWrite.then(() => writeToDiskAsync(owner))
-  const trackedWrite = write
-    .catch((err) => {
-      console.error('[persistence] Failed to write state:', err)
-    })
-    .finally(() => {
-      if (owner[primaryStateWriteOperationsContext].runtime.pendingWrite === trackedWrite) {
-        owner[primaryStateWriteOperationsContext].runtime.pendingWrite = null
-      }
-    })
+  const trackedWrite = write.finally(() => {
+    if (owner[primaryStateWriteOperationsContext].runtime.pendingWrite === trackedWrite) {
+      owner[primaryStateWriteOperationsContext].runtime.pendingWrite = null
+    }
+  })
+  // Why: waiters still see the rejection; this only logs and marks it handled if nobody is awaiting.
+  void trackedWrite.catch((err) => {
+    console.error('[persistence] Failed to write state:', err)
+  })
   owner[primaryStateWriteOperationsContext].runtime.pendingWrite = trackedWrite
   return write
 }
