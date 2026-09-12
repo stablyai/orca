@@ -99,11 +99,10 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, codex, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
-  // Why: Antigravity visibility also requires geminiCliOAuthEnabled because its usage snapshot mirrors the Gemini fetch.
   const antigravityUsageConfigured =
     statusBarItems.includes('antigravity') &&
     isStatusBarItemAvailable('antigravity', detectedAgentIds)
@@ -117,7 +116,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
-  const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
   const visibleAntigravity = getVisibleUsageProvider('antigravity', antigravity, usageSettings)
   const visibleMiniMax = getVisibleUsageProvider('minimax', minimax, usageSettings)
@@ -130,10 +128,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleCodex !== null &&
     statusBarItems.includes('codex') &&
     isStatusBarItemAvailable('codex', detectedAgentIds)
-  const showGemini =
-    visibleGemini !== null &&
-    statusBarItems.includes('gemini') &&
-    isStatusBarItemAvailable('gemini', detectedAgentIds)
   const showKimi =
     visibleKimi !== null &&
     statusBarItems.includes('kimi') &&
@@ -160,7 +154,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const hasVisibleUsageMeters =
     showClaude ||
     showCodex ||
-    showGemini ||
     showOpencodeGo ||
     showKimi ||
     showAntigravity ||
@@ -169,7 +162,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, codex, gemini: null, opencodeGo, kimi, antigravity, minimax, grok },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
@@ -177,7 +170,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
-    gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
@@ -196,7 +188,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const rosterProviders = [
     showClaude ? visibleClaude : null,
     showCodex ? visibleCodex : null,
-    showGemini ? visibleGemini : null,
     showAntigravity ? visibleAntigravity : null,
     showOpencodeGo ? visibleOpencodeGo : null,
     showKimi ? visibleKimi : null,

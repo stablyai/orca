@@ -369,8 +369,10 @@ export type GlobalSettings = {
   minimaxUsageModels: string
   /** MiniMax account region; defaults to overseas for existing users. */
   minimaxEndpoint: MiniMaxEndpoint
-  /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
-  geminiCliOAuthEnabled: boolean
+  /** Extract credentials from the local Antigravity CLI for rate-limit fetching. Off by default (explicit opt-in). */
+  antigravityCliOAuthEnabled: boolean
+  /** Legacy Gemini CLI OAuth toggle, kept optional for migration. */
+  geminiCliOAuthEnabled?: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).
