@@ -26,8 +26,20 @@ import {
   isValidOwnerSlug,
   isValidRepoSlug,
   parseProjectPaste,
+  projectViewItemsUseSearchQuery,
   resolveProjectRef
 } from './project-view'
+
+describe('projectViewItemsUseSearchQuery', () => {
+  it('skips search for empty / whitespace-only filters so unfiltered boards avoid index lag', () => {
+    expect(projectViewItemsUseSearchQuery('')).toBe(false)
+    expect(projectViewItemsUseSearchQuery('   ')).toBe(false)
+  })
+
+  it('uses search when the view has a real filter string', () => {
+    expect(projectViewItemsUseSearchQuery('status:Todo')).toBe(true)
+  })
+})
 
 describe('classifyProjectError', () => {
   it('classifies HTTP 404 as not_found', () => {

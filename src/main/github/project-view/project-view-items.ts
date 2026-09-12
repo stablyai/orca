@@ -12,6 +12,7 @@ import {
 } from './project-view-cache'
 import { ownerQueryRoot } from './project-view-config'
 import { fetchItemsPageWithRaw } from './project-view-item-page'
+import { projectViewItemsUseSearchQuery } from './project-view-items-search-query'
 import { normalizeItem, type RawItem } from './project-view-item-normalization'
 
 const ITEM_PAGE_SIZE = 100
@@ -209,7 +210,11 @@ export async function fetchItemsCountOnly(args: {
   host?: string
 }): Promise<number | null> {
   const root = ownerQueryRoot(args.ownerType)
-  const query = `
+  const filterQuery = args.query.trim()
+  const useSearchQuery = projectViewItemsUseSearchQuery(filterQuery)
+  // Why: match item fetch — unfiltered count must not use the lagging search index (#12648).
+  const query = useSearchQuery
+    ? `
     query($owner:String!, $num:Int!, $q:String!) {
       ${root}(login:$owner) {
         projectV2(number:$num) {
@@ -218,11 +223,22 @@ export async function fetchItemsCountOnly(args: {
       }
     }
   `
+    : `
+    query($owner:String!, $num:Int!) {
+      ${root}(login:$owner) {
+        projectV2(number:$num) {
+          items(first:1) { totalCount }
+        }
+      }
+    }
+  `
   const res = await runGraphql<
     Record<string, { projectV2?: { items?: { totalCount?: number } | null } | null } | null>
   >(
     query,
-    { owner: args.owner, num: args.projectNumber, q: args.query },
+    useSearchQuery
+      ? { owner: args.owner, num: args.projectNumber, q: filterQuery }
+      : { owner: args.owner, num: args.projectNumber },
     projectGhExecOptions(args.host)
   )
   if (!res.ok) {

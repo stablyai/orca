@@ -81,9 +81,8 @@ export type GitHubProjectView = {
   number: number
   name: string
   layout: GitHubProjectViewLayout
-  /** Normalized to '' when GitHub returns null. Why: passing null through as
-   *  `$q` in the items query would change the query shape between filtered
-   *  and unfiltered views; the empty string keeps the GraphQL shape stable. */
+  /** Normalized to '' when GitHub returns null. Empty/whitespace filters omit
+   *  `items(query:)` so unfiltered boards skip GitHub's search-index lag. */
   filter: string
   fields: GitHubProjectField[]
   groupByFields: GitHubProjectField[]
