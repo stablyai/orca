@@ -1049,8 +1049,6 @@
       },
       "settings": {
         "AccountsPane": {
-          "0c64dc2a64": "Gemini",
-          "0c7f915b01": "Use Gemini CLI credentials",
           "15e831350e": "Configure MiniMax usage tracking from platform.minimax.io.",
           "1fd1b1b6b4": "Cookie not set",
           "3455cf43fa": "Claude login.",
@@ -1060,16 +1058,11 @@
           "5e08b0fe57": "Stored locally and sent only to platform.minimax.io for usage refreshes.",
           "79418c782a": "Open platform.minimax.io/console/usage in your browser, sign in, then copy the Cookie request header from DevTools (Network → any remains request → Cookie).",
           "9107406589": "Could not load Claude accounts.",
-          "96f3649526": "Use Gemini CLI credentials (experimental)",
-          "973741a871": "Configure Gemini provider settings.",
           "b10cb4f696": "adding",
           "b11078a9c2": "wsl",
           "b43e761fe5": "MiniMax cookie update failed.",
           "b8c2905c2b": "Could not load Codex accounts.",
-          "c2aee76420": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
-          "d676c41fc6": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
-          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in.",
-          "useAntigravityCredentialsExp": "Use Antigravity credentials (experimental)"
+          "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
         },
         "AdvancedNetworkSettingsSection": {
           "d93c7cd531": "Configure app-level network routing.",
@@ -1535,13 +1528,6 @@
           "7c3bb36706": "remove",
           "e2b0ee267f": "stale"
         },
-        "accounts": {
-          "search": {
-            "b7c2cee442": "experimental",
-            "bada4a3218": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.",
-            "d819755b02": "Use Gemini CLI credentials"
-          }
-        },
         "agent-awake-copy": {
           "95d3031db2": "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings.",
           "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
@@ -1883,11 +1869,9 @@
           "49f62c5665": "Workspace board",
           "5c9c7c16aa": "Add a project to create workspaces",
           "a30e34eb5c": "Close workspace board",
-          "moreActions": "More workspace actions",
           "projects": "Projects",
           "spaces": "Spaces",
-          "views": "Sidebar view",
-          "workspaces": "Workspaces"
+          "views": "Sidebar view"
         },
         "SidebarHostScopeStrip": {
           "backToAll": "All hosts",
