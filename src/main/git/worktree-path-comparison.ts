@@ -21,6 +21,9 @@ export function areWorktreePathsEqual(
 }
 
 function looksLikeWindowsPath(pathValue: string): boolean {
+  if (typeof pathValue !== 'string' || pathValue.length === 0) {
+    return false
+  }
   return /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\')
 }
 
