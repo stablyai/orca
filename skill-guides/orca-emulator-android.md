@@ -24,10 +24,11 @@ Android Studio installs, so it runs on Windows, Linux, and macOS. Input uses
 `ORCA emulator exec --command "<adb shell command>"`, which runs
 `adb -s <serial> shell <command>` with the string unvalidated.
 
-`install`, `launch`, `permissions`, and `logcat` are Android-only and fail against an iOS
-device with `emulator_unsupported`. `tap`, `type`, `gesture`, `button`, `rotate`, `ax`, and
-`exec` work on both backends, with backend-specific output for `ax` — a `uiautomator` node
-tree on Android, a serve-sim node tree on iOS.
+`install`, `launch`, and `permissions` are Android-only and fail against an iOS device
+with `emulator_unsupported`. `tap`, `type`, `gesture`, `button`, `rotate`, `ax`, `logcat`,
+and `exec` work on both backends, with backend-specific output for `ax` — a `uiautomator`
+node tree on Android, a serve-sim node tree on iOS — and for `logcat`: adb logs on Android,
+a one-shot unified log dump on iOS.
 
 Camera and sensor injection are not wrapped; Android virtual-scene is out of scope. Device
 control is local to the host that owns the SDK, so remote and SSH device control is out of
@@ -65,7 +66,7 @@ device.
 | Launch an app        | `ORCA emulator launch com.acme.app --activity .MainActivity --json`             | Omit `--activity` to launch the default LAUNCHER activity.                                                                |
 | Runtime permission   | `ORCA emulator permissions grant com.acme.app android.permission.CAMERA --json` | Positional order is `<grant\|revoke> <package> <permission>`; `reset` takes no positionals and clears all runtime grants. |
 | Accessibility tree   | `ORCA emulator ax --json`                                                       | `uiautomator dump` parsed to a node tree.                                                                                 |
-| Logcat (one-shot)    | `ORCA emulator logcat --lines 200 --json`                                       | Dumps recent lines, parsed to entries.                                                                                    |
+| Logcat (one-shot)    | `ORCA emulator logcat --filter MyTag:D --lines 200 --json`                      | Dumps recent lines with an optional adb filterspec, parsed to entries.                                                    |
 | Raw adb shell        | `ORCA emulator exec --command "getprop ro.build.version.sdk" --json`            | Runs `adb -s <serial> shell <command>`.                                                                                   |
 | Stop the helper      | `ORCA emulator kill --json`                                                     | Leaves the device booted.                                                                                                 |
 | Stop and power off   | `ORCA emulator shutdown --json`                                                 | Stops the helper and shuts the device down.                                                                               |
@@ -98,6 +99,9 @@ commands target it. Pass a selector only to override that or reach a second devi
   swiping but not a true multi-touch path.
 - Run `kill` when you are done. A helper left running holds the device until Orca quits.
 
+Android `--filter` is an adb logcat filterspec such as `MyTag:D`. On iOS the same flag
+is required and searches process, subsystem, category, and message case-insensitively.
+
 ## Examples
 
 ```text
@@ -110,7 +114,7 @@ ORCA emulator install ./app-debug.apk --reinstall --json
 ORCA emulator launch com.acme.app --json
 ORCA emulator permissions grant com.acme.app android.permission.CAMERA --json
 ORCA emulator ax --json
-ORCA emulator logcat --lines 100 --json
+ORCA emulator logcat --filter MyTag:D --lines 100 --json
 ORCA emulator kill --json
 ```
 
