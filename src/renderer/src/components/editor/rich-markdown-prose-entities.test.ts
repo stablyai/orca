@@ -27,15 +27,24 @@ describe('encodeProseTextForMarkdown', () => {
     ['F&B revenue'],
     ['Copyright &copy; 2026'],
     ['A &MadeUpEntity; here'],
-    ['5 <6 and 7> 8']
+    ['5 <6 and 7> 8'],
+    ['a <beta'],
+    ['a < b'],
+    ['a <beta and <gamma']
   ])('leaves %j unescaped', (text) => {
     expect(encodeProseTextForMarkdown(text)).toBe(text)
   })
 
   it.each([
     ['Press <kbd>x</kbd>', 'Press &lt;kbd>x&lt;/kbd>'],
-    ['A <!-- comment --> here', 'A &lt;!-- comment --> here']
-  ])('escapes the tag opening in %j', (text, expected) => {
+    ['A <!-- comment --> here', 'A &lt;!-- comment --> here'],
+    ['x <y> z', 'x &lt;y> z'],
+    ['a <b c="d">e', 'a &lt;b c="d">e'],
+    ['<br/>', '&lt;br/>'],
+    ['<?php ?>', '&lt;?php ?>'],
+    ['<!DOCTYPE html>', '&lt;!DOCTYPE html>'],
+    ['<![CDATA[x]]>', '&lt;![CDATA[x]]>']
+  ])('escapes the complete construct in %j', (text, expected) => {
     expect(encodeProseTextForMarkdown(text)).toBe(expected)
   })
 
@@ -54,7 +63,12 @@ describe('prose entity round trip', () => {
     ['A &MadeUpEntity; here'],
     ['5 <6 and 7> 8'],
     ['Press <kbd>x</kbd> now.'],
-    ['`a < b && c` stays literal']
+    ['`a < b && c` stays literal'],
+    ['a <beta'],
+    ['a < b'],
+    ['<kbd>x</kbd>'],
+    ['<!-- c -->'],
+    ['x <y> z']
   ])('preserves %j', (source) => {
     expect(roundTrip(source)).toBe(source)
   })
@@ -71,5 +85,26 @@ describe('prose entity round trip', () => {
       current = roundTrip(current)
     }
     expect(current).toBe(source)
+  })
+})
+
+describe('base encoder markdown escapes', () => {
+  // Why: `@tiptap/markdown` 3.22.5 encodes `&`, `<`, and `>` and nothing else, so the
+  // replacement encoder has no backslash escapes to preserve. A version that adds them
+  // fails these, which is the signal to carry them through.
+  it.each([['*literal*'], ['[label](url)'], ['a \\ b'], ['snake_case_name'], ['5 * 3']])(
+    'round-trips %j without gaining or losing an escape',
+    (source) => {
+      expect(roundTrip(source)).toBe(source)
+    }
+  )
+
+  it('normalizes a single-tilde strike to the double-tilde spelling', () => {
+    expect(roundTrip('~x~')).toBe('~~x~~')
+  })
+
+  it('leaves a leading hash and dash inside a paragraph alone', () => {
+    expect(roundTrip('a # b')).toBe('a # b')
+    expect(roundTrip('a - b')).toBe('a - b')
   })
 })

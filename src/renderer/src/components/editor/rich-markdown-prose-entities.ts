@@ -1,7 +1,18 @@
 import { Extension } from '@tiptap/core'
 
-// Why: only an open tag, a close tag, or a comment makes `<` raw HTML rather than text.
-const TAG_OPENING = /^<(?:[a-zA-Z][a-zA-Z0-9-]*|\/[a-zA-Z][a-zA-Z0-9-]*|!--)/
+// Why: CommonMark section 6.6 makes `<` raw HTML only as a complete construct, so a
+// bare `<` in prose such as `a <beta` is ordinary text and stays literal.
+const ATTRIBUTE =
+  '(?:\\s+[a-zA-Z_:][a-zA-Z0-9_.:-]*(?:\\s*=\\s*(?:[^\\s"\'=<>`]+|\'[^\']*\'|"[^"]*"))?)*'
+const HTML_CONSTRUCT = new RegExp(
+  `^<(?:[a-zA-Z][a-zA-Z0-9-]*${ATTRIBUTE}\\s*/?>` +
+    '|/[a-zA-Z][a-zA-Z0-9-]*\\s*>' +
+    '|!--(?:[\\s\\S]*?)-->' +
+    '|\\?[\\s\\S]*?\\?>' +
+    '|![a-zA-Z][\\s\\S]*?>' +
+    '|!\\[CDATA\\[[\\s\\S]*?\\]\\]>' +
+    ')'
+)
 
 // Why: a `>` in the first column opens a block quote, so it stays encoded there
 // even though it is ordinary text anywhere else on the line.
@@ -21,7 +32,7 @@ export function encodeProseTextForMarkdown(text: string): string {
   let output = ''
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index]
-    if (character === '<' && TAG_OPENING.test(text.slice(index))) {
+    if (character === '<' && HTML_CONSTRUCT.test(text.slice(index))) {
       output += '&lt;'
       continue
     }
