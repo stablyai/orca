@@ -1,4 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { join, parse } from 'node:path'
+import { AnalyticsSessionIdStore, type AnalyticsSessionId } from './analytics-session-id-store'
 import type { Store } from '../persistence'
 import { UsageCacheSnapshotWriter } from '../usage-cache-snapshot-writer'
 import { loadKnownUsageWorktreesByRepo } from '../usage-worktree-metadata'
@@ -55,6 +57,7 @@ export abstract class UsageProviderStoreLifecycle<
 > {
   protected state: State
   private scanPromise: Promise<void> | null = null
+  private analyticsSessionIds: AnalyticsSessionIdStore | null = null
   private readonly writer: UsageCacheSnapshotWriter
 
   constructor(
@@ -74,9 +77,20 @@ export abstract class UsageProviderStoreLifecycle<
     } as PublicUsageProviderScanState<DataPresenceKey>
   }
 
+  /** Local identity only; callers must use the usage store on the execution host. */
+  getAnalyticsSessionId(providerSessionId: string): Promise<AnalyticsSessionId> {
+    if (!this.analyticsSessionIds) {
+      const { dir, name } = parse(this.config.resolveCacheFile())
+      this.analyticsSessionIds = new AnalyticsSessionIdStore(
+        join(dir, `${name}-analytics-session-ids.json`)
+      )
+    }
+    return this.analyticsSessionIds.getOrCreate(providerSessionId)
+  }
+
   /** Await queued cache writes so quit does not drop the final snapshot. */
-  flush(): Promise<void> {
-    return this.writer.flush()
+  async flush(): Promise<void> {
+    await Promise.all([this.writer.flush(), this.analyticsSessionIds?.flush()])
   }
 
   async setEnabled(enabled: boolean): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
