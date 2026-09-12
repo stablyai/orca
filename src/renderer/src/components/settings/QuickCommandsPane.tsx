@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
+import {
+  canAddTerminalQuickCommand,
+  duplicateTerminalQuickCommand,
+  getTerminalQuickCommandScope
+} from '../../../../shared/terminal-quick-commands'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { searchTerminalQuickCommands } from '@/lib/terminal-quick-command-search'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
@@ -204,13 +209,17 @@ export function QuickCommandsPane({
   ) {
     // Why: Settings deep-links use this one-shot signal to open the add dialog;
     // consume it before paint so the pane never flashes without the editor.
+    // Consume it even at the cap, or the signal stays armed and reopens the
+    // dialog later when a command is deleted.
     consumedAddIntentSignalRef.current = intentSignal
-    setEditor({
-      mode: 'add',
-      command: createDraftForCurrentFilter(),
-      connectionGeneration: selectedRuntimeConnectionGeneration,
-      hostId: selectedHostId
-    })
+    if (canAddTerminalQuickCommand(commands)) {
+      setEditor({
+        mode: 'add',
+        command: createDraftForCurrentFilter(),
+        connectionGeneration: selectedRuntimeConnectionGeneration,
+        hostId: selectedHostId
+      })
+    }
   }
 
   const toggleScope = (key: string): void => {
@@ -275,13 +284,35 @@ export function QuickCommandsPane({
     void useAppStore.getState().deleteTerminalQuickCommand(selectedHostId, command.id)
   }
 
-  const openAddDialog = (): void =>
+  const openAddDialog = (): void => {
+    // Why: the host rejects a new-id upsert above the cap; blocking here keeps
+    // the failure out of the save path where the draft would already be typed.
+    if (!canAddTerminalQuickCommand(commands)) {
+      return
+    }
     setEditor({
       mode: 'add',
       command: createDraftForCurrentFilter(),
       connectionGeneration: selectedRuntimeConnectionGeneration,
       hostId: selectedHostId
     })
+  }
+
+  const duplicateCommand = (command: TerminalQuickCommand): void => {
+    if (!canAddTerminalQuickCommand(commands)) {
+      return
+    }
+    setEditor({
+      mode: 'add',
+      command: duplicateTerminalQuickCommand(
+        command,
+        `quick-command-${createBrowserUuid()}`,
+        commands
+      ),
+      connectionGeneration: selectedRuntimeConnectionGeneration,
+      hostId: selectedHostId
+    })
+  }
 
   return (
     <div className="space-y-4">
@@ -300,6 +331,7 @@ export function QuickCommandsPane({
           setScopeSelection(null)
         }}
         canAdd={canManageSelectedHost}
+        atCommandLimit={!canAddTerminalQuickCommand(commands)}
         onAdd={openAddDialog}
         repos={hostRepos}
         effectiveSelection={effectiveSelection}
@@ -384,6 +416,7 @@ export function QuickCommandsPane({
                 hostId: selectedHostId
               })
             }
+            onDuplicate={duplicateCommand}
             onRemove={(command) => void removeCommand(command)}
           />
         </>

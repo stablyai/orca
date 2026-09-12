@@ -26,6 +26,7 @@ type ListProps = {
   onQueryChange: (value: string) => void
   onLaunch: (command: TerminalQuickCommand) => void
   onEdit: (command: TerminalQuickCommand) => void
+  onDuplicate: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
   onAdd: () => void
 }
@@ -42,6 +43,7 @@ export function QuickCommandsList({
   onQueryChange,
   onLaunch,
   onEdit,
+  onDuplicate,
   onDelete,
   onAdd
 }: ListProps) {
@@ -90,7 +92,9 @@ export function QuickCommandsList({
           commands={repoCommands}
           onLaunch={onLaunch}
           onEdit={onEdit}
+          onDuplicate={onDuplicate}
           onDelete={onDelete}
+          canDuplicate={canAdd}
           disabled={disabled}
         />
       ) : null}
@@ -101,7 +105,9 @@ export function QuickCommandsList({
           commands={globalCommands}
           onLaunch={onLaunch}
           onEdit={onEdit}
+          onDuplicate={onDuplicate}
           onDelete={onDelete}
+          canDuplicate={canAdd}
           disabled={disabled}
         />
       ) : null}
@@ -130,14 +136,18 @@ function QuickCommandGroup({
   commands,
   onLaunch,
   onEdit,
+  onDuplicate,
   onDelete,
+  canDuplicate,
   disabled
 }: {
   label: string
   commands: TerminalQuickCommand[]
   onLaunch: (command: TerminalQuickCommand) => void
   onEdit: (command: TerminalQuickCommand) => void
+  onDuplicate: (command: TerminalQuickCommand) => void
   onDelete: (command: TerminalQuickCommand) => void
+  canDuplicate: boolean
   disabled: boolean
 }) {
   return (
@@ -151,7 +161,9 @@ function QuickCommandGroup({
             first={index === 0}
             onLaunch={onLaunch}
             onEdit={onEdit}
+            onDuplicate={onDuplicate}
             onDelete={onDelete}
+            canDuplicate={canDuplicate}
             disabled={disabled}
           />
         ))}
