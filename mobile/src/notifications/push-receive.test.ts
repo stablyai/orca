@@ -272,3 +272,28 @@ it('preflight does not consume the final presentation claim and observes later d
   await expect(canPresentForegroundPush(payload)).resolves.toBe(false)
   await expect(shouldSuppressForegroundPush(apnsData(payload))).resolves.toBe(true)
 })
+
+it('allows the viewed workspace after backgrounding during eligibility reads', async () => {
+  const payload = {
+    hostFingerprint,
+    worktreeId: 'workspace',
+    notificationId: 'background-transition',
+    notificationEpoch: 'epoch',
+    notificationSeq: 1
+  }
+  setNotificationViewingWorkspace({ hostId: 'host-1', worktreeId: 'workspace' })
+  AppState.currentState = 'active'
+  await expect(canPresentForegroundPush(payload)).resolves.toBe(false)
+  let resolveHosts!: (value: HostCatalogEntry[]) => void
+  vi.mocked(loadHostCatalog).mockReturnValueOnce(
+    new Promise((resolve) => {
+      resolveHosts = resolve
+    })
+  )
+  const eligibility = canPresentForegroundPush(payload)
+  await vi.waitFor(() => expect(resolveHosts).toBeDefined())
+  AppState.currentState = 'background'
+  resolveHosts(hosts)
+  await expect(eligibility).resolves.toBe(true)
+  await expect(shouldSuppressForegroundPush(apnsData(payload))).resolves.toBe(false)
+})
