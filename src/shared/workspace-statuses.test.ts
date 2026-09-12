@@ -6,7 +6,8 @@ import {
   clampWorkspaceBoardColumnWidth,
   cloneDefaultWorkspaceStatuses,
   normalizePersistedWorkspaceStatuses,
-  normalizeWorkspaceStatuses
+  normalizeWorkspaceStatuses,
+  resolveWorkspaceStatusInput
 } from './workspace-statuses'
 
 describe('workspace status visuals', () => {
@@ -296,5 +297,73 @@ describe('workspace status visuals', () => {
     expect(clampWorkspaceBoardColumnWidth(100)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MIN)
     expect(clampWorkspaceBoardColumnWidth(321.6)).toBe(322)
     expect(clampWorkspaceBoardColumnWidth(900)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MAX)
+  })
+})
+
+describe('workspace status input resolution', () => {
+  const renamedBoard = [
+    { id: 'todo', label: 'Todo' },
+    { id: 'status-5-2', label: 'QA' },
+    { id: 'status-6', label: 'Human review' }
+  ]
+
+  it('resolves a status id', () => {
+    expect(resolveWorkspaceStatusInput('status-5-2', renamedBoard)).toEqual({
+      ok: true,
+      status: 'status-5-2'
+    })
+  })
+
+  it.each(['qa', 'QA', ' qa ', 'Human review', 'human-review', 'HUMAN-REVIEW'])(
+    'resolves the column named %s by label',
+    (input) => {
+      const resolved = resolveWorkspaceStatusInput(input, renamedBoard)
+
+      expect(resolved.ok).toBe(true)
+      expect(resolved).toHaveProperty('status')
+    }
+  )
+
+  it('resolves a renamed column by its label rather than its stale id', () => {
+    expect(resolveWorkspaceStatusInput('qa', renamedBoard)).toEqual({
+      ok: true,
+      status: 'status-5-2'
+    })
+  })
+
+  it('prefers an exact id over another column whose label slugs the same', () => {
+    const statuses = [
+      { id: 'qa', label: 'Quality' },
+      { id: 'qa-2', label: 'QA' }
+    ]
+
+    expect(resolveWorkspaceStatusInput('qa', statuses)).toEqual({ ok: true, status: 'qa' })
+  })
+
+  it('refuses a label that matches more than one column', () => {
+    const statuses = [
+      { id: 'first', label: 'QA' },
+      { id: 'second', label: 'QA!' }
+    ]
+
+    const resolved = resolveWorkspaceStatusInput('qa', statuses)
+
+    expect(resolved.ok).toBe(false)
+    expect(resolved).toHaveProperty('message', expect.stringContaining('first (QA)'))
+    expect(resolved).toHaveProperty('message', expect.stringContaining('second (QA!)'))
+  })
+
+  it('refuses an unknown status and lists every column', () => {
+    const resolved = resolveWorkspaceStatusInput('nope', renamedBoard)
+
+    expect(resolved.ok).toBe(false)
+    expect(resolved).toHaveProperty(
+      'message',
+      expect.stringContaining('todo (Todo), status-5-2 (QA), status-6 (Human review)')
+    )
+  })
+
+  it.each(['', '   '])('refuses a blank status', (input) => {
+    expect(resolveWorkspaceStatusInput(input, renamedBoard).ok).toBe(false)
   })
 })
