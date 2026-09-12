@@ -464,6 +464,7 @@ describe('PR workflow parallelism', () => {
       'shell_contracts',
       'test',
       'orcad_browser',
+      'orchestration_e2e',
       'cross-version-wire',
       'managed_hook_node18',
       'package',
