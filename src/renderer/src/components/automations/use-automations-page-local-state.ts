@@ -147,6 +147,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     dayOfWeek: '1',
     customSchedule: '',
     missedRunGraceMinutes: '720',
+    savedSchedule: null,
     scheduleWarning: null
   })
   const draftRef = useRef(draft)
