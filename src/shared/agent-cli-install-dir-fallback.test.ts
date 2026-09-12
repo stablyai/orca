@@ -99,6 +99,19 @@ describe('agent CLI install-dir fallback', () => {
     })
   })
 
+  it('finds a macOS CLI in /opt/local/bin only when port is executable', () => {
+    const home = '/Users/tester'
+    stage(join('/opt/local/bin', 'codex'))
+    expect(resolveAll(['codex'], { platform: 'darwin', homePath: home })).toEqual({
+      codex: 'codex'
+    })
+
+    stage(join('/opt/local/bin', 'port'))
+    expect(resolveAll(['codex'], { platform: 'darwin', homePath: home })).toEqual({
+      codex: join('/opt/local/bin', 'codex')
+    })
+  })
+
   it('finds Linux CLIs in Linuxbrew, snap and nix prefixes, not the macOS brew prefix', () => {
     const home = '/home/tester'
     stage(
@@ -203,6 +216,7 @@ describe('agent CLI install-dir fallback', () => {
       for (const directory of [
         '/opt/homebrew/bin',
         '/usr/local/bin',
+        '/opt/local/bin',
         '/snap/bin',
         '/home/linuxbrew/.linuxbrew/bin',
         '/nix/var/nix/profiles/default/bin',
