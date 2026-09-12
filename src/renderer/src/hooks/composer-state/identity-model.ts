@@ -50,6 +50,9 @@ export type ComposerIdentityModel = {
     connectionId: string,
     options?: { force?: boolean }
   ) => Promise<TuiAgent[]>
-  ensureRuntimeDetectedAgents: (environmentId: string) => Promise<TuiAgent[]>
+  ensureRuntimeDetectedAgents: (
+    environmentId: string,
+    options?: { force?: boolean }
+  ) => Promise<TuiAgent[]>
   detectedAgentIds: Set<TuiAgent> | null
 }

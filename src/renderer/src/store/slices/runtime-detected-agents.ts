@@ -10,7 +10,10 @@ export type RuntimeDetectedAgentsSlice = {
   runtimeDetectedAgentIds: Record<string, TuiAgent[] | null>
   isDetectingRuntimeAgents: Record<string, boolean>
   isRefreshingRuntimeAgents: Record<string, boolean>
-  ensureRuntimeDetectedAgents: (environmentId: string) => Promise<TuiAgent[]>
+  ensureRuntimeDetectedAgents: (
+    environmentId: string,
+    options?: { force?: boolean }
+  ) => Promise<TuiAgent[]>
   /** Forces a re-detect on the runtime host via `preflight.refreshAgents`
    *  (login-shell PATH re-read), falling back to `preflight.detectAgents` for
    *  servers that predate the refresh RPC. */
@@ -45,7 +48,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
   isDetectingRuntimeAgents: {},
   isRefreshingRuntimeAgents: {},
 
-  ensureRuntimeDetectedAgents: (environmentId: string) => {
+  ensureRuntimeDetectedAgents: (environmentId: string, options?: { force?: boolean }) => {
     const inflightRefresh = runtimeRefreshPromises.get(environmentId)
     if (inflightRefresh) {
       return inflightRefresh
@@ -53,8 +56,10 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
     const existing = get().runtimeDetectedAgentIds[environmentId]
     // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
     // must not be treated as cached — re-detect so a later install / PATH fix is
-    // picked up without a reconnect. Non-empty results still short-circuit.
-    if (existing?.length) {
+    // picked up without a reconnect. A non-empty result short-circuits unless the
+    // caller forces (a freshly mounted launch surface must re-probe, otherwise a
+    // CLI installed after the last probe stays invisible until the client quits).
+    if (existing?.length && options?.force !== true) {
       return Promise.resolve(existing)
     }
     const inflight = runtimeDetectPromises.get(environmentId)
