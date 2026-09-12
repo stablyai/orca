@@ -1,4 +1,3 @@
-import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { detectLanguage } from '@/lib/language-detect'
@@ -30,19 +29,6 @@ type TerminalFileOpenDeps = {
 
 export function isHtmlFilePath(filePath: string): boolean {
   return /\.html?$/i.test(filePath)
-}
-
-function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
-  const store = useAppStore.getState()
-  if (worktreeId) {
-    // Why: following an HTML file link changes which worktree is foregrounded,
-    // so it must record a history visit before opening the browser tab — but the
-    // browser tab is the surface, so an emptied workspace must not gain a shell.
-    activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
-  }
-  const fileUrl = absolutePathToFileUri(filePath)
-  const title = filePath.split(/[/\\]/).pop() ?? filePath
-  store.createBrowserTab(worktreeId, fileUrl, { title, activate: true })
 }
 
 export function getTerminalFileContext(
@@ -197,15 +183,9 @@ export function openDetectedFilePath(
       return
     }
 
-    // Why: local HTML files render in Orca's browser for ordinary Cmd/Ctrl-click,
-    // and remain the fallback if Shift+Cmd/Ctrl cannot launch the OS default.
+    // Why: every HTML file opened inside Orca uses the isolated document preview;
+    // Shift+Cmd/Ctrl still explicitly delegates to the OS default above.
     if (isHtmlFilePath(mappedFilePath)) {
-      if (shouldOpenTerminalFileWithSystemDefault(fileContext, mappedFilePath)) {
-        openHtmlFileInBrowser(mappedFilePath, worktreeId)
-        return
-      }
-      // Why: the same gesture renders remote HTML too, through the doc preview; only an
-      // unsupported plan (e.g. a paired doc outside the worktree) falls back to source.
       const plan = getWorkspaceFilePreviewPlan(useAppStore.getState(), worktreeId, mappedFilePath)
       if (plan.status === 'doc-preview') {
         activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
