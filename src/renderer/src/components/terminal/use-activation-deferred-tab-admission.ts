@@ -23,6 +23,7 @@ export function useActivationDeferredTabAdmission(
   controller: TerminalColdActivationController
 ): void {
   const {
+    activationDeferralPlanRevision,
     activationDeferredMountTabIdsByWorktreeRef,
     backgroundMountRevision,
     backgroundMountTabIdsByWorktreeRef,
@@ -78,6 +79,10 @@ export function useActivationDeferredTabAdmission(
       })
       setBackgroundMountRevision((revision) => revision + 1)
     })
+    // Why activationDeferralPlanRevision is a dep: a startup-gate-open pass can
+    // install a plan for the already-active worktree by mutating only refs —
+    // neither other dep changes, and without this revision the tabs stay
+    // unmounted until the user switches workspaces and back.
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
-  }, [backgroundMountRevision, renderedActiveWorktreeId])
+  }, [activationDeferralPlanRevision, backgroundMountRevision, renderedActiveWorktreeId])
 }
