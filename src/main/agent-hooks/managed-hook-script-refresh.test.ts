@@ -57,7 +57,8 @@ vi.mock('os', async (importOriginal) => {
 import { refreshManagedScriptIfPresent } from './managed-hook-script-refresh'
 import {
   MANAGED_AGENT_HOOK_INSTALLERS,
-  MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS
+  MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
+  MANAGED_HOOK_POSIX_ONLY_AGENTS
 } from './managed-agent-hook-registry'
 import { ClaudeHookService } from '../claude/hook-service'
 
@@ -164,8 +165,12 @@ describe('managed hook script refresh', () => {
         ).toBe(true)
       }
       // Why: the reverse direction — a refresher naming an agent that writes nothing is a
-      // stale registry entry, likely a renamed script file.
+      // stale registry entry, likely a renamed script file. POSIX-only agents (Vibe) write
+      // no launcher under this forced win32 platform, so they are exempted here.
       for (const agent of refresherAgents) {
+        if (MANAGED_HOOK_POSIX_ONLY_AGENTS.has(agent)) {
+          continue
+        }
         expect(
           files.some((file) => file.startsWith(`${agent}-`)),
           `refresher for ${agent} matches no installed script`
