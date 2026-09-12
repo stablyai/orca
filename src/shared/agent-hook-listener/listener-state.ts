@@ -95,13 +95,8 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.codexLeadStateByPaneKey.delete(paneKey)
 }
 
-/** Does this pane still hold anything that can ASSERT a state — a stored row, or a Claude latch that
- *  `resolveClaudePaneStatus` would re-gate `working` from on the pane's next event?
- *
- *  Deliberately lives next to `clearPaneCacheState` above and enumerates the claim-bearing subset of
- *  what that function deletes: the two must be edited together, and keeping them three lines apart in
- *  one file is what makes that obvious. Prompt/tool/transcript caches are excluded — they render a
- *  row, they never create one. */
+/** Claim-bearing subset of what `clearPaneCacheState` deletes (edit both together); excludes
+ *  prompt/tool/transcript caches, which render a row but never create one. */
 export function paneHasStateClaims(state: HookListenerState, paneKey: string): boolean {
   return (
     state.lastStatusByPaneKey.has(paneKey) ||
