@@ -120,6 +120,8 @@ export type RuntimePtyTitleTrackerEntry = {
   /** Run once this chunk's facts are emitted: status that readers must see after them. */
   afterFacts: (() => void)[]
   commandCodeDetector: { observe: (data: string) => boolean } | null
+  /** Bob's approval modal is its only 'blocked on you' signal; see bob-approval-prompt.ts. */
+  bobApprovalDetector: { observe: (data: string) => boolean } | null
 }
 
 export type RuntimeHeadlessTerminal = {
