@@ -22,6 +22,12 @@ export function apiBasePath(site: JiraSite): string {
   return site.authType === 'server' ? '/rest/api/2' : '/rest/api/3'
 }
 
+// Scoped Cloud tokens are only honoured on the api.atlassian.com gateway, so
+// REST calls go there while the site URL stays the browse/identity origin.
+export function apiBaseUrl(site: JiraSite): string {
+  return site.apiBaseUrl ?? site.siteUrl
+}
+
 export class JiraApiError extends Error {
   status: number | null
 
@@ -35,8 +41,9 @@ export function authHeader(email: string, apiToken: string, authType?: JiraAuthT
   // Self-hosted with no username = a personal access token (Bearer); Basic auth
   // with a PAT in the password slot is what produces the 401s users report.
   // Self-hosted WITH a username is classic username+password Basic auth, which
-  // older Server/DC instances (predating PATs) require. Cloud is always Basic.
-  if (authType === 'server' && !email) {
+  // older Server/DC instances (predating PATs) require. Classic Cloud is always
+  // Basic; a scoped Cloud token is Basic with the email and Bearer without.
+  if ((authType === 'server' || authType === 'cloud-scoped') && !email) {
     return `Bearer ${apiToken}`
   }
   return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`
@@ -53,7 +60,7 @@ function describeErrorCause(error: unknown): string | undefined {
   return cause === undefined ? undefined : String(cause)
 }
 
-async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
+export async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
   return withSpan(
     'jira.request',
     async (span) => {
@@ -95,7 +102,7 @@ async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
 }
 
 export async function requestWithCredentials(
-  siteUrl: string,
+  baseUrl: string,
   email: string,
   apiToken: string,
   path: string,
@@ -107,7 +114,7 @@ export async function requestWithCredentials(
   headers.set('Content-Type', 'application/json')
   headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', authHeader(email, apiToken, authType))
-  const response = await jiraFetch(`${siteUrl}${path}`, {
+  const response = await jiraFetch(`${baseUrl}${path}`, {
     ...init,
     headers
   })
@@ -151,7 +158,7 @@ export async function jiraRequest<T>(
   headers.set('Content-Type', 'application/json')
   headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', client.authorization)
-  const response = await jiraFetch(`${client.site.siteUrl}${path}`, {
+  const response = await jiraFetch(`${apiBaseUrl(client.site)}${path}`, {
     ...init,
     headers
   })
@@ -164,19 +171,36 @@ export async function jiraRequest<T>(
   return (await response.json()) as T
 }
 
+// Why: attachment metadata is provider-controlled; never forward Jira
+// credentials if a malformed response points at another origin. Cloud reports
+// content URLs on the site host even when the token is only valid on the
+// gateway, so those are re-rooted onto the gateway instead of rejected. On the
+// gateway the whole `/ex/jira/<cloudId>` prefix must match: the origin is
+// shared by every Atlassian tenant, so an origin check alone would forward the
+// token to another cloud id.
+function resolveBinaryRequestUrl(site: JiraSite, pathOrUrl: string): URL {
+  const siteUrl = new URL(site.siteUrl)
+  const requestUrl = /^https?:\/\//i.test(pathOrUrl)
+    ? new URL(pathOrUrl)
+    : new URL(`${site.siteUrl}${pathOrUrl}`)
+  if (site.apiBaseUrl) {
+    if (requestUrl.href.startsWith(`${site.apiBaseUrl}/`)) {
+      return requestUrl
+    }
+    if (requestUrl.origin === siteUrl.origin) {
+      return new URL(`${site.apiBaseUrl}${requestUrl.pathname}${requestUrl.search}`)
+    }
+  } else if (requestUrl.origin === siteUrl.origin) {
+    return requestUrl
+  }
+  throw new JiraApiError('Jira attachment URL must use the configured site origin.', null)
+}
+
 export async function jiraRequestBinary(
   client: JiraClientForSite,
   pathOrUrl: string
 ): Promise<{ data: ArrayBuffer; contentType: string }> {
-  const siteUrl = new URL(client.site.siteUrl)
-  const requestUrl = /^https?:\/\//i.test(pathOrUrl)
-    ? new URL(pathOrUrl)
-    : new URL(`${client.site.siteUrl}${pathOrUrl}`)
-  if (requestUrl.origin !== siteUrl.origin) {
-    // Why: attachment metadata is provider-controlled; never forward Jira
-    // credentials if a malformed response points at another origin.
-    throw new JiraApiError('Jira attachment URL must use the configured site origin.', null)
-  }
+  const requestUrl = resolveBinaryRequestUrl(client.site, pathOrUrl)
   const headers = new Headers()
   // Why: attachment content is binary; forcing JSON Accept/Content-Type can
   // break downloads and confuses some Atlassian edge responses.

@@ -59,7 +59,7 @@ export async function connectBitbucket(
       // is down sends them to regenerate a credential that was fine.
       error:
         result.reason === 'rejected'
-          ? 'Bitbucket rejected these credentials. Check the email and token, then try again.'
+          ? 'Bitbucket rejected these credentials. Check the email and token (a scoped API token also needs read:user:bitbucket), then try again.'
           : 'Could not reach Bitbucket. Check your connection or the API base URL, then try again.'
     }
   }

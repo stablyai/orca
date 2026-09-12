@@ -8,7 +8,7 @@ Hosted code review is a first-class part of the worktree. Orca links worktrees t
 
 Connect the provider your repository uses from [Settings → Integrations](/docs/settings). GitHub has the deepest Actions and issue support; GitLab merge requests and issues use the same worktree review flow.
 
-Bitbucket Cloud connects in-app from the same pane — **Connect** with **Email & API token** or an **Access token**. Orca verifies the credential before saving and can create pull requests from Source Control. Bitbucket Cloud has no draft PRs, so the composer hides the Draft toggle. `ORCA_BITBUCKET_*` environment variables still win over a saved credential. Azure DevOps and Gitea pull requests appear in the worktree sidebar and the Checks panel alongside GitHub, GitLab, and Bitbucket — the worktree creation flow checks them for remote conflicts before pushing.
+Bitbucket Cloud connects in-app from the same pane — **Connect** with **Email & API token** or an **Access token**. Atlassian API tokens with scopes work in either mode (Basic with the email, Bearer without); give them `read:user:bitbucket`, `read:repository:bitbucket`, `read:pullrequest:bitbucket`, and `write:pullrequest:bitbucket`, otherwise reads succeed while creating a pull request fails with a 403. Orca verifies the credential before saving and can create pull requests from Source Control. Bitbucket Cloud has no draft PRs, so the composer hides the Draft toggle. `ORCA_BITBUCKET_*` environment variables still win over a saved credential. Azure DevOps and Gitea pull requests appear in the worktree sidebar and the Checks panel alongside GitHub, GitLab, and Bitbucket — the worktree creation flow checks them for remote conflicts before pushing.
 
 ## Reviews
 
