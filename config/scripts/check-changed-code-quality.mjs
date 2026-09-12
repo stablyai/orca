@@ -16,6 +16,10 @@ export const OXLINT_SCANS = [
     args: ['--report-unused-disable-directives-severity', 'warn']
   },
   {
+    label: 'casting code quality',
+    args: ['--config', 'config/oxlint-code-quality-casting.json']
+  },
+  {
     label: 'type-aware code quality',
     args: ['--type-aware', '--config', 'config/oxlint-code-quality-type-aware.json']
   },
