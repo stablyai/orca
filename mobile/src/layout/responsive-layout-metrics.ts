@@ -8,7 +8,12 @@ const WIDE_LAYOUT_MIN_WIDTH = 700
 const TABLET_LAYOUT_MIN_SHORT_SIDE = 600
 
 const CONTENT_MAX_WIDTH = 720
+const EXTERNAL_DISPLAY_MIN_WIDTH = 1_200
 const MODAL_MAX_WIDTH = 480
+
+function contentMaxWidthForViewport(width: number, isLandscape: boolean): number {
+  return isLandscape && width >= EXTERNAL_DISPLAY_MIN_WIDTH ? width : CONTENT_MAX_WIDTH
+}
 
 export type ResponsiveLayoutMetrics = {
   width: number
@@ -27,16 +32,18 @@ export type ResponsiveLayoutMetrics = {
 }
 
 export function getResponsiveLayoutMetrics(width: number, height: number): ResponsiveLayoutMetrics {
+  const isLandscape = width > height
   const isTabletLayout = Math.min(width, height) >= TABLET_LAYOUT_MIN_SHORT_SIDE
   const isWideLayout = width >= WIDE_LAYOUT_MIN_WIDTH && isTabletLayout
 
   return {
     width,
     height,
-    isLandscape: width > height,
+    isLandscape,
     isWideLayout,
     isTabletLayout,
-    contentMaxWidth: CONTENT_MAX_WIDTH,
+    // Why: an external display has desktop-scale width; do not leave the home view inside a tablet cap.
+    contentMaxWidth: contentMaxWidthForViewport(width, isLandscape),
     modalMaxWidth: MODAL_MAX_WIDTH,
     // Roomier gutters once content is capped so it isn't glued to the edges.
     horizontalPadding: isWideLayout ? spacing.xl : spacing.lg
