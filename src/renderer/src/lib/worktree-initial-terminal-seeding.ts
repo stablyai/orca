@@ -2,6 +2,7 @@ import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
@@ -35,14 +36,18 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
   )
 }
 
-/** After the async activation gate reports an empty workspace: re-seed a shell unless the caller
- *  promised its own surface or the user has already moved on. */
+/** Re-seed after an empty gate unless its activation owns the surface or no longer owns the host. */
 export function reseedGatedEmptyWorkspace(
   workspaceKey: string,
-  callerProvidesSurface: boolean | undefined
+  callerProvidesSurface: boolean,
+  executionHostId?: ExecutionHostId
 ): void {
   const state = useAppStore.getState()
-  if (callerProvidesSurface === true || state.activeWorktreeId !== workspaceKey) {
+  if (
+    callerProvidesSurface === true ||
+    state.activeWorktreeId !== workspaceKey ||
+    (executionHostId !== undefined && state.activeWorkspaceExecutionHostId !== executionHostId)
+  ) {
     return
   }
   ensureWorktreeHasInitialTerminal(
