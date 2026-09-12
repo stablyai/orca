@@ -105,6 +105,18 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
     expect(isKnownHarnessInjectedUserTurnText('<foo-bar@example.com> sent me this')).toBe(false)
   })
 
+  it('classifies the Kimi hook_result envelope while keeping underscore user turns', () => {
+    expect(
+      isKnownHarnessInjectedUserTurnText(
+        '<hook_result hook_event="UserPromptSubmit">{}</hook_result>'
+      )
+    ).toBe(true)
+    expect(isKnownHarnessInjectedUserTurnText('<hook_result>{}</hook_result>')).toBe(true)
+    // The underscore shape alone must not qualify: only allowlisted names do.
+    expect(isKnownHarnessInjectedUserTurnText('<user_query>fix the bug</user_query>')).toBe(false)
+    expect(isKnownHarnessInjectedUserTurnText('<my_widget>pasted</my_widget>')).toBe(false)
+  })
+
   it('does not treat unknown kebab tags as machinery', () => {
     // Only observed harness tags count — a real custom-element paste or a
     // brand-new tag we have not catalogued stays a user turn.

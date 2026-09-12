@@ -164,6 +164,35 @@ describe('shared agent-hook-listener', () => {
     expect(tool!.payload.agentType).toBe('kimi')
   })
 
+  // Why: a Kimi UserPromptSubmit hook re-emits its own <hook_result> envelope as a
+  // prompt; letting it win makes branch auto-naming anchor on the envelope (#14789).
+  it('keeps the typed prompt when a Kimi hook_result envelope follows', () => {
+    const typed = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'debug the CI config' }
+      },
+      'production'
+    )
+    expect(typed?.payload.prompt).toBe('debug the CI config')
+
+    const envelope = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: '<hook_result hook_event="UserPromptSubmit">{}</hook_result>'
+        }
+      },
+      'production'
+    )
+    expect(envelope?.payload.prompt).toBe('debug the CI config')
+  })
+
   it('ignores unproven Kimi compact lifecycle events', () => {
     const pre = normalizeAndAccept(state, 'kimi', {
       hook_event_name: 'PreCompact',
