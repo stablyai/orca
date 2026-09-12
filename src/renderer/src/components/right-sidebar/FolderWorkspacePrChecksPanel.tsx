@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { getActionRequiredCheckCountLabel } from '@/components/pr-check-counts'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
@@ -278,6 +279,7 @@ export default function FolderWorkspacePrChecksPanel({
 function formatReviewChecksHeaderSummary(summary: {
   attached: number
   failing: number
+  actionRequired: number
   pending: number
   passing: number
 }): string | null {
@@ -287,6 +289,7 @@ function formatReviewChecksHeaderSummary(summary: {
   const worktreeCount = formatWorktreeCount(summary.attached)
   const attentionParts = [
     summary.failing > 0 ? formatFailingCount(summary.failing) : null,
+    summary.actionRequired > 0 ? getActionRequiredCheckCountLabel(summary.actionRequired) : null,
     summary.pending > 0 ? formatPendingCount(summary.pending) : null
   ].filter((part): part is string => part !== null)
 

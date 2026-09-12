@@ -1,5 +1,6 @@
 import type {
   CheckStatus,
+  CheckPresentationStatus,
   GitHubRepositoryIdentity,
   PRConflictSummary,
   PRMergeableState,
@@ -34,6 +35,7 @@ export type HostedReviewInfo = {
   state: HostedReviewState
   url: string
   status: CheckStatus
+  checksPresentationStatus?: CheckPresentationStatus
   updatedAt: string
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
@@ -50,6 +52,12 @@ export type HostedReviewInfo = {
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary
+}
+
+export function getHostedReviewCheckPresentationStatus(
+  review: Pick<HostedReviewInfo, 'checksPresentationStatus'> & { status?: CheckStatus }
+): CheckPresentationStatus | undefined {
+  return review.checksPresentationStatus ?? review.status
 }
 
 export type HostedReviewForBranchArgs = {

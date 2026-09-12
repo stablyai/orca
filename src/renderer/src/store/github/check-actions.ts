@@ -78,7 +78,8 @@ export const createCheckActions = (
         requestSettings,
         repo?.connectionId,
         repo?.executionHostId,
-        repo !== undefined
+        repo !== undefined,
+        prNumber
       )
       if (prStatusUpdate) {
         set(prStatusUpdate)
@@ -151,13 +152,10 @@ export const createCheckActions = (
             requestSettings,
             repo?.connectionId,
             repo?.executionHostId,
-            repo !== undefined
+            repo !== undefined,
+            prNumber
           )
-          if (prStatusUpdate?.prCache) {
-            nextState.prCache = prStatusUpdate.prCache
-          }
-
-          return nextState
+          return prStatusUpdate ? { ...nextState, ...prStatusUpdate } : nextState
         })
         debouncedSaveCache(get())
         return checks

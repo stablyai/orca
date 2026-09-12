@@ -6,6 +6,7 @@ import { gitLabPipelineJobsToPRChecks } from '../../../shared/gitlab-pipeline-ch
 import { derivePRCheckStatus, derivePRCheckStatusFromRollup } from '../../../shared/pr-check-status'
 import {
   getProviderChecksLabel,
+  getProviderChecksPresentationState,
   summarizeProviderChecks
 } from '../../../shared/provider-check-summary'
 import type { GitLabPipelineJob } from '../../../shared/gitlab-types'
@@ -160,7 +161,41 @@ const PARITY_CASES: ParityCase[] = [
   {
     name: 'genuine action_required',
     checks: [completed('success'), completed('action_required')],
-    expected: { state: 'failure', passed: 1, failed: 1, pending: 0, neutral: 0 }
+    expected: {
+      state: 'failure',
+      passed: 1,
+      failed: 1,
+      pending: 0,
+      neutral: 0,
+      actionRequired: 1
+    }
+  },
+  {
+    name: 'failure alongside action_required',
+    checks: [completed('failure'), completed('action_required')],
+    expected: {
+      state: 'failure',
+      passed: 0,
+      failed: 2,
+      pending: 0,
+      neutral: 0,
+      actionRequired: 1
+    }
+  },
+  {
+    name: 'action_required alongside running',
+    checks: [
+      completed('action_required'),
+      { name: 'ci', status: 'in_progress', conclusion: null, url: null }
+    ],
+    expected: {
+      state: 'failure',
+      passed: 0,
+      failed: 1,
+      pending: 1,
+      neutral: 0,
+      actionRequired: 1
+    }
   }
 ]
 
@@ -176,15 +211,16 @@ describe('provider check classification parity', () => {
       const paneCounts = getCheckCounts(checks)
       expect({
         passed: paneCounts.passing,
-        // Both panes split action_required into its own amber chip; it is still the failed bucket.
         failed: paneCounts.failing + paneCounts.needsAction,
         pending: paneCounts.pending,
-        neutral: paneCounts.neutral
+        neutral: paneCounts.neutral,
+        actionRequired: paneCounts.needsAction || undefined
       }).toEqual({
         passed: expected.passed,
         failed: expected.failed,
         pending: expected.pending,
-        neutral: expected.neutral
+        neutral: expected.neutral,
+        actionRequired: expected.actionRequired
       })
       expect(getCheckCountChips(paneCounts).find((chip) => chip.tone === 'neutral')?.label).toBe(
         expected.neutral > 0 ? `${expected.neutral} unresolved` : undefined
@@ -215,5 +251,21 @@ describe('provider check classification parity', () => {
   it('labels a green PR carrying one neutral check as passing', () => {
     const checks = [...Array.from({ length: 19 }, () => completed('success')), completed('neutral')]
     expect(getProviderChecksLabel(summarizeProviderChecks(checks))).toBe('19/20 passed')
+  })
+
+  it('presents genuine failures ahead of action-required and action-required ahead of pending', () => {
+    const failureAndAction = summarizeProviderChecks([
+      completed('failure'),
+      completed('action_required')
+    ])
+    const actionAndPending = summarizeProviderChecks([
+      completed('action_required'),
+      { status: 'in_progress', conclusion: null }
+    ])
+
+    expect(getProviderChecksPresentationState(failureAndAction)).toBe('failure')
+    expect(getProviderChecksLabel(failureAndAction)).toBe('1 failing')
+    expect(getProviderChecksPresentationState(actionAndPending)).toBe('action_required')
+    expect(getProviderChecksLabel(actionAndPending)).toBe('Action required: 1')
   })
 })

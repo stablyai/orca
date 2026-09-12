@@ -138,6 +138,28 @@ describe('buildParentPrChecksProjection', () => {
       reviewLabel: '#12'
     })
 
+    const actionRequired = makeProjection({
+      worktree,
+      repo,
+      hostedReviewCache: {
+        [cacheKey]: {
+          data: makeReview({
+            status: 'failure',
+            checksPresentationStatus: 'action_required'
+          }),
+          fetchedAt: 1,
+          linkedReviewHintKey: ''
+        }
+      }
+    })
+    expect(actionRequired.rows[0]).toMatchObject({
+      status: 'actionRequired',
+      group: 'needsAttention',
+      checkTone: 'action_required',
+      summary: 'Action required'
+    })
+    expect(actionRequired.summary).toMatchObject({ failing: 0, actionRequired: 1 })
+
     expect(
       makeProjection({
         worktree,

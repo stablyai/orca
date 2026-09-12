@@ -9,9 +9,13 @@ import {
   Sparkles
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { getActionRequiredCheckCountLabel } from '@/components/pr-check-counts'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { ConflictReview } from './conflict-summary'
-import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
+import {
+  getProviderCheckFailureCount,
+  summarizeProviderChecks
+} from '../../../../../shared/provider-check-summary'
 import { translate } from '@/i18n/i18n'
 
 export function PRTriageStrip({
@@ -46,8 +50,10 @@ export function PRTriageStrip({
   // `{status: completed, conclusion: null}` check used to spin here as "1 pending" forever while
   // the pill two panes away called it unresolved.
   const summary = summarizeProviderChecks(checks)
-  const failingCount = summary.failed
+  const failingCount = getProviderCheckFailureCount(summary)
+  const actionRequiredCount = summary.actionRequired ?? 0
   const pendingCount = summary.pending
+  const providerName = reviewKind === 'MR' ? 'GitLab' : 'GitHub'
 
   if (resolvedReview?.mergeable === 'CONFLICTING') {
     return (
@@ -97,6 +103,28 @@ export function PRTriageStrip({
             )}
             {translate('auto.components.right.sidebar.checks.panel.content.b45db92d0e', 'Fix')}
           </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (actionRequiredCount > 0) {
+    return (
+      <div className="border-b border-border px-3 py-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-medium text-foreground">
+              {getActionRequiredCheckCountLabel(actionRequiredCount)}
+            </div>
+            <div className="truncate text-[10px] text-muted-foreground">
+              {translate(
+                'auto.components.right.sidebar.checks.panel.content.actionRequiredProviderHint',
+                'Needs a manual action on {{providerName}} to unblock merging.',
+                { providerName }
+              )}
+            </div>
+          </div>
         </div>
       </div>
     )

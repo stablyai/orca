@@ -10,7 +10,7 @@ import {
   MergeConflictNotice
 } from './checks-panel/conflict-summary'
 import { ConflictTriageStrip, PRTriageStrip } from './checks-panel/triage-strip'
-import { getFailedChecksForDetails } from './checks-panel/check-details-model'
+import { getChecksRequiringAttentionForDetails } from './checks-panel/check-details-model'
 import { ChecksList } from './checks-panel/checks-list'
 import { isMutablePRConversationComment } from './checks-panel/comment-controls'
 import { PRCommentsList } from './checks-panel/comments-list'
@@ -179,6 +179,27 @@ describe('MergeConflictNotice', () => {
     expect(markup).not.toContain('Fix with AI')
     expect(markup).not.toContain('Resolve')
   })
+
+  it('prompts for action-required checks without offering an AI failure fix', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PRTriageStrip, {
+        review: makePR({ mergeable: 'MERGEABLE' }),
+        checks: [
+          { name: 'approve', status: 'completed', conclusion: 'action_required', url: null }
+        ],
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {},
+        isFixingChecksWithAI: false,
+        onFixChecksWithAI: () => {}
+      })
+    )
+
+    expect(markup).toContain('Action required: 1')
+    expect(markup).toContain('GitHub')
+    expect(markup).toContain('text-amber-500')
+    expect(markup).not.toContain('failing check')
+    expect(markup).not.toContain('>Fix<')
+  })
 })
 
 describe('ChecksList', () => {
@@ -235,6 +256,60 @@ describe('ChecksList', () => {
 
     expect(markup).toContain('5 passing')
     expect(markup).not.toContain('2 passing')
+  })
+
+  it('summarizes action-required checks as action required instead of failing', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(ChecksList, {
+          checks: [
+            {
+              name: 'Approve and run',
+              status: 'completed',
+              conclusion: 'action_required',
+              url: null
+            },
+            {
+              name: 'Deploy preview',
+              status: 'completed',
+              conclusion: 'action_required',
+              url: null
+            }
+          ],
+          checksLoading: false,
+          checkDetailsContextKey: 'repo:action-required'
+        })
+      )
+    )
+    const summaryMarkup = markup.slice(0, markup.indexOf('</button>'))
+
+    expect(summaryMarkup).toContain('Action required: 2')
+    expect(summaryMarkup).toContain('lucide-triangle-alert')
+    expect(summaryMarkup).toContain('text-amber-500')
+    expect(summaryMarkup).not.toContain('2 failing')
+    expect(summaryMarkup).not.toContain('text-rose-500')
+    expect(markup.match(/Action required/g)).toHaveLength(3)
+  })
+
+  it('names GitLab in the action-required hint for merge requests', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PRTriageStrip, {
+        review: makePR({ mergeable: 'MERGEABLE' }),
+        reviewKind: 'MR',
+        checks: [
+          { name: 'approve', status: 'completed', conclusion: 'action_required', url: null }
+        ],
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {},
+        isFixingChecksWithAI: false,
+        onFixChecksWithAI: () => {}
+      })
+    )
+
+    expect(markup).toContain('Needs a manual action on GitLab')
+    expect(markup).not.toContain('Needs a manual action on GitHub')
   })
 
   // Why: a completed check with no conclusion will never resolve, so calling it pending kept an
@@ -467,20 +542,22 @@ describe('PRCommentsList', () => {
   })
 })
 
-describe('getFailedChecksForDetails', () => {
-  it('selects failed, cancelled, and timed out checks for inline details', () => {
+describe('getChecksRequiringAttentionForDetails', () => {
+  it('selects failures and action-required checks for inline details', () => {
     const checks: PRCheckDetail[] = [
       { name: 'unit', status: 'completed', conclusion: 'success', url: null },
       { name: 'verify', status: 'completed', conclusion: 'failure', url: null },
       { name: 'lint', status: 'completed', conclusion: 'cancelled', url: null },
       { name: 'e2e', status: 'completed', conclusion: 'timed_out', url: null },
+      { name: 'approve', status: 'completed', conclusion: 'action_required', url: null },
       { name: 'deploy', status: 'in_progress', conclusion: 'pending', url: null }
     ]
 
-    expect(getFailedChecksForDetails(checks).map((check) => check.name)).toEqual([
+    expect(getChecksRequiringAttentionForDetails(checks).map((check) => check.name)).toEqual([
       'verify',
       'lint',
-      'e2e'
+      'e2e',
+      'approve'
     ])
   })
 })

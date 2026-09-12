@@ -108,7 +108,14 @@ const PARITY_CASES: ParityCase[] = [
   {
     name: 'genuine action_required',
     checks: [completed('success'), completed('action_required')],
-    expected: { state: 'failure', passed: 1, failed: 1, pending: 0, neutral: 0 }
+    expected: {
+      state: 'failure',
+      passed: 1,
+      failed: 1,
+      actionRequired: 1,
+      pending: 0,
+      neutral: 0
+    }
   }
 ]
 

@@ -1,6 +1,6 @@
-import type { ProviderCheckSummary } from './github/pull-request-types'
+import type { CheckPresentationStatus, ProviderCheckSummary } from './github/pull-request-types'
 
-export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'neutral'
+export type CheckOutcome = 'passed' | 'failed' | 'action_required' | 'pending' | 'neutral'
 
 export type CheckOutcomeInput = { status?: string | null; conclusion?: string | null }
 
@@ -14,14 +14,16 @@ const FAILED_CONCLUSIONS = new Set([
   'error',
   'startup_failure',
   'timed_out',
-  'cancelled',
-  'action_required'
+  'cancelled'
 ])
 
 /** The single provider-neutral verdict for one check; every check surface must route through it. */
 export function classifyCheckOutcome(check: CheckOutcomeInput): CheckOutcome {
   const conclusion = (check.conclusion ?? '').toLowerCase()
   const status = (check.status ?? '').toLowerCase()
+  if (conclusion === 'action_required') {
+    return 'action_required'
+  }
   if (FAILED_CONCLUSIONS.has(conclusion)) {
     return 'failed'
   }
@@ -56,6 +58,7 @@ export function summarizeProviderChecks(
 ): ProviderCheckSummary {
   let passed = 0
   let failed = 0
+  let actionRequired = 0
   let pending = 0
   let neutral = 0
   for (const check of checks) {
@@ -64,6 +67,11 @@ export function summarizeProviderChecks(
       passed += 1
     } else if (outcome === 'failed') {
       failed += 1
+    } else if (outcome === 'action_required') {
+      // Keep the legacy failed total/state for mixed-version clients while publishing the
+      // distinction as an optional field that older clients safely ignore.
+      failed += 1
+      actionRequired += 1
     } else if (outcome === 'pending') {
       pending += 1
     } else {
@@ -77,11 +85,33 @@ export function summarizeProviderChecks(
     passed,
     failed,
     pending,
-    neutral
+    neutral,
+    ...(actionRequired > 0 ? { actionRequired } : {})
   }
 }
 
-/** The one checks-pill label; it keys off `state` so the text can never contradict the pill's tone or icon. */
+export type ProviderCheckPresentationState = CheckPresentationStatus | 'none'
+
+export function getProviderCheckFailureCount(summary: ProviderCheckSummary): number {
+  return Math.max(0, summary.failed - (summary.actionRequired ?? 0))
+}
+
+export function getProviderChecksPresentationState(
+  summary: ProviderCheckSummary | undefined
+): ProviderCheckPresentationState | undefined {
+  if (!summary) {
+    return undefined
+  }
+  if (getProviderCheckFailureCount(summary) > 0) {
+    return 'failure'
+  }
+  if ((summary.actionRequired ?? 0) > 0) {
+    return 'action_required'
+  }
+  return summary.state
+}
+
+/** The one checks-pill label; it uses the same presentation state as the pill's tone and icon. */
 export function getProviderChecksLabel(summary: ProviderCheckSummary | undefined): string {
   if (!summary) {
     return 'Checks'
@@ -89,8 +119,12 @@ export function getProviderChecksLabel(summary: ProviderCheckSummary | undefined
   if (summary.total === 0) {
     return 'No checks'
   }
-  if (summary.failed > 0) {
-    return `${summary.failed} failing`
+  const failureCount = getProviderCheckFailureCount(summary)
+  if (failureCount > 0) {
+    return `${failureCount} failing`
+  }
+  if ((summary.actionRequired ?? 0) > 0) {
+    return `Action required: ${summary.actionRequired}`
   }
   if (summary.pending > 0) {
     return `${summary.pending} pending`

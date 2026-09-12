@@ -39,10 +39,8 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
   return check.conclusion ?? 'pending'
 }
 
-export function isFailedCheck(check: PRCheckDetail): boolean {
-  // Why: action_required blocks merge just like a failure, so it must count as
-  // not-passing — otherwise the summary reads "all checks passing" while
-  // auto-merge stays blocked.
+export function isCheckRequiringAttention(check: PRCheckDetail): boolean {
+  // Action-required checks are not failures, but auto-expanding either kind exposes the blocker.
   return ['failure', 'cancelled', 'timed_out', 'action_required'].includes(
     getCheckConclusion(check)
   )
@@ -100,8 +98,8 @@ export function formatCheckTimestamp(input: string | null | undefined): string |
   })
 }
 
-export function getFailedChecksForDetails(checks: PRCheckDetail[]): PRCheckDetail[] {
-  return checks.filter(isFailedCheck)
+export function getChecksRequiringAttentionForDetails(checks: PRCheckDetail[]): PRCheckDetail[] {
+  return checks.filter(isCheckRequiringAttention)
 }
 
 export type CheckDetailsStickySurface = 'sidebar' | 'card'

@@ -1,4 +1,6 @@
 import type { AppState } from '@/store/types'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
+import { getHostedReviewCheckPresentationStatus } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -19,11 +21,12 @@ type FolderWorkspaceCardPrDisplayArgs = {
   settings?: AppState['settings']
 }
 
-const REVIEW_STATUS_PRIORITY: Record<NonNullable<WorktreeCardPrDisplay['status']>, number> = {
+const REVIEW_STATUS_PRIORITY: Record<CheckPresentationStatus, number> = {
   failure: 0,
-  pending: 1,
-  success: 2,
-  neutral: 3
+  action_required: 1,
+  pending: 2,
+  success: 3,
+  neutral: 4
 }
 
 export function getFolderWorkspaceCardPrDisplay({
@@ -100,13 +103,15 @@ function parentPrChecksRowToCardDisplay(row: ParentPrChecksRow): WorktreeCardPrD
   if (!row.provider || row.provider === 'unsupported' || row.reviewNumber === null) {
     return null
   }
+  const status = row.checkTone === 'action_required' ? 'failure' : row.checkTone
   return {
     provider: row.provider,
     number: row.reviewNumber,
     title: row.title,
     ...(row.reviewState ? { state: row.reviewState } : {}),
     ...(row.reviewUrl ? { url: row.reviewUrl } : {}),
-    status: row.checkTone
+    status,
+    ...(row.checkTone === 'action_required' ? { checksPresentationStatus: row.checkTone } : {})
   }
 }
 
@@ -133,5 +138,6 @@ function compareReviewDisplays(left: WorktreeCardPrDisplay, right: WorktreeCardP
 }
 
 function getReviewDisplayPriority(review: WorktreeCardPrDisplay): number {
-  return review.status ? REVIEW_STATUS_PRIORITY[review.status] : 4
+  const status = getHostedReviewCheckPresentationStatus(review)
+  return status ? REVIEW_STATUS_PRIORITY[status] : 5
 }

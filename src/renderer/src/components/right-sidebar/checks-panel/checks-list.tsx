@@ -1,5 +1,6 @@
 import React from 'react'
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronRight,
   CircleCheck,
@@ -12,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { getActionRequiredCheckCountLabel } from '@/components/pr-check-counts'
 import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { getCheckStatusLabel } from './check-details-model'
@@ -38,6 +40,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
     rows,
     passingCount,
     failingCount,
+    actionRequiredCount,
     pendingCount,
     neutralCount,
     toggleCheckExpanded,
@@ -74,6 +77,12 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
                 'auto.components.right.sidebar.checks.panel.content.5e52f4ef7f',
                 'failing'
               )}
+            </span>
+          )}
+          {actionRequiredCount > 0 && (
+            <span className="flex items-center gap-1">
+              <AlertTriangle className="size-3 text-amber-500" />
+              {getActionRequiredCheckCountLabel(actionRequiredCount)}
             </span>
           )}
           {pendingCount > 0 && (

@@ -3,7 +3,7 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ParentPrChecksRow, ParentPrChecksRowStatus } from './parent-pr-checks-row-types'
@@ -27,12 +27,16 @@ vi.mock('./checks-panel/check-presentation', () => ({
   CHECK_COLOR: {
     success: 'success-color',
     failure: 'failure-color',
+    action_required: 'action-required-color',
     pending: 'pending-color',
     neutral: 'neutral-color'
   },
   CHECK_ICON: {
     success: (props: { className?: string }) => <span data-icon="success" {...props} />,
     failure: (props: { className?: string }) => <span data-icon="failure" {...props} />,
+    action_required: (props: { className?: string }) => (
+      <span data-icon="action-required" {...props} />
+    ),
     pending: (props: { className?: string }) => <span data-icon="pending" {...props} />,
     neutral: (props: { className?: string }) => <span data-icon="neutral" {...props} />
   },
@@ -87,7 +91,7 @@ function makeRepo(): Repo {
 function makeRow(
   overrides: Partial<ParentPrChecksRow> & {
     status?: ParentPrChecksRowStatus
-    checkTone?: CheckStatus
+    checkTone?: CheckPresentationStatus
   } = {}
 ): ParentPrChecksRow {
   return {
@@ -160,6 +164,13 @@ describe('FolderWorkspacePrChecksRow', () => {
       icon: 'failure',
       color: 'failure-color',
       summary: 'Checks failing'
+    },
+    {
+      status: 'actionRequired' as const,
+      checkTone: 'action_required' as const,
+      icon: 'action-required',
+      color: 'action-required-color',
+      summary: 'Action required'
     }
   ])('shows $icon status as summary metadata after the review identity', (state) => {
     renderRow(

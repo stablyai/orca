@@ -93,6 +93,8 @@ function RollupIcon({ kind, color }: { kind: MobilePrChipRollup['kind']; color: 
       return <AlertTriangle size={size} color={color} strokeWidth={strokeWidth} />
     case 'failing':
       return <X size={size} color={color} strokeWidth={strokeWidth} />
+    case 'action_required':
+      return <AlertTriangle size={size} color={color} strokeWidth={strokeWidth} />
     case 'running':
       return <CircleDot size={size} color={color} strokeWidth={strokeWidth} />
     case 'passed':
