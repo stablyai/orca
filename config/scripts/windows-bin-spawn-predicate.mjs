@@ -75,9 +75,26 @@ export function hasNodeModulesBinSpawn(contents) {
     )
   }
 
+  // Why: arguments are folded textually, so a literal '..' segment would otherwise hide a
+  // path that resolves into node_modules/.bin at runtime.
+  function foldDotSegments(value) {
+    const folded = []
+    for (const segment of value.replace(/\\/g, '/').split('/')) {
+      if (segment === '.' || segment === '') {
+        continue
+      }
+      if (segment === '..' && folded.length && folded[folded.length - 1] !== '..') {
+        folded.pop()
+        continue
+      }
+      folded.push(segment)
+    }
+    return folded.join('/')
+  }
+
   return calls.some(
     (call) =>
       SPAWN_METHODS.has(name(call.expression)) &&
-      paths(call.arguments[0]).some((value) => BIN_PATH.test(value))
+      paths(call.arguments[0]).some((value) => BIN_PATH.test(foldDotSegments(value)))
   )
 }
