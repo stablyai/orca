@@ -134,7 +134,24 @@ export function groupLinearIssues(
   groupBy: LinearGroupBy,
   orderBy: LinearOrderBy
 ): LinearIssueSection[] {
-  const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy))
+  return groupOrderedLinearIssues(
+    [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy)),
+    groupBy
+  )
+}
+
+/** The caller must sort issues by its selected order before grouping. */
+export function groupSortedLinearIssues(
+  issues: readonly LinearIssue[],
+  groupBy: LinearGroupBy
+): LinearIssueSection[] {
+  return groupOrderedLinearIssues([...issues], groupBy)
+}
+
+function groupOrderedLinearIssues(
+  sorted: LinearIssue[],
+  groupBy: LinearGroupBy
+): LinearIssueSection[] {
   if (groupBy === 'none') {
     return [{ key: 'all', label: 'Issues', color: colors.accentBlue, issues: sorted }]
   }
