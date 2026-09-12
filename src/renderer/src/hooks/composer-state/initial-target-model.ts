@@ -21,6 +21,8 @@ export type ComposerInitialTargetModel = {
   resolvedInitialRepoId: string
   internalRepoId: string
   setInternalRepoId: React.Dispatch<React.SetStateAction<string>>
+  selectedProjectIdOverride: string | null
+  setSelectedProjectIdOverride: React.Dispatch<React.SetStateAction<string | null>>
   selectedProjectHostSetupOverrideId: string | null
   setSelectedProjectHostSetupOverrideId: React.Dispatch<React.SetStateAction<string | null>>
   initialFolderProjectGroupId: string | null

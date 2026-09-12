@@ -4,6 +4,7 @@ import type {
   NeedsSetupProjectHostOption,
   ProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
+import type { WorkspaceCreationTarget } from '@/lib/project-host-workspace-target'
 import type { SetupConfig } from '@/lib/new-workspace'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
@@ -49,6 +50,7 @@ export type NewWorkspaceComposerCardProps = {
   selectedEphemeralVmRecipeId?: string | null
   onEphemeralVmRecipeChange?: (recipeId: string | null) => void
   ephemeralVmRecipeError?: string | null
+  runTargetChoiceCandidates?: readonly WorkspaceCreationTarget[] | null
   repoBackedSearchRepos?: readonly RepoOption[]
   repoBackedSourcesDisabled?: boolean
   allowSmartNameAddProject?: boolean

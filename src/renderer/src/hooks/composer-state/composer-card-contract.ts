@@ -12,6 +12,7 @@ export type ComposerCardSourceProps = Pick<
   | 'ephemeralVmRecipes'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
+  | 'runTargetChoiceCandidates'
   | 'name'
   | 'branchNameOverride'
   | 'parentWorktreeId'
