@@ -19,6 +19,7 @@ export function maybeAutoRenameWorkspaceOnFirstStructuredTurn(
       tabId: undefined,
       worktreeId: summary.workspaceId,
       state: 'working',
+      agentType: summary.agent,
       prompt: summary.latestPrompt,
       assistantMessage: undefined,
       isReplay: options.replay
