@@ -45,6 +45,38 @@ export function readMailRow(userDataDir: string, id: string): MailRow | undefine
   ) as MailRow | undefined
 }
 
+export type ThreadedMailRow = Pick<MailRow, 'id' | 'run_id' | 'to_handle' | 'read'> & {
+  thread_id: string | null
+}
+
+/** Exact rows, in insertion order, for asserting that a set of ids survived a restart unchanged. */
+export function readMailRowsById(userDataDir: string, ids: string[]): ThreadedMailRow[] {
+  if (ids.length === 0) {
+    return []
+  }
+  return withMailDb(userDataDir, (db) =>
+    db
+      .prepare(
+        `SELECT id, run_id, to_handle, read, thread_id FROM messages
+         WHERE id IN (${ids.map(() => '?').join(',')}) ORDER BY sequence`
+      )
+      .all(...ids)
+  ) as ThreadedMailRow[]
+}
+
+/**
+ * How many Runs this database has adopted from a pre-cutover contract.
+ *
+ * A reopen that gains a row here means the skew probe read current state as
+ * legacy state — the second half of the #19542 class of bug.
+ */
+export function countLegacyAdoptions(userDataDir: string): number {
+  return withMailDb(
+    userDataDir,
+    (db) => (db.prepare('SELECT COUNT(*) AS n FROM legacy_adoptions').get() as { n: number }).n
+  )
+}
+
 export function readMailbox(userDataDir: string, toHandle: string): MailRow[] {
   return withMailDb(userDataDir, (db) =>
     db

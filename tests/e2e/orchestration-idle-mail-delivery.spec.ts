@@ -350,9 +350,10 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     await expectSubmitted(pane)
   })
 
-  // #19542 deleted the legacy-Run write fallback, so a sender in no Run has
-  // nowhere to file mail to a bare handle: the send is refused outright, which
-  // is what keeps an unsafe pointer out of the pane on the next idle frame.
+  // A sender in no Run files mail to a bare handle under the unbound Run, not the
+  // legacy one (#19542 deleted that fallback, #19696 restored delivery). The row is
+  // durable and unread; what stays out of the pane is the pointer, because an
+  // unbound row has no safe check for the recipient to run.
   test('keeps unbound direct mail durable without pointing to an unsafe check', async ({
     orcaPage,
     electronApp
