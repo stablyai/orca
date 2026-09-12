@@ -52,8 +52,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   request: AgentSessionMutationRequest<TValue>
 ): Promise<AgentSessionMutationResult<TValue>> {
   const { envelope, plan, journal } = request
-  const record = request.store.getRecord(envelope.sessionId)
-  if (!journal || !record) {
+  if (!journal) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
@@ -65,17 +64,17 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
   }
-  const admission = admitAgentSessionMutation({
+  const admitted = await request.store.admitMutationOperation({
+    callerKey: request.callerKey,
     envelope,
     hostFingerprint,
-    ledger: await request.store.admitOperation({
-      callerKey: request.callerKey,
-      operationId: envelope.clientOperationId,
-      fingerprint: hostFingerprint,
-      now: request.now()
-    }),
-    lease: record.lease
+    now: request.now(),
+    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
+  if (!admitted) {
+    return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
+  }
+  const { admission, record } = admitted
   if (admission.decision === 'refused') {
     return refuseAgentSessionMutation(admission.refusal)
   }
@@ -111,10 +110,11 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     }
   }
 
-  plan.beforeRun?.()
   const outcome = await runSettledAgentSessionMutation({
     store: request.store,
-    callerKey: request.callerKey,
+    // A global send replay can cross caller identities. Settlement still owns
+    // the durable row admitted by the original caller.
+    operationCallerKey: admission.row.callerKey,
     envelope,
     plan,
     context

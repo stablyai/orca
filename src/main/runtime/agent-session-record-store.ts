@@ -10,7 +10,10 @@ import {
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
+  admitAgentSessionGlobalOperationRow,
+  admitAgentSessionMutationOperation,
   admitAgentSessionOperationRow,
+  type AgentSessionMutationOperationAdmission,
   type AgentSessionOperationAdmission
 } from './agent-session-operation-admission'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
@@ -279,6 +282,20 @@ export class AgentSessionRecordStore {
       return admitted.decision
     })
   }
+
+  /** Send ids stay global after a caller reconnects under a different identity. */
+  async admitGlobalOperation(
+    args: AgentSessionOperationAdmission
+  ): Promise<AgentSessionOperationDecision> {
+    return this.transact(() => {
+      const admitted = admitAgentSessionGlobalOperationRow(this.state.operations, args)
+      this.state.operations = admitted.rows
+      return admitted.decision
+    })
+  }
+
+  admitMutationOperation = (args: AgentSessionMutationOperationAdmission) =>
+    this.transact(() => admitAgentSessionMutationOperation(this.state, args))
 
   async recordOperationOutcome(args: {
     callerKey?: string

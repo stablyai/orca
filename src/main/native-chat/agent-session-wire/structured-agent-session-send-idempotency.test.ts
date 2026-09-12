@@ -8,6 +8,7 @@ import { structuredAgentSessionPayloadFingerprint } from '../../../shared/struct
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { DISPATCH_DOUBT_CODEX_TURN_UNNAMED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import { performSend, type AgentSessionTurnContext } from './structured-agent-session-turns'
 
 const journals = createTrackedJournalOpener()
@@ -35,7 +36,11 @@ afterEach(async () => {
 })
 
 describe('structured send idempotency', () => {
-  it('publishes a recovered retry as working before waiting for its provider', async () => {
+  it.each([
+    ['a refused write', 'provider_write_failed: broken pipe'],
+    ['a dead host', 'host_restarted_before_acknowledgement'],
+    ['a codex turn it could not name', DISPATCH_DOUBT_CODEX_TURN_UNNAMED]
+  ])('never puts an unknown back on the wire after %s', async (_case, reason) => {
     const body: AgentJournalMessageItem = {
       kind: 'message',
       role: 'user',
@@ -43,15 +48,11 @@ describe('structured send idempotency', () => {
     }
     const input = { clientMessageId: 'retry-id', payloadFingerprint: 'fingerprint', body }
     await journal.appendSubmission({ ...input, fence: 1 })
-    await journal.markPendingSubmissionsUnknown(2, 'provider_write_failed: broken pipe')
-    const originalItem = journal.snapshot().items[0]
-    const publish = vi.fn()
-    const dispatch = vi.fn(async () => {
-      expect(publish).toHaveBeenCalledOnce()
-      expect(hasUnansweredStructuredAgentSessionDispatch(journal.submissions(), 2)).toBe(true)
-      return { state: 'unknown' as const, reason: 'ack timeout' }
-    })
-    await performSend(
+    await journal.markPendingSubmissionsUnknown(2, reason)
+    const before = journal.snapshot()
+    const dispatch = vi.fn(async () => ({ state: 'admitted' as const }))
+
+    const result = await performSend(
       {
         sessionId: 'session-1',
         journal,
@@ -59,13 +60,22 @@ describe('structured send idempotency', () => {
         adapter: { dispatch } as unknown as StructuredAgentSessionAdapter,
         persistOptions: async () => undefined,
         resolvedBy: 'caller',
-        publish,
+        publish: vi.fn(),
         now: () => 1
       },
-      { ...input, retryUnknown: true }
+      input
     )
-    expect(hasUnansweredStructuredAgentSessionDispatch(journal.submissions(), 2)).toBe(true)
-    expect(journal.snapshot().items).toEqual([originalItem])
+
+    // The recorded outcome comes back verbatim: no dispatch, no new row, and the
+    // doubt is neither cleared nor sharpened into a rejection.
+    expect(dispatch).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'unknown', reason } }
+    })
+    expect(journal.snapshot()).toEqual(before)
+    // And the refusal does not resurrect a recovered submission as still working.
+    expect(hasUnansweredStructuredAgentSessionDispatch(journal.submissions(), 2)).toBe(false)
   })
 
   it('does not redispatch one send id reused across caller ledgers', async () => {

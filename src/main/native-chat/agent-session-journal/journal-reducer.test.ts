@@ -251,7 +251,7 @@ describe('submission and dispatch state machine', () => {
       {
         kind: 'dispatch',
         clientMessageId: 'cm_1',
-        state: 'unknown',
+        state: 'rejected',
         providerItemId: null,
         reason: 'provider_write_failed: closed before enqueue',
         ...base(2)
@@ -272,13 +272,46 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
-    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('rejected')
     expect(state.submissions.get('cm_2')).toMatchObject({
       dispatchState: 'accepted',
       providerItemId: 'claude:session-1:user-1'
     })
     expect(state.receipts.has('cm_1')).toBe(false)
     expect(state.receipts.get('cm_2')?.providerItemId).toBe('claude:session-1:user-1')
+  })
+
+  it('does not give a newer identical echo to a legacy unknown write failure', () => {
+    const body = userText('same message')
+    const state = fold([
+      { ...submission, body, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        ...submission,
+        clientMessageId: 'cm_2',
+        body,
+        payloadFingerprint: sendFingerprint(body),
+        ...base(3)
+      },
+      { kind: 'item', itemId: 'claude:session-1:user-1', revision: 1, body, ...base(4) }
+    ])
+
+    // A journal written before a refused write became `rejected` still holds it as
+    // `unknown`. Replay must not let that row claim the echo of a later send that
+    // genuinely landed, which would attach the delivery to the wrong message.
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_2')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1'
+    })
+    expect(state.receipts.has('cm_1')).toBe(false)
   })
 
   it('does not accept a submission from a stale provider item behind its tombstone', () => {
@@ -484,13 +517,13 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_1')).toBeTruthy()
   })
 
-  it('returns a proven retry to pending without moving its original submission', () => {
+  it('keeps a refused write rejected and leaves its bubble where it was', () => {
     const state = fold([
       submission,
       {
         kind: 'dispatch',
         clientMessageId: 'cm_1',
-        state: 'unknown',
+        state: 'rejected',
         providerItemId: null,
         reason: 'provider_write_failed: closed before enqueue',
         ...base(2)
@@ -505,11 +538,12 @@ describe('submission and dispatch state machine', () => {
       }
     ])
 
+    // `rejected` is terminal, so nothing can put this id back on the wire; the
+    // user's Retry sends a new message under a new id instead.
     expect(state.submissions.get('cm_1')).toMatchObject({
-      dispatchState: 'pending',
+      dispatchState: 'rejected',
       submittedAt: submission.ts,
-      reason: null,
-      resolvedAt: null
+      reason: 'provider_write_failed: closed before enqueue'
     })
     expect(renderJournalState(state).items[0]?.sequence).toBe(submission.seq)
   })

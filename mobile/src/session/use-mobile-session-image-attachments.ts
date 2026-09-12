@@ -34,6 +34,7 @@ type Args = {
       id: string
       path: string
       previewUri: string
+      contentFingerprint?: string
     }[]
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured agent sessions do not have a terminal paste path. */

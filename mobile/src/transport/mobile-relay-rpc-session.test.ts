@@ -322,6 +322,21 @@ describe('mobile relay RPC session', () => {
     expect(session.getState()).toBe('disconnected')
   })
 
+  it('keeps a synchronous pre-write relay failure definite', async () => {
+    const { session } = await authenticateSession()
+    fakes.sendText.mockImplementationOnce(() => {
+      fakes.linkOptions!.onError(new Error('relay outbound overflow'))
+      return false
+    })
+
+    const error = await session
+      .sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+      .catch((cause: unknown) => cause)
+
+    expect((error as Error).message).toBe('relay outbound overflow')
+    expect(isRpcDeliveryUnknown(error)).toBe(false)
+  })
+
   it('marks in-flight requests delivery-unknown when the session closes', async () => {
     const { session } = await authenticateSession()
     const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })

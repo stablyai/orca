@@ -238,8 +238,7 @@ export async function sendStructuredWorkerPreamble(args: {
         expectedRuntimeFence: fence,
         payloadFingerprint: structuredPointerPayloadFingerprint(args.sessionId, body)
       },
-      body,
-      retryUnknown: true
+      body
     }
   )
   if (!result.ok) {
@@ -250,7 +249,15 @@ export async function sendStructuredWorkerPreamble(args: {
     return
   }
   if (submission.dispatchState === 'rejected') {
-    throw new Error(`The dispatch preamble was rejected: ${submission.reason ?? 'no reason given'}`)
+    // A rejection is a verdict, not a mystery: the preamble provably did not happen.
+    // `dispatch_preamble_undelivered` says exactly that, and says it as a code rather
+    // than as prose, so a coordinator can tell "we could not send it" apart from
+    // `operation_unknown`'s "it may be running and you must go look". Both discard the
+    // pending receipt; only this one lets the caller retry knowing nothing landed.
+    throw new OrchestrationError(
+      'dispatch_preamble_undelivered',
+      `The dispatch preamble was not delivered: ${submission.reason ?? 'no reason given'}.`
+    )
   }
   // Only `accepted` is an acknowledgement — the same rule the mail lane already applies. A thrown
   // adapter call settles as `unknown`, which is indistinguishable from a lost reply, so the start

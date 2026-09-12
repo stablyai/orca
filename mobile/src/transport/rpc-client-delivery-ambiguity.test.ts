@@ -148,6 +148,34 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
     client.close()
   })
 
+  it('marks a written request unknown when another request triggers auth recovery', async () => {
+    const { client, socket } = connectAuthenticated()
+    const sendError = client.sendRequest('terminal.send', { terminal: 't' }).then(
+      () => null,
+      (error: Error) => error
+    )
+    const authProbe = client.sendRequest('status.get')
+    await Promise.resolve()
+    const probe = socket.sent
+      .map(
+        (payload) =>
+          JSON.parse(payload.replace(/^encrypted:/, '')) as { id: string; method: string }
+      )
+      .find((request) => request.method === 'status.get')!
+
+    socket.receive(
+      `encrypted:${JSON.stringify({ id: probe.id, ok: false, error: { code: 'unauthorized', message: 'Unauthorized' } })}`
+    )
+    await expect(authProbe).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'unauthorized' }
+    })
+
+    const error = await sendError
+    expect(isRpcDeliveryUnknown(error)).toBe(true)
+    client.close()
+  })
+
   it('does not mark requests whose frame never reached the wire', async () => {
     const { client, socket } = connectAuthenticated()
     // Simulate RN dropping onclose: the socket is dead but state is still 'connected'.

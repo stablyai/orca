@@ -250,8 +250,9 @@ export class DirectRpcClient implements RpcClient {
       return
     }
     if (!response.ok && response.error.code === 'unauthorized') {
-      this.authenticationRetry.reject('Unauthorized — pairing may be revoked')
-      return
+      // Settle this correlated refusal before marking other written requests unknown.
+      this.requests.resolve(response)
+      return this.authenticationRetry.reject('Unauthorized — pairing may be revoked')
     }
     if (!this.streams.handleResponse(response)) {
       this.requests.resolve(response)
@@ -270,7 +271,7 @@ export class DirectRpcClient implements RpcClient {
     this.socketSession = null
     closing?.clearKey()
     this.streams.markForReplay()
-    this.requests.rejectAll(reason)
+    this.requests.rejectAll(reason, { deliveryUnknown: true })
     closing?.close()
     this.connectionState.publish('reconnecting')
     this.reconnect.schedule()
@@ -281,7 +282,7 @@ export class DirectRpcClient implements RpcClient {
     this.socketSession?.close()
     this.socketSession = null
     this.connectionState.publish('auth-failed')
-    this.requests.rejectAll(reason)
+    this.requests.rejectAll(reason, { deliveryUnknown: true })
   }
 
   private sendEncrypted(request: unknown): boolean {

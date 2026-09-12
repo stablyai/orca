@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
-import type {
-  AgentSessionCancelResult,
-  AgentSessionSendResult
-} from '../../../src/shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
@@ -38,8 +35,13 @@ import { useMobileStructuredAgentState } from './use-mobile-structured-agent-sta
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
+import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
+import { useMobileStructuredSendOperationReconciliation } from './use-mobile-structured-send-operation-reconciliation'
 
-type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
+type StructuredMobileAttachment = StructuredAgentSessionAttachment & {
+  id?: string
+  contentFingerprint?: string
+}
 
 type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
@@ -66,13 +68,24 @@ export function useMobileStructuredAgentSession(args: {
   sessionId: string | null
   /** Host/workspace scope used to keep same provider ids isolated. */
   sourceIdentity?: string
+  /** Authenticated identity the host keys mutation admission under. */
+  callerIdentity?: string
   enabled: boolean
   /** Live transport only; gates the connection-scoped hold, nothing else. */
   connected: boolean
   agent: string | null
   onSendError: (message: string) => void
 }): StructuredMobileSession {
-  const { agent, client, connected, sessionId, sourceIdentity = '', enabled, onSendError } = args
+  const {
+    agent,
+    callerIdentity = '',
+    client,
+    connected,
+    sessionId,
+    sourceIdentity = '',
+    enabled,
+    onSendError
+  } = args
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
@@ -81,6 +94,7 @@ export function useMobileStructuredAgentSession(args: {
     retainStructuredOpId(operationIdsRef.current, key, operationId)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
   const { state, stateRef, loadingOlder, loadEarlier } = useMobileStructuredAgentState(stateArgs)
+  useMobileStructuredSendOperationReconciliation(state.submissions)
 
   const mutate = useCallback(
     async <TValue>(
@@ -113,9 +127,9 @@ export function useMobileStructuredAgentSession(args: {
         }
       }
       if (result.status === 'unknown') {
-        // Prompt/option/cancel plans cannot redispatch an unknown ledger row;
+        // Prompt/option plans cannot repeat a harmful effect under a fresh id;
         // issue a fresh id so a retry can be admitted after the user checks the
-        // stream. Sends opt into explicit retryUnknown below.
+        // stream. Sends keep theirs — see `mobile-structured-send-delivery.ts`.
         operationIdsRef.current.delete(key)
         return result
       }
@@ -190,34 +204,21 @@ export function useMobileStructuredAgentSession(args: {
       if (body.blocks.length === 0) {
         return 'rejected'
       }
-      const fields = { body }
-      const key = `${sessionKey}:agentSession.send:${JSON.stringify(fields)}`
-      const priorOperationId = operationIdsRef.current.get(key)
-      const clientOperationId = retainOperationId(key, priorOperationId)
-      const result = await requestStructuredAgentSessionMutation<AgentSessionSendResult>({
+      return sendMobileStructuredAgentSessionMessage({
         client,
-        method: 'agentSession.send',
-        fingerprintMethod: 'agentSession.send',
         sessionId,
+        sessionKey,
+        callerIdentity,
         expectedRuntimeFence: currentFence,
-        fields,
-        clientOperationId,
-        ...(priorOperationId ? { retryUnknown: true } : {}),
-        timeoutMs
+        text,
+        attachments: sendAttachments,
+        deadline,
+        onError: onSendError
       })
-      if (result.status === 'accepted') {
-        operationIdsRef.current.delete(key)
-        return 'accepted'
-      }
-      if (result.status === 'unknown') {
-        return 'unknown'
-      }
-      operationIdsRef.current.delete(key)
-      onSendError(result.message === 'Request not sent' ? 'Message not sent' : result.message)
-      return 'rejected'
     },
     [
       agent,
+      callerIdentity,
       client,
       conversationCommands,
       enabled,

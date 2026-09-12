@@ -16,10 +16,8 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../shared/structured-agent-session-projection'
-import {
-  DISPATCH_DOUBT_RETRY_IN_PROGRESS,
-  dispatchDoubtProvesUndelivered
-} from './journal-dispatch-doubt-reasons'
+import { DISPATCH_DOUBT_CODEX_TURN_UNNAMED } from './journal-dispatch-doubt-reasons'
+import { dispatchWriteFailureReason } from '../../../shared/structured-agent-session-dispatch-rejection'
 import { digestPayload } from './journal-payload-bounds'
 import {
   reconcileSubmissions,
@@ -170,56 +168,59 @@ describe('crash between provider accept and journal commit', () => {
     expect(restarted.cursor()).toEqual(cursor)
   })
 
-  it('preserves a proven write failure while retiring its live dispatch', async () => {
+  it('leaves a rejected write failure settled across a restart', async () => {
     const journal = await open()
     await journal.appendSubmission({
       clientMessageId: 'cm_write_failed',
-      payloadFingerprint: digestPayload('safe to retry'),
-      body: userMessage('safe to retry'),
+      payloadFingerprint: digestPayload('never left the process'),
+      body: userMessage('never left the process'),
       fence: 1
     })
     await journal.resolveDispatch({
       clientMessageId: 'cm_write_failed',
-      state: 'unknown',
-      reason: 'provider_write_failed: broken pipe',
+      state: 'rejected',
+      reason: dispatchWriteFailureReason(new Error('broken pipe')),
       fence: 1
     })
 
     const restarted = await open()
     await restarted.markPendingSubmissionsUnknown(2)
 
+    // A restart re-opens what it could not answer. This one is already answered,
+    // so recovery must not reopen it as doubt.
     expect(restarted.submissions()[0]).toMatchObject({
-      dispatchState: 'unknown',
-      reason: 'provider_write_failed: broken pipe',
-      recovered: true
+      dispatchState: 'rejected',
+      reason: 'provider_write_failed: broken pipe'
     })
-    expect(dispatchDoubtProvesUndelivered(restarted.submissions()[0]?.reason)).toBe(true)
+    expect(restarted.submissions()[0]?.recovered).toBeUndefined()
+    expect(hasUnansweredStructuredAgentSessionDispatch(restarted.submissions())).toBe(false)
   })
 
-  it('turns an interrupted retry marker into recovery doubt', async () => {
+  it('keeps a codex turn it could not name in doubt, never rejected', async () => {
     const journal = await open()
     await journal.appendSubmission({
-      clientMessageId: 'cm_retrying',
-      payloadFingerprint: digestPayload('retry interrupted'),
-      body: userMessage('retry interrupted'),
+      clientMessageId: 'cm_codex_unnamed',
+      payloadFingerprint: digestPayload('codex is running this'),
+      body: userMessage('codex is running this'),
       fence: 1
     })
     await journal.resolveDispatch({
-      clientMessageId: 'cm_retrying',
+      clientMessageId: 'cm_codex_unnamed',
       state: 'unknown',
-      reason: DISPATCH_DOUBT_RETRY_IN_PROGRESS,
+      reason: DISPATCH_DOUBT_CODEX_TURN_UNNAMED,
       fence: 1
     })
 
     const restarted = await open()
     await restarted.markPendingSubmissionsUnknown(2, 'provider_exited_before_acknowledgement')
 
+    // The turn IS started; recovery may not overwrite that with a weaker guess,
+    // and it may never become a rejection, which would license a re-delivery.
     expect(restarted.submissions()[0]).toMatchObject({
       dispatchState: 'unknown',
-      reason: 'provider_exited_before_acknowledgement',
+      reason: DISPATCH_DOUBT_CODEX_TURN_UNNAMED,
       recovered: true
     })
-    expect(dispatchDoubtProvesUndelivered(restarted.submissions()[0]?.reason)).toBe(false)
   })
 
   it('reports a rejected submission as never delivered, and never re-sends it', async () => {

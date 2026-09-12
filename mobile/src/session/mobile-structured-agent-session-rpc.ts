@@ -1,8 +1,12 @@
 import {
-  AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
+  AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS,
+  AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
 } from '../../../src/shared/agent-session-host-authority'
-import type { AgentSessionMutationResult } from '../../../src/shared/agent-session-wire'
+import type {
+  AgentSessionMutationResult,
+  AgentSessionWireRefusalCode
+} from '../../../src/shared/agent-session-wire'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
@@ -16,7 +20,7 @@ export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
 export type StructuredAgentSessionMutationCallResult<TValue> =
   | { status: 'accepted'; value: TValue }
-  | { status: 'refused'; message: string }
+  | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
   | { status: 'failed'; message: string }
   | { status: 'unknown' }
 
@@ -31,6 +35,22 @@ export type StructuredAgentSessionMutate = <TValue>(
   fields: Record<string, unknown>
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
 
+class AgentSessionRpcResponseError extends Error {
+  constructor(
+    readonly code: string,
+    message: string
+  ) {
+    super(message)
+  }
+}
+
+const PRE_HANDLER_RPC_REFUSALS = new Set([
+  'invalid_argument',
+  'method_not_found',
+  'method_not_supported',
+  'unauthorized'
+])
+
 export async function callAgentSession<TResult>(
   client: RpcClient,
   method: string,
@@ -44,7 +64,7 @@ export async function callAgentSession<TResult>(
     ...(options?.failWhenDisconnected ? { failWhenDisconnected: true } : {})
   })
   if (!response.ok) {
-    throw new Error(response.error.message)
+    throw new AgentSessionRpcResponseError(response.error.code, response.error.message)
   }
   return response.result as TResult
 }
@@ -57,34 +77,44 @@ export function structuredSessionRandomUuid(): string {
     : Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')
 }
 
-export function structuredSessionOperationId(): string {
-  return createStructuredAgentSessionOperationId(structuredSessionRandomUuid)
+export function structuredSessionOperationId(now: number = Date.now()): string {
+  return createStructuredAgentSessionOperationId(structuredSessionRandomUuid, now)
+}
+
+function isReplayableStructuredSessionOperationId(operationId: string, now: number): boolean {
+  const timestamp = parseAgentSessionOperationTimestamp(operationId)
+  return (
+    timestamp !== null &&
+    timestamp <= now + AGENT_SESSION_OPERATION_FUTURE_SKEW_MS &&
+    now - timestamp <= AGENT_SESSION_MAX_OPERATION_REPLAY_AGE_MS
+  )
 }
 
 /**
- * Bounded by expiry, never by count: every retained id belongs to a send whose outcome is still
- * unknown, so dropping one turns the user's retry into a second message on the host. Only an id
- * the host would already refuse — unparseable, or past the window in which it can be admitted —
- * is safe to release, which matches the host's own tombstone retention.
+ * Retains transient non-send mutation ids while the host can still replay them. Structured sends
+ * use the durable journal because delivery ambiguity itself does not expire.
  */
 export function retainStructuredSessionOperationId(
   operationIds: Map<string, string>,
   key: string,
-  operationId = structuredSessionOperationId(),
+  operationId?: string,
   now: number = Date.now()
 ): string {
+  const retainedOperationId =
+    operationId && isReplayableStructuredSessionOperationId(operationId, now)
+      ? operationId
+      : structuredSessionOperationId(now)
   operationIds.delete(key)
-  operationIds.set(key, operationId)
+  operationIds.set(key, retainedOperationId)
   for (const [retainedKey, retainedId] of operationIds) {
     if (retainedKey === key) {
       continue
     }
-    const timestamp = parseAgentSessionOperationTimestamp(retainedId)
-    if (timestamp === null || now - timestamp > AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS) {
+    if (!isReplayableStructuredSessionOperationId(retainedId, now)) {
       operationIds.delete(retainedKey)
     }
   }
-  return operationId
+  return retainedOperationId
 }
 
 export function timeoutForDeadline(deadline: number | undefined): number | null {
@@ -103,7 +133,6 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
   expectedRuntimeFence: number
   fields: Record<string, unknown>
   clientOperationId?: string
-  retryUnknown?: boolean
   timeoutMs?: number
 }): Promise<StructuredAgentSessionMutationCallResult<TValue>> {
   const {
@@ -114,7 +143,6 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     expectedRuntimeFence,
     fields,
     clientOperationId,
-    retryUnknown,
     timeoutMs
   } = args
   try {
@@ -132,23 +160,29 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
             fields
           })
         },
-        ...(retryUnknown ? { retryUnknown: true } : {}),
         ...fields
       },
       timeoutMs
     )
     if (
       !result.ok &&
-      method === 'agentSession.conversationCommand' &&
+      (method === 'agentSession.cancel' || method === 'agentSession.conversationCommand') &&
       result.refusal.code === 'agent_session_operation_unknown'
     ) {
       return { status: 'unknown' }
     }
     return result.ok
       ? { status: 'accepted', value: result.value }
-      : { status: 'refused', message: result.refusal.message }
+      : { status: 'refused', code: result.refusal.code, message: result.refusal.message }
   } catch (error) {
-    if (isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)) {
+    if (error instanceof AgentSessionRpcResponseError && PRE_HANDLER_RPC_REFUSALS.has(error.code)) {
+      return { status: 'failed', message: error.message }
+    }
+    if (
+      isRpcDeliveryUnknown(error) ||
+      isLogicalClientCutoverError(error) ||
+      error instanceof AgentSessionRpcResponseError
+    ) {
       return { status: 'unknown' }
     }
     return {

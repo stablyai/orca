@@ -372,14 +372,13 @@ describe('Claude structured dispatch image limits', () => {
       .fn()
       .mockRejectedValue(claudeUnwrittenUserMessageError(new Error('broken pipe')))
 
-    // A refused write is a transport fact, and the only thing besides child exit
-    // that puts one message's delivery in doubt.
+    // A refused write is not doubt: the frame never left, so it is a rejection.
     await expect(
       dispatchClaudeTurn(session, {
         clientMessageId: 'client-2',
         body: userMessage([{ type: 'text', text: 'two' }])
       })
-    ).resolves.toEqual({ state: 'unknown', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
     expect(session.dispatchWaiters).toEqual([firstWaiter])
 
     const firstUuid = (firstWaiter as { sentUuid?: string }).sentUuid
@@ -401,7 +400,7 @@ describe('Claude structured dispatch image limits', () => {
 
     await expect(
       dispatchClaudeTurn(session, { clientMessageId: 'client-1', body })
-    ).resolves.toEqual({ state: 'unknown', reason: 'provider_write_failed: broken pipe' })
+    ).resolves.toEqual({ state: 'rejected', reason: 'provider_write_failed: broken pipe' })
     expect(session.dispatchWaiters).toHaveLength(0)
     expect(session.retiredDispatchWaiters).toHaveLength(0)
 

@@ -90,7 +90,6 @@ export function createStableLogicalRpcClient(
       if (suspended) {
         return Promise.reject(new Error('Client suspended'))
       }
-      const requestGeneration = generation
       const session = activeSession
       return new Promise<RpcResponse>((resolve, reject) => {
         const pending = { reject }
@@ -100,13 +99,9 @@ export function createStableLogicalRpcClient(
           .then(
             (response) => {
               pendingRequests.delete(pending)
-              if (closed) {
-                reject(new Error('Client closed'))
-              } else if (requestGeneration !== generation) {
-                reject(new LogicalClientCutoverError())
-              } else {
-                resolve(response)
-              }
+              // A correlated response is definitive even if close/cutover won the
+              // callback race after the physical promise had already settled.
+              resolve(response)
             },
             (error: unknown) => {
               pendingRequests.delete(pending)

@@ -75,6 +75,7 @@ export type MobileNativeChatController = {
       id?: string
       path: string
       previewUri: string
+      contentFingerprint?: string
     }[]
   ) => Promise<MobileNativeChatSendOutcome>
   /** Launch-context text still parked on the agent's TUI input line, or null.
