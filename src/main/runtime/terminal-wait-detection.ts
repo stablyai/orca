@@ -4,6 +4,7 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
+import { stripAnsiEscapeSequences } from '../../shared/ansi-escape-sequences'
 import {
   isTerminalWaitWhitespace,
   startOfLastLines,
@@ -159,7 +160,7 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
 }
 
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
+  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission (?:needed|required)|requires permission|allow once|allow always|apply this change\?|run this command\?/i
 
 // Why text at all: cursor-agent has no approval hook, so the key-bound menu is the only authority.
 const CURSOR_APPROVAL_CHOICE_MARKERS = [
@@ -216,13 +217,91 @@ function findTerminalWaitBlockedSignal(
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const windowStart = startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
   const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
-  // Why: one combined negative scan avoids a dozen searches when no prompt can match.
-  if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
+  const liveWindowSignal = TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)
+    ? findBlockedSignalInLiveWindow(normalized)
+    : null
+  const genericSignal =
+    liveWindowSignal === null
+      ? null
+      : { reason: liveWindowSignal.reason, index: liveWindowSignal.index + windowStart }
+  // fx command bodies can wrap beyond the generic bounded window. Its structural
+  // footer and dialog boundaries keep the full-tail scan tied to the live screen.
+  const fxApprovalIndex = findFxApprovalPromptIndex(fullTail)
+  const fxSignal =
+    fxApprovalIndex === null
+      ? null
+      : ({ reason: 'agent-approval-prompt', index: fxApprovalIndex } as const)
+  if (genericSignal === null) {
+    return fxSignal
+  }
+  return fxSignal !== null && fxSignal.index > genericSignal.index ? fxSignal : genericSignal
+}
+
+const FX_DIALOG_BOUNDARY_RE = /[─━═╌╍┄┅┈┉]{3,}/g
+const FX_SELECTABLE_CHOICE_RE = /(\d+)(?:\.|\s{2,})\s*\S/g
+
+type FxDialogBoundary = { index: number }
+
+function findLastFxDialogBoundaryBefore(
+  normalized: string,
+  beforeIndex: number
+): FxDialogBoundary | null {
+  let lastBoundary: FxDialogBoundary | null = null
+  for (const match of normalized.slice(0, beforeIndex).matchAll(FX_DIALOG_BOUNDARY_RE)) {
+    lastBoundary = { index: match.index }
+  }
+  return lastBoundary
+}
+
+function findLastFxPermissionHeaderBefore(normalized: string, beforeIndex: number): number | null {
+  const permissionIndex = normalized.lastIndexOf('permission needed', beforeIndex)
+  if (permissionIndex === -1) {
     return null
   }
-  const signal = findBlockedSignalInLiveWindow(normalized)
-  // Why: callers compare this index against ready-header indexes found over the full tail.
-  return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
+  const lineStart = normalized.lastIndexOf('\n', permissionIndex) + 1
+  const linePrefix = normalized.slice(lineStart, permissionIndex)
+  const printablePrefix = stripAnsiEscapeSequences(linePrefix).trimEnd()
+  const hasHeaderIndent =
+    (linePrefix.trim() === '' ||
+      /^\s{2}$/.test(normalized.slice(permissionIndex - 2, permissionIndex))) &&
+    !printablePrefix.endsWith('>')
+  const hasHeaderSeparator = /^\s*·/.test(
+    normalized.slice(permissionIndex + 'permission needed'.length, beforeIndex)
+  )
+  return hasHeaderIndent && hasHeaderSeparator ? permissionIndex : null
+}
+
+function findFxApprovalPromptIndex(normalized: string): number | null {
+  const liveTail = normalized.trimEnd()
+  const cancelIndex = liveTail.lastIndexOf('esc cancel')
+  if (cancelIndex === -1 || cancelIndex + 'esc cancel'.length !== liveTail.length) {
+    return null
+  }
+  const confirmIndex = liveTail.lastIndexOf('enter confirm', cancelIndex)
+  const chooseIndex = liveTail.lastIndexOf('choose now', confirmIndex)
+  if (chooseIndex === -1 || confirmIndex === -1) {
+    return null
+  }
+  const footerBoundary = findLastFxDialogBoundaryBefore(liveTail, chooseIndex)
+  if (footerBoundary === null) {
+    return null
+  }
+  const permissionIndex = findLastFxPermissionHeaderBefore(liveTail, footerBoundary.index)
+  if (permissionIndex === null) {
+    return null
+  }
+  const dialogBoundary = findLastFxDialogBoundaryBefore(liveTail, permissionIndex)
+  if (dialogBoundary === null) {
+    return null
+  }
+  const dialogBody = liveTail.slice(
+    permissionIndex + 'permission needed'.length,
+    footerBoundary.index
+  )
+  const choiceNumbers = new Set(
+    [...dialogBody.matchAll(FX_SELECTABLE_CHOICE_RE)].map((match) => Number(match[1]))
+  )
+  return choiceNumbers.has(1) && choiceNumbers.has(2) ? permissionIndex : null
 }
 
 function findBlockedSignalInLiveWindow(

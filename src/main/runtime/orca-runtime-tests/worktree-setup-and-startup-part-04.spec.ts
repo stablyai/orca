@@ -16,76 +16,87 @@ import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import { TEST_REPO_ID, makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('sends follow-up prompts for CLI-created stdin-after-start startup agents', async () => {
-    const metaById: Record<string, WorktreeMeta> = {}
-    const runtimeStore = {
-      ...store,
-      getSettings: () => ({
-        ...store.getSettings(),
-        agentCmdOverrides: {}
-      }),
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
-        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
-        return metaById[worktreeId]
-      }
+  it.each([
+    { agent: 'aider' as const, command: "aider '--yes-always'", expectedEnv: undefined },
+    {
+      agent: 'fx' as const,
+      command: 'fx',
+      expectedEnv: { FX_PERMISSION_MODE: 'full-access' }
     }
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli-aider-startup' })
-    const write = vi.fn().mockReturnValue(true)
-    runtime.setPtyController({
-      spawn,
-      write,
-      kill: () => true,
-      getForegroundProcess: async () => 'aider'
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-cli-aider-startup' }),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      sleepWorktree: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-
-    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
-    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
-    vi.mocked(listWorktrees).mockResolvedValue([
-      {
-        path: '/tmp/workspaces/runtime-cli-aider-startup',
-        head: 'def',
-        branch: 'runtime-cli-aider-startup',
-        isBare: false,
-        isMainWorktree: false
+  ])(
+    'sends follow-up prompts for CLI-created $agent startup agents',
+    async ({ agent, command, expectedEnv }) => {
+      const metaById: Record<string, WorktreeMeta> = {}
+      const runtimeStore = {
+        ...store,
+        getSettings: () => ({
+          ...store.getSettings(),
+          agentCmdOverrides: {}
+        }),
+        getAllWorktreeMeta: () => metaById,
+        getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+        setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+          metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+          return metaById[worktreeId]
+        }
       }
-    ])
-
-    const result = await runtime.createManagedWorktree({
-      repoSelector: TEST_REPO_ID,
-      name: 'runtime-cli-aider-startup',
-      startupAgent: 'aider',
-      startupPrompt: 'fix it'
-    })
-
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cwd: '/tmp/workspaces/runtime-cli-aider-startup',
-        command: "aider '--yes-always'",
-        worktreeId: result.worktree.id
+      const runtime = new OrcaRuntimeService(runtimeStore as never)
+      const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli-aider-startup' })
+      const write = vi.fn().mockReturnValue(true)
+      runtime.setPtyController({
+        spawn,
+        write,
+        kill: () => true,
+        getForegroundProcess: async () => agent
       })
-    )
-    await vi.waitFor(() => {
-      expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r')
-    })
-  })
+      runtime.setNotifier({
+        worktreesChanged: vi.fn(),
+        reposChanged: vi.fn(),
+        activateWorktree: vi.fn(),
+        createTerminal: vi.fn(),
+        revealTerminalSession: vi.fn().mockResolvedValue({ tabId: 'tab-cli-aider-startup' }),
+        splitTerminal: vi.fn(),
+        renameTerminal: vi.fn(),
+        focusTerminal: vi.fn(),
+        closeTerminal: vi.fn(),
+        sleepWorktree: vi.fn(),
+        terminalFitOverrideChanged: vi.fn(),
+        terminalDriverChanged: vi.fn()
+      })
+      runtime.attachWindow(1)
+
+      computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
+      ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
+      vi.mocked(listWorktrees).mockResolvedValue([
+        {
+          path: '/tmp/workspaces/runtime-cli-aider-startup',
+          head: 'def',
+          branch: 'runtime-cli-aider-startup',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+
+      const result = await runtime.createManagedWorktree({
+        repoSelector: TEST_REPO_ID,
+        name: 'runtime-cli-aider-startup',
+        startupAgent: agent,
+        startupPrompt: 'fix it'
+      })
+
+      expect(spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/tmp/workspaces/runtime-cli-aider-startup',
+          command,
+          worktreeId: result.worktree.id,
+          ...(expectedEnv ? { env: expect.objectContaining(expectedEnv) } : {})
+        })
+      )
+      await vi.waitFor(() => {
+        expect(write).toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r')
+      })
+    }
+  )
 
   it('does not send stdin-after-start prompts into a shell when the agent never starts', async () => {
     vi.useFakeTimers()

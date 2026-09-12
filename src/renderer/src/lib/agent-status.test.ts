@@ -838,6 +838,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('codex')).toBe('Codex')
   })
 
+  it("maps 'fx' to 'Vercel fx'", () => {
+    expect(formatAgentTypeLabel('fx')).toBe('Vercel fx')
+  })
+
   it("maps 'gemini' to 'Gemini'", () => {
     expect(formatAgentTypeLabel('gemini')).toBe('Gemini')
   })
@@ -891,6 +895,7 @@ describe('agentTypeToIconAgent', () => {
   it("round-trips iconable agent types like 'claude'", () => {
     expect(agentTypeToIconAgent('claude')).toBe('claude')
     expect(agentTypeToIconAgent('openclaude')).toBe('openclaude')
+    expect(agentTypeToIconAgent('fx')).toBe('fx')
     expect(agentTypeToIconAgent('antigravity')).toBe('antigravity')
     expect(agentTypeToIconAgent('command-code')).toBe('command-code')
     expect(agentTypeToIconAgent('ante')).toBe('ante')

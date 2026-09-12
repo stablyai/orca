@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T20:12:39.534Z",
+  "platform": "darwin",
+  "command": ["fx"],
+  "cols": 120,
+  "rows": 40,
+  "note": "fx 0.0.8; macOS arm64; bare interactive startup; ready-state evidence",
+  "exitCode": 0
+}

@@ -33,11 +33,20 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
 }
 
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
+  fx: { FX_PERMISSION_MODE: 'full-access' },
   goose: { GOOSE_MODE: 'auto' }
 }
 
+export const MANUAL_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {
+  fx: { FX_PERMISSION_MODE: 'ask' }
+}
+
+function hasEnvPermissionMode(agent: string): agent is TuiAgent {
+  return agent in YOLO_TUI_AGENT_ENV || agent in MANUAL_TUI_AGENT_ENV
+}
+
 const PERMISSION_AGENT_IDS = Object.keys(TUI_AGENT_CONFIG).filter(
-  (agent): agent is TuiAgent => agent in YOLO_TUI_AGENT_ARGS || agent in YOLO_TUI_AGENT_ENV
+  (agent): agent is TuiAgent => agent in YOLO_TUI_AGENT_ARGS || hasEnvPermissionMode(agent)
 )
 
 function normalizeArgs(value: string | null | undefined): string {
@@ -65,9 +74,10 @@ function resolveAgentPermissionMode(args: string, yoloArgs: string): AgentPermis
 
 function resolveAgentEnvPermissionMode(
   env: Record<string, string> | null | undefined,
-  yoloEnv: Record<string, string> | undefined
+  yoloEnv: Record<string, string> | undefined,
+  manualEnv: Record<string, string> | undefined
 ): AgentPermissionMode {
-  if (sameEnv(env, {})) {
+  if (sameEnv(env, {}) || sameEnv(env, manualEnv ?? {})) {
     return 'manual'
   }
   return sameEnv(env, yoloEnv) ? 'yolo' : 'mixed'
@@ -108,8 +118,14 @@ export function resolveTuiAgentPermissionMode(args: {
       )
     )
   }
-  if (args.agent in YOLO_TUI_AGENT_ENV) {
-    modes.push(resolveAgentEnvPermissionMode(args.agentEnv, YOLO_TUI_AGENT_ENV[args.agent]))
+  if (hasEnvPermissionMode(args.agent)) {
+    modes.push(
+      resolveAgentEnvPermissionMode(
+        args.agentEnv,
+        YOLO_TUI_AGENT_ENV[args.agent],
+        MANUAL_TUI_AGENT_ENV[args.agent]
+      )
+    )
   }
 
   return combinePermissionModes(modes)
@@ -154,11 +170,16 @@ export function applyAgentPermissionMode(args: {
       }
     }
 
-    if (agent in YOLO_TUI_AGENT_ENV) {
+    if (hasEnvPermissionMode(agent)) {
       const yoloEnv = YOLO_TUI_AGENT_ENV[agent]
+      const manualEnv = MANUAL_TUI_AGENT_ENV[agent] ?? {}
       const currentEnv = nextEnv[agent]
-      if (sameEnv(currentEnv, {}) || sameEnv(currentEnv, yoloEnv)) {
-        nextEnv[agent] = args.mode === 'yolo' ? { ...yoloEnv } : {}
+      if (
+        sameEnv(currentEnv, {}) ||
+        sameEnv(currentEnv, yoloEnv) ||
+        sameEnv(currentEnv, manualEnv)
+      ) {
+        nextEnv[agent] = args.mode === 'yolo' ? { ...yoloEnv } : { ...manualEnv }
       }
     }
   }

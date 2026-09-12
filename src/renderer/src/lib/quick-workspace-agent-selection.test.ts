@@ -10,6 +10,7 @@ describe('pickQuickWorkspaceAgent', () => {
   it('keeps the fallback order in sync with the desktop agent catalog', () => {
     expect(TUI_AGENT_AUTO_PICK_ORDER).toEqual(AGENT_CATALOG.map((agent) => agent.id))
     expect(new Set(TUI_AGENT_AUTO_PICK_ORDER).size).toBe(TUI_AGENT_AUTO_PICK_ORDER.length)
+    expect(AGENT_CATALOG.at(-1)?.id).toBe('fx')
   })
 
   it('uses the first enabled catalog agent while detection is pending', () => {

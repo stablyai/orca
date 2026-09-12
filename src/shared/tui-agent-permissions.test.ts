@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyAgentPermissionMode,
+  MANUAL_TUI_AGENT_ENV,
   resolveAgentPermissionModeSummary,
   resolveTuiAgentPermissionMode,
   YOLO_TUI_AGENT_ARGS,
@@ -35,6 +36,8 @@ describe('tui agent permissions', () => {
 
     expect(result.agentDefaultArgs.claude).toBe('')
     expect(result.agentDefaultArgs.codex).toBe('--model gpt-5')
+    expect(result.agentDefaultArgs).not.toHaveProperty('fx')
+    expect(result.agentDefaultEnv.fx).toEqual(MANUAL_TUI_AGENT_ENV.fx)
     expect(result.agentDefaultEnv.goose).toEqual({})
   })
 
@@ -76,7 +79,7 @@ describe('tui agent permissions', () => {
     ).toBe('mixed')
   })
 
-  it('resolves env-driven yolo launches', () => {
+  it('resolves env-driven permission launches', () => {
     expect(
       resolveTuiAgentPermissionMode({
         agent: 'goose',
@@ -84,5 +87,22 @@ describe('tui agent permissions', () => {
         agentEnv: YOLO_TUI_AGENT_ENV.goose
       })
     ).toBe('yolo')
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'fx',
+        agentArgs: '',
+        agentEnv: YOLO_TUI_AGENT_ENV.fx
+      })
+    ).toBe('yolo')
+    expect(
+      resolveTuiAgentPermissionMode({
+        agent: 'fx',
+        agentArgs: '',
+        agentEnv: MANUAL_TUI_AGENT_ENV.fx
+      })
+    ).toBe('manual')
+    expect(resolveTuiAgentPermissionMode({ agent: 'fx', agentArgs: '', agentEnv: {} })).toBe(
+      'manual'
+    )
   })
 })

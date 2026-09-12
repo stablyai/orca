@@ -5,15 +5,26 @@ import {
   type TuiAgentConfig,
   type TuiAgentDetectionRuntime
 } from './tui-agent-config'
+import type { TuiAgentIdentityProbe } from './tui-agent-identity-probe'
+export {
+  getTuiAgentIdentityProbeArgs,
+  matchesTuiAgentIdentityProbe
+} from './tui-agent-identity-probe'
 
 export type TuiAgentDetectionCommand = {
   id: TuiAgent
   cmd: string
+  identityProbe?: TuiAgentIdentityProbe
   requiredCommands?: readonly string[]
   unsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
 }
 
 export const KNOWN_TUI_AGENT_DETECTION_COMMANDS = buildTuiAgentDetectionCommands()
+export const IDENTITY_PROBED_TUI_AGENT_IDS: ReadonlySet<string> = new Set(
+  KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter((command) => command.identityProbe).map(
+    (command) => command.id
+  )
+)
 
 function buildTuiAgentDetectionCommands(): TuiAgentDetectionCommand[] {
   return Object.entries(TUI_AGENT_CONFIG).flatMap(([id, config]) =>
@@ -31,6 +42,7 @@ function buildTuiAgentDetectionCommand(
   return {
     id,
     cmd,
+    ...(config.detectIdentityProbe ? { identityProbe: config.detectIdentityProbe } : {}),
     ...(config.detectRequiredCommands?.length
       ? { requiredCommands: config.detectRequiredCommands }
       : {}),
@@ -56,13 +68,15 @@ export function getTuiAgentDetectionProbeCommands(
 export function resolveDetectedTuiAgentIds(
   commands: readonly TuiAgentDetectionCommand[],
   foundCommands: ReadonlySet<string>,
-  runtime: TuiAgentDetectionRuntime
+  runtime: TuiAgentDetectionRuntime,
+  identityVerifiedCommands: ReadonlySet<string> = new Set()
 ): TuiAgent[] {
   const detected = commands
     .filter(
       (command) =>
         !isDetectionUnsupportedInRuntime(command, runtime) &&
         foundCommands.has(command.cmd) &&
+        (!command.identityProbe || identityVerifiedCommands.has(command.cmd)) &&
         (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
     )
     .map(({ id }) => id)
