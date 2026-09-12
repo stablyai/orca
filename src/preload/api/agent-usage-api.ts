@@ -57,3 +57,10 @@ export type RateLimitsApi = {
   refreshGrok: () => Promise<RateLimitState>
   onUpdate: (callback: (state: RateLimitState) => void) => () => void
 }
+
+/** Anthropic Console credential storage backing the org-balance fetcher. */
+export type ConsoleApi = {
+  setCredential: (apiKey: string) => Promise<{ success: boolean; error?: string }>
+  getCredential: () => Promise<{ apiKey?: string | null; error?: string }>
+  clearCredential: () => Promise<{ success: boolean; error?: string }>
+}

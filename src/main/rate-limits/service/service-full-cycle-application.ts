@@ -1,6 +1,7 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
 import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
 import type { ProviderRateLimits } from './service-types'
+import { fetchConsoleBalance } from '../claude-fetcher'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
   protected async runFetchAllCycle(
@@ -130,6 +131,41 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (signal.aborted) {
       return
     }
+
+    let claudeWithBalance = claude
+    let consoleBalanceUpdate:
+      | Pick<ProviderRateLimits, 'consoleBalance' | 'consoleBalanceError'>
+      | undefined
+    // Why: skip the balance fetch (and its await) entirely when no Console credential is
+    // configured, so the unused feature adds no latency to the Claude usage apply.
+    if (this.consoleCredentialResolver) {
+      try {
+        const apiKey = await this.consoleCredentialResolver()
+        if (apiKey && !signal.aborted) {
+          const balance = await fetchConsoleBalance(apiKey, undefined, signal)
+          consoleBalanceUpdate = { consoleBalance: balance, consoleBalanceError: undefined }
+          claudeWithBalance = {
+            ...claude,
+            ...consoleBalanceUpdate
+          }
+        } else if (!signal.aborted) {
+          consoleBalanceUpdate = { consoleBalance: undefined, consoleBalanceError: undefined }
+        }
+      } catch (error) {
+        consoleBalanceUpdate = {
+          consoleBalance: undefined,
+          consoleBalanceError: error instanceof Error ? error.message : 'Unknown error'
+        }
+        claudeWithBalance = {
+          ...claude,
+          ...consoleBalanceUpdate
+        }
+      }
+
+      if (signal.aborted) {
+        return
+      }
+    }
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
     // Why: a finishing skip has no provenance, so an in-flight result must never be
     // applied as though the target had become the system default (#STA-4422).
@@ -141,16 +177,19 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const codexBecameUnavailable =
       !codexFetchGated && latestCodexHome.skip && codexGeneration === this.codexFetchGeneration
     // Why: a gated cycle made no Claude attempt; applying its passthrough result would grow the failure streak and reset stale-policy clocks for free.
-    const shouldApplyClaude =
-      !claudeFetchGated &&
+    // Why: a console balance from this cycle belongs to the target/generation it was
+    // fetched under; an account switch mid-flight must not paint it onto the new target,
+    // though the OAuth gate can independently suppress only the Claude usage apply.
+    const claudeTargetUnchanged =
       claudeGeneration === this.claudeFetchGeneration &&
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
+    const shouldApplyClaude = !claudeFetchGated && claudeTargetUnchanged
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
 
     if (shouldApplyClaude) {
-      this.trackActiveFailureStreak('claude', claude)
+      this.trackActiveFailureStreak('claude', claudeWithBalance)
     }
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
@@ -168,9 +207,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
     this.updateState({
       ...this.state,
-      claude: shouldApplyClaude
-        ? this.resolveClaudeFetchApply(claude, previousState.claude)
-        : this.state.claude,
+      claude: (() => {
+        const resolvedClaude = shouldApplyClaude
+          ? this.resolveClaudeFetchApply(claudeWithBalance, previousState.claude)
+          : this.state.claude
+        return claudeTargetUnchanged && consoleBalanceUpdate && resolvedClaude
+          ? { ...resolvedClaude, ...consoleBalanceUpdate }
+          : resolvedClaude
+      })(),
       codex: shouldApplyCodex
         ? this.applyStalePolicy(codex, previousState.codex)
         : codexBecameUnavailable

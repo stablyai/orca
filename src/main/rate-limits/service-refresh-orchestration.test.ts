@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
-import { fetchClaudeRateLimits } from './claude-fetcher'
+import { fetchClaudeRateLimits, fetchConsoleBalance } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
@@ -20,7 +20,8 @@ import {
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
-  fetchManagedAccountUsage: vi.fn()
+  fetchManagedAccountUsage: vi.fn(),
+  fetchConsoleBalance: vi.fn()
 }))
 
 vi.mock('./codex-fetcher', () => ({
@@ -56,8 +57,11 @@ vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
 
-function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<void> } {
-  return service as unknown as { fetchAll: () => Promise<void> }
+function serviceInternals(service: RateLimitService): {
+  fetchAll: () => Promise<void>
+  fetchClaudeOnly: () => Promise<void>
+} {
+  return service as unknown as { fetchAll: () => Promise<void>; fetchClaudeOnly: () => Promise<void> }
 }
 
 describe('RateLimitService', () => {
@@ -594,5 +598,295 @@ describe('RateLimitService', () => {
     expect(state.opencodeGo?.status).toBe('error')
     expect(state.opencodeGo?.session).toBeNull()
     expect(state.opencodeGo?.error).toBe('No workspace ID found')
+  })
+
+  describe('Console Balance Fetching', () => {
+    it('should fetch console balance when credentials exist', async () => {
+      const mockBalance = {
+        organization_id: 'org-123',
+        balance_in_cents: 10000,
+        last_fetched_at: Date.now()
+      }
+
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 50))
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(mockBalance)
+      service.setConsoleCredentialResolver(() => Promise.resolve('sk-test-key'))
+
+      await service.refresh()
+
+      expect(fetchConsoleBalance).toHaveBeenCalledWith(
+        'sk-test-key',
+        undefined,
+        expect.any(AbortSignal)
+      )
+      expect(service.getState().claude?.consoleBalance).toEqual(mockBalance)
+      expect(service.getState().claude?.consoleBalanceError).toBeUndefined()
+    })
+
+    it('should handle missing credentials gracefully', async () => {
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 50))
+      service.setConsoleCredentialResolver(() => Promise.resolve(null))
+
+      await service.refresh()
+
+      expect(fetchConsoleBalance).not.toHaveBeenCalled()
+      expect(service.getState().claude?.consoleBalance).toBeUndefined()
+    })
+
+    it('should store error when console balance fetch fails', async () => {
+      const service = new RateLimitService()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 50))
+      vi.mocked(fetchConsoleBalance).mockRejectedValueOnce(new Error('API error'))
+      service.setConsoleCredentialResolver(() => Promise.resolve('sk-test-key'))
+
+      await service.refresh()
+
+      expect(service.getState().claude?.consoleBalanceError).toBe('API error')
+      expect(service.getState().claude?.consoleBalance).toBeUndefined()
+    })
+
+    it('clears a cached balance when a later cycle loses its credential', async () => {
+      const balance = {
+        organization_id: 'org-123',
+        balance_in_cents: 10000,
+        last_fetched_at: Date.now()
+      }
+      let credential: string | null = 'sk-test-key'
+      const service = new RateLimitService()
+      service.setConsoleCredentialResolver(() => Promise.resolve(credential))
+      vi.mocked(fetchClaudeRateLimits)
+        .mockResolvedValueOnce(okProvider('claude', 50))
+        .mockResolvedValueOnce(errorProvider('claude', 'Temporary Claude failure'))
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(balance)
+
+      await service.refresh()
+      credential = null
+      await service.refresh()
+
+      expect(service.getState().claude?.consoleBalance).toBeUndefined()
+    })
+
+    it('clears a cached balance when a Claude-only refresh loses its credential', async () => {
+      const balance = {
+        organization_id: 'org-123',
+        balance_in_cents: 10000,
+        last_fetched_at: Date.now()
+      }
+      let credential: string | null = 'sk-test-key'
+      const service = new RateLimitService()
+      service.setConsoleCredentialResolver(() => Promise.resolve(credential))
+      vi.mocked(fetchClaudeRateLimits)
+        .mockResolvedValueOnce(okProvider('claude', 50))
+        .mockResolvedValueOnce(errorProvider('claude', 'Temporary Claude failure'))
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(balance)
+
+      await service.refreshClaudeForTarget()
+      credential = null
+      await service.refreshClaudeForTarget()
+
+      expect(service.getState().claude?.consoleBalance).toBeUndefined()
+    })
+
+    it('refreshes Console balance when a non-forced Claude-only retry is gated', async () => {
+      const balance = {
+        organization_id: 'org-123',
+        balance_in_cents: 10000,
+        last_fetched_at: Date.now()
+      }
+      let credential: string | null = null
+      const service = new RateLimitService()
+      service.setConsoleCredentialResolver(() => Promise.resolve(credential))
+      mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 50))
+
+      await service.refresh()
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 23.5 },
+        sevenDay: null
+      })
+      credential = 'sk-test-key'
+      vi.mocked(fetchClaudeRateLimits).mockClear()
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(balance)
+
+      await serviceInternals(service).fetchClaudeOnly()
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+      expect(service.getState().claude?.consoleBalance).toEqual(balance)
+    })
+
+    it('preserves a live Claude update that arrives during a gated balance refresh', async () => {
+      const balance = {
+        organization_id: 'org-123',
+        balance_in_cents: 10000,
+        last_fetched_at: Date.now()
+      }
+      const credential = deferred<string>()
+      const balanceResult = deferred<typeof balance>()
+      const service = new RateLimitService()
+      service.setConsoleCredentialResolver(() => Promise.resolve(null))
+      mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 50))
+
+      await service.refresh()
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 23.5 },
+        sevenDay: null
+      })
+      service.setConsoleCredentialResolver(() => credential.promise)
+      vi.mocked(fetchConsoleBalance).mockReturnValueOnce(balanceResult.promise)
+
+      const refresh = serviceInternals(service).fetchClaudeOnly()
+      await flushMicrotasks()
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 42 },
+        sevenDay: null
+      })
+      credential.resolve('sk-test-key')
+      await flushMicrotasks()
+      balanceResult.resolve(balance)
+      await refresh
+
+      expect(service.getState().claude?.session?.usedPercent).toBe(42)
+      expect(service.getState().claude?.consoleBalance).toEqual(balance)
+    })
+
+    it('discards a full-cycle console balance whose Claude target switched mid-flight', async () => {
+      const hostBalance = {
+        organization_id: 'org-host',
+        balance_in_cents: 5000,
+        last_fetched_at: Date.now()
+      }
+      const staleBalance = {
+        organization_id: 'org-old',
+        balance_in_cents: 999,
+        last_fetched_at: Date.now()
+      }
+      const credential = deferred<string>()
+      const service = new RateLimitService()
+      service.setConsoleCredentialResolver(() => Promise.resolve('sk-host-key'))
+      mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 50))
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(hostBalance)
+
+      await service.refresh()
+      expect(service.getState().claude?.consoleBalance).toEqual(hostBalance)
+
+      service.setConsoleCredentialResolver(() => credential.promise)
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(staleBalance)
+
+      const cycle = serviceInternals(service).fetchAll()
+      await flushMicrotasks()
+      service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      credential.resolve('sk-old-key')
+      await cycle
+
+      expect(service.getState().claude?.consoleBalance).toEqual(hostBalance)
+    })
+
+    it('discards a Claude-only console balance whose target switched mid-flight', async () => {
+      const hostBalance = {
+        organization_id: 'org-host',
+        balance_in_cents: 5000,
+        last_fetched_at: Date.now()
+      }
+      const staleBalance = {
+        organization_id: 'org-old',
+        balance_in_cents: 999,
+        last_fetched_at: Date.now()
+      }
+      const credential = deferred<string>()
+      const service = new RateLimitService()
+      service.setConsoleCredentialResolver(() => Promise.resolve('sk-host-key'))
+      mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 50))
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(hostBalance)
+
+      await service.refresh()
+      expect(service.getState().claude?.consoleBalance).toEqual(hostBalance)
+
+      service.setConsoleCredentialResolver(() => credential.promise)
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(staleBalance)
+
+      const cycle = serviceInternals(service).fetchClaudeOnly()
+      await flushMicrotasks()
+      service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      credential.resolve('sk-old-key')
+      await cycle
+
+      expect(service.getState().claude?.consoleBalance).toEqual(hostBalance)
+    })
+
+    it('still refreshes Console balance during a gated full cycle on the same target', async () => {
+      const balance = {
+        organization_id: 'org-host',
+        balance_in_cents: 7000,
+        last_fetched_at: Date.now()
+      }
+      const service = new RateLimitService()
+      service.setConsoleCredentialResolver(() => Promise.resolve('sk-test-key'))
+      mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 50))
+
+      await service.refresh()
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 23.5 },
+        sevenDay: null
+      })
+      vi.mocked(fetchClaudeRateLimits).mockClear()
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(balance)
+
+      await serviceInternals(service).fetchAll()
+
+      expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
+      expect(service.getState().claude?.consoleBalance).toEqual(balance)
+      expect(service.getState().claude?.session?.usedPercent).toBe(23.5)
+    })
+
+    it('discards a gated Console balance whose Claude target switched mid-flight', async () => {
+      const hostBalance = {
+        organization_id: 'org-host',
+        balance_in_cents: 5000,
+        last_fetched_at: Date.now()
+      }
+      const staleBalance = {
+        organization_id: 'org-old',
+        balance_in_cents: 999,
+        last_fetched_at: Date.now()
+      }
+      const credential = deferred<string>()
+      const service = new RateLimitService()
+      service.setConsoleCredentialResolver(() => Promise.resolve('sk-host-key'))
+      mockFreshBackgroundProviderFetches()
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 50))
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(hostBalance)
+
+      await service.refresh()
+      expect(service.getState().claude?.consoleBalance).toEqual(hostBalance)
+
+      // Gate the OAuth fetch so the Claude-only cycle takes the balance-only path.
+      service.ingestLiveClaudeRateLimits({
+        configDir: null,
+        fiveHour: { used_percentage: 23.5 },
+        sevenDay: null
+      })
+      expect(service.getState().claude?.consoleBalance).toEqual(hostBalance)
+
+      service.setConsoleCredentialResolver(() => credential.promise)
+      vi.mocked(fetchConsoleBalance).mockResolvedValueOnce(staleBalance)
+
+      const cycle = serviceInternals(service).fetchClaudeOnly()
+      await flushMicrotasks()
+      service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+      credential.resolve('sk-old-key')
+      await cycle
+
+      expect(service.getState().claude?.consoleBalance).toEqual(hostBalance)
+    })
   })
 })
