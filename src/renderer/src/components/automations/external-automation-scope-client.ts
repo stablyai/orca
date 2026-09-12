@@ -175,7 +175,8 @@ export async function listScopedExternalAutomationRuns(
     jobId: job.id,
     // The engine pages from one; the table's page index is zero-based.
     page: page + 1,
-    pageSize
+    pageSize,
+    summaryOnly: true
   })
   return { runs: result.runs, totalCount: result.total }
 }

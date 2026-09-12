@@ -33,9 +33,10 @@ beforeEach(() => {
 })
 
 describe('ExternalAutomationsHandler', () => {
-  it('preserves the five external automation routes', () => {
+  it('preserves legacy routes and registers opt-in run history', () => {
     expect([...createHandlerHarness().keys()]).toEqual([
       'externalAutomations.list',
+      'externalAutomations.runHistory',
       'externalAutomations.runs',
       'externalAutomations.create',
       'externalAutomations.update',

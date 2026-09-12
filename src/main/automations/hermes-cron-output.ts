@@ -92,10 +92,16 @@ async function readHermesCronOutputRunCount(jobId: string): Promise<number> {
   })
 }
 
-async function hydrateHermesRunRef(jobId: string, ref: HermesMergedRunRef): Promise<unknown> {
-  const outputRun = ref.output ? await readHermesOutputFileRun(ref.output) : null
-  const sessionRun = ref.session ? readHermesSessionDbRunById(jobId, ref.session.id) : null
-  return (
+async function hydrateHermesRunRef(
+  jobId: string,
+  ref: HermesMergedRunRef,
+  summaryOnly = false
+): Promise<unknown> {
+  const outputRun = ref.output ? await readHermesOutputFileRun(ref.output, summaryOnly) : null
+  const sessionRun = ref.session
+    ? readHermesSessionDbRunById(jobId, ref.session.id, summaryOnly)
+    : null
+  const run =
     mergeHermesOutputAndSessionRuns(
       outputRun ? [outputRun] : [],
       sessionRun ? [sessionRun] : []
@@ -103,17 +109,23 @@ async function hydrateHermesRunRef(jobId: string, ref: HermesMergedRunRef): Prom
     outputRun ??
     sessionRun ??
     ref
-  )
+  return summaryOnly && typeof run === 'object' && run !== null
+    ? { ...run, output_content: null, output_content_deferred: true }
+    : run
 }
 
 export async function readHermesCronOutputRunsPage(
   jobId: string,
   {
     page,
-    pageSize
+    pageSize,
+    summaryOnly = false,
+    runId
   }: {
     page: number
     pageSize: number
+    summaryOnly?: boolean
+    runId?: string
   }
 ): Promise<HermesCronOutputRunsPage> {
   if (!EXTERNAL_JOB_ID_PATTERN.test(jobId)) {
@@ -128,10 +140,13 @@ export async function readHermesCronOutputRunsPage(
   }
   const runRefs = await readHermesCronOutputRunRefs(jobId)
   const start = (safePage - 1) * safePageSize
-  const pageRefs = runRefs.slice(start, start + safePageSize)
+  const pageRefs =
+    runId !== undefined
+      ? runRefs.filter((ref) => ref.id === runId)
+      : runRefs.slice(start, start + safePageSize)
   return {
     total: runRefs.length,
-    runs: await Promise.all(pageRefs.map((ref) => hydrateHermesRunRef(jobId, ref)))
+    runs: await Promise.all(pageRefs.map((ref) => hydrateHermesRunRef(jobId, ref, summaryOnly)))
   }
 }
 
@@ -168,11 +183,14 @@ async function readHermesOutputFileRunRefs(jobId: string): Promise<HermesOutputR
     }))
 }
 
-async function readHermesOutputFileRun(ref: HermesOutputRunRef): Promise<unknown> {
+async function readHermesOutputFileRun(
+  ref: HermesOutputRunRef,
+  summaryOnly = false
+): Promise<unknown> {
   try {
     const content = await readFile(ref.output_path, 'utf-8')
     const parsed = parseHermesOutput(content)
-    const outputContent = await appendReferencedLogFile(parsed.outputContent)
+    const outputContent = summaryOnly ? null : await appendReferencedLogFile(parsed.outputContent)
     return {
       id: ref.id,
       job_id: ref.job_id,
@@ -233,7 +251,7 @@ function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[] {
   }
 }
 
-function readHermesSessionDbRunById(jobId: string, runId: string): unknown {
+function readHermesSessionDbRunById(jobId: string, runId: string, summaryOnly = false): unknown {
   if (!existsSync(HERMES_STATE_DB)) {
     return null
   }
@@ -251,14 +269,16 @@ function readHermesSessionDbRunById(jobId: string, runId: string): unknown {
       if (!row) {
         return null
       }
-      const messages = db
-        .prepare(
-          `SELECT role, content, tool_name, reasoning, reasoning_content
+      const messages = summaryOnly
+        ? []
+        : (db
+            .prepare(
+              `SELECT role, content, tool_name, reasoning, reasoning_content
                FROM messages
               WHERE session_id = ?
               ORDER BY timestamp, id`
-        )
-        .all(runId) as Record<string, unknown>[]
+            )
+            .all(runId) as Record<string, unknown>[])
       const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null
       const model = typeof row.model === 'string' && row.model.trim() ? row.model.trim() : null
       const messageCount = typeof row.message_count === 'number' ? row.message_count : null

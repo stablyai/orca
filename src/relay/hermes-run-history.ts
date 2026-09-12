@@ -26,8 +26,8 @@ type HermesRunCountCacheEntry = {
 export type HermesRunHistorySources = {
   readOutputRefs: (jobId: string) => Promise<HermesOutputRunRef[]>
   readSessionRefs: (jobId: string) => HermesSessionRunRef[]
-  readOutputRun: (ref: HermesOutputRunRef) => Promise<unknown>
-  readSessionRun: (jobId: string, runId: string) => unknown
+  readOutputRun: (ref: HermesOutputRunRef, summaryOnly?: boolean) => Promise<unknown>
+  readSessionRun: (jobId: string, runId: string, summaryOnly?: boolean) => unknown
 }
 
 const DEFAULT_SOURCES: HermesRunHistorySources = {
@@ -84,7 +84,10 @@ export class HermesRunHistory {
     return {
       total: runRefs.length,
       runs: await Promise.all(
-        runRefs.slice(start, start + pageSize).map((ref) => this.hydrateRunRef(jobId, ref))
+        (typeof params.runId === 'string'
+          ? runRefs.filter((ref) => ref.id === params.runId)
+          : runRefs.slice(start, start + pageSize)
+        ).map((ref) => this.hydrateRunRef(jobId, ref, params.summaryOnly === true))
       )
     }
   }
@@ -111,10 +114,16 @@ export class HermesRunHistory {
     )
   }
 
-  private async hydrateRunRef(jobId: string, ref: HermesMergedRunRef): Promise<unknown> {
-    const outputRun = ref.output ? await this.sources.readOutputRun(ref.output) : null
-    const sessionRun = ref.session ? this.sources.readSessionRun(jobId, ref.session.id) : null
-    return (
+  private async hydrateRunRef(
+    jobId: string,
+    ref: HermesMergedRunRef,
+    summaryOnly = false
+  ): Promise<unknown> {
+    const outputRun = ref.output ? await this.sources.readOutputRun(ref.output, summaryOnly) : null
+    const sessionRun = ref.session
+      ? this.sources.readSessionRun(jobId, ref.session.id, summaryOnly)
+      : null
+    const run =
       mergeHermesOutputAndSessionRuns(
         outputRun ? [outputRun] : [],
         sessionRun ? [sessionRun] : []
@@ -122,7 +131,9 @@ export class HermesRunHistory {
       outputRun ??
       sessionRun ??
       ref
-    )
+    return summaryOnly && typeof run === 'object' && run !== null
+      ? { ...run, output_content: null, output_content_deferred: true }
+      : run
   }
 
   private async readRunCount(jobId: string): Promise<number> {

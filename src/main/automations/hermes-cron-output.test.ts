@@ -1,3 +1,4 @@
+import type * as FsPromises from 'node:fs/promises'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -10,6 +11,18 @@ const fakeDbRows = vi.hoisted(() => ({
   sessions: [] as Record<string, unknown>[],
   messages: [] as Record<string, unknown>[]
 }))
+const readFileSpy = vi.hoisted(() => vi.fn())
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FsPromises>()
+  return {
+    ...actual,
+    readFile: (...args: Parameters<typeof actual.readFile>) => {
+      readFileSpy(...args)
+      return actual.readFile(...args)
+    }
+  }
+})
+
 const fakePrepareSqls = vi.hoisted(() => [] as string[])
 const fakeDatabase = vi.hoisted(() =>
   vi.fn(function FakeDatabase() {
@@ -118,8 +131,33 @@ Run summary: monitor automation completed successfully.
     ]
 
     const { readHermesCronOutputRunsPage } = await loadReader()
+    readFileSpy.mockClear()
+    const summary = await readHermesCronOutputRunsPage('job-1', {
+      page: 1,
+      pageSize: 25,
+      summaryOnly: true
+    })
+    expect(summary.runs).toHaveLength(1)
+    expect(summary.runs[0]).toMatchObject({ output_content: null, output_content_deferred: true })
+    expect(readFileSpy.mock.calls.some(([filename]) => filename === scriptLogPath)).toBe(false)
+    expect(fakePrepareSqls.some((sql) => sql.includes('FROM messages'))).toBe(false)
     const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 25 })
 
+    const detail = await readHermesCronOutputRunsPage('job-1', {
+      page: 1,
+      pageSize: 1,
+      runId: 'job-1:2026-05-15_09-02-00.md'
+    })
+    expect(detail.runs).toEqual(page.runs)
+    expect(
+      (
+        await readHermesCronOutputRunsPage('other-job', {
+          page: 1,
+          pageSize: 1,
+          runId: 'job-1:2026-05-15_09-02-00.md'
+        })
+      ).runs
+    ).toEqual([])
     expect(page.total).toBe(1)
     expect(page.runs[0]).toMatchObject({
       id: 'job-1:2026-05-15_09-02-00.md',

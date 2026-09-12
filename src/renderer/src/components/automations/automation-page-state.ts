@@ -1,3 +1,4 @@
+import type { ExternalAutomationScope } from './external-automation-scope-client'
 import type {
   ExternalAutomationJob,
   ExternalAutomationManager,
@@ -14,6 +15,7 @@ export type AutomationRunPageOrigin = 'runs' | 'automation'
 
 /** External run opened as a full page inside the detail pane. */
 export type SelectedExternalRunPage = {
+  scope: ExternalAutomationScope
   manager: ExternalAutomationManager
   job: ExternalAutomationJob
   run: ExternalAutomationRun
