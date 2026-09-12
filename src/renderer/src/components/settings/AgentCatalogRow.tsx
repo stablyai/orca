@@ -216,16 +216,14 @@ export function AgentCatalogRow({
               onSaveArgs={onSaveArgs}
             />
           </div>
-          {(defaultEnvSummary || envSummary) && (
-            <div className="mt-2">
-              <AgentDefaultEnvInput
-                key={`${agentId}:${envSummary}`}
-                defaultEnv={defaultEnv}
-                envOverride={envOverride}
-                onSaveEnv={onSaveEnv}
-              />
-            </div>
-          )}
+          <div className="mt-2">
+            <AgentDefaultEnvInput
+              key={`${agentId}:${envSummary}`}
+              defaultEnv={defaultEnv}
+              envOverride={envOverride}
+              onSaveEnv={onSaveEnv}
+            />
+          </div>
           {sessionSourceHome && (
             <div className="mt-2">
               <AgentSessionSourceHomeInput
