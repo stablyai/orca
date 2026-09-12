@@ -7,6 +7,22 @@ type ReferenceLinkDefinition = {
 const REFERENCE_DEFINITION_PATTERN =
   /^ {0,3}\[([^\]]+)\]:[ \t]*(<[^>\n]+>|[^\s]+)(?:[ \t]+(?:"([^"]*)"|'([^']*)'|\(([^)]*)\)))?[ \t]*$/
 
+// Why: fenced blocks inside list/blockquote containers still block reference
+// normalization. Without container-aware fence detection, mermaid labels like
+// `<br/>` can be transformed unexpectedly.
+const FENCE_LINE_PATTERN = /^[ \t]*(?:(?:>[ \t]*)|(?:[-+*]|\d+[.)])[ \t]+)*(`{3,}|~{3,})/
+
+function matchMarkdownFence(line: string): { char: '`' | '~'; length: number } | null {
+  const match = line.match(FENCE_LINE_PATTERN)
+  if (!match) {
+    return null
+  }
+  return {
+    char: match[1][0] as '`' | '~',
+    length: match[1].length
+  }
+}
+
 function normalizeReferenceLabel(label: string): string {
   let normalized = ''
   let pendingWhitespace = false
@@ -70,10 +86,10 @@ function splitReferenceDefinitions(content: string): {
   let markdown = ''
 
   forEachReferenceDefinitionLine(content, (line, newline) => {
-    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/)
+    const fenceMatch = matchMarkdownFence(line)
     if (fenceMatch) {
-      const fenceChar = fenceMatch[1][0] as '`' | '~'
-      const fenceLength = fenceMatch[1].length
+      const fenceChar = fenceMatch.char
+      const fenceLength = fenceMatch.length
       if (activeFence === null) {
         activeFence = fenceChar
         activeFenceLength = fenceLength
@@ -155,10 +171,10 @@ function replaceReferenceLinks(
   while (index < markdown.length) {
     if (isLineStart) {
       const lineRest = markdown.slice(index)
-      const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
+      const fenceMatch = matchMarkdownFence(lineRest)
       if (fenceMatch) {
-        const fenceChar = fenceMatch[1][0] as '`' | '~'
-        const fenceLength = fenceMatch[1].length
+        const fenceChar = fenceMatch.char
+        const fenceLength = fenceMatch.length
         if (activeFence === null) {
           activeFence = fenceChar
           activeFenceLength = fenceLength

@@ -12,6 +12,22 @@ import { matchHtmlSuperscriptLinkSource } from './rich-markdown-html-superscript
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
 
+// Why: fenced code blocks can appear inside list/blockquote container prefixes
+// (e.g. `- ```mermaid` or `> ```mermaid`). Detecting those keeps mermaid
+// labels like `<br/>` literal inside the fence.
+const FENCE_LINE_PATTERN = /^[ \t]*(?:(?:>[ \t]*)|(?:[-+*]|\d+[.)])[ \t]+)*(`{3,}|~{3,})/
+
+function matchMarkdownFence(lineRest: string): { char: '`' | '~'; length: number } | null {
+  const fenceMatch = lineRest.match(FENCE_LINE_PATTERN)
+  if (!fenceMatch) {
+    return null
+  }
+  return {
+    char: fenceMatch[1][0] as '`' | '~',
+    length: fenceMatch[1].length
+  }
+}
+
 function matchInlineHtml(src: string): string | null {
   const match = src.match(INLINE_HTML_PATTERN)
   return match?.[0] ?? null
@@ -72,10 +88,10 @@ export function encodeRawMarkdownHtmlForRichEditor(
       // character (one throwaway string per char) is pure waste — compute it here. On a large
       // doc this drops O(n) suffix allocations from the rich-editor open path (#7056).
       const lineRest = normalizedContent.slice(index)
-      const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
+      const fenceMatch = matchMarkdownFence(lineRest)
       if (fenceMatch) {
-        const fenceChar = fenceMatch[1][0] as '`' | '~'
-        const fenceLength = fenceMatch[1].length
+        const fenceChar = fenceMatch.char
+        const fenceLength = fenceMatch.length
         if (activeFence === null) {
           activeFence = fenceChar
           activeFenceLength = fenceLength

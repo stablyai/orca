@@ -6,6 +6,19 @@ import { translate } from '@/i18n/i18n'
 
 type MermaidApi = typeof mermaidNamespace
 
+const LEAKED_RICH_MARKDOWN_TOKEN_PATTERN =
+  /\[\[ORCA_RICH_MD:[a-f0-9]{32}:(?:literal|inline-html|block-html|document-link|html-superscript-link):([^\]]+)\]\]/gi
+
+export function decodeLeakedRichMarkdownTransport(content: string): string {
+  return content.replace(LEAKED_RICH_MARKDOWN_TOKEN_PATTERN, (raw, encodedValue: string) => {
+    try {
+      return decodeURIComponent(encodedValue)
+    } catch {
+      return raw
+    }
+  })
+}
+
 // Why: mermaid is ~650KB and only needed when a diagram actually renders, yet a
 // static import drags it into the eager startup chunk (it is reachable from the
 // sidebar comment-markdown path). Load it on first render and cache the promise
@@ -58,6 +71,7 @@ export default function MermaidBlock({
 
   useEffect(() => {
     let cancelled = false
+    const normalizedContent = decodeLeakedRichMarkdownTransport(content)
 
     const render = async (): Promise<void> => {
       try {
@@ -71,7 +85,7 @@ export default function MermaidBlock({
         // and render(), which would make markdown preview fall back to the
         // broken foreignObject label path again.
         mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
-        const { svg } = await mermaid.render(`mermaid-${id}`, content)
+        const { svg } = await mermaid.render(`mermaid-${id}`, normalizedContent)
         if (!cancelled && containerRef.current) {
           // Why: although mermaid uses DOMPurify internally, we add an explicit
           // sanitization pass as defense-in-depth against XSS in case upstream
@@ -106,7 +120,7 @@ export default function MermaidBlock({
           {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')} {error}
         </div>
         <pre>
-          <code>{content}</code>
+          <code>{normalizedContent}</code>
         </pre>
       </div>
     )
