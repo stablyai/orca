@@ -112,10 +112,15 @@ export class DesktopScriptServeChannel {
     if (this.closed) {
       return
     }
-    this.buffer += typeof chunk === 'string' ? chunk : this.decoder.write(chunk)
+    const decoded = typeof chunk === 'string' ? chunk : this.decoder.write(chunk)
+    this.buffer += decoded
     if (this.buffer.length > MAX_RESPONSE_CHARS) {
       this.buffer = ''
       this.handlers.onOverflow()
+      return
+    }
+    // The retained tail has no newline; avoid rescanning and flattening it for every chunk.
+    if (!decoded.includes('\n')) {
       return
     }
     for (let newline = this.buffer.indexOf('\n'); newline >= 0;) {
