@@ -334,7 +334,7 @@ describe('ai vault resume command runtime', () => {
 
   it('uses configured agent defaults for resumable session history entries', () => {
     const state = makeState({
-      worktreePath: 'C:\\Users\\alice\\repo',
+      worktreePath: '/home/alice/repo',
       localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     })
     state.settings = {
@@ -374,6 +374,18 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toMatchObject({ cwd: '/home/alice/repo' })
     expect(
       buildQueuedAiVaultResumeCommand({
         state,
@@ -462,6 +474,33 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe("claude '--resume' 'session one'")
+  })
+
+  it('converts a WSL UNC target fallback to its Linux cwd', () => {
+    const state = makeState({
+      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\replacement'
+    })
+    const session = {
+      agent: 'claude' as const,
+      sessionId: 'session one',
+      cwd: '/home/alice/deleted',
+      codexHome: null
+    }
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session
+      })
+    ).toMatchObject({ cwd: '/home/alice/replacement' })
+    expect(
+      buildAiVaultResumeCopyCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session
+      })
+    ).toContain("cd '/home/alice/replacement'")
   })
 
   it('keeps WSL UNC worktrees on POSIX command wrapping without an explicit override', () => {

@@ -53,6 +53,54 @@ export function buildAiVaultResumeCommand(args: {
   })
 }
 
+/** Removes the cwd wrapper emitted by the scanner before repinning a stale session. */
+export function stripAiVaultResumeCwdPrefix(args: {
+  resumeCommand: string
+  cwd: string | null
+  platform: NodeJS.Platform
+  shell?: AgentStartupShell
+}): string {
+  if (!args.cwd) {
+    return args.resumeCommand
+  }
+  const marker = '__ORCA_RESUME_COMMAND__'
+  if (args.platform === 'win32' && !args.shell) {
+    const wrapperPrefix = 'cmd /d /s /c '
+    if (args.resumeCommand.startsWith(wrapperPrefix)) {
+      const wrapped = args.resumeCommand.slice(wrapperPrefix.length)
+      if (wrapped.startsWith('"') && wrapped.endsWith('"')) {
+        const inner = wrapped.slice(1, -1).replace(/""/g, '"')
+        const cdEnd = inner.indexOf(' && ')
+        if (cdEnd !== -1 && inner.startsWith('cd /d ')) {
+          const oldCwd = inner.slice('cd /d '.length, cdEnd)
+          const normalizedOldCwd = oldCwd.replace(/^"|"$/g, '').replace(/\\/g, '/').toLowerCase()
+          const normalizedSessionCwd = args.cwd.replace(/\\/g, '/').toLowerCase()
+          if (normalizedOldCwd === normalizedSessionCwd) {
+            return inner.slice(cdEnd + ' && '.length)
+          }
+        }
+      }
+    }
+  }
+  const cwdCandidates = [args.cwd]
+  if (args.platform === 'win32') {
+    cwdCandidates.push(args.cwd.replace(/\\/g, '/'))
+  }
+  for (const cwd of cwdCandidates) {
+    const wrapped = buildAiVaultResumeShellCommand({
+      resumeCommand: marker,
+      cwd,
+      platform: args.platform,
+      shell: args.shell
+    })
+    const prefix = wrapped.slice(0, -marker.length)
+    if (args.resumeCommand.startsWith(prefix)) {
+      return args.resumeCommand.slice(prefix.length)
+    }
+  }
+  return args.resumeCommand
+}
+
 export function buildAiVaultResumeShellCommand(args: {
   resumeCommand: string
   cwd: string | null
