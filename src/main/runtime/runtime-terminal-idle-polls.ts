@@ -1,7 +1,6 @@
 import { isShellProcess, type AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'
 import {
-  detectExplicitIdleStatusFromTitle,
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptPreview
 } from './terminal-wait-detection'
@@ -12,6 +11,12 @@ import {
   buildTerminalWaitResult
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import {
+  isTuiIdleSatisfied,
+  quietForegroundProcessProvesTuiIdle,
+  type FirstPartyAgentStatus
+} from './tui-idle-evidence'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
@@ -21,6 +26,10 @@ type RuntimeTerminalIdlePollDependencies = {
   getTabTitle(tabId: string): string | null
   getForegroundProcess(ptyId: string): Promise<string | null> | null
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
+  getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
+  getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
+  /** Re-read the record the waiter registered against; see `liveLeaf` below. */
+  getLiveLeaf(leaf: RuntimeLeafRecord): RuntimeLeafRecord
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
 }
 
@@ -82,20 +91,15 @@ export class RuntimeTerminalIdlePolls {
     if (!this.entries.has(entry)) {
       return
     }
-    const { waiter, leaf } = entry
+    const { waiter } = entry
+    // Why re-read: `syncWindowGraph` rebuilds `this.leaves` with fresh objects on every
+    // renderer publish, so the record captured at registration stops advancing. Its
+    // `lastOutputAt` freezes, the quiescence gate below then reads an ever-growing
+    // elapsed time, and the waiter settles while the pane is in fact still streaming.
+    const leaf = this.deps.getLiveLeaf(entry.leaf)
+    const agent = this.deps.getPaneAgent(leaf.ptyId)
     let startedForegroundPoll = false
     try {
-      if (leaf.lastAgentStatus === 'idle') {
-        this.stop(entry)
-        this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
-        return
-      }
-      const title = leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId)
-      if (title && detectExplicitIdleStatusFromTitle(title) === 'idle') {
-        this.stop(entry)
-        this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
-        return
-      }
       const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
       const blockedReason = detectTerminalWaitBlockedReason(waitText)
       if (blockedReason) {
@@ -106,12 +110,26 @@ export class RuntimeTerminalIdlePolls {
         )
         return
       }
-      if (isKnownReadyPromptPreview(waitText)) {
+      if (
+        isTuiIdleSatisfied({
+          record: leaf,
+          rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
+          positiveBodyEvidence: isKnownReadyPromptPreview(waitText),
+          agent,
+          firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
+          quiescenceMs: this.deps.quiescenceMs
+        })
+      ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
         return
       }
-      if (leaf.lastAgentStatus === null && leaf.ptyId && !entry.foregroundPollInFlight) {
+      if (
+        leaf.lastAgentStatus === null &&
+        quietForegroundProcessProvesTuiIdle(agent) &&
+        leaf.ptyId &&
+        !entry.foregroundPollInFlight
+      ) {
         const foregroundRead = this.deps.getForegroundProcess(leaf.ptyId)
         if (!foregroundRead) {
           return
@@ -119,13 +137,14 @@ export class RuntimeTerminalIdlePolls {
         entry.foregroundPollInFlight = true
         startedForegroundPoll = true
         const foreground = await foregroundRead
+        const live = this.deps.getLiveLeaf(entry.leaf)
         if (
           foreground &&
           !isShellProcess(foreground) &&
-          (leaf.lastOutputAt ? Date.now() - leaf.lastOutputAt : 0) >= this.deps.quiescenceMs
+          (live.lastOutputAt ? Date.now() - live.lastOutputAt : 0) >= this.deps.quiescenceMs
         ) {
           this.stop(entry)
-          this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
+          this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', live))
         }
       }
     } catch {
@@ -142,13 +161,11 @@ export class RuntimeTerminalIdlePolls {
       return
     }
     const { waiter, pty } = entry
+    // Why no re-read here: `ptysById` has a single create-once `set` site, so PTY
+    // records are mutated in place rather than swapped, and a capture stays live.
+    const agent = this.deps.getPaneAgent(pty.ptyId)
     let startedForegroundPoll = false
     try {
-      if (pty.lastAgentStatus === 'idle') {
-        this.stop(entry)
-        this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
-        return
-      }
       const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
       const blockedReason = detectTerminalWaitBlockedReason(waitText)
       if (blockedReason) {
@@ -160,14 +177,25 @@ export class RuntimeTerminalIdlePolls {
         return
       }
       if (
-        this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
-        isKnownReadyPromptPreview(waitText)
+        isTuiIdleSatisfied({
+          record: pty,
+          positiveBodyEvidence:
+            this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
+            isKnownReadyPromptPreview(waitText),
+          agent,
+          firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
+          quiescenceMs: this.deps.quiescenceMs
+        })
       ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
         return
       }
-      if (pty.lastAgentStatus === null && !entry.foregroundPollInFlight) {
+      if (
+        pty.lastAgentStatus === null &&
+        quietForegroundProcessProvesTuiIdle(agent) &&
+        !entry.foregroundPollInFlight
+      ) {
         const foregroundRead = this.deps.getForegroundProcess(pty.ptyId)
         if (!foregroundRead) {
           return

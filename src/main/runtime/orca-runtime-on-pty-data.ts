@@ -215,6 +215,19 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       for (const payload of agentStatusChunk.payloads) {
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
       }
+      // Why on the PTY record: the retained status snapshots are keyed by paneKey, which a
+      // background CLI-created PTY may never have. `terminal wait --for tui-idle` still needs
+      // the agent's own account of itself, and ptyId is the only identity that path always holds.
+      const latestAgentStatus = agentStatusChunk.payloads.at(-1)
+      if (latestAgentStatus) {
+        const ptyRecord = this.ptysById.get(ptyId)
+        if (ptyRecord) {
+          ptyRecord.lastExplicitAgentStatus = {
+            state: latestAgentStatus.state,
+            updatedAt: Date.now()
+          }
+        }
+      }
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
         titleScanData: titleInput
       })

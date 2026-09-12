@@ -3,7 +3,6 @@ import type {
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
 import {
-  detectExplicitIdleStatusFromTitle,
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptPreview
 } from './terminal-wait-detection'
@@ -15,6 +14,8 @@ import {
   getTerminalState
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { isTuiIdleSatisfied, type FirstPartyAgentStatus } from './tui-idle-evidence'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { AgentStatus } from '../../shared/agent-detection'
@@ -27,6 +28,9 @@ type RuntimeTerminalWaitDependencies = {
   getLiveLeaf(handle: string): { leaf: RuntimeLeafRecord }
   getAdoptedPtyIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null
   getTabTitle(tabId: string): string | null
+  quiescenceMs: number
+  getPaneAgent(ptyId: string | null | undefined): TuiAgent | null
+  getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
   startVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void
 }
 
@@ -36,6 +40,30 @@ export class RuntimeTerminalWait {
     private readonly waiters: RuntimeTerminalWaiterRegistry,
     private readonly polls: RuntimeTerminalIdlePolls
   ) {}
+
+  /** Why one helper per record kind: every satisfaction site must rank the same way,
+   *  or the immediate check and the poll disagree about the same pane. */
+  private ptySatisfied(pty: RuntimePtyWorktreeRecord, waitText: string): boolean {
+    return isTuiIdleSatisfied({
+      record: pty,
+      positiveBodyEvidence:
+        this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' || isKnownReadyPromptPreview(waitText),
+      agent: this.deps.getPaneAgent(pty.ptyId),
+      firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
+      quiescenceMs: this.deps.quiescenceMs
+    })
+  }
+
+  private leafSatisfied(leaf: RuntimeLeafRecord, waitText: string): boolean {
+    return isTuiIdleSatisfied({
+      record: leaf,
+      rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
+      positiveBodyEvidence: isKnownReadyPromptPreview(waitText),
+      agent: this.deps.getPaneAgent(leaf.ptyId),
+      firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
+      quiescenceMs: this.deps.quiescenceMs
+    })
+  }
 
   async wait(
     handle: string,
@@ -60,14 +88,7 @@ export class RuntimeTerminalWait {
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
       }
-      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
-        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
-      }
-      if (
-        condition === 'tui-idle' &&
-        (this.deps.getAdoptedPtyIdleStatus(pty.pty) === 'idle' ||
-          isKnownReadyPromptPreview(ptyWaitText))
-      ) {
+      if (condition === 'tui-idle' && this.ptySatisfied(pty.pty, ptyWaitText)) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
@@ -115,12 +136,7 @@ export class RuntimeTerminalWait {
               waiter,
               buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
             )
-          } else if (live.pty.lastAgentStatus === 'idle') {
-            this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
-          } else if (
-            this.deps.getAdoptedPtyIdleStatus(live.pty) === 'idle' ||
-            isKnownReadyPromptPreview(livePtyWaitText)
-          ) {
+          } else if (this.ptySatisfied(live.pty, livePtyWaitText)) {
             this.waiters.resolve(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
             this.polls.startPty(waiter, live.pty)
@@ -147,17 +163,8 @@ export class RuntimeTerminalWait {
     // detection that powers the renderer's "Task complete" notifications.
     // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
     // agent is blocked on user approval, not finished with its task.
-    if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
+    if (condition === 'tui-idle' && this.leafSatisfied(leaf, leafWaitText)) {
       return buildTerminalWaitResult(handle, condition, leaf)
-    }
-    if (condition === 'tui-idle') {
-      const fastPathTitle = leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId)
-      if (
-        (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-        isKnownReadyPromptPreview(leafWaitText)
-      ) {
-        return buildTerminalWaitResult(handle, condition, leaf)
-      }
     }
 
     return await new Promise<RuntimeTerminalWaitResult>((resolve, reject) => {
@@ -214,7 +221,7 @@ export class RuntimeTerminalWait {
               waiter,
               buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
             )
-          } else if (live.leaf.lastAgentStatus === 'idle') {
+          } else if (this.leafSatisfied(live.leaf, liveLeafWaitText)) {
             // Why: don't clear lastAgentStatus here. It's a factual record of the
             // last detected OSC state, not a one-shot signal. Clearing it causes
             // subsequent tui-idle waiters to hang even though the agent is idle —
@@ -224,17 +231,9 @@ export class RuntimeTerminalWait {
             // Why: renderer-synced previews can show a known ready prompt even
             // while the last OSC title is still "working"; keep polling the
             // preview/title until the waiter resolves or hits its timeout.
-            const fastPathTitle = live.leaf.paneTitle ?? this.deps.getTabTitle(live.leaf.tabId)
-            if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isKnownReadyPromptPreview(liveLeafWaitText)
-            ) {
-              this.waiters.resolve(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
-            } else {
-              this.polls.startLeaf(waiter, live.leaf)
-              if (live.leaf.lastAgentStatus === null && liveLeafWaitText.length === 0) {
-                this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs)
-              }
+            this.polls.startLeaf(waiter, live.leaf)
+            if (live.leaf.lastAgentStatus === null && liveLeafWaitText.length === 0) {
+              this.deps.startVisibleReadProbe(waiter, effectiveTimeoutMs)
             }
           }
         }
