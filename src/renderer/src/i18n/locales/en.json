@@ -7123,7 +7123,9 @@
           "5cb5475664": "Confirm before closing pinned tabs",
           "36b2a5dc6d": "Show a confirmation dialog before a pinned tab is closed.",
           "projectRuntime": "Project Runtime",
-          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
+          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it.",
+          "autoHideSingleTabStrip": "Hide the tab bar when a pane has one tab",
+          "autoHideSingleTabStripDescription": "Collapse the tab bar until you hover the top edge of the pane."
         },
         "GeneralSupportSection": {
           "af7d9f4396": "Thanks for the support!",
@@ -9652,7 +9654,14 @@
             "sidebar": "sidebar",
             "867dddea41": "pinned",
             "5250cf0e48": "pin",
-            "afa37a34e1": "close"
+            "afa37a34e1": "close",
+            "autoHideSingleTabStrip": "Hide the tab bar when a pane has one tab",
+            "autoHideSingleTabStripDescription": "Collapse the tab bar until you hover the top edge of the pane.",
+            "autoHideSingleTabStripKeywordBar": "tab bar",
+            "autoHideSingleTabStripKeywordHide": "hide",
+            "autoHideSingleTabStripKeywordAutoHide": "auto hide",
+            "autoHideSingleTabStripKeywordSingle": "single",
+            "autoHideSingleTabStripKeywordStrip": "strip"
           }
         },
         "git": {

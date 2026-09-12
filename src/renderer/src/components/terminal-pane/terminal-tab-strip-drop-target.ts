@@ -107,6 +107,22 @@ function getElementsFromPoint(clientX: number, clientY: number): Element[] {
   return element ? [element] : []
 }
 
+// Why: an auto-hidden strip is click-through until its hover reveal commits, and hit-testing skips
+// `pointer-events: none`. A pane drag reads its target on pointermove and reuses it on pointerup, so
+// a release on the first move into the band would resolve nothing. Match those strips by geometry.
+function getStripsByGeometry(clientX: number, clientY: number): HTMLElement[] {
+  if (typeof document === 'undefined') {
+    return []
+  }
+  const strips: HTMLElement[] = []
+  for (const strip of document.querySelectorAll<HTMLElement>(TAB_GROUP_STRIP_SELECTOR)) {
+    if (pointWithinRect(clientX, clientY, strip.getBoundingClientRect())) {
+      strips.push(strip)
+    }
+  }
+  return strips
+}
+
 export function resolveTerminalTabStripDropTarget(args: {
   clientX: number
   clientY: number
@@ -120,7 +136,11 @@ export function resolveTerminalTabStripDropTarget(args: {
     return null
   }
 
-  for (const element of getElementsFromPoint(args.clientX, args.clientY)) {
+  const candidates: Element[] = [
+    ...getElementsFromPoint(args.clientX, args.clientY),
+    ...getStripsByGeometry(args.clientX, args.clientY)
+  ]
+  for (const element of candidates) {
     const strip = element.closest<HTMLElement>(TAB_GROUP_STRIP_SELECTOR)
     const groupId = strip?.dataset.tabGroupStripId
     const worktreeId = strip?.dataset.worktreeId
