@@ -137,10 +137,14 @@ const projectedItems = new WeakMap<AgentJournalRenderItem, NativeChatMessage | n
 export function projectStructuredItemsToNativeChat(
   items: readonly AgentJournalRenderItem[]
 ): NativeChatMessage[] {
-  return items.flatMap((item) => {
+  const messages: NativeChatMessage[] = []
+  items.forEach((item) => {
     const projected = projectStructuredItemToNativeChat(item)
-    return projected ? [projected] : []
+    if (projected) {
+      messages.push(projected)
+    }
   })
+  return messages
 }
 
 export function projectStructuredItemToNativeChat(
