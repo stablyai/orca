@@ -127,13 +127,47 @@ export function installOpenDraftAddReviewNoteGuard(target: HTMLElement): () => v
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
 
-type MonacoFindShortcutEditor = {
+type MonacoActionShortcutEditor = {
   getAction: (id: string) => { run: () => void | Promise<void> } | null
   getContainerDomNode: () => HTMLElement
 }
 
-export function installMonacoEditorFindShortcut(editor: MonacoFindShortcutEditor): () => void {
+export function installMonacoEditorFindShortcut(editor: MonacoActionShortcutEditor): () => void {
   return installEditorFindShortcut(editor.getContainerDomNode(), () => {
     void editor.getAction('actions.find')?.run()
+  })
+}
+
+export function installEditorCommandPaletteShortcut(
+  target: HTMLElement,
+  onCommandPalette: () => void
+): () => void {
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    const matchesShortcut = editorShortcutMatches('editor.commandPalette', event)
+    // Why: consume Monaco's F1 after the Orca binding is remapped or disabled.
+    const matchesDefaultShortcut = keybindingMatchesAction(
+      'editor.commandPalette',
+      event,
+      getShortcutPlatform()
+    )
+    if (!matchesShortcut && !matchesDefaultShortcut) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    if (matchesShortcut && !event.repeat) {
+      onCommandPalette()
+    }
+  }
+
+  target.addEventListener('keydown', handleKeyDown, true)
+  return () => target.removeEventListener('keydown', handleKeyDown, true)
+}
+
+export function installMonacoEditorCommandPaletteShortcut(
+  editor: MonacoActionShortcutEditor
+): () => void {
+  return installEditorCommandPaletteShortcut(editor.getContainerDomNode(), () => {
+    void editor.getAction('editor.action.quickCommand')?.run()
   })
 }
