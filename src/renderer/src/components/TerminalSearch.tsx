@@ -6,6 +6,7 @@ import type { SearchState } from '@/components/terminal-pane/keyboard-handlers'
 import { translate } from '@/i18n/i18n'
 import { getFindRequestQuery } from '@/lib/find-query-bounds'
 import { safeFind } from './terminal-search-safe-find'
+import { createTerminalSearchOptions } from './terminal-search-options'
 
 type TerminalSearchProps = {
   isOpen: boolean
@@ -34,26 +35,8 @@ export default function TerminalSearch({
   const [regex, setRegex] = useState(false)
   const requestQuery = getFindRequestQuery(query)
 
-  // Why: the default xterm SearchAddon highlights blend into common
-  // terminal backgrounds (see orca#612). Providing explicit decoration
-  // colors gives all matches a visible yellow background and the
-  // current match a brighter orange, matching the contrast VS Code and
-  // iTerm2 use for terminal search. xterm requires #RRGGBB format for
-  // the background colors.
   const searchOptions = useCallback(
-    (incremental: boolean = false) => ({
-      caseSensitive,
-      regex,
-      incremental,
-      decorations: {
-        matchBackground: '#5c4a00',
-        matchBorder: '#5c4a00',
-        matchOverviewRuler: '#ffcc00',
-        activeMatchBackground: '#c4580e',
-        activeMatchBorder: '#ffcf6b',
-        activeMatchColorOverviewRuler: '#ff9900'
-      }
-    }),
+    (incremental = false) => createTerminalSearchOptions({ caseSensitive, regex }, incremental),
     [caseSensitive, regex]
   )
 

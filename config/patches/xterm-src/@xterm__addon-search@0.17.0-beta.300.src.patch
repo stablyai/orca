@@ -1,3 +1,33 @@
+diff --git a/src/SearchAddon.ts b/src/SearchAddon.ts
+index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..d4413e058e65ffbc6321561cfaf0b90908102fb4 100644
+--- a/src/SearchAddon.ts
++++ b/src/SearchAddon.ts
+@@ -105,9 +105,11 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+ 
+     this._onBeforeSearch.fire();
+ 
++    // Compare the previous policy before publishing options to search callbacks and write refresh.
++    const updateHighlighting = this._state.shouldUpdateHighlighting(term, searchOptions);
+     this._state.lastSearchOptions = searchOptions;
+ 
+-    if (this._state.shouldUpdateHighlighting(term, searchOptions)) {
++    if (updateHighlighting) {
+       this._highlightAllMatches(term, searchOptions!);
+     }
+ 
+@@ -186,9 +188,11 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+ 
+     this._onBeforeSearch.fire();
+ 
++    // Compare the previous policy before publishing options to search callbacks and write refresh.
++    const updateHighlighting = this._state.shouldUpdateHighlighting(term, searchOptions);
+     this._state.lastSearchOptions = searchOptions;
+ 
+-    if (this._state.shouldUpdateHighlighting(term, searchOptions)) {
++    if (updateHighlighting) {
+       this._highlightAllMatches(term, searchOptions!);
+     }
+ 
 diff --git a/src/SearchEngine.ts b/src/SearchEngine.ts
 index 1760bc2bd1fd274d23e2032fde631b39c739f0d9..5b3c5cc5e861356b87e8a15c55797f45bac20a5c 100644
 --- a/src/SearchEngine.ts

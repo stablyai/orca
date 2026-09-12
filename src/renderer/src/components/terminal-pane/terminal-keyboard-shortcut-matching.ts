@@ -1,5 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { safeFind } from '../terminal-search-safe-find'
+import { createTerminalSearchOptions } from '../terminal-search-options'
 import { resolveTerminalShortcutAction, type MacOptionAsAlt } from './terminal-shortcut-policy'
 import {
   keybindingMatchesAction,
@@ -92,7 +93,7 @@ export function runTerminalSearchNavigation(
   direction: SearchNavigationDirection,
   searchState: SearchState
 ): boolean {
-  const options = { caseSensitive: searchState.caseSensitive, regex: searchState.regex }
+  const options = createTerminalSearchOptions(searchState)
   return direction === 'next'
     ? safeFind(
         (term, findOptions) => pane.searchAddon.findNext(term, findOptions),
