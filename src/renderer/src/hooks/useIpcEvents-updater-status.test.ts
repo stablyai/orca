@@ -51,6 +51,10 @@ describe('useIpcEvents updater integration', () => {
           editorFontZoomLevel: 0,
           setEditorFontZoomLevel: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          setRateLimitUsageOwner: vi.fn(),
+          applyOwnedRateLimits: vi.fn(),
+          rateLimitUsageByHost: {},
+          runtimeEnvironments: [],
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
@@ -257,6 +261,10 @@ describe('useIpcEvents updater integration', () => {
           setIsFullScreen: vi.fn(),
           setUpdateStatus: vi.fn(),
           setRateLimitsFromPush: vi.fn(),
+          setRateLimitUsageOwner: vi.fn(),
+          applyOwnedRateLimits: vi.fn(),
+          rateLimitUsageByHost: {},
+          runtimeEnvironments: [],
           settings: { terminalFontSize: 13 }
         })
       }

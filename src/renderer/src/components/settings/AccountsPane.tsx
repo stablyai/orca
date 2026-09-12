@@ -75,6 +75,8 @@ export function AccountsPane({
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
+  const usageUnavailable = useAppStore((s) => s.rateLimitUsageUnavailable)
+  const usageContactLost = useAppStore((s) => s.rateLimitUsageContactLost)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -134,6 +136,14 @@ export function AccountsPane({
         className="text-xs"
       />
     ) : null
+  // Why: say the selected owner's usage is missing and why. Falling back to this
+  // machine's usage would attribute the wrong account's numbers to this scope.
+  // Lost contact is the weaker claim: the numbers below still stand, they are
+  // just no longer being confirmed.
+  const usageOwnerStatus = usageUnavailable ?? usageContactLost
+  const usageOwnerNotice = usageOwnerStatus ? (
+    <p className="text-xs text-muted-foreground">{usageOwnerStatus.message}</p>
+  ) : null
 
   const [codexAccounts, setCodexAccounts] =
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
@@ -175,11 +185,11 @@ export function AccountsPane({
   // WSL falls back to the generic label.
   const systemCodexIdentity =
     accountRuntime.runtime === 'host' ? codexAccounts.systemDefault : undefined
-  // Why: remote snapshots own their system-default identity, but the desktop's
-  // rate-limit poll must not be misattributed to a remote account owner.
+  // Why: usage is keyed by execution owner, so codexRateLimits already belongs
+  // to the selected scope; it is no longer the desktop poll's local snapshot.
   const activeCodexAuthWarning = codexAccountsLoaded
     ? getCodexAccountAuthWarning({
-        limits: isRemoteAccountScope ? null : codexRateLimits,
+        limits: codexRateLimits,
         target: codexRateLimitTarget,
         runtime: accountRuntime,
         activeAccountId: activeCodexAccountId,
@@ -383,6 +393,7 @@ export function AccountsPane({
   return (
     <div className="space-y-8">
       {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
+      {usageOwnerNotice}
       {visibleSections.map((section, index) => (
         <div key={index} className="space-y-8">
           {index > 0 ? <Separator /> : null}

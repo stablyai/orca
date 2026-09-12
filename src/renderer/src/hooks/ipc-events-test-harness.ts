@@ -140,8 +140,13 @@ export async function loadIpcEventsHarness(
     dispatchEvent: vi.fn(),
     api: new Proxy(
       {
+        // The app-lifetime usage stream subscribes here for a remote owner.
+        // Only `subscribe` is overridden: the default stub returns a listener
+        // rather than a thenable, and widening the rest would hand every other
+        // runtime RPC a synthetic success it never had.
         runtimeEnvironments: createApiNamespaceStub({
-          getStatusSnapshots: () => Promise.resolve([])
+          getStatusSnapshots: () => Promise.resolve([]),
+          subscribe: () => Promise.resolve({ unsubscribe: vi.fn() })
         }),
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,

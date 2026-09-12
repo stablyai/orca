@@ -103,6 +103,10 @@ export type TerminalCreateSurfacingStore = {
   editorFontZoomLevel: number
   setEditorFontZoomLevel: SpyMock
   setRateLimitsFromPush: SpyMock
+  setRateLimitUsageOwner: SpyMock
+  applyOwnedRateLimits: SpyMock
+  rateLimitUsageByHost: Record<string, unknown>
+  runtimeEnvironments: { id: string; name?: string | null }[]
   setSshConnectionState: SpyMock
   setSshTargetLabels: SpyMock
   setPortForwards: SpyMock

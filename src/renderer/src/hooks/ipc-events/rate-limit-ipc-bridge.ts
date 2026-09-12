@@ -1,7 +1,12 @@
 import type { RateLimitState } from '../../../../shared/rate-limit-types'
+import { subscribeRateLimitUsageOwner } from '@/runtime/rate-limit-usage-owner-subscription'
 import { useAppStore } from '../../store'
 
 export function registerRateLimitIpcBridge(unsubs: (() => void)[]): void {
+  // Why: the desktop push below only ever carries LOCAL usage. This is what
+  // keeps the displayed usage pointed at the selected owner and streams a
+  // paired runtime's own usage.
+  unsubs.push(subscribeRateLimitUsageOwner())
   let initialSnapshotPending = true
   let receivedPushBeforeInitialSnapshot = false
   unsubs.push(

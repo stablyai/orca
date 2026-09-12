@@ -23,6 +23,9 @@ describe('runtime host catalog refresh on reposChanged', () => {
       })
       const state = {
         settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
+        setRateLimitUsageOwner: vi.fn(),
+        applyOwnedRateLimits: vi.fn(),
+        rateLimitUsageByHost: {},
         repos: [],
         worktreesByRepo: {},
         folderWorkspaces: [],
@@ -66,8 +69,15 @@ describe('runtime host catalog refresh on reposChanged', () => {
       const api = new Proxy(
         {
           runtimeEnvironments: {
-            subscribe: async (_args: unknown, callbacks: { onResponse: (r: unknown) => void }) => {
-              runtimeOnResponse = callbacks.onResponse
+            subscribe: async (
+              args: { method?: string },
+              callbacks: { onResponse: (r: unknown) => void }
+            ) => {
+              // The usage-owner stream subscribes here too; keep this capture
+              // on the worktree stream this test drives.
+              if (args?.method !== 'accounts.subscribe') {
+                runtimeOnResponse = callbacks.onResponse
+              }
               return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
             }
           }
@@ -120,6 +130,9 @@ describe('runtime host catalog refresh on reposChanged', () => {
       const fetchWorktreeLineage = vi.fn(() => Promise.resolve())
       const state = {
         settings: { activeRuntimeEnvironmentId: 'env-1' as string | null },
+        setRateLimitUsageOwner: vi.fn(),
+        applyOwnedRateLimits: vi.fn(),
+        rateLimitUsageByHost: {},
         repos: [],
         worktreesByRepo: {},
         folderWorkspaces: [],
@@ -189,6 +202,9 @@ describe('repo catalog refresh on repos:changed', () => {
     const remountTerminalTabForRecovery = vi.fn(() => true)
     const state = {
       settings: { activeRuntimeEnvironmentId: null as string | null },
+      setRateLimitUsageOwner: vi.fn(),
+      applyOwnedRateLimits: vi.fn(),
+      rateLimitUsageByHost: {},
       repos: [{ id: 'repo1', connectionId: 'conn-1' }],
       worktreesByRepo: { repo1: [{ id: 'wt-1', repoId: 'repo1' }] },
       folderWorkspaces: [],
@@ -264,6 +280,9 @@ describe('parked terminal recovery on repos:changed', () => {
 
     const state = {
       settings: { activeRuntimeEnvironmentId: null },
+      setRateLimitUsageOwner: vi.fn(),
+      applyOwnedRateLimits: vi.fn(),
+      rateLimitUsageByHost: {},
       repos: [{ id: 'repo1', connectionId: 'conn-1' }],
       worktreesByRepo: { repo1: [{ id: 'wt-1', repoId: 'repo1' }] },
       folderWorkspaces: [],
