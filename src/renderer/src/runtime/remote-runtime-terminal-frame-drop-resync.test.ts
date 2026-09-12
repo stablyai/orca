@@ -44,6 +44,7 @@ class FakeMultiplexServer {
   holdNextRecoverySnapshot = false
   snapshotRequests: (number | undefined)[] = []
   private heldManualRequestId: number | null = null
+  private heldRecoverySnapshot = false
   private snapshotData = 'INITIAL'
 
   constructor(
@@ -77,6 +78,7 @@ class FakeMultiplexServer {
       if (typeof payload?.requestId !== 'number' && this.holdNextRecoverySnapshot) {
         // The reply's binary frames were all dropped under backpressure.
         this.holdNextRecoverySnapshot = false
+        this.heldRecoverySnapshot = true
         return
       }
       if (typeof payload?.requestId !== 'number' && this.truncateNextRecoverySnapshot) {
@@ -167,6 +169,14 @@ class FakeMultiplexServer {
     this.snapshotData = 'MANUAL'
     this.sendSnapshot(requestId)
   }
+
+  flushHeldRecoverySnapshot(): void {
+    if (!this.heldRecoverySnapshot) {
+      throw new Error('No recovery snapshot is held')
+    }
+    this.heldRecoverySnapshot = false
+    this.sendSnapshot()
+  }
 }
 
 describe('remote terminal frame-drop resync', () => {
@@ -239,7 +249,8 @@ describe('remote terminal frame-drop resync', () => {
     await Promise.resolve()
     await Promise.resolve()
 
-    // The corrupt tail ('ccc', which followed a gap) is NOT rendered as live data.
+    // The immediate snapshot covers the corrupt tail ('ccc'), so it is not
+    // rendered separately or duplicated after the recovery reset.
     expect(data).toEqual(['aaa'])
     expect(server.droppedFrames).toBe(1)
     // Instead, a fresh authoritative snapshot recovers the terminal.
@@ -250,7 +261,7 @@ describe('remote terminal frame-drop resync', () => {
     expect(data).toEqual(['aaa', 'ddd'])
   })
 
-  it('retries a truncated recovery on a backoff without accepting output across the gap', async () => {
+  it('retries a truncated recovery on a backoff while keeping live output flowing', async () => {
     vi.useFakeTimers()
     try {
       const { data, snapshots } = await subscribeClient()
@@ -260,8 +271,8 @@ describe('remote terminal frame-drop resync', () => {
       server.dropNextOutput = true
       server.output('bbb')
       server.output('ccc')
-      // The gate stays shut across the backoff: the post-gap tail is corrupt,
-      // and retrying once per chunk would stampede a flooded server.
+      // Recovery retries are backoff-limited, but the live path stays open;
+      // output must not freeze while a jittery host serializes the snapshot.
       server.output('ddd')
       expect(server.snapshotRequests).toEqual([undefined])
 
@@ -271,9 +282,56 @@ describe('remote terminal frame-drop resync', () => {
 
       server.output('eee')
       expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-      expect(data).toEqual(['aaa', 'eee'])
+      expect(data).toEqual(['aaa', 'ddd', 'eee'])
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  it('keeps painting live output while a recovery snapshot is delayed', async () => {
+    const { data, snapshots, stream } = await subscribeClient()
+    try {
+      server.holdNextRecoverySnapshot = true
+
+      server.output('aaa')
+      server.dropNextOutput = true
+      server.output('bbb')
+      server.output('ccc') // exposes the gap and starts the delayed recovery
+      server.output('ddd')
+      server.output('eee')
+
+      // A slow snapshot must not become a renderer backpressure gate.
+      expect(data).toEqual(['aaa', 'ddd', 'eee'])
+      expect(snapshots).toEqual(['INITIAL'])
+    } finally {
+      stream.close()
+    }
+  })
+
+  it('reconciles painted output when a delayed recovery snapshot arrives', async () => {
+    const { data, snapshots, stream } = await subscribeClient()
+    try {
+      server.holdNextRecoverySnapshot = true
+
+      server.output('aaa')
+      server.dropNextOutput = true
+      server.output('bbb')
+      server.output('ccc')
+      server.output('ddd')
+      server.output('eee')
+
+      expect(data).toEqual(['aaa', 'ddd', 'eee'])
+      expect(snapshots).toEqual(['INITIAL'])
+
+      server.flushHeldRecoverySnapshot()
+      expect(snapshots).toEqual(['INITIAL', '\x1b[2J\x1b[3J\x1b[HRECOVERED'])
+
+      // A replay covered by the authoritative snapshot must not duplicate.
+      server.replaySnapshotCoveredOutput('eee')
+      server.output('fff')
+      expect(data).toEqual(['aaa', 'ddd', 'eee', 'fff'])
+    } finally {
+      stream.close()
     }
   })
 
