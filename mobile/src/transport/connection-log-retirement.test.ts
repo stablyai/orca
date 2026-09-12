@@ -25,6 +25,7 @@ describe('connection log retirement', () => {
     store.subscribe('b', onB)
     store.append('a', entry(1))
     store.append('b', entry(2))
+    expect(store.get('a')).toEqual([entry(1)])
     const otherSnapshot = store.get('b')
     onA.mockClear()
     onB.mockClear()

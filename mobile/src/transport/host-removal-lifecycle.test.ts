@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createConnectionLogStore } from './connection-log-buffer'
 
 const removeHostMock = vi.hoisted(() => vi.fn())
 const unregisterPushMock = vi.hoisted(() => vi.fn(async () => vi.fn()))
@@ -22,7 +23,7 @@ describe('host removal lifecycle', () => {
   beforeEach(() => {
     removeHostMock.mockReset()
     unregisterPushMock.mockClear()
-    forgetLogMock.mockClear()
+    forgetLogMock.mockReset()
   })
 
   it('closes the client only after metadata removal commits', async () => {
@@ -39,6 +40,19 @@ describe('host removal lifecycle', () => {
     expect(closeHostClient.mock.invocationCallOrder[0]).toBeLessThan(
       forgetLogMock.mock.invocationCallOrder[0]
     )
+  })
+
+  it('retires a final close-time log entry after successful removal', async () => {
+    const logs = createConnectionLogStore()
+    removeHostMock.mockResolvedValue(undefined)
+    forgetLogMock.mockImplementation((hostId: string) => logs.forgetHost(hostId))
+    logs.append('host-1', { id: 'opened', ts: 1, level: 'info', message: 'connected' })
+
+    await removeHostAndCloseClient('host-1', (hostId) => {
+      logs.append(hostId, { id: 'closed', ts: 2, level: 'info', message: 'closed' })
+    })
+
+    expect(logs.get('host-1')).toEqual([])
   })
 
   it('keeps the client open when metadata removal fails', async () => {
