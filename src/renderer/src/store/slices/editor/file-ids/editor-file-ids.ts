@@ -62,7 +62,7 @@ export function buildDiffEditorFileId(
 export function withDiffContentReloadRequest(file: OpenFile): OpenFile {
   return {
     ...file,
-    diffContentReloadNonce: (file.diffContentReloadNonce ?? 0) + 1
+    diffContentRefreshNonce: (file.diffContentRefreshNonce ?? 0) + 1
   }
 }
 

@@ -12,6 +12,7 @@ export function createOpenFileMutations(
   | 'reorderFiles'
   | 'markFileDirty'
   | 'setExternalMutation'
+  | 'requestDiffContentReload'
   | 'setLastKnownDiskSignature'
   | 'clearPendingDiskBaselineVerification'
   | 'setPendingDiskBaselineVerification'
@@ -120,6 +121,21 @@ export function createOpenFileMutations(
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === fileId ? { ...f, externalMutation: next } : f
+          )
+        }
+      }),
+
+    requestDiffContentReload: (fileId) =>
+      set((s) => {
+        const file = s.openFiles.find((f) => f.id === fileId)
+        if (!file) {
+          return s
+        }
+        return {
+          openFiles: s.openFiles.map((f) =>
+            f.id === fileId
+              ? { ...f, diffContentReloadNonce: (f.diffContentReloadNonce ?? 0) + 1 }
+              : f
           )
         }
       }),
