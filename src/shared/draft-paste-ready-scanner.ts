@@ -1,4 +1,4 @@
-import type { DraftPasteReadySignal } from './tui-agent-config'
+import type { DraftPasteReadySignal } from './tui-agent-config-types'
 
 // Why: agents enable bracketed paste (DECSET 2004) before their composer is
 // actually mounted/focused. These markers let the scanner detect the real

@@ -12,7 +12,7 @@
 // the inline mode that emits no alt-screen switch (quiet-window floor).
 import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
-import type { DraftPasteReadySignal } from './tui-agent-config'
+import type { DraftPasteReadySignal } from './tui-agent-config-types'
 import {
   GROK_STARTUP_PTY_TRACE,
   type GrokStartupTraceChunk

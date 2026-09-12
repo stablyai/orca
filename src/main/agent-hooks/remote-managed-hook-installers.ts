@@ -8,6 +8,7 @@ import { antigravityHookService } from '../antigravity/hook-service'
 import { cursorHookService } from '../cursor/hook-service'
 import { commandCodeHookService } from '../command-code/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
+import { bobHookService } from '../bob/hook-service'
 import { devinHookService } from '../devin/hook-service'
 import { droidHookService } from '../droid/hook-service'
 import { grokHookService } from '../grok/hook-service'
@@ -64,7 +65,8 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   ['droid', (sftp, remoteHome) => droidHookService.installRemote(sftp, remoteHome)],
   ['hermes', (sftp, remoteHome) => hermesHookService.installRemote(sftp, remoteHome)],
   ['devin', (sftp, remoteHome) => devinHookService.installRemote(sftp, remoteHome)],
-  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)]
+  ['kimi', (sftp, remoteHome) => kimiHookService.installRemote(sftp, remoteHome)],
+  ['bob', (sftp, remoteHome) => bobHookService.installRemote(sftp, remoteHome)]
 ]
 
 /** Agents wired into the remote (SSH) hook installer. Exported so an invariant

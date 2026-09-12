@@ -24,6 +24,7 @@ afterEach(() => vi.restoreAllMocks())
 const NEW_TURN_EVENT: Record<AgentHookSource, string | null> = {
   claude: 'SessionStart',
   kimi: 'UserPromptSubmit',
+  bob: 'SessionStart',
   codex: 'SessionStart',
   gemini: 'BeforeAgent',
   antigravity: 'PreInvocation',

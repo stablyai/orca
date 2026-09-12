@@ -12,6 +12,7 @@ const {
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
   isCommandOnLocalPathMock,
+  resolveCommandOnLocalPathMock,
   mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
@@ -26,6 +27,7 @@ const {
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
+  resolveCommandOnLocalPathMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn()
 }))
@@ -59,7 +61,8 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
 // These tests express "which commands are on PATH" via the where/which mock,
 // so route the resolver through that same mock to preserve their intent.
 vi.mock('./command-path-resolver', () => ({
-  isCommandOnLocalPath: isCommandOnLocalPathMock
+  isCommandOnLocalPath: isCommandOnLocalPathMock,
+  resolveCommandOnLocalPath: resolveCommandOnLocalPathMock
 }))
 
 vi.mock('../pty/windows-environment-path', () => ({
@@ -106,6 +109,7 @@ describe('preflight', () => {
         getGiteaAuthStatusMock,
         resolveCliCommandsMock,
         isCommandOnLocalPathMock,
+        resolveCommandOnLocalPathMock,
         mergePersistedWindowsPathAsyncMock,
         mergePersistedWindowsPathMock
       },
