@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PRE_COMMIT_INSTALL_FAILURE } from './updater-test-harness'
 import { loadUpdaterModule, warmUpdaterModule } from './updater-test-module-loader'
+import type * as ConflictingAppInstances from './updater-conflicting-app-instances'
+
+type ConflictingAppInstancesModule = typeof ConflictingAppInstances
 
 const {
   nativeUpdaterMock,
@@ -22,6 +25,11 @@ vi.mock('electron-updater', () => moduleFactories.electronUpdater())
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+// The real detector shells out to osascript; keep unit tests off the live machine.
+vi.mock('./updater-conflicting-app-instances', async () => ({
+  ...(await vi.importActual<ConflictingAppInstancesModule>('./updater-conflicting-app-instances')),
+  findConflictingAppInstancePids: vi.fn(async () => [])
+}))
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
