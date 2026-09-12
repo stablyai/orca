@@ -120,6 +120,68 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
     expect(usedGlobalHtmlFragmentMatch).toBe(false)
   })
 
+  it('allows a minimal bare details block with no pre-existing styling class', () => {
+    expect(
+      getMarkdownRichModeUnsupportedMessage('<details><summary>x</summary>\n\nbody\n\n</details>\n')
+    ).toBeNull()
+  })
+
+  it('allows a minimal bare details block with the open attribute', () => {
+    expect(
+      getMarkdownRichModeUnsupportedMessage(
+        '<details open><summary>x</summary>\n\nbody\n\n</details>\n'
+      )
+    ).toBeNull()
+  })
+
+  it('allows a details block already carrying the legacy orca-details class', () => {
+    // Why: a file saved by an earlier Orca version has this class in its
+    // source; the round-trip eligibility check must still recognize it.
+    expect(
+      getMarkdownRichModeUnsupportedMessage(
+        '<details class="orca-details"><summary>x</summary>\n\nbody\n\n</details>\n'
+      )
+    ).toBeNull()
+  })
+
+  it('allows a document with front matter, prose, and two details blocks', () => {
+    const content = [
+      '---',
+      'title: Details Disclosure Test',
+      '---',
+      '',
+      '# Heading',
+      '',
+      'Some prose before the first toggle.',
+      '',
+      '<details>',
+      '<summary>First toggle</summary>',
+      '',
+      '**Bold text** and a [link](./target%20file.md).',
+      '',
+      '- one',
+      '- two',
+      '',
+      '```ts',
+      'const answer = 42',
+      '```',
+      '',
+      '</details>',
+      '',
+      'A paragraph between the two toggles.',
+      '',
+      '<details open>',
+      '<summary>Second toggle</summary>',
+      '',
+      'Short body.',
+      '',
+      '</details>',
+      ''
+    ].join('\n')
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
   it('keeps unsupported content blocked when it also exceeds the size limit', () => {
     const content = `${'a'.repeat(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)}<Widget />`
 
