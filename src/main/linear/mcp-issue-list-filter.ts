@@ -68,7 +68,7 @@ function nullableCycleFilter(value: string): object {
   if (value === 'null') {
     return { null: true }
   }
-  const keyword = CYCLE_KEYWORD_FILTERS.get(value.toLocaleLowerCase())
+  const keyword = CYCLE_KEYWORD_FILTERS.get(value.toLowerCase())
   if (keyword) {
     return keyword
   }

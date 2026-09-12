@@ -43,7 +43,7 @@ export const LINEAR_MCP_COMMAND_SPECS: CommandSpec[] = [
     path: ['linear', 'list-issues'],
     summary: 'List Linear issues with MCP-compatible filters',
     usage:
-      'orca linear list-issues [--team <team>] [--cycle <cycle|current|previous|next|number|null>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]',
+      'orca linear list-issues [--team <team>] [--cycle <cycle|current|active|previous|next|number|null>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'team',
