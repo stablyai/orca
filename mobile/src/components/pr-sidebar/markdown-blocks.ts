@@ -10,6 +10,9 @@ export type InlineToken =
   | { kind: 'italic'; text: string }
   | { kind: 'code'; text: string }
   | { kind: 'link'; text: string; url: string }
+  // `href` is the outer link target of a linked image `[![alt](url)](href)`; absent for a
+  // plain `![alt](url)`. Tapping navigates to `href` when present, else to `url`.
+  | { kind: 'image'; alt: string; url: string; href?: string }
 
 export type CellAlign = 'left' | 'center' | 'right'
 
@@ -232,9 +235,14 @@ function parseAlignRow(line: string): CellAlign[] {
   })
 }
 
-// Inline emphasis/code/link tokenizer. Walks the string once, longest-match first,
+// Inline emphasis/code/link/image tokenizer. Walks the string once, longest-match first,
 // emitting plain-text runs between matches. Unbalanced markers stay literal text.
-const INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)|(\[[^\]]+\]\([^)]+\))/
+// Order matters (leftmost match wins, ties break by alternative order): the linked-image
+// `[![alt](img)](href)` alternative precedes the plain image and link ones so a clickable
+// thumbnail isn't mis-split into a link with a `![alt` label plus literal tail; the plain
+// image `![alt](url)` precedes the link so `![…](…)` isn't split into a stray `!` + link.
+const INLINE =
+  /(`[^`]+`)|(\[!\[[^\]]*\]\([^)]+\)\]\([^)]+\))|(!\[[^\]]*\]\([^)]+\))|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)|(\[[^\]]+\]\([^)]+\))/
 
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []
@@ -253,7 +261,26 @@ export function parseInline(text: string): InlineToken[] {
       tokens.push({ kind: 'text', text: rest.slice(0, m.index) })
     }
     const token = m[0]
-    if (token.startsWith('`')) {
+    if (token.startsWith('[![')) {
+      // Linked image `[![alt](img)](href)` (a clickable thumbnail): render the image and
+      // keep the outer link's href so tapping navigates to it (e.g. a full-size page).
+      const altClose = token.indexOf('](')
+      const urlStart = altClose + 2
+      const imgUrlEnd = token.indexOf(')', urlStart)
+      tokens.push({
+        kind: 'image',
+        alt: token.slice(3, altClose),
+        url: token.slice(urlStart, imgUrlEnd),
+        href: token.slice(imgUrlEnd + 3, -1)
+      })
+    } else if (token.startsWith('![')) {
+      const close = token.indexOf('](')
+      tokens.push({
+        kind: 'image',
+        alt: token.slice(2, close),
+        url: token.slice(close + 2, -1)
+      })
+    } else if (token.startsWith('`')) {
       tokens.push({ kind: 'code', text: token.slice(1, -1) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
       tokens.push({ kind: 'bold', text: token.slice(2, -2) })
@@ -270,4 +297,34 @@ export function parseInline(text: string): InlineToken[] {
     rest = rest.slice(m.index + token.length)
   }
   return tokens
+}
+
+// A paragraph's inline tokens split into standalone image blocks and runs of the
+// surrounding inline tokens, in order.
+export type ParagraphPart =
+  | { kind: 'image'; alt: string; url: string; href?: string }
+  | { kind: 'run'; tokens: InlineToken[] }
+
+// Hoists images out of a paragraph's inline flow: RN can't render a responsive <Image>
+// inside <Text>, so the renderer needs images as their own blocks with the surrounding
+// prose preserved as text runs. Pure so it's covered by the parser tests.
+export function splitInlineImages(tokens: InlineToken[]): ParagraphPart[] {
+  const parts: ParagraphPart[] = []
+  let run: InlineToken[] = []
+  const flushRun = (): void => {
+    if (run.length > 0) {
+      parts.push({ kind: 'run', tokens: run })
+      run = []
+    }
+  }
+  for (const token of tokens) {
+    if (token.kind === 'image') {
+      flushRun()
+      parts.push({ kind: 'image', alt: token.alt, url: token.url, href: token.href })
+    } else {
+      run.push(token)
+    }
+  }
+  flushRun()
+  return parts
 }
