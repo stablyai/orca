@@ -15,4 +15,16 @@ describe('terminal container geometry', () => {
       /\.pane-link-tooltip\s*{[^}]*height:\s*var\(--orca-terminal-link-tooltip-height\);/s
     )
   })
+
+  it('balances horizontal padding across both edges of the terminal container', () => {
+    expect(terminalCss).toMatch(
+      /\.xterm-container\s*{[^}]*width:\s*calc\(100% - var\(--pane-padding-x, 4px\) \* 2\);/s
+    )
+    expect(terminalCss).toMatch(
+      /\.xterm-container\s*{[^}]*margin-left:\s*var\(--pane-padding-x, 4px\);/s
+    )
+    expect(terminalCss).toMatch(
+      /\.xterm-container\s*{[^}]*margin-right:\s*var\(--pane-padding-x, 4px\);/s
+    )
+  })
 })
