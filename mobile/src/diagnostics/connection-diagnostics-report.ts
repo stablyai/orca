@@ -1,4 +1,5 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import { clampUtf8TextPrefix } from '../../../src/shared/utf8-byte-limits'
 import type {
   ConnectionLogEntry,
   ConnectionState,
@@ -87,17 +88,7 @@ function truncateUtf8WithMarker(value: string, maxBytes: number, marker: string)
     return value
   }
   const markerBytes = new TextEncoder().encode(marker).byteLength
-  const characters: string[] = []
-  let bytes = 0
-  for (const character of value) {
-    const characterBytes = new TextEncoder().encode(character).byteLength
-    if (bytes + characterBytes + markerBytes > maxBytes) {
-      break
-    }
-    characters.push(character)
-    bytes += characterBytes
-  }
-  return `${characters.join('')}${marker}`
+  return `${clampUtf8TextPrefix(value, maxBytes - markerBytes)}${marker}`
 }
 
 function formatAgo(ms: number): string {
