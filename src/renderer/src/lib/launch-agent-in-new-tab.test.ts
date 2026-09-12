@@ -886,14 +886,12 @@ describe('launchAgentInNewTab', () => {
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
       agentArgs: '--model gpt-5.5',
-      promptDelivery: 'submit-after-ready'
+      promptDelivery: 'submit-after-ready',
+      suppressStartupUpdatePrompt: true
     })
 
-    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
-      'tab-1',
-      expect.objectContaining({
-        command: "codex '--model' 'gpt-5.5'"
-      })
+    expect(mockQueueTabStartupCommand.mock.calls[0]?.[1]?.command).toBe(
+      "codex '--model' 'gpt-5.5' '-c' 'check_for_update_on_startup=false'"
     )
   })
 })
