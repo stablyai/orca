@@ -50,6 +50,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       set({ groupBy: g, collapsedGroups: new Set<string>() })
     },
 
+    sidebarViewMode: 'project',
+    setSidebarViewMode: (m) => {
+      window.api.ui.set({ sidebarViewMode: m }).catch(console.error)
+      set({ sidebarViewMode: m })
+    },
+
     sortBy: 'recent',
     setSortBy: (s) => set({ sortBy: s }),
 

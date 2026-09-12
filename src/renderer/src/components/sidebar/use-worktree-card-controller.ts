@@ -136,7 +136,8 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     workspacePorts: foundation.workspacePorts,
     openTaskPage: foundation.openTaskPage,
     updateWorktreeMeta: foundation.updateWorktreeMeta,
-    settings: foundation.settings
+    settings: foundation.settings,
+    forceInlineAgents: foundation.sidebarViewMode === 'current'
   })
 
   return {

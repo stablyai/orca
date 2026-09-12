@@ -23,8 +23,10 @@ type MockState = {
   repos: { id: string }[]
   groupBy: string
   sidebarBody: 'workspaces' | 'agents'
+  sidebarViewMode: 'project' | 'current'
   sidebarWidth: number
   setSidebarBody: (body: 'workspaces' | 'agents') => void
+  setSidebarViewMode: (mode: 'project' | 'current') => void
   openModal: (modal: string, data?: unknown) => void
   updateSettings: (patch: Record<string, unknown>) => void
   activeContextualTourId: string | null
@@ -113,8 +115,10 @@ beforeEach(() => {
     repos: [],
     groupBy: 'repo',
     sidebarBody: 'workspaces',
+    sidebarViewMode: 'project',
     sidebarWidth: 280,
     setSidebarBody: vi.fn(),
+    setSidebarViewMode: vi.fn(),
     openModal: vi.fn(),
     updateSettings: vi.fn(),
     activeContextualTourId: null,
@@ -252,22 +256,28 @@ describe('SidebarHeader', () => {
     expect(mockState.setSidebarBody).toHaveBeenCalledWith('workspaces')
   })
 
-  it('uses the legacy title based on workspace grouping', () => {
+  it('renders the Project/Current toggle in place of the static title', async () => {
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
     })
 
-    expect(container.querySelector('[data-sidebar-section-title="projects"]')?.textContent).toBe(
-      'Projects'
+    const group = container.querySelector('[data-sidebar-section-title="projects"]')
+    expect(group).toBeTruthy()
+    const current = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Current'
     )
+    expect(current).toBeTruthy()
+
+    await act(async () => {
+      current?.click()
+    })
+    expect(mockState.setSidebarViewMode).toHaveBeenCalledWith('current')
 
     mockState.groupBy = 'workspace-status'
     act(() => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
     })
-    expect(container.querySelector('[data-sidebar-section-title="workspaces"]')?.textContent).toBe(
-      'Workspaces'
-    )
+    expect(container.querySelector('[data-sidebar-section-title="workspaces"]')).toBeTruthy()
   })
 
   it('drops both project actions in the agents view, which lists activity, not projects', () => {
