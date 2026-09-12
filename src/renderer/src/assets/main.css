@@ -1527,6 +1527,25 @@ html.native-shell .app-layout {
   }
 }
 
+/* Emoji glyphs are not radially symmetric, so a smooth continuous turn reads
+   better than the ring's stepped tick. Compositor-only transform, like above. */
+@keyframes agent-working-emoji-rotate {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.agent-working-emoji-spinner {
+  animation: agent-working-emoji-rotate 1.6s linear infinite;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-working-emoji-spinner {
+    animation: none;
+  }
+}
+
 /* Why: keyframes run when the content mounts already in its final state. */
 @keyframes compact-agent-expansion-reveal {
   from {

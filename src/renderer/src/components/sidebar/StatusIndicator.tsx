@@ -3,6 +3,7 @@ import { Activity } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
+import { AgentWorkingEmojiSpinner } from '@/components/AgentWorkingEmojiSpinner'
 import {
   StateIndicatorTooltip,
   type StateIndicatorTooltipSide
@@ -19,6 +20,8 @@ type StatusIndicatorProps = Omit<React.ComponentProps<'span'>, 'title'> & {
   status: Status
   showTooltip?: boolean
   tooltipSide?: StateIndicatorTooltipSide
+  // When the workspace has an emoji icon, spin it as the working indicator.
+  workingEmoji?: string | null
 }
 
 const AGENT_STATUS_TOOLTIP_STATUSES = new Set<Status>([
@@ -34,6 +37,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
   className,
   showTooltip = true,
   tooltipSide,
+  workingEmoji,
   ...rest
 }: StatusIndicatorProps) {
   const tooltipLabel =
@@ -46,7 +50,11 @@ const StatusIndicator = React.memo(function StatusIndicator({
         className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
         {...rest}
       >
-        <AgentWorkingSpinner className="size-2" />
+        {workingEmoji ? (
+          <AgentWorkingEmojiSpinner emoji={workingEmoji} className="size-3 text-[13px]" />
+        ) : (
+          <AgentWorkingSpinner className="size-2" />
+        )}
       </span>
     )
   } else if (status === 'monitoring') {
