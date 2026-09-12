@@ -23,6 +23,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     flushSurface,
     contentIndent,
     newCardStyle,
+    provisionalWorktreeCatalog,
     compactCards,
     isFolder,
     detachedHeadDisplay,
@@ -106,9 +107,30 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     cacheStartedAt != null ||
     showMetaRowDetails
   )
-  const hasMetaRow = compactCards
+  const baseHasMetaRow = compactCards
     ? hasMetadataBadge || cacheStartedAt != null
     : hasDetailedMetaRowContent
+  // Why: a provisional row has no branch identity yet; keep the settled silhouette while the
+  // scan fills the identity slot, even when other meta (host badge) already occupies the row. #20119
+  const showProvisionalCardTreatment = provisionalWorktreeCatalog && newCardStyle && !isFolder
+  // Why: only reserve a slot the scan will actually fill. Without the branch card property
+  // the identity row never renders and the placeholder would vanish into nothing.
+  // Mirrors showIdentityInNewCard's hasPathIdentityEnabled gate. #20119
+  const reserveProvisionalIdentityRow =
+    showProvisionalCardTreatment &&
+    !identityDisplay &&
+    detachedHeadDisplay === null &&
+    cardProps.includes('branch')
+  // Why: an automatic name is branch-derived upstream, so showing the fallback basename would
+  // change under the user; hold the title slot until the scan resolves it. An omitted mode is
+  // legacy rows that predate the field and behave as automatic. A row that already resolves
+  // its own identity (a richer cached SSH row alongside a non-authoritative catalog) is
+  // settled data, so it must not be masked. #20119
+  const titleIsProvisional =
+    showProvisionalCardTreatment &&
+    !identityDisplay &&
+    (worktree.displayNameMode === undefined || worktree.displayNameMode === 'automatic')
+  const hasMetaRow = baseHasMetaRow || reserveProvisionalIdentityRow
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
@@ -276,6 +298,8 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     showMetaRowDetails,
     showTitleRowIndicators,
     hasMetaRow,
+    titleIsProvisional,
+    reserveProvisionalIdentityRow,
     showHeaderActions,
     showDeleteQuickAction,
     hoverBranchName,
