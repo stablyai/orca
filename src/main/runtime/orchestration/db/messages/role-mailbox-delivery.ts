@@ -3,6 +3,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { exposeDeliveryTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
+import { requireMailboxConsumer } from './mailbox-consumer'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './mailbox-routing-page'
 
 export function getDeliveryRaw(this: OrchestrationDb, id: string): DeliveryRow | undefined {
@@ -29,9 +30,9 @@ export function getOrCreateMailboxDelivery(
     runId: string
     mailboxHandle: string
     consumerGeneration: number
+    consumerSource?: 'dispatch' | 'attachment'
     limit?: number
     wakeTypes?: MessageType[]
-    requireCurrentRunConsumer?: boolean
   }
 ): { delivery: DeliveryRow; messages: MessageRow[]; replayed: boolean } | undefined {
   const limit = Math.min(
@@ -40,11 +41,9 @@ export function getOrCreateMailboxDelivery(
   )
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    if (params.requireCurrentRunConsumer) {
-      this.requireCurrentConsumer(params.runId, params.consumerGeneration)
-    }
+    requireMailboxConsumer(this, params)
     const existing = this.db
-      .prepare("SELECT * FROM deliveries WHERE mailbox_handle = ? AND status = 'outstanding'")
+      .prepare('SELECT * FROM outstanding_deliveries WHERE mailbox_handle = ?')
       .get(params.mailboxHandle) as DeliveryRow | undefined
     if (existing) {
       if (existing.consumer_generation !== params.consumerGeneration) {
@@ -115,15 +114,13 @@ export function acknowledgeMailboxDelivery(
     runId: string
     mailboxHandle: string
     consumerGeneration: number
+    consumerSource?: 'dispatch' | 'attachment'
     deliveryId: string
-    requireCurrentRunConsumer?: boolean
   }
 ): { delivery: DeliveryRow; duplicate: boolean } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    if (params.requireCurrentRunConsumer) {
-      this.requireCurrentConsumer(params.runId, params.consumerGeneration)
-    }
+    requireMailboxConsumer(this, params)
     const delivery = this.getDeliveryRaw(params.deliveryId)
     if (
       !delivery ||
@@ -132,7 +129,7 @@ export function acknowledgeMailboxDelivery(
     ) {
       throw new OrchestrationError(
         'stale_delivery',
-        `Delivery ${params.deliveryId} does not belong to this mailbox.`
+        `Delivery ${params.deliveryId} does not belong to this mailbox. --ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.`
       )
     }
     if (
@@ -180,14 +177,12 @@ export function hasOutstandingMailboxDelivery(
 ): boolean {
   return Boolean(
     this.db
-      .prepare(
-        "SELECT 1 FROM deliveries WHERE mailbox_handle = ? AND status = 'outstanding' LIMIT 1"
-      )
+      .prepare('SELECT 1 FROM outstanding_deliveries WHERE mailbox_handle = ? LIMIT 1')
       .get(mailboxHandle)
   )
 }
 
-export function fenceOutstandingMailboxDelivery(
+export function fenceUnacknowledgedMailboxDeliveries(
   this: OrchestrationDb,
   mailboxHandle: string
 ): void {
@@ -204,7 +199,7 @@ export type RoleMailboxDeliveryMethods = {
   getOrCreateMailboxDelivery: typeof getOrCreateMailboxDelivery
   acknowledgeMailboxDelivery: typeof acknowledgeMailboxDelivery
   hasOutstandingMailboxDelivery: typeof hasOutstandingMailboxDelivery
-  fenceOutstandingMailboxDelivery: typeof fenceOutstandingMailboxDelivery
+  fenceUnacknowledgedMailboxDeliveries: typeof fenceUnacknowledgedMailboxDeliveries
 }
 
 export function attachRoleMailboxDelivery(ctor: { prototype: object }): void {
@@ -214,6 +209,6 @@ export function attachRoleMailboxDelivery(ctor: { prototype: object }): void {
     getOrCreateMailboxDelivery,
     acknowledgeMailboxDelivery,
     hasOutstandingMailboxDelivery,
-    fenceOutstandingMailboxDelivery
+    fenceUnacknowledgedMailboxDeliveries
   })
 }

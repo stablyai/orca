@@ -71,7 +71,7 @@ export function prepareRemoteAttachmentAuthority(
         `Remote Dispatch ${params.dispatchId} is not starting.`
       )
     }
-    this.fenceOutstandingMailboxDelivery(`dispatch:${params.dispatchId}`)
+    this.fenceUnacknowledgedMailboxDeliveries(`dispatch:${params.dispatchId}`)
     if (params.terminalOwnership && !this.getWorkerTerminalResourceByOwner(params.dispatchId)) {
       const resource =
         params.terminalOwnership === 'external'

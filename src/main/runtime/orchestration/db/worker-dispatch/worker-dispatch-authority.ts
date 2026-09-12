@@ -75,7 +75,7 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
-    this.fenceOutstandingMailboxDelivery(`dispatch:${params.dispatchId}`)
+    this.fenceUnacknowledgedMailboxDeliveries(`dispatch:${params.dispatchId}`)
     const workerUpdate = this.db
       .prepare(
         `UPDATE worker_dispatches
