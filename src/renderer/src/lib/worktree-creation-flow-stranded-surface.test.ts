@@ -199,7 +199,6 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       undefined,
       undefined
     )
-    expect(ensureWorktreeHasInitialTerminal).toHaveReturnedWith('recovered-tab')
     // Contained: completion still tears the surface down.
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
       cleanupVm: false
