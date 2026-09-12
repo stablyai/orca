@@ -125,9 +125,6 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: 0.3.251
         version: 0.3.251(@anthropic-ai/sdk@0.122.0(zod@4.5.4))(@modelcontextprotocol/sdk@1.30.0(supports-color@7.2.0)(zod@4.5.4))(zod@4.5.4)
-      '@electron-toolkit/preload':
-        specifier: ^3.0.2
-        version: 3.0.2(electron@43.7.0(supports-color@7.2.0))
       '@electron-toolkit/utils':
         specifier: ^4.0.0
         version: 4.0.0(electron@43.7.0(supports-color@7.2.0))
@@ -756,11 +753,6 @@ packages:
   '@electron-internal/extract-zip@1.0.4':
     resolution: {integrity: sha512-Zr1Vs7E9tpCNhZHDAbFVXc2gEVCG9RqPDjrno5+bdgB6LRAuvgyMHJut4NCVyYwtAieapMzc3fiQ3CSTi75ARg==}
     engines: {node: '>=22.12.0'}
-
-  '@electron-toolkit/preload@3.0.2':
-    resolution: {integrity: sha512-TWWPToXd8qPRfSXwzf5KVhpXMfONaUuRAZJHsKthKgZR/+LqX1dZVSSClQ8OTAEduvLGdecljCsoT2jSshfoUg==}
-    peerDependencies:
-      electron: '>=13.0.0'
 
   '@electron-toolkit/tsconfig@2.0.0':
     resolution: {integrity: sha512-AdPsP770WhW7b260h13SHMdmjEEHJL6xFtgi3jwgdsSQbJOkJLeNnnpZW9qxTPCvmRI6vmdzWz5K3gibFS6SNg==}
@@ -7331,10 +7323,6 @@ snapshots:
       '@noble/ciphers': 1.3.0
 
   '@electron-internal/extract-zip@1.0.4': {}
-
-  '@electron-toolkit/preload@3.0.2(electron@43.7.0(supports-color@7.2.0))':
-    dependencies:
-      electron: 43.7.0(supports-color@7.2.0)
 
   '@electron-toolkit/tsconfig@2.0.0(@types/node@25.9.5)':
     dependencies:

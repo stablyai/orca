@@ -164,7 +164,6 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.251",
-    "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@floating-ui/dom": "1.7.6",
     "@linear/sdk": "^82.1.0",
