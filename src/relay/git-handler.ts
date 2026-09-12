@@ -25,6 +25,10 @@ import { registerGitHandlers } from './git-handler-registration'
 import { resolveGitFetchHeadCommand, runWithGitFetchHeadLock } from '../shared/git-fetch-head-lock'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { MAX_GIT_BUFFER, runGitToTermination } from './git-handler-command-termination'
+import {
+  runWithExplicitBareRepositoryRetry,
+  type ExplicitBareRepositoryReadState
+} from '../shared/git-bare-repository-command'
 
 const execFileAsync = promisify(execFile)
 
@@ -89,7 +93,7 @@ export class GitHandler {
       watcherRegistry: this.watcherRegistry,
       git: (args, cwd, opts) =>
         opts === undefined ? this.git(args, cwd) : this.git(args, cwd, opts),
-      gitBuffer: (args, cwd) => this.gitBuffer(args, cwd),
+      gitBuffer: (args, cwd, readState) => this.gitBuffer(args, cwd, readState),
       spawnClone: (args, cwd, progressId, context) =>
         this.spawnClone(args, cwd, progressId, context),
       clearGitMutationReadCaches: () => this.clearGitMutationReadCaches(),
@@ -159,7 +163,7 @@ export class GitHandler {
     opts?: GitHandlerCommandOptions
   ): Promise<GitHandlerCommandResult> {
     const expandedCwd = expandTilde(cwd)
-    const run = async (): Promise<{ stdout: string; stderr: string }> => {
+    const run = async (commandArgs: string[]): Promise<{ stdout: string; stderr: string }> => {
       const env = opts?.nonInteractive ? buildRelayUnattendedGitEnv() : buildRelayGitEnv()
       if (opts?.disableOptionalLocks) {
         env.GIT_OPTIONAL_LOCKS = '0'
@@ -173,28 +177,43 @@ export class GitHandler {
         signal: opts?.signal
       } satisfies ExecFileOptions
       if (opts?.terminationBarrier) {
-        return runGitToTermination(args, execOptions, opts.stdin)
+        return runGitToTermination(commandArgs, execOptions, opts.stdin)
       }
       if (opts?.stdin !== undefined) {
-        return execFileWithStdin('git', args, execOptions, opts.stdin)
+        return execFileWithStdin('git', commandArgs, execOptions, opts.stdin)
       }
-      const { stdout, stderr } = await execFileAsync('git', args, execOptions)
+      const { stdout, stderr } = await execFileAsync('git', commandArgs, execOptions)
       return { stdout: String(stdout), stderr: String(stderr) }
     }
-    const command = resolveGitFetchHeadCommand(args, expandedCwd)
-    return command.needsLock
-      ? runWithGitFetchHeadLock(command.cwd, opts?.signal, run, command.gitDir)
-      : run()
+    const execute = (commandArgs: string[]) => {
+      const command = resolveGitFetchHeadCommand(commandArgs, expandedCwd)
+      return command.needsLock
+        ? runWithGitFetchHeadLock(command.cwd, opts?.signal, () => run(commandArgs), command.gitDir)
+        : run(commandArgs)
+    }
+    return opts?.allowExplicitBareRepositoryRetry
+      ? runWithExplicitBareRepositoryRetry(args, execute, opts.explicitBareRepositoryReadState)
+      : execute(args)
   }
 
-  private async gitBuffer(args: string[], cwd: string): Promise<Buffer> {
-    const { stdout } = (await execFileAsync('git', args, {
-      cwd,
-      env: buildRelayGitEnv(),
-      encoding: 'buffer',
-      maxBuffer: MAX_GIT_BUFFER
-    })) as { stdout: Buffer }
-    return stdout
+  private async gitBuffer(
+    args: string[],
+    cwd: string,
+    readState?: ExplicitBareRepositoryReadState
+  ): Promise<Buffer> {
+    return runWithExplicitBareRepositoryRetry(
+      args,
+      async (commandArgs) => {
+        const { stdout } = (await execFileAsync('git', commandArgs, {
+          cwd,
+          env: buildRelayGitEnv(),
+          encoding: 'buffer',
+          maxBuffer: MAX_GIT_BUFFER
+        })) as { stdout: Buffer }
+        return stdout
+      },
+      readState
+    )
   }
 
   private async spawnClone(

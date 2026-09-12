@@ -3,9 +3,12 @@ import { isShowRefNoMatchError } from './exact-ref-probe'
 import { hasCommitObjectViaGitExec } from './commit-object-ref'
 import { isSafeGitRefName } from '../../shared/git-status-upstream-ref'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
+import type { ExplicitBareRepositoryReadState } from '../../shared/git-bare-repository-command'
+import type { GitRuntimeOptions } from './git-runtime-options'
 
-type GitExecOptions = {
-  wslDistro?: string
+type GitExecOptions = GitRuntimeOptions & {
+  allowExplicitBareRepositoryRetry?: boolean
+  explicitBareRepositoryReadState?: ExplicitBareRepositoryReadState
 }
 
 /**

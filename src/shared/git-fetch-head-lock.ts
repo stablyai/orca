@@ -32,7 +32,7 @@ export function resolveGitFetchHeadCommand(
   initialCwd: string
 ): GitFetchHeadCommand {
   let cwd = initialCwd
-  let gitDir: string | undefined
+  let gitDirArg: string | undefined
   let subcommandIndex = -1
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
@@ -46,12 +46,12 @@ export function resolveGitFetchHeadCommand(
       continue
     }
     if (arg === '--git-dir' && args[index + 1]) {
-      gitDir = path.resolve(cwd, args[index + 1])
+      gitDirArg = args[index + 1]
       index += 1
       continue
     }
     if (arg.startsWith('--git-dir=')) {
-      gitDir = path.resolve(cwd, arg.slice('--git-dir='.length))
+      gitDirArg = arg.slice('--git-dir='.length)
       continue
     }
     if (GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
@@ -64,6 +64,7 @@ export function resolveGitFetchHeadCommand(
     subcommandIndex = index
     break
   }
+  const gitDir = gitDirArg === undefined ? undefined : path.resolve(cwd, gitDirArg)
   const subcommand = args[subcommandIndex]
   if (subcommand === 'pull') {
     return { needsLock: true, cwd, gitDir }

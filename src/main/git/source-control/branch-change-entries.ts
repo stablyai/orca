@@ -2,7 +2,7 @@ import type { GitBranchChangeEntry } from '../../../shared/git-diff-compare-type
 import type { GitBranchChangeStatus } from '../../../shared/git-status-types'
 import { parseNumstat } from '../../../shared/git-uncommitted-line-stats'
 import { decodeGitCQuotedPath } from '../../../shared/git-cquoted-path'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import type { GitCompareOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
 import { MAX_GIT_SHOW_BYTES } from './git-show-max-bytes'
@@ -28,7 +28,7 @@ export async function loadBranchChanges(
   worktreePath: string,
   mergeBase: string,
   headOid: string,
-  options: GitRuntimeOptions = {}
+  options: GitCompareOptions
 ): Promise<GitBranchChangeEntry[]> {
   // Why: core.quotePath=false keeps real UTF-8 paths — see getStatus rationale.
   const gitOptions = {
@@ -66,7 +66,7 @@ export async function loadCommitChanges(
   worktreePath: string,
   parentOid: string | null,
   commitOid: string,
-  options: GitRuntimeOptions = {}
+  options: GitCompareOptions
 ): Promise<GitBranchChangeEntry[]> {
   // Why: root commits have no parent tree; diff-tree --root uses git's empty tree, avoiding a hardcoded hash-format-specific oid.
   const args = parentOid

@@ -113,6 +113,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
     const result = await this.gitDiffReadDedupe.run(
       stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
       async () => {
+        const gitBuffer = this.createCompareGitBuffer()
         // Why: route gitlink roots to pointer diffs and inner files to their submodule worktree.
         const submodulePaths = await listSubmodulePathsCached(
           this.git.bind(this),
@@ -146,7 +147,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
             // Why: a moved gitlink (clean worktree) keeps inner changes in committed history, so diff the two commits; otherwise read the working-tree blob.
             if (fromOid && toOid && fromOid !== toOid) {
               return buildSubmoduleInnerCommitRangeDiff(
-                this.gitBuffer.bind(this),
+                gitBuffer,
                 submoduleWorktreePath,
                 innerPath,
                 fromOid,
@@ -154,7 +155,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
               )
             }
             return computeDiff(
-              this.gitBuffer.bind(this),
+              gitBuffer,
               submoduleWorktreePath,
               innerPath,
               staged,
@@ -162,13 +163,7 @@ export class GitHandlerReadOperations extends GitHandlerOperationContext {
             )
           }
         }
-        return computeDiff(
-          this.gitBuffer.bind(this),
-          worktreePath,
-          filePath,
-          staged,
-          compareAgainstHead
-        )
+        return computeDiff(gitBuffer, worktreePath, filePath, staged, compareAgainstHead)
       }
     )
     return this.maybeStreamResponse(result, params, context)

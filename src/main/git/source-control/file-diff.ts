@@ -2,7 +2,7 @@ import * as path from 'node:path'
 import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
 import { resolveWorktreeHostPath } from '../../../shared/git-metadata-path'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
-import type { GitRuntimeOptions } from '../git-runtime-options'
+import { createGitCompareOptions, type GitRuntimeOptions } from '../git-runtime-options'
 import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'
 import { gitDiffReadDedupe, settledDiffCache } from './git-read-cache-invalidation'
 import { readWorktreeDiffStamp } from './worktree-diff-stamp'
@@ -104,8 +104,9 @@ async function loadDiff(
   compareAgainstHead: boolean,
   options: GitRuntimeOptions
 ): Promise<LoadedDiff> {
+  const compareOptions = createGitCompareOptions(options)
   // Why: gitlink paths can't be read as blobs, so route submodule diffs explicitly (root → pointer, inner → recurse).
-  const submodulePaths = await listSubmodulePaths(worktreePath, options)
+  const submodulePaths = await listSubmodulePaths(worktreePath, compareOptions)
   if (submodulePaths.length > 0) {
     const matchedSubmodule = findContainingSubmodule(submodulePaths, filePath)
     if (matchedSubmodule) {
@@ -119,19 +120,19 @@ async function loadDiff(
             matchedSubmodule,
             staged,
             compareAgainstHead,
-            options,
+            compareOptions,
             submoduleWorktreePath
           )
         )
       }
       const innerPath = normalizedFilePath.slice(matchedSubmodule.length + 1)
       const fromOid = staged
-        ? await readGitlinkOidFromTree(worktreePath, 'HEAD', matchedSubmodule, options)
-        : (await readGitlinkOidFromIndex(worktreePath, matchedSubmodule, options)) ||
-          (await readGitlinkOidFromTree(worktreePath, 'HEAD', matchedSubmodule, options))
+        ? await readGitlinkOidFromTree(worktreePath, 'HEAD', matchedSubmodule, compareOptions)
+        : (await readGitlinkOidFromIndex(worktreePath, matchedSubmodule, compareOptions)) ||
+          (await readGitlinkOidFromTree(worktreePath, 'HEAD', matchedSubmodule, compareOptions))
       const toOid = staged
-        ? await readGitlinkOidFromIndex(worktreePath, matchedSubmodule, options)
-        : await readWorkingSubmoduleHead(submoduleWorktreePath, options)
+        ? await readGitlinkOidFromIndex(worktreePath, matchedSubmodule, compareOptions)
+        : await readWorkingSubmoduleHead(submoduleWorktreePath, compareOptions)
       // Why: a moved gitlink with a clean submodule worktree means the change is committed — diff the two commits.
       if (fromOid && toOid && fromOid !== toOid) {
         return notReusable(
@@ -140,7 +141,7 @@ async function loadDiff(
             innerPath,
             fromOid,
             toOid,
-            options
+            compareOptions
           )
         )
       }
@@ -163,8 +164,8 @@ async function loadDiff(
       // Why concurrent: HEAD and the index are independent `git show` spawns.
       // Only this branch qualifies — the unstaged left read chains index→HEAD.
       const [leftBlob, rightBlob] = await Promise.all([
-        readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options),
-        readGitBlobAtIndexPath(worktreePath, filePath, options)
+        readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, compareOptions),
+        readGitBlobAtIndexPath(worktreePath, filePath, compareOptions)
       ])
       originalContent = leftBlob.content
       originalIsBinary = leftBlob.isBinary
@@ -179,8 +180,8 @@ async function loadDiff(
       const hostWorktreePath = resolveWorktreeHostPath(worktreePath, options)
       const [leftBlob, workingTreeBlob] = await Promise.all([
         compareAgainstHead
-          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, options)
-          : readUnstagedLeftBlob(worktreePath, filePath, options),
+          ? readGitBlobAtOidPath(worktreePath, 'HEAD', filePath, compareOptions)
+          : readUnstagedLeftBlob(worktreePath, filePath, compareOptions),
         hostWorktreePath
           ? readWorkingTreeFile(path.join(hostWorktreePath, filePath))
           : Promise.resolve(UNSPELLABLE_WORKING_TREE_READ)

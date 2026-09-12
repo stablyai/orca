@@ -3,6 +3,11 @@ import type { InFlightPromiseDedupe } from '../shared/in-flight-promise-dedupe'
 import type { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { SubmodulePathsCache } from './git-handler-submodule-ops'
 import type { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
+import {
+  createExplicitBareRepositoryReadState,
+  type ExplicitBareRepositoryReadState
+} from '../shared/git-bare-repository-command'
+import type { GitBufferExec } from './git-handler-ops'
 
 export const GIT_BULK_CHUNK_SIZE = 100
 
@@ -14,6 +19,8 @@ export type GitHandlerCommandOptions = {
   stdin?: string
   timeout?: number
   terminationBarrier?: boolean
+  allowExplicitBareRepositoryRetry?: boolean
+  explicitBareRepositoryReadState?: ExplicitBareRepositoryReadState
 }
 
 export type GitHandlerCommandResult = { stdout: string; stderr: string }
@@ -29,7 +36,11 @@ export type GitHandlerOperationHost = {
     cwd: string,
     opts?: GitHandlerCommandOptions
   ): Promise<GitHandlerCommandResult>
-  gitBuffer(args: string[], cwd: string): Promise<Buffer>
+  gitBuffer(
+    args: string[],
+    cwd: string,
+    readState?: ExplicitBareRepositoryReadState
+  ): Promise<Buffer>
   spawnClone(
     args: string[],
     cwd: string,
@@ -72,8 +83,17 @@ export abstract class GitHandlerOperationContext {
     return this.host.git(args, cwd, opts)
   }
 
-  protected gitBuffer(args: string[], cwd: string): Promise<Buffer> {
-    return this.host.gitBuffer(args, cwd)
+  protected gitBuffer(
+    args: string[],
+    cwd: string,
+    readState?: ExplicitBareRepositoryReadState
+  ): Promise<Buffer> {
+    return this.host.gitBuffer(args, cwd, readState)
+  }
+
+  protected createCompareGitBuffer(): GitBufferExec {
+    const readState = createExplicitBareRepositoryReadState()
+    return (args, cwd) => this.gitBuffer(args, cwd, readState)
   }
 
   protected spawnClone(

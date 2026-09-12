@@ -3,24 +3,20 @@
 // Also listed in pr.yml's Windows boundary step: reading Git's admin layout directly depends on
 // Windows path resolution, CRLF in `HEAD`/`gitdir`/`commondir`, and whether `worktree move`/`lock`
 // and deleting a live checkout behave as they do on POSIX. The Linux shards cannot reach any of it.
-import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { runGitFixture } from '../../shared/git-process-test-fixture'
 import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
-
-const execFileAsync = promisify(execFile)
 
 let scratchDir = ''
 let repoPath = ''
 let worktreePath = ''
 
 async function git(args: string[], cwd: string): Promise<string> {
-  const { stdout } = await execFileAsync('git', args, { cwd })
-  return stdout
+  return await runGitFixture(cwd, args)
 }
 
 async function fingerprint(path = repoPath): Promise<string | null> {
@@ -44,6 +40,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   await removeTree(scratchDir)
 })
 
@@ -135,10 +132,21 @@ describe('readRepoWorktreeAdminFingerprint', () => {
   it('reads a bare repo through its own gitdir', async () => {
     const barePath = join(scratchDir, 'bare.git')
     await git(['clone', '-q', '--bare', repoPath, barePath], scratchDir)
+    vi.stubEnv('GIT_CONFIG_COUNT', '1')
+    vi.stubEnv('GIT_CONFIG_KEY_0', 'safe.bareRepository')
+    vi.stubEnv('GIT_CONFIG_VALUE_0', 'explicit')
     const before = await fingerprint(barePath)
     expect(before).not.toBeNull()
     await git(
-      ['worktree', 'add', '-q', join(scratchDir, 'trees', 'from-bare'), '-b', 'bare-tree'],
+      [
+        '--git-dir=.',
+        'worktree',
+        'add',
+        '-q',
+        join(scratchDir, 'trees', 'from-bare'),
+        '-b',
+        'bare-tree'
+      ],
       barePath
     )
     expect(await fingerprint(barePath)).not.toBe(before)

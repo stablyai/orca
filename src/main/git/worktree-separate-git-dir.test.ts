@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { runGitFixture } from '../../shared/git-process-test-fixture'
 import type * as GitRunner from './runner'
 
 // Why: spy on the git runner so we can count rev-parse invocations while still
@@ -81,12 +82,13 @@ async function createBareRepo(): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), 'orca-bare-worktree-'))
   tempRoots.push(root)
   const repoPath = path.join(root, 'repo.git')
-  execFileSync('git', ['init', '--bare', '--quiet', repoPath])
+  await runGitFixture(root, ['init', '--bare', '--quiet', repoPath])
   return realpath(repoPath)
 }
 
 afterEach(async () => {
   revParseTopLevelCalls.count = 0
+  vi.unstubAllEnvs()
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -177,8 +179,11 @@ describe('git worktree separate git dir paths', () => {
     }
   )
 
-  it.skipIf(process.platform === 'win32')('does not throw for a bare repo', async () => {
+  it('does not throw for a bare repo', async () => {
     const repoPath = await createBareRepo()
+    vi.stubEnv('GIT_CONFIG_COUNT', '1')
+    vi.stubEnv('GIT_CONFIG_KEY_0', 'safe.bareRepository')
+    vi.stubEnv('GIT_CONFIG_VALUE_0', 'explicit')
 
     const worktrees = await listWorktrees(repoPath)
     const mainWorktree = worktrees.find((worktree) => worktree.isMainWorktree)
