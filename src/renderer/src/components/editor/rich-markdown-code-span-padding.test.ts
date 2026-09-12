@@ -1,7 +1,7 @@
 import { Editor } from '@tiptap/core'
 import { describe, expect, it } from 'vitest'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
-import { maskCodeSpanPadding, restoreCodeSpanPadding } from './rich-markdown-code-span-padding'
+import { createCodeSpanPaddingSession } from './rich-markdown-code-span-padding'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
@@ -24,42 +24,51 @@ const TAB = '\t'
 const NBSP = String.fromCharCode(0x00a0)
 const SENTINEL = String.fromCharCode(0xe002)
 
-describe('maskCodeSpanPadding', () => {
+describe('createCodeSpanPaddingSession', () => {
   it('leaves a node without a code mark alone', () => {
     const nodes = [{ type: 'text', text: ' padded ', marks: [] }]
-    expect(maskCodeSpanPadding(nodes)).toEqual(nodes)
+    expect(createCodeSpanPaddingSession().mask(nodes)).toEqual(nodes)
   })
 
   it('leaves an unpadded code span alone', () => {
     const nodes = [{ type: 'text', text: 'code', marks: [{ type: 'code' }] }]
-    expect(maskCodeSpanPadding(nodes)).toEqual(nodes)
+    expect(createCodeSpanPaddingSession().mask(nodes)).toEqual(nodes)
   })
 
   it('round-trips the padding it masks', () => {
-    const [masked] = maskCodeSpanPadding([
-      { type: 'text', text: ' code ', marks: [{ type: 'code' }] }
-    ])
+    const session = createCodeSpanPaddingSession()
+    const [masked] = session.mask([{ type: 'text', text: ' code ', marks: [{ type: 'code' }] }])
     expect(masked.text?.startsWith(' ')).toBe(false)
     expect(masked.text?.endsWith(' ')).toBe(false)
-    expect(restoreCodeSpanPadding(masked.text ?? '')).toBe(' code ')
+    expect(session.restore(masked.text ?? '')).toBe(' code ')
   })
 
   it.each([[`${TAB}code${TAB}`], [`${NBSP}code${NBSP}`], [`${TAB}code${NBSP}`]])(
     'restores %j as its original characters',
     (text) => {
-      const [masked] = maskCodeSpanPadding([{ type: 'text', text, marks: [{ type: 'code' }] }])
-      expect(restoreCodeSpanPadding(masked.text ?? '')).toBe(text)
+      const session = createCodeSpanPaddingSession()
+      const [masked] = session.mask([{ type: 'text', text, marks: [{ type: 'code' }] }])
+      expect(session.restore(masked.text ?? '')).toBe(text)
     }
   )
 
   it.each([['  '], ['   '], [' ']])('partitions the all-whitespace span %j once', (text) => {
-    const [masked] = maskCodeSpanPadding([{ type: 'text', text, marks: [{ type: 'code' }] }])
-    expect(restoreCodeSpanPadding(masked.text ?? '')).toBe(text)
+    const session = createCodeSpanPaddingSession()
+    const [masked] = session.mask([{ type: 'text', text, marks: [{ type: 'code' }] }])
+    expect(session.restore(masked.text ?? '')).toBe(text)
   })
 
-  it('leaves a code span already carrying the sentinel alone', () => {
-    const nodes = [{ type: 'text', text: ` ${SENTINEL} `, marks: [{ type: 'code' }] }]
-    expect(maskCodeSpanPadding(nodes)).toEqual(nodes)
+  it('keeps a sentinel the span already carried', () => {
+    const session = createCodeSpanPaddingSession()
+    const text = ` ${SENTINEL}x${SENTINEL} `
+    const [masked] = session.mask([{ type: 'text', text, marks: [{ type: 'code' }] }])
+    expect(session.restore(masked.text ?? '')).toBe(text)
+  })
+
+  it('restores only the masks it generated', () => {
+    const session = createCodeSpanPaddingSession()
+    const unrelated = `${SENTINEL}z${SENTINEL}`
+    expect(session.restore(unrelated)).toBe(unrelated)
   })
 })
 
@@ -77,7 +86,10 @@ describe('code span padding round trip', () => {
     [`\`${TAB}x${TAB}\``],
     [`\`${NBSP}x${NBSP}\``],
     [`a literal ${String.fromCharCode(0xe000)} in prose`],
-    [`a literal ${SENTINEL} in prose`]
+    [`a literal ${SENTINEL} in prose`],
+    [`\`${SENTINEL}x${SENTINEL}\``],
+    [`\`a${SENTINEL}b${SENTINEL}c\``],
+    [`\`${SENTINEL}${SENTINEL}\``]
   ])('preserves %j', (source) => {
     expect(roundTrip(source)).toBe(source)
   })

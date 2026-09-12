@@ -107,5 +107,5 @@ export const RichMarkdownEscape = Mark.create({
 /** Puts each escape's backslashes back into the text the walk renders. */
 export const RichMarkdownEscapeSources = createMarkBoundaryWalkExtension({
   name: 'richMarkdownEscapeSources',
-  rewriteNodes: expandEscapeSources
+  createSession: () => ({ mask: expandEscapeSources, restore: (markdown) => markdown })
 })
