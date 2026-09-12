@@ -12,6 +12,7 @@ import type { AgentAwakeApi, AgentStatusApi, AgentTrustApi } from './api/agent-s
 import type {
   ClaudeUsageApi,
   CodexUsageApi,
+  KimiUsageApi,
   OpenCodeUsageApi,
   RateLimitsApi
 } from './api/agent-usage-api'
@@ -131,6 +132,7 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  kimiUsage: KimiUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
@@ -152,7 +154,12 @@ export type PreloadApi = {
   speech: SpeechApi
 }
 
-export type { ClaudeUsageApi, CodexUsageApi, OpenCodeUsageApi } from './api/agent-usage-api'
+export type {
+  ClaudeUsageApi,
+  CodexUsageApi,
+  KimiUsageApi,
+  OpenCodeUsageApi
+} from './api/agent-usage-api'
 export type { AiVaultApi } from './api/ai-vault-api'
 export type { AutomationsApi, ExternalAutomationManagerResult } from './api/automation-api'
 export type { AppApi } from './api/app-api'
