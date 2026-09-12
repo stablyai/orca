@@ -11,7 +11,10 @@ import { readFirstString } from './agent-hook-listener/interactive-tool'
 import type { AgentHookEventPayload } from './agent-hook-listener/listener-event'
 import { normalizeClaudePromptId } from './agent-hook-listener/listener-limits'
 import type { HookListenerState } from './agent-hook-listener/listener-state'
-import { extractPromptText } from './agent-hook-listener/prompt-fields'
+import {
+  extractPromptText,
+  stripLeadingKimiUserPromptHookResults
+} from './agent-hook-listener/prompt-fields'
 import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
@@ -100,7 +103,10 @@ export function normalizeHookPayload(
   }
 
   const extractedPrompt = extractPromptText(hookPayloadRecord)
-  const promptText = extractedPrompt.text
+  const promptText =
+    source === 'kimi' && eventName === 'UserPromptSubmit'
+      ? stripLeadingKimiUserPromptHookResults(extractedPrompt.text)
+      : extractedPrompt.text
   const dispatched = normalizeProviderEvent({
     state,
     source,

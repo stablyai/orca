@@ -74,6 +74,20 @@ export function extractPromptText(hookPayload: Record<string, unknown>): Extract
   return { text: '', source: null }
 }
 
+const KIMI_USER_PROMPT_HOOK_RESULT_ENVELOPE =
+  /^<hook_result hook_event="UserPromptSubmit">[\s\S]*?<\/hook_result>\s*/
+
+export function stripLeadingKimiUserPromptHookResults(promptText: string): string {
+  let text = promptText
+  let stripped: string
+  do {
+    stripped = text
+    text = text.replace(KIMI_USER_PROMPT_HOOK_RESULT_ENVELOPE, '')
+  } while (text !== stripped)
+  // Why: Kimi appends hook results as user-role envelopes; prompt-derived UI should see only the typed suffix.
+  return text.trim()
+}
+
 export function stripGrokUserQueryWrapper(promptText: string): string {
   const opener = '<user_query>'
   if (!promptText.startsWith(opener)) {
