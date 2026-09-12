@@ -145,6 +145,7 @@ describe('connectPanePty', () => {
   })
 
   afterEach(async () => {
+    vi.useRealTimers()
     await restoreTerminalTestGlobals()
   })
 

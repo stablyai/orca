@@ -113,6 +113,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'dispatch_capability_invalid',
   'agent_unconfigured',
   'worker_prompt_too_large',
+  'agent_not_available',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',
   'request_mismatch',
