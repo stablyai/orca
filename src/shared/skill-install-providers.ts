@@ -1,3 +1,5 @@
+import type { SkillDiscoverySource } from './skills'
+
 /**
  * Agents Orca can place an installed skill for.
  *
@@ -93,6 +95,47 @@ export function skillInstallProvider(
   id: SkillInstallProviderId
 ): SkillInstallProviderDefinition | undefined {
   return PROVIDERS_BY_ID.get(id)
+}
+
+const SKILL_INSTALL_PROVIDER_ALIASES: Readonly<Record<string, SkillInstallProviderId>> = {
+  'claude-agent-teams': 'claude',
+  openclaude: 'claude'
+}
+
+/** Resolve a detected agent to the provider registry entry that owns its roots. */
+export function skillInstallProviderIdForAgent(value: string): SkillInstallProviderId | null {
+  if (isSkillInstallProviderId(value)) {
+    return value
+  }
+  return SKILL_INSTALL_PROVIDER_ALIASES[value] ?? null
+}
+
+/**
+ * Whether a discovered source is readable by an agent at its scan scope.
+ * Shared canonical roots are only visible where the registry says the provider
+ * reads that scope; owned roots remain limited to their owner (and aliases).
+ */
+export function isSkillSourceVisibleToAgent(
+  agent: string,
+  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>
+): boolean {
+  const providerId = skillInstallProviderIdForAgent(agent)
+  const sourceOwner = source.owner
+  if (sourceOwner !== null) {
+    return sourceOwner === agent || sourceOwner === providerId
+  }
+
+  const provider = providerId ? skillInstallProvider(providerId) : undefined
+  if (!provider) {
+    return false
+  }
+  if (source.sourceKind === 'home') {
+    return provider.globalSegments === null
+  }
+  if (source.sourceKind === 'repo') {
+    return provider.workspaceSegments === null
+  }
+  return false
 }
 
 /** Detected agents Orca can actually place skills for, in registry order. */
