@@ -1,4 +1,5 @@
 import { listAutomationRunsForTarget } from '@/components/automations/automation-host-client'
+import { expandProjectFolderOnAutomationRun } from '@/components/automations/automation-run-actions'
 import { translate } from '@/i18n/i18n'
 import { submitPromptToAgentPty } from '@/lib/agent-paste-draft'
 import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-session'
@@ -83,6 +84,10 @@ export async function handleAutomationDispatchRequest({
     if (!worktree) {
       return
     }
+    expandProjectFolderOnAutomationRun(
+      worktree.id,
+      worktree.hostId ?? run.runContext?.hostId ?? automation.runContext?.hostId
+    )
     const completion = createAutomationDispatchCompletion({
       run,
       worktree,

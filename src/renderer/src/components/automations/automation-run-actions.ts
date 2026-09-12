@@ -1,5 +1,10 @@
 import { toast } from 'sonner'
 import type { AutomationRun } from '../../../../shared/automations-types'
+import {
+  getSettingsFocusedExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { getFolderWorkspaceRevealGroupKeys } from '../sidebar/worktree-list/navigation/folder-reveal'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { getAutomationTargetAvailability } from './automation-target-availability'
@@ -8,6 +13,50 @@ import { dispatchAutomationRunNow } from './automation-row-action-dispatch'
 import { waitForAutomationRerunPendingVisibility } from './automation-run-view-state'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
+
+/**
+ * Why: #20113 — Reveal the workspace's ancestor project groups when an automation run starts,
+ * so work happening in a collapsed folder is visible to the user without scrolling or stealing focus.
+ */
+export function expandProjectFolderOnAutomationRun(
+  workspaceId: string | null | undefined,
+  executionHostId?: ExecutionHostId | null
+): void {
+  if (!workspaceId) {
+    return
+  }
+  try {
+    const store = useAppStore.getState()
+    if (store.settings?.expandProjectFolderOnAutomationRun === false) {
+      return
+    }
+    const worktrees =
+      typeof store.allWorktrees === 'function'
+        ? store.allWorktrees()
+        : Object.values(store.worktreesByRepo ?? {}).flat()
+    const repoMap = new Map((store.repos ?? []).map((r) => [r.id, r]))
+    const defaultHostId = getSettingsFocusedExecutionHostId(store.settings)
+
+    const keys = getFolderWorkspaceRevealGroupKeys(
+      workspaceId,
+      store.folderWorkspaces ?? [],
+      store.projectGroups ?? [],
+      {
+        groupBy: store.groupBy,
+        workspaceStatuses: store.workspaceStatuses,
+        defaultHostId,
+        worktrees,
+        repoMap,
+        executionHostId
+      }
+    )
+    if (keys.length > 0) {
+      store.uncollapseSidebarGroups?.(keys)
+    }
+  } catch (error) {
+    console.warn('[automations] failed to expand project folder on run start:', error)
+  }
+}
 
 /** Run-now/rerun handlers keyed by the selected row's captured host. */
 export function createAutomationRunActions({
@@ -62,6 +111,10 @@ export function createAutomationRunActions({
     if (!result.ok) {
       return
     }
+    expandProjectFolderOnAutomationRun(
+      row.automation.workspaceId,
+      workspace?.hostId ?? row.automation.runContext?.hostId
+    )
     useAppStore.getState().recordFeatureInteraction('automation-run')
     invalidateRowHost(row.key, 'run')
     await pageRefresh.hydratePersistedUIState()
@@ -76,6 +129,11 @@ export function createAutomationRunActions({
     if (rerunRunIdsInFlightRef.current.has(runId)) {
       return
     }
+    const repo = repoForRow(row) ?? null
+    const targetWorkspaceId = run.workspaceId ?? row.automation.workspaceId
+    const workspace = targetWorkspaceId
+      ? (worktreeForRow(row, repo ?? undefined, targetWorkspaceId) ?? null)
+      : null
     const pendingStartedAt = Date.now()
     rerunRunIdsInFlightRef.current.add(runId)
     setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
@@ -90,6 +148,10 @@ export function createAutomationRunActions({
         await pageRefresh.refresh()
         return
       }
+      expandProjectFolderOnAutomationRun(
+        targetWorkspaceId,
+        workspace?.hostId ?? row.automation.runContext?.hostId
+      )
       invalidateRowHost(row.key, 'run')
       await pageRefresh.hydratePersistedUIState()
       await pageRefresh.refresh()

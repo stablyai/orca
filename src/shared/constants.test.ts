@@ -18,6 +18,10 @@ describe('getDefaultSettings', () => {
   it('enables gitignored file decorations by default', () => {
     expect(getDefaultSettings('/tmp').showGitIgnoredFiles).toBe(true)
   })
+  it('expands project folder on automation run by default', () => {
+    expect(getDefaultSettings('/tmp').expandProjectFolderOnAutomationRun).toBe(true)
+  })
+
 
   it('uses list view for Source Control changes by default', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')

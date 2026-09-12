@@ -487,6 +487,30 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
   })
 
+  it('uncollapses specified sidebar groups and persists the result (#20113)', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ collapsedGroups: new Set(['group-1', 'group-2', 'group-3']) })
+    store.getState().uncollapseSidebarGroups(['group-1', 'group-2'])
+
+    expect([...store.getState().collapsedGroups]).toEqual(['group-3'])
+    expect(setUI).toHaveBeenCalledWith({ collapsedGroups: ['group-3'] })
+  })
+
+  it('no-ops when uncollapsing groups that are already expanded (#20113)', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ collapsedGroups: new Set(['group-3']) })
+    store.getState().uncollapseSidebarGroups(['group-1', 'group-2'])
+
+    expect([...store.getState().collapsedGroups]).toEqual(['group-3'])
+    expect(setUI).not.toHaveBeenCalled()
+  })
+
   it('hydrates persisted per-worktree dotfile visibility', () => {
     const store = createUIStore()
 

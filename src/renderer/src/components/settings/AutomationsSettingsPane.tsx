@@ -32,6 +32,23 @@ export function AutomationsSettingsPane({
           })
         }
       />
+      <SettingsSwitchRow
+        label={translate(
+          'auto.components.settings.automations.expandProjectFolderOnAutomationRun',
+          'Expand the project when a run starts'
+        )}
+        description={translate(
+          'auto.components.settings.automations.expandProjectFolderOnAutomationRunDescription',
+          'Open the collapsed project folder that holds the workspace for this run. The sidebar does not scroll.'
+        )}
+        checked={settings.expandProjectFolderOnAutomationRun !== false}
+        onChange={() =>
+          void updateSettings({
+            expandProjectFolderOnAutomationRun:
+              settings.expandProjectFolderOnAutomationRun === false
+          })
+        }
+      />
       <section className="space-y-4 py-5">
         <div className="space-y-1">
           <h3 className="text-sm font-medium">
