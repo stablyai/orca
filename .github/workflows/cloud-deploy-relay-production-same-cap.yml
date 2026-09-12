@@ -26,13 +26,13 @@ on:
         required: true
         default: '1'
         type: choice
-        options: ['0', '1']
+        options: ['0', '1', '3']
       rollback-rehome-protocol:
         description: Exact rollback regional-rehome protocol
         required: true
         default: '0'
         type: choice
-        options: ['0', '1']
+        options: ['0', '1', '3']
       expected-selector-generation:
         description: Exact selector generation before the first cell
         required: true
