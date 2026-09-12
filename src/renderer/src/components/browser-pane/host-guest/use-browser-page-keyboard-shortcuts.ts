@@ -2,7 +2,11 @@ import { useEffect, type MutableRefObject } from 'react'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings'
-import { isEditableKeyboardTarget } from './browser-keyboard'
+import {
+  hasHostTextSelection,
+  isEditableKeyboardTarget,
+  isNativeCopyChord
+} from './browser-keyboard'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
 import type { GrabIntent } from '../describe-page/browser-page-types'
 
@@ -63,6 +67,13 @@ export function useBrowserPageKeyboardShortcuts({
         !markupIsActive &&
         keybindingMatchesAction('browser.grabElement', e, shortcutPlatform, keybindings)
       ) {
+        // Why: a live selection in the host document means the user is copying prose — chat
+        // transcript rows are plain elements no editable-host selector can cover, and this listener
+        // is gated on the pane being active rather than focused, so it would otherwise eat their
+        // copy. Scoped to the copy chord so a rebound grab shortcut still fires with text selected.
+        if (isNativeCopyChord(e, shortcutPlatform) && hasHostTextSelection()) {
+          return
+        }
         e.preventDefault()
         startGrabIntent('copy')
       }
