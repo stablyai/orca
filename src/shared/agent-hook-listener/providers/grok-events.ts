@@ -51,7 +51,7 @@ export function normalizeGrokEvent(
     stateName = 'working'
   } else if (isUserInputPreTool) {
     stateName = 'waiting'
-  } else if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure')) {
+  } else if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure', 'stop_cancelled')) {
     stateName = 'done'
   } else if (
     isGrokEvent(eventName, 'notification') &&
@@ -69,7 +69,7 @@ export function normalizeGrokEvent(
     stateName = 'waiting'
   } else if (
     isGrokEvent(eventName, 'notification') &&
-    isGrokIdleNotification(notificationMessage)
+    isGrokIdleNotification(notificationType, notificationMessage)
   ) {
     stateName = 'done'
   }

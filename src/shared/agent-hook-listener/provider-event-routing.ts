@@ -20,7 +20,15 @@ import { isGrokEvent } from './provider-event-names'
 import { extractGrokToolFields } from './providers/grok-tool-fields'
 import { extractHermesToolFields } from './providers/hermes-tool-fields'
 
-export function isGrokIdleNotification(message: string | undefined): boolean {
+export function isGrokIdleNotification(
+  notificationType: string | undefined,
+  message: string | undefined
+): boolean {
+  // Why (#15225): Grok 1.0+ documents idle_prompt / task_complete as the official
+  // idle types. Message-text matching is a leftover from earlier Build TUI copy.
+  if (isGrokEvent(notificationType, 'idle_prompt', 'task_complete')) {
+    return true
+  }
   if (!message) {
     return false
   }
