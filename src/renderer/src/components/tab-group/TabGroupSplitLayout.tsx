@@ -316,7 +316,7 @@ export default function TabGroupSplitLayout({
           ref={dragSplit.setDragRootNode}
           className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
         >
-          <div className="h-[4px] shrink-0 bg-card" data-terminal-focus-release-surface="true" />
+          <div className="h-[4px] shrink-0 bg-card" data-window-drag-strip="true" />
           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
             <SplitNode
               node={layout}
