@@ -96,7 +96,8 @@ export function buildAgentStatusLiveEntry(
         state: existing.state,
         prompt: existing.prompt,
         startedAt: existing.stateStartedAt,
-        interrupted: existing.interrupted
+        interrupted: existing.interrupted,
+        providerSession: existing.providerSession
       }
     ]
     if (history.length > AGENT_STATE_HISTORY_MAX) {
