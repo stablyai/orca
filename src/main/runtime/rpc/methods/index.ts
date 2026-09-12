@@ -16,6 +16,7 @@ import { NOTIFICATION_METHODS } from './notifications'
 import { STATS_METHODS } from './stats'
 import { DIAGNOSTICS_METHODS } from './diagnostics'
 import { ACCOUNT_METHODS } from './accounts'
+import { RESOURCE_METHODS } from './resource'
 import { PREFLIGHT_METHODS } from './preflight'
 import { COMPUTER_METHODS } from './computer'
 import { SESSION_TAB_METHODS } from './session-tabs'
@@ -72,6 +73,7 @@ export const ALL_RPC_METHODS = [
   ...STATS_METHODS,
   ...DIAGNOSTICS_METHODS,
   ...ACCOUNT_METHODS,
+  ...RESOURCE_METHODS,
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,
   ...SESSION_TAB_METHODS,

@@ -33,6 +33,21 @@ Rows without live numbers show a short status instead: **Loading usage…**, **n
 
 On the companion app, open the host **Accounts** screen for the same switcher/usage readout. When Codex has earned **rate-limit reset** credits, spend one from that screen (see [Mobile companion](/docs/mobile)).
 
+## Machine-readable evidence (`orca resource status`)
+
+For automation and external orchestration, `orca resource status --json` prints the same normalized usage state the status bar renders, as a stable JSON contract with **no account identity, credentials, or raw provider payloads**:
+
+```bash
+orca resource status --json
+orca resource status --json --refresh
+```
+
+Each provider carries `status`, `available` (`true` only when the fetch succeeded **and** at least one window is present — a fetch that succeeded with no windows is `available: false` with `status: "ok"`), `source_updated_at` (when the provider data was last refreshed), `data_age_ms`, `rate_limited` / `retry_at`, and a `windows` list.
+
+Each window has a stable `scope` — `session`, `weekly`, `fableWeekly`, `monthly`, or `bucket` — that identifies the underlying quota (so `weekly` and `fableWeekly`, both 7‑day `BUDGET` windows, stay distinct); `role` (`BURST` / `BUDGET` / `UNKNOWN`) is only the generic capacity horizon. Do not use array position as identity. It also has `window_minutes`, `remaining_ratio` (with `remaining_ratio_granularity` — the source is integer percent, so `0.01`), `reset_at`, `reset_at_source` (always `"unknown"`: the state does not record whether a reset time was reported by the provider directly or derived), and `pool` (the model name) for `bucket` windows.
+
+Without `--refresh` the command returns the cached poll snapshot. `--refresh` runs the existing stale-aware provider fetch first; the poll throttle and any `Retry-After` still apply. The command is read-only and never selects accounts or changes credentials. Orca reports the evidence and its timestamps; it applies no freshness or routing policy of its own.
+
 ## Estimated cost (Stats)
 
 The Stats breakdown may show **estimated cost** for known model families (including Claude 5-class and Codex GPT-5.6 rows). Rows marked **• inferred pricing** use Orca’s local price table, not a live bill from the provider. Prefer the provider console for authoritative spend.
