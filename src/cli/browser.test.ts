@@ -35,10 +35,13 @@ vi.mock('./runtime-client', () => {
 })
 
 import { main } from './index'
+import { useOrcaTerminalWorkspaceEnvironment } from './index-test-harness'
 import { RuntimeClientError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 
 describe('orca cli browser page targeting', () => {
+  useOrcaTerminalWorkspaceEnvironment()
+
   beforeEach(() => {
     callMock.mockReset()
   })

@@ -40,9 +40,7 @@ export class RuntimeBrowserCommandsWithBrowserTabCreate extends RuntimeBrowserCo
       clientKind: caller?.clientKind
     })
     const worktree = params.worktree
-      ? params.placement?.kind === 'client'
-        ? await this.host.resolveBrowserWorkspace(params.worktree)
-        : await this.host.resolveWorktreeSelector(params.worktree)
+      ? await this.host.resolveBrowserWorkspace(params.worktree)
       : undefined
     const worktreeId = worktree?.id
     const sessionPartition = browserSessionRegistry.resolveKnownPartition(params.profileId)

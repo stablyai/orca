@@ -93,7 +93,7 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
   ): Promise<string> {
     if (this.graphStatus !== 'ready') {
       const targetWorktreeId = worktreeSelector
-        ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+        ? (await this.resolveWorkspaceSelector(worktreeSelector)).id
         : null
       const snapshots = targetWorktreeId
         ? [this.getMobileSessionTabsForWorktree(targetWorktreeId)]
@@ -128,7 +128,7 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
     this.assertGraphReady()
 
     const targetWorktreeId = worktreeSelector
-      ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+      ? (await this.resolveWorkspaceSelector(worktreeSelector)).id
       : null
 
     // Prefer the tab's activeLeafId — this is the pane the user last focused.

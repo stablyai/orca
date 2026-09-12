@@ -64,7 +64,7 @@ export class RuntimeBrowserCommandsWithBrowserTabClose extends RuntimeBrowserCom
         namedPageId &&
         params.worktree &&
         this.retireGhostBrowserSessionRow(
-          (await this.host.resolveWorktreeSelector(params.worktree)).id,
+          (await this.host.resolveBrowserWorkspace(params.worktree)).id,
           namedPageId
         )
       ) {
@@ -74,7 +74,7 @@ export class RuntimeBrowserCommandsWithBrowserTabClose extends RuntimeBrowserCom
     }
     const worktreeId = explicitPage
       ? params.worktree
-        ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+        ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
         : undefined
       : await this.resolveBrowserWorktreeId(params.worktree)
 

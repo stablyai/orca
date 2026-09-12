@@ -42,7 +42,7 @@ function createCommandsHost(): RuntimeBrowserCommandHost {
     }))
   } as unknown as AgentBrowserBridge
   return {
-    resolveWorktreeSelector: async () => ({ id: 'wt-1' }),
+    resolveBrowserWorkspace: async () => ({ id: 'wt-1' }),
     getAgentBrowserBridge: () => bridge,
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAvailableAuthoritativeWindow: vi.fn(() => null),

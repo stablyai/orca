@@ -81,7 +81,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '',
   'Selectors:',
   '  --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>',
-  '  --worktree <selector>     Worktree selector such as identity:<identity>, id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+  '  --worktree <selector>     Workspace selector such as identity:<identity>, id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, folder:<id> (Folder Workspace), or active/current',
   '  --terminal <handle>       Runtime-issued terminal handle returned by `orca terminal list --json`',
   '  --parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
   '  --no-parent               Force no parent lineage for unrelated worktree creation/update',
