@@ -3,28 +3,16 @@ import type { SessionSearchRequest } from './session-search-engine-types'
 
 export type SessionSearchCursorRejection = 'stale-generation' | 'different-query' | 'malformed'
 
-/**
- * A cursor the engine refuses to honour. Typed, and thrown rather than
- * swallowed: silently restarting at page one hands the caller a page it has
- * already shown as if it were the next one, and silently re-running against a
- * newer index hands it a slice of a list it never saw.
- */
+/** Rejects invalid cursors or any page whose generation changes during its reads. */
 export class SessionSearchCursorError extends Error {
   constructor(
     readonly rejection: SessionSearchCursorRejection,
-    /**
-     * The generation the index is at now. Always present: the engine knows it
-     * before it looks at the cursor at all.
-     */
+    /** The generation observed when rejecting the request. */
     readonly actualGeneration: number,
-    /**
-     * The generation the cursor claims it was minted in. Absent only when the
-     * cursor could not be decoded far enough to carry a number, which is one of
-     * the `malformed` cases.
-     */
+    /** Cursor generation, or the generation at the start of a first-page read. */
     readonly expectedGeneration?: number
   ) {
-    super(`Search cursor rejected: ${rejection}`)
+    super(`Search page rejected: ${rejection}`)
     this.name = 'SessionSearchCursorError'
   }
 }

@@ -158,7 +158,7 @@ export class SessionSearchRetrieval {
   }
 
   /** Bound SQL parameters independently of the configurable candidate limit. */
-  loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
+  private loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
     const rows: SessionRow[] = []
     for (let start = 0; start < ids.length; start += SESSION_ID_BATCH) {
       const batch = ids.slice(start, start + SESSION_ID_BATCH)
