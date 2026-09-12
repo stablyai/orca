@@ -1,3 +1,4 @@
+import { retireRemotePtyIncarnation } from './remote-pty-incarnation-replacement'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 // Why: a restored pane's stale-account prompt can only be raised once a PTY is
@@ -204,7 +205,11 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
     if (!session.canAdoptCapturedDirectSshRetryPty(ptyId)) {
       return
     }
+    const replacedIncarnationId = session.remotePtyIncarnationId
     session.remotePtyIncarnationId = incarnationId ?? null
+    if (replacedIncarnationId && incarnationId && replacedIncarnationId !== incarnationId) {
+      retireRemotePtyIncarnation(session, replacedPtyId, ptyId)
+    }
     // Why: provider handle rotation keeps the existing pane/session generation;
     // replace its stale store identity without fresh-spawn exit semantics.
     session.bindActivePanePty(ptyId, { replacePtyId: replacedPtyId })

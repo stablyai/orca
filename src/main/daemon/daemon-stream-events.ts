@@ -9,6 +9,8 @@ export type DataEvent = {
   sessionId: string
   payload: {
     data: string
+    /** Emitting Session provenance, not an admitted client binding. Absent on older daemons. */
+    incarnationId?: PtyIncarnationId
     seq?: number
     rawLength?: number
     transformed?: boolean
@@ -52,6 +54,7 @@ export type SessionBackgroundMarkerEvent = {
   sessionId: string
   payload: {
     background: boolean
+    incarnationId?: PtyIncarnationId
     scanSeedAnsi?: string
     mode2031PendingSubscribe?: true
   }
@@ -64,7 +67,7 @@ export type DataGapEvent = {
   type: 'event'
   event: 'dataGap'
   sessionId: string
-  payload: { droppedChars: number; sequenceChars?: number }
+  payload: { droppedChars: number; sequenceChars?: number; incarnationId?: PtyIncarnationId }
 }
 
 /** Notification-bearing fact detected by the daemon while it holds scan
@@ -83,7 +86,7 @@ export type TransientFactEvent = {
   type: 'event'
   event: 'transientFact'
   sessionId: string
-  payload: DaemonTransientFact
+  payload: DaemonTransientFact & { incarnationId?: PtyIncarnationId }
 }
 
 export type DaemonEvent =

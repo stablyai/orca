@@ -523,6 +523,10 @@ describe('registerPtyHandlers', () => {
         'daemon output',
         expect.any(Number),
         'daemon output'.length,
+        undefined,
+        undefined,
+        undefined,
+        // No emitting incarnation on this payload, so the runtime keeps the live path.
         undefined
       )
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {

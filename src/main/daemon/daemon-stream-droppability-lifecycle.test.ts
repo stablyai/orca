@@ -18,7 +18,9 @@ type MockSubprocess = SubprocessHandle & {
 
 type DaemonLifecyclePrivate = {
   connections: { clients: Map<string, ConnectedDaemonClient> }
-  host: { getPartialEscapeTailAnsi(sessionId: string): string }
+  host: {
+    getStreamScanState(sessionId: string): { partialEscapeTailAnsi: string; incarnationId?: string }
+  }
   requestRouter: {
     route(clientId: string, request: DaemonRequest): Promise<unknown>
   }
@@ -128,7 +130,7 @@ describe('daemon stream droppability lifecycle', () => {
     const { daemon } = harness
     addClient(daemon)
     daemon.attachments.clientIdBySessionId.set('session-toggle', 'client-1')
-    vi.spyOn(daemon.host, 'getPartialEscapeTailAnsi').mockReturnValue('')
+    vi.spyOn(daemon.host, 'getStreamScanState').mockReturnValue({ partialEscapeTailAnsi: '' })
     const lifecycle: string[] = []
     vi.spyOn(daemon.streamDataBatcher, 'refreshSessionDroppability').mockImplementation(
       (sessionId) => {
@@ -177,7 +179,7 @@ describe('daemon stream droppability lifecycle', () => {
     daemon.attachments.clientIdBySessionId.set('session-toggle', 'client-1')
     daemon.transientFactRelay.setSessionBackground('session-toggle', true)
     daemon.transientFactRelay.onSessionData('session-toggle', '\x1b[?2031h\x1b[?')
-    vi.spyOn(daemon.host, 'getPartialEscapeTailAnsi').mockReturnValue('\x1b[?')
+    vi.spyOn(daemon.host, 'getStreamScanState').mockReturnValue({ partialEscapeTailAnsi: '\x1b[?' })
     const enqueue = vi.spyOn(daemon.streamDataBatcher, 'enqueueControlEvent')
 
     await daemon.requestRouter.route('client-1', {
@@ -227,6 +229,34 @@ describe('daemon stream droppability lifecycle', () => {
     })
 
     expect(lifecycle).toEqual(['refresh:client-1', 'marker:sessionBackgroundMarker'])
+  })
+
+  it('attributes the reattach background marker to the attached session’s incarnation', async () => {
+    const harness = createServerHarness()
+    server = harness.server
+    const { daemon } = harness
+    addClient(daemon)
+    daemon.transientFactRelay.setSessionBackground('session-attach', true)
+    const enqueue = vi.spyOn(daemon.streamDataBatcher, 'enqueueControlEvent')
+
+    await daemon.requestRouter.route('client-1', {
+      id: 'attach',
+      type: 'createOrAttach',
+      payload: { sessionId: 'session-attach', cols: 80, rows: 24 }
+    })
+
+    // The marker hands scan authority for the session this attach just named, so main can scope
+    // it to that source instead of folding it into the pane's accepted source.
+    const incarnationId = daemon.host.getStreamScanState('session-attach').incarnationId
+    expect(incarnationId).toBeTruthy()
+    expect(enqueue).toHaveBeenCalledWith(
+      'client-1',
+      'session-attach',
+      expect.objectContaining({
+        event: 'sessionBackgroundMarker',
+        payload: { background: true, incarnationId }
+      })
+    )
   })
 
   it('invalidates droppable membership for final output held behind a deep socket', async () => {

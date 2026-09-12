@@ -38,6 +38,7 @@ function createSubprocess(shellPath: string): TestSubprocess {
 describe('TerminalHost PTY owner backend', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   let host: TerminalHost
+  let incarnationId: string | undefined
 
   beforeEach(() => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
@@ -57,7 +58,7 @@ describe('TerminalHost PTY owner backend', () => {
   ): Promise<TestSubprocess> {
     const subprocess = createSubprocess(shellPath)
     host = new TerminalHost({ spawnSubprocess: () => subprocess })
-    await host.createOrAttach({
+    const result = await host.createOrAttach({
       sessionId: 'owner-test',
       cols: 80,
       rows: 24,
@@ -66,6 +67,7 @@ describe('TerminalHost PTY owner backend', () => {
         : { shellOverride: 'powershell.exe' }),
       streamClient: { onData, onExit: vi.fn() }
     })
+    incarnationId = result.incarnationId
     return subprocess
   }
 
@@ -82,7 +84,13 @@ describe('TerminalHost PTY owner backend', () => {
     subprocess.emitData('\x1b]10;?\x07')
 
     expect(replyProducers).toEqual([])
-    expect(onData).toHaveBeenCalledWith('', '\x1b]10;?\x07'.length, true, '\x1b]10;?\x07'.length)
+    expect(onData).toHaveBeenCalledWith(
+      '',
+      '\x1b]10;?\x07'.length,
+      true,
+      '\x1b]10;?\x07'.length,
+      incarnationId
+    )
     expect(subprocess.write).not.toHaveBeenCalled()
   })
 

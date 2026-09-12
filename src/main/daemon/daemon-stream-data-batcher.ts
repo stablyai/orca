@@ -192,6 +192,8 @@ export class DaemonStreamDataBatcher {
           ? entry.data.length
           : clampToSafeSplitIndex(entry.data, 0, BULK_WRITE_SLICE_CHARS)
       const slice = entry.data.slice(0, end)
+      const sliceEndSeq =
+        entry.seq === undefined ? undefined : entry.seq - (entry.data.length - end)
       const entrySequenceChars = entry.sequenceChars ?? entry.data.length
       const sliceSequenceChars = entry.transformed
         ? entrySequenceChars
@@ -221,8 +223,9 @@ export class DaemonStreamDataBatcher {
         slice,
         this.maxLineBytes,
         sliceSequenceChars,
-        entry.seq,
-        entry.transformed
+        sliceEndSeq,
+        entry.transformed,
+        entry.incarnationId
       )
       this.onAfterSocketWrite?.()
     }
@@ -309,7 +312,8 @@ export class DaemonStreamDataBatcher {
           this.maxLineBytes,
           entry.sequenceChars ?? entry.data.length,
           entry.seq,
-          entry.transformed
+          entry.transformed,
+          entry.incarnationId
         )
         this.onAfterSocketWrite?.()
       }

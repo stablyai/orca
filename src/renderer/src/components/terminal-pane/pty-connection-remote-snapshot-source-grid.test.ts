@@ -1,11 +1,17 @@
 import type * as React from 'react'
+import { Terminal } from '@xterm/headless'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushAsyncTicks, renderHeadlessBuffer } from './pty-connection-test-async'
+import {
+  flushAsyncTicks,
+  renderHeadlessBuffer,
+  writeHeadlessTerminal
+} from './pty-connection-test-async'
 import { createMockTransport, createPane, createManager } from './pty-connection-test-pane-fixtures'
 import type { ConnectCallbacks, MockTransport } from './pty-connection-test-pane-fixtures'
 import { buildPaneConnectionDeps } from './pty-connection-test-deps'
 import {
   createInitialStoreState,
+  buildReattachPaneTitleState,
   buildActiveRuntimeEnvironmentState
 } from './pty-connection-test-store-fixtures'
 import type { StoreState } from './pty-connection-test-store-state'
@@ -62,7 +68,11 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
-  return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...buildAgentStatusModuleMock(actual),
+    detectAgentStatusFromTitle: actual.detectAgentStatusFromTitle
+  }
 })
 
 vi.mock('./cache-timer-seeding', () => ({
@@ -133,20 +143,32 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
 }
 
-async function connectRemotePane(): Promise<{
+async function connectRemotePane(
+  title?: string,
+  incarnationId: string | null = 'inc-old'
+): Promise<{
   operations: { kind: 'resize' | 'write'; value: string }[]
   pane: ReturnType<typeof createPane>
   transport: MockTransport
+  live: (data: string) => void
+  rebind: (incarnationId?: string | null) => void
   replay: (data: string, meta?: Record<string, unknown>) => void
   dispose: () => void
 }> {
   const { connectPanePty } = await import('./pty-connection')
   mockStoreState = buildActiveRuntimeEnvironmentState(mockStoreState, 'env-1')
+  if (title) {
+    mockStoreState = buildReattachPaneTitleState(mockStoreState, title)
+  }
   const transport = createMockTransport('remote:env-1@@terminal-1')
-  const captured: { current: ConnectCallbacks['onReplayData'] | null } = { current: null }
+  const captured: {
+    current: ConnectCallbacks['onReplayData'] | null
+    live: ConnectCallbacks['onData'] | null
+  } = { current: null, live: null }
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
     captured.current = callbacks.onReplayData ?? null
-    return { id: 'remote:env-1@@terminal-1', replay: '' }
+    captured.live = callbacks.onData ?? null
+    return { id: 'remote:env-1@@terminal-1', replay: '', incarnationId }
   })
   transportFactoryQueue.push(transport)
 
@@ -177,6 +199,15 @@ async function connectRemotePane(): Promise<{
     operations,
     pane,
     transport,
+    live: (data) => captured.live?.(data),
+    rebind: (nextIncarnation) => {
+      const onRebind = createdTransportOptions.at(-1)?.onPtyRebind as (
+        id: string,
+        replacedId: string,
+        incarnationId?: string | null
+      ) => void
+      onRebind('remote:env-1@@terminal-1', 'remote:env-1@@terminal-1', nextIncarnation)
+    },
     replay: (data, meta) => captured.current?.(data, meta as never),
     dispose: () => disposable.dispose()
   }
@@ -195,6 +226,104 @@ describe('pushed remote snapshot replay grid', () => {
 
   afterEach(async () => {
     await restoreTerminalTestGlobals()
+  })
+
+  it.each([
+    { name: 'replacement with shell ownership', owner: 'shell' as const, expectedMouse: 'none' },
+    {
+      name: 'known replacement without ownership',
+      owner: undefined,
+      expectedMouse: 'none',
+      replacement: true
+    },
+    { name: 'unknown legacy ownership', owner: undefined, expectedMouse: 'any' },
+    {
+      name: 'unknown predecessor',
+      owner: undefined,
+      expectedMouse: 'any',
+      replacement: true,
+      unknownPredecessor: true
+    },
+    { name: 'unknown successor', owner: undefined, expectedMouse: 'any', unknownSuccessor: true },
+    {
+      name: 'same-incarnation rebind',
+      owner: undefined,
+      expectedMouse: 'any',
+      sameIncarnation: true
+    },
+    { name: 'surviving agent', owner: undefined, expectedMouse: 'any', liveAgent: true },
+    {
+      name: 'replacement agent',
+      owner: undefined,
+      expectedMouse: 'any',
+      liveAgent: true,
+      replacement: true
+    }
+  ])('reconciles mouse modes for a $name despite a retained Pi title', async (scenario) => {
+    const session = await connectRemotePane(
+      'π - remote-session',
+      scenario.unknownPredecessor ? null : 'inc-old'
+    )
+    const terminal = new Terminal({ cols: PANE_COLS, rows: PANE_ROWS, allowProposedApi: true })
+    const mouseModes = '\x1b[?1003h\x1b[?1006h'
+    const snapshot = scenario.liveAgent ? `${mouseModes}LIVE_AGENT` : 'REPLACEMENT_SHELL$ '
+    try {
+      await writeHeadlessTerminal(terminal, `OLD_AGENT_FRAME${mouseModes}`)
+      expect(terminal.modes.mouseTrackingMode).toBe('any')
+      if (scenario.replacement) {
+        session.rebind('inc-new')
+      }
+      if (scenario.sameIncarnation) {
+        session.rebind('inc-old')
+      }
+      if (scenario.unknownSuccessor) {
+        session.rebind(null)
+      }
+      session.replay(snapshot, {
+        snapshotCols: PANE_COLS,
+        snapshotRows: PANE_ROWS,
+        ...(scenario.owner ? { terminalOwner: scenario.owner, alternateScreen: false } : {})
+      })
+      await flushAsyncTicks(20)
+      const writes = session.operations.filter((operation) => operation.kind === 'write')
+      expect(writes.some((operation) => operation.value.includes(snapshot))).toBe(true)
+      for (const operation of writes) {
+        await writeHeadlessTerminal(terminal, operation.value)
+      }
+      expect(terminal.buffer.active.getLine(0)?.translateToString(true)).toContain(
+        scenario.liveAgent ? 'LIVE_AGENT' : 'REPLACEMENT_SHELL$'
+      )
+      expect(terminal.modes.mouseTrackingMode).toBe(scenario.expectedMouse)
+    } finally {
+      session.dispose()
+      terminal.dispose()
+    }
+  })
+
+  it('grounds a retained invisible pen before painting a replacement shell snapshot', async () => {
+    const session = await connectRemotePane('π - remote-session')
+    const terminal = new Terminal({ cols: PANE_COLS, rows: PANE_ROWS, allowProposedApi: true })
+    try {
+      await writeHeadlessTerminal(terminal, 'OLD_AGENT_FRAME\x1b[8m')
+      session.replay('REPLACEMENT_SHELL$ ', {
+        snapshotCols: PANE_COLS,
+        snapshotRows: PANE_ROWS,
+        terminalOwner: 'shell',
+        alternateScreen: false
+      })
+      await flushAsyncTicks(20)
+      for (const operation of session.operations) {
+        if (operation.kind === 'write') {
+          await writeHeadlessTerminal(terminal, operation.value)
+        }
+      }
+      const line = terminal.buffer.active.getLine(0)
+      expect(line?.translateToString(true)).toContain('REPLACEMENT_SHELL$')
+      expect(line?.getCell(0)?.isInvisible()).toBe(0)
+    } finally {
+      session.dispose()
+      terminal.dispose()
+    }
   })
 
   it('replays at the host grid and then pushes the pane grid back to the PTY', async () => {
@@ -216,6 +345,107 @@ describe('pushed remote snapshot replay grid', () => {
     expect(session.transport.resize).toHaveBeenCalledWith(PANE_COLS, PANE_ROWS)
     expect(session.transport.resize).not.toHaveBeenCalledWith(HOST_COLS, HOST_ROWS)
     session.dispose()
+  })
+
+  it('fits locally after source replay without claiming an unknown remote owner grid', async () => {
+    const { setFitOverride, getFitOverrideForPty } =
+      await import('@/lib/pane-manager/mobile-fit-overrides')
+    const session = await connectRemotePane()
+    const id = 'remote:env-1@@terminal-1'
+    setFitOverride(id, 'remote-desktop-fit', 0, 0)
+    try {
+      session.replay('SHELL$', { snapshotCols: 2, snapshotRows: 1 })
+      await flushAsyncTicks(20)
+      expect(session.pane.terminal.resize).toHaveBeenCalledWith(2, 1)
+      expect(session.pane.terminal.cols).toBe(PANE_COLS)
+      expect(session.pane.terminal.rows).toBe(PANE_ROWS)
+      expect(session.transport.resize).not.toHaveBeenCalled()
+      expect(getFitOverrideForPty(id)).toEqual({ mode: 'remote-desktop-fit', cols: 0, rows: 0 })
+    } finally {
+      setFitOverride(id, 'desktop-fit', 0, 0)
+      session.dispose()
+    }
+  })
+
+  it('retires an in-flight predecessor replay and keeps successor live output for a reused handle', async () => {
+    const session = await connectRemotePane('π - remote-session')
+    const write = session.pane.terminal.write.getMockImplementation()!
+    let finishOldWrite: (() => void) | undefined
+    session.pane.terminal.write.mockImplementation((data: string, callback?: () => void) => {
+      if (data === 'STALE_FRAME') {
+        write(data)
+        finishOldWrite = callback
+      } else {
+        write(data, callback)
+      }
+    })
+    try {
+      session.replay('STALE_FRAME', {
+        snapshotCols: 2,
+        snapshotRows: 1,
+        pendingEscapeTailAnsi: '\x1b[999;'
+      })
+      await flushAsyncTicks(10)
+      expect(finishOldWrite).toBeTypeOf('function')
+      session.live('STALE_ACK')
+      session.rebind('inc-new')
+      session.replay('SUCCESSOR_FRAME', { snapshotCols: 2, snapshotRows: 1 })
+      session.live('LIVE_ACK')
+      finishOldWrite?.()
+      await flushAsyncTicks(30)
+      const writes = session.operations.filter((op) => op.kind === 'write').map((op) => op.value)
+      expect(writes).not.toContain('\x1b[999;')
+      expect(writes.join('')).not.toContain('STALE_ACK')
+      expect(writes.join('')).toContain('LIVE_ACK')
+      // Why findIndex twice: indexOf reports -1 for a frame the write queue coalesced,
+      // which turned the ordering check below into a vacuous pass.
+      const successorWriteIndex = writes.findIndex((data) => data.includes('SUCCESSOR_FRAME'))
+      const liveAckWriteIndex = writes.findIndex((data) => data.includes('LIVE_ACK'))
+      expect(successorWriteIndex).toBeGreaterThanOrEqual(0)
+      expect(liveAckWriteIndex).toBeGreaterThan(successorWriteIndex)
+      expect(session.pane.terminal.cols).toBe(PANE_COLS)
+      expect(session.transport.resize).not.toHaveBeenCalledWith(2, 1)
+    } finally {
+      finishOldWrite?.()
+      session.dispose()
+    }
+  })
+
+  it('stops a predecessor replay whose pane is rebound mid-transaction', async () => {
+    // The predecessor named no incarnation, so the rebind below changes the pane's source
+    // without bumping the payload generation: only the incarnation check can stop the rest of
+    // the payload from being applied to the successor.
+    const session = await connectRemotePane('π - remote-session', null)
+    const write = session.pane.terminal.write.getMockImplementation()!
+    let finishOldWrite: (() => void) | undefined
+    session.pane.terminal.write.mockImplementation((data: string, callback?: () => void) => {
+      if (data === 'STALE_FRAME') {
+        write(data)
+        finishOldWrite = callback
+      } else {
+        write(data, callback)
+      }
+    })
+    try {
+      session.replay('STALE_FRAME', {
+        snapshotCols: 2,
+        snapshotRows: 1,
+        pendingEscapeTailAnsi: '\x1b[999;'
+      })
+      await flushAsyncTicks(10)
+      expect(finishOldWrite).toBeTypeOf('function')
+
+      session.rebind('inc-new')
+      finishOldWrite?.()
+      await flushAsyncTicks(30)
+
+      const writes = session.operations.filter((op) => op.kind === 'write').map((op) => op.value)
+      expect(writes).toContain('STALE_FRAME')
+      expect(writes).not.toContain('\x1b[999;')
+    } finally {
+      finishOldWrite?.()
+      session.dispose()
+    }
   })
 
   it('keeps the pane grid when the host published no snapshot dimensions', async () => {

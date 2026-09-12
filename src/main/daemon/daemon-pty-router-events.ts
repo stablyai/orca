@@ -7,6 +7,8 @@ export type DaemonPtyRouterDataEvent = {
   sequenceChars?: number
   transformed?: boolean
   seq?: number
+  /** Observed source; does not admit or replace the provider binding. */
+  incarnationId?: string
 }
 
 export type DaemonPtyRouterExitEvent = {

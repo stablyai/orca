@@ -42,11 +42,17 @@ export async function getSettledTerminalHostSnapshot(
   return session.getSnapshot(opts)
 }
 
-export function getTerminalHostPartialEscapeTail(session: Session | undefined): string {
+export function getTerminalHostStreamScanState(session: Session | undefined): {
+  partialEscapeTailAnsi: string
+  incarnationId?: string
+} {
   if (!session || !session.isAlive) {
-    return ''
+    return { partialEscapeTailAnsi: '' }
   }
-  return session.getPartialEscapeTailAnsi()
+  return {
+    partialEscapeTailAnsi: session.getLivePartialEscapeTailAnsi(),
+    incarnationId: session.incarnationId
+  }
 }
 
 export function getTerminalHostAppliedSize(

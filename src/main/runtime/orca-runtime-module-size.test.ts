@@ -11,10 +11,12 @@ function runtimeImplementationModuleNames(): string[] {
         name.endsWith('.ts') &&
         !name.includes('.test.') &&
         !name.includes('.spec.') &&
+        // Every `runtime-*` split module, not just the orca-runtime-* ones: the
+        // un-prefixed siblings (runtime-pty-*, runtime-worktree-*, …) carry split
+        // runtime code too, and an extraction into one of them used to escape this gate.
         (name === 'orca-runtime.ts' ||
           name.startsWith('orca-runtime-') ||
-          name.startsWith('runtime-browser-commands-') ||
-          name.startsWith('runtime-file-commands-'))
+          name.startsWith('runtime-'))
     )
     .sort()
 }

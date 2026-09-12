@@ -7,6 +7,10 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import { getPtyExecutionHost } from '../../shared/terminal-execution-host'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { selectRuntimeHookAgentRowForPane } from './runtime-mobile-agent-status-projection'
+import {
+  excludeRetiredPaneEvidenceRows,
+  type RetiredPaneEvidence
+} from './runtime-retired-pane-evidence'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolvePublishedPaneAgentIdentity } from '../../shared/published-pane-agent-identity'
 import type { RuntimeTerminalSummary, RuntimeWorktreePsSummary } from '../../shared/runtime-types'
@@ -88,6 +92,17 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     return hostId ? { executionHostId: hostId } : {}
   }
 
+  /**
+   * The hook-row identity a proven replacement retired for this pane, or null when nothing was
+   * replaced. The durable-retirement mixin owns the record; every other runtime answers null, so
+   * a pane that replaced nothing keeps its hook evidence exactly as before.
+   */
+  protected getRetiredPaneEvidence(_paneKey: string): RetiredPaneEvidence | null {
+    return null
+  }
+
+  /** Hook rows a pane may publish: an identity-only row the host itself retired with a proven
+   *  replacement belongs to the predecessor, so it is never re-attributed to this pane. */
   protected resolvePaneAgentIdentityField(
     launchAgent: TuiAgent | null | undefined,
     foregroundAgent: TuiAgent | null | undefined,
@@ -95,7 +110,12 @@ export class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWith
     paneKey: string | null
   ): { agentIdentity?: TuiAgent } {
     const hookRow = paneKey
-      ? selectRuntimeHookAgentRowForPane(this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [])
+      ? selectRuntimeHookAgentRowForPane(
+          excludeRetiredPaneEvidenceRows(
+            this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [],
+            this.getRetiredPaneEvidence(paneKey)
+          )
+        )
       : null
     const hookAgent = isTuiAgent(hookRow?.agentType) ? hookRow.agentType : null
     const agentIdentity = resolvePublishedPaneAgentIdentity({

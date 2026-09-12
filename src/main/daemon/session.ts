@@ -205,7 +205,7 @@ export class Session {
   }
 
   attachClient(client: Omit<AttachedClient, 'token'>): symbol {
-    return this.output.attachClient(client)
+    return this.output.attachClient(client, this.incarnationId)
   }
 
   detachClient(token: symbol): void {
@@ -226,8 +226,8 @@ export class Session {
     return this.output.getSnapshot(opts)
   }
 
-  getPartialEscapeTailAnsi(): string {
-    return this.output.getPartialEscapeTailAnsi()
+  getLivePartialEscapeTailAnsi(): string {
+    return this.output.getLivePartialEscapeTailAnsi()
   }
 
   getAppliedSize(): { cols: number; rows: number } | null {

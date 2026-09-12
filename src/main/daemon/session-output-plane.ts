@@ -7,6 +7,7 @@ import type { PendingOutputRecord, TakePendingOutputResult, TerminalSnapshot } f
 import type { TerminalOwner } from '../../shared/terminal-owner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
+import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 
 // Why: bounds in-memory pending output when no client drains it; past the cap we drop records and flag
 // overflow so the next take falls back to one full snapshot. UTF-16 units; worst-case wire is ~6x, under NDJSON_MAX_LINE_BYTES (16MB).
@@ -14,7 +15,13 @@ const PENDING_OUTPUT_MAX_BYTES = 2 * 1024 * 1024
 
 export type AttachedClient = {
   token: symbol
-  onData: (data: string, rawLength?: number, transformed?: boolean, seq?: number) => void
+  onData: (
+    data: string,
+    rawLength?: number,
+    transformed?: boolean,
+    seq?: number,
+    incarnationId?: string
+  ) => void
   onExit: (code: number, incarnationId: string, cause?: TerminalExitCause) => void
 }
 
@@ -41,6 +48,7 @@ export class SessionOutputPlane {
   private pendingOutputOverflowed = false
   private pendingOutputSeq = 0
   private _outputSequence = 0
+  private livePartialEscapeTail = ''
   private deviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
   private disposed = false
 
@@ -74,9 +82,15 @@ export class SessionOutputPlane {
     return this.attachedClients.length > 0
   }
 
-  attachClient(client: Omit<AttachedClient, 'token'>): symbol {
+  attachClient(client: Omit<AttachedClient, 'token'>, incarnationId?: string): symbol {
     const token = Symbol('attach')
-    this.attachedClients.push({ token, ...client })
+    // Capture the emitting Session, not the host's replaceable session-ID binding.
+    this.attachedClients.push({
+      token,
+      ...client,
+      onData: (data, rawLength, transformed, seq) =>
+        client.onData(data, rawLength, transformed, seq, incarnationId)
+    })
     return token
   }
 
@@ -158,11 +172,11 @@ export class SessionOutputPlane {
     }
   }
 
-  getPartialEscapeTailAnsi(): string {
+  getLivePartialEscapeTailAnsi(): string {
     if (this.disposed) {
       return ''
     }
-    return this.emulator.partialEscapeTailAnsi
+    return this.livePartialEscapeTail
   }
 
   // Why: returns the size the PTY actually applied (emulator dims) so the renderer can detect a
@@ -186,6 +200,7 @@ export class SessionOutputPlane {
     if (pending.length === 0) {
       return
     }
+    this.livePartialEscapeTail = advancePartialEscapeTail(this.livePartialEscapeTail, pending)
     this.record({ kind: 'output', data: pending })
     for (const client of this.attachedClients) {
       client.onData(pending, 0, true, this._outputSequence)
@@ -202,6 +217,8 @@ export class SessionOutputPlane {
       data = this.deviceAttributesQueryFilter?.accept(data) ?? data
     }
     if (data.length > 0) {
+      // History belongs to the emulator, never to a live scan-authority handoff.
+      this.livePartialEscapeTail = advancePartialEscapeTail(this.livePartialEscapeTail, data)
       this.record({ kind: 'output', data })
     }
 
@@ -269,9 +286,11 @@ export class SessionOutputPlane {
    *  which outlives fd teardown so an already-exited session can still be snapshotted. */
   markDisposed(): void {
     this.disposed = true
+    this.livePartialEscapeTail = ''
   }
 
   disposeEmulator(): void {
+    this.livePartialEscapeTail = ''
     this.emulator.dispose()
   }
 }

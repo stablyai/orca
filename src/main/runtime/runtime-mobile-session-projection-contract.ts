@@ -10,6 +10,7 @@ import type {
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import type { RetiredPaneEvidence } from './runtime-retired-pane-evidence'
 
 export type RuntimeMobileSessionProjectionHost = {
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
@@ -19,6 +20,8 @@ export type RuntimeMobileSessionProjectionHost = {
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
   getStatusSnapshot(): AgentStatusIpcPayload[]
+  /** Evidence a proven replacement retired for this pane; null when the pane replaced nothing. */
+  getRetiredPaneEvidence(paneKey: string): RetiredPaneEvidence | null
   getLeafKey(tabId: string, leafId: string): string
   findPty(
     worktreeId: string,

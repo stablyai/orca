@@ -140,7 +140,10 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
         pty.wslDistro = null
       }
       if (replacesExistingRuntimeGeneration && postSpawnSequence === 0) {
-        this.resetTrackedTerminalStateForProviderGeneration(ptyId)
+        // Why deferred: postSpawnSequence is not source proof. While a spawn's
+        // observation admission is pending, the automatic half of this reset runs
+        // at promotion instead, after binding persistence and final registration.
+        this.deferTrackedTerminalStateResetForProviderGeneration(ptyId)
       }
     }
 

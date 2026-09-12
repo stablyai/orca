@@ -148,6 +148,18 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
+    if (preservesAbnormalSshSurface) {
+      // Why: relay loss is not process death. This pane keeps the predecessor's retained
+      // scrollback through the reconnect grace, so the fence that stops that scrollback seeding
+      // this incarnation's identity survives the teardown too — and so does the pane's retired-row
+      // fence, or the predecessor remnant would re-project onto the unconfirmed successor.
+      this.disposePtyObservationState(ptyId, {
+        preserveRestoreSeedFence: true,
+        preserveRetiredPaneEvidence: true
+      })
+    } else {
+      this.disposePtyObservationState(ptyId)
+    }
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.terminalCwdByPtyId.delete(ptyId)
