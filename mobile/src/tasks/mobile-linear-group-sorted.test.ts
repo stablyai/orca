@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LinearIssue } from './mobile-tasks-provider-detail-types'
 import {
-  compareLinearIssues,
+  sortLinearIssues,
   groupLinearIssues,
   groupSortedLinearIssues
 } from './mobile-tasks-reviewer-linear'
@@ -27,7 +27,7 @@ describe('mobile Linear grouping of sorted issues', () => {
   it.each(['updated', 'identifier', 'priority'] as const)(
     'preserves %s ordering, ties and group metadata',
     (order) => {
-      const sorted = Object.freeze([...issues].sort((a, b) => compareLinearIssues(a, b, order)))
+      const sorted = Object.freeze(sortLinearIssues(issues, order))
       for (const group of ['none', 'status', 'assignee', 'team', 'priority'] as const) {
         const expected = groupLinearIssues([...sorted], group, order)
         const actual = groupSortedLinearIssues(sorted, group)
@@ -43,7 +43,7 @@ describe('mobile Linear grouping of sorted issues', () => {
   )
 
   it('does no date parsing or collation after ordering has been established', () => {
-    const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, 'updated'))
+    const sorted = sortLinearIssues(issues, 'updated')
     const parse = vi.spyOn(Date, 'parse')
     const compare = vi.spyOn(String.prototype, 'localeCompare')
     groupSortedLinearIssues(sorted, 'none')

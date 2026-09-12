@@ -15,7 +15,7 @@ import {
   type LinearListEntry,
   PR_PRESETS,
   type TaskItem,
-  compareLinearIssues,
+  sortLinearIssues,
   groupSortedLinearIssues
 } from './mobile-tasks-legacy-foundation'
 
@@ -122,12 +122,14 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
   ])
   const linearIssuesForView = useMemo(
     () =>
-      items
-        .filter(
-          (item): item is Extract<TaskItem, { provider: 'linear' }> => item.provider === 'linear'
-        )
-        .map((item) => item.source)
-        .sort((a, b) => compareLinearIssues(a, b, linearOrderBy)),
+      sortLinearIssues(
+        items
+          .filter(
+            (item): item is Extract<TaskItem, { provider: 'linear' }> => item.provider === 'linear'
+          )
+          .map((item) => item.source),
+        linearOrderBy
+      ),
     [items, linearOrderBy]
   )
   const linearIssueSections = useMemo(

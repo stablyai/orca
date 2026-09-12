@@ -8,7 +8,9 @@ import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedu
 
 const baseline = process.argv[2]
 if (!baseline) {
-  throw new Error('Usage: node config/scripts/mobile-linear-sort-benchmark.mjs <baseline-ref>')
+  throw new Error(
+    'Usage: node config/scripts/mobile-linear-group-sorted-benchmark.mjs <baseline-ref>'
+  )
 }
 async function load(file, contents) {
   const result = await build({

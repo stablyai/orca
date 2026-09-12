@@ -12,7 +12,7 @@ import {
   LINEAR_LIMIT,
   type TaskItem,
   buildPartialRepositoryNotice,
-  compareLinearIssues,
+  sortLinearIssues,
   createGitLabTask,
   createGitLabTodoTask,
   createLinearTask,
@@ -228,7 +228,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
             selectedLinearTeamIds.size > 0
               ? issues.filter((issue) => selectedLinearTeamIds.has(issue.team.id))
               : issues
-          const sorted = [...filtered].sort((a, b) => compareLinearIssues(a, b, linearOrderBy))
+          const sorted = sortLinearIssues(filtered, linearOrderBy)
           if (!isCurrent()) {
             return
           }
