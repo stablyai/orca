@@ -9,7 +9,7 @@ import { Table } from '@tiptap/extension-table'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import { TableRow } from '@tiptap/extension-table-row'
-import { BlockMath, InlineMath } from '@tiptap/extension-mathematics'
+import { BlockMath } from '@tiptap/extension-mathematics'
 import { Markdown } from '@tiptap/markdown'
 import { createLowlight, common } from 'lowlight'
 import {
@@ -37,7 +37,12 @@ import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLink } from './rich-markdown-html-superscript-link'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
+import { RichMarkdownCodeSpanPadding } from './rich-markdown-code-span-padding'
+import { RichMarkdownEscape, RichMarkdownEscapeSources } from './rich-markdown-escape'
+import { RichMarkdownInlineMath } from './rich-markdown-inline-math'
+import { RichMarkdownListItem } from './rich-markdown-list-item'
 import { RichMarkdownParagraph } from './rich-markdown-paragraph'
+import { RichMarkdownProseEntities } from './rich-markdown-prose-entities'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
@@ -53,7 +58,11 @@ const RichMarkdownLink = Link.extend({
 const RichMarkdownCode = Code.extend({
   // Why: Markdown supports linked code labels, so code cannot exclude the link
   // mark even though it should still stay exclusive with emphasis marks.
-  excludes: 'code bold italic strike underline'
+  excludes: 'code bold italic strike underline',
+  // Why: ProseMirror ranks a text node's marks by schema order, which Tiptap takes
+  // from priority; code must outrank emphasis so **`x`** serializes with the
+  // asterisks outside the backticks.
+  priority: 200
 })
 
 export function createRichMarkdownExtensions({
@@ -78,9 +87,11 @@ export function createRichMarkdownExtensions({
       link: false,
       code: false,
       codeBlock: false,
+      listItem: false,
       orderedList: false,
       paragraph: false
     }),
+    RichMarkdownListItem,
     RichMarkdownParagraph,
     RichMarkdownCode,
     RichMarkdownCodeBlockLowlight.extend({
@@ -230,7 +241,7 @@ export function createRichMarkdownExtensions({
     TableRow,
     TableHeader,
     TableCell,
-    InlineMath.configure({
+    RichMarkdownInlineMath.configure({
       katexOptions: {
         throwOnError: false
       }
@@ -255,6 +266,10 @@ export function createRichMarkdownExtensions({
         gfm: true
       }
     }),
+    RichMarkdownProseEntities,
+    RichMarkdownCodeSpanPadding,
+    RichMarkdownEscape,
+    RichMarkdownEscapeSources,
     createRichMarkdownAnnotationHighlightExtension()
   ]
 
