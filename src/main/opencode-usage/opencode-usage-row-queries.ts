@@ -53,6 +53,11 @@ function getAssistantSessionMessageCount(db: Database.Database): number {
   return row?.count ?? 0
 }
 
+// Why: tokens_cache_write arrived after the other counters; older DBs lack it.
+function getSessionCacheWriteColumn(db: Database.Database, alias = ''): string {
+  return columnExists(db, 'session', 'tokens_cache_write') ? `${alias}tokens_cache_write` : '0'
+}
+
 function canReadSessionUsageRows(db: Database.Database): boolean {
   if (!tableExists(db, 'session')) {
     return false
@@ -66,11 +71,12 @@ function getSessionUsageRowCount(db: Database.Database): number {
   if (!canReadSessionUsageRows(db)) {
     return 0
   }
+  const cacheWrite = getSessionCacheWriteColumn(db)
   const row = db
     .prepare(
       `SELECT COUNT(*) AS count
        FROM session
-       WHERE tokens_input + tokens_output + tokens_reasoning + tokens_cache_read > 0`
+       WHERE tokens_input + tokens_output + tokens_reasoning + tokens_cache_read + ${cacheWrite} > 0`
     )
     .get() as { count?: number } | undefined
   return row?.count ?? 0
@@ -79,18 +85,16 @@ function getSessionUsageRowCount(db: Database.Database): number {
 function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
   const projectJoin = getProjectJoin(db)
   const sessionModelSelect = getSessionModelSelect(db)
-  const cacheWriteSelect = columnExists(db, 'session', 'tokens_cache_write')
-    ? 's.tokens_cache_write'
-    : '0 AS tokens_cache_write'
+  const cacheWrite = getSessionCacheWriteColumn(db, 's.')
   const rows = db
     .prepare(
       `SELECT s.id, s.id AS session_id, s.time_created, s.time_updated,
               s.directory, s.title, p.worktree, ${sessionModelSelect},
               s.cost, s.tokens_input, s.tokens_output, s.tokens_reasoning, s.tokens_cache_read,
-              ${cacheWriteSelect}
+              ${cacheWrite} AS tokens_cache_write
        FROM session s
        ${projectJoin}
-       WHERE s.tokens_input + s.tokens_output + s.tokens_reasoning + s.tokens_cache_read > 0
+       WHERE s.tokens_input + s.tokens_output + s.tokens_reasoning + s.tokens_cache_read + ${cacheWrite} > 0
        ORDER BY s.time_created, s.id`
     )
     .all() as OpenCodeSessionUsageRow[]

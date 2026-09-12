@@ -337,6 +337,53 @@ describe('parseOpenCodeUsageDatabase', () => {
     })
   })
 
+  it('counts a materialized session whose only usage is cache writes', async () => {
+    const { db, path } = createTempDb()
+    db.exec(`
+      CREATE TABLE session (
+        id TEXT PRIMARY KEY,
+        directory TEXT,
+        title TEXT,
+        time_created INTEGER,
+        time_updated INTEGER,
+        cost REAL,
+        tokens_input INTEGER,
+        tokens_output INTEGER,
+        tokens_reasoning INTEGER,
+        tokens_cache_read INTEGER,
+        tokens_cache_write INTEGER
+      );
+    `)
+    db.prepare(
+      `INSERT INTO session (
+        id, directory, title, time_created, time_updated, cost,
+        tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      'session-1',
+      WORKTREE,
+      'Session',
+      1_777_777_700_000,
+      1_777_777_800_000,
+      0,
+      0,
+      0,
+      0,
+      0,
+      2_313
+    )
+    db.close()
+
+    const parsed = await parseOpenCodeUsageDatabase(path, worktrees())
+
+    expect(parsed.sessions).toHaveLength(1)
+    expect(parsed.sessions[0]).toMatchObject({
+      totalInputTokens: 2_313,
+      totalCachedInputTokens: 2_313,
+      totalTokens: 2_313
+    })
+  })
+
   it('counts materialized session totals the same as the per-message rows they summarize', async () => {
     // Real OpenCode shape: `input` is uncached, cache hits dominate, `total` sums everything.
     const tokens = {
