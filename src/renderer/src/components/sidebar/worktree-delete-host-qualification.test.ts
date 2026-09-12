@@ -65,6 +65,7 @@ vi.mock('./delete-worktree-failure-toast', () => ({
   showDeleteWorktreeFailureToast: vi.fn()
 }))
 
+import { toast } from 'sonner'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import { runWorktreeDelete, runWorktreeDeletesInParallel } from './delete-worktree-flow'
 
@@ -234,6 +235,33 @@ describe('STA-4343 sidebar delete: the confirmed row decides the host', () => {
     expect(fs.existsSync(local.markerPath)).toBe(false)
     expect(fs.existsSync(ssh.markerPath)).toBe(true)
     expect(showDeleteWorktreeFailureToast).not.toHaveBeenCalled()
+  })
+
+  it('does not delete either checkout when two hosts share an id and no host is named', async () => {
+    const local = createHostCheckout(LOCAL_HOST)
+    const ssh = createHostCheckout(SSH_HOST)
+    const routedHostIds: string[] = []
+    installRemovalTransports(
+      { remove: mockApi.worktrees.remove, runtimeCall: runtimeEnvironmentCall },
+      { [LOCAL_HOST]: local.root, [SSH_HOST]: ssh.root },
+      routedHostIds
+    )
+    const store = storeRef.current as ReturnType<typeof createTestStore>
+    seedCollidingSidebar(store, SSH_HOST)
+
+    runWorktreeDelete(WORKTREE_ID)
+    await vi.waitFor(() => expect(toast.info).toHaveBeenCalled())
+
+    expect(fs.existsSync(local.markerPath), 'the local checkout must survive').toBe(true)
+    expect(fs.existsSync(ssh.markerPath), 'the SSH checkout must survive').toBe(true)
+    expect(routedHostIds).toEqual([])
+    expect(toast.info).toHaveBeenCalledWith(
+      'Workspace list changed',
+      expect.objectContaining({
+        description: 'Refresh Space and try again if the workspace list looks stale.'
+      })
+    )
+    expect(store.getState().worktreesByRepo.repo1).toHaveLength(2)
   })
 
   it('still deletes an ordinary single-host SSH workspace for real', async () => {
