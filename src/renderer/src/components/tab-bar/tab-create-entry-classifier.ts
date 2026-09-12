@@ -1,4 +1,8 @@
-import { getPreparedQuickOpenFiles, isQuickOpenQueryTooLarge } from '../quick-open-search'
+import {
+  getPreparedQuickOpenFiles,
+  isQuickOpenQueryTermLimitExceeded,
+  isQuickOpenQueryTooLarge
+} from '../quick-open-search'
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { translate } from '@/i18n/i18n'
 import { getTabEntryOmniboxPlaceholder } from './tab-create-entry-copy'
@@ -187,6 +191,18 @@ export function getTabEntryOptions(
     return explicitUrl.kind === 'blocked'
       ? [blockedOption('invalid-url', explicitUrl.message)]
       : toOptions([explicitUrl], limit)
+  }
+
+  if (isQuickOpenQueryTermLimitExceeded(trimmed)) {
+    return [
+      blockedOption(
+        'query-too-large',
+        translate(
+          'auto.components.tab.bar.tab.create.entry.classifier.queryTooLarge',
+          'Search text is too large.'
+        )
+      )
+    ]
   }
 
   const hostUrl = classifyHostUrl(trimmed)
