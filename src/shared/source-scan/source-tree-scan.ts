@@ -46,16 +46,18 @@ export function scanSourceTree(
   const extensions = options.extensions ?? /\.tsx?$/
   const found: ScannedFile[] = []
   const visit = (directory: string): void => {
-    for (const entry of readdirSync(directory)) {
-      if (IGNORED_DIRECTORIES.has(entry) || entry.startsWith('.') || entry === '__fixtures__') {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const name = entry.name
+      if (IGNORED_DIRECTORIES.has(name) || name.startsWith('.') || name === '__fixtures__') {
         continue
       }
-      const path = join(directory, entry)
-      if (statSync(path).isDirectory()) {
+      const path = join(directory, name)
+      // Preserve link traversal; ordinary entries already carry their type from readdir.
+      if (entry.isSymbolicLink() ? statSync(path).isDirectory() : entry.isDirectory()) {
         visit(path)
         continue
       }
-      if (!extensions.test(entry)) {
+      if (!extensions.test(name)) {
         continue
       }
       const relativePath = relative(root, path).replace(/\\/g, '/')
