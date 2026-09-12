@@ -80,6 +80,29 @@ describe('detectCsvDelimiter', () => {
     expect(detectCsvDelimiter('data.csv', 'a,b,c\n1,2,3')).toBe(',')
   })
 
+  it('sniffs semicolon exports that use commas as the decimal mark', () => {
+    const content = 'amount;label\n1,50;"Roe, John"\n2,75;lunch\n'
+
+    expect(detectCsvDelimiter('expenses.csv', content)).toBe(';')
+    expect(parseCsv(content, detectCsvDelimiter('expenses.csv', content)).rows).toEqual([
+      ['amount', 'label'],
+      ['1,50', 'Roe, John'],
+      ['2,75', 'lunch']
+    ])
+  })
+
+  it('keeps comma when semicolons only appear inside quoted fields', () => {
+    expect(detectCsvDelimiter('x.csv', '"a;b;c",d,e\n1,2,3\n')).toBe(',')
+  })
+
+  it('prefers tab over semicolon when tabs dominate the first line', () => {
+    expect(detectCsvDelimiter('x.csv', 'a\tb;c\td\n')).toBe('\t')
+  })
+
+  it('uses tab for .tsv files that contain semicolons', () => {
+    expect(detectCsvDelimiter('data.tsv', 'a;b;c')).toBe('\t')
+  })
+
   it('skips leading blank lines when sniffing', () => {
     expect(detectCsvDelimiter('x.csv', '\n\na\tb\tc')).toBe('\t')
   })
