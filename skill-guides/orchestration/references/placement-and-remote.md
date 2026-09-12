@@ -12,13 +12,13 @@ sharing unsafe.
 
 ```text
 # Current workspace; setup is not rerun.
-ORCA orchestration worker-start --task <task_id> --worktree current --agent codex --json
+ORCA orchestration worker-start --task <task_id> --worktree current --json
 
 # Stacked child worktree.
-ORCA orchestration worker-start --task <task_id> --worktree new-child --name <name> --agent codex --setup run --json
+ORCA orchestration worker-start --task <task_id> --worktree new-child --name <name> --setup run --json
 
 # Independent top-level worktree.
-ORCA orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --agent codex --setup run --json
+ORCA orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --setup run --json
 ```
 
 Current and exact existing workspaces create a fresh terminal unless
@@ -49,7 +49,7 @@ The Run and Tasks remain authoritative on the current server. `--on` selects
 only the worker's execution server and appears only on `worker-start`:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --on <environment> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run --json
+ORCA orchestration worker-start --task <task_id> --on <environment> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --setup run --json
 ```
 
 Remote `current` and `new-child` are invalid because they are ambiguous across
