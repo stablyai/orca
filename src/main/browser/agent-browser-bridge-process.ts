@@ -91,10 +91,17 @@ export function stripAgentBrowserTargetArgs(args: string[]): string[] {
   return stripped
 }
 
-// Why: agent-browser returns generic errors for stale/unknown refs; map to a specific code so agents can detect and re-snapshot.
+// Why: agent-browser returns generic errors for stale refs and dead controls; map those so agents can re-snapshot instead of retrying blindly.
 export function classifyErrorCode(message: string): string {
   if (/unknown ref|ref not found|element not found: @e/i.test(message)) {
     return 'browser_stale_ref'
+  }
+  if (
+    /\belement(?: exists but)? (?:is )?(?:not interactable|not visible|not enabled|not editable|disabled|read[ -]?only)|\belement (?:has )?(?:zero size|no layout box)|\belement cannot be interacted with|\banother element is covering the target element/i.test(
+      message
+    )
+  ) {
+    return 'browser_element_not_interactable'
   }
   return 'browser_error'
 }

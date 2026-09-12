@@ -3,7 +3,6 @@ import { RuntimeBrowserCommands } from '../runtime/orca-runtime-browser'
 import { setRuntimeBrowserCommandsFactory } from '../runtime/runtime-browser-commands-factory'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createConnection } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ── Electron mocks ──
@@ -25,248 +24,12 @@ vi.mock('../git/worktree', () => ({
 }))
 
 import { BrowserManager } from './browser-manager'
-import { CdpBridge } from './cdp-bridge'
+import { BrowserError, CdpBridge } from './cdp-bridge'
+import { createMockGuest, sendBrowserRpcRequest } from './cdp-bridge-integration-guest'
 import { BROWSER_TEXT_INSERT_CHUNK_BYTES } from './browser-text-insertion'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { readRuntimeMetadata } from '../runtime/runtime-metadata'
-
-// ── CDP response builders ──
-
-type AXNode = {
-  nodeId: string
-  backendDOMNodeId?: number
-  role?: { type: string; value: string }
-  name?: { type: string; value: string }
-  properties?: { name: string; value: { type: string; value: unknown } }[]
-  childIds?: string[]
-  ignored?: boolean
-}
-
-function axNode(
-  id: string,
-  role: string,
-  name: string,
-  opts?: { childIds?: string[]; backendDOMNodeId?: number }
-): AXNode {
-  return {
-    nodeId: id,
-    backendDOMNodeId: opts?.backendDOMNodeId ?? Number.parseInt(id, 10) * 100,
-    role: { type: 'role', value: role },
-    name: { type: 'computedString', value: name },
-    childIds: opts?.childIds
-  }
-}
-
-const EXAMPLE_COM_TREE: AXNode[] = [
-  axNode('1', 'WebArea', 'Example Domain', { childIds: ['2', '3', '4'] }),
-  axNode('2', 'heading', 'Example Domain'),
-  axNode('3', 'staticText', 'This domain is for use in illustrative examples.'),
-  axNode('4', 'link', 'More information...', { backendDOMNodeId: 400 })
-]
-
-const SEARCH_PAGE_TREE: AXNode[] = [
-  axNode('1', 'WebArea', 'Search', { childIds: ['2', '3', '4', '5'] }),
-  axNode('2', 'navigation', 'Main Nav', { childIds: ['3'] }),
-  axNode('3', 'link', 'Home', { backendDOMNodeId: 300 }),
-  axNode('4', 'textbox', 'Search query', { backendDOMNodeId: 400 }),
-  axNode('5', 'button', 'Search', { backendDOMNodeId: 500 })
-]
-
-// ── Mock WebContents factory ──
-
-function createMockGuest(
-  id: number,
-  url: string,
-  title: string,
-  options?: { readyState?: string | (() => string) }
-) {
-  let currentUrl = url
-  let currentTitle = title
-  let currentTree = EXAMPLE_COM_TREE
-  let navHistoryId = 1
-  let debuggerAttached = false
-
-  const sendCommandMock = vi.fn(async (method: string, params?: Record<string, unknown>) => {
-    switch (method) {
-      case 'Page.enable':
-      case 'DOM.enable':
-      case 'Accessibility.enable':
-        return {}
-      case 'Accessibility.getFullAXTree':
-        return { nodes: currentTree }
-      case 'Page.getNavigationHistory':
-        return {
-          entries: [{ id: navHistoryId, url: currentUrl }],
-          currentIndex: 0
-        }
-      case 'Page.navigate': {
-        const targetUrl = (params as { url: string }).url
-        if (targetUrl.includes('nonexistent.invalid')) {
-          return { errorText: 'net::ERR_NAME_NOT_RESOLVED' }
-        }
-        navHistoryId++
-        currentUrl = targetUrl
-        if (targetUrl.includes('search.example.com')) {
-          currentTitle = 'Search'
-          currentTree = SEARCH_PAGE_TREE
-        } else {
-          currentTitle = 'Example Domain'
-          currentTree = EXAMPLE_COM_TREE
-        }
-        return {}
-      }
-      case 'Runtime.evaluate': {
-        const expr = (params as { expression: string }).expression
-        if (expr === 'document.readyState') {
-          return {
-            result: {
-              value:
-                typeof options?.readyState === 'function'
-                  ? options.readyState()
-                  : (options?.readyState ?? 'complete')
-            }
-          }
-        }
-        if (expr === 'location.origin') {
-          return { result: { value: new URL(currentUrl).origin } }
-        }
-        if (expr.includes('innerWidth')) {
-          return { result: { value: JSON.stringify({ w: 1280, h: 720 }) } }
-        }
-        if (expr.includes('scrollBy')) {
-          return { result: { value: undefined } }
-        }
-        if (expr.includes('dispatchEvent')) {
-          return { result: { value: undefined } }
-        }
-        // eslint-disable-next-line no-eval
-        return { result: { value: String(eval(expr)), type: 'string' } }
-      }
-      case 'DOM.scrollIntoViewIfNeeded':
-        return {}
-      case 'DOM.getBoxModel':
-        return { model: { content: [100, 200, 300, 200, 300, 250, 100, 250] } }
-      case 'Input.dispatchMouseEvent':
-        return {}
-      case 'Input.insertText':
-        return {}
-      case 'Input.dispatchKeyEvent':
-        return {}
-      case 'DOM.focus':
-        return {}
-      case 'DOM.describeNode':
-        return { node: { nodeId: 1 } }
-      case 'DOM.requestNode':
-        return { nodeId: 1 }
-      case 'DOM.resolveNode':
-        return { object: { objectId: 'obj-1' } }
-      case 'Runtime.callFunctionOn':
-        return { result: { value: undefined } }
-      case 'DOM.setFileInputFiles':
-        return {}
-      case 'Page.captureScreenshot':
-        return {
-          data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-        }
-      case 'Page.reload':
-        return {}
-      case 'Network.enable':
-        return {}
-      case 'Target.setAutoAttach':
-        return {}
-      case 'Page.addScriptToEvaluateOnNewDocument':
-        return { identifier: 'mock-script-id' }
-      case 'Runtime.enable':
-        return {}
-      default:
-        throw new Error(`Unexpected CDP method: ${method}`)
-    }
-  })
-
-  const debuggerListeners = new Map<string, ((...args: unknown[]) => void)[]>()
-
-  const guest = {
-    id,
-    isDestroyed: vi.fn(() => false),
-    getType: vi.fn(() => 'webview'),
-    getURL: vi.fn(() => currentUrl),
-    getTitle: vi.fn(() => currentTitle),
-    setBackgroundThrottling: vi.fn(),
-    setWindowOpenHandler: vi.fn(),
-    on: vi.fn(),
-    off: vi.fn(),
-    debugger: {
-      isAttached: vi.fn(() => debuggerAttached),
-      attach: vi.fn(() => {
-        if (debuggerAttached) {
-          throw new Error('Another debugger is already attached')
-        }
-        debuggerAttached = true
-      }),
-      detach: vi.fn(),
-      sendCommand: sendCommandMock,
-      on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-        const handlers = debuggerListeners.get(event) ?? []
-        handlers.push(handler)
-        debuggerListeners.set(event, handlers)
-      }),
-      removeListener: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
-        const handlers = debuggerListeners.get(event) ?? []
-        const idx = handlers.indexOf(handler)
-        if (idx !== -1) {
-          handlers.splice(idx, 1)
-        }
-      }),
-      removeAllListeners: vi.fn((event: string) => {
-        debuggerListeners.set(event, [])
-      }),
-      off: vi.fn()
-    }
-  }
-
-  return {
-    guest,
-    sendCommandMock,
-    emitDebugger(event: string, ...args: unknown[]) {
-      for (const handler of debuggerListeners.get(event) ?? []) {
-        handler(...args)
-      }
-    },
-    emitDebuggerMessage(method: string, params?: Record<string, unknown>) {
-      for (const handler of debuggerListeners.get('message') ?? []) {
-        handler({}, method, params)
-      }
-    }
-  }
-}
-
-// ── RPC helper ──
-
-async function sendRequest(
-  endpoint: string,
-  request: Record<string, unknown>
-): Promise<Record<string, unknown>> {
-  return await new Promise((resolve, reject) => {
-    const socket = createConnection(endpoint)
-    let buffer = ''
-    socket.setEncoding('utf8')
-    socket.once('error', reject)
-    socket.on('data', (chunk: string) => {
-      buffer += chunk
-      const newlineIndex = buffer.indexOf('\n')
-      if (newlineIndex === -1) {
-        return
-      }
-      const message = buffer.slice(0, newlineIndex)
-      socket.end()
-      resolve(JSON.parse(message) as Record<string, unknown>)
-    })
-    socket.on('connect', () => {
-      socket.write(`${JSON.stringify(request)}\n`)
-    })
-  })
-}
 
 // ── Tests ──
 
@@ -280,6 +43,7 @@ describe('Browser automation pipeline (integration)', () => {
 
   const GUEST_WC_ID = 5001
   const RENDERER_WC_ID = 1
+  const PASSTHROUGH = Symbol('passthrough')
 
   beforeEach(async () => {
     // Why: constructing the browser commands is what pulls the Chromium cluster in, so
@@ -326,13 +90,68 @@ describe('Browser automation pipeline (integration)', () => {
   })
 
   async function rpc(method: string, params?: Record<string, unknown>) {
-    const response = await sendRequest(endpoint, {
+    const response = await sendBrowserRpcRequest(endpoint, {
       id: `req_${method}`,
       authToken,
       method,
       ...(params ? { params } : {})
     })
     return response
+  }
+
+  function interceptCdp(
+    handler: (method: string, params?: Record<string, unknown>) => unknown
+  ): void {
+    const sendCommand = activeGuestHarness.sendCommandMock as ReturnType<typeof vi.fn>
+    const previous = sendCommand.getMockImplementation() as (
+      method: string,
+      params?: Record<string, unknown>
+    ) => Promise<unknown>
+    sendCommand.mockImplementation(async (method: string, params?: Record<string, unknown>) => {
+      const result = handler(method, params)
+      return result === PASSTHROUGH ? await previous(method, params) : result
+    })
+  }
+
+  function evaluateInteractabilityCall(
+    params: Record<string, unknown> | undefined,
+    options?: {
+      disabled?: boolean
+      editable?: boolean
+      readOnly?: boolean
+      shadowRoot?: boolean
+      obscured?: boolean
+    }
+  ): { result: { value: string } } {
+    const declaration = String(params?.functionDeclaration)
+    const compile = new Function('getComputedStyle', `return (${declaration})`)
+    const check = compile(() => ({
+      display: 'block',
+      visibility: 'visible',
+      pointerEvents: 'auto'
+    })) as (this: Record<string, unknown>, ...args: unknown[]) => string
+    const other = {}
+    const target: Record<string, unknown> = {
+      disabled: options?.disabled ?? false,
+      inert: false,
+      readOnly: options?.readOnly ?? false,
+      hidden: false,
+      type: options?.editable ? 'text' : 'button',
+      tagName: options?.editable ? 'INPUT' : 'BUTTON',
+      value: '',
+      select: options?.editable ? () => undefined : undefined,
+      isContentEditable: false,
+      getAttribute: () => null,
+      contains: () => false
+    }
+    const ownerDocument = {
+      elementFromPoint: () => (options?.obscured ? other : target)
+    }
+    target.ownerDocument = ownerDocument
+    target.getRootNode = () =>
+      options?.shadowRoot ? { elementFromPoint: () => target } : ownerDocument
+    const values = ((params?.arguments ?? []) as { value: unknown }[]).map(({ value }) => value)
+    return { result: { value: check.call(target, ...values) } }
   }
 
   // ── Snapshot ──
@@ -399,6 +218,153 @@ describe('Browser automation pipeline (integration)', () => {
     const res = await rpc('browser.click', { element: '@e999' })
     expect(res.ok).toBe(false)
     expect((res.error as { code: string }).code).toBe('browser_ref_not_found')
+  })
+
+  it('classifies a missing layout box as browser_element_not_interactable', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method) => {
+      if (method === 'DOM.getBoxModel') {
+        throw new Error('Could not compute box model.')
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it('preserves CDP transport errors while reading the layout box', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method) => {
+      if (method === 'DOM.getBoxModel') {
+        throw new BrowserError('browser_cdp_error', 'CDP transport failed')
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_cdp_error')
+  })
+
+  it('does not misclassify unknown getBoxModel protocol errors', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method) => {
+      if (method === 'DOM.getBoxModel') {
+        throw new Error('Could not find node with given id')
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('runtime_error')
+  })
+
+  it('rejects zero-size pointer targets', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method) =>
+      method === 'DOM.getBoxModel'
+        ? { model: { content: [100, 200, 100, 200, 100, 250, 100, 250] } }
+        : PASSTHROUGH
+    )
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it.each([
+    ['browser.click', { element: '@e1' }],
+    ['browser.check', { element: '@e1', checked: true }]
+  ])('rejects disabled pointer targets for %s', async (method, params) => {
+    await rpc('browser.snapshot')
+    interceptCdp((cdpMethod, cdpParams) => {
+      if (
+        cdpMethod === 'Runtime.callFunctionOn' &&
+        String(cdpParams?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(cdpParams, { disabled: true })
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc(method, params)
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it.each([
+    ['browser.hover', { element: '@e1' }],
+    ['browser.drag', { from: '@e1', to: '@e1' }]
+  ])('allows disabled pointer targets for %s', async (method, params) => {
+    await rpc('browser.snapshot')
+    interceptCdp((cdpMethod, cdpParams) => {
+      if (
+        cdpMethod === 'Runtime.callFunctionOn' &&
+        String(cdpParams?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(cdpParams, { disabled: true })
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc(method, params)
+
+    expect(res.ok).toBe(true)
+    if (method === 'browser.drag') {
+      const scrollCalls = activeGuestHarness.sendCommandMock.mock.calls.filter(
+        ([name, args]) =>
+          name === 'Runtime.callFunctionOn' &&
+          String(args?.functionDeclaration).includes('scrollIntoView')
+      )
+      expect(scrollCalls).toHaveLength(2)
+    }
+  })
+
+  it('rejects pointer targets obscured at their center', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method === 'Runtime.callFunctionOn' &&
+        String(params?.functionDeclaration).includes('elementFromPoint')
+      ) {
+        expect(((params?.arguments ?? []) as unknown[]).slice(0, 2)).toEqual([
+          { value: 200 },
+          { value: 225 }
+        ])
+        return evaluateInteractabilityCall(params, { obscured: true })
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it('accepts a pointer target reached through its shadow root hit test', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method !== 'Runtime.callFunctionOn' ||
+        !String(params?.functionDeclaration).includes('elementFromPoint')
+      ) {
+        return PASSTHROUGH
+      }
+      return evaluateInteractabilityCall(params, { obscured: true, shadowRoot: true })
+    })
+
+    const res = await rpc('browser.click', { element: '@e1' })
+
+    expect(res.ok).toBe(true)
   })
 
   // ── Navigation ──
@@ -474,11 +440,73 @@ describe('Browser automation pipeline (integration)', () => {
   it('fills an input by ref', async () => {
     await rpc('browser.goto', { url: 'https://search.example.com' })
     await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method === 'Runtime.callFunctionOn' &&
+        String(params?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(params, { editable: true })
+      }
+      return PASSTHROUGH
+    })
 
     // @e2 should be the textbox "Search query" on the search page
     const res = await rpc('browser.fill', { element: '@e2', value: 'hello world' })
     expect(res.ok).toBe(true)
     expect((res.result as { filled: string }).filled).toBe('@e2')
+  })
+
+  it('rejects fill when the input has no layout box', async () => {
+    await rpc('browser.goto', { url: 'https://search.example.com' })
+    await rpc('browser.snapshot')
+    interceptCdp((method) => {
+      if (method === 'DOM.getBoxModel') {
+        throw new Error('Could not compute box model.')
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.fill', { element: '@e2', value: 'hidden' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it('rejects fill when the input is readonly', async () => {
+    await rpc('browser.goto', { url: 'https://search.example.com' })
+    await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method === 'Runtime.callFunctionOn' &&
+        String(params?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(params, { readOnly: true })
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.fill', { element: '@e2', value: 'readonly' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
+  })
+
+  it('rejects fill on a non-editable element', async () => {
+    await rpc('browser.snapshot')
+    interceptCdp((method, params) => {
+      if (
+        method === 'Runtime.callFunctionOn' &&
+        String(params?.functionDeclaration).includes('this.disabled')
+      ) {
+        return evaluateInteractabilityCall(params)
+      }
+      return PASSTHROUGH
+    })
+
+    const res = await rpc('browser.fill', { element: '@e1', value: 'not editable' })
+
+    expect(res.ok).toBe(false)
+    expect((res.error as { code: string }).code).toBe('browser_element_not_interactable')
   })
 
   it('chunks large browser fill text before CDP insertText', async () => {
@@ -694,7 +722,7 @@ describe('Browser automation pipeline (integration)', () => {
     await server2.start()
 
     const metadata2 = readRuntimeMetadata(userDataPath2)!
-    const res = await sendRequest(metadata2.transports[0]!.endpoint, {
+    const res = await sendBrowserRpcRequest(metadata2.transports[0]!.endpoint, {
       id: 'req_no_tab',
       authToken: metadata2.authToken,
       method: 'browser.snapshot'

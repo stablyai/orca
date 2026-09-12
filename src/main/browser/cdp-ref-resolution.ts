@@ -5,12 +5,17 @@ import type { CdpCommandSender, RefEntry } from './snapshot-engine'
 import type { CdpBridgeState } from './cdp-bridge-state'
 import type { CdpDebuggerLifecycle } from './cdp-debugger-lifecycle'
 import type { CdpNavigationOperations } from './cdp-navigation-operations'
+import type {
+  CdpElementActionability,
+  ElementActionabilityRequirements
+} from './cdp-element-actionability'
 
 export class CdpRefResolution {
   constructor(
     private readonly bridgeState: CdpBridgeState,
     private readonly debuggerLifecycle: CdpDebuggerLifecycle,
-    private readonly navigation: CdpNavigationOperations
+    private readonly navigation: CdpNavigationOperations,
+    private readonly actionability: CdpElementActionability
   ) {}
 
   senderForRef(guest: WebContents, ref: RefEntry): CdpCommandSender {
@@ -79,97 +84,31 @@ export class CdpRefResolution {
     })
   }
 
-  async getElementCenter(
+  assertElementInteractable(
     sender: CdpCommandSender,
-    backendNodeId: number
+    backendNodeId: number,
+    ref: string,
+    requirements?: ElementActionabilityRequirements
+  ): Promise<void> {
+    return this.actionability.assertElementInteractable(sender, backendNodeId, ref, requirements)
+  }
+
+  getElementCenter(
+    sender: CdpCommandSender,
+    backendNodeId: number,
+    ref?: string
   ): Promise<{ cx: number; cy: number }> {
-    const { model } = (await sender('DOM.getBoxModel', { backendNodeId })) as {
-      model: { content: number[] }
-    }
-    const [x1, y1, , , x3, y3] = model.content
-    return { cx: (x1 + x3) / 2, cy: (y1 + y3) / 2 }
+    return this.actionability.getElementCenter(sender, backendNodeId, ref)
   }
 
-  // Why: cross-origin iframes report iframe-local coords, but Input events use parent-page space; add the iframe offset.
-  private async getIframeOffset(
-    guest: WebContents,
-    sessionId: string
-  ): Promise<{ offsetX: number; offsetY: number }> {
-    const tabId = this.resolveTabId(guest.id)
-    const state = this.getOrCreateTabState(tabId)
-    const parentSender = this.makeCdpSender(guest)
-
-    for (const [targetId, sid] of state.iframeSessions) {
-      if (sid === sessionId) {
-        try {
-          // Why: match the iframe's target URL against DOM iframe src to pick the right element on multi-iframe pages.
-          const { targetInfo } = (await parentSender('Target.getTargetInfo', {
-            targetId
-          })) as { targetInfo: { url?: string } }
-
-          const targetUrl = targetInfo?.url
-
-          const { result } = (await parentSender('Runtime.evaluate', {
-            expression: `(() => {
-              const frames = document.querySelectorAll('iframe, frame');
-              const rects = [];
-              for (const f of frames) {
-                const rect = f.getBoundingClientRect();
-                rects.push({ x: rect.x, y: rect.y, src: f.src || '' });
-              }
-              return JSON.stringify(rects);
-            })()`,
-            returnByValue: true
-          })) as { result: { value: string } }
-
-          const rects = JSON.parse(result.value) as { x: number; y: number; src: string }[]
-
-          // Match by URL first (reliable for cross-origin iframes)
-          if (targetUrl) {
-            for (const rect of rects) {
-              if (rect.src === targetUrl) {
-                return { offsetX: rect.x, offsetY: rect.y }
-              }
-            }
-            // Why: iframe may redirect after load so src differs from target URL; match by origin as a fallback.
-            try {
-              const targetOrigin = new URL(targetUrl).origin
-              for (const rect of rects) {
-                if (rect.src && new URL(rect.src).origin === targetOrigin) {
-                  return { offsetX: rect.x, offsetY: rect.y }
-                }
-              }
-            } catch {
-              // URL parsing failed — fall through
-            }
-          }
-
-          // Fallback: if only one iframe exists, use its position
-          if (rects.length === 1) {
-            return { offsetX: rects[0].x, offsetY: rects[0].y }
-          }
-        } catch {
-          // Can't determine offset, return zero (best effort)
-        }
-        break
-      }
-    }
-
-    return { offsetX: 0, offsetY: 0 }
-  }
-
-  // Why: Input.dispatchMouseEvent uses parent-page coords, so translate iframe-local coords for iframe elements.
-  async getPageCoordinates(
+  // Why: Input.dispatchMouseEvent uses parent-page coords, so project iframe-local points through each parent surface.
+  getPageCoordinates(
     guest: WebContents,
     refEntry: RefEntry,
     localCx: number,
     localCy: number
   ): Promise<{ cx: number; cy: number }> {
-    if (!refEntry.sessionId) {
-      return { cx: localCx, cy: localCy }
-    }
-    const { offsetX, offsetY } = await this.getIframeOffset(guest, refEntry.sessionId)
-    return { cx: localCx + offsetX, cy: localCy + offsetY }
+    return this.actionability.getPageCoordinates(guest, refEntry, localCx, localCy)
   }
 
   // Why: nth-index disambiguates duplicate role+name matches so recovery hits the original element, not the first match.
