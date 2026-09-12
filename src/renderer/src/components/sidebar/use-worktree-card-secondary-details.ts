@@ -212,6 +212,7 @@ export function useWorktreeCardSecondaryDetails({
       case 'gitea':
         void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null }, options)
         break
+      case 'custom':
       case 'unsupported':
       case undefined:
         break

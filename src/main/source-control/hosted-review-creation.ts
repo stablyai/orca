@@ -132,6 +132,7 @@ export async function getHostedReviewCreationEligibility(
       linkedBitbucketPR: args.linkedBitbucketPR ?? null,
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
+      linkedCustomPR: args.linkedCustomPR ?? null,
       executionHostId: args.executionHostId,
       // Why: eligibility is only ever asked for the worktree the user is acting
       // on, so it earns the fast tier. Without it a review opened outside Orca

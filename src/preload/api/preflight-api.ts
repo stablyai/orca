@@ -3,6 +3,7 @@ import type {
   PathSource,
   ShellHydrationFailureReason
 } from '../../shared/shell-path-hydration-types'
+import type { CustomGitServerStatus } from '../../shared/custom-git-server'
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -24,6 +25,9 @@ export type PreflightStatus = {
     baseUrl: string | null
     tokenConfigured: boolean
   }
+  /** User-configured self-hosted servers. Optional for payload back-compat;
+   *  consumers default to an empty list. */
+  customGitServers?: CustomGitServerStatus[]
 }
 
 export type RefreshAgentsResult = {
