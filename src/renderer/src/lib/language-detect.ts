@@ -100,6 +100,7 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.nimble': 'nim',
   '.tf': 'hcl',
   '.hcl': 'hcl',
+  '.abap': 'abap',
   '.prisma': 'graphql',
   '.csv': 'csv',
   '.tsv': 'tsv'

@@ -38,6 +38,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\rtl\\TOP.SV')).toBe('systemverilog')
   })
 
+  it('maps ABAP files to the Monaco built-in abap language id (case-insensitive)', () => {
+    expect(detectLanguage('src/zcor0260.prog.abap')).toBe('abap')
+    expect(detectLanguage('C:\\repo\\src\\ZCL_DEMO.CLAS.ABAP')).toBe('abap')
+  })
+
   it('maps .proto files to the Monaco built-in proto language id, not the alias', () => {
     expect(detectLanguage('api/v1/service.proto')).toBe('proto')
   })
