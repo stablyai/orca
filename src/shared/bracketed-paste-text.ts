@@ -2,7 +2,7 @@
 // the native-chat attachment builders must frame and sanitize identically — a
 // frame that differs by platform is a submit-early bug waiting to happen.
 
-const ESCAPE = ''
+const ESCAPE = '\u001b'
 export const BRACKETED_PASTE_START = `${ESCAPE}[200~`
 export const BRACKETED_PASTE_END = `${ESCAPE}[201~`
 
@@ -18,7 +18,7 @@ export function sanitizeBracketedPasteText(text: string): string {
   let sanitized = ''
   let start = 0
   while (escapeIndex !== -1) {
-    sanitized += `${text.slice(start, escapeIndex)}␛`
+    sanitized += `${text.slice(start, escapeIndex)}\u241b`
     start = escapeIndex + ESCAPE.length
     escapeIndex = text.indexOf(ESCAPE, start)
   }
