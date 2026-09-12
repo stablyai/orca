@@ -823,6 +823,31 @@ describe('killAllProcessesForWorktree', () => {
     expect(result.runtimeStopped).toBe(0)
   })
 
+  it('still fails a destructive delete closed when a provider PTY refuses to stop, even though the runtime selector cannot resolve (#9197)', async () => {
+    // Why: swallowing selector_not_found (the WSL \\wsl.localhost↔\\wsl$ alias miss)
+    // relaxes ONLY the renderer-graph sweep — "no graph terminals to stop". A real
+    // provider-visible PTY that cannot be physically stopped must still block
+    // filesystem removal. Locks the invariant the swallow depends on; complements
+    // the wedged-daemon-RPC fail-closed case (#9500), which this pairing doesn't cover.
+    const worktreeId = 'repo-1::\\\\wsl.localhost\\Ubuntu\\root\\orca\\workspaces\\wt'
+    const runtime = {
+      stopTerminalsForWorktree: vi.fn().mockRejectedValue(new Error('selector_not_found'))
+    } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
+    const localProvider = createProviderStub(async () => [
+      { id: `${worktreeId}@@live-1`, cwd: '/wsl/wt', title: 'shell' }
+    ])
+    localProvider.shutdown = vi.fn().mockRejectedValue(new Error('daemon refused kill'))
+    listRegisteredPtysMock.mockReturnValue([])
+
+    await expect(
+      killAllProcessesForWorktree(worktreeId, {
+        runtime,
+        localProvider,
+        requirePhysicalStop: true
+      })
+    ).rejects.toThrow('Failed to physically stop every PTY')
+  })
+
   it('fails destructive teardown closed when the runtime sweep rejects', async () => {
     const stopTerminalsForWorktree = vi.fn().mockRejectedValue(new Error('runtime sweep failed'))
     const runtime = {
