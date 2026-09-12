@@ -9,9 +9,11 @@ export function getUsageProviderAccountsSectionId(
     case 'codex':
       return 'accounts-codex'
     case 'gemini':
-    case 'antigravity':
-      // Why: Antigravity usage currently shares Gemini's OAuth configuration.
       return 'accounts-gemini'
+    case 'antigravity':
+      // Why: Antigravity sign-in lives in the OS keyring under the `agy` CLI; Orca has no
+      // Accounts section that configures it, and Gemini's would configure the wrong provider.
+      return null
     case 'opencode-go':
       return 'accounts-opencode-go'
     case 'minimax':
