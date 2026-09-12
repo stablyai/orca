@@ -192,3 +192,20 @@ Final logs: `/tmp/orca-cow-final-tests.log`, `/tmp/orca-cow-final-tc.log`,
 `/tmp/orca-cow-final-quality.log`, `/tmp/orca-cow-package.log`,
 `/tmp/orca-cow-packaged-exercise.log`. Full repository lint/tests and signed release
 packaging were not run; no broader pass claim is implied.
+
+## Elegance review
+
+Desktop creation, runtime creation and SSH/WSL host materialization now use one
+`materializeHostWorktreePaths` policy function. Transport validation remains at its
+boundary, and desktop timing phases remain intact. Removed unused UUID dependency
+hooks left behind by exclusive staging. This pass removes 59 net source/test lines.
+An overlapping YAML/include fixture verifies that explicit sharing still wins.
+Settings now says “Paths for New Worktrees” and “Configured paths” in all six locales;
+the private-copy/shared-fallback explanation is retained. The former “Shared” and
+“Linked” labels incorrectly implied a single outcome.
+
+Affected suites passed (130 tests with four platform skips; a subsequent routing,
+overlap and WSL run passed 29 tests). Full typecheck and changed-code quality passed.
+The renamed empty and populated states rendered cleanly in an isolated background
+Electron app, with Add Path exercised through Playwright CDP and worktree identity
+verified. No release-readiness or CI-completion claim is added by this refactor.

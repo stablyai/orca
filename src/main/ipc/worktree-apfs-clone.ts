@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { constants, existsSync } from 'node:fs'
 import { access, chmod, lstat, mkdir, mkdtemp, stat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
@@ -18,7 +17,6 @@ type ExecFileAsync = (
 
 export type ApfsCloneDeps = {
   execFileAsync: ExecFileAsync
-  randomUUID: () => string
 }
 
 async function resolveHelper(): Promise<string> {
@@ -44,7 +42,6 @@ async function resolveHelper(): Promise<string> {
 }
 
 export const defaultApfsCloneDeps: ApfsCloneDeps = {
-  randomUUID,
   execFileAsync: async (_file, args, options) => {
     const result = await runWorktreeCloneProcess({
       program: await resolveHelper(),

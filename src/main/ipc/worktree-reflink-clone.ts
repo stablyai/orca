@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { constants, type Dirent } from 'node:fs'
 import { chmod, copyFile, link, mkdir, mkdtemp, readdir, rm, rmdir, stat } from 'node:fs/promises'
 import { dirname, join, sep } from 'node:path'
@@ -23,7 +22,6 @@ export type ReflinkCloneDeps = {
   reflinkTree: (source: string, target: string) => Promise<void>
   /** Publish an already private tree without copying bytes or replacing files. */
   publishTree: (source: string, target: string) => Promise<void>
-  randomUUID: () => string
 }
 
 // Automatic byte fallback would bypass the materialization's copy budget.
@@ -56,8 +54,7 @@ export const defaultReflinkCloneDeps: ReflinkCloneDeps = {
     if (result.code !== 0) {
       throw new Error(`cp --link exited ${result.code ?? result.signal}: ${result.stderr.trim()}`)
     }
-  },
-  randomUUID
+  }
 }
 
 /** Advisory prediction per filesystem pair; every actual clone must still be strict. */

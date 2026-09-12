@@ -11,7 +11,7 @@ afterEach(async () => {
 })
 
 describe('host-owned worktree path materialization', () => {
-  it('reads include and sharing configuration from the execution host', async () => {
+  it('reads host configuration and keeps shared paths ahead of overlapping includes', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-relay-materialization-'))
     roots.push(root)
     const source = join(root, 'source')
@@ -21,7 +21,7 @@ describe('host-owned worktree path materialization', () => {
     const initialized = await runProcess({ program: 'git', args: ['init', '-q', source] })
     expect(initialized.code).toBe(0)
     await writeFile(join(source, '.gitignore'), '.env\nshared/\n')
-    await writeFile(join(source, '.worktreeinclude'), '.env\n')
+    await writeFile(join(source, '.worktreeinclude'), '.env\nshared\n')
     await writeFile(join(source, '.env'), 'host-owned value')
     await mkdir(join(source, 'shared'))
     await writeFile(join(source, 'shared', 'marker'), 'shared')

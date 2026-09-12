@@ -65,7 +65,6 @@ describe('interrupted worktree clones', () => {
     async (termination) => {
       const { source, target } = await fixture()
       const deps: ReflinkCloneDeps = {
-        randomUUID: () => 'probe',
         reflinkFileOrFail: async () => {},
         reflinkFile: async () => {},
         reflinkTree: async (_source, staged) => {
@@ -94,7 +93,6 @@ describe('interrupted worktree clones', () => {
       const { source, target } = await fixture()
       await expect(
         cloneWorktreePathWithApfs(source, join(target, 'copy'), true, {
-          randomUUID: () => 'unused',
           execFileAsync: async (_file, args) => {
             if (args[0] === 'probe') {
               return { stdout: '', stderr: '' }

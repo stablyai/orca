@@ -47,7 +47,6 @@ function createDeps(
     cloneError?: string
     treeError?: string
     onTree?: (source: string, target: string) => void
-    uuid?: string
   } = {}
 ): ReflinkCloneDeps {
   return {
@@ -72,8 +71,7 @@ function createDeps(
     }),
     publishTree: async (source, target) => {
       cpSync(source, target, { recursive: true, force: false, errorOnExist: false })
-    },
-    randomUUID: () => options.uuid ?? 'test'
+    }
   }
 }
 

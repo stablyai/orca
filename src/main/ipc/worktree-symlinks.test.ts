@@ -45,7 +45,6 @@ function notSupported(): never {
  *  decides the outcome. */
 function createReflinkCloneDeps(options: {
   supported: boolean
-  uuid?: string
   onReflink?: (source: string, target: string) => void
 }): ReflinkCloneDepsForTest {
   return {
@@ -65,13 +64,11 @@ function createReflinkCloneDeps(options: {
     }),
     publishTree: async (source, target) => {
       cpSync(source, target, { recursive: true, force: false, errorOnExist: false })
-    },
-    randomUUID: () => options.uuid ?? 'test'
+    }
   }
 }
 
 function createApfsCloneDeps(options: {
-  uuid?: string
   onClone?: (args: readonly string[]) => void
   onProbe?: () => void
 }): ApfsCloneDepsForTest {
@@ -93,7 +90,7 @@ function createApfsCloneDeps(options: {
     }
     return { stdout: '', stderr: '' }
   })
-  return { execFileAsync, randomUUID: () => options.uuid ?? 'test' }
+  return { execFileAsync }
 }
 
 describe('createWorktreeLinkedPaths', () => {
@@ -273,7 +270,6 @@ describe('createWorktreeLinkedPaths', () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
     const target = join(worktree, '.env')
     const deps = createApfsCloneDeps({
-      uuid: 'file-race',
       onClone: (args) => {
         const tempTarget = args.at(-1)
         if (!tempTarget) {
@@ -550,7 +546,6 @@ describe('createWorktreeLinkedPaths', () => {
     const target = join(worktree, '.env')
     const deps = createReflinkCloneDeps({
       supported: true,
-      uuid: 'file-race',
       onReflink: () => {
         writeFileSync(target, 'RACE=1\n')
       }

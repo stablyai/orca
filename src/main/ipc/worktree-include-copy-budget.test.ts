@@ -28,8 +28,7 @@ const NO_REFLINK = {
   reflinkFileOrFail: async (): Promise<void> => notSupported(),
   reflinkFile: async (): Promise<void> => notSupported(),
   reflinkTree: async (): Promise<void> => notSupported(),
-  publishTree: async (): Promise<void> => notSupported(),
-  randomUUID: () => 'test'
+  publishTree: async (): Promise<void> => notSupported()
 }
 
 const posixIt = process.platform === 'win32' ? it.skip : it
@@ -457,8 +456,7 @@ describe('createWorktreeCopiedPaths copy budget', () => {
     const apfsCloneDeps = {
       execFileAsync: async () => {
         throw new Error('diskutil unavailable')
-      },
-      randomUUID: () => 'test'
+      }
     }
 
     const skipped = await createWorktreeCopiedPaths(primary, worktree, ['.env'], {

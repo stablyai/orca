@@ -1,14 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import { expandTilde } from './context'
-import { resolveWorktreeIncludePaths } from '../main/git/worktree-include-file'
-import { resolveWorktreeSharedDirectories } from '../main/git/worktree-shared-directories'
-import {
-  createWorktreeCopiedPaths,
-  createWorktreeLinkedPaths,
-  createWorktreeSharedPaths
-} from '../main/ipc/worktree-symlinks'
-import { formatWorktreeIncludeCopyWarning } from '../main/ipc/worktree-include-copy-budget'
+import { materializeHostWorktreePaths } from '../main/ipc/worktree-path-materialization'
 import type { WorktreePathMaterializationResult } from '../shared/worktree-path-materialization'
 
 export async function materializeRelayWorktreePaths(
@@ -37,13 +30,6 @@ export async function materializeRelayWorktreePaths(
   ) {
     throw new Error('Worktree materialization requires distinct source and target directories')
   }
-  await createWorktreeLinkedPaths(sourcePath, targetPath, linkedPaths)
-  const [sharedPaths, includePaths] = await Promise.all([
-    resolveWorktreeSharedDirectories(sourcePath),
-    resolveWorktreeIncludePaths(sourcePath)
-  ])
-  await createWorktreeSharedPaths(sourcePath, targetPath, sharedPaths)
-  const skipped = await createWorktreeCopiedPaths(sourcePath, targetPath, includePaths)
-  const warning = formatWorktreeIncludeCopyWarning(skipped)
+  const warning = await materializeHostWorktreePaths(sourcePath, targetPath, linkedPaths)
   return { supported: true, ...(warning ? { warning } : {}) }
 }

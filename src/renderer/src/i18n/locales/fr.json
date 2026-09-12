@@ -8456,15 +8456,15 @@
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Supprimer {{value0}}",
-          "b814c618e2": "Chemins liés",
-          "31ebab5403": "Aucun chemin partagé configuré pour ce dépôt.",
+          "b814c618e2": "Chemins configurés",
+          "31ebab5403": "Aucun chemin configuré pour ce dépôt.",
           "ea06227efa": "ajouté",
           "b2429aeb31": "Ajouter",
           "ab40b8a5f1": "Aucun résultat. Continuez à saisir pour ajouter un chemin personnalisé.",
           "4cd2a4c077": "Saisissez un chemin (ex. .env ou node_modules)…",
           "241325302c": "Ajouter un chemin",
           "7ff265071d": "Les nouveaux worktrees reçoivent des copies privées par copie sur écriture lorsque le système de fichiers de leur hôte le permet. Sinon, ces chemins pointent vers le checkout principal et partagent les modifications.",
-          "4755f120b6": "Chemins partagés des worktrees",
+          "4755f120b6": "Chemins pour les nouveaux worktrees",
           "b07ef5a8b6": "Chemins à matérialiser depuis le checkout principal vers les nouveaux worktrees.",
           "d72ba8dc68": "{{value0}} chemins",
           "9ea912d811": "1 chemin"
