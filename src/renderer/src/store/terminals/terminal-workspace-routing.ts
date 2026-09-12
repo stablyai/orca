@@ -3,26 +3,11 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getCatalogOwnerHostId } from '@/lib/worktree-runtime-owner-index'
 import { getIndexedRepoMap, getIndexedWorktreeMap } from '../worktree-repo-index'
-
-type ActiveWorkspaceHostState = Partial<
-  Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>
->
-
-function getSelectedExecutionHostId(
-  state: ActiveWorkspaceHostState,
-  worktreeId: string
-): ExecutionHostId | undefined {
-  return state.activeWorktreeId === worktreeId
-    ? (state.activeWorkspaceExecutionHostId ?? undefined)
-    : undefined
-}
 
 export function isWindowsRendererRuntime(): boolean {
   return typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
@@ -67,16 +52,13 @@ export function resolveCreatedTabShellOverride(
 }
 
 export function worktreeUsesWslPath(
-  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'> & ActiveWorkspaceHostState,
+  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
   worktreeId: string
 ): boolean {
   const parsed = parseWorkspaceKey(worktreeId)
   if (parsed?.type === 'folder') {
-    const selectedHostId = getSelectedExecutionHostId(state, worktreeId)
     const folderWorkspace = state.folderWorkspaces.find(
-      (workspace) =>
-        workspace.id === parsed.folderWorkspaceId &&
-        (!selectedHostId || getCatalogOwnerHostId(workspace) === selectedHostId)
+      (workspace) => workspace.id === parsed.folderWorkspaceId
     )
     return folderWorkspace ? isWslUncPath(folderWorkspace.folderPath) : false
   }
@@ -85,19 +67,12 @@ export function worktreeUsesWslPath(
 }
 
 export function worktreeUsesRemoteConnection(
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'> &
-    ActiveWorkspaceHostState,
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
   worktreeId: string
 ): boolean {
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
   if (parsedWorkspaceKey?.type === 'folder') {
-    return Boolean(
-      getFolderWorkspaceConnectionId(
-        state,
-        parsedWorkspaceKey.folderWorkspaceId,
-        getSelectedExecutionHostId(state, worktreeId)
-      )
-    )
+    return Boolean(getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId))
   }
   const repoMap = getIndexedRepoMap(state.repos)
   const directRepo = repoMap.get(getRepoIdFromWorktreeId(worktreeId))
@@ -110,19 +85,12 @@ export function worktreeUsesRemoteConnection(
 }
 
 export function getRemoteConnectionIdForWorktree(
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'> &
-    ActiveWorkspaceHostState,
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
   worktreeId: string
 ): string | null {
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
   if (parsedWorkspaceKey?.type === 'folder') {
-    return (
-      getFolderWorkspaceConnectionId(
-        state,
-        parsedWorkspaceKey.folderWorkspaceId,
-        getSelectedExecutionHostId(state, worktreeId)
-      ) ?? null
-    )
+    return getFolderWorkspaceConnectionId(state, parsedWorkspaceKey.folderWorkspaceId) ?? null
   }
   const repoMap = getIndexedRepoMap(state.repos)
   const directRepo = repoMap.get(getRepoIdFromWorktreeId(worktreeId))

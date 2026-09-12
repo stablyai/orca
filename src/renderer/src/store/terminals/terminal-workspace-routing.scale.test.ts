@@ -6,7 +6,6 @@ import {
   worktreeUsesWslPath
 } from './terminal-workspace-routing'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 const REPO_COUNT = 10
 const WORKTREE_COUNT = 400
@@ -95,40 +94,5 @@ describe('terminal workspace routing scales with tab count, not workspace count'
     const { state } = buildCountingState()
     expect(getRemoteConnectionIdForWorktree(state, 'ghost::/nowhere')).toBeNull()
     expect(worktreeUsesRemoteConnection(state, 'ghost::/nowhere')).toBe(false)
-  })
-
-  it('routes a duplicate folder id through its active host', () => {
-    const worktreeId = folderWorkspaceKey('folder-1')
-    const base = {
-      folderWorkspaces: [
-        {
-          id: 'folder-1',
-          projectGroupId: 'group-1',
-          folderPath: '/srv/shared',
-          executionHostId: 'ssh:ssh-1',
-          connectionId: 'ssh-1'
-        },
-        {
-          id: 'folder-1',
-          projectGroupId: 'group-1',
-          folderPath: String.raw`\\wsl.localhost\Ubuntu\srv\shared`,
-          executionHostId: 'local'
-        }
-      ],
-      projectGroups: [],
-      repos: [],
-      worktreesByRepo: {},
-      activeWorktreeId: worktreeId
-    } as unknown as AppState
-
-    const local = { ...base, activeWorkspaceExecutionHostId: 'local' } as AppState
-    expect(worktreeUsesRemoteConnection(local, worktreeId)).toBe(false)
-    expect(getRemoteConnectionIdForWorktree(local, worktreeId)).toBeNull()
-    expect(worktreeUsesWslPath(local, worktreeId)).toBe(true)
-
-    const ssh = { ...base, activeWorkspaceExecutionHostId: 'ssh:ssh-1' } as AppState
-    expect(worktreeUsesRemoteConnection(ssh, worktreeId)).toBe(true)
-    expect(getRemoteConnectionIdForWorktree(ssh, worktreeId)).toBe('ssh-1')
-    expect(worktreeUsesWslPath(ssh, worktreeId)).toBe(false)
   })
 })

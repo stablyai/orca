@@ -513,8 +513,7 @@ function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
 type ConnectionContextState = Pick<
   AppState,
   'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
-> &
-  Partial<Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>>
+>
 
 describe('getConnectionIdFromState', () => {
   afterEach(() => {
@@ -752,42 +751,5 @@ describe('getConnectionIdFromState', () => {
       repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-hydrated' })]
     }
     expect(selector(hydrated)).toBe('ssh-hydrated')
-  })
-
-  it('recomputes a retained folder selector when the active host changes', () => {
-    const workspaceKey = folderWorkspaceKey('folder-workspace-1')
-    const selector = createConnectionIdForFileSelector(workspaceKey, '/srv/shared/README.md')
-    const folderWorkspaces = [
-      makeFolderWorkspace({ folderPath: '/srv/shared', executionHostId: 'local' }),
-      makeFolderWorkspace({
-        folderPath: '/srv/shared',
-        connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1'
-      })
-    ]
-    const projectGroups = [
-      makeProjectGroup({ parentPath: '/srv/shared', executionHostId: 'local' }),
-      makeProjectGroup({
-        parentPath: '/srv/shared',
-        connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1'
-      })
-    ]
-    const base = { folderWorkspaces, projectGroups, repos: [], worktreesByRepo: {} }
-
-    expect(
-      selector({
-        ...base,
-        activeWorktreeId: workspaceKey,
-        activeWorkspaceExecutionHostId: 'local'
-      })
-    ).toBeNull()
-    expect(
-      selector({
-        ...base,
-        activeWorktreeId: workspaceKey,
-        activeWorkspaceExecutionHostId: 'ssh:ssh-1'
-      })
-    ).toBe('ssh-1')
   })
 })

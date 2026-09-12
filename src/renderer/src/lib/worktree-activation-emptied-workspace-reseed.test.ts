@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { getRemoteConnectionIdForWorktree } from '@/store/terminals/terminal-workspace-routing'
 import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorkspace,
@@ -429,14 +427,6 @@ describe('activating a folder workspace whose last terminal was closed', () => {
       expect(useAppStore.getState().activeWorktreeId).toBe(FOLDER_KEY)
       expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(executionHostId)
       expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY] ?? []).toHaveLength(expectedTabs)
-      if (expectedTabs > 0) {
-        expect(getRemoteConnectionIdForWorktree(useAppStore.getState(), FOLDER_KEY)).toBe(
-          executionHostId === 'local' ? null : 'conn-1'
-        )
-        expect(getConnectionIdFromState(useAppStore.getState(), FOLDER_KEY)).toBe(
-          executionHostId === 'local' ? null : 'conn-1'
-        )
-      }
     }
   )
 
@@ -513,6 +503,6 @@ describe('activating a folder workspace whose last terminal was closed', () => {
 
     expect(result).not.toBe(false)
     expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY]).toHaveLength(1)
-    expect(getConnectionIdFromState(useAppStore.getState(), FOLDER_KEY)).toBe('conn-1')
+    expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(SSH_HOST_ID)
   })
 })
