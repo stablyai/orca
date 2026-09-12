@@ -16,25 +16,39 @@ export async function decodeTranscriptStream(
   // Why: a Buffer chunk can end mid-codepoint, and decoding it standalone would
   // both corrupt the line and shift `consumedBytes` (which seeds fallback ids).
   const decoder = new StringDecoder('utf8')
-  let pending = ''
+  let pending: string[] = []
   let consumedBytes = 0
 
   for await (const chunk of stream) {
-    pending += typeof chunk === 'string' ? chunk : decoder.write(Buffer.from(chunk))
-    let newlineIndex = pending.indexOf('\n')
+    const text = typeof chunk === 'string' ? chunk : decoder.write(Buffer.from(chunk))
+    let lineStart = 0
+    let newlineIndex = text.indexOf('\n')
     while (newlineIndex !== -1) {
-      const segment = pending.slice(0, newlineIndex + 1)
+      let segment = text.slice(lineStart, newlineIndex + 1)
+      if (pending.length > 0) {
+        // Join a fragmented record only once, including split string surrogate pairs.
+        pending.push(segment)
+        segment = pending.join('')
+        pending = []
+      }
       decodeLine(segment.slice(0, -1), consumedBytes)
       consumedBytes += Buffer.byteLength(segment, 'utf8')
-      pending = pending.slice(newlineIndex + 1)
-      newlineIndex = pending.indexOf('\n')
+      lineStart = newlineIndex + 1
+      newlineIndex = text.indexOf('\n', lineStart)
+    }
+    if (lineStart < text.length) {
+      pending.push(text.slice(lineStart))
     }
   }
-  pending += decoder.end()
+  const tail = decoder.end()
+  if (tail) {
+    pending.push(tail)
+  }
 
   if (includeTrailingLine && pending.length > 0) {
-    decodeLine(pending, consumedBytes)
-    consumedBytes += Buffer.byteLength(pending, 'utf8')
+    const line = pending.join('')
+    decodeLine(line, consumedBytes)
+    consumedBytes += Buffer.byteLength(line, 'utf8')
   }
 
   return { messages, consumedBytes }
