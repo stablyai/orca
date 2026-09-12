@@ -1,8 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
-import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
-import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import {
   attachEphemeralVmRuntimeToWorkspace,
   cleanupEphemeralVmRuntimeForFailedCreate,
@@ -13,16 +11,14 @@ import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
-import { isAgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
-import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structured-session'
+import { runWorktreePostCreateSteps } from '@/lib/worktree-creation-post-create-steps'
 import { completeWorktreeCreation } from '@/lib/worktree-creation-completion'
 import { markStructuredWorktreeLaunchUnconfirmed } from '@/lib/worktree-creation-structured-recovery'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
 // Why: activePendingCreationId can outlive the terminal route when the user
 // switches app views; only the terminal route renders the creation panel.
@@ -164,84 +160,40 @@ export async function executeWorktreeCreation(
       (completionState.activeView === 'terminal' &&
         completionState.activePendingCreationId === null))
 
-  let activation: ActivateAndRevealResult | false = false
-  let primaryTabId: string | null
-  if (shouldActivateOnCompletion && !structuredLaunch) {
-    activation = activateAndRevealWorktree(worktree.id, {
-      sidebarRevealBehavior: 'auto',
-      ...(preparedRequest.agent !== null ? { agent: preparedRequest.agent } : {}),
-      ...(result.setup ? { setup: result.setup } : {}),
-      ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
-      ...(startupOpt ? { startup: startupOpt } : {}),
-      ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
-      ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
-    })
-    primaryTabId = activation === false ? null : activation.primaryTabId
-  } else {
-    // Keep chat creation on its pending surface until the session is ready.
-    const hasExplicitTerminalWork = Boolean(
-      startupOpt || result.setup || preparedRequest.issueCommand || result.defaultTabs
-    )
-    primaryTabId =
-      preparedRequest.agent !== null && !hasExplicitTerminalWork
-        ? null
-        : ensureWorktreeHasInitialTerminal(
-            useAppStore.getState(),
-            worktree.id,
-            startupOpt,
-            result.setup,
-            preparedRequest.issueCommand,
-            result.defaultTabs,
-            {
-              activateCreatedTabs: false,
-              ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
-              ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
-            }
-          )
-    if (!structuredLaunch && !backendSpawned) {
-      ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id, {
-        startup: startupOpt,
-        agent: preparedRequest.agent,
-        activate: false
-      })
-    }
+  // Why: past this point the worktree exists and its row is in the store, so every
+  // remaining step is best-effort — settlement is by returned outcome, not by whether a
+  // step threw, because an escaped throw would leave the creation surface covering the
+  // finished workspace.
+  const outcome = await runWorktreePostCreateSteps({
+    creationId,
+    request: preparedRequest,
+    result,
+    worktreeId: worktree.id,
+    structuredLaunch,
+    backendSpawned,
+    shouldActivateOnCompletion,
+    startupOpt,
+    fallbackStartupOpt
+  })
+  // The cancel path already removed the pending entry.
+  if (outcome.kind === 'cancelled') {
+    return
   }
-
-  let structuredLaunchAccepted = structuredLaunch
-  const { agentLaunchRoute } = preparedRequest
-  if (
-    agentLaunchRoute === 'structured-native-chat' &&
-    isAgentSessionHandleProvider(preparedRequest.agent)
-  ) {
-    const structuredSession = await launchStructuredWorktreeSession({
-      creationId,
-      request: preparedRequest,
-      agentLaunchRoute,
-      worktreeId: worktree.id,
-      shouldActivateOnCompletion,
-      fallbackStartupOpt,
-      activation,
-      primaryTabId
-    })
-    structuredLaunchAccepted = structuredSession.accepted
-    activation = structuredSession.activation
-    primaryTabId = structuredSession.primaryTabId
-    if (structuredSession.cancelled) {
-      return
-    }
-    if (structuredSession.visibilityUnknown) {
-      markStructuredWorktreeLaunchUnconfirmed(creationId, worktree.id)
-      return
-    }
+  // Why: this deliberately keeps the entry in an error state so the panel can offer a
+  // retry; completing here would destroy the only handle on the unconfirmed session.
+  if (outcome.kind === 'awaiting-visibility') {
+    markStructuredWorktreeLaunchUnconfirmed(creationId, worktree.id)
+    return
   }
-
+  // Narrowed to 'complete': a new outcome variant fails to typecheck here until it is
+  // given its own settlement above, rather than silently settling nothing.
   await completeWorktreeCreation({
     creationId,
     request: preparedRequest,
     worktreeId: worktree.id,
-    structuredLaunchAccepted,
-    activation,
-    primaryTabId,
+    structuredLaunchAccepted: outcome.structuredLaunchAccepted,
+    activation: outcome.activation,
+    primaryTabId: outcome.primaryTabId,
     startupTerminalTabId: result.startupTerminal?.tabId,
     backendSpawned,
     focusOnCompletion: shouldActivateOnCompletion
