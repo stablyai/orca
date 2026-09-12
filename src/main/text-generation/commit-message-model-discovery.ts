@@ -13,7 +13,7 @@ import {
 import { userFacingUnsafeWindowsBatchArgs } from './source-control-agent-failure'
 import {
   MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES,
-  SOURCE_CONTROL_GENERATION_TIMEOUT_MS
+  DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS
 } from './source-control-generation-limits'
 import { runCodexProcessWithHomeLock } from './source-control-local-generation'
 import { killSourceControlAgentProcess } from './source-control-local-process'
@@ -37,6 +37,7 @@ export async function discoverModelsLocal(input: {
   options: CommitMessageModelDiscoveryLocalOptions
   backslash: CommandTemplateBackslash
   spawnAgent: SpawnSourceControlAgent
+  generationTimeoutMs?: number
 }): Promise<DiscoverCommitMessageModelsResult> {
   const spec = getAgentModelProbeSpec(input.agentId)
   if (!spec) {
@@ -115,9 +116,9 @@ export async function discoverModelsLocal(input: {
         startTermination()
         finish({
           success: false,
-          error: `${spec.label} model discovery timed out after ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s.`
+          error: `${spec.label} model discovery timed out after ${(input.generationTimeoutMs ?? DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS) / 1000}s.`
         })
-      }, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
+      }, input.generationTimeoutMs ?? DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
 
       const onData = (chunk: Buffer, append: (text: string) => void): void => {
         if (
@@ -187,6 +188,7 @@ export async function discoverModelsRemote(input: {
     timeoutMs: number
   ) => Promise<RemoteCommitMessageExecResult>
   agentCommandOverride?: string
+  generationTimeoutMs?: number
 }): Promise<DiscoverCommitMessageModelsResult> {
   const spec = getAgentModelProbeSpec(input.agentId)
   if (!spec) {
@@ -201,13 +203,13 @@ export async function discoverModelsRemote(input: {
   }
   let result: RemoteCommitMessageExecResult
   try {
-    result = await input.execute(planned.plan, input.cwd, SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
+    result = await input.execute(planned.plan, input.cwd, input.generationTimeoutMs ?? DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
   } catch (error) {
     console.error('[commit-message] Remote model discovery request failed:', error)
     return {
       success: false,
       error: isSshRequestOutcomeUnverifiable(error)
-        ? `${spec.label} model discovery took longer than ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s and may still be running on the remote host.`
+        ? `${spec.label} model discovery took longer than ${(input.generationTimeoutMs ?? DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS) / 1000}s and may still be running on the remote host.`
         : `${spec.label} model discovery could not be reached on the remote PATH. Try again after the SSH connection recovers.`
     }
   }
@@ -233,7 +235,7 @@ export async function discoverModelsRemote(input: {
   if (result.timedOut) {
     return {
       success: false,
-      error: `${spec.label} model discovery timed out after ${SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000}s.`
+      error: `${spec.label} model discovery timed out after ${(input.generationTimeoutMs ?? DEFAULT_SOURCE_CONTROL_GENERATION_TIMEOUT_MS) / 1000}s.`
     }
   }
   return finalizeModelDiscoveryOutput(spec, result.stdout, result.stderr, result.exitCode)

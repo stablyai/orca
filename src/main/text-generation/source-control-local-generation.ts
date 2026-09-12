@@ -24,6 +24,7 @@ export function runLocalPlanForAgent(input: {
   emptyResultName: string
   operation: TextGenerationOperation
   spawnAgent: SpawnSourceControlAgent
+  generationTimeoutMs?: number
 }): Promise<InternalTextGenerationResult> {
   const start = (
     holdHomeLockUntilExit = false
@@ -36,7 +37,8 @@ export function runLocalPlanForAgent(input: {
       operation: input.operation,
       wslDistro: input.target.wslDistro,
       holdHomeLockUntilExit,
-      spawnAgent: input.spawnAgent
+      spawnAgent: input.spawnAgent,
+      generationTimeoutMs: input.generationTimeoutMs
     })
   if (input.agentId !== 'codex') {
     return start().result

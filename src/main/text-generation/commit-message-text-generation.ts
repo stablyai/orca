@@ -95,7 +95,8 @@ export async function discoverCommitMessageModelsLocal(
   agentId: TuiAgent,
   env: NodeJS.ProcessEnv | undefined,
   agentCommandOverride?: string,
-  options: CommitMessageModelDiscoveryLocalOptions = {}
+  options: CommitMessageModelDiscoveryLocalOptions = {},
+  generationTimeoutMs?: number
 ): Promise<DiscoverCommitMessageModelsResult> {
   return discoverModelsLocal({
     agentId,
@@ -107,7 +108,8 @@ export async function discoverCommitMessageModelsLocal(
       cwd: options.cwd ?? '',
       wslDistro: options.wslDistro
     }),
-    spawnAgent: spawnSourceControlAgent
+    spawnAgent: spawnSourceControlAgent,
+    generationTimeoutMs
   })
 }
 
@@ -119,9 +121,10 @@ export async function discoverCommitMessageModelsRemote(
     cwd: string,
     timeoutMs: number
   ) => Promise<RemoteCommitMessageExecResult>,
-  agentCommandOverride?: string
+  agentCommandOverride?: string,
+  generationTimeoutMs?: number
 ): Promise<DiscoverCommitMessageModelsResult> {
-  return discoverModelsRemote({ agentId, cwd, execute, agentCommandOverride })
+  return discoverModelsRemote({ agentId, cwd, execute, agentCommandOverride, generationTimeoutMs })
 }
 
 export function cancelGenerateCommitMessageLocal(cwd: string): void {

@@ -20,6 +20,7 @@ import {
   type GenerateCommitMessageResult,
   type GeneratePullRequestFieldsResult
 } from '../text-generation/commit-message-text-generation'
+import { normalizeSourceControlAiSettings } from '../../shared/source-control-ai'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import {
   localGitOptionsForTarget,
@@ -255,10 +256,20 @@ export class RuntimeGitGenerationCommands {
   ): Promise<DiscoverCommitMessageModelsResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const typedAgentId = agentId as TuiAgent
+    const mergedSettings = getRuntimeGitGenerationSettings(
+      this.host.getRuntimeSettings(),
+      settingsOverride,
+      'commitMessage'
+    )
+    const normalizedSettings = normalizeSourceControlAiSettings(
+      mergedSettings.sourceControlAi,
+      mergedSettings.commitMessageAi
+    )
     const agentCommandOverride =
       settingsOverride?.agentCmdOverrides?.[typedAgentId] ??
-      this.host.getRuntimeSettings().agentCmdOverrides?.[typedAgentId]
+      mergedSettings.agentCmdOverrides?.[typedAgentId]
     const route = runtimeGitRouteForTarget(target)
+    const generationTimeoutMs = normalizedSettings.generationTimeoutMs
     if (route.kind === 'ssh') {
       const provider = route.provider
       if (!provider) {
@@ -268,7 +279,8 @@ export class RuntimeGitGenerationCommands {
         typedAgentId,
         target.worktree.path,
         (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
-        agentCommandOverride
+        agentCommandOverride,
+        generationTimeoutMs
       )
     }
     const localEnv = await prepareLocalCommitMessageAgentEnv(
@@ -281,10 +293,22 @@ export class RuntimeGitGenerationCommands {
     }
     const localOptions = localGitOptionsForTarget(target)
     return localOptions.wslDistro
-      ? discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride, {
-          cwd: target.worktree.path,
-          wslDistro: localOptions.wslDistro
-        })
-      : discoverCommitMessageModelsLocal(typedAgentId, localEnv.env, agentCommandOverride)
+      ? discoverCommitMessageModelsLocal(
+          typedAgentId,
+          localEnv.env,
+          agentCommandOverride,
+          {
+            cwd: target.worktree.path,
+            wslDistro: localOptions.wslDistro
+          },
+          generationTimeoutMs
+        )
+      : discoverCommitMessageModelsLocal(
+          typedAgentId,
+          localEnv.env,
+          agentCommandOverride,
+          undefined,
+          generationTimeoutMs
+        )
   }
 }
