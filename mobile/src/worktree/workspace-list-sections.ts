@@ -7,8 +7,16 @@ import {
 } from './mobile-workspace-statuses'
 import { applyMobileWorkspaceLineage } from './mobile-workspace-lineage'
 import { getPRGroupKey, PR_GROUP_LABELS, PR_GROUP_ORDER } from './workspace-pr-status-groups'
-import type { FilterState, Section, Worktree } from './workspace-list-types'
+import type { ProjectGroup } from '../../../src/shared/project-group-types'
+import type {
+  FilterState,
+  Section,
+  Worktree,
+  WorkspaceListSectionIcon,
+  WorkspaceListSectionKind
+} from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
+import { nestRepoSectionsInProjectGroups } from './workspace-list-project-groups'
 import { sortWorktrees } from './workspace-list-ordering'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 
@@ -19,18 +27,23 @@ function makeSection(
   key: string,
   title: string,
   data: Worktree[],
-  icon?: 'pin',
+  kind: WorkspaceListSectionKind,
+  icon?: WorkspaceListSectionIcon,
   collapsedGroups?: ReadonlySet<string>
 ): Section {
   const rows = collapsedGroups ? applyMobileWorkspaceLineage(data, collapsedGroups) : data
+  const rowsWithKeys = rows.map((worktree) => ({
+    ...worktree,
+    sectionListKey: `${key}:${getWorktreeRowIdentity(worktree)}`
+  }))
   return {
     key,
     title,
+    kind,
+    depth: 0,
+    count: rowsWithKeys.length,
     ...(icon ? { icon } : {}),
-    data: rows.map((worktree) => ({
-      ...worktree,
-      sectionListKey: `${key}:${getWorktreeRowIdentity(worktree)}`
-    }))
+    data: rowsWithKeys
   }
 }
 
@@ -129,7 +142,9 @@ export function buildSections(
   pinnedIds: Set<string>,
   repoIdsByName: ReadonlyMap<string, string> = new Map(),
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_MOBILE_WORKSPACE_STATUSES,
-  collapsedGroups: ReadonlySet<string> = new Set()
+  collapsedGroups: ReadonlySet<string> = new Set(),
+  projectGroups: readonly ProjectGroup[] = [],
+  repoProjectGroupIdByRepoId: ReadonlyMap<string, string | null> = new Map()
 ): Section[] {
   const filtered = filterWorktrees(worktrees, filters, search)
   const sorted = sortWorktrees(filtered, sortMode)
@@ -141,12 +156,14 @@ export function buildSections(
 
   const sections: Section[] = []
   if (pinned.length > 0) {
-    sections.push(makeSection('pinned', 'Pinned', pinned, 'pin'))
+    sections.push(makeSection('pinned', 'Pinned', pinned, 'pinned', 'pin'))
   }
 
   if (groupMode === 'none') {
     if (canonicalGroupWorktrees.length > 0) {
-      sections.push(makeSection('all', 'All', canonicalGroupWorktrees, undefined, collapsedGroups))
+      sections.push(
+        makeSection('all', 'All', canonicalGroupWorktrees, 'lane', undefined, collapsedGroups)
+      )
     }
   } else if (groupMode === 'repo') {
     const byRepo = new Map<string, Worktree[]>()
@@ -175,12 +192,20 @@ export function buildSections(
         byRepo.set(displayName, [])
       }
     }
+    const repoSections: Section[] = []
     for (const [repo, items] of byRepo) {
       const key = `repo:${repoIdsByName.get(repo) ?? repo}`
-      sections.push(
-        makeSection(key, repo, orderMainWorktreeFirst(items), undefined, collapsedGroups)
+      repoSections.push(
+        makeSection(key, repo, orderMainWorktreeFirst(items), 'repo', undefined, collapsedGroups)
       )
     }
+    sections.push(
+      ...nestRepoSectionsInProjectGroups({
+        repoSections,
+        projectGroups,
+        repoProjectGroupIdByRepoId
+      })
+    )
   } else if (groupMode === 'workspaceStatus') {
     const renderableWorkspaceStatuses = coerceMobileWorkspaceStatuses(workspaceStatuses)
     const byStatus = new Map<string, Worktree[]>()
@@ -201,6 +226,7 @@ export function buildSections(
             getMobileWorkspaceStatusGroupKey(status.id),
             status.label,
             items,
+            'lane',
             undefined,
             collapsedGroups
           )
@@ -226,6 +252,7 @@ export function buildSections(
             `pr:${groupKey}`,
             PR_GROUP_LABELS[groupKey],
             items,
+            'lane',
             undefined,
             collapsedGroups
           )

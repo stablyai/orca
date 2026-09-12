@@ -1,6 +1,8 @@
 import { useMemo } from 'react'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
+import type { ProjectGroup } from '../../../src/shared/project-group-types'
+import { collapseWorkspaceListSections } from './workspace-list-collapse'
 import {
   buildSections,
   type FilterState,
@@ -26,6 +28,8 @@ export function useWorkspaceSections(args: {
   repoColorsByName: Map<string, string>
   collapsedGroups: Set<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  projectGroups?: readonly ProjectGroup[]
+  repoProjectGroupIdByRepoId?: ReadonlyMap<string, string | null>
 }): {
   sections: Section[]
   rawSections: Section[]
@@ -42,7 +46,9 @@ export function useWorkspaceSections(args: {
     repoIdsByName,
     repoColorsByName,
     collapsedGroups,
-    workspaceStatuses
+    workspaceStatuses,
+    projectGroups = [],
+    repoProjectGroupIdByRepoId = new Map()
   } = args
 
   const uniqueRepos = useMemo(() => {
@@ -74,7 +80,9 @@ export function useWorkspaceSections(args: {
         pinnedIds,
         repoIdsByName,
         workspaceStatuses,
-        collapsedGroups
+        collapsedGroups,
+        projectGroups,
+        repoProjectGroupIdByRepoId
       ),
     [
       displayWorktrees,
@@ -85,16 +93,14 @@ export function useWorkspaceSections(args: {
       pinnedIds,
       repoIdsByName,
       workspaceStatuses,
-      collapsedGroups
+      collapsedGroups,
+      projectGroups,
+      repoProjectGroupIdByRepoId
     ]
   )
 
   const sections = useMemo(
-    () =>
-      rawSections.map((s) => ({
-        ...s,
-        data: collapsedGroups.has(s.key) ? [] : s.data
-      })),
+    () => collapseWorkspaceListSections(rawSections, collapsedGroups),
     [rawSections, collapsedGroups]
   )
 

@@ -4,6 +4,10 @@ import type { Repo } from './repo-types'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
 
+export function getProjectGroupHeaderKey(groupId: string | null): string {
+  return groupId ? `project-group:${groupId}` : UNGROUPED_PROJECT_GROUP_KEY
+}
+
 function createProjectGroupId(): string {
   const randomUUID = globalThis.crypto?.randomUUID
   if (randomUUID) {

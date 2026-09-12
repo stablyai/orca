@@ -9,6 +9,7 @@ export type MockRepo = {
   path: string
   badgeColor: string
   connectionId: string | null
+  projectGroupId?: string | null
 }
 
 const REPO_COLORS = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
@@ -34,9 +35,39 @@ export function createMockRepos(count: number): MockRepo[] {
       displayName,
       path: `/tmp/orca-mobile-repro/${displayName}`,
       badgeColor: REPO_COLORS[index % REPO_COLORS.length]!,
-      connectionId: null
+      connectionId: null,
+      projectGroupId: index === 0 ? 'mock-work' : index === 1 ? 'mock-personal' : null
     }
   })
+}
+
+export function createMockProjectGroups() {
+  return [
+    {
+      id: 'mock-work',
+      name: 'Work',
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual' as const,
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 0,
+      updatedAt: 0
+    },
+    {
+      id: 'mock-personal',
+      name: 'Personal',
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual' as const,
+      tabOrder: 1,
+      isCollapsed: false,
+      color: null,
+      createdAt: 0,
+      updatedAt: 0
+    }
+  ]
 }
 
 export function createMockWorktrees(

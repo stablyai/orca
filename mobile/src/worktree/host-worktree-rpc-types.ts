@@ -18,4 +18,5 @@ export type RepoSummary = {
   executionHostId?: ExecutionHostId | null
   badgeColor?: string
   repoIcon?: RepoIcon | null
+  projectGroupId?: string | null
 }

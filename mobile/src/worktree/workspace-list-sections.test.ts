@@ -34,7 +34,7 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 function withoutSectionListKeys(sections: ReturnType<typeof buildSections>) {
-  return sections.map((section) => ({
+  return sections.map(({ kind: _kind, depth: _depth, count: _count, ...section }) => ({
     ...section,
     data: section.data.map(
       ({
