@@ -2,6 +2,12 @@ import type { AutomationSchedulePreset } from './automations-types'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
 
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
+import {
+  DAY_NAMES,
+  MONTH_NAMES,
+  parseCronField,
+  type CronParseOptions
+} from './automation-cron-field-parsing'
 
 export const AUTOMATION_CRON_EXPRESSION_MAX_BYTES = 2 * 1024
 export type ParsedRrule = {
@@ -24,38 +30,10 @@ export type ParsedCron = {
 }
 
 export type ParsedSchedule = ParsedRrule | ParsedCron
+export type { CronParseOptions }
+
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR'] as const
-const MONTH_NAMES: Record<string, number> = {
-  JAN: 1,
-  FEB: 2,
-  MAR: 3,
-  APR: 4,
-  MAY: 5,
-  JUN: 6,
-  JUL: 7,
-  AUG: 8,
-  SEP: 9,
-  OCT: 10,
-  NOV: 11,
-  DEC: 12
-}
-const DAY_NAMES: Record<string, number> = {
-  SU: 0,
-  MO: 1,
-  TU: 2,
-  WE: 3,
-  TH: 4,
-  FR: 5,
-  SA: 6,
-  SUN: 0,
-  MON: 1,
-  TUE: 2,
-  WED: 3,
-  THU: 4,
-  FRI: 5,
-  SAT: 6
-}
 
 function parseRrule(rrule: string): ParsedRrule {
   const entries = new Map<string, string>()
@@ -88,101 +66,22 @@ function parseRrule(rrule: string): ParsedRrule {
   return { kind: 'rrule', freq, byDay, byHour, byMinute }
 }
 
-function parseCronNumber(
-  value: string,
-  names: Record<string, number> | null,
-  field: string
-): number {
-  const normalized = value.toUpperCase()
-  const named = names?.[normalized]
-  const parsed = named ?? Number(normalized)
-  if (!Number.isInteger(parsed)) {
-    throw new Error(`Invalid cron ${field}.`)
-  }
-  return parsed
-}
-
-function parseCronField(args: {
-  value: string
-  min: number
-  max: number
-  field: string
-  names?: Record<string, number>
-  normalize?: (value: number) => number
-}): Set<number> {
-  const result = new Set<number>()
-  for (const rawPart of args.value.split(',')) {
-    const part = rawPart.trim()
-    if (!part) {
-      throw new Error(`Invalid cron ${args.field}.`)
-    }
-    const stepParts = part.split('/')
-    if (stepParts.length > 2) {
-      throw new Error(`Invalid cron ${args.field}.`)
-    }
-    const [rangePart, stepPart] = stepParts
-    if (!rangePart) {
-      throw new Error(`Invalid cron ${args.field}.`)
-    }
-    const step = stepPart === undefined ? 1 : Number(stepPart)
-    if (!Number.isInteger(step) || step < 1) {
-      throw new Error(`Invalid cron ${args.field}.`)
-    }
-
-    let start: number
-    let end: number
-    if (rangePart === '*') {
-      start = args.min
-      end = args.max
-    } else if (rangePart.includes('-')) {
-      const rangeParts = rangePart.split('-')
-      if (rangeParts.length !== 2 || !rangeParts[0] || !rangeParts[1]) {
-        throw new Error(`Invalid cron ${args.field}.`)
-      }
-      const [startPart, endPart] = rangeParts
-      start = parseCronNumber(startPart, args.names ?? null, args.field)
-      end = parseCronNumber(endPart, args.names ?? null, args.field)
-    } else {
-      start = parseCronNumber(rangePart, args.names ?? null, args.field)
-      end = start
-    }
-
-    const normalizedStart = args.normalize?.(start) ?? start
-    const normalizedEnd = args.normalize?.(end) ?? end
-    if (
-      start < args.min ||
-      start > args.max ||
-      end < args.min ||
-      end > args.max ||
-      normalizedStart < args.min ||
-      normalizedStart > args.max ||
-      normalizedEnd < args.min ||
-      normalizedEnd > args.max ||
-      start > end
-    ) {
-      throw new Error(`Invalid cron ${args.field}.`)
-    }
-    for (let value = start; value <= end; value += step) {
-      result.add(args.normalize?.(value) ?? value)
-    }
-  }
-  if (result.size === 0) {
-    throw new Error(`Invalid cron ${args.field}.`)
-  }
-  return result
-}
-
-export function parseCronExpression(expression: string): ParsedCron {
+export function parseCronExpression(
+  expression: string,
+  options: CronParseOptions = {}
+): ParsedCron {
   const parts = getAutomationCronExpressionFields(expression, 6)
   if (parts.length !== 5) {
     throw new Error('Cron schedule must have five fields.')
   }
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
+  const rejectOversizedStep = options.rejectOversizedStep ?? false
   const daysOfMonth = parseCronField({
     value: dayOfMonth,
     min: 1,
     max: 31,
-    field: 'day of month'
+    field: 'day of month',
+    rejectOversizedStep
   })
   const daysOfWeek = parseCronField({
     value: dayOfWeek,
@@ -190,14 +89,29 @@ export function parseCronExpression(expression: string): ParsedCron {
     max: 7,
     field: 'day of week',
     names: DAY_NAMES,
-    normalize: (value) => (value === 7 ? 0 : value)
+    normalize: (value) => (value === 7 ? 0 : value),
+    distinctValueCount: 7,
+    rejectOversizedStep
   })
   return {
     kind: 'cron',
-    minutes: parseCronField({ value: minute, min: 0, max: 59, field: 'minute' }),
-    hours: parseCronField({ value: hour, min: 0, max: 23, field: 'hour' }),
+    minutes: parseCronField({
+      value: minute,
+      min: 0,
+      max: 59,
+      field: 'minute',
+      rejectOversizedStep
+    }),
+    hours: parseCronField({ value: hour, min: 0, max: 23, field: 'hour', rejectOversizedStep }),
     daysOfMonth,
-    months: parseCronField({ value: month, min: 1, max: 12, field: 'month', names: MONTH_NAMES }),
+    months: parseCronField({
+      value: month,
+      min: 1,
+      max: 12,
+      field: 'month',
+      names: MONTH_NAMES,
+      rejectOversizedStep
+    }),
     daysOfWeek,
     dayOfMonthRestricted: daysOfMonth.size !== 31,
     dayOfWeekRestricted: daysOfWeek.size !== 7
@@ -245,33 +159,50 @@ function isAutomationCronFieldWhitespace(code: number): boolean {
   )
 }
 
-export function parseSchedule(schedule: string): ParsedSchedule {
+export function parseSchedule(schedule: string, options: CronParseOptions = {}): ParsedSchedule {
   const trimmed = schedule.trim()
   if (trimmed.includes('=')) {
     return parseRrule(trimmed)
   }
-  return parseCronExpression(trimmed)
+  return parseCronExpression(trimmed, options)
 }
 
-export function isValidAutomationSchedule(schedule: string): boolean {
+function scheduleRuns(schedule: string, options: CronParseOptions): boolean {
   try {
-    const parsed = parseSchedule(schedule)
-    if (parsed.kind === 'cron' && !cronHasPossibleOccurrence(parsed, Date.now())) {
-      throw new Error('Cron schedule has no possible run.')
-    }
-    return true
+    const parsed = parseSchedule(schedule, options)
+    return parsed.kind !== 'cron' || cronHasPossibleOccurrence(parsed, Date.now())
   } catch {
     return false
   }
+}
+
+function cronScheduleRuns(schedule: string, options: CronParseOptions): boolean {
+  try {
+    return cronHasPossibleOccurrence(parseCronExpression(schedule.trim(), options), Date.now())
+  } catch {
+    return false
+  }
+}
+
+/** Accepts a schedule as new input, oversized-step refusal included (#15895). */
+export function isValidAutomationSchedule(schedule: string): boolean {
+  return scheduleRuns(schedule, { rejectOversizedStep: true })
 }
 
 export function isValidAutomationCronSchedule(schedule: string): boolean {
-  try {
-    const parsed = parseCronExpression(schedule.trim())
-    return cronHasPossibleOccurrence(parsed, Date.now())
-  } catch {
-    return false
-  }
+  return cronScheduleRuns(schedule, { rejectOversizedStep: true })
+}
+
+// Whether Orca can still run a schedule it did not just receive. A row saved before the
+// oversized-step gate, or one a provider owns, keeps running the cadence it has, so reading
+// it back must not re-judge it as input — otherwise renaming an automation would demand
+// re-authoring a schedule the user never touched.
+export function isRunnableAutomationSchedule(schedule: string): boolean {
+  return scheduleRuns(schedule, {})
+}
+
+export function isRunnableAutomationCronSchedule(schedule: string): boolean {
+  return cronScheduleRuns(schedule, {})
 }
 
 export function parseAutomationRrule(rrule: string): {
