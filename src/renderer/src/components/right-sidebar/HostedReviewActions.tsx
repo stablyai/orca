@@ -15,10 +15,13 @@ import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { resolveGitHubPRMergeMethods } from '../../../../shared/github/pull-request-merge-methods'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { getDeleteStateForWorktreeHost } from '../sidebar/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
+import { presentBitbucketPRMergeState } from './bitbucket-pr-merge-state'
+import { resolveBitbucketPRMergeMethods } from '../../../../shared/bitbucket-merge-methods'
 import {
   ClosedReviewActions,
   DraftReviewActions,
@@ -55,6 +58,7 @@ export default function HostedReviewActions({
     (s) => getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)?.isDeleting ?? false
   )
   const isGitLab = review.provider === 'gitlab'
+  const isBitbucket = review.provider === 'bitbucket'
   const shortLabel = isGitLab ? 'MR' : 'PR'
   const reviewLabel = isGitLab ? 'merge request' : 'pull request'
   const stackMergeScope = useMemo(
@@ -82,6 +86,9 @@ export default function HostedReviewActions({
   const mergePresentation = useMemo(() => {
     if (isGitLab) {
       return { ...presentGitLabMRMergeState(review), autoMergeAction: null }
+    }
+    if (isBitbucket) {
+      return { ...presentBitbucketPRMergeState(review), autoMergeAction: null }
     }
     const presentation = presentGitHubPRMergeState({
       ...githubPR,
@@ -117,11 +124,24 @@ export default function HostedReviewActions({
         (stackMergeScope.complete || presentation.directMergeAvailable || stackUsesMergeQueue),
       autoMergeAction: null
     }
-  }, [githubPR, isGitLab, review, stackMergeLabel, stackMergeScope, stackUsesMergeQueue])
-  const mergeMethods = useMemo(
-    () => resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
-    [githubPR?.mergeMethodSettings, isGitLab]
-  )
+  }, [
+    githubPR,
+    isBitbucket,
+    isGitLab,
+    review,
+    stackMergeLabel,
+    stackMergeScope,
+    stackUsesMergeQueue
+  ])
+  const mergeMethods = useMemo(() => {
+    if (isGitLab) {
+      return resolveGitHubPRMergeMethods(null)
+    }
+    if (isBitbucket) {
+      return resolveBitbucketPRMergeMethods()
+    }
+    return resolveGitHubPRMergeMethods(githubPR?.mergeMethodSettings ?? null)
+  }, [githubPR?.mergeMethodSettings, isBitbucket, isGitLab])
   const {
     merging,
     readying,
@@ -136,7 +156,9 @@ export default function HostedReviewActions({
     review,
     githubPR,
     repo,
+    executionHostId: (worktree.hostId ?? repo.executionHostId ?? 'local') as ExecutionHostId,
     isGitLab,
+    isBitbucket,
     shortLabel,
     reviewLabel,
     defaultMergeMethod: mergeMethods.defaultMethod,
@@ -313,6 +335,14 @@ export default function HostedReviewActions({
   }
 
   if (review.state === 'closed') {
+    if (isBitbucket) {
+      return (
+        <MergedReviewActions
+          isDeletingWorktree={isDeletingWorktree}
+          onDeleteWorktree={handleDeleteWorktree}
+        />
+      )
+    }
     return (
       <ClosedReviewActions
         shortLabel={shortLabel}

@@ -18,6 +18,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
   const {
     activeConnectionId,
     activeGitLabReview,
+    activeReview,
     activeWorktreeId,
     activeWorktreePath,
     activeWorktreePushTarget,
@@ -82,18 +83,24 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     const refreshProvider = isGitLabReviewContext ? 'gitlab' : 'github'
     let refreshOutcome = 'started'
     setIsRefreshing(true)
-    recordChecksPanelPRRefreshBreadcrumb({
-      event: 'start',
-      provider: refreshProvider,
-      repoId: repo.id,
-      worktreeId: activeWorktreeId,
-      branch,
-      prCacheKey,
-      prNumber: activeGitLabReview?.number ?? prNumber,
-      prState: activeGitLabReview?.state ?? pr?.state,
-      prChecksStatus: pr?.checksStatus,
-      refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null
-    })
+    const recordBreadcrumb = (event: 'start' | 'done', outcome?: string): void => {
+      recordChecksPanelPRRefreshBreadcrumb({
+        event,
+        provider: refreshProvider,
+        repoId: repo.id,
+        worktreeId: activeWorktreeId,
+        branch,
+        prCacheKey,
+        prNumber: activeGitLabReview?.number ?? prNumber,
+        prState: activeGitLabReview?.state ?? pr?.state,
+        prChecksStatus: pr?.checksStatus,
+        refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null,
+        outcome,
+        durationMs: event === 'done' ? Date.now() - refreshStartedAt : undefined,
+        currentRequest: isCurrentRequest()
+      })
+    }
+    recordBreadcrumb('start')
     try {
       if (activeWorktreeId && activeWorktreePath && !isFolder) {
         const snapshotIdentity = readChecksPanelRefreshGitIdentitySnapshot({
@@ -127,10 +134,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           })
           if (
             observedBranch !== undefined &&
-            hasChecksPanelGitStatusBranchChanged({
-              observedBranch,
-              currentBranch: branch
-            })
+            hasChecksPanelGitStatusBranchChanged({ observedBranch, currentBranch: branch })
           ) {
             // Why: this click discovered a terminal branch switch; let branch-keyed render/effects restart instead of refreshing old PR data.
             refreshOutcome = 'branch-changed'
@@ -159,45 +163,55 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
               contextKey: panelContextKey,
               hasUncommittedChanges: status.entries.length > 0,
               remoteStatus: freshRemoteStatus,
-              gitIdentity: {
-                head: status.head,
-                branch: observedBranch
-              }
+              gitIdentity: { head: status.head, branch: observedBranch }
             })
           }
         } catch (error) {
           console.warn('[ChecksPanel] pre-refresh git identity refresh failed', error)
         }
       }
-      if (isGitLabReviewContext) {
-        const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-          repoPath: repo.path,
-          repoId: repo.id,
-          branch,
-          admissionTier: 'interactive',
-          linkedGitHubPR: linkedPR,
-          fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR,
-          linkedBitbucketPR,
-          linkedAzureDevOpsPR,
-          linkedGiteaPR
-        })
+      const hostedReviewArgs = {
+        repoPath: repo.path,
+        repoId: repo.id,
+        branch,
+        admissionTier: 'interactive' as const,
+        linkedGitHubPR: linkedPR,
+        fallbackGitHubPR: fallbackGitHubPRNumber,
+        linkedGitLabMR,
+        linkedBitbucketPR,
+        linkedAzureDevOpsPR,
+        linkedGiteaPR
+      }
+      const isBitbucketReviewContext = Boolean(
+        activeReview?.provider === 'bitbucket' || linkedBitbucketPR !== null
+      )
+      if (isGitLabReviewContext || isBitbucketReviewContext) {
+        const refreshedReview = await refreshHostedReviewCard(
+          fetchHostedReviewForBranch,
+          hostedReviewArgs
+        )
         if (!isCurrentRequest()) {
           return
         }
-        const refreshedGitLabReview =
-          refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
-        if (refreshedGitLabReview) {
-          await fetchGitLabDetails({
-            mrNumberOverride: refreshedGitLabReview.number,
-            headShaOverride: refreshedGitLabReview.headSha,
-            commitAsCurrent: true
-          })
-          refreshOutcome = 'review'
+        if (isGitLabReviewContext) {
+          const refreshedGitLabReview =
+            refreshedReview?.provider === 'gitlab' ? refreshedReview : activeGitLabReview
+          if (refreshedGitLabReview) {
+            await fetchGitLabDetails({
+              mrNumberOverride: refreshedGitLabReview.number,
+              headShaOverride: refreshedGitLabReview.headSha,
+              commitAsCurrent: true
+            })
+            refreshOutcome = 'review'
+          } else {
+            setChecks([])
+            setComments([])
+            refreshOutcome = 'no-review'
+          }
         } else {
           setChecks([])
           setComments([])
-          refreshOutcome = 'no-review'
+          refreshOutcome = refreshedReview?.provider === 'bitbucket' ? 'review' : 'no-review'
         }
         return
       }
@@ -227,16 +241,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         return
       }
       await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-        repoPath: repo.path,
-        repoId: repo.id,
-        branch,
-        admissionTier: 'interactive',
-        linkedGitHubPR: linkedPR,
-        fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber,
-        linkedGitLabMR,
-        linkedBitbucketPR,
-        linkedAzureDevOpsPR,
-        linkedGiteaPR
+        ...hostedReviewArgs,
+        fallbackGitHubPR: refreshedPR?.number ?? fallbackGitHubPRNumber
       })
       if (!isCurrentRequest()) {
         return
@@ -256,6 +262,8 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         // Why: a forced refresh can find the PR number before React repaints from prCache; mark this refresh's checks current.
         asyncResultKeyRef.current = prRequestKey
         // Why: pass the refreshed headSha directly; fetchChecks's closure captured a stale one (force-pushes, PR-number changes).
+        const isMatchingResult = (): boolean =>
+          isCurrentRequest() && isCurrentAsyncResult(prRequestKey)
         const refreshedChecks = fetchPRChecks(
           repo.path,
           refreshedPR.number,
@@ -265,7 +273,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           { force: true, repoId: repo.id }
         ).then(
           (result) => {
-            if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
+            if (!isMatchingResult()) {
               return
             }
             setChecks(result)
@@ -279,7 +287,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
             prevChecksRef.current = signature
           },
           (err) => {
-            if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
+            if (!isMatchingResult()) {
               return
             }
             console.warn('Failed to fetch PR checks:', err)
@@ -294,12 +302,12 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
           prRepo: refreshedPR.prRepo
         }).then(
           (result) => {
-            if (isCurrentRequest() && isCurrentAsyncResult(prRequestKey)) {
+            if (isMatchingResult()) {
               setComments(result)
             }
           },
           (err) => {
-            if (!isCurrentRequest() || !isCurrentAsyncResult(prRequestKey)) {
+            if (!isMatchingResult()) {
               return
             }
             console.warn('Failed to fetch PR comments:', err)
@@ -308,12 +316,12 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
         )
         await Promise.all([
           refreshedChecks.finally(() => {
-            if (isCurrentRequest() && isCurrentAsyncResult(prRequestKey)) {
+            if (isMatchingResult()) {
               setChecksLoading(false)
             }
           }),
           refreshedComments.finally(() => {
-            if (isCurrentRequest() && isCurrentAsyncResult(prRequestKey)) {
+            if (isMatchingResult()) {
               setCommentsLoading(false)
             }
           })
@@ -327,21 +335,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
       refreshOutcome = 'error'
       throw error
     } finally {
-      recordChecksPanelPRRefreshBreadcrumb({
-        event: 'done',
-        provider: refreshProvider,
-        repoId: repo.id,
-        worktreeId: activeWorktreeId,
-        branch,
-        prCacheKey,
-        prNumber: activeGitLabReview?.number ?? prNumber,
-        prState: activeGitLabReview?.state ?? pr?.state,
-        prChecksStatus: pr?.checksStatus,
-        refreshState: prCacheKey ? useAppStore.getState().prRefreshStates[prCacheKey] : null,
-        outcome: refreshOutcome,
-        durationMs: Date.now() - refreshStartedAt,
-        currentRequest: isCurrentRequest()
-      })
+      recordBreadcrumb('done', refreshOutcome)
       if (isCurrentRequest()) {
         refreshInFlightRef.current = false
         setIsRefreshing(false)
@@ -357,6 +351,7 @@ export function useChecksPanelManualRefresh(model: ChecksPanelManualRefreshInput
     activeWorktreePath,
     activeWorktreePushTarget,
     activeGitLabReview,
+    activeReview?.provider,
     prNumber,
     pr?.checksStatus,
     pr?.headSha,

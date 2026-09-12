@@ -210,4 +210,105 @@ describe('Bitbucket hosted review integration', () => {
       })
     }
   })
+
+  it('merges a Bitbucket PR with fast_forward strategy over HTTP', async () => {
+    let receivedMethod: string | null = null
+    let receivedCloseBranch: boolean | null = null
+    let receivedAuth: string | undefined
+
+    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
+      receivedAuth = req.headers.authorization
+
+      if (url.pathname === '/2.0/repositories/team/repo/pullrequests/42/merge') {
+        let body = ''
+        req.on('data', (chunk) => {
+          body += chunk
+        })
+        req.on('end', () => {
+          const parsed = JSON.parse(body) as {
+            merge_strategy: string
+            close_source_branch: boolean
+          }
+          receivedMethod = parsed.merge_strategy
+          receivedCloseBranch = parsed.close_source_branch
+          sendJson(res, { id: 42, state: 'MERGED' })
+        })
+        return
+      }
+
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ message: 'not found' }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-merge-'))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('expected TCP server address')
+      }
+
+      process.env.ORCA_BITBUCKET_API_BASE_URL = `http://127.0.0.1:${address.port}/2.0`
+      await execFileAsync('git', ['init'], { cwd: repoPath })
+      await execFileAsync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:team/repo.git'], {
+        cwd: repoPath
+      })
+
+      const { mergeBitbucketPullRequest } = await import('../bitbucket/pull-request-merge')
+      const result = await mergeBitbucketPullRequest(repoPath, 42, 'fast_forward', true)
+
+      expect(result).toEqual({ ok: true })
+      expect(receivedMethod).toBe('fast_forward')
+      expect(receivedCloseBranch).toBe(true)
+      expect(receivedAuth).toBe('Bearer local-token')
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+    }
+  })
+
+  it('declines a Bitbucket PR over HTTP', async () => {
+    let declinedPath: string | null = null
+
+    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
+      if (url.pathname === '/2.0/repositories/team/repo/pullrequests/42/decline') {
+        declinedPath = url.pathname
+        sendJson(res, { id: 42, state: 'DECLINED' })
+        return
+      }
+
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ message: 'not found' }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+
+    const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-decline-'))
+    try {
+      const address = server.address()
+      if (!address || typeof address === 'string') {
+        throw new Error('expected TCP server address')
+      }
+
+      process.env.ORCA_BITBUCKET_API_BASE_URL = `http://127.0.0.1:${address.port}/2.0`
+      await execFileAsync('git', ['init'], { cwd: repoPath })
+      await execFileAsync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:team/repo.git'], {
+        cwd: repoPath
+      })
+
+      const { declineBitbucketPullRequest } = await import('../bitbucket/pull-request-merge')
+      const result = await declineBitbucketPullRequest(repoPath, 42)
+
+      expect(result).toEqual({ ok: true })
+      expect(declinedPath).toBe('/2.0/repositories/team/repo/pullrequests/42/decline')
+    } finally {
+      await rm(repoPath, { recursive: true, force: true })
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()))
+      })
+    }
+  })
 })
