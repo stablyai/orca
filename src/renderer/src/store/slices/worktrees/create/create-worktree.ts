@@ -31,6 +31,8 @@ import {
   type WorktreeCreateParentPick
 } from './worktree-create-parent-pick'
 
+import { repoHostId, withRepoHostOwnership } from '../listing/worktree-host-ownership'
+
 type RuntimeTarget = ReturnType<typeof getActiveRuntimeTarget>
 
 type CreateAttemptOutcome = {
@@ -68,6 +70,9 @@ async function runCreateAttempt(
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
   } catch (error) {
     if (!attempt.parentWorkspace || !isRuntimeLineageParentMissingError(error)) {
+      throw error
+    }
+    if (request.options?.isCancelled?.()) {
       throw error
     }
     return { result: await create(undefined), droppedParent: true }
@@ -169,6 +174,7 @@ export function createCreateWorktree(
       }
       // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
       const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
+      const ownerHostId = repoHostId(get(), repoId)
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
       if (
         target.kind === 'environment' &&
@@ -186,6 +192,9 @@ export function createCreateWorktree(
       }
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         try {
+          if (options?.isCancelled?.()) {
+            throw new Error('Worktree creation cancelled.')
+          }
           const outcome = await runCreateAttempt(
             request,
             {
@@ -201,11 +210,15 @@ export function createCreateWorktree(
             },
             target
           )
+          options?.onCreated?.(withRepoHostOwnership(outcome.result.worktree, ownerHostId))
+          applyCreatedWorktree(set, repoId, outcome.result, ownerHostId)
+          const { result } = outcome
+          if (options?.isCancelled?.()) {
+            return result
+          }
           if (lostRequestedParent(outcome, parent, target)) {
             warnParentDroppedOnce()
           }
-          applyCreatedWorktree(set, repoId, outcome.result)
-          const { result } = outcome
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)
@@ -220,7 +233,11 @@ export function createCreateWorktree(
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           const shouldRetry = isRetryableWorktreeCreateConflict(message)
-          if (!shouldRetry || attempt === CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS - 1) {
+          if (
+            options?.isCancelled?.() ||
+            !shouldRetry ||
+            attempt === CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS - 1
+          ) {
             throw error
           }
         }

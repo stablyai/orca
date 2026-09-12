@@ -1,8 +1,7 @@
+import { activeWorktreeCreationAttempts } from './worktree-creation-attempt'
+import { makeRequest, makePendingCreation } from './worktree-creation-test-fixtures'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  PendingWorktreeCreation,
-  WorktreeCreationRequest
-} from '@/lib/pending-worktree-creation'
+import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 
 const { prepareEphemeralVmWorkspaceTargetMock } = vi.hoisted(() => ({
   prepareEphemeralVmWorkspaceTargetMock: vi.fn()
@@ -36,6 +35,7 @@ const store = {
     delete store.pendingWorktreeCreations[creationId]
   }),
   updateWorktreeMeta: vi.fn(),
+  removeWorktree: vi.fn().mockResolvedValue({ ok: true }),
   setActivePendingWorktreeCreation: vi.fn(),
   setActiveView: vi.fn(),
   setSidebarOpen: vi.fn(),
@@ -96,6 +96,7 @@ import {
 } from './worktree-creation-flow'
 
 beforeEach(() => {
+  activeWorktreeCreationAttempts.clear()
   vi.clearAllMocks()
   store.settings.activeRuntimeEnvironmentId = null
   store.settings.experimentalNativeChat = undefined
@@ -109,33 +110,6 @@ beforeEach(() => {
   store.unifiedTabsByWorktree = {}
   vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
 })
-
-function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCreationRequest {
-  return {
-    repoId: 'repo-1',
-    name: 'feature',
-    setupDecision: 'inherit',
-    agent: null,
-    pendingFirstAgentMessageRename: false,
-    note: '',
-    startupPlan: null,
-    quickPrompt: '',
-    quickTelemetry: null,
-    ...overrides
-  }
-}
-
-function makePendingCreation(request: WorktreeCreationRequest): PendingWorktreeCreation {
-  return {
-    creationId: 'creation-1',
-    phase: 'preparing',
-    status: 'creating',
-    startedAt: 1,
-    indeterminate: false,
-    loaderVisible: true,
-    request
-  }
-}
 
 async function flushAsyncWorktreeCreation(): Promise<void> {
   await Promise.resolve()
@@ -473,17 +447,21 @@ describe('staged background worktree creation', () => {
     }
     const request = makeRequest({ linkedWorkItem, linkedTaskSourceContext })
     const expectedOptions = { linkedWorkItem, linkedTaskSourceContext }
+    store.createWorktree.mockRejectedValueOnce(new Error('Create failed'))
 
     expect(continueBackgroundWorktreeCreation('creation-1', request)).toBe(true)
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
     const stagedCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(stagedCreateCall?.[25]).toEqual(expectedOptions)
+    expect(stagedCreateCall?.[25]).toEqual(expect.objectContaining(expectedOptions))
 
+    await vi.waitFor(() =>
+      expect(store.pendingWorktreeCreations['creation-1'].status).toBe('error')
+    )
     store.createWorktree.mockClear()
     retryBackgroundWorktreeCreation('creation-1')
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalledTimes(1))
     const retryCreateCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
-    expect(retryCreateCall?.[25]).toEqual(expectedOptions)
+    expect(retryCreateCall?.[25]).toEqual(expect.objectContaining(expectedOptions))
   })
 
   it('can continue without revealing a staged create after background preflight', async () => {
@@ -603,10 +581,15 @@ describe('staged background worktree creation', () => {
 
     expect(started).toBe(true)
     await vi.waitFor(() => expect(markTrusted).toHaveBeenCalledTimes(1))
+    const options = (store.createWorktree.mock.calls[0] as unknown[])[25] as {
+      onCreated: (worktree: unknown) => void
+    }
+    options.onCreated({ id: 'wt-1', repoId: 'repo-1', hostId: 'local' })
     delete store.pendingWorktreeCreations['creation-1']
     store.activePendingCreationId = null
     resolveTrust()
-    await vi.waitFor(() => expect(store.removePendingWorktreeCreation).toHaveBeenCalled())
+    await vi.waitFor(() => expect(store.removeWorktree).toHaveBeenCalled())
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
 
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
   })
@@ -742,7 +725,9 @@ describe('staged background worktree creation', () => {
     )
     const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
     expect(createCall?.[25]).toEqual({
-      startupDraft: 'https://github.com/o/r/issues/12'
+      startupDraft: 'https://github.com/o/r/issues/12',
+      isCancelled: expect.any(Function),
+      onCreated: expect.any(Function)
     })
   })
 

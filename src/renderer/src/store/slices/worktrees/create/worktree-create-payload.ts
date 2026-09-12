@@ -4,8 +4,13 @@ import type { WorkspaceKey } from '../../../../../../shared/folder-workspace-typ
 import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
 import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
 
+import type { Worktree } from '../../../../../../shared/worktree/types'
+
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
+  /** Renderer lifecycle callbacks; never sent over IPC/RPC. */
+  isCancelled?: () => boolean
+  onCreated?: (worktree: Worktree) => void
   automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null

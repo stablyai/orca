@@ -8,6 +8,7 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
+import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getWorktreeOperationOwnerHostIds,
@@ -159,11 +160,20 @@ export function refuseUnprovableRemoteHostRouting(
 }
 
 /** The row on the confirmed host only — a same-id row elsewhere must not stand in for it. */
+export function assertWorktreeRemovalInstance(
+  worktree: Worktree | undefined,
+  expectedInstanceId?: string
+): void {
+  if (expectedInstanceId && worktree?.instanceId !== expectedInstanceId) {
+    throw new Error('Workspace instance changed before cancellation cleanup.')
+  }
+}
+
 export function findWorktreeOnConfirmedHost(
   get: WorktreeSliceGet,
   worktreeId: string,
   requiredExecutionHostId: ExecutionHostId | null
-): PreservedBranchWorktree {
+): Worktree | undefined {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   return get()
     .allWorktrees()

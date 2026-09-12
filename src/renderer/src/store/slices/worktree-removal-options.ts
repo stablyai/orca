@@ -6,6 +6,10 @@ export type RemoveWorktreeOptions = {
   // renderer-side teardown/purge as a normal remove.
   mode?: 'remove' | 'forget-local'
   suppressPreservedBranchToast?: boolean
+  /** Cancellation rolls back an unfinished workspace without running archive hooks. */
+  skipArchiveHooks?: boolean
+  /** Prevent a delayed creation rollback from removing a replacement at the same path. */
+  expectedInstanceId?: string
   // Why (#11960): only an explicit Force Delete waives the proof that every
   // PTY stopped; `force` alone is set by the ordinary delete confirmation.
   allowUnverifiedPtyStop?: boolean

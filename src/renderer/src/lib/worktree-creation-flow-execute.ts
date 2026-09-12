@@ -1,4 +1,7 @@
+import { dispatchWorktreeCreation } from './worktree-creation-dispatch'
 import { toast } from 'sonner'
+import { withWorktreeCreationCancellation } from './worktree-creation-cancellation'
+import type { WorktreeCreationAttempt } from './worktree-creation-attempt'
 import { useAppStore } from '@/store'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
@@ -8,7 +11,6 @@ import {
   cleanupEphemeralVmRuntimeForFailedCreate,
   prepareRequestForCreate
 } from '@/lib/ephemeral-vm-worktree-creation'
-import { getProvisionedRootCreateOptions } from '@/lib/provisioned-root-create-options'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
@@ -17,7 +19,6 @@ import { isAgentSessionHandleProvider } from '../../../shared/agent-session-prov
 import type { CreateWorktreeResult } from '../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
 import { buildWorktreeCreationStartupOpt } from '@/lib/worktree-creation-flow-startup'
 import {
   launchStructuredWorktreeSession,
@@ -38,69 +39,33 @@ export async function executeWorktreeCreation(
   creationId: string,
   request: WorktreeCreationRequest
 ): Promise<void> {
+  return withWorktreeCreationCancellation(creationId, (attempt) =>
+    executeWorktreeCreationAttempt(creationId, request, attempt)
+  )
+}
+
+async function executeWorktreeCreationAttempt(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  attempt: WorktreeCreationAttempt
+): Promise<void> {
+  if (request.ephemeralVmRuntimeId) {
+    attempt.cleanupRuntime = () => cleanupEphemeralVmRuntimeForFailedCreate(request)
+  }
   const preparedRequest = await prepareRequestForCreate(creationId, request)
   if (!preparedRequest) {
     return
   }
 
+  if (preparedRequest.ephemeralVmRuntimeId) {
+    attempt.cleanupRuntime = () => cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+  }
+  if (attempt.isCancelled()) {
+    return
+  }
   let result: CreateWorktreeResult
   try {
-    const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)
-    const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
-    const backendStartup =
-      provisionedRoot || structuredLaunch ? undefined : resolveBackendDraftStartup(preparedRequest)
-    result = await useAppStore
-      .getState()
-      .createWorktree(
-        preparedRequest.repoId,
-        preparedRequest.name,
-        preparedRequest.baseBranch,
-        preparedRequest.setupDecision,
-        preparedRequest.sparseCheckout,
-        preparedRequest.telemetrySource,
-        preparedRequest.displayName,
-        preparedRequest.linkedIssue,
-        preparedRequest.linkedPR,
-        preparedRequest.pushTarget,
-        preparedRequest.agent ?? undefined,
-        preparedRequest.linkedLinearIssue,
-        preparedRequest.branchNameOverride,
-        preparedRequest.workspaceStatus,
-        preparedRequest.linkedGitLabMR,
-        preparedRequest.linkedGitLabIssue,
-        backendStartup,
-        preparedRequest.pendingFirstAgentMessageRename,
-        creationId,
-        preparedRequest.linkedLinearIssueWorkspaceId,
-        preparedRequest.linkedLinearIssueOrganizationUrlKey,
-        preparedRequest.linkedBitbucketPR,
-        preparedRequest.linkedAzureDevOpsPR,
-        preparedRequest.linkedGiteaPR,
-        preparedRequest.compareBaseRef,
-        {
-          ...(preparedRequest.nameWasGenerated ? { nameWasGenerated: true } : {}),
-          ...(preparedRequest.displayNameKind
-            ? { displayNameKind: preparedRequest.displayNameKind }
-            : {}),
-          ...(preparedRequest.linkedWorkItem !== undefined
-            ? { linkedWorkItem: preparedRequest.linkedWorkItem }
-            : {}),
-          ...(preparedRequest.linkedTaskSourceContext !== undefined
-            ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
-            : {}),
-          // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
-          ...(!structuredLaunch &&
-          !backendStartup &&
-          preparedRequest.agent &&
-          preparedRequest.launchDraftPrompt
-            ? { startupDraft: preparedRequest.launchDraftPrompt }
-            : {}),
-          ...(provisionedRoot ? { provisionedRoot } : {}),
-          ...(preparedRequest.parentWorktreeId
-            ? { parentWorktreeId: preparedRequest.parentWorktreeId }
-            : {})
-        }
-      )
+    result = await dispatchWorktreeCreation(creationId, preparedRequest, attempt)
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
     // silently rather than surfacing an error for work they already dismissed.
@@ -128,14 +93,14 @@ export async function executeWorktreeCreation(
 
   const worktree = result.worktree
   const structuredLaunch = preparedRequest.agentLaunchRoute === 'structured-native-chat'
-  // Why: cancellation can race a successful backend adoption; clean up again after it settles so an adopted workspace cannot outlive its destroyed VM.
+  // Cleanup waits for this attempt to settle before removing its workspace or VM.
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
-    if (preparedRequest.ephemeralVmRuntimeId) {
-      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
-    }
     return
   }
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
+  if (attempt.isCancelled()) {
+    return
+  }
 
   const backendSpawned = result.startupTerminal?.spawned === true
   if (preparedRequest.startupPlan && !backendSpawned && !preparedRequest.startupPlan.launchToken) {
@@ -160,12 +125,14 @@ export async function executeWorktreeCreation(
   // view keeps the create in the background, while selecting another workspace
   // means the user still expects this task-launch handoff when it becomes ready;
   // the entry guard prevents a late trust preflight from reviving a cancelled create.
+  if (attempt.isCancelled()) {
+    return
+  }
   const completionState = useAppStore.getState()
   const shouldActivateOnCompletion =
-    completionState.pendingWorktreeCreations[creationId] !== undefined &&
-    (isPendingCreationSurfaceVisible(creationId) ||
-      (completionState.activeView === 'terminal' &&
-        completionState.activePendingCreationId === null))
+    completionState.activeView === 'terminal' &&
+    (completionState.activePendingCreationId === creationId ||
+      completionState.activePendingCreationId === null)
 
   // Why: the worktree exists past this point and nothing awaits this caller, so
   // each follow-up step is best-effort — an escaped throw would strand the
@@ -310,6 +277,10 @@ export async function executeWorktreeCreation(
     }
   }
 
+  if (attempt.isCancelled()) {
+    return
+  }
+  attempt.completed = true
   await completeWorktreeCreation({
     creationId,
     request: preparedRequest,
