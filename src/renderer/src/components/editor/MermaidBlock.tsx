@@ -2,6 +2,8 @@ import React, { useEffect, useId, useRef, useState } from 'react'
 import type mermaidNamespace from 'mermaid'
 import DOMPurify from 'dompurify'
 import { getMermaidConfig } from './mermaid-config'
+import { getRenderedDiagramSize } from './mermaid-diagram-size'
+import type { SurfaceContentDimensions } from './surface-zoom'
 import { translate } from '@/i18n/i18n'
 
 type MermaidApi = typeof mermaidNamespace
@@ -22,6 +24,9 @@ type MermaidBlockProps = {
   content: string
   isDark: boolean
   htmlLabels?: boolean
+  // Why: the rendered SVG is injected imperatively, so a zoom surface wrapping
+  // this block has no other way to learn the diagram's intrinsic size.
+  onRendered?: (size: SurfaceContentDimensions | null) => void
 }
 
 // Why: mermaid.render() manipulates global DOM state (element IDs, internal
@@ -50,7 +55,8 @@ function enqueueRender(fn: () => Promise<void>): void {
 export default function MermaidBlock({
   content,
   isDark,
-  htmlLabels = false
+  htmlLabels = false,
+  onRendered
 }: MermaidBlockProps): React.JSX.Element {
   const id = useId().replace(/:/g, '_')
   const containerRef = useRef<HTMLDivElement>(null)
@@ -80,10 +86,12 @@ export default function MermaidBlock({
             USE_PROFILES: { svg: true }
           })
           setError(null)
+          onRendered?.(getRenderedDiagramSize(containerRef.current))
         }
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : 'Invalid mermaid syntax')
+          onRendered?.(null)
           // Mermaid leaves an error element in the DOM on failure — clean it up.
           const errorEl = document.getElementById(`d${`mermaid-${id}`}`)
           errorEl?.remove()
@@ -97,7 +105,7 @@ export default function MermaidBlock({
     return () => {
       cancelled = true
     }
-  }, [content, htmlLabels, isDark, id])
+  }, [content, htmlLabels, isDark, id, onRendered])
 
   if (error) {
     return (
