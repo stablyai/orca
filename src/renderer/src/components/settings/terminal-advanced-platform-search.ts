@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { getTerminalShellHistorySearchEntry } from './terminal-shell-history-search'
 
 export const getTerminalAdvancedSearchEntries = createLocalizedCatalog(() => [
   {
@@ -36,7 +37,8 @@ export const getTerminalAdvancedSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.terminal.search.affb14efd4', 'selection')
     ]
-  }
+  },
+  getTerminalShellHistorySearchEntry()
 ])
 
 export const getTerminalMacOptionSearchEntries = createLocalizedCatalog(() => [
