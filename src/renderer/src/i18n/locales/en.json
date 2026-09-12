@@ -17580,7 +17580,15 @@
       "agentUnavailable": "{{agent}} was not detected on this workspace host.",
       "sent": "Session context sent to {{agent}} in a new session.",
       "deliveryFailed": "The new {{agent}} session started, but its context could not be sent.",
-      "launchFailed": "Could not start a new {{agent}} session."
+      "launchFailed": "Could not start a new {{agent}} session.",
+      "destination": "Destination",
+      "destinationCurrent": "This workspace",
+      "destinationNewWorktree": "New worktree",
+      "branchNamePlaceholder": "Branch name",
+      "baseRefPlaceholder": "Base ref (defaults to the project base)",
+      "destinationNewWorktreeDescription": "Creates the worktree, then starts the Agent there with this context. Uncommitted changes stay in the source workspace.",
+      "worktreeRepoMissing": "Could not find the project this session belongs to.",
+      "creatingWorktree": "Creating {{branch}} and starting {{agent}} there."
     },
     "status": {
       "bar": {
