@@ -91,7 +91,7 @@ describe('local filesystem watcher flush serialization', () => {
     expect(root.batch.timer).toBeNull()
   })
 
-  it('can schedule a late event after an error clears the pending timer', async () => {
+  it('discards queued and late events after a terminal watcher error', async () => {
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const root = await createLocalWatcher('/repo', '/repo')
@@ -102,7 +102,35 @@ describe('local filesystem watcher flush serialization', () => {
       watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
       vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
       await flushMicrotasks()
-      expect(sender.send).toHaveBeenCalledTimes(2)
+      expect(sender.send).toHaveBeenCalledTimes(1)
+      expect(root.batch.cancelled).toBe(true)
+      expect(root.batch.events).toEqual([])
+      expect(root.batch.timer).toBeNull()
+    } finally {
+      errorLog.mockRestore()
+    }
+  })
+
+  it('suppresses an inflight batch and its queued drain after a terminal watcher error', async () => {
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const pendingStat = deferred<{ isDirectory: () => boolean }>()
+    statMock.mockReturnValueOnce(pendingStat.promise)
+    try {
+      const root = await createLocalWatcher('/repo', '/repo')
+      root.listeners.set(1, sender as never)
+      watcherCallback?.(null, [{ type: 'update', path: '/repo/first.ts' }])
+      vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+      await flushMicrotasks()
+      expect(statMock).toHaveBeenCalledTimes(1)
+      watcherCallback?.(null, [{ type: 'update', path: '/repo/queued.ts' }])
+      watcherCallback?.(new Error('watcher interrupted'), [])
+      pendingStat.resolve({ isDirectory: () => false })
+      vi.advanceTimersByTime(WATCH_BATCH_MAX_WAIT_MS)
+      await flushMicrotasks()
+      expect(sender.send).toHaveBeenCalledTimes(1)
+      expect(statMock).toHaveBeenCalledTimes(1)
+      expect(root.batch.events).toEqual([])
+      expect(root.batch.timer).toBeNull()
     } finally {
       errorLog.mockRestore()
     }
