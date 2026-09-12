@@ -1,4 +1,4 @@
-import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, mkdtemp, rm, stat, truncate, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -170,6 +170,8 @@ it('replays only the appended lines on a resumed read', async () => {
   expect(firstRead?.outcome?.incomplete).toBe(false)
 
   await appendFile(transcript, `${jsonLines(claudeTurns(5, 5))}\n`)
+  const changedAt = new Date(firstRead!.start.candidate.file.mtimeMs + 2000)
+  await utimes(transcript, changedAt, changedAt)
   consumer.reads.length = 0
   await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
 
@@ -182,6 +184,38 @@ it('replays only the appended lines on a resumed read', async () => {
     'tool:Bash: ls 5'
   ])
 })
+
+it.each(['rewrite', 'truncate then regrow'])(
+  're-reads a same-size %s from zero',
+  async (operation) => {
+    const { transcript } = await writeClaudeFixture()
+    const before = await claudeCandidate(transcript)
+    await parseAgentSessionFileCached(before, 'darwin')
+    const consumer = recordingConsumer()
+    const rewritten = `${jsonLines(claudeTurns(1, 4))}\n`.replace('reply 4', 'fresh 4')
+    expect(Buffer.byteLength(rewritten)).toBe(before.file.sizeBytes)
+
+    if (operation === 'truncate then regrow') {
+      await truncate(transcript, 0)
+      await appendFile(transcript, rewritten)
+    } else {
+      await writeFile(transcript, rewritten)
+    }
+    const changedAt = new Date(before.file.mtimeMs + 2000)
+    await utimes(transcript, changedAt, changedAt)
+    const session = await parseAgentSessionFileCached(await claudeCandidate(transcript), 'darwin')
+
+    expect(consumer.reads).toHaveLength(1)
+    expect(consumer.reads[0].start.mode).toBe('replace')
+    expect(consumer.reads[0].start.previousByteOffset).toBe(0)
+    expect(textsFor(consumer.reads, 'claude')).toContain('assistant:fresh 4')
+    expect(textsFor(consumer.reads, 'claude')).not.toContain('assistant:reply 4')
+    resetSessionParseCacheForTests()
+    expect(session).toEqual(
+      await parseAgentSessionFileCached(await claudeCandidate(transcript), 'darwin')
+    )
+  }
+)
 
 it('publishes a trailing unterminated line once, when it is complete', async () => {
   const { roots, transcript } = await writeClaudeFixture()

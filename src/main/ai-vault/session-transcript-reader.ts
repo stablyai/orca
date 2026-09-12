@@ -68,6 +68,9 @@ export async function readResumableTranscript(args: {
     resume !== null &&
     typeof file.sizeBytes === 'number' &&
     file.sizeBytes >= resume.byteOffset &&
+    file.mtimeMs >= resume.mtimeMs &&
+    // A changed timestamp without growth signals a rewrite, even at a valid line boundary.
+    (file.mtimeMs === resume.mtimeMs || file.sizeBytes > (resume.sizeBytes ?? resume.byteOffset)) &&
     (resume.byteOffset === 0 || (await endsWithNewlineAt(file.path, resume.byteOffset)))
 
   // Clone before consuming: a failed read must not corrupt the cached state,
@@ -127,7 +130,13 @@ export async function readResumableTranscript(args: {
     channel.finishRead({ session, byteOffset: readResult.consumedThrough, incomplete: false })
     return {
       session,
-      resume: { state, byteOffset: readResult.consumedThrough, channel }
+      resume: {
+        state,
+        byteOffset: readResult.consumedThrough,
+        mtimeMs: file.mtimeMs,
+        sizeBytes: file.sizeBytes,
+        channel
+      }
     }
   } catch (error) {
     channel.finishRead({ session: null, byteOffset: startOffset, incomplete: true })
