@@ -1,5 +1,7 @@
 import { prepareManagedWslCodexHomeBeforeShellLaunch } from '../../../codex/managed-wsl-home-shell-preflight'
 import { defineMethod } from '../core'
+import { CANVAS_AGENT_CONTEXT_METHODS } from './canvas-agent-context'
+import { CANVAS_MESSAGING_METHODS } from './canvas-messaging'
 import { PrepareCodexForWslPaneParams } from '../../../../shared/rpc-contract/agent-hooks-params'
 
 export const AGENT_HOOK_METHODS = [
@@ -21,5 +23,7 @@ export const AGENT_HOOK_METHODS = [
           settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')
       })
     }
-  })
+  }),
+  ...CANVAS_AGENT_CONTEXT_METHODS,
+  ...CANVAS_MESSAGING_METHODS
 ]

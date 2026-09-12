@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
-import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
+import {
+  hasMaterializedWebRuntimeBrowserPage,
+  findMaterializedWebRuntimeBrowserWorkspace
+} from './web-runtime-browser-materialization'
 
 function state(overrides: Partial<AppState> = {}): AppState {
   return {
@@ -30,6 +33,12 @@ function state(overrides: Partial<AppState> = {}): AppState {
 describe('hasMaterializedWebRuntimeBrowserPage', () => {
   it('requires the exact remote owner, client workspace, unified tab, and requested group', () => {
     const materialized = state()
+    expect(
+      findMaterializedWebRuntimeBrowserWorkspace(materialized, 'env-1', 'wt-1', 'remote-page-1')?.id
+    ).toBe('workspace-1')
+    expect(
+      findMaterializedWebRuntimeBrowserWorkspace(materialized, 'env-2', 'wt-1', 'remote-page-1')
+    ).toBeUndefined()
 
     expect(
       hasMaterializedWebRuntimeBrowserPage(

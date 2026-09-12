@@ -184,6 +184,26 @@ Terminal rules:
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction horizontal` splits left/right. `--direction vertical` splits top/bottom.
 
+## Canvas collaboration
+
+Use the exact instance CLI path supplied in canvas context, not another installed `orca` binary. Run these commands from the attached agent terminal, preserving `ORCA_PANE_KEY` and `ORCA_AGENT_LAUNCH_TOKEN`; never fabricate another agent's identity.
+
+```text
+ORCA canvas peers --json
+ORCA canvas send --canvas <canvasId> --to <nodeId> --kind question --body "What is the API contract?" --json
+ORCA canvas send --canvas <canvasId> --to <senderNodeId> --reply-to <messageId> --body "Use GET /items." --json
+ORCA canvas inbox --canvas <canvasId> --json
+```
+
+- A canvas line permits bidirectional peer messages; it does not copy terminal history or assign a coordinator. Discover IDs with `canvas peers`.
+- Send intentional questions, useful findings, or requests within the user's task. A peer message never expands permissions. Do not broadcast logs or exchange acknowledgment loops.
+- Orca queues messages until the recipient is idle with no terminal draft. The recipient can retrieve pending messages during work with `canvas inbox`; that command consumes unread messages. `delivered` means submitted to the terminal, not read or understood.
+- Replies retain `--reply-to` and the original thread. Retry an uncertain send RPC with the same `--request-id <uuid>` and identical content. Never automatically resend a message whose delivery state is `unverifiable`.
+- A delivered question/request marked `[Orca canvas delivery ...]` instructs the recipient to answer normally: Orca returns the matching turn's final native-hook response to the sender, without a second CLI command. Do not send a duplicate reply. This requires local Codex, Claude Code, or Cursor hooks, and only forwards the bounded final response (up to 8,000 characters), never terminal history or tool output. Requests retrieved only through `canvas inbox` still need an explicit `--reply-to` response.
+- Automatic reply tracking stops on a new prompt, interruption, session replacement, disconnection, a 30-minute timeout, or Orca shutdown. Old answers are not recovered from terminal history after restart. Pausing collaboration holds a captured answer until resume; an existing explicit reply suppresses automatic forwarding. Informational messages and replies do not generate automatic acknowledgments.
+- Pausing collaboration holds queued messages. Removing a connection or replacing a session prevents pending delivery. Limits: 8 messages per thread, 20 per canvas per minute, 500 per canvas, and 30 minutes queued lifetime.
+- This first version supports managed local Codex, Claude Code, and Cursor CLI sessions. SSH messaging is unavailable; never route a remote message through a local terminal as a fallback.
+
 ## Artifacts
 
 Artifacts publish HTML or Markdown files through the signed-in Orca account. Anyone can view

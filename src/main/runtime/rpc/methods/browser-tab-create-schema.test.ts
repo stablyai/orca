@@ -3,6 +3,11 @@ import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigatio
 import { BrowserTabCreateParams } from './browser-tab-create-schema'
 
 describe('browser.tabCreate placement schema', () => {
+  it('accepts an optional bounded origin pane without requiring it from older CLIs', () => {
+    expect(BrowserTabCreateParams.parse({})).not.toHaveProperty('originPaneKey')
+    expect(BrowserTabCreateParams.parse({ originPaneKey: 'pane' }).originPaneKey).toBe('pane')
+    expect(() => BrowserTabCreateParams.parse({ originPaneKey: 'x'.repeat(513) })).toThrow()
+  })
   it('keeps placement optional for older clients', () => {
     expect(BrowserTabCreateParams.parse({ worktree: 'id:worktree-a' })).not.toHaveProperty(
       'placement'

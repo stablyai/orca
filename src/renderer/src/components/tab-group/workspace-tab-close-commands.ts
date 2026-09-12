@@ -1,3 +1,4 @@
+import { closeCanvasTab } from '../agent-canvas/close-canvas-tab'
 import { toast } from 'sonner'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
@@ -124,6 +125,9 @@ export function createWorkspaceTabCloseCommands({
       if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
         return
       }
+    } else if (item.contentType === 'canvas') {
+      void closeCanvasTab(item, opts?.skipEmptyCheck ? undefined : leaveWorktreeIfEmpty)
+      return
     } else if (item.contentType === 'simulator') {
       closeUnifiedTab(item.id)
     } else {

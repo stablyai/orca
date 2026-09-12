@@ -47,6 +47,8 @@ ORCA exec --command "help" --json
 
 Browser rules:
 
+- In a desktop canvas, `ORCA tab create --url <url> --json` from an attached agent's terminal also adds and connects that native browser card beside the agent, without switching the user's tab. Keep the returned `browserPageId` and use `--page <browserPageId>` on every later command; the card shows that same page. The calling pane is inherited from Orca's terminal environment. Do not fabricate it. This canvas placement requires the owning desktop renderer; headless/server-hosted pages remain regular browser pages.
+
 - Re-snapshot after navigation, tab switches, clicks that change the page, and any `browser_stale_ref`.
 - Refs like `@e1` are assigned by `snapshot`, scoped to one tab, and invalidated by navigation or tab switch.
 - Browser commands default to the current worktree and its active tab. Use `--worktree all` only intentionally.

@@ -6,20 +6,26 @@ import {
   buildWindowsHookStdinDrainEpilogue
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
+import {
+  windowsContextHookScript,
+  WINDOWS_CONTEXT_POST_FAILURE
+} from '../agent-hooks/hook-context-response-script'
 
 export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
-    return [
-      '@echo off',
-      'setlocal',
-      // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      ...buildWindowsHookEnvironmentGuardLines(),
-      buildWindowsAgentHookCurlPostCommand('codex'),
-      'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
-      ''
-    ].join('\r\n')
+    return windowsContextHookScript(
+      [
+        // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
+        'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+        ...buildWindowsHookEnvironmentGuardLines(),
+        buildWindowsAgentHookCurlPostCommand('codex', true),
+        WINDOWS_CONTEXT_POST_FAILURE,
+        'exit /b 0',
+        ...buildWindowsHookStdinDrainEpilogue(),
+        ''
+      ],
+      'rem No context on failure'
+    )
   }
 
   return [
@@ -64,6 +70,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: keep full hook JSON off the command line and avoid URL-encoding paths/commands into IDS-friendly traversal signatures.
     ...buildPosixAgentHookPostCommand('codex', {
       curlCommand: '"$curl_bin"',
+      contextResponse: true,
       indent: '    '
     }).map((line) => `  ${line}`),
     '}',
@@ -71,13 +78,15 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  [ -n "$WSL_DISTRO_NAME" ] && return 0',
     '  grep -qiE "microsoft|wsl" /proc/sys/kernel/osrelease /proc/version 2>/dev/null',
     '}',
-    'if post_codex_hook curl >/dev/null 2>&1; then',
+    'if orca_hook_reply=$(post_codex_hook curl 2>/dev/null); then',
+    '  if [ -n "$orca_hook_reply" ]; then printf "%s\\n" "$orca_hook_reply"; fi',
     '  exit 0',
     'fi',
     'if is_wsl_runtime; then',
     '  windows_curl=$(command -v curl.exe 2>/dev/null || true)',
     '  if [ -n "$windows_curl" ] && [ -x "$windows_curl" ]; then',
-    '    if post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1; then',
+    '    if orca_hook_reply=$(post_codex_hook "$windows_curl" 3 5 2>/dev/null); then',
+    '      if [ -n "$orca_hook_reply" ]; then printf "%s\\n" "$orca_hook_reply"; fi',
     '      exit 0',
     '    fi',
     '    # post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true',

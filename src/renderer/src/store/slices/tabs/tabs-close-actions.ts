@@ -8,6 +8,8 @@ import {
   sanitizeRecentTabIds
 } from '../tab-group-state'
 import { buildActiveSurfacePatch } from './tabs-surface'
+import { removeClosedTabFromCanvases } from '@/components/agent-canvas/canvas-closed-resource-cleanup'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -156,6 +158,13 @@ export function createTabsCloseActions(
         }
       })
 
+      removeClosedTabFromCanvases(
+        {
+          ...tab,
+          executionHostId: tab.executionHostId ?? getExecutionHostIdForWorktree(state, worktreeId)
+        },
+        state.unifiedTabsByWorktree[worktreeId] ?? []
+      )
       if (opts?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }

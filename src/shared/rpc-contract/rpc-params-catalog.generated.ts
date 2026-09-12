@@ -13,6 +13,13 @@ import {
   BrowserNetworkTunnelAttachParams
 } from '../browser-client-host-protocol'
 import { BrowserClientPageMetadataParams } from '../browser-client-page-metadata-protocol'
+import { canvasContextReplaceSchema, canvasContextSyncSchema } from '../canvas-agent-context'
+import {
+  canvasActorSchema,
+  canvasHistorySchema,
+  canvasInboxSchema,
+  canvasSendSchema
+} from '../canvas-messaging'
 import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
@@ -549,6 +556,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.selectCodexForTarget': SelectCodexAccountForTargetParams,
   'accounts.subscribe': null,
   'accounts.unsubscribe': AccountsUnsubscribeParams,
+  'agentHooks.canvasContext': canvasContextReplaceSchema,
+  'agentHooks.canvasContextSync': canvasContextSyncSchema,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.cancel': CancelParams,
   'agentSession.close': OptionsParams,
@@ -680,6 +689,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.upload': Upload,
   'browser.viewport': Viewport,
   'browser.wait': Wait,
+  'canvas.history': canvasHistorySchema,
+  'canvas.inbox': canvasInboxSchema,
+  'canvas.peers': canvasActorSchema,
+  'canvas.send': canvasSendSchema,
   'clipboard.abortImageUpload': AbortImageUpload,
   'clipboard.appendImageUploadChunk': AppendImageUploadChunk,
   'clipboard.commitImageUpload': CommitImageUpload,

@@ -197,6 +197,8 @@ export type RuntimeTerminalRead = {
   source?: 'stream' | 'screen' | 'screen-unavailable'
   /** UI-only composer text, excluded from `tail`. */
   draft?: string
+  /** Present only when the rendered cursor proves a recognized empty agent composer. */
+  composerReady?: boolean
 }
 
 export type RuntimeTerminalRename = {

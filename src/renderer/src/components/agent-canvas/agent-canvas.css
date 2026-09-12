@@ -1,0 +1,58 @@
+.agent-canvas {
+  --xy-background-color: color-mix(in srgb, var(--foreground) 3%, var(--background));
+  --canvas-grid-dot: color-mix(in srgb, var(--muted-foreground) 45%, transparent);
+  --canvas-grid-line: color-mix(in srgb, var(--muted-foreground) 10%, transparent);
+  --xy-node-border: 1px solid var(--border);
+  --xy-node-background-color: var(--card);
+  --xy-node-color: var(--card-foreground);
+  --xy-edge-stroke: var(--muted-foreground);
+  --xy-edge-stroke-selected: var(--foreground);
+  --xy-handle-background-color: var(--foreground);
+  --xy-handle-border-color: var(--background);
+  --xy-selection-background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --xy-selection-border: 1px solid var(--ring);
+  --xy-resize-background-color: var(--foreground);
+}
+
+.agent-canvas .react-flow__node.selected > section {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.agent-canvas .react-flow__handle {
+  width: 20px;
+  height: 20px;
+  border-width: 3px;
+  cursor: crosshair;
+}
+
+.agent-canvas [data-canvas-kind='note'] {
+  background: color-mix(in srgb, var(--foreground) 4%, var(--card));
+}
+
+.agent-canvas .react-flow__edge-path {
+  stroke-width: 2;
+}
+
+.agent-canvas .canvas-link-control {
+  color: var(--muted-foreground);
+}
+
+.agent-canvas .canvas-link-control:hover {
+  color: var(--foreground);
+}
+
+.agent-canvas .react-flow__handle:hover {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.agent-canvas .react-flow__edge-text {
+  fill: var(--muted-foreground);
+  font-family: Geist, sans-serif;
+  font-size: 11px;
+}
+
+.agent-canvas .react-flow__edge-textbg {
+  fill: var(--background);
+}

@@ -9,6 +9,7 @@ import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/structured-agent-session-runtime'
+import { stopCanvasMessaging } from '../runtime/canvas/canvas-messaging-runtime'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from '../runtime/runtime-metadata'
 import { shutdownPairedRuntimeBrowserClientHosts } from '../browser/paired-runtime-browser-client-host-runtime'
@@ -75,6 +76,9 @@ function installBeforeQuitHandler(): void {
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
     state.unsubscribeAgentAwakeStatusChanges = null
+    if (state.runtime) {
+      stopCanvasMessaging(state.runtime)
+    }
     state.agentAwakeService?.dispose()
     state.agentAwakeService = null
     // Why wait but not uninstall: a renderer beforeunload can still veto this

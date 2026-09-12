@@ -75,9 +75,7 @@ describe('relay correction mixed-version wire contracts', () => {
       appVersion: 'test'
     }
     expect(BaselineHello.parse(HostHelloSchema.parse(hello))).toEqual(hello)
-    expect(BaselineHello.safeParse({ ...hello, idleRegionalRehome: true }).success).toBe(
-      false
-    )
+    expect(BaselineHello.safeParse({ ...hello, idleRegionalRehome: true }).success).toBe(false)
   })
 
   it('the idle cutover uses a drain frame understood by the pinned old desktop', () => {

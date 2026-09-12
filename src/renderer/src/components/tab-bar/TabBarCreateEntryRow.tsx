@@ -5,6 +5,7 @@ import {
   GitCompare,
   Globe,
   Loader2,
+  Network,
   Search,
   Smartphone,
   TerminalSquare
@@ -164,7 +165,9 @@ function getActionPresentation(
 } {
   if (option.kind === 'menu') {
     const icon =
-      option.option.kind === 'new-browser' ? (
+      option.option.kind === 'new-canvas' ? (
+        <Network className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'new-browser' ? (
         <Globe className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-markdown' ? (
         <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />

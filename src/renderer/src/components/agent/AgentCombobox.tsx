@@ -46,6 +46,7 @@ type AgentComboboxProps = {
    *  the selected trigger and each list item get a context menu. */
   onSetDefault?: (agent: DefaultAgentPreference) => void
   triggerClassName?: string
+  triggerAriaLabel?: string
   /** When set, pressing Enter on the closed combobox trigger invokes this
    *  instead of opening the popover — lets the parent form treat the Agent
    *  field as the last keyboard-submit step. */
@@ -156,6 +157,7 @@ export default function AgentCombobox({
   defaultAgent,
   onSetDefault,
   triggerClassName,
+  triggerAriaLabel,
   onTriggerEnter,
   allowNarrowTrigger = false,
   allowBlankTerminal = true,
@@ -323,6 +325,7 @@ export default function AgentCombobox({
               type="button"
               variant="outline"
               role="combobox"
+              aria-label={triggerAriaLabel}
               aria-expanded={open}
               onKeyDown={handleTriggerKeyDown}
               className={cn(
