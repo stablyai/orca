@@ -1,4 +1,5 @@
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
 export function indexPersistedPtyWorktreeBindings(
@@ -86,4 +87,27 @@ export function setsEqual<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
     }
   }
   return true
+}
+
+export function createPersistedPtyBindingLookup(
+  readSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null | undefined
+) {
+  type Indexes = {
+    worktreeIdByPtyId: ReturnType<typeof indexPersistedPtyWorktreeBindings>
+    surfaceByPtyId: ReturnType<typeof indexPersistedPtySurfaceBindings>
+  }
+  const indexesByHostId = new Map<ExecutionHostId, Indexes>()
+  return (hostId: ExecutionHostId): Indexes => {
+    const existing = indexesByHostId.get(hostId)
+    if (existing) {
+      return existing
+    }
+    const session = readSession(hostId)
+    const indexes = {
+      worktreeIdByPtyId: indexPersistedPtyWorktreeBindings(session),
+      surfaceByPtyId: indexPersistedPtySurfaceBindings(session)
+    }
+    indexesByHostId.set(hostId, indexes)
+    return indexes
+  }
 }

@@ -25,7 +25,6 @@ export const MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES = 1024
 
 type ReservedOwner = {
   claim: AgentSessionExecutionClaim
-  worktreeScopeDigest: string
   generation: string
   phase: 'reserved'
   promise: Promise<AgentSessionClaimedSpawnResult>
@@ -74,9 +73,6 @@ export class ClaimedAgentPtyOwnerRegistry {
       if (!agentSessionClaimsEqual(live.claim, requestedClaim)) {
         throw new Error('agent_session_ownership_unknown')
       }
-      if (live.claim.worktreeScopeDigest !== requestedClaim.worktreeScopeDigest) {
-        throw new Error('agent_session_conflict')
-      }
       if (!args.isLive || (await args.isLive(cloneOwner(live)))) {
         const current = this.live.get(key)
         if (current?.ptyId === live.ptyId && current.generation === live.generation) {
@@ -89,9 +85,6 @@ export class ClaimedAgentPtyOwnerRegistry {
 
     const reserved = this.reserved.get(key)
     if (reserved) {
-      if (reserved.worktreeScopeDigest !== requestedClaim.worktreeScopeDigest) {
-        throw new Error('agent_session_conflict')
-      }
       const result = await reserved.promise
       return { disposition: 'adopted', owner: cloneOwner(result.owner as LiveOwner) }
     }
@@ -109,7 +102,6 @@ export class ClaimedAgentPtyOwnerRegistry {
     void promise.catch(() => {})
     this.reserved.set(key, {
       claim: requestedClaim,
-      worktreeScopeDigest: requestedClaim.worktreeScopeDigest,
       generation,
       phase: 'reserved',
       promise
@@ -133,15 +125,13 @@ export class ClaimedAgentPtyOwnerRegistry {
             ptyId: spawned.ptyId,
             surface: requestedSurface
           }
-      if (
-        owner.ptyId !== spawned.ptyId ||
-        !scopedAgentSessionClaimsEqual(owner.claim, requestedClaim)
-      ) {
+      if (owner.ptyId !== spawned.ptyId || !agentSessionClaimsEqual(owner.claim, requestedClaim)) {
         throw new Error('agent_session_ownership_unknown')
       }
       if (
         spawned.disposition !== 'adopted' &&
-        !agentSessionSurfacesEqual(owner.surface, requestedSurface)
+        (!scopedAgentSessionClaimsEqual(owner.claim, requestedClaim) ||
+          !agentSessionSurfacesEqual(owner.surface, requestedSurface))
       ) {
         // Why: only an already-reconciled owner may override placement; a fresh
         // owner returning another surface would let a lower layer forge authority.
@@ -283,7 +273,7 @@ export class ClaimedAgentPtyOwnerRegistry {
 
   find(claim: AgentSessionExecutionClaim): AgentSessionOwnerBinding | null {
     const owner = this.live.get(agentSessionClaimKey(claim))
-    return owner && scopedAgentSessionClaimsEqual(owner.claim, claim) ? cloneOwner(owner) : null
+    return owner && agentSessionClaimsEqual(owner.claim, claim) ? cloneOwner(owner) : null
   }
 
   private rebuildPtyIndex(): void {

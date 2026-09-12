@@ -57,6 +57,12 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
       worktreeWslDistro,
       currentRevision: this.getTerminalTopologyRevision(workspace.id),
       ports: {
+        bindPtySurface: (ptyId, tabId, paneKey) => {
+          const pty = this.ptysById.get(ptyId)
+          if (pty) {
+            this.recordPtyWorktree(ptyId, pty.worktreeId, { tabId, paneKey })
+          }
+        },
         getPty: (handle) => this.getLivePtyForHandle(handle)?.pty ?? null,
         getLeaves: (ptyId) => this.getLeavesForPty(ptyId),
         getLeaf: (tabId, leafId) => this.leaves.get(this.getLeafKey(tabId, leafId)),

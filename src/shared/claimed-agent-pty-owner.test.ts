@@ -48,7 +48,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     expect(spawn).toHaveBeenCalledTimes(1)
   })
 
-  it('conflicts when the same identity is claimed by another worktree', async () => {
+  it('adopts the incumbent placement when another worktree requests the same writer', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
     await registry.ensure({
       claim: claim(),
@@ -65,10 +65,10 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
         surface: { ...surface, worktreeId: 'other' },
         spawn: async () => ({ ptyId: 'pty-2' })
       })
-    ).rejects.toThrow('agent_session_conflict')
+    ).resolves.toMatchObject({ disposition: 'adopted', owner: { ptyId: 'pty-1', surface } })
   })
 
-  it('does not find an owner through another worktree scope', async () => {
+  it('finds the incumbent through another worktree scope', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
     await registry.ensure({
       claim: claim(),
@@ -83,7 +83,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
           'ccccccccccccccccccccccccccccccccccccccccccc'
         )
       )
-    ).toBeNull()
+    ).toMatchObject({ ptyId: 'pty-1', surface, claim: claim() })
   })
 
   it('generation-guards release across a replacement owner', async () => {

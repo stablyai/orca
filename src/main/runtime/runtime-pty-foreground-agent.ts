@@ -51,7 +51,11 @@ export class RuntimePtyForegroundAgent {
     }
     let entry: PtyForegroundProcessReadEntry
     const promise = processRead
-      .then((process) => ({ controller, process, available: true }))
+      .then((process) => ({
+        controller,
+        process,
+        available: this.reads.get(ptyId) === entry
+      }))
       .catch(() => unavailable)
       .finally(() => this.deleteRead(ptyId, entry))
     entry = { controller, startedAfterTitleObservation: afterTitle, promise }
@@ -114,6 +118,12 @@ export class RuntimePtyForegroundAgent {
   }
 
   clearDelayedSnapshot(ptyId: string): void {
+    this.delayedTitles.delete(ptyId)
+  }
+
+  resetIncarnation(ptyId: string): void {
+    this.reads.delete(ptyId)
+    this.refreshes.delete(ptyId)
     this.delayedTitles.delete(ptyId)
   }
 

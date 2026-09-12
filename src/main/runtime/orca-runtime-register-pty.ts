@@ -26,6 +26,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     isWsl?: boolean
   ): void {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
+    this.ptyOwnershipRevisions.advance(ptyId)
     const existingPty = this.ptysById.get(ptyId)
     const replacementHandle = binding?.terminalHandle?.trim()
     const pendingReplacement = this.pendingPtyHandleReplacementFences.get(ptyId)
@@ -78,7 +79,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         : {}),
       ...(isWsl !== undefined ? { isWsl } : {}),
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
-      ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
+      incarnationId: binding?.incarnationId ?? null
     })
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (paneKey && binding?.incarnationId && hostScope) {
@@ -137,6 +138,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     if (binding && paneKey) {
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
     }
+    this.ptyOwnershipRevisions.advance(ptyId, binding?.incarnationId ?? null)
   }
 
   assertPtyRegistrationAllowed(ptyId: string, incarnationId?: PtyIncarnationId): void {
@@ -158,12 +160,14 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       exitedIncarnation === candidateIncarnation
     ) {
       // Why: the rejected spawn call was the fence's sole late publisher; retaining it leaks fresh PTY ids.
+      this.ptyOwnershipRevisions.advance(ptyId)
       this.earlyExitedPtyIncarnations.delete(ptyId)
       this.pendingPtyRegistrationIncarnations.delete(ptyId)
     }
   }
 
   beginPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId): void {
+    this.ptyOwnershipRevisions.advance(ptyId)
     this.pendingPtyRegistrationIncarnations.set(ptyId, incarnationId ?? null)
   }
 
@@ -171,7 +175,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       // Why: a reconnect attach reply can prove the exit generation after stale local proof was cleared.
-      pty.incarnationId = incarnationId
+      this.transitionPtyIncarnation(pty, incarnationId)
     }
   }
 
@@ -183,6 +187,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     ) {
       return
     }
+    this.ptyOwnershipRevisions.advance(ptyId)
     this.pendingPtyRegistrationIncarnations.delete(ptyId)
     const exited = this.earlyExitedPtyIncarnations.get(ptyId)
     if (

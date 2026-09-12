@@ -495,6 +495,7 @@ describe('OrcaRuntimeService', () => {
       opts.adoptedStablePane
         ? {
             id: 'pty-stable-owner',
+            incarnationId: 'synthetic-stable',
             isReattach: true,
             stablePaneOwner: {
               handle: opts.adoptedStablePane.owner.handle!,
@@ -502,7 +503,7 @@ describe('OrcaRuntimeService', () => {
               leafId: HEADLESS_LEAF_ID
             }
           }
-        : { id: 'pty-stable-owner' }
+        : { id: 'pty-stable-owner', incarnationId: 'synthetic-stable' }
     )
     const runtimeStore = {
       ...store,
@@ -526,7 +527,7 @@ describe('OrcaRuntimeService', () => {
       launchAgent: 'claude'
     })
     adoptStablePane.mockResolvedValueOnce({
-      result: { id: 'pty-stable-owner', isReattach: true },
+      result: { id: 'pty-stable-owner', incarnationId: 'synthetic-stable', isReattach: true },
       owner: {
         handle: first.handle,
         tabId: 'stable-owner-tab',

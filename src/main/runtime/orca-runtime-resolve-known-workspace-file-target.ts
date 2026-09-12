@@ -118,6 +118,7 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
     if (existing) {
       return existing
     }
+    this.ptyOwnershipRevisions.advance(ptyId)
     const handle = this.createPreAllocatedTerminalHandle()
     this.handleByPtyId.set(ptyId, handle)
     return handle
@@ -160,6 +161,7 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
       // incarnation. Never let that predecessor alias be reintroduced.
       return
     }
+    this.ptyOwnershipRevisions.advance(ptyId)
     const retained = this.handleByPtyIncarnation.get(ptyId)
     if (retained?.handle === handle) {
       this.handleByPtyIncarnation.delete(ptyId)

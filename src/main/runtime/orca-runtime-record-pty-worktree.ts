@@ -34,6 +34,15 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     > = {}
   ): RuntimePtyWorktreeRecord {
     let pty = this.ptysById.get(ptyId)
+    if (
+      !pty ||
+      pty.worktreeId !== worktreeId ||
+      ['connectionId', 'tabId', 'paneKey', 'connected', 'runtimeSessionOwned'].some(
+        (key) => state[key] !== undefined && state[key] !== pty?.[key]
+      )
+    ) {
+      this.ptyOwnershipRevisions.advance(ptyId)
+    }
     if (!pty) {
       const titleObservedAt = state.title ? this.nextTitleObservationSequence() : null
       const connectionId = state.connectionId ?? parseAppSshPtyId(ptyId)?.connectionId ?? null
@@ -106,18 +115,8 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     }
 
     pty.worktreeId = worktreeId
-    if (
-      state.incarnationId !== undefined &&
-      pty.incarnationId !== null &&
-      state.incarnationId !== pty.incarnationId
-    ) {
-      pty.agentSessionOwners = []
-    }
     if (state.incarnationId !== undefined) {
-      if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
-        this.invalidatePtyIncarnationHandle(ptyId)
-      }
-      pty.incarnationId = state.incarnationId
+      this.transitionPtyIncarnation(pty, state.incarnationId)
     }
     if (state.agentSessionOwners !== undefined) {
       pty.agentSessionOwners = state.agentSessionOwners.map(cloneAgentSessionOwnerBinding)
@@ -168,6 +167,35 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
     // Why: recordPtyWorktree is the common lifecycle point for every path that resolves a PTY's worktree (renderer restore, controller list).
     advertisedUrlWatcher.bindPty(ptyId, worktreeId)
     return pty
+  }
+
+  protected transitionPtyIncarnation(
+    pty: RuntimePtyWorktreeRecord,
+    incarnationId: RuntimePtyWorktreeRecord['incarnationId']
+  ): void {
+    this.ptyOwnershipRevisions.advance(pty.ptyId)
+    // Only positive identity equality authorizes retaining process metadata.
+    if (incarnationId !== null && pty.incarnationId === incarnationId) {
+      return
+    }
+    this.retirePtyAgentLaunchAuthority(pty.ptyId)
+    this.ptyForegroundAgent.resetIncarnation(pty.ptyId)
+    this.resetTrackedTerminalStateForProviderGeneration(pty.ptyId)
+    this.invalidatePtyIncarnationHandle(pty.ptyId)
+    this.terminalCwdByPtyId.delete(pty.ptyId)
+    this.terminalFileUriHostnameByPtyId.delete(pty.ptyId)
+    this.terminalSpawnCommandsByPtyId.delete(pty.ptyId)
+    pty.launchConfig = null
+    pty.launchToken = null
+    pty.launchIncarnationId = null
+    pty.launchAgent = null
+    pty.launchSurface = undefined
+    pty.agentSessionOwners = []
+    pty.foregroundAgent = null
+    pty.title = null
+    pty.titleUpdatedAt = null
+    pty.controllerTitle = null
+    pty.incarnationId = incarnationId
   }
 
   protected makeRuntimePaneKey(

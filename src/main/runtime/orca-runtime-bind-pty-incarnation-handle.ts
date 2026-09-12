@@ -11,6 +11,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
   ): void {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     if (retained.leafKey !== leafKey) {
+      this.ptyOwnershipRevisions.advance(leaf.ptyId)
       if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
         this.handleByLeafKey.delete(retained.leafKey)
       }
@@ -30,6 +31,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
   }
 
   protected invalidatePtyIncarnationHandle(ptyId: string): void {
+    this.ptyOwnershipRevisions.advance(ptyId)
     const retained = this.handleByPtyIncarnation.get(ptyId)
     if (!retained) {
       return
@@ -44,6 +46,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
   }
 
   protected clearPtyIncarnationHandles(): void {
+    this.ptyOwnershipRevisions.clear()
     for (const retained of this.handleByPtyIncarnation.values()) {
       this.syntheticTerminalHandles.delete(retained.handle)
     }
@@ -111,6 +114,7 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
 
     const handle = existingHandle ?? `term_${randomUUID()}`
     if (!existingHandle) {
+      this.ptyOwnershipRevisions.advance(pty.ptyId)
       this.syntheticTerminalHandles.add(handle)
     }
     const syntheticId = `pty:${pty.ptyId}`
@@ -153,6 +157,9 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
       return
     }
     const record = this.handles.get(handle)
+    if (record?.ptyId) {
+      this.ptyOwnershipRevisions.advance(record.ptyId)
+    }
     if (record?.ptyId && this.handleByPtyIncarnation.get(record.ptyId)?.handle === handle) {
       this.handleByPtyIncarnation.delete(record.ptyId)
     }

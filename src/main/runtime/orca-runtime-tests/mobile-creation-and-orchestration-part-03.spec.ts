@@ -188,7 +188,7 @@ describe('OrcaRuntimeService', () => {
       ).leaves
       expect(leaves.size).toBeGreaterThan(0)
       const rebuilt = [...leaves.values()][0]
-      expect(rebuilt.lastAgentStatus).toBe('idle')
+      expect(rebuilt.lastAgentStatus).toBeNull()
       expect(rebuilt.lastAgentStatusObservedLive).toBe(false)
 
       setInMemoryOrchestrationMessages(runtime, db)

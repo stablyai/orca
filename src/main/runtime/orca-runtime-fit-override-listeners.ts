@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { RuntimePtyOwnershipRevisions } from './runtime-pty-ownership-revisions'
 import { OrcaRuntimeWithStopRequestedPtyIds } from './orca-runtime-stop-requested-pty-ids'
 import { RuntimeSubscriptionRegistry } from './runtime-subscription-registry'
 import { RuntimeMobileNotificationController } from './runtime-mobile-notification-controller'
@@ -72,6 +73,8 @@ export class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWithStopRequ
   protected providerVisibleRetryAtByPtyId = new Map<string, number>()
 
   protected providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
+
+  protected ptyOwnershipRevisions = new RuntimePtyOwnershipRevisions()
 
   protected ptyLifecycleGenerationById = new Map<string, number>()
 

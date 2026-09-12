@@ -4,6 +4,7 @@ import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithResolveKnownWorkspaceFileTarget {
   protected invalidateAllHandlesForPty(ptyId: string, preserveHandle?: string): Set<string> {
+    this.ptyOwnershipRevisions.advance(ptyId)
     const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
     const preallocatedHandle = this.handleByPtyId.get(ptyId)
     const invalidated = new Set<string>()
@@ -115,6 +116,7 @@ export class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithRe
     incarnationId?: PtyIncarnationId,
     options: { awaitsRegistration?: boolean } = {}
   ): void {
+    this.ptyOwnershipRevisions.advance(ptyId)
     const existingPty = this.ptysById.get(ptyId)
     if (
       existingPty &&
@@ -141,9 +143,7 @@ export class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithRe
     this.terminalViewSubscribers.markSpawnPublished(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
-      if (incarnationId) {
-        pty.incarnationId = incarnationId
-      }
+      this.transitionPtyIncarnation(pty, incarnationId ?? null)
       pty.connected = true
       pty.disconnectedAt = null
     }
@@ -152,5 +152,6 @@ export class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithRe
       leaf.writable = this.graphStatus === 'ready'
       this.adoptPreAllocatedHandle(leaf)
     }
+    this.ptyOwnershipRevisions.advance(ptyId, incarnationId ?? null)
   }
 }
