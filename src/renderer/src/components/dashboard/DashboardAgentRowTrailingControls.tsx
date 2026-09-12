@@ -74,7 +74,7 @@ export function DashboardAgentRowTrailingControls({
           onKeyDown={stopKeyDown}
           disabled={sendTargetStatus === 'sending'}
           className={cn(
-            'worktree-agent-send-target-button absolute right-0 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none transition-[background-color,border-color,color,opacity]',
+            'worktree-agent-send-target-button absolute right-0 top-1/2 z-10 inline-flex h-5 -translate-y-1/2 items-center gap-1 rounded-md border px-1.5 text-[10px] font-medium leading-none transition-[background-color,border-color,color,opacity] whitespace-nowrap',
             sendTargetStatus === 'sending' && 'cursor-progress opacity-75'
           )}
           aria-label={translate(
