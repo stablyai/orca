@@ -252,3 +252,52 @@ describe('spawn-group roster rows', () => {
     expect(prose.map((block) => block.type)).toEqual(['text', 'subagent-group'])
   })
 })
+
+describe('a declined AskUserQuestion', () => {
+  // Record ordering measured against Claude Code 2.1.266: the tool call and its
+  // errored result are adjacent, and the interrupt marker follows the pair.
+  const declined = [
+    msg({
+      id: 'A',
+      role: 'assistant',
+      blocks: [{ type: 'tool-call', name: 'AskUserQuestion', input: { questions: [] } }]
+    }),
+    msg({
+      id: 'B',
+      role: 'tool',
+      blocks: [
+        {
+          type: 'tool-result',
+          output: "The user doesn't want to proceed with this tool use.",
+          isError: true
+        }
+      ]
+    }),
+    msg({
+      id: 'C',
+      role: 'user',
+      blocks: [{ type: 'text', text: '[Request interrupted by user for tool use]' }]
+    })
+  ]
+
+  it('keeps the errored result folded onto its call', () => {
+    const folded = foldToolMessages(declined)
+
+    expect(folded[0]?.id).toBe('A')
+    expect(folded[0]?.blocks).toEqual([
+      { type: 'tool-call', name: 'AskUserQuestion', input: { questions: [] } },
+      {
+        type: 'tool-result',
+        output: "The user doesn't want to proceed with this tool use.",
+        isError: true
+      }
+    ])
+  })
+
+  it('survives the noise strip that removes the trailing interrupt marker', () => {
+    const projected = stripNoiseMessages(foldToolMessages(declined))
+
+    expect(projected.map((message) => message.id)).toEqual(['A'])
+    expect(projected[0]?.blocks.some((block) => block.type === 'tool-result')).toBe(true)
+  })
+})

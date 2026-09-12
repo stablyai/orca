@@ -47,6 +47,9 @@ function parseQuestionsShape(input: unknown): AskPrompt | null {
   return questions.length > 0 ? { questions } : null
 }
 
+/** Tolerant parse of raw tool-input options: bare strings become label-only
+ *  options, malformed entries are dropped, and an empty-string preview counts
+ *  as no preview. */
 function parseOptions(raw: unknown): AskOption[] {
   if (!Array.isArray(raw)) {
     return []
@@ -61,10 +64,14 @@ function parseOptions(raw: unknown): AskOption[] {
         typeof option === 'object' &&
         typeof (option as { label?: unknown }).label === 'string'
       ) {
-        const value = option as { label: string; description?: unknown }
+        const value = option as { label: string; description?: unknown; preview?: unknown }
+        const preview =
+          typeof value.preview === 'string' && value.preview.length > 0 ? value.preview : undefined
         return {
           label: value.label,
-          description: typeof value.description === 'string' ? value.description : undefined
+          description: typeof value.description === 'string' ? value.description : undefined,
+          hasPreview: preview === undefined ? undefined : true,
+          preview
         }
       }
       return null
@@ -139,13 +146,71 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
   return pending
 }
 
-/** Prefers live status and consults transcript history only after its read settles. */
+/** Does the transcript positively show THIS ask already resolved?
+ *
+ *  Answers only from evidence: a tool-call matching `ask` whose FIFO slot then
+ *  received its tool-result. Absence of the call, an unsettled read, and a call
+ *  orphaned by a user turn or interrupt all answer false — an orphan's result
+ *  never arrives, so it can never witness resolution (#11761). Callers use this
+ *  to retire an ask that live status still asserts; a false negative leaves a
+ *  stale card up, while a false positive would hide a live question.
+ *
+ *  Claude Code writes a tool-result row for an AskUserQuestion cancelled in the
+ *  TUI (`is_error`), so a selector the user escaped reads as resolved here. That
+ *  result is immediately followed by the interrupt row, so a formed verdict
+ *  outlives turn boundaries; only a fresh matching call un-resolves the ask. */
+export function isAskResolvedInTranscript(
+  ask: AskPrompt,
+  messages: readonly NativeChatMessage[]
+): boolean {
+  // Same identity the cards dismiss under: canonical content, not object identity.
+  const askKey = nativeChatAskDismissKey(ask)
+  // Mirrors extractPendingAsk's FIFO walk: `outstanding` holds each unresolved
+  // call's key (or null for a non-question call), oldest first.
+  let outstanding: (string | null)[] = []
+  let resolved = false
+  for (const message of messages) {
+    if (message.role === 'user' || isInterruptedStatusMessage(message)) {
+      // The turn owning these calls ended; their results never arrive, so the
+      // pending FIFO is void. A verdict already witnessed by a result stands —
+      // the cancel path writes the interrupt row right after the tool-result.
+      outstanding = []
+    }
+    for (const block of message.blocks) {
+      if (block.type === 'tool-call') {
+        const key = nativeChatAskDismissKey(parseToolInput(block.name, block.input))
+        if (key === askKey) {
+          // The agent is asking this same question again: a live instance is
+          // outstanding, so the earlier resolution no longer describes it.
+          resolved = false
+        }
+        outstanding.push(key)
+      } else if (block.type === 'tool-result' && outstanding.length > 0) {
+        if (outstanding.shift() === askKey) {
+          resolved = true
+        }
+      }
+    }
+  }
+  return resolved
+}
+
+/** Prefers live status, except where the settled transcript positively shows the
+ *  live ask already resolved — a question killed inside the TUI emits no hook, so
+ *  live status would otherwise assert it forever (#16865). Falls through to the
+ *  transcript's own pending ask so a genuinely newer question still renders. */
 export function resolveNativeChatAsk(args: {
   liveAsk: AskPrompt | null
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
 }): AskPrompt | null {
-  return args.liveAsk ?? (args.transcriptSettled ? extractPendingAsk(args.messages) : null)
+  if (args.liveAsk) {
+    if (!args.transcriptSettled || !isAskResolvedInTranscript(args.liveAsk, args.messages)) {
+      return args.liveAsk
+    }
+    return extractPendingAsk(args.messages)
+  }
+  return args.transcriptSettled ? extractPendingAsk(args.messages) : null
 }
 
 /** One question's chosen answer, normalized for delivery: the selected option
@@ -190,11 +255,88 @@ export function formatAskAnswer(prompt: AskPrompt, selections: AskAnswerSelectio
 // against Claude Code's TUI; groups are written spaced apart (see the senders)
 // because a navigation keystroke batched with Enter commits before the selector
 // has applied it.
-const ASK_ENTER = '\r'
+export const ASK_ENTER = '\r'
 const ASK_NEXT_TAB = '\x1b[C'
-const ASK_PREVIOUS_ROW = '\x1b[A'
 const ASK_NEXT_ROW = '\x1b[B'
-const ASK_NOTES = '\t'
+// The preview layout has no "Type something" row (upstream
+// anthropics/claude-code#27348, closed "not planned"). Free text goes through a
+// per-option note instead: `n` opens the notes field on the highlighted row.
+const ASK_PREVIEW_NOTE = 'n'
+// ESC closes an open note field and returns to the row list without cancelling
+// the question; the note persists and the next Enter commits the highlighted row.
+const ASK_ESCAPE = '\x1b'
+
+/** True once any option in the question carries a preview snippet — the
+ *  selector then switches to a list+preview layout where a digit only moves
+ *  the highlight, and a separate Enter commits it.
+ *
+ *  A multiSelect question renders the plain checkbox layout even when every
+ *  option carries a preview, so callers must test `multiSelect` first. */
+function questionHasPreview(q: AskQuestion): boolean {
+  return q.options.some((o) => o.hasPreview === true)
+}
+
+/** Rows a digit can address in this question's layout. A digit past the last
+ *  row is swallowed with no redraw, so a following Enter commits the untouched
+ *  first option — never emit one. Preview layouts number only their options;
+ *  the plain layouts add the "Type something" row. */
+function addressableRowCount(q: AskQuestion): number {
+  if (!q.multiSelect && questionHasPreview(q)) {
+    return q.options.length
+  }
+  return q.options.length + 1
+}
+
+/** The digit for a 1-based row, or null when the layout has no such row. */
+function rowDigit(q: AskQuestion, row: number): string | null {
+  return row >= 1 && row <= addressableRowCount(q) ? String(row) : null
+}
+
+/** Keystrokes that select the selector's own "Chat about this" row, which
+ *  rejects the question and hands the chat prompt back for free typing.
+ *
+ *  The plain layouts number the row after "Type something" and a digit selects
+ *  it outright; the preview layout leaves it unnumbered below the divider, so
+ *  it is reached by arrowing past the last option from the initial highlight. */
+export function buildAskChatRowKeys(q: AskQuestion): AskAnswerKeyGroup[] {
+  if (!q.multiSelect && questionHasPreview(q)) {
+    const rows: AskAnswerKeyGroup[] = []
+    for (let step = 0; step < q.options.length; step += 1) {
+      rows.push({ raw: ASK_NEXT_ROW })
+    }
+    return [...rows, { raw: ASK_ENTER }]
+  }
+  return [{ raw: String(q.options.length + 2) }]
+}
+
+/** Answer a preview-layout question, whose row set and commit semantics differ
+ *  from the plain selector: no "Type something" row, and a digit only highlights.
+ *
+ *  Notes attach to a selected option — the layout offers no selection-less note —
+ *  so an answer without a pick delivers nothing rather than fabricating a
+ *  selection or sending a sequence the selector does not accept. */
+function buildPreviewAnswerKeys(
+  sel: AskAnswerSelection | undefined,
+  other: string
+): AskAnswerKeyGroup[] {
+  const picked = sel?.indices[0]
+  if (picked === undefined) {
+    return []
+  }
+  const selectRow: AskAnswerKeyGroup = { raw: String(picked + 1) }
+  if (other) {
+    // Enter inside the note field submits the question as notes-only, losing the
+    // highlighted row; ESC leaves the field with the note intact so Enter commits both.
+    return [
+      selectRow,
+      { raw: ASK_PREVIEW_NOTE },
+      { text: other },
+      { raw: ASK_ESCAPE },
+      { raw: ASK_ENTER }
+    ]
+  }
+  return [selectRow, { raw: ASK_ENTER }]
+}
 
 /** Build the ordered keystroke groups that answer a Claude Code AskUserQuestion.
  *  Each group is written a step apart so the selector applies it before the next.
@@ -202,13 +344,17 @@ const ASK_NOTES = '\t'
  *  - single-select pick  → the option number (selects AND commits; in a
  *    multi-question prompt it auto-advances to the next question)
  *  - free-text answer    → the "Type something" row number, the text, then Enter
+ *  - preview layout      → see `buildPreviewAnswerKeys`; the row set and commit
+ *    semantics both differ from the plain selector
  *  - multi-select        → each option number TOGGLES its checkbox, then a step
- *    to the Submit tab
+ *    to the Submit tab; a note instead arrows to the free-text row and walks out
+ *    through Submit and the review page
  *  - a multi-question prompt (and a lone multi-select) finishes on a Submit
  *    confirmation, so it ends with one Enter
  *
- *  (Option counts are ≤ the tool's cap of a few, so single-digit numbers always
- *  address every row.) */
+ *  Every emitted digit is checked against the layout's row count: a digit past
+ *  the last row is swallowed silently and the next Enter commits the untouched
+ *  first option. */
 export function buildAskAnswerKeys(
   prompt: AskPrompt,
   selections: AskAnswerSelection[]
@@ -216,25 +362,51 @@ export function buildAskAnswerKeys(
   const questions = prompt.questions
   const multiQuestion = questions.length > 1
   const groups: AskAnswerKeyGroup[] = []
+  // A multi-select note walks all the way through Submit and the review page,
+  // so it already spends the confirmation the shared tail would add.
+  let confirmedByNoteWalk = false
 
   questions.forEach((q, qi) => {
     const sel = selections[qi]
     const other = (sel?.other ?? '').trim()
-    const typeSomething = String(q.options.length + 1)
+    const typeSomething = rowDigit(q, q.options.length + 1)
 
     if (q.multiSelect) {
       for (const i of sel?.indices ?? []) {
         groups.push({ raw: String(i + 1) })
       }
       if (other) {
-        groups.push({ raw: typeSomething }, { text: other }, { raw: ASK_ENTER })
+        // A digit toggles the "Type something" checkbox without opening its
+        // editor, so the row is reached by arrowing from the top of the list;
+        // Enter there opens the field. Enter while the field has focus unchecks
+        // the row and discards the note, so the exit is DOWN onto Submit.
+        for (let step = 0; step < q.options.length; step += 1) {
+          groups.push({ raw: ASK_NEXT_ROW })
+        }
+        groups.push(
+          { raw: ASK_ENTER },
+          { text: other },
+          { raw: ASK_NEXT_ROW },
+          { raw: ASK_ENTER },
+          { raw: ASK_ENTER }
+        )
+        confirmedByNoteWalk = true
+      } else {
+        // A multi-select never auto-advances; step to the next tab (the Submit tab
+        // when this is the last question).
+        groups.push({ raw: ASK_NEXT_TAB })
       }
-      // A multi-select never auto-advances; step to the next tab (the Submit tab
-      // when this is the last question).
-      groups.push({ raw: ASK_NEXT_TAB })
-    } else if (other) {
+    } else if (questionHasPreview(q)) {
+      const previewGroups = buildPreviewAnswerKeys(sel, other)
+      if (previewGroups.length > 0) {
+        groups.push(...previewGroups)
+      } else if (multiQuestion) {
+        groups.push({ raw: ASK_NEXT_TAB })
+      }
+    } else if (other && typeSomething) {
       // Single-select can only carry one value, so route any answer that
       // includes free text through the "Type something" row as one string.
+      // A digit there opens the field immediately; Enter commits it.
       groups.push(
         { raw: typeSomething },
         { text: answerLabels(q, sel).join(', ') },
@@ -249,63 +421,9 @@ export function buildAskAnswerKeys(
   })
 
   const endsOnSubmitTab =
-    multiQuestion || (questions.length === 1 && questions[0]!.multiSelect === true)
+    !confirmedByNoteWalk &&
+    (multiQuestion || (questions.length === 1 && questions[0]!.multiSelect === true))
   if (endsOnSubmitTab && groups.length > 0) {
-    groups.push({ raw: ASK_ENTER })
-  }
-  return groups
-}
-
-/** Build keystrokes for Codex's request_user_input overlay.
- *
- * Unlike Claude, Codex submits on the final option digit and attaches free text
- * as notes to the highlighted row. The overlay starts on the first row, so note
- * answers move to the target without committing, open notes with Tab, then
- * submit with Enter. */
-export function buildCodexAskAnswerKeys(
-  prompt: AskPrompt,
-  selections: AskAnswerSelection[]
-): AskAnswerKeyGroup[] {
-  const groups: AskAnswerKeyGroup[] = []
-  let hasUnanswered = false
-
-  prompt.questions.forEach((question, questionIndex) => {
-    const selection = selections[questionIndex]
-    const selectedIndex = selection?.indices[0]
-    const note = (selection?.other ?? '').trim()
-
-    if (note) {
-      const targetIndex = selectedIndex ?? question.options.length
-      const rowCount = question.options.length + 1
-      const nextSteps = targetIndex
-      const previousSteps = rowCount - targetIndex
-      const usePrevious = previousSteps < nextSteps
-      const navigationKey = usePrevious ? ASK_PREVIOUS_ROW : ASK_NEXT_ROW
-      const navigationSteps = usePrevious ? previousSteps : nextSteps
-      for (let index = 0; index < navigationSteps; index += 1) {
-        groups.push({ raw: navigationKey })
-      }
-      groups.push({ raw: ASK_NOTES }, { text: note }, { raw: ASK_ENTER })
-      return
-    }
-
-    if (selectedIndex !== undefined) {
-      groups.push({ raw: String(selectedIndex + 1) })
-      return
-    }
-
-    hasUnanswered = true
-    groups.push({ raw: '\x7f' })
-    if (questionIndex < prompt.questions.length - 1) {
-      groups.push({ raw: ASK_NEXT_TAB })
-    } else {
-      groups.push({ raw: ASK_ENTER })
-    }
-  })
-
-  // Codex opens a confirmation after the last question when any were skipped;
-  // Proceed is highlighted by default, so one Enter submits the partial answer.
-  if (hasUnanswered) {
     groups.push({ raw: ASK_ENTER })
   }
   return groups

@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { applyCommandMarkerBoundaries } from './native-chat-command-marker'
+import { nativeChatAnswerConfirmDeadlineMs } from './native-chat-answer-confirmation'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 
 const INITIAL_PROMPT = JSON.stringify({
@@ -37,8 +38,25 @@ import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 const mocks = {
   sendAnswer: vi.fn<NativeChatInteractiveSend['sendAnswer']>(),
   sendRaw: vi.fn<NativeChatInteractiveSend['sendRaw']>(),
+  sendChatText: vi.fn<NativeChatInteractiveSend['sendChatText']>(),
+  escapeToChat: vi.fn<NativeChatInteractiveSend['escapeToChat']>(),
   cancelPending: vi.fn<NativeChatInteractiveSend['cancelPending']>(),
-  cancel: vi.fn<NativeChatInteractiveSend['cancel']>()
+  cancel: vi.fn<NativeChatInteractiveSend['cancel']>(),
+  /** Clears the pane's question wait; the card owes it a confirmation signal. */
+  confirmAnswered: vi.fn<() => void>()
+}
+
+function sendResult(
+  settleAfterMs: number,
+  waitsForVerifiedDelivery: boolean,
+  awaitsConfirmation = true
+): ReturnType<NativeChatInteractiveSend['sendAnswer']> {
+  return {
+    settleAfterMs,
+    waitsForVerifiedDelivery,
+    awaitsConfirmation,
+    confirmAnswered: mocks.confirmAnswered
+  }
 }
 
 function renderCard(canSend = true): ReturnType<typeof render> {
@@ -61,6 +79,8 @@ function cardElement(
       send={{
         sendAnswer: mocks.sendAnswer,
         sendRaw: mocks.sendRaw,
+        sendChatText: mocks.sendChatText,
+        escapeToChat: mocks.escapeToChat,
         cancelPending: mocks.cancelPending,
         cancel: mocks.cancel
       }}
@@ -101,6 +121,17 @@ function askResultMessage(): NativeChatMessage {
   } as unknown as NativeChatMessage
 }
 
+/** The transcript tool-call for the live `INITIAL_PROMPT` question — same
+ *  canonical content, as a real session emits for one AskUserQuestion. */
+function initialPromptCallMessage(): NativeChatMessage {
+  return {
+    id: 'call-initial',
+    role: 'assistant',
+    createdAt: 1,
+    blocks: [{ type: 'tool-call', name: 'AskUserQuestion', input: JSON.parse(INITIAL_PROMPT) }]
+  } as unknown as NativeChatMessage
+}
+
 function chooseSpacesAndSubmit(): void {
   fireEvent.click(screen.getByRole('button', { name: /Spaces/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
@@ -118,7 +149,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('keeps the card retryable when no PTY answer was sent', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 0, waitsForVerifiedDelivery: false })
+    mocks.sendAnswer.mockReturnValue(sendResult(0, false))
     renderCard()
 
     chooseSpacesAndSubmit()
@@ -129,7 +160,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('cancels delayed PTY writes when the owning card unmounts', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000, waitsForVerifiedDelivery: false })
+    mocks.sendAnswer.mockReturnValue(sendResult(5_000, false))
     const rendered = renderCard()
 
     chooseSpacesAndSubmit()
@@ -140,7 +171,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('cancels delayed PTY writes when desktop send authority is lost', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000, waitsForVerifiedDelivery: false })
+    mocks.sendAnswer.mockReturnValue(sendResult(5_000, false))
     const rendered = renderCard()
 
     chooseSpacesAndSubmit()
@@ -150,7 +181,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('shows the paced send as busy and freezes the snapshotted answer', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000, waitsForVerifiedDelivery: false })
+    mocks.sendAnswer.mockReturnValue(sendResult(5_000, false))
     renderCard()
 
     chooseSpacesAndSubmit()
@@ -162,7 +193,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
   })
 
   it('cancels the old answer sequence when a replacement prompt arrives', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000, waitsForVerifiedDelivery: false })
+    mocks.sendAnswer.mockReturnValue(sendResult(5_000, false))
     const rendered = renderCard()
     chooseSpacesAndSubmit()
 
@@ -185,7 +216,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
     let settleDelivery: ((delivered: boolean) => void) | undefined
     mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
       settleDelivery = onDeliverySettled
-      return { settleAfterMs: 500, waitsForVerifiedDelivery: true }
+      return sendResult(500, true)
     })
     renderCard()
 
@@ -200,7 +231,7 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
     let settleDelivery: ((delivered: boolean) => void) | undefined
     mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
       settleDelivery = onDeliverySettled
-      return { settleAfterMs: 500, waitsForVerifiedDelivery: true }
+      return sendResult(500, true)
     })
     renderCard()
 
@@ -216,6 +247,239 @@ describe('NativeChatInteractiveCard answer lifecycle', () => {
 // `interactivePrompt` while the transcript still holds the unresolved call (#11761).
 // Which asks the transcript still counts as pending (orphaned calls, turn boundaries)
 // is the shared parser's contract — covered in `src/shared/native-chat-ask.test.ts`.
+// Delivering an answer proves only that the PTY took the bytes. A selector the
+// keystrokes do not fit (preview-style layouts, for months) leaves the question
+// live, and the pre-fix card dismissed into a false "working" animation with no
+// way back (#16865).
+describe('NativeChatInteractiveCard unconfirmed answers', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = undefined
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    cleanup()
+  })
+
+  function answerWithVerifiedDelivery(): void {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return sendResult(500, true)
+    })
+    renderCard()
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+  }
+
+  it('brings the question back when no confirmation arrives before the deadline', () => {
+    answerWithVerifiedDelivery()
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(500))
+    })
+
+    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+    // Answerable again, not a frozen "Sending…" shell.
+    expect(screen.getByRole('button', { name: /Spaces/ })).toBeEnabled()
+  })
+
+  it('leaves the pane waiting while an answer is unconfirmed', () => {
+    answerWithVerifiedDelivery()
+
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(500))
+    })
+
+    // The question is still live, so the wait must survive: clearing it is what
+    // painted a progress animation over a blocked session.
+    expect(mocks.confirmAnswered).not.toHaveBeenCalled()
+  })
+
+  it('holds the card dismissed right up to the deadline', () => {
+    answerWithVerifiedDelivery()
+
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(500) - 1)
+    })
+
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+
+  it('scales the deadline with the keystroke pacing of a longer answer', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return sendResult(6_000, true)
+    })
+    renderCard()
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+
+    // A short answer's deadline would already have fired here; a paced one has
+    // not finished writing its groups yet, so the card must stay down.
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(500))
+    })
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(6_000))
+    })
+    expect(screen.getByText('Tabs or spaces?')).toBeInTheDocument()
+  })
+
+  it('confirms the answer and keeps the card down once the prompt clears', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return sendResult(500, true)
+    })
+    const rendered = renderCard()
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+
+    // A fresh hook status drops the prompt: the agent moved on, so the answer landed.
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = undefined
+    rendered.rerender(cardElement())
+
+    expect(mocks.confirmAnswered).toHaveBeenCalledOnce()
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(500))
+    })
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+
+  it('treats a replacement question as confirmation of the answered one', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return sendResult(500, true)
+    })
+    const rendered = renderCard()
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = JSON.stringify({
+      questions: [{ question: 'Choose a shell?', multiSelect: false, options: [{ label: 'zsh' }] }]
+    })
+    rendered.rerender(cardElement())
+
+    expect(mocks.confirmAnswered).toHaveBeenCalledOnce()
+    expect(screen.getByText('Choose a shell?')).toBeInTheDocument()
+  })
+
+  // Codex and Grok resolve their own asks through a post-tool hook, so no
+  // confirmation signal is owed. Arming the deadline for them would restore a
+  // card over a question the agent already closed.
+  it('does not arm the deadline for an agent that owes no confirmation', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return sendResult(500, true, false)
+    })
+    renderCard()
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(500))
+    })
+
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+
+  it('does not confirm an answer for an agent that owes no confirmation', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return sendResult(500, true, false)
+    })
+    const rendered = renderCard()
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = undefined
+    rendered.rerender(cardElement())
+
+    expect(mocks.confirmAnswered).not.toHaveBeenCalled()
+  })
+
+  it('does not resurrect a question the user cancelled', () => {
+    mocks.sendAnswer.mockReturnValue(sendResult(500, true))
+    renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(500))
+    })
+
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+    expect(mocks.confirmAnswered).not.toHaveBeenCalled()
+  })
+
+  // A question killed inside the TUI (selector ESC, or the card's X sending a
+  // real ESC byte) emits no hook, so live status keeps asserting it. Before the
+  // liveness check the deadline restored the card over a dead question, and
+  // answering it typed option digits into the bare composer (#16865).
+  it('does not resurrect a question the transcript shows already resolved', () => {
+    let settleDelivery: ((delivered: boolean) => void) | undefined
+    mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
+      settleDelivery = onDeliverySettled
+      return sendResult(500, true)
+    })
+    const messages = [initialPromptCallMessage()]
+    const rendered = render(cardElement(true, messages))
+    chooseSpacesAndSubmit()
+    act(() => settleDelivery?.(true))
+
+    // Live status still holds the dead question; only the transcript knows.
+    rendered.rerender(cardElement(true, [...messages, askResultMessage()]))
+    act(() => {
+      vi.advanceTimersByTime(nativeChatAnswerConfirmDeadlineMs(500))
+    })
+
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+
+  it('drops the remaining keystrokes when the ask dies mid-send', () => {
+    mocks.sendAnswer.mockReturnValue(sendResult(6_000, true))
+    const messages = [initialPromptCallMessage()]
+    const rendered = render(cardElement(true, messages))
+    chooseSpacesAndSubmit()
+    expect(mocks.cancelPending).not.toHaveBeenCalled()
+
+    // The selector dies between paced keystroke groups.
+    rendered.rerender(cardElement(true, [...messages, askResultMessage()]))
+
+    expect(mocks.cancelPending).toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Sending…' })).not.toBeInTheDocument()
+  })
+
+  // The plain-selector flow commits on a digit and its hook event follows
+  // shortly; the optimistic dismissal must survive unchanged.
+  it('keeps an unverified paced answer dismissed once its hook status lands', () => {
+    mocks.sendAnswer.mockReturnValue(sendResult(500, false))
+    const rendered = renderCard()
+    chooseSpacesAndSubmit()
+
+    act(() => {
+      vi.advanceTimersByTime(500)
+    })
+    expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = undefined
+    rendered.rerender(cardElement())
+
+    expect(mocks.confirmAnswered).toHaveBeenCalledOnce()
+  })
+})
+
 describe('NativeChatInteractiveCard transcript fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -259,14 +523,14 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
   })
 
   it('stays dismissed after answering while the transcript call is still pending', () => {
-    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 500, waitsForVerifiedDelivery: true })
+    mocks.sendAnswer.mockReturnValue(sendResult(500, true))
     const messages = [askCallMessage('Tabs or spaces?')]
     const rendered = render(cardElement(true, messages))
 
     let settleDelivery: ((delivered: boolean) => void) | undefined
     mocks.sendAnswer.mockImplementation((_prompt, _selections, onDeliverySettled) => {
       settleDelivery = onDeliverySettled
-      return { settleAfterMs: 500, waitsForVerifiedDelivery: true }
+      return sendResult(500, true)
     })
     chooseSpacesAndSubmit()
     act(() => settleDelivery?.(true))
@@ -294,5 +558,123 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     render(cardElement(true, trimmed))
 
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+})
+
+describe('NativeChatInteractiveCard escape-to-chat routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = undefined
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  function typeReply(text: string): void {
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: text } })
+  }
+
+  it('rejects the prompt and replies in chat when nothing is picked', () => {
+    renderCard()
+
+    typeReply('neither, use whatever the file already uses')
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+
+    // No selector answer exists for unattached words, so the question leaves
+    // through the selector's own "Chat about this" row and the text follows it.
+    expect(mocks.sendAnswer).not.toHaveBeenCalled()
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(mocks.escapeToChat).toHaveBeenCalledTimes(1)
+    expect(mocks.escapeToChat.mock.calls[0]![1]).toBe('neither, use whatever the file already uses')
+  })
+
+  it('delivers a pick with its note through the selector, with no chat message', () => {
+    mocks.sendAnswer.mockReturnValue(sendResult(0, false))
+    renderCard()
+
+    typeReply('but only in JS')
+    chooseSpacesAndSubmit()
+
+    expect(mocks.sendAnswer).toHaveBeenCalledTimes(1)
+    expect(mocks.sendAnswer.mock.calls[0]![1]).toEqual([{ indices: [1], other: 'but only in JS' }])
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(mocks.sendChatText).not.toHaveBeenCalled()
+  })
+
+  it('holds the chat message until the selector answer has settled', () => {
+    vi.useFakeTimers()
+    try {
+      mocks.sendAnswer.mockReturnValue(sendResult(5_000, false))
+      renderCard()
+
+      chooseSpacesAndSubmit()
+
+      // The selector write is still pacing out; nothing may reach chat yet.
+      expect(mocks.sendChatText).not.toHaveBeenCalled()
+      act(() => {
+        vi.advanceTimersByTime(5_000)
+      })
+      // This prompt had no stranded text, so settling sends nothing — the point
+      // is that the send decision waits for the settle callback.
+      expect(mocks.sendChatText).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not reject the prompt when a pick exists', () => {
+    mocks.sendAnswer.mockReturnValue(sendResult(0, false))
+    renderCard()
+
+    chooseSpacesAndSubmit()
+
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(mocks.sendChatText).not.toHaveBeenCalled()
+  })
+
+  it('submits the picked question and sends the stranded one to chat', () => {
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = JSON.stringify({
+      questions: [
+        { question: 'Indent?', multiSelect: false, options: [{ label: 'Tabs' }] },
+        { question: 'Quotes?', multiSelect: false, options: [{ label: 'Single' }] }
+      ]
+    })
+    mocks.sendAnswer.mockReturnValue(sendResult(1_000, false))
+    vi.useFakeTimers()
+    try {
+      renderCard()
+
+      fireEvent.click(screen.getByRole('button', { name: /Tabs/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+      typeReply('whichever the linter wants')
+      fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+
+      act(() => {
+        vi.advanceTimersByTime(1_000)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    // Q1's pick still goes through the selector; Q2's unattached words ride
+    // with the answer, so a mid-flight cancel cannot strand them.
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(mocks.sendAnswer.mock.calls[0]![1]).toEqual([
+      { indices: [0], other: '' },
+      { indices: [], other: '' }
+    ])
+    expect(mocks.sendAnswer.mock.calls[0]![3]).toBe('Quotes?\nwhichever the linter wants')
+  })
+
+  it('leaves Skip alone when nothing was entered anywhere', () => {
+    renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
+
+    expect(mocks.sendAnswer).not.toHaveBeenCalled()
+    expect(mocks.sendChatText).not.toHaveBeenCalled()
+    expect(mocks.cancel).toHaveBeenCalledTimes(1)
   })
 })
