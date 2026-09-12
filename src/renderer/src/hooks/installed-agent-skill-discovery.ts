@@ -4,6 +4,7 @@ import { discoverSkillsForRuntimeTarget } from '@/runtime/runtime-skills-client'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 import {
   clearInstalledAgentSkillDiscoveryCache,
+  deleteInstalledAgentSkillDiscoveryCache,
   peekInstalledAgentSkillDiscoveryCache,
   readInstalledAgentSkillDiscoveryCache,
   resetInstalledAgentSkillDiscoveryCacheForTests,
@@ -36,6 +37,17 @@ export function invalidateInstalledAgentSkillDiscovery(): void {
   // reads may finish, but their generation can no longer repopulate the cache.
   pendingDiscoveryByTarget.clear()
   pendingDiscoverySatisfiesForcedRefreshByTarget.clear()
+}
+
+export function evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(
+  environmentIds: Iterable<string>
+): void {
+  for (const environmentId of environmentIds) {
+    const key = getRuntimeScopedSkillDiscoveryKey({ kind: 'environment', environmentId }, undefined)
+    deleteInstalledAgentSkillDiscoveryCache(key)
+    pendingDiscoveryByTarget.delete(key)
+    pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
+  }
 }
 
 export function resetSkillDiscoveryCacheForTests(): void {
@@ -109,7 +121,7 @@ function startInstalledAgentSkillDiscovery(
   const requestTarget = force ? { ...normalizedTarget, refresh: true } : normalizedTarget
   const discovery = discoverSkillsForRuntimeTarget(runtimeTarget, requestTarget)
     .then((result) => {
-      if (generation === discoveryGeneration) {
+      if (generation === discoveryGeneration && pendingDiscoveryByTarget.get(key) === discovery) {
         writeInstalledAgentSkillDiscoveryCache(key, result)
       }
       return result
