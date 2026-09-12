@@ -1,3 +1,4 @@
+import { createDrainMigrationRowLookup } from './drain-migration-row-lookup.js'
 import { IDLE_REHOME_PAGE_SIZE, selectIdleRegionalRehomes } from './idle-regional-rehome-selection.js'
 import { readRegionCorrectionOutcomes } from './region-correction-outcomes.js'
 import {
@@ -2187,22 +2188,16 @@ export class RelayAssignmentStore {
         [input.cellId]
       )
       const cells = await this.lockCellInventory(transaction, 'request')
+      const assignmentRows = createDrainMigrationRowLookup(assignments, text)
+      const leaseRows = createDrainMigrationRowLookup(activityLeases, text)
       for (const migrationRow of migrations) {
         const identity = {
           userId: text(migrationRow, 'user_id'),
           relayHostId: text(migrationRow, 'relay_host_id')
         }
-        const assignment = assignments.find(
-          (candidate) =>
-            text(candidate, 'user_id') === identity.userId &&
-            text(candidate, 'relay_host_id') === identity.relayHostId
-        )
+        const assignment = assignmentRows.first(identity)
         assertCurrentMigrationAssignment(assignment, migrationRow)
-        const leases = activityLeases.filter(
-          (lease) =>
-            text(lease, 'user_id') === identity.userId &&
-            text(lease, 'relay_host_id') === identity.relayHostId
-        )
+        const leases = leaseRows.all(identity)
         const migrationLeases = leases.filter(
           (lease) => text(lease, 'activity_kind') === 'migration'
         )
@@ -2377,22 +2372,16 @@ export class RelayAssignmentStore {
       ) {
         throw new Error('drain_migration_source_incarnation_mismatch')
       }
+      const assignmentRows = createDrainMigrationRowLookup(assignments, text)
+      const leaseRows = createDrainMigrationRowLookup(activityLeases, text)
       for (const migrationRow of migrationIncarnations) {
-        const assignment = assignments.find(
-          (candidate) =>
-            text(candidate, 'user_id') === text(migrationRow, 'user_id') &&
-            text(candidate, 'relay_host_id') === text(migrationRow, 'relay_host_id')
-        )
+        const identity = {
+          userId: text(migrationRow, 'user_id'),
+          relayHostId: text(migrationRow, 'relay_host_id')
+        }
+        const assignment = assignmentRows.first(identity)
         assertCurrentMigrationAssignment(assignment, migrationRow)
-        assertAssignmentActivityAccounting(
-          assignment,
-          activityLeases.filter(
-            (lease) =>
-              text(lease, 'user_id') === text(migrationRow, 'user_id') &&
-              text(lease, 'relay_host_id') === text(migrationRow, 'relay_host_id')
-          ),
-          migrationRow
-        )
+        assertAssignmentActivityAccounting(assignment, leaseRows.all(identity), migrationRow)
       }
       const sendPermitExpiresAt = now + CELL_DRAIN_SEND_PERMIT_MS
       await transaction.query(
