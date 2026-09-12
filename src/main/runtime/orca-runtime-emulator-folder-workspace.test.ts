@@ -158,4 +158,39 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
     expect(bridge.shutdownActiveManagedForWorktree).toHaveBeenCalledWith(FOLDER_WORKSPACE_KEY)
     expect(release).toHaveBeenCalledWith({ cleanupIfUnused: true })
   })
+
+  it('releases a helper when registration is refused during app shutdown', async () => {
+    const release = vi.fn(async () => {})
+    const bridge = {
+      acquireHelperForDevice: vi.fn(async () => ({ info: EMULATOR_INFO, release })),
+      getReusableActiveForWorktree: vi.fn(async () => null),
+      registerActiveEmulator: vi.fn(() => {
+        throw new Error('Emulator runtime is shutting down')
+      }),
+      stopActiveForSwitch: vi.fn(async () => null)
+    }
+    const runtime = new OrcaRuntimeService({
+      getFolderWorkspaces: () => [makeFolderWorkspace()],
+      getAllWorktreeMeta: () => new Map(),
+      getRepo: () => null,
+      getRepos: () => [],
+      getSettings: () => ({
+        mobileEmulatorEnabled: true,
+        mobileEmulatorDefaultDeviceUdid: null,
+        androidSdkPath: null
+      })
+    } as never)
+    runtime.setEmulatorBridge(bridge as never)
+    Object.assign(runtime, {
+      getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } })
+    })
+
+    await expect(
+      runtime.emulatorAttach({
+        device: EMULATOR_INFO.deviceUdid,
+        worktree: FOLDER_WORKSPACE_KEY
+      })
+    ).rejects.toThrow('Emulator runtime is shutting down')
+    expect(release).toHaveBeenCalledWith({ cleanupIfUnused: true })
+  })
 })
