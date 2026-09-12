@@ -8,6 +8,7 @@ import {
 } from '../../orchestration-worker-start-mode'
 import { resolveOrchestrationCaller } from '../runs/run-scope'
 import { WorkerStartParams } from './worker-start-schema'
+import { resolveOrchestrationWorkerLaunchDefaults } from './worker-launch-preferences'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -49,25 +50,42 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
         )
       }
       await assertWorkerStartTaskSpecWithinPromptBudget(params.spec ?? existingTask!.spec)
+      const resolvedDefaults = resolveOrchestrationWorkerLaunchDefaults({
+        terminal: params.terminal,
+        agent: params.agent,
+        model: params.model,
+        effort: params.effort,
+        defaults: runtime.getOrchestrationWorkerLaunchDefaults()
+      })
+      const launchParams = {
+        ...params,
+        ...(resolvedDefaults.agent !== undefined ? { agent: resolvedDefaults.agent } : {}),
+        ...(resolvedDefaults.model !== undefined ? { model: resolvedDefaults.model } : {}),
+        ...(resolvedDefaults.effort !== undefined ? { effort: resolvedDefaults.effort } : {})
+      }
+      // Why: the resolved defaults are the launch the mode receipt has to judge — a stored
+      // model or effort only applies to a terminal agent, exactly as an explicit flag does,
+      // and the stored agent is what decides whether a structured session exists at all.
       const mode = decideWorkerStartMode({
-        params,
+        params: launchParams,
         settings: readWorkerStartModeSettings(runtime)
       })
       if (params.on) {
         // A remote worker is always a terminal agent; the mode receipt rides along so the
         // coordinator still learns why its structured default did not apply.
         const receipt = await startFederatedWorker({
-          params,
+          params: launchParams,
           runtime,
           db,
           runId: run.id,
           task: existingTask,
-          orchestrationMutation
+          orchestrationMutation,
+          defaultsApplied: resolvedDefaults.applied
         })
         return receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt
       }
       return startLocalWorker({
-        params: { ...params, timeoutMs: readinessTimeoutMs },
+        params: { ...launchParams, timeoutMs: readinessTimeoutMs },
         runtime,
         db,
         run,

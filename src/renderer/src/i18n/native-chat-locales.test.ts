@@ -10,6 +10,8 @@ const localizedCatalogs = { es, ja, ko, zh }
 const englishSetting = en.auto.components.settings.ExperimentalPane.nativeChat
 const englishSearch = en.auto.components.settings.experimental.search.nativeChat
 const englishComposer = en.components['native-chat'].composer
+// Why: `minimal` stays localized for a CLI-reported level even though no seeded
+// Codex model advertises it, so this list is a superset of the catalog's choices.
 const localizedEffortValues = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'] as const
 
 const codexEffortValues = new Set(
@@ -25,7 +27,9 @@ const codexEffortValues = new Set(
 
 describe('native chat locale copy', () => {
   it('covers every Codex effort choice', () => {
-    expect([...codexEffortValues].sort()).toEqual([...localizedEffortValues].sort())
+    for (const value of codexEffortValues) {
+      expect(localizedEffortValues).toContain(value)
+    }
   })
 
   it.each(Object.entries(localizedCatalogs))(

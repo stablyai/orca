@@ -441,6 +441,144 @@ describe('Store', () => {
     expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
   })
 
+  it('normalizes orchestration worker launch preferences on load and update', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          orchestrationDefaultWorkerAgent: 'codex',
+          orchestrationWorkerModels: {
+            codex: '  gpt-5.6-luna  ',
+            aider: 'unsupported',
+            unknown: 'ignored'
+          },
+          orchestrationWorkerEfforts: {
+            codex: ' max ',
+            gemini: 'high',
+            unknown: 'ignored'
+          }
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().orchestrationDefaultWorkerAgent).toBe('codex')
+    expect(store.getSettings().orchestrationWorkerModels).toEqual({ codex: 'gpt-5.6-luna' })
+    expect(store.getSettings().orchestrationWorkerEfforts).toEqual({ codex: 'max' })
+
+    const mismatched = store.updateSettings({
+      orchestrationWorkerModels: { codex: 'gpt-5.5' },
+      orchestrationWorkerEfforts: { codex: 'max' }
+    })
+    expect(mismatched.orchestrationWorkerModels).toEqual({ codex: 'gpt-5.5' })
+    expect(mismatched.orchestrationWorkerEfforts).toEqual({})
+
+    const updated = store.updateSettings({
+      orchestrationDefaultWorkerAgent: 'unknown' as never,
+      orchestrationWorkerModels: { claude: ' opus ', cursor: '' } as never,
+      orchestrationWorkerEfforts: { claude: ' high ', codex: 'future' } as never
+    })
+    expect(updated.orchestrationDefaultWorkerAgent).toBeNull()
+    expect(updated.orchestrationWorkerModels).toEqual({ claude: 'opus' })
+    expect(updated.orchestrationWorkerEfforts).toEqual({ claude: 'high' })
+  })
+
+  it('revalidates stored efforts when only the worker model changes', async () => {
+    writeDataFile({
+      settings: {
+        orchestrationWorkerModels: { codex: 'gpt-5.6-luna' },
+        orchestrationWorkerEfforts: { codex: 'max' }
+      }
+    })
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings(
+      { orchestrationWorkerModels: { codex: 'gpt-5.5' } },
+      { notifyListeners: true }
+    )
+    store.flush()
+
+    expect(readDataFile()).toMatchObject({
+      settings: {
+        orchestrationWorkerModels: { codex: 'gpt-5.5' },
+        orchestrationWorkerEfforts: {}
+      }
+    })
+    expect(listener).toHaveBeenCalledWith(
+      {
+        orchestrationWorkerModels: { codex: 'gpt-5.5' },
+        orchestrationWorkerEfforts: {}
+      },
+      expect.objectContaining({ orchestrationWorkerEfforts: {} }),
+      undefined
+    )
+  })
+
+  it('does not rewrite valid stored efforts when only the worker model changes', async () => {
+    writeDataFile({
+      settings: {
+        orchestrationWorkerModels: { codex: 'gpt-5.6-luna' },
+        orchestrationWorkerEfforts: { codex: 'high' }
+      }
+    })
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings(
+      { orchestrationWorkerModels: { codex: 'gpt-5.5' } },
+      { notifyListeners: true }
+    )
+    store.flush()
+
+    expect(readDataFile()).toMatchObject({
+      settings: {
+        orchestrationWorkerModels: { codex: 'gpt-5.5' },
+        orchestrationWorkerEfforts: { codex: 'high' }
+      }
+    })
+    expect(listener).toHaveBeenCalledWith(
+      { orchestrationWorkerModels: { codex: 'gpt-5.5' } },
+      expect.objectContaining({ orchestrationWorkerEfforts: { codex: 'high' } }),
+      undefined
+    )
+  })
+
+  it('drops persisted efforts that exceed their stored model ceiling', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          orchestrationWorkerModels: { codex: 'gpt-5.5' },
+          orchestrationWorkerEfforts: { codex: 'max' }
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().orchestrationWorkerModels).toEqual({ codex: 'gpt-5.5' })
+    expect(store.getSettings().orchestrationWorkerEfforts).toEqual({})
+  })
+
+  it('round-trips normalized orchestration worker preferences through persistence', async () => {
+    const store = await createStore()
+
+    store.updateSettings({
+      orchestrationWorkerModels: { codex: 'gpt-5.5', claude: 'opus' },
+      orchestrationWorkerEfforts: { codex: 'max', claude: 'high' }
+    })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().orchestrationWorkerModels).toEqual({
+      codex: 'gpt-5.5',
+      claude: 'opus'
+    })
+    expect(reloaded.getSettings().orchestrationWorkerEfforts).toEqual({ claude: 'high' })
+  })
+
   it('enables Claude Agent Teams by default for fresh installs', async () => {
     const store = await createStore()
 

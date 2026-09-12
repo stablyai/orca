@@ -13,6 +13,12 @@ import { normalizeSourceControlGroupOrder } from '../../../shared/source-control
 import { normalizeProjectGroups } from '../../../shared/project-groups'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { hasUnsupportedTuiAgentArgs } from '../../../shared/tui-agent-launch-defaults'
+import {
+  normalizeOrchestrationDefaultWorkerAgent,
+  persistedOrchestrationWorkerPreferencesRepaired,
+  normalizeOrchestrationWorkerEfforts,
+  normalizeOrchestrationWorkerModels
+} from '../../../shared/orchestration-worker-model-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import { normalizeTerminalLineHeight } from '../../../shared/terminal-line-height-settings'
 import { migrateAgentYoloDefaults } from '../applying-settings/terminal-settings-migrations'
@@ -40,6 +46,9 @@ export type PreparedLoadedProfileSettings = {
   migratePrimarySelectionPlatformDefault: boolean
   stampPrimarySelectionTerminalDefaults: boolean
   migratedDisabledTuiAgents: GlobalSettings['disabledTuiAgents']
+  migratedOrchestrationDefaultWorkerAgent: GlobalSettings['orchestrationDefaultWorkerAgent']
+  migratedOrchestrationWorkerModels: GlobalSettings['orchestrationWorkerModels']
+  migratedOrchestrationWorkerEfforts: GlobalSettings['orchestrationWorkerEfforts']
   migratedAgentYoloDefaults: Pick<
     GlobalSettings,
     'agentDefaultArgs' | 'agentDefaultEnv' | 'agentYoloDefaultsMigrated'
@@ -133,6 +142,33 @@ export function prepareLoadedProfileSettings(
     markNeedsSave()
   }
   const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents)
+  const migratedOrchestrationWorkerModels = normalizeOrchestrationWorkerModels(
+    parsed.settings?.orchestrationWorkerModels
+  )
+  const migratedOrchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
+    parsed.settings?.orchestrationWorkerEfforts,
+    migratedOrchestrationWorkerModels
+  )
+  const migratedOrchestrationDefaultWorkerAgent = normalizeOrchestrationDefaultWorkerAgent(
+    parsed.settings?.orchestrationDefaultWorkerAgent
+  )
+  // Why: persist repaired worker preferences so load-time repairs do not recur every launch.
+  if (
+    persistedOrchestrationWorkerPreferencesRepaired(
+      {
+        orchestrationDefaultWorkerAgent: parsed.settings?.orchestrationDefaultWorkerAgent,
+        orchestrationWorkerModels: parsed.settings?.orchestrationWorkerModels,
+        orchestrationWorkerEfforts: parsed.settings?.orchestrationWorkerEfforts
+      },
+      {
+        agent: migratedOrchestrationDefaultWorkerAgent,
+        models: migratedOrchestrationWorkerModels,
+        efforts: migratedOrchestrationWorkerEfforts
+      }
+    )
+  ) {
+    markNeedsSave()
+  }
   const migratedAgentYoloDefaults = migrateAgentYoloDefaults(parsed.settings)
   if (
     parsed.settings?.agentYoloDefaultsMigrated !== true ||
@@ -241,6 +277,9 @@ export function prepareLoadedProfileSettings(
     migratePrimarySelectionPlatformDefault,
     stampPrimarySelectionTerminalDefaults,
     migratedDisabledTuiAgents,
+    migratedOrchestrationDefaultWorkerAgent,
+    migratedOrchestrationWorkerModels,
+    migratedOrchestrationWorkerEfforts,
     migratedAgentYoloDefaults,
     migratedWindowsRuntimeDefault,
     migratedLocalAccountRuntime,
