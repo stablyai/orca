@@ -116,6 +116,102 @@ describe('shared agent-hook-listener', () => {
     expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
   })
 
+  // Payload shapes below are verbatim captures from bobshell 2.0.2 (2026-09-12).
+  it('normalizes Bob Shell Claude-compatible lifecycle events as bob status', () => {
+    const started = normalizeHookPayload(
+      state,
+      'bob',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SessionStart',
+          session_id: '18959c65a0a57bf810ac78d14d1aa07a',
+          cwd: '/repo',
+          source: 'resume'
+        }
+      },
+      'production'
+    )
+    const submitted = normalizeHookPayload(
+      state,
+      'bob',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: '18959c65a0a57bf810ac78d14d1aa07a',
+          prompt: 'summarize the diff'
+        }
+      },
+      'production'
+    )
+    const tool = normalizeHookPayload(
+      state,
+      'bob',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          session_id: '18959c65a0a57bf810ac78d14d1aa07a',
+          tool_name: 'execute_command',
+          tool_input: { command: 'echo HELLOFROMBOB' },
+          tool_use_id: 'tooluse_GFMbfmSoADLqFXcH9e9wzV'
+        }
+      },
+      'production'
+    )
+    const stopped = normalizeHookPayload(
+      state,
+      'bob',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'Stop',
+          session_id: '18959c65a0a57bf810ac78d14d1aa07a',
+          last_assistant_message: 'Done.'
+        }
+      },
+      'production'
+    )
+
+    // Why: a resumed session emits SessionStart before any prompt; it must read as idle, not busy.
+    expect(started?.payload).toMatchObject({
+      agentType: 'bob',
+      state: 'done',
+      sessionBoundary: true
+    })
+    expect(submitted?.payload).toMatchObject({
+      agentType: 'bob',
+      state: 'working',
+      prompt: 'summarize the diff'
+    })
+    expect(tool?.payload).toMatchObject({
+      agentType: 'bob',
+      state: 'working',
+      toolName: 'execute_command'
+    })
+    expect(stopped?.payload).toMatchObject({ agentType: 'bob', state: 'done' })
+    // Why: session_id is Bob's rootTaskId, which is exactly what `bob --resume` takes.
+    expect(stopped?.providerSession).toMatchObject({
+      key: 'session_id',
+      id: '18959c65a0a57bf810ac78d14d1aa07a'
+    })
+  })
+
+  // Why: Bob only ever sends source startup|resume; an unknown source must not flip a live turn idle.
+  it('ignores a Bob SessionStart with an unrecognized source', () => {
+    const payload = normalizeHookPayload(
+      state,
+      'bob',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', session_id: 'session_bob', source: 'compact' }
+      },
+      'production'
+    )
+    expect(payload?.payload).toBeUndefined()
+  })
+
   // Why: Kimi shares Claude-compatible compact/harness hooks; cover the same sticky-working
   // guards so a Kimi-only regression cannot slip past the Claude-only tests (issue #11352).
   it('ignores harness-injected UserPromptSubmit for Kimi', () => {
