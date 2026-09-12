@@ -440,7 +440,10 @@ describe('fetchCodexRateLimits', () => {
       primary: { usedPercent: 22, windowDurationMins: 10080 },
       secondary: null
     })
-    readFileMock.mockResolvedValue(
+    // Why: the first (backend-first) auth read must fail so this exercises RPC
+    // + supplementCodexSessionWindow's merge — not the backend-first short
+    // circuit, which would never reach the RPC path this test is named for.
+    readFileMock.mockRejectedValueOnce(new Error('no auth fixture')).mockResolvedValue(
       JSON.stringify({
         tokens: { access_token: 'access-token', account_id: 'account-id' }
       })
@@ -477,6 +480,7 @@ describe('fetchCodexRateLimits', () => {
       weekly: { usedPercent: 23, windowMinutes: 10080, resetsAt: 1_800_100_000_000 },
       status: 'ok'
     })
+    expect(childSpawnMock).toHaveBeenCalled()
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 

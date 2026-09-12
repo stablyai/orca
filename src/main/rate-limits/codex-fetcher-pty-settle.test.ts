@@ -44,6 +44,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 

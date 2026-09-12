@@ -73,6 +73,7 @@ describe('fetchCodexRateLimits auth errors', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
