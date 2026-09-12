@@ -601,3 +601,137 @@ describe('query pipeline', () => {
     expect(counts.safety).toBe(2)
   })
 })
+
+describe('path prefix spelling', () => {
+  function showsPath(candidatePath: string, pathPrefix: string): boolean {
+    return matchesWorkspaceCleanupFilters(
+      makeFacets({
+        candidate: { worktreeId: `repo-1::${candidatePath}`, path: candidatePath },
+        worktree: { id: `repo-1::${candidatePath}` }
+      }),
+      filters((s) => {
+        s.safety.dismissed = 'any'
+        s.location.pathPrefix = pathPrefix
+      }),
+      FACET_NOW
+    )
+  }
+
+  // Why: macOS file pickers hand back NFD for a path Orca stored as NFC, so a
+  // pasted prefix is a different byte string for the same directory.
+  it('matches an NFD-spelled prefix against an NFC-stored path', () => {
+    const nfc = '/repo/café-one'.normalize('NFC')
+    const nfd = '/repo/café-one'.normalize('NFD')
+    expect(nfc).not.toBe(nfd)
+    expect(showsPath(nfc, nfd)).toBe(true)
+    expect(showsPath(nfd, nfc)).toBe(true)
+  })
+
+  // Why interior only: a leading `//` is UNC syntax, not a doubled separator.
+  it('matches a prefix spelled with doubled separators', () => {
+    expect(showsPath('/repo/alpha', '/repo//alpha')).toBe(true)
+    expect(showsPath('/repo//alpha', '/repo/alpha')).toBe(true)
+  })
+
+  // Why: Windows drive/UNC roots fold case and accept either separator, so all
+  // of these spell the one workspace the user sees in Explorer.
+  it('matches Windows drive paths across separator and case spellings', () => {
+    expect(showsPath('C:\\Users\\Alice\\repo', 'C:\\Users\\Alice')).toBe(true)
+    expect(showsPath('C:\\Users\\Alice\\repo', 'c:/users/alice')).toBe(true)
+    expect(showsPath('C:\\Users\\Alice\\repo', 'C:\\USERS\\ALICE\\')).toBe(true)
+  })
+
+  it('matches the pinned directory itself, not only its children', () => {
+    expect(showsPath('/repo/alpha', '/repo/alpha/')).toBe(true)
+    expect(showsPath('/repo/alpha/nested', '/repo/alpha/')).toBe(true)
+  })
+
+  // Why: POSIX paths stay case-sensitive; folding them would merge distinct
+  // directories, which is worse than missing a case-only spelling.
+  it('keeps POSIX prefixes case-sensitive', () => {
+    expect(showsPath('/repo/Alpha', '/repo/alpha')).toBe(false)
+  })
+
+  it('keeps a trailing separator pinned to a whole segment', () => {
+    expect(showsPath('/repository/x', '/repo/')).toBe(false)
+    expect(showsPath('/repository/x', '/repo')).toBe(true)
+  })
+
+  it('still excludes a genuinely different prefix', () => {
+    expect(showsPath('/repo/alpha', '/other')).toBe(false)
+  })
+})
+
+describe('path prefix never hides a literally-matching row', () => {
+  function showsPath(candidatePath: string, pathPrefix: string): boolean {
+    return matchesWorkspaceCleanupFilters(
+      makeFacets({
+        candidate: { worktreeId: `repo-1::${candidatePath}`, path: candidatePath },
+        worktree: { id: `repo-1::${candidatePath}` }
+      }),
+      filters((s) => {
+        s.safety.dismissed = 'any'
+        s.location.pathPrefix = pathPrefix
+      }),
+      FACET_NOW
+    )
+  }
+
+  // Why: these arrive one keystroke at a time and cannot prove Windows syntax on
+  // their own, so flavor-inferring from the typed text alone blanks the drive.
+  it('keeps matching half-typed Windows drive prefixes', () => {
+    for (const prefix of ['C', 'C:', 'C:\\', 'C:\\U', 'C:\\Users']) {
+      expect(showsPath('C:\\Users\\Alice\\repo', prefix)).toBe(true)
+    }
+  })
+
+  it('keeps matching a UNC candidate from the first typed backslash', () => {
+    for (const prefix of ['\\', '\\\\', '\\\\server', '\\\\server\\share']) {
+      expect(showsPath('\\\\server\\share\\x', prefix)).toBe(true)
+    }
+  })
+
+  // Why: backslash is a legal POSIX filename character, including on SSH and
+  // folder workspaces, so it must not be read as a segment separator there.
+  it('keeps matching a POSIX prefix ending in a literal backslash', () => {
+    expect(showsPath('/repo/foo\\bar', '/repo/foo\\')).toBe(true)
+    expect(showsPath('/repo/foo\\bar', '/repo/foo')).toBe(true)
+  })
+
+  // Why: Windows folds the share alias and the distro case-insensitively, but
+  // everything below the distro is a case-sensitive Linux filesystem.
+  it('matches partial and aliased WSL UNC prefixes above the distro', () => {
+    const wsl = '//wsl.localhost/Ubuntu/home/Ada/Repo'
+    for (const prefix of [
+      '//WSL.LOCALHOST',
+      '//wsl$',
+      '\\\\WSL.LOCALHOST',
+      '//WSL.LOCALHOST/UBUNTU',
+      '//wsl$/Ubuntu/home/Ada',
+      '//wsl.localhost/ubuntu/home/Ada'
+    ]) {
+      expect(showsPath(wsl, prefix)).toBe(true)
+    }
+  })
+
+  it('keeps a WSL UNC candidate case-sensitive below the distro', () => {
+    const wsl = '//wsl.localhost/Ubuntu/home/Ada/Repo'
+    expect(showsPath(wsl, '//wsl.localhost/Ubuntu/home/ada')).toBe(false)
+    expect(showsPath(wsl, '//wsl.localhost/Ubuntu/HOME')).toBe(false)
+  })
+
+  // Why: a prefix ending right before a combining mark is the boundary that
+  // composing normalization destroys — an NFC key would hide both of these, and
+  // the second cannot fall back on the literal spelling because of its doubled
+  // separator.
+  it('keeps matching a prefix that stops before a combining mark', () => {
+    expect(showsPath('/repo/e\u0301x', '/repo/e')).toBe(true)
+    expect(showsPath('/repo/e\u0301x', '/repo//e')).toBe(true)
+  })
+
+  it('still refuses a prefix that matches neither spelling', () => {
+    expect(showsPath('C:\\Users\\Alice\\repo', 'D:')).toBe(false)
+    expect(showsPath('/repo/foo\\bar', '/other\\')).toBe(false)
+    expect(showsPath('/repository/x', '/repo/')).toBe(false)
+  })
+})
