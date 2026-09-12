@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import * as roundTrip from './markdown-round-trip'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import {
   getMarkdownRichModeEligibility,
@@ -20,6 +21,53 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
 
   it('allows common raw html in markdown files', () => {
     expect(getMarkdownRichModeUnsupportedMessage('Before <span>hi</span> after\n')).toBeNull()
+  })
+
+  it.each(['', ' open', ' open="open"', " data-orca-toggle='heading-2' open"])(
+    'allows editable details blocks with attributes %s',
+    (attributes) => {
+      const content = `<details${attributes}>\n<summary>Toggle</summary>\n\nBody\n\n</details>\n`
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+    }
+  )
+
+  it('allows nested plain details blocks', () => {
+    const inner = '<details>\n<summary>Inner</summary>\n\nBody\n\n</details>'
+    const content = `<details open>\n<summary>Outer</summary>\n\n${inner}\n\n</details>\n`
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
+  it('checks mixed editable and passthrough details blocks in source order', () => {
+    const content = [
+      '<details>\n<summary>Editable</summary>\n\nBody\n\n</details>',
+      '<details>\n<summary><span>Passthrough</span></summary>\n\nBody\n\n</details>',
+      '<details class="orca-details" open>\n<summary>Authored</summary>\n\nBody\n\n</details>'
+    ].join('\n\n')
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+  })
+
+  it.each([' id="keep"', ' class="custom"', ' data-orca-toggle="heading-6"', ' open'])(
+    'rejects a details round trip that loses attributes %s',
+    (attributes) => {
+      const content = `<details${attributes}>\n<summary>Toggle</summary>\n\nBody\n\n</details>`
+      vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput').mockReturnValue(
+        '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>'
+      )
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
+    }
+  )
+
+  it('still rejects unrelated HTML lost alongside a normalized details tag', () => {
+    const content = '<details>\n<summary>Toggle</summary>\n\nBody\n\n</details>\n<span>Tail</span>'
+    vi.spyOn(roundTrip, 'getRichMarkdownRoundTripOutput').mockReturnValue(
+      '<details class="orca-details">\n<summary>Toggle</summary>\n\nBody\n\n</details>\nTail'
+    )
+
+    expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
   })
 
   it('allows markdown autolinks wrapped in angle brackets', () => {
