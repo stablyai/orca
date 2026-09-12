@@ -15,6 +15,14 @@ import {
   type StoreDomains
 } from './store-domain-composition'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { Repo } from '../../../shared/repo-types'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { syncProjectHostSetupCompatibilityState } from './repo-lifecycle-operations'
+import { bumpLocalWorktreeScanGeneration } from '../../local-worktree-scan-generation'
+import {
+  planRepoPathRelocation,
+  type RepoWorkspaceIdentityMove
+} from '../tracking-repos/repo-path-relocation'
 import { scheduleSave } from './write-scheduling'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
@@ -101,6 +109,47 @@ export class Store {
       clearTimeout(this.runtime.writeTimer)
       this.runtime.writeTimer = null
     }
+  }
+
+  /**
+   * Point a registered project at a directory it has moved to, carrying its workspaces across.
+   *
+   * Lives on the composition root because it is the one repo mutation that also has to re-key
+   * worktree-derived identity: `updateRepo` cannot take `path` precisely because changing it alone
+   * would strand every `<repoId>::<path>` row. Callers own validating that `newPath` exists on the
+   * host that runs the project; this only rewrites persisted identity.
+   */
+  relocateRepoPath(
+    repoId: string,
+    newPath: string,
+    hostId?: ExecutionHostId
+  ): { repo: Repo; moves: RepoWorkspaceIdentityMove[] } | null {
+    // Host-qualified like `updateRepo`: the same repo id can exist on several execution hosts, and an
+    // id-only lookup would move one host's row using another host's request.
+    const stored = this.state.repos.find(
+      (candidate) =>
+        candidate.id === repoId && (!hostId || getRepoExecutionHostId(candidate) === hostId)
+    )
+    if (!stored) {
+      return null
+    }
+    const moves = planRepoPathRelocation(this.state, stored, newPath)
+    // Re-key first: a migration reads the old id, so the repo must still spell the old path.
+    // No host argument, matching the folder-rename path: naming a host that disagrees with the row's
+    // own persisted `hostId` makes the migration skip the session it was called to move.
+    for (const move of moves) {
+      this.migrateWorktreeIdentity(move.from, move.to)
+    }
+    stored.path = newPath
+    // Project host setups are projected from the repo catalog, so a path written without this stays
+    // stale on the setup row until an unrelated catalog mutation happens to rebuild it — and
+    // `setup.path` is what an automation resolves its run directory from.
+    syncProjectHostSetupCompatibilityState(this)
+    // Every path a scan would report just changed, which is exactly what this generation exists to
+    // signal. `updateRepo` bumps it for far smaller edits; a direct write must not skip it.
+    bumpLocalWorktreeScanGeneration(repoId)
+    scheduleSave(this.domains.scheduling)
+    return { repo: this.getRepo(repoId) ?? stored, moves }
   }
 }
 

@@ -22,6 +22,7 @@ import { getProjectIdForProviderIdentity } from '../../shared/project-host-setup
 import { getProjectHostSetupForRepo } from '../../shared/project-host-setup-lookup'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import { applyProjectHostSetupPathRelocation } from '../project-path-relocation'
 import type { RuntimeStore } from './runtime-store-contract'
 
 type RuntimeProjectHostSetupDependencies = {
@@ -39,6 +40,8 @@ type RuntimeProjectHostSetupDependencies = {
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
+  /** Carry old->new worktree id so the renderer re-keys instead of treating a relocation as a deletion. */
+  notifyWorktreeRenamed: (repoId: string, oldWorktreeId: string, newWorktreeId: string) => void
 }
 
 // Why clone alone still refuses: nothing in this process clones onto an SSH host. `cloneRepo` runs
@@ -130,11 +133,34 @@ export class RuntimeProjectHostSetupController {
     if (!store?.updateProjectHostSetup) {
       throw new Error('runtime_unavailable')
     }
-    const result = store.updateProjectHostSetup(args)
+    // A repo-backed setup's path is the project's own location, so settle a move before the field
+    // write; persistence only ever sees updates whose `path` it can apply verbatim.
+    const relocateRepoPath = store.relocateRepoPath
+    const getProjectHostSetups = store.getProjectHostSetups
+    const { updates, relocatedRepo } = relocateRepoPath
+      ? applyProjectHostSetupPathRelocation(
+          {
+            // Bound: these are Store prototype methods and lose `this` when passed bare.
+            getRepos: () => store.getRepos(),
+            relocateRepoPath: (repoId, path, hostId) =>
+              relocateRepoPath.call(store, repoId, path, hostId),
+            ...(getProjectHostSetups
+              ? { getProjectHostSetups: () => getProjectHostSetups.call(store) }
+              : {})
+          },
+          args,
+          this.deps.notifyWorktreeRenamed
+        )
+      : { updates: args.updates, relocatedRepo: null }
+    if (relocatedRepo) {
+      invalidateAuthorizedRootsCache()
+      this.deps.notifyReposChanged()
+    }
+    const result = store.updateProjectHostSetup({ ...args, updates })
     if (!result) {
       throw new Error(`Project host setup not found: ${args.setupId}`)
     }
-    if ('worktreeBasePath' in args.updates && result.repo) {
+    if ('worktreeBasePath' in updates && result.repo) {
       void prepareLocalWorktreeRootForRepo(store, result.repo)
       invalidateAuthorizedRootsCache()
     }

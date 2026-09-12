@@ -2,6 +2,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoUpdatePersistenceOperations } from './repo-update-operations'
+import { refuseFolderProjectGitUpgradeReason } from '../../project-kind-transition'
 
 export type ProjectHostSetupUpdateOperations = {
   state: PersistedState
@@ -32,8 +33,11 @@ export class ProjectHostSetupPersistenceOperations {
     updates: ProjectHostSetupUpdateArgs['updates']
   ): { setup: ProjectHostSetup; repo: Repo } | null {
     if (updates.path !== undefined && updates.path !== repo.path) {
+      // Why still a throw: the project's path is baked into every `<repoId>::<path>` workspace id,
+      // so it can only move through `relocateRepoPath`, which re-keys them. Callers reach that via
+      // `applyProjectHostSetupPathRelocation`; anything landing here skipped the migration.
       throw new Error(
-        'Repo-backed project host setup paths must be changed by re-importing the project.'
+        "Repo-backed project host setup paths must be moved through a project relocation, which carries the project's workspaces to the new path."
       )
     }
     if (updates.setupState !== undefined && updates.setupState !== 'ready') {
@@ -47,6 +51,13 @@ export class ProjectHostSetupPersistenceOperations {
       repoUpdates.worktreeBasePath = updates.worktreeBasePath
     }
     if (updates.kind !== undefined) {
+      const refusal =
+        updates.kind === 'git'
+          ? refuseFolderProjectGitUpgradeReason(this.state.worktreeMeta, repo)
+          : null
+      if (refusal) {
+        throw new Error(refusal)
+      }
       repoUpdates.kind = updates.kind
     }
     if (updates.setupMethod === 'provisioned') {
