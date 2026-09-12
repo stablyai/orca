@@ -1,6 +1,5 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { TranscriptMessageRole } from '../ai-vault/session-transcript-consumers'
-import type { SessionSearchUnavailableFeature } from './session-search-query-schema'
 
 // ENGINE types, deliberately not in src/shared: nothing here is a wire type.
 // PR 5 owns the public contract and lifts what a caller may actually receive;
@@ -135,12 +134,6 @@ export type SessionSearchTruncation = {
 
 export type SessionSearchResponse = {
   hits: SessionSearchHit[]
-  /**
-   * Engine features the index on disk cannot serve, empty on a current index.
-   * A route ladder missing its repair rung still answers; saying so is what
-   * keeps the answer honest.
-   */
-  unavailable: readonly SessionSearchUnavailableFeature[]
   planner: SessionSearchPlannerReport
   page: SessionSearchPage
   truncated: SessionSearchTruncation

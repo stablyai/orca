@@ -22,12 +22,7 @@ const RECENT_SCAN_FACTOR = 20
 
 // Measured: user 3 / assistant 2 / tool 1 / identifiers 1 (MRR 0.503 vs 0.475 flat).
 const FULL_WEIGHTS = '3.0, 2.0, 1.0, 1.0'
-// The conversation scope zeroes the two columns its filter already excludes.
-// Measured, and stated because it is easy to over-read: these zeros change no
-// score. FTS5's bm25 sums over the columns the query matched, and the filter
-// has already kept the match out of those two, so the same rows come back with
-// `1.0, 1.0` here. They are a statement of what the scope means, not the fence
-// that enforces it — `scopedExpression` is the fence.
+// Tool and identifier columns do not contribute to conversation ranking.
 const CONVERSATION_WEIGHTS = '3.0, 2.0, 0.0, 0.0'
 
 export type RetrievalScope = {
@@ -49,7 +44,9 @@ export type RetrievalScope = {
 }
 
 export type Retrieved = {
+  sessions: SessionRow[]
   rows: MessageRow[]
+  incomplete: boolean
   route: SessionSearchRoute
   /** The plan the rows were actually retrieved by; snippets highlight from it. */
   plan: SessionSearchQueryPlan
@@ -67,14 +64,10 @@ export function scopedWeights(scope: SessionSearchScope): string {
 
 /** The FTS half of a search: the route ladder and the SQL each rung runs. */
 export class SessionSearchRetrieval {
-  /** Null when this index has no vocabulary to repair against; the rung is skipped. */
-  private readonly typoRepair: SessionSearchTypoRepair | null
+  private readonly typoRepair: SessionSearchTypoRepair
 
-  constructor(
-    private readonly db: SyncDatabase,
-    canRepairTypos = true
-  ) {
-    this.typoRepair = canRepairTypos ? new SessionSearchTypoRepair(db) : null
+  constructor(private readonly db: SyncDatabase) {
+    this.typoRepair = new SessionSearchTypoRepair(db)
   }
 
   /**
@@ -87,19 +80,33 @@ export class SessionSearchRetrieval {
    * repairing.
    */
   run(plan: SessionSearchQueryPlan, scope: RetrievalScope): Retrieved {
-    const exact = this.literal(plan, scope)
+    let incomplete = false
+    let sessions: SessionRow[] = []
+    const match = (expression: string): MessageRow[] => {
+      const rows = this.match(expression, scope)
+      incomplete ||= rows.length >= scope.candidateLimit
+      sessions = this.loadSessions(
+        rows.map((row) => row.session_row_id),
+        scope
+      )
+      const eligible = new Set(sessions.map((row) => row.id))
+      return rows.filter((row) => eligible.has(row.session_row_id))
+    }
+    const exact = this.literal(plan, match)
     if (exact) {
-      return { ...exact, plan }
+      return { ...exact, plan, incomplete, sessions }
     }
     const repaired = this.repair(plan, scope.scope)
     const effective = repaired ?? plan
-    const literal = repaired ? this.literal(repaired, scope) : null
+    const literal = repaired ? this.literal(repaired, match) : null
     const found = literal ?? {
-      rows: this.match(orExpression(effective.terms), scope),
+      rows: match(orExpression(effective.terms)),
       route: 'or' as const
     }
     return {
+      sessions,
       rows: found.rows,
+      incomplete,
       route: repaired ? (`typo+${found.route}` as SessionSearchRoute) : found.route,
       plan: effective,
       ...(repaired ? { repairedTerms: repaired.body } : {})
@@ -150,18 +157,7 @@ export class SessionSearchRetrieval {
     return { sessions, incomplete: incomplete || sessions.length >= scope.candidateLimit }
   }
 
-  /**
-   * Read in batches, because the id list is as long as the candidate limit and
-   * every id is a bound parameter, so a single statement scales with a knob the
-   * tuning doc invites a host to raise.
-   *
-   * Not a fix for a reachable failure, and worth saying so: SQLite has bound
-   * `SQLITE_MAX_VARIABLE_NUMBER` at 32,766 since 3.32, every runtime this stack
-   * supports is past that, and the measured limit on this one is higher still.
-   * A candidate limit that large is not a configuration anyone would choose.
-   * The batch is here so the ceiling belongs to this file rather than to
-   * whichever SQLite the process happened to link.
-   */
+  /** Bound SQL parameters independently of the configurable candidate limit. */
   loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
     const rows: SessionRow[] = []
     for (let start = 0; start < ids.length; start += SESSION_ID_BATCH) {
@@ -180,9 +176,6 @@ export class SessionSearchRetrieval {
     plan: SessionSearchQueryPlan,
     scope: SessionSearchScope
   ): SessionSearchQueryPlan | null {
-    if (!this.typoRepair) {
-      return null
-    }
     const typoRepair = this.typoRepair
     let changed = false
     const body = plan.body.map((term) => {
@@ -204,7 +197,7 @@ export class SessionSearchRetrieval {
   /** Phrase, then AND, for literal-looking queries; null when neither matches. */
   private literal(
     plan: SessionSearchQueryPlan,
-    scope: RetrievalScope
+    match: (expression: string) => MessageRow[]
   ): { rows: MessageRow[]; route: 'phrase' | 'and' } | null {
     if (!plan.literal || plan.body.length === 0) {
       return null
@@ -212,14 +205,14 @@ export class SessionSearchRetrieval {
     // A one-token literal (`resolveTerminalPath`, `src/a/b.ts`) is its own
     // phrase: the tokenizer keeps it whole, so the exact token is the cheap,
     // precise first try before the identifier pieces fan out over OR.
-    const phrase = this.match(phraseExpression(plan.body), scope)
+    const phrase = match(phraseExpression(plan.body))
     if (phrase.length > 0) {
       return { rows: phrase, route: 'phrase' }
     }
     if (plan.body.length < 2) {
       return null
     }
-    const and = this.match(andExpression(plan.body), scope)
+    const and = match(andExpression(plan.body))
     return and.length > 0 ? { rows: and, route: 'and' } : null
   }
 

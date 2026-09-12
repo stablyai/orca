@@ -24,22 +24,19 @@ import {
   type SessionRow
 } from './session-search-hit-ranking'
 import {
+  SessionSearchCursorError,
   decodeSessionSearchCursor,
   encodeSessionSearchCursor,
   sessionSearchPageKey
 } from './session-search-page-cursor'
 import { planSessionSearchQuery } from './session-search-query-planner'
-import { logSessionSearchQuery } from './session-search-query-log'
 import {
   SessionSearchRetrieval,
   type RetrievalScope,
   type Retrieved
 } from './session-search-retrieval'
 import { sessionRowFilter } from './session-search-row-filter'
-import {
-  ensureSessionSearchQuerySchema,
-  type SessionSearchUnavailableFeature
-} from './session-search-query-schema'
+import { ensureSessionSearchQuerySchema } from './session-search-query-schema'
 import { EMPTY_SNIPPET, sessionSearchSnippet } from './session-search-snippet'
 import { sessionSourcePresence } from './session-search-source-presence'
 
@@ -69,43 +66,16 @@ export type SessionSearchEngineOptions = {
   sessionCandidateLimit?: number
   /** Oldest transcript mtime a hit may come from; PR 3 derives it from retention. */
   retentionCutoffMs?: number | null
-  /** Write each query to `search_log`. Off unless a caller asks (see query-log). */
-  logQueries?: boolean
 }
 
 /**
- * Ranked session search over the PR 2 index.
- *
- * A library: it holds no timers, reads no settings, and knows nothing about
- * Electron, IPC or a panel. It is handed a connection rather than opening one,
- * because which process may open, rebuild or unlink the index file is PR 3b's
- * decision and not a query engine's.
- *
- * **Every read here is a single statement, and no read transaction is ever
- * open across an `await`.** There is no `BEGIN` on this path, no `.iterate()`
- * outliving its statement, and `search` is synchronous end to end. That is a
- * constraint PR 2 measured rather than a style: a reader that pins a WAL
- * snapshot holds off every checkpoint behind it, and the same 47 MB of writes
- * that leave a 9.9 MB WAL grew to 266 MB with one `BEGIN` + `SELECT` held open.
- *
- * One search is one synchronous pass, and every page of it is a slice of the
- * same ranked list. That list is rebuilt per page rather than streamed, which
- * is what makes a page repeatable: within one index generation the same request
- * ranks the same way, and a cursor from any other generation is refused.
- *
- * That fence is strict on purpose, and the cost is worth stating plainly: any
- * committed read moves the generation, so while a backfill is running an
- * outstanding cursor will be refused, often within a second. Pagination is
- * usable against a settled index and unreliable against one still filling. The
- * rejection carries both generations, so a caller that sees `stale-generation`
- * knows the index moved rather than that it holds a bad cursor, and can quietly
- * re-issue page one instead of showing anyone an error.
+ * Synchronous searches use independent statements to avoid pinning the WAL.
+ * Generation checks bracket all content reads; concurrent writes reject the page.
+ * The connection's owner handles index rebuilds and engine reconstruction.
  */
 export class SessionSearchEngine {
-  private retrieval: SessionSearchRetrieval
+  private readonly retrieval: SessionSearchRetrieval
   private readonly candidateLimit: number
-  /** Re-probed whenever a query proves it stale; see `withCapabilityRetry`. */
-  private unavailable: readonly SessionSearchUnavailableFeature[]
 
   constructor(
     private readonly db: SyncDatabase,
@@ -115,13 +85,13 @@ export class SessionSearchEngine {
     // Installed here and not on the first search, so the generation triggers are
     // watching before anything this engine will be asked to page over is
     // written, and so retrieval below prepares against tables that exist.
-    this.unavailable = ensureSessionSearchQuerySchema(this.db)
-    this.retrieval = new SessionSearchRetrieval(this.db, !this.unavailable.includes('typo-repair'))
+    ensureSessionSearchQuerySchema(this.db)
+    this.retrieval = new SessionSearchRetrieval(this.db)
   }
 
   search(request: SessionSearchRequest): SessionSearchResponse {
     const startedAt = performance.now()
-    this.probeCapabilities()
+    ensureSessionSearchQuerySchema(this.db)
     const generation = readIndexGeneration(this.db)
     const scope = request.scope ?? 'all'
     const sort = request.filters?.sort ?? 'relevance'
@@ -144,19 +114,21 @@ export class SessionSearchEngine {
       : 0
 
     const plan = planSessionSearchQuery(split.text)
-    const { ranked, retrieved, incomplete } = this.withCapabilityRetry(() =>
+    const { ranked, retrieved, incomplete } =
       plan.terms.length === 0
         ? this.operatorOnly(split, retrievalScope)
         : this.text(plan, retrievalScope, sort)
-    )
 
     const limit = resolveSessionSearchLimit(request.limit)
     const page = ranked.slice(offset, offset + limit)
     const hits = this.hits(page, scope, retrieved)
+    const actualGeneration = readIndexGeneration(this.db)
+    if (actualGeneration !== generation) {
+      throw new SessionSearchCursorError('stale-generation', actualGeneration, generation)
+    }
     const hasMore = ranked.length > offset + limit
     const response: SessionSearchResponse = {
       hits,
-      unavailable: this.unavailable,
       planner: {
         route: retrieved?.route ?? 'or',
         tier: scope,
@@ -178,55 +150,7 @@ export class SessionSearchEngine {
       generation,
       durationMs: performance.now() - startedAt
     }
-    if (this.options.logQueries) {
-      logSessionSearchQuery(this.db, {
-        query: request.query,
-        route: response.planner.route,
-        hits: hits.length,
-        durationMs: response.durationMs
-      })
-    }
     return response
-  }
-
-  /**
-   * Where the engine's own schema is created and checked, once per search.
-   *
-   * A capability is a fact about the file, not about this object: another handle
-   * can rebuild the index under a live connection, so a verdict cached in the
-   * constructor is wrong for the rest of the engine's life in both directions —
-   * it would keep reaching for a table that went away, and never pick one back
-   * up when it returned. Retrieval is only rebuilt when the answer changes, so
-   * the steady-state cost is one indexed lookup and nothing else.
-   */
-  private probeCapabilities(): void {
-    const unavailable = ensureSessionSearchQuerySchema(this.db)
-    if (unavailable.join() === this.unavailable.join()) {
-      return
-    }
-    this.unavailable = unavailable
-    this.retrieval = new SessionSearchRetrieval(this.db, !unavailable.includes('typo-repair'))
-  }
-
-  /**
-   * Runs a retrieval, and re-probes once if it turns out the index no longer
-   * has what an earlier probe found.
-   *
-   * `probeCapabilities` already runs per search, so this only covers the window
-   * between that probe and the statement that reaches for the table. Losing a
-   * table there is a thrown error rather than a wrong verdict, so it re-probes
-   * and runs the search again.
-   */
-  private withCapabilityRetry(run: () => RankedPage): RankedPage {
-    try {
-      return run()
-    } catch (error) {
-      if (!isMissingTableError(error)) {
-        throw error
-      }
-      this.probeCapabilities()
-      return run()
-    }
   }
 
   /**
@@ -252,15 +176,10 @@ export class SessionSearchEngine {
     const retrieved = this.retrieval.run(plan, scope)
     // `match` already grouped to one best row per session.
     const best = new Map<number, MessageRow>(retrieved.rows.map((row) => [row.session_row_id, row]))
-    // Operators cut here, after retrieval, so the candidate count still reports
-    // what the SQL limit saw: that is what tells a caller the limit was binding.
-    const sessions = this.retrieval.loadSessions([...best.keys()], scope)
-    // Counted before the operator predicate and before fork folding: the SQL
-    // LIMIT is what could have hidden a session, and it saw the unfiltered set.
     return {
-      ranked: rankSessionHits(sessions, best, sort),
+      ranked: rankSessionHits(retrieved.sessions, best, sort),
       retrieved,
-      incomplete: best.size >= this.candidateLimit
+      incomplete: retrieved.incomplete
     }
   }
 
@@ -303,15 +222,6 @@ export class SessionSearchEngine {
         : null
     }
   }
-}
-
-// SQLite reports a table that went away at the statement that reaches for it.
-// `fts5` is in the message when the table is the vocabulary's target, which is
-// the one an index rebuilt under a live connection loses first.
-const MISSING_TABLE = /no such (fts5 )?table/i
-
-function isMissingTableError(error: unknown): boolean {
-  return error instanceof Error && MISSING_TABLE.test(error.message)
 }
 
 /**

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionSearchRequest } from './session-search-engine-types'
 import {
   addSyntheticSession,
@@ -318,4 +318,34 @@ describe('the response carries the snapshot it was built from', () => {
     expect(after).toBe(readIndexGeneration(db))
     expect(after).toBeGreaterThan(before)
   })
+})
+
+it.each([false, true])('rejects a write during page assembly (cursor: %s)', async (withCursor) => {
+  const { db, engine, store } = await open('ss-concurrent-page')
+  for (let id = 1; id <= 3; id++) {
+    addSyntheticSession(db, { id, text: 'needle' })
+  }
+  const first = engine.search({ query: 'needle', limit: 1 })
+  const prepare = db.prepare.bind(db)
+  let committed = false
+  const hook = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
+    if (!committed && sql.includes('SELECT DISTINCT session_row_id FROM files')) {
+      committed = true
+      store.removeFile('/synthetic/1.jsonl')
+    }
+    return prepare(sql)
+  })
+  try {
+    expect(() =>
+      engine.search({
+        query: 'needle',
+        limit: 1,
+        ...(withCursor ? { cursor: first.page.cursor! } : {})
+      })
+    ).toThrow(SessionSearchCursorError)
+    expect(committed).toBe(true)
+    expect(readIndexGeneration(db)).toBeGreaterThan(first.generation)
+  } finally {
+    hook.mockRestore()
+  }
 })

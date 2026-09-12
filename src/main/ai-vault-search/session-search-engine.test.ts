@@ -327,14 +327,13 @@ describe('source presence comes from the files table, never a stat', () => {
 })
 
 describe('the engine carries its own schema and puts it back', () => {
-  it('installs the vocabulary and the log over an index a writer built alone', async () => {
+  it('installs the vocabulary over an index a writer built alone', async () => {
     // The store creates none of these: PR 3's indexer can fill a whole index
     // before anything opens an engine over it.
     const { db, engine } = await open('ss-engine-installs')
     addSyntheticSession(db, { id: 1, text: 'the coalesces path is slow' })
     addSyntheticSession(db, { id: 2, text: 'coalesces again here' })
     const result = engine.search({ query: 'coalescs' })
-    expect(result.unavailable).toEqual([])
     expect(result.planner.route).toBe('typo+or')
     expect(ids(result).sort()).toEqual(['1', '2'])
   })
@@ -347,30 +346,21 @@ describe('the engine carries its own schema and puts it back', () => {
 
     db.exec('DROP TABLE messages_vocab')
     const after = engine.search({ query: 'coalescs' })
-    expect(after.unavailable).toEqual([])
     expect(after.planner.route).toBe('typo+or')
   })
 
-  it('names the feature it cannot serve when the vocabulary has no source left', async () => {
-    // What an index being rebuilt by another handle looks like from here. The
-    // vocabulary can be created over a missing `messages_fts` and every query
-    // against it then fails, so the probe reads the source, not the view.
-    //
-    // With one FTS table there is no scope left to answer from, so this is now
-    // the boundary of the degrade: the engine names the feature and the search
-    // fails loudly on the table it cannot read, rather than returning an empty
-    // page that looks like an answer.
+  it('fails clearly when the source index is missing', async () => {
     const { db, engine } = await open('ss-engine-vocab-source-gone')
     addSyntheticSession(db, { id: 1, text: 'coalesces here now', role: 'user' })
     db.exec('DROP TABLE messages_vocab; DROP TABLE messages_fts')
 
-    expect(ensureSessionSearchQuerySchema(db)).toEqual(['typo-repair'])
+    expect(() => ensureSessionSearchQuerySchema(db)).toThrow('missing messages_fts')
     for (const scope of ['all', 'conversation'] as const) {
-      expect(() => engine.search({ query: 'coalesces', scope })).toThrow(/no such (fts5 )?table/i)
+      expect(() => engine.search({ query: 'coalesces', scope })).toThrow(/missing messages_fts/i)
     }
   })
 
-  it('picks the feature back up when the source comes back', async () => {
+  it('answers again after the source index is restored', async () => {
     const { db, engine } = await open('ss-engine-vocab-returns')
     addSyntheticSession(db, { id: 1, text: 'coalesces here now' })
     addSyntheticSession(db, { id: 2, text: 'coalesces again here' })
@@ -380,7 +370,7 @@ describe('the engine carries its own schema and puts it back', () => {
       }
     ).sql
     db.exec('DROP TABLE messages_vocab; DROP TABLE messages_fts')
-    expect(ensureSessionSearchQuerySchema(db)).toEqual(['typo-repair'])
+    expect(() => ensureSessionSearchQuerySchema(db)).toThrow('missing messages_fts')
 
     db.exec(fts)
     // Two, because the vocabulary only offers a term at least two rows carry.
@@ -389,7 +379,6 @@ describe('the engine carries its own schema and puts it back', () => {
     // Nothing throws on the way back up, so the recovery cannot come from the
     // error path; it comes from the probe running per search.
     const restored = engine.search({ query: 'coalescs' })
-    expect(restored.unavailable).toEqual([])
     expect(restored.planner.route).toBe('typo+or')
   })
 })
@@ -469,3 +458,16 @@ describe('unicode terms survive the round trip', () => {
     expect(engine.search({ query: text }).hits).toHaveLength(1)
   })
 })
+
+it.each(['repo:target', 'path:/work/target'])(
+  'applies %s before selecting a route',
+  async (operator) => {
+    const { db, engine } = await open('ss-route-filter')
+    addSyntheticSession(db, { id: 1, cwd: '/work/other', text: 'alpha beta' })
+    addSyntheticSession(db, { id: 2, cwd: '/work/target', text: 'alpha x beta' })
+    const result = engine.search({ query: `"alpha beta" ${operator}` })
+    expect(ids(result)).toEqual(['2'])
+    expect(result.planner.route).toBe('and')
+    expect(result.truncated.candidates).toBe(false)
+  }
+)
