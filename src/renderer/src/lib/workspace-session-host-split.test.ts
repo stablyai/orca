@@ -154,7 +154,7 @@ describe('splitWorkspaceSessionByHost', () => {
     expect(Object.keys(slices[RUNTIME_B]?.tabsByWorktree ?? {})).toEqual(['b-wt'])
   })
 
-  it('keeps ssh-qualified visit recency in the local slice and routes runtime-qualified keys to their partition', () => {
+  it('routes host-qualified visit recency to the partition the key names', () => {
     const state: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       lastVisitedAtByWorktreeId: {
@@ -167,17 +167,17 @@ describe('splitWorkspaceSessionByHost', () => {
 
     const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
 
-    // Why local for ssh: boot hydration reads only local + runtime:* partitions,
-    // so an ssh partition would strand the recency across restarts.
-    expect(slices[LOCAL_EXECUTION_HOST_ID]?.lastVisitedAtByWorktreeId).toEqual({
-      'local-wt': 1,
-      'ssh:builder|ssh-wt': 3
-    })
+    // Why the key's own host and not 'local': the recency row has to land in the same partition as
+    // the workspace it describes, or a read that adopts one without the other reports a visit for
+    // a workspace it has no tabs for (#12721).
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.lastVisitedAtByWorktreeId).toEqual({ 'local-wt': 1 })
     expect(slices[RUNTIME_A]?.lastVisitedAtByWorktreeId).toEqual({
       'a-wt': 2,
       'runtime:env-a|a-wt': 4
     })
-    expect(slices['ssh:builder' as ExecutionHostId]).toBeUndefined()
+    expect(slices['ssh:builder' as ExecutionHostId]?.lastVisitedAtByWorktreeId).toEqual({
+      'ssh:builder|ssh-wt': 3
+    })
   })
 
   it('routes tab-keyed maps via the owning tab worktree (legacy + unified)', () => {
