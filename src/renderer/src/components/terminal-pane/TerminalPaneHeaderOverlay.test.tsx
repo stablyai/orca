@@ -6,8 +6,17 @@ import { createRoot, type Root } from 'react-dom/client'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import type { PtyTransport } from './pty-transport'
 import TerminalPaneHeaderOverlay from './TerminalPaneHeaderOverlay'
+
+const { handleInternalTerminalFileDropMock } = vi.hoisted(() => ({
+  handleInternalTerminalFileDropMock: vi.fn()
+}))
+
+vi.mock('./terminal-drop-handler', () => ({
+  handleInternalTerminalFileDrop: handleInternalTerminalFileDropMock
+}))
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children?: ReactNode }) => children,
@@ -47,10 +56,13 @@ function renderOverlay({
   onClosePane = vi.fn(),
   onRemoveTitle = vi.fn(),
   onRenameSubmit = vi.fn(),
+  onBeginPaneDrag = vi.fn(),
+  onStartRename = vi.fn(),
   canContinueAgentSessionInNewSession = false,
   onContinueAgentSessionInNewSession = vi.fn(),
   renameValue = '',
-  renamingPaneId = null
+  renamingPaneId = null,
+  managerRef = { current: null } as RefObject<PaneManager | null>
 }: {
   paneTitles: Record<number, string>
   paneCount?: number
@@ -59,15 +71,20 @@ function renderOverlay({
   onClosePane?: ReturnType<typeof vi.fn>
   onRemoveTitle?: ReturnType<typeof vi.fn>
   onRenameSubmit?: ReturnType<typeof vi.fn>
+  onBeginPaneDrag?: ReturnType<typeof vi.fn>
+  onStartRename?: ReturnType<typeof vi.fn>
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: ReturnType<typeof vi.fn>
   renameValue?: string
   renamingPaneId?: number | null
+  managerRef?: RefObject<PaneManager | null>
 }): {
   container: HTMLDivElement
   onClosePane: ReturnType<typeof vi.fn>
   onRemoveTitle: ReturnType<typeof vi.fn>
   onRenameSubmit: ReturnType<typeof vi.fn>
+  onBeginPaneDrag: ReturnType<typeof vi.fn>
+  onStartRename: ReturnType<typeof vi.fn>
 } {
   const panes = [makePane(1), makePane(2)]
   const container = document.createElement('div')
@@ -96,17 +113,19 @@ function renderOverlay({
         paneTitleBackground="transparent"
         terminalContentVisible
         hiddenStartupStyle={{}}
-        managerRef={{ current: null } as RefObject<PaneManager | null>}
+        managerRef={managerRef}
         paneTransportsRef={{ current: new Map() } as RefObject<Map<number, PtyTransport>>}
         canContinueAgentSessionInNewSession={canContinueAgentSessionInNewSession}
         onContinueAgentSessionInNewSession={
           onContinueAgentSessionInNewSession as (pane: ManagedPane) => void
         }
         onSplitPane={vi.fn()}
-        onBeginPaneDrag={vi.fn()}
+        onBeginPaneDrag={
+          onBeginPaneDrag as (paneId: number, handle: HTMLElement, event: PointerEvent) => void
+        }
         onActivatePaneTitleInteraction={vi.fn()}
         onPaneTitleContextMenu={vi.fn()}
-        onStartRename={vi.fn()}
+        onStartRename={onStartRename as (paneId: number) => void}
         onRemoveTitle={onRemoveTitle as (paneId: number) => void}
         onClosePane={onClosePane as (paneId: number) => void}
         onRenameValueChange={vi.fn()}
@@ -117,7 +136,15 @@ function renderOverlay({
     )
   })
   mounted.push({ container, root })
-  return { container, onClosePane, onRemoveTitle, onRenameSubmit }
+  return { container, onClosePane, onRemoveTitle, onRenameSubmit, onBeginPaneDrag, onStartRename }
+}
+
+function firePointerDown(target: Element): void {
+  act(() => {
+    target.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, pointerId: 1 })
+    )
+  })
 }
 
 function pressInputKey(
@@ -223,5 +250,172 @@ describe('TerminalPaneHeaderOverlay', () => {
     expect(onContinueAgentSessionInNewSession).toHaveBeenCalledWith(
       expect.objectContaining({ id: 1 })
     )
+  })
+
+  // Regression for https://github.com/stablyai/orca/issues/19727: once a pane
+  // has a title, its .pane-title-bar becomes pointer-events:auto and fully
+  // occludes the pane's underlying full-width drag strip. These tests pin the
+  // fix's contract: the bar (including the title text, which is a plain drag
+  // surface renamed only via double-click) starts the pane drag on
+  // pointerdown, while the rename input and every action button opt out via
+  // stopPropagation so their own rename/close behavior is preserved — mirrors
+  // SortableTab.tsx's tab-label/rename-input split.
+  describe('pane drag after a title is set', () => {
+    it('starts a pane drag from pointerdown on the titled bar itself', () => {
+      const { container, onBeginPaneDrag } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' }
+      })
+      const bar = container.querySelectorAll('.pane-title-bar')[0] as HTMLElement
+
+      firePointerDown(bar)
+
+      expect(onBeginPaneDrag).toHaveBeenCalledTimes(1)
+      expect(onBeginPaneDrag).toHaveBeenCalledWith(1, bar, expect.any(PointerEvent))
+    })
+
+    it('starts a pane drag from pointerdown on the title text (single click/drag drags; double-click renames)', () => {
+      const { container, onBeginPaneDrag } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' }
+      })
+      const titleText = container.querySelector<HTMLSpanElement>('.pane-title-text')
+
+      expect(titleText).not.toBeNull()
+      firePointerDown(titleText as HTMLSpanElement)
+
+      expect(onBeginPaneDrag).toHaveBeenCalledTimes(1)
+      expect(onBeginPaneDrag).toHaveBeenCalledWith(
+        1,
+        expect.any(HTMLElement),
+        expect.any(PointerEvent)
+      )
+    })
+
+    it('opens rename on double-click of the title text instead of a single click', () => {
+      const { container, onStartRename } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' }
+      })
+      const titleText = container.querySelector<HTMLSpanElement>('.pane-title-text')
+
+      expect(titleText).not.toBeNull()
+      // Why: a plain click on the title text (or anywhere else on the bar) must
+      // never rename — only pointer movement (drag) or dblclick does anything.
+      act(() => titleText?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      expect(onStartRename).not.toHaveBeenCalled()
+
+      // Why: dispatched on the title text and asserted via bubbling, matching
+      // production — beginPaneDragFromPointerDown captures the pointer on the
+      // bar itself, so the real dblclick actually lands on the bar, not this
+      // child; the rename handler lives there for exactly that reason.
+      act(() => titleText?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
+      expect(onStartRename).toHaveBeenCalledWith(1)
+    })
+
+    // Why: the title text moved from a <button> to a plain <span> so a single
+    // click/drag isn't stolen from the bar (see the drag tests above). That
+    // dropped native keyboard activation, so it's restored explicitly here —
+    // a keyboard-only user must still be able to reach rename without a mouse.
+    it('is keyboard-focusable and opens rename on Enter/Space', () => {
+      const { container, onStartRename } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' }
+      })
+      const titleText = container.querySelector<HTMLSpanElement>('.pane-title-text')
+
+      expect(titleText).not.toBeNull()
+      expect(titleText?.getAttribute('role')).toBe('button')
+      expect(titleText?.getAttribute('tabindex')).toBe('0')
+
+      act(() =>
+        titleText?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      )
+      expect(onStartRename).toHaveBeenCalledWith(1)
+
+      onStartRename.mockClear()
+      act(() => titleText?.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true })))
+      expect(onStartRename).toHaveBeenCalledWith(1)
+    })
+
+    it('does not open rename on double-click of an action button', () => {
+      // Why: an action button's pointerdown stops propagation, so the bar never
+      // captures the pointer for that gesture — its native dblclick is a
+      // separate event the click handler's stopPropagation doesn't touch, and
+      // would otherwise bubble up and incorrectly trigger rename.
+      const { container, onStartRename } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' }
+      })
+      const removeTitle = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Remove pane title: server"]'
+      )
+
+      expect(removeTitle).not.toBeNull()
+      act(() => removeTitle?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
+
+      expect(onStartRename).not.toHaveBeenCalled()
+    })
+
+    it('does not start a pane drag from pointerdown on the rename input', () => {
+      const { container, onBeginPaneDrag } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' },
+        renamingPaneId: 1,
+        renameValue: 'server'
+      })
+      const input = container.querySelector<HTMLInputElement>('.pane-title-input')
+
+      expect(input).not.toBeNull()
+      firePointerDown(input as HTMLInputElement)
+
+      expect(onBeginPaneDrag).not.toHaveBeenCalled()
+    })
+
+    it('does not start a pane drag from pointerdown on the split action button', () => {
+      const { container, onBeginPaneDrag } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' }
+      })
+      const splitButton = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Split Terminal Right"]'
+      )
+
+      expect(splitButton).not.toBeNull()
+      firePointerDown(splitButton as HTMLButtonElement)
+
+      expect(onBeginPaneDrag).not.toHaveBeenCalled()
+    })
+
+    it('does not start a pane drag from pointerdown on the remove-title action button', () => {
+      const { container, onBeginPaneDrag } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' }
+      })
+      const removeTitle = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Remove pane title: server"]'
+      )
+
+      expect(removeTitle).not.toBeNull()
+      firePointerDown(removeTitle as HTMLButtonElement)
+
+      expect(onBeginPaneDrag).not.toHaveBeenCalled()
+    })
+
+    it('still accepts an external workspace-file drag-over/drop on the titled bar', () => {
+      const manager = {} as PaneManager
+      const { container } = renderOverlay({
+        paneTitles: { 1: 'server', 2: '' },
+        managerRef: { current: manager } as RefObject<PaneManager | null>
+      })
+      const bar = container.querySelectorAll('.pane-title-bar')[0] as HTMLElement
+
+      // Why: happy-dom's DragEvent constructor doesn't wire the `dataTransfer`
+      // option through (a known limitation), so attach it directly.
+      const dataTransfer = new DataTransfer()
+      dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, '/tmp/example.txt')
+      const dragOverEvent = new DragEvent('dragover', { bubbles: true, cancelable: true })
+      Object.defineProperty(dragOverEvent, 'dataTransfer', { value: dataTransfer })
+      act(() => bar.dispatchEvent(dragOverEvent))
+      expect(dragOverEvent.defaultPrevented).toBe(true)
+      expect(dataTransfer.dropEffect).toBe('copy')
+
+      const dropEvent = new DragEvent('drop', { bubbles: true, cancelable: true })
+      Object.defineProperty(dropEvent, 'dataTransfer', { value: dataTransfer })
+      act(() => bar.dispatchEvent(dropEvent))
+      expect(handleInternalTerminalFileDropMock).toHaveBeenCalledTimes(1)
+    })
   })
 })
