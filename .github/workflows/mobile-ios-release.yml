@@ -58,17 +58,15 @@ jobs:
           # Xcode 26.x ships the Swift 6.x toolchain Expo SDK 55 requires.
           xcode-version: '26.5'
 
-      - name: Setup pnpm
-        uses: pnpm/setup@v2
-        with:
-          install: false
-
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: mobile/pnpm-lock.yaml
+
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -99,15 +97,6 @@ jobs:
         env:
           ORCA_IOS_APS_ENVIRONMENT: production
         run: npx expo prebuild --platform ios --no-install
-
-      # Cache downloaded pod sources only; prebuild and pod install still run on every build.
-      - name: Cache CocoaPods downloads
-        uses: actions/cache@v5
-        with:
-          path: ~/Library/Caches/CocoaPods
-          key: cocoapods-downloads-v1-${{ runner.os }}-${{ runner.arch }}-xcode26.5-${{ hashFiles('mobile/Gemfile.lock') }}-${{ hashFiles('mobile/pnpm-lock.yaml', 'mobile/pnpm-workspace.yaml', 'mobile/patches/**', 'mobile/Gemfile.lock', 'mobile/ios/Podfile', 'mobile/ios/Podfile.properties.json', 'mobile/ios/Podfile.lock') }}
-          restore-keys: |
-            cocoapods-downloads-v1-${{ runner.os }}-${{ runner.arch }}-xcode26.5-${{ hashFiles('mobile/Gemfile.lock') }}-
 
       - name: Install CocoaPods
         run: npx pod-install ios
