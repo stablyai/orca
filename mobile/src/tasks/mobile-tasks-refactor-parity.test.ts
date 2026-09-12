@@ -17,10 +17,10 @@ const hash = (parts: string[] | string): string =>
     .digest('hex')
 
 // Task and Linear sort tests cover computation changes; render/style guards remain.
-const EXPECTED_SCREEN_HOOKS = '2ad040fcb76d50c820d2c2e7a0b8e9136031fe685bd12d4397572b61d6e629c0'
+const EXPECTED_SCREEN_HOOKS = '4fd2a93d56217c097bda3ecbf156395d7e12b238c1397f5aae819a6cffd79a65'
 const EXPECTED_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const EXPECTED_STATEMENTS = 'aec0a4647032f9414c3d912ad00cd02e7558ef63adb201294932f9eea27e91ec'
-const EXPECTED_DECLARATIONS = '3fb5a15c92960124ea2b9a222d8ed4786b1faab965d56a7a8896cc7ea44a6afc'
+const EXPECTED_STATEMENTS = '469705dedca11481e6b7f7d39fc105fc9c2cdbd349a21a4bb04685c70a00d309'
+const EXPECTED_DECLARATIONS = '6ad0397123e59fc1047a14049c86ff31d81723673a7a7f5c41677471aec58415'
 const EXPECTED_SEMANTICS = '4758ba019e4ff7cadd7ee02338719fa4fc4e1443e34cc290842819cfa1a70181'
 const EXPECTED_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
 const EXPECTED_RENDER_TREE = '2111145136b1e4fbca150d4792d735a90e992488e9934cfc1a8b8f3be981f39f'
@@ -44,7 +44,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves every moved top-level declaration', () => {
     const declarations = readMobileTasksDeclarationSignatures()
-    expect(declarations).toHaveLength(192)
+    expect(declarations).toHaveLength(194)
     expect(hash(declarations)).toBe(EXPECTED_DECLARATIONS)
   })
 

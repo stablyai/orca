@@ -16,7 +16,7 @@ import {
   PR_PRESETS,
   type TaskItem,
   sortLinearIssues,
-  groupLinearIssues
+  groupSortedLinearIssues
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksProviderViewProjection(model: PickerProjectionModel) {
@@ -133,7 +133,7 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     [items, linearOrderBy]
   )
   const linearIssueSections = useMemo(
-    () => groupLinearIssues(linearIssuesForView, linearGroupBy, linearOrderBy),
+    () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy),
     [linearGroupBy, linearIssuesForView, linearOrderBy]
   )
   // Why: FlatList treats data identity as meaningful; unrelated renders should
@@ -152,10 +152,9 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
   )
   const linearBoardSections = useMemo(
     () =>
-      groupLinearIssues(
+      groupSortedLinearIssues(
         linearIssuesForView,
-        linearGroupBy === 'none' ? 'status' : linearGroupBy,
-        linearOrderBy
+        linearGroupBy === 'none' ? 'status' : linearGroupBy
       ),
     [linearGroupBy, linearIssuesForView, linearOrderBy]
   )
