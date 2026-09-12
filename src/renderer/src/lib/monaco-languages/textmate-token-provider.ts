@@ -11,6 +11,7 @@ export type TextMateTokensProviderOptions = {
   scopeName: string
   loadGrammar: TextMateGrammarLoader
   loadOniguruma?: () => Promise<IOnigLib>
+  onError?: (error: unknown) => void
 }
 
 let browserOnigurumaPromise: Promise<IOnigLib> | undefined
@@ -47,8 +48,10 @@ class TextMateTokenizerState implements Monaco.languages.IState {
 
 function createTokensProvider(
   grammar: IGrammar,
-  fallbackScopeName: string
+  fallbackScopeName: string,
+  onError?: (error: unknown) => void
 ): TextMateTokensProvider {
+  let failed = false
   return {
     getInitialState() {
       return new TextMateTokenizerState(INITIAL)
@@ -56,17 +59,27 @@ function createTokensProvider(
     tokenize(line, state) {
       const textMateState =
         state instanceof TextMateTokenizerState ? state : new TextMateTokenizerState(INITIAL)
-      const result = grammar.tokenizeLine(line, textMateState.ruleStack)
-
-      return {
-        endState: new TextMateTokenizerState(result.ruleStack),
-        tokens: result.tokens.map((token) => ({
-          startIndex: token.startIndex,
-          // Why: Monaco themes match a single token scope; TextMate returns a
-          // scope stack, and the final entry is the most specific reusable one.
-          scopes: token.scopes.at(-1) ?? fallbackScopeName
-        }))
+      if (!failed) {
+        try {
+          const result = grammar.tokenizeLine(line, textMateState.ruleStack)
+          return {
+            endState: new TextMateTokenizerState(result.ruleStack),
+            tokens: result.tokens.map((token) => ({
+              startIndex: token.startIndex,
+              // Monaco themes match the most specific scope in the TextMate stack.
+              scopes: token.scopes.at(-1) ?? fallbackScopeName
+            }))
+          }
+        } catch (error) {
+          if (!onError) {
+            throw error
+          }
+          // Regex scanners can fail lazily, after the grammar has loaded.
+          failed = true
+          onError(error)
+        }
       }
+      return { endState: textMateState, tokens: [{ startIndex: 0, scopes: '' }] }
     }
   }
 }
@@ -94,5 +107,5 @@ export async function createTextMateTokensProvider(
     throw new Error(`No TextMate grammar registered for scope ${options.scopeName}`)
   }
 
-  return createTokensProvider(grammar, options.scopeName)
+  return createTokensProvider(grammar, options.scopeName, options.onError)
 }

@@ -1,3 +1,6 @@
+import { toast } from 'sonner'
+import { loadCustomLanguageSnapshot } from './custom-language-snapshot'
+import { registerCustomLanguages } from './monaco-languages/register-custom-languages'
 import { loader } from '@monaco-editor/react'
 import * as monaco from 'monaco-editor'
 import { typescript as monacoTS } from 'monaco-editor'
@@ -79,6 +82,12 @@ registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
 registerNimLanguage(monaco)
 registerJsonlLanguage(monaco)
+void loadCustomLanguageSnapshot().then((snapshot) => {
+  registerCustomLanguages(monaco, snapshot, (message) => {
+    console.warn('[custom-languages]', message)
+    toast.error(message, { id: 'custom-languages' })
+  })
+})
 installMonacoDelayerCancellationGuard()
 installMonacoDiffEditorDisposalGuard(monaco)
 installMonacoPeekReferencesPreviewOptions()

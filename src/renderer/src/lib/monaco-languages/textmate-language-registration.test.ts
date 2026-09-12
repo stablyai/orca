@@ -88,4 +88,23 @@ describe('registerTextMateLanguage', () => {
     expect(monaco.languages.register).not.toHaveBeenCalled()
     expect(monaco.languages.registerTokensProviderFactory).not.toHaveBeenCalled()
   })
+  it('falls back without an unhandled rejection when a custom grammar fails', async () => {
+    const { monaco, createTokensProvider } = createMonacoMock()
+    const onError = vi.fn()
+    registerTextMateLanguage(monaco as never, {
+      language: { id: 'custom' },
+      scopeName: 'source.custom',
+      loadGrammar: vi.fn(),
+      onError,
+      loadProviderModule: async () => ({
+        createTextMateTokensProvider: async () => {
+          throw new Error('Invalid regex')
+        }
+      })
+    })
+    await expect(createTokensProvider()).resolves.toBeNull()
+    await expect(createTokensProvider()).resolves.toBeNull()
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(onError.mock.calls[0][0].message).toBe('Invalid regex')
+  })
 })

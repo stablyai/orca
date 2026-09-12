@@ -7,6 +7,7 @@ import type {
 import type { PreloadApi } from '../api-types'
 
 export const settingsApi = {
+  getCustomLanguages: () => ipcRenderer.invoke('settings:getCustomLanguages'),
   get: () => ipcRenderer.invoke('settings:get'),
 
   // Why: blocking read for the few startup decisions (terminal side-effect authority) that can't wait for async hydration. Call sparingly.

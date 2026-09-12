@@ -1,3 +1,5 @@
+import { detectCustomLanguage } from './custom-language-associations'
+
 function extname(filePath: string): string {
   const lastDot = filePath.lastIndexOf('.')
   const lastSep = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
@@ -119,6 +121,11 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
 }
 
 export function detectLanguage(filePath: string): string {
+  const customLanguage = detectCustomLanguage(filePath)
+  if (customLanguage) {
+    return customLanguage
+  }
+
   // Check exact filename first
   const parts = filePath.split(/[\\/]/)
   const filename = parts.at(-1)!

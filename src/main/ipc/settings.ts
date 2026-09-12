@@ -1,3 +1,4 @@
+import { readCustomLanguages } from '../custom-languages/read-custom-languages'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -92,6 +93,12 @@ export function registerSettingsHandlers(
         window.webContents.send('settings:changed', updates)
       }
     }
+  })
+
+  let customLanguages: ReturnType<typeof readCustomLanguages> | undefined
+  ipcMain.handle('settings:getCustomLanguages', () => {
+    customLanguages ??= readCustomLanguages()
+    return customLanguages
   })
 
   ipcMain.handle('settings:get', () => {
