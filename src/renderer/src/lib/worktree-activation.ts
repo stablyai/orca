@@ -143,7 +143,11 @@ export function activateAndRevealFolderWorkspace(
     resumeSleepingAgentSessionsForWorktree(workspaceKey)
   }
   if (shouldGateAgentActivation) {
-    gateAndReseedEmptyWorkspace(workspaceKey, opts)
+    gateAndReseedEmptyWorkspace(
+      workspaceKey,
+      opts?.providesInitialSurface === true,
+      opts?.executionHostId
+    )
   }
   const primaryTabId = shouldGateAgentActivation
     ? null
@@ -238,7 +242,11 @@ export function activateAndRevealWorktree(
     resumeSleepingAgentSessionsForWorktree(worktreeId)
   }
   if (shouldGateAgentActivation) {
-    gateAndReseedEmptyWorkspace(worktreeId, opts)
+    gateAndReseedEmptyWorkspace(
+      worktreeId,
+      opts?.providesInitialSurface === true,
+      opts?.executionHostId
+    )
   }
 
   // 4. Ensure a focusable surface exists for externally-created worktrees

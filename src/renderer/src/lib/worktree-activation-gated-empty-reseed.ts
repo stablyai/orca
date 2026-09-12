@@ -3,7 +3,6 @@ import {
   gateWorktreeAgentActivation,
   type WorktreeAgentActivationOutcome
 } from './worktree-agent-activation-gate'
-import type { WorktreeActivationSurfaceSelection } from './worktree-activation-surface-selection'
 import { reseedGatedEmptyWorkspace } from './worktree-initial-terminal-seeding'
 
 type GatedEmptyWorkspaceReseedIntent = {
@@ -18,12 +17,13 @@ const latestReseedIntentByGate = new WeakMap<
 
 export function gateAndReseedEmptyWorkspace(
   workspaceKey: string,
-  selection?: WorktreeActivationSurfaceSelection & { executionHostId?: ExecutionHostId }
+  callerProvidesSurface: boolean,
+  executionHostId?: ExecutionHostId
 ): void {
   const gate = gateWorktreeAgentActivation(workspaceKey)
   const intent: GatedEmptyWorkspaceReseedIntent = {
-    callerProvidesSurface: selection?.providesInitialSurface === true,
-    ...(selection?.executionHostId ? { executionHostId: selection.executionHostId } : {})
+    callerProvidesSurface,
+    ...(executionHostId ? { executionHostId } : {})
   }
   latestReseedIntentByGate.set(gate, intent)
   void gate.then((outcome) => {
