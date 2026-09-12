@@ -13,6 +13,7 @@ import {
   isCursorNativeAgentTitle,
   titleHasAgentName
 } from './agent-title-core'
+import { isAtomCodeTerminalTitle } from './atomcode-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
@@ -68,6 +69,7 @@ const NAME_TOKENS: readonly (readonly [string, TuiAgent])[] = [
   ['antigravity', 'antigravity'],
   ['opencode', 'opencode'],
   ['mimo', 'mimo-code'],
+  ['atomcode', 'atomcode'],
   ['openclaw', 'openclaw'],
   ['aider', 'aider'],
   ['grok', 'grok'],
@@ -231,6 +233,9 @@ function collectVendorMarkers(segments: readonly string[]): TuiAgent[] {
   for (const segment of segments) {
     // Why prefix-only: a sigil marks the pane's own status line only in the identity position.
     // The same character inside task text is decoration, not a vendor emission.
+    if (isAtomCodeTerminalTitle(segment)) {
+      markers.add('atomcode')
+    }
     if (GEMINI_GLYPHS.some((glyph) => segment.startsWith(glyph))) {
       markers.add('gemini')
     }

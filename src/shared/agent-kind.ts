@@ -21,6 +21,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   autohand: 'autohand',
   opencode: 'opencode',
   'mimo-code': 'mimo-code',
+  atomcode: 'atomcode',
   pi: 'pi',
   omp: 'omp',
   'prime-agent': 'prime-agent',

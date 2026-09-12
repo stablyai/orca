@@ -10,6 +10,7 @@ import {
   isPiAgentTitle,
   titleHasAgentName
 } from './agent-title-core'
+import { isAtomCodeTerminalTitle } from './atomcode-terminal-title'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
@@ -67,6 +68,11 @@ function computeAgentLabel(title: string): string | null {
   ) {
     return 'Claude Code'
   }
+  // Why: AtomCode's traffic-light prefix is vendor-owned identity evidence and
+  // outranks task text that may mention another agent.
+  if (isAtomCodeTerminalTitle(title)) {
+    return 'AtomCode'
+  }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
@@ -103,6 +109,9 @@ function computeAgentLabel(title: string): string | null {
   }
   if (titleHasAgentName(title, 'mimo')) {
     return 'MiMo Code'
+  }
+  if (titleHasAgentName(title, 'atomcode')) {
+    return 'AtomCode'
   }
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'

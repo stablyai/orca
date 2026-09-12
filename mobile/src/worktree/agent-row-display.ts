@@ -94,7 +94,8 @@ export function agentIdentityLabel(agentType: string | null): string {
     amp: 'AM',
     aider: 'AI',
     opencode: 'OC',
-    'mimo-code': 'MC'
+    'mimo-code': 'MC',
+    atomcode: 'AC'
   }
   return known[normalized] ?? normalized.slice(0, 2).toUpperCase()
 }
