@@ -64,7 +64,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     return makePaneKey(record.tabId, record.leafId)
   }
 
-  protected getWorktreeIdForTerminalHandle(handle: string): string | null {
+  getTerminalWorktreeIdForHandle(handle: string): string | null {
     const livePty = this.getLivePtyForHandle(handle)
     if (livePty?.pty.worktreeId) {
       return livePty.pty.worktreeId

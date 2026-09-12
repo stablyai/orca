@@ -37,6 +37,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     if (retained) {
       this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
     }
+    this.commitStatusRowMutation(deleted, retained)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitStatusDropped(deleted.paneKey)
@@ -74,6 +75,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       if (retained) {
         this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
       }
+      this.commitStatusRowMutation(deleted, retained)
       evicted.push(deleted.paneKey)
     }
     if (evicted.length === 0) {
@@ -119,12 +121,16 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
               | undefined
           )
         : null
-      this.clearPaneState(resolvedPaneKey)
+      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      this.clearPaneState(resolvedPaneKey, { emitStatusRowMutation: false })
       if (retained) {
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, retained)
         this.scheduleStatusPersist()
         this.notifyStatusChangeListeners()
       }
+      this.commitStatusRowMutation(previous, retained)
       cleared += 1
     }
     return cleared
@@ -159,6 +165,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
       if (deleted) {
         statusChanged = true
+        this.commitStatusRowMutation(deleted, undefined)
         if (deleted.payload.agentType === 'codex') {
           // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)

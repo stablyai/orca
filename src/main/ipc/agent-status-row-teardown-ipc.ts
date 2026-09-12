@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
 import type { AgentStatusCacheIdentity } from '../../shared/agent-status-types'
+import { parseLegacyNumericPaneKey } from '../../shared/stable-pane-id'
 import {
   clearMigrationUnsupportedPtysByTabPrefix,
   clearMigrationUnsupportedPtysForPaneKey
@@ -27,7 +28,10 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
   ipcMain.removeAllListeners('agentStatus:dropByTabPrefix')
 
   ipcMain.on('agentStatus:drop', (_event, paneKey: unknown) => {
-    if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
+    if (
+      typeof paneKey !== 'string' ||
+      (!isValidPaneKey(paneKey) && parseLegacyNumericPaneKey(paneKey) === null)
+    ) {
       return
     }
     try {

@@ -1,7 +1,11 @@
 import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
-import type { RetiredPaneAlias, RetiredPaneFence } from './server-types'
+import type {
+  EnrichedAgentHookEventPayload,
+  RetiredPaneAlias,
+  RetiredPaneFence
+} from './server-types'
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
   // Why: retirement fences a pane and every alias of it, then deletes those aliases.
@@ -21,7 +25,13 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     }
     this.recordRetiredPaneFence(paneKeys, retiredAliases)
     const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
-    const hadStatus = [...paneKeys].some((key) => this.state.lastStatusByPaneKey.has(key))
+    const retiredRows = [...paneKeys].flatMap((key) => {
+      const row = this.state.lastStatusByPaneKey.get(key) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      return row ? [row] : []
+    })
+    const hadStatus = retiredRows.length > 0
     for (const key of paneKeys) {
       this.markPaneClosedForAgentStatus(key)
       this.restartedStatusLaunchTokenHashByPaneKey.delete(key)
@@ -36,6 +46,9 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     }
     if (aliasChanged) {
       this.notifyPaneKeyAliasPersistenceListener()
+    }
+    for (const row of retiredRows) {
+      this.commitStatusRowMutation(row, undefined)
     }
     if (hadStatus || authorityChanged) {
       this.scheduleStatusPersist()
@@ -108,6 +121,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     let aliasChanged = false
     let statusChanged = false
     const clearedStatusPaneKeys = new Set<string>()
+    const clearedStatusRows = new Map<string, EnrichedAgentHookEventPayload>()
     for (const [legacyPaneKey, entry] of this.legacyPaneKeyAliases) {
       if (entry.ptyId !== ptyId) {
         continue
@@ -129,6 +143,10 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
         statusChanged = true
         clearedStatusPaneKeys.add(entry.stablePaneKey)
+        clearedStatusRows.set(
+          entry.stablePaneKey,
+          this.state.lastStatusByPaneKey.get(entry.stablePaneKey) as EnrichedAgentHookEventPayload
+        )
       }
       if (shouldClearStablePaneKey) {
         // Why: hydrated rows live under the stable key; if this PTY dies before ptyPaneKey rebuilds, alias cleanup is the only evictor.
@@ -142,6 +160,9 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     }
     if (aliasChanged) {
       this.notifyPaneKeyAliasPersistenceListener()
+    }
+    for (const row of clearedStatusRows.values()) {
+      this.commitStatusRowMutation(row, undefined)
     }
     if (statusChanged) {
       this.scheduleStatusPersist()

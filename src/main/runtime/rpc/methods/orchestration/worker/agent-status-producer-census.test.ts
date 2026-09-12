@@ -97,7 +97,7 @@ const CENSUS: readonly CensusRow[] = [
   {
     path: 'main/orcad/orcad-entry.ts',
     kind: 'wiring',
-    role: 'binds the same snapshot and structured sink into the headless orcad runtime deps'
+    role: 'binds the same snapshot, OSC producer and structured sink into the headless orcad runtime deps'
   },
   {
     path: 'main/runtime/orca-runtime-state-fields.ts',
@@ -157,7 +157,7 @@ const CENSUS: readonly CensusRow[] = [
   {
     path: 'main/runtime/orca-runtime-prune-mobile-session-tab-group-layout.ts',
     kind: 'consumes',
-    role: 'mobile tab-group pruning from provider-session rows, and the pane identity accessors'
+    role: 'mobile tab-group pruning and its live agent row, plus the pane identity accessors'
   }
 ]
 

@@ -78,6 +78,7 @@ describe('workspace surface ids', () => {
     const ids = Array.from({ length: 423 }, (_, index) => `repo::/worktree-${index}`)
     const { surfaces, mapCalls } = countingSurfaces(ids)
     const controller = {
+      activationDeferralPlanRevisionRef: { current: 0 },
       activationDeferredMountTabIdsByWorktreeRef: { current: new Map() },
       activeGroupIdByWorktree: {},
       activeTabId: null,

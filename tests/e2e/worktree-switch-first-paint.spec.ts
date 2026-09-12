@@ -471,7 +471,9 @@ test.describe('Worktree switch first paint', () => {
     // runners cannot hold a latency threshold, but "the switch mounted one pane"
     // and "the warm set came back" are exact and are the real regression guards.
     if (process.env.CI) {
-      console.log(`[switch-budget] CI run, latency budget not enforced (median ${median(restored).toFixed(1)}ms)`)
+      console.log(
+        `[switch-budget] CI run, latency budget not enforced (median ${median(restored).toFixed(1)}ms)`
+      )
       return
     }
     expect(median(restored)).toBeLessThanOrEqual(FIRST_PAINT_BUDGET_MS)

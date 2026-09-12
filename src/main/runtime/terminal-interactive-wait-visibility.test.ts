@@ -1,10 +1,12 @@
 // A worker parked on an interactive prompt must be distinguishable from one that is thinking
 // or inside a long tool call (STA-4513, STA-3714).
 import { readFileSync } from 'node:fs'
+import { makeAgentStatusStoreWiring } from './agent-status-store-wiring.test-fixture'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  createTranscriptPane as createPane,
+  createTranscriptPane,
+  type TranscriptPaneOptions,
   TRANSCRIPT_PANE_PTY_ID as PTY_ID
 } from './agent-transcript-pane-test-harness'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
@@ -39,6 +41,15 @@ const CLAUDE_TRUST = [
 
 function agentStatusOsc(state: string): string {
   return `]9999;${JSON.stringify({ state, prompt: 'ship it', agentType: 'claude' })}`
+}
+
+async function createPane(
+  options: TranscriptPaneOptions
+): Promise<Awaited<ReturnType<typeof createTranscriptPane>>> {
+  // Compose the same central hook-store wiring as desktop and orcad so OSC rows exercise the
+  // production status path rather than silently disappearing in a bare runtime fixture.
+  const statusWiring = makeAgentStatusStoreWiring()
+  return createTranscriptPane(options, statusWiring.deps)
 }
 
 // cursor-agent renders a braille spinner in its OSC title while it works, and Orca reads
