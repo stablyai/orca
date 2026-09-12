@@ -102,6 +102,9 @@ describe('BrowserCertificateTrustController', () => {
   let pageByGuestId: Map<number, string | null>
   let guestByPageId: Map<string, number>
   let guestById: Map<number, Electron.WebContents>
+  let isEligibleCertificateHost: ReturnType<
+    typeof vi.fn<(hostname: string, url: string, session: Electron.Session) => Promise<boolean>>
+  >
   let controller: BrowserCertificateTrustController
 
   beforeEach(() => {
@@ -125,6 +128,7 @@ describe('BrowserCertificateTrustController', () => {
       [guest.id, guest],
       [otherGuest.id, otherGuest]
     ])
+    isEligibleCertificateHost = vi.fn(async () => false)
     controller = new BrowserCertificateTrustController({
       resolveManagedGuestContext: (webContentsId) => {
         if (!pageByGuestId.has(webContentsId)) {
@@ -140,6 +144,7 @@ describe('BrowserCertificateTrustController', () => {
       resolveWebContentsIdForPage: (browserPageId) => guestByPageId.get(browserPageId) ?? null,
       resolveWebContents: (webContentsId) => guestById.get(webContentsId) ?? null,
       onFailureChanged,
+      isEligibleCertificateHost,
       now: () => now,
       createChallengeId: () => `challenge-${++challengeNumber}`
     })
@@ -298,6 +303,42 @@ describe('BrowserCertificateTrustController', () => {
       expect(event.callback).toHaveBeenCalledWith(false)
       expect(event.preventDefault).not.toHaveBeenCalled()
     }
+    expect(controller.getFailure('page-1')).toBeNull()
+    expect(onFailureChanged).not.toHaveBeenCalled()
+  })
+
+  it('offers approval when a custom hostname resolves only to loopback', async () => {
+    isEligibleCertificateHost.mockResolvedValue(true)
+
+    certificateEvent({ controller, guest, url: 'https://localhost.bswhealth.com:44302/' })
+
+    expect(controller.getFailure('page-1')).toBeNull()
+    await vi.waitFor(() =>
+      expect(controller.getFailure('page-1')).toMatchObject({
+        origin: 'https://localhost.bswhealth.com:44302',
+        canProceed: true
+      })
+    )
+    expect(isEligibleCertificateHost).toHaveBeenCalledWith(
+      'localhost.bswhealth.com',
+      'https://localhost.bswhealth.com:44302/',
+      browserSession
+    )
+  })
+
+  it('does not publish a resolved-host challenge after navigation changes', async () => {
+    let resolveEligibility: ((eligible: boolean) => void) | undefined
+    isEligibleCertificateHost.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveEligibility = resolve
+      })
+    )
+
+    certificateEvent({ controller, guest, url: 'https://local.example:3443/' })
+    controller.onMainFrameNavigationStarted(guest.id)
+    resolveEligibility?.(true)
+    await Promise.resolve()
+
     expect(controller.getFailure('page-1')).toBeNull()
     expect(onFailureChanged).not.toHaveBeenCalled()
   })
