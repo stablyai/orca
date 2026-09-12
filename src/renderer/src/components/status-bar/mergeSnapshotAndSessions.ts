@@ -24,6 +24,7 @@ import type {
 } from '../../../../shared/process-stats-types'
 import { parsePtySessionId } from '../../../../shared/pty-session-id-format'
 import { parsePaneKey as parseStablePaneKey } from '../../../../shared/stable-pane-id'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
@@ -39,12 +40,9 @@ import {
   buildResourceSessionBindingIndex,
   type ResourceSessionBindingIndex
 } from './resource-session-bindings'
+import { resolveResourceWorkspaceHost } from './resource-workspace-host'
 
 // ─── Helpers ────────────────────────────────────────────────────────
-
-function deriveRepoIdFromWorktreeId(worktreeId: string): string {
-  return getRepoIdFromWorktreeId(worktreeId)
-}
 
 function deriveWorktreeNameFromWorktreeId(worktreeId: string): string {
   return getWorktreePathBasenameFromId(worktreeId) ?? worktreeId
@@ -156,24 +154,7 @@ export function mergeSnapshotAndSessions(
     daemonSessions.map((session) => [session.id, session.agentOwnership])
   )
 
-  function isRepoRemote(repoId: string): boolean {
-    // Why: missing entry === we don't know about this repo (typically the
-    // unattributed bucket or a session whose repo metadata never made it
-    // into the renderer). Treat unknown as not-remote so a missing-data
-    // edge case can never spuriously flip the chip on. The chip should
-    // only fire when we have positive evidence the repo is SSH-backed.
-    return ctx.repoConnectionIdById.get(repoId) != null
-  }
-
-  function isRuntimeScopedRepo(repoId: string): boolean {
-    return ctx.repoRuntimeScopedById.get(repoId) === true
-  }
-
-  function ensureRepo(
-    repoId: string,
-    repoName: string,
-    initiallyHasRemoteChildren = false
-  ): UnifiedProjectGroup {
+  function ensureRepo(repoId: string, repoName: string): UnifiedProjectGroup {
     const existing = repos.get(repoId)
     if (existing) {
       return existing
@@ -183,7 +164,7 @@ export function mergeSnapshotAndSessions(
       repoName,
       cpu: null,
       memory: null,
-      hasRemoteChildren: initiallyHasRemoteChildren || isRepoRemote(repoId),
+      hasRemoteChildren: false,
       worktrees: []
     }
     repos.set(repoId, next)
@@ -200,6 +181,7 @@ export function mergeSnapshotAndSessions(
 
   function appendWorktreeRow(repo: UnifiedProjectGroup, row: UnifiedWorktreeRow): void {
     repo.worktrees.push(row)
+    repo.hasRemoteChildren ||= row.isRemote
     const rows = worktreeRowsByRepo.get(repo.repoId)!
     if (!rows.has(row.worktreeId)) {
       rows.set(row.worktreeId, row)
@@ -209,12 +191,19 @@ export function mergeSnapshotAndSessions(
   // ── Step 1: ingest snapshot worktrees as the local-truth foundation.
   if (snapshot) {
     for (const wt of snapshot.worktrees as readonly WorktreeMemory[]) {
+      const worktree =
+        parseWorkspaceKey(wt.worktreeId)?.type === 'folder'
+          ? ctx.worktreeById?.get(wt.worktreeId)
+          : undefined
+      const repoId = worktree?.repoId ?? wt.repoId
+      const repoName = (worktree && ctx.repoDisplayNameById.get(repoId)) || wt.repoName
+      const { isRemote, isRuntimeScoped } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
       // Why: local snapshot data must never render under a runtime-hosted repo
       // row; belt-and-braces with the matching session-ingest guard below.
-      if (isRuntimeScopedRepo(wt.repoId)) {
+      if (isRuntimeScoped) {
         continue
       }
-      const repo = ensureRepo(wt.repoId, wt.repoName)
+      const repo = ensureRepo(repoId, repoName)
       const sessions: UnifiedSessionRow[] = wt.sessions.map((s) => {
         seenSessionIds.add(s.sessionId)
         const tabId = index.ptyIdToTabId.get(s.sessionId) ?? null
@@ -233,14 +222,14 @@ export function mergeSnapshotAndSessions(
       })
       appendWorktreeRow(repo, {
         worktreeId: wt.worktreeId,
-        worktreeName: wt.worktreeName,
-        repoId: wt.repoId,
-        repoName: wt.repoName,
+        worktreeName: worktree?.displayName?.trim() || wt.worktreeName,
+        repoId,
+        repoName,
         cpu: wt.cpu,
         memory: wt.memory,
         history: wt.history,
         hasLocalSamples: true,
-        isRemote: isRepoRemote(wt.repoId),
+        isRemote,
         sessions,
         browsers: []
       })
@@ -258,35 +247,40 @@ export function mergeSnapshotAndSessions(
     const tabId = index.ptyIdToTabId.get(session.id) ?? null
     let worktreeId = tabId ? (index.tabIdToWorktreeId.get(tabId) ?? null) : null
 
-    // 2b: @@-parse — recover worktreeId from the minted session id format.
+    // Prefer daemon metadata; older publishers may only encode the workspace in the session id.
     if (!worktreeId) {
-      worktreeId = parsePtySessionId(session.id).worktreeId
+      worktreeId = session.worktreeId || parsePtySessionId(session.id).worktreeId
     }
 
     // 2c: unattributed bucket.
     const isUnattributed = !worktreeId
     const finalWorktreeId = worktreeId ?? `${UNATTRIBUTED_REPO_ID}::${session.id}`
+    const worktree =
+      parseWorkspaceKey(finalWorktreeId)?.type === 'folder'
+        ? ctx.worktreeById?.get(finalWorktreeId)
+        : undefined
     const finalRepoId = isUnattributed
       ? UNATTRIBUTED_REPO_ID
-      : deriveRepoIdFromWorktreeId(finalWorktreeId)
+      : (worktree?.repoId ?? getRepoIdFromWorktreeId(finalWorktreeId))
     const finalRepoName = isUnattributed
       ? UNATTRIBUTED_REPO_NAME
       : ctx.repoDisplayNameById.get(finalRepoId) || finalRepoId
     const finalWorktreeName = isUnattributed
       ? session.title || session.id.slice(0, 12)
-      : deriveWorktreeNameFromWorktreeId(finalWorktreeId)
+      : worktree?.displayName?.trim() || deriveWorktreeNameFromWorktreeId(finalWorktreeId)
 
     // Why: the current daemon inputs are local/SSH only; this guard prevents a
     // future local daemon row accidentally exposing kill actions for runtime PTYs.
-    if (isRuntimeScopedRepo(finalRepoId)) {
+    const { isRemote, isRuntimeScoped } = resolveResourceWorkspaceHost(
+      ctx,
+      finalWorktreeId,
+      finalRepoId
+    )
+    if (isRuntimeScoped) {
       continue
     }
 
-    const repoIsRemote = isRepoRemote(finalRepoId)
-    const repo = ensureRepo(finalRepoId, finalRepoName, repoIsRemote)
-    if (repoIsRemote) {
-      repo.hasRemoteChildren = true
-    }
+    const repo = ensureRepo(finalRepoId, finalRepoName)
 
     let row = findWorktreeRow(repo, finalWorktreeId)
     if (!row) {
@@ -299,7 +293,7 @@ export function mergeSnapshotAndSessions(
         memory: null,
         history: [],
         hasLocalSamples: false,
-        isRemote: repoIsRemote,
+        isRemote,
         sessions: [],
         browsers: []
       }
@@ -339,7 +333,7 @@ export function mergeSnapshotAndSessions(
         memory: null,
         history: [],
         hasLocalSamples: false,
-        isRemote: isRepoRemote(worktree.repoId),
+        isRemote: resolveResourceWorkspaceHost(ctx, worktreeId, worktree.repoId).isRemote,
         sessions: [],
         browsers: []
       }
@@ -348,10 +342,7 @@ export function mergeSnapshotAndSessions(
     row.browsers = browsers
   }
 
-  // ── Step 4: per-repo aggregates. Remote children are identified by the
-  //   repo's connectionId, not by missing data — `!hasLocalSamples` would
-  //   mislabel warm-reattached local PTYs. The aggregate still skips rows
-  //   we can't sample (worktree.cpu === null) so the numbers stay honest.
+  // Only sampled rows contribute to project totals.
   for (const repo of repos.values()) {
     let cpuSum = 0
     let memSum = 0

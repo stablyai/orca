@@ -35,7 +35,7 @@ export type UnifiedWorktreeRow = {
   memory: Metric
   history: number[]
   hasLocalSamples: boolean
-  /** Why: repo connectionId, not sample presence, drives the remote chip. */
+  /** Execution-host metadata drives the remote chip; missing samples do not. */
   isRemote: boolean
   sessions: UnifiedSessionRow[]
   browsers: BrowserWorkspace[]
@@ -46,7 +46,7 @@ export type UnifiedProjectGroup = {
   repoName: string
   cpu: Metric
   memory: Metric
-  /** Why: kept for callsite stability; this now means SSH-backed repo rows. */
+  /** True when any workspace in this project runs over SSH. */
   hasRemoteChildren: boolean
   worktrees: UnifiedWorktreeRow[]
 }
@@ -64,7 +64,7 @@ export type MergeContext = {
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   /** From useAppStore: false until renderer state can distinguish bound/orphan. */
   workspaceSessionReady: boolean
-  /** Repo display names by repo id for daemon-only groups. */
+  /** Project display names for sampled and daemon-only groups. */
   repoDisplayNameById: Map<string, string>
   /** Repo connectionId by repo id (null/missing == local). */
   repoConnectionIdById: Map<string, string | null>
@@ -72,6 +72,6 @@ export type MergeContext = {
   repoRuntimeScopedById: Map<string, boolean>
   /** Browser inventory is open-only; the Resource Manager never scans it in the background. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
-  /** Canonical worktrees keep browser-only workspace rows out of synthetic buckets. */
+  /** Canonical workspace names and grouping for every resource source. */
   worktreeById?: ReadonlyMap<string, Worktree>
 }
