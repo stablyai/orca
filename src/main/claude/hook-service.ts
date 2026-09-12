@@ -27,8 +27,8 @@ import { getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedHooks,
   applyManagedStatusLine,
-  CLAUDE_EVENTS,
   CLAUDE_HOOK_SETTINGS,
+  getEventsForSettings,
   getManagedScriptFileName,
   getConfigPath,
   getManagedCommand,
@@ -156,7 +156,7 @@ export class ClaudeHookService {
     const expectedHook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const missing: string[] = []
     let presentCount = 0
-    for (const event of CLAUDE_EVENTS) {
+    for (const event of getEventsForSettings(this.options.settings)) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
@@ -215,7 +215,8 @@ export class ClaudeHookService {
     let nextConfig = applyManagedHooks(
       config,
       hook,
-      getManagedScriptFileName(this.options.settings)
+      getManagedScriptFileName(this.options.settings),
+      this.options.settings
     )
     writeManagedScript(
       scriptPath,
@@ -274,7 +275,12 @@ export class ClaudeHookService {
 
       // Why: settings resolve HOME at runtime while SFTP still targets the discovered remote home.
       const hook = buildManagedCommandHook(getRemoteManagedCommand(remoteScriptPath))
-      const nextConfig = applyManagedHooks(config, hook, remoteScriptFileName)
+      const nextConfig = applyManagedHooks(
+        config,
+        hook,
+        remoteScriptFileName,
+        this.options.settings
+      )
 
       // Why: write scripts before settings to avoid settings pointing to missing scripts.
       // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.
