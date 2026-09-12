@@ -53,7 +53,12 @@ function getAssistantSessionMessageCount(db: Database.Database): number {
   return row?.count ?? 0
 }
 
-// Why: tokens_cache_write arrived after the other counters; older DBs lack it.
+/**
+ * SQL expression for a session's cache-write counter.
+ * @param db - A readonly SyncDatabase instance for opencode.db.
+ * @param alias - Table alias prefix, e.g. `s.`, when the column is used in a join.
+ * @returns The qualified column name, or `0` when the DB predates `tokens_cache_write`.
+ */
 function getSessionCacheWriteColumn(db: Database.Database, alias = ''): string {
   return columnExists(db, 'session', 'tokens_cache_write') ? `${alias}tokens_cache_write` : '0'
 }
@@ -67,6 +72,11 @@ function canReadSessionUsageRows(db: Database.Database): boolean {
   )
 }
 
+/**
+ * Count sessions with materialized token totals, cache columns included.
+ * @param db - A readonly SyncDatabase instance for opencode.db.
+ * @returns Number of sessions with any usage, or 0 when the totals columns are absent.
+ */
 function getSessionUsageRowCount(db: Database.Database): number {
   if (!canReadSessionUsageRows(db)) {
     return 0
@@ -82,6 +92,12 @@ function getSessionUsageRowCount(db: Database.Database): number {
   return row?.count ?? 0
 }
 
+/**
+ * Read one usage row per session from the materialized `session.tokens_*` columns.
+ * @param db - A readonly SyncDatabase instance for opencode.db.
+ * @returns Rows whose `data` mirrors OpenCode's message `tokens` shape, so
+ *   `parseOpenCodeUsageRow` treats them exactly like per-message rows.
+ */
 function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
   const projectJoin = getProjectJoin(db)
   const sessionModelSelect = getSessionModelSelect(db)
@@ -131,6 +147,12 @@ function selectSessionUsageRows(db: Database.Database): OpenCodeUsageRow[] {
   }))
 }
 
+/**
+ * Select usage rows from whichever schema generation the database has.
+ * @param db - A readonly SyncDatabase instance for opencode.db.
+ * @returns Materialized session rows when available, else `session_message`
+ *   rows, else legacy `message` rows; empty when no usage tables exist.
+ */
 export function selectUsageRows(db: Database.Database): OpenCodeUsageRow[] {
   if (!tableExists(db, 'session')) {
     return []

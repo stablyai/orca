@@ -66,6 +66,15 @@ function extractTimestamp(data: Record<string, unknown>, row: OpenCodeUsageRow):
   return millis ? new Date(millis).toISOString() : null
 }
 
+/**
+ * Parse one OpenCode usage row into a provider-neutral event.
+ *
+ * OpenCode's `tokens.input` excludes cache hits and `tokens.total` includes
+ * them; the event folds cache read + write into `inputTokens` so
+ * `newInput = inputTokens - cachedInputTokens` holds like the other providers.
+ * @param row - A row from `selectUsageRows`.
+ * @returns The parsed event, or `null` when the row carries no token data or timestamp.
+ */
 export function parseOpenCodeUsageRow(row: OpenCodeUsageRow): OpenCodeUsageParsedEvent | null {
   const data = parseJsonObject(row.data)
   if (!data) {
