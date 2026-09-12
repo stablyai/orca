@@ -34,7 +34,18 @@ export async function saveMobileRelayPairingJournal(
       existing.journalId !== metadata.journalId &&
       (existing.winner !== undefined || existing.authorizationMode !== undefined)
     ) {
-      throw new Error('mobile relay pairing recovery pending')
+      // Why: recovery still owns same-offer reconcile. A different offerFingerprint
+      // means the user scanned a new QR; blocking that forever while recovery only
+      // deferred left pairing unusable after any interrupted attempt (#12708).
+      // Uncommitted server-side installs for the old invite expire on their own.
+      if (existing.offerFingerprint === metadata.offerFingerprint) {
+        throw new Error(
+          'mobile relay pairing recovery pending: a previous pairing for this invite ' +
+            'is still reconciling. Wait for recovery, or clear Orca Mobile pairing data ' +
+            'and scan a new QR code.'
+        )
+      }
+      await removeIncompleteJournal()
     }
     // Why: no install RPC can run before winner+authorization are durable, so
     // a new user-initiated scan may safely supersede a pre-authorization attempt.
