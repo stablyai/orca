@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { RESUMABLE_TUI_AGENTS } from '../../../shared/agent-session-resume'
 import {
+  AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
@@ -8,16 +9,12 @@ import {
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
 
 describe('agentResumeHostAuthorityCapability', () => {
-  it('gates Kimi resume behind its own capability', () => {
-    expect(agentResumeHostAuthorityCapability('kimi')).toBe(
-      AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
-    )
-  })
-
-  it('keeps the OMP resume-path gate', () => {
-    expect(agentResumeHostAuthorityCapability('omp')).toBe(
-      AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY
-    )
+  it.each([
+    ['kimi', AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY],
+    ['cursor', AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY],
+    ['omp', AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY]
+  ] as const)('gates %s resume behind its own capability', (agent, capability) => {
+    expect(agentResumeHostAuthorityCapability(agent)).toBe(capability)
   })
 
   it('leaves agents shipped with host authority on the generic probe', () => {
@@ -26,8 +23,11 @@ describe('agentResumeHostAuthorityCapability', () => {
     expect(agentResumeHostAuthorityCapability(undefined)).toBeUndefined()
   })
 
-  it('advertises the Kimi resume capability from the host', () => {
-    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY)
+  it.each([
+    AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+    AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY
+  ])('advertises %s from the host', (capability) => {
+    expect(RUNTIME_CAPABILITIES).toContain(capability)
   })
 
   it('pins the gate for every resumable agent so a new member is a deliberate decision', () => {
@@ -51,7 +51,8 @@ describe('agentResumeHostAuthorityCapability', () => {
       'prime-agent': undefined,
       copilot: undefined,
       omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
-      kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
+      kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+      cursor: AGENT_SESSION_CURSOR_RESUME_RUNTIME_CAPABILITY
     })
   })
 })
