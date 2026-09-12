@@ -16,11 +16,11 @@ const hash = (parts: string[] | string): string =>
     .update(Array.isArray(parts) ? parts.join('\n') : parts)
     .digest('hex')
 
-// Task-sort key precomputation is covered by mobile-task-sort.test.ts; other source guards remain.
-const EXPECTED_SCREEN_HOOKS = '6bbbbbcea5faec9cef22c9e7b4ada24b69517bd7d6bd03259e5f239eca036a9d'
+// Task and Linear sort tests cover computation changes; render/style guards remain.
+const EXPECTED_SCREEN_HOOKS = '2ad040fcb76d50c820d2c2e7a0b8e9136031fe685bd12d4397572b61d6e629c0'
 const EXPECTED_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
-const EXPECTED_STATEMENTS = '71b6d3e02022568b0300cba3fa33e19b39509b9bfd987af6bb6f7d378a75939c'
-const EXPECTED_DECLARATIONS = 'e79d877078362cef301ac8bdc46fef07eb0ac9414e5b8f752a879559ec6dbde1'
+const EXPECTED_STATEMENTS = 'aec0a4647032f9414c3d912ad00cd02e7558ef63adb201294932f9eea27e91ec'
+const EXPECTED_DECLARATIONS = '3fb5a15c92960124ea2b9a222d8ed4786b1faab965d56a7a8896cc7ea44a6afc'
 const EXPECTED_SEMANTICS = '4758ba019e4ff7cadd7ee02338719fa4fc4e1443e34cc290842819cfa1a70181'
 const EXPECTED_STYLES = '1db6af69c791d9963928541ad5310942fcbda6d984b422c90b6eb92b6816579a'
 const EXPECTED_RENDER_TREE = '2111145136b1e4fbca150d4792d735a90e992488e9934cfc1a8b8f3be981f39f'
