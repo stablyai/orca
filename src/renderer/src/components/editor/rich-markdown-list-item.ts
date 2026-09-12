@@ -12,12 +12,30 @@ const baseRenderMarkdown = ListItem.config.renderMarkdown as (
   context: RenderContext
 ) => string
 
+function listStart(context: RenderContext): number {
+  return Number(context.meta?.parentAttrs?.start ?? 1)
+}
+
 function markerWidth(context: RenderContext): number {
   if (context?.parentType !== 'orderedList') {
     return '- '.length
   }
-  const start = Number(context.meta?.parentAttrs?.start ?? 1)
-  return `${start + (context.index ?? 0)}. `.length
+  return `${listStart(context) + (context.index ?? 0)}. `.length
+}
+
+/**
+ * Rewrites the item's marker when the list starts at zero, which CommonMark
+ * allows and the base renderer reads as falsy.
+ */
+function withZeroStartMarker(rendered: string, context: RenderContext): string {
+  if (context?.parentType !== 'orderedList' || listStart(context) !== 0) {
+    return rendered
+  }
+  const index = context.index ?? 0
+  const marker = `${index + 1}. `
+  // Why: the marker opens the rendered item, so anchoring the swap there keeps a
+  // matching run of digits in the item's own text untouched.
+  return rendered.startsWith(marker) ? `${index}. ${rendered.slice(marker.length)}` : rendered
 }
 
 /**
@@ -42,7 +60,9 @@ function paragraphLineCount(node: JSONContent): number {
 export const RichMarkdownListItem = ListItem.extend({
   renderMarkdown: (node, helpers, context) => {
     const width = markerWidth(context)
-    const lines = baseRenderMarkdown(node, helpers, context).split('\n')
+    const lines = withZeroStartMarker(baseRenderMarkdown(node, helpers, context), context).split(
+      '\n'
+    )
     const blockStart = paragraphLineCount(node)
     // Why: the serializer never indents the newlines inside the item's own first
     // paragraph, and indents every later child by a fixed two columns.
