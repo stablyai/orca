@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -39,6 +40,10 @@ function isHostedOnRuntimeOwnedSshTarget(
 // so a delete behaves like closing a tab — prefer another non-base/primary
 // workspace of the same project (most-recently-visited first), and fall back to
 // the project's base/primary workspace when no other workspace remains.
+//
+// Only awake siblings qualify: activating a slept workspace respawns its PTYs and
+// resumes its agent sessions. With none awake the selection stays empty, the same
+// state sleeping the focused workspace leaves behind. #10205
 function pickNextWorktreeIdAfterDelete(
   state: AppStoreState,
   repoId: string,
@@ -46,12 +51,24 @@ function pickNextWorktreeIdAfterDelete(
 ): string | null {
   const deleteState = state.deleteStateByWorktreeId
   const repoById = getRepoMapFromState(state)
+  const worktreeIdsWithLiveAgent = getWorktreeIdsWithLiveAgent(
+    state.agentStatusByPaneKey,
+    state.tabsByWorktree,
+    Date.now()
+  )
   const siblings = (state.worktreesByRepo[repoId] ?? []).filter(
     (worktree) =>
       worktree.id !== deletedWorktreeId &&
       !getDeleteStateForWorktreeHost(worktree, deleteState)?.isDeleting &&
       // Skip siblings hosted on the now-destroyed runtime-owned SSH target (see helper).
-      !isHostedOnRuntimeOwnedSshTarget(worktree, repoById)
+      !isHostedOnRuntimeOwnedSshTarget(worktree, repoById) &&
+      !isInactiveWorkspace(
+        worktree.id,
+        state.tabsByWorktree,
+        state.ptyIdsByTabId,
+        state.browserTabsByWorktree,
+        worktreeIdsWithLiveAgent
+      )
   )
   const others = siblings.filter((worktree) => !worktree.isMainWorktree)
   if (others.length > 0) {
